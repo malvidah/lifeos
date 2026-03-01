@@ -490,14 +490,14 @@ function Notes({date,token}) {
     return text.split("\n").map((line, i) => {
       // Heading
       if (line.startsWith("# ")) {
-        return <div key={i} style={{color:"#D4A853",fontFamily:serif,fontSize:15,lineHeight:"1.8"}}>{renderInline(line.slice(2))}</div>;
+        return <div key={i} style={{color:"#D4A853",fontFamily:serif,fontSize:16,lineHeight:"1.7"}}>{renderInline(line.slice(2))}</div>;
       }
       // Empty line
       if (!line.trim()) {
         return <div key={i} style={{height:"1.8em"}}>&nbsp;</div>;
       }
       // Normal
-      return <div key={i} style={{color:C.text,fontFamily:serif,fontSize:15,lineHeight:"1.8"}}>{renderInline(line)}</div>;
+      return <div key={i} style={{color:C.text,fontFamily:serif,fontSize:16,lineHeight:"1.7"}}>{renderInline(line)}</div>;
     });
   }
 
@@ -517,10 +517,10 @@ function Notes({date,token}) {
   if (!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
 
   const textareaStyle = {
-    fontFamily:serif, fontSize:15, lineHeight:"1.8",
+    fontFamily:serif, fontSize:16, lineHeight:"1.7",
     padding:0, margin:0, border:"none", outline:"none",
     width:"100%", height:"100%", resize:"none",
-    background:"transparent", color:C.text, caretColor:C.text,
+    background:"transparent", color:C.text, caretColor:C.accent,
     whiteSpace:"pre-wrap", wordBreak:"break-word",
   };
 
@@ -544,7 +544,7 @@ function Notes({date,token}) {
     >
       {value && value.trim()
         ? renderContent(value)
-        : <div style={{color:C.muted,fontFamily:serif,fontSize:15,lineHeight:"1.8",fontStyle:"italic"}}>
+        : <div style={{color:C.muted,fontFamily:serif,fontSize:16,lineHeight:"1.7",fontStyle:"italic"}}>
             What's on your mind?
           </div>
       }
