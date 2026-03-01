@@ -490,6 +490,13 @@ export default function Dashboard() {
 
   useEffect(()=>{
     const supabase=createClient();
+    // Handle OAuth code landing on root page (PKCE flow fallback)
+    const code=new URLSearchParams(window.location.search).get("code");
+    if(code){
+      supabase.auth.exchangeCodeForSession(code).then(()=>{
+        window.history.replaceState({},document.title,window.location.pathname);
+      });
+    }
     supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{setSession(session);setAuthReady(true);});
     return ()=>subscription.unsubscribe();
