@@ -38,10 +38,10 @@ const R = "12px";
 const toKey    = d => new Date(d).toISOString().split("T")[0];
 const todayKey = () => toKey(new Date());
 const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
-const DAY3 = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const DAY3 = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function weekOf(anchor) {
-  const d=new Date(anchor); d.setDate(d.getDate()-((d.getDay()+6)%7));
+  const d=new Date(anchor); d.setDate(d.getDate()-d.getDay());
   return Array.from({length:7},(_,i)=>shift(d,i));
 }
 
@@ -353,7 +353,7 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
                 {!mobile && <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
                   {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
                   {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green,display:"inline-block"}}/>}
-                  {dot.strain>=90   &&<span style={{width:3,height:3,borderRadius:"50%",background:C.yellow,display:"inline-block"}}/>}
+
                 </div>}
               </div>
               {/* Events */}
@@ -388,7 +388,7 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
   );
 }
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",strainScore:"",strainNote:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:""};
 function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
@@ -412,8 +412,7 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}
       fields:[{label:"Hours",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Efficiency",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
     {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,setScore:e=>setH(p=>({...p,readinessScore:e.target.value})),
       fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"Resting HR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
-    {key:"strain",label:"Strain",color:C.yellow,score:h.strainScore,setScore:e=>setH(p=>({...p,strainScore:e.target.value})),
-      fields:[{label:"Note",value:h.strainNote,onChange:set("strainNote"),unit:""}]},
+
   ];
 
   const mobileH = useIsMobile();
@@ -735,7 +734,7 @@ export default function Dashboard() {
   },[googleToken]); // eslint-disable-line
 
   const onHealthChange=useCallback((date,data)=>{
-    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,strain:+data.strainScore||0}}));
+    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0}}));
   },[]);
 
   const wMap=Object.fromEntries(WIDGET_DEFS.map(w=>[w.id,w]));
