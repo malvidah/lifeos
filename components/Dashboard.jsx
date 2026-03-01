@@ -261,10 +261,9 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
                 {evts.length===0
                   ?<span style={{fontFamily:mono,fontSize:7,color:C.dimmer}}>—</span>
                   :evts.map((ev,ei)=>(
-                    <div key={ei} style={{borderLeft:`2px solid ${ev.color||C.accent}`,paddingLeft:3}}>
-                      <div style={{fontFamily:mono,fontSize:7,color:C.dim}}>{ev.time}</div>
-                      <div style={{fontFamily:serif,fontSize:9,lineHeight:1.3,wordBreak:"break-word",color:sel?C.text:C.dim}}>{ev.title}</div>
-                      {ev.zoomUrl&&<a href={ev.zoomUrl} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontFamily:mono,fontSize:7,color:C.blue}}>JOIN ↗</a>}
+                    <div key={ei} style={{display:"flex",gap:3,alignItems:"baseline"}}>
+                      <span style={{fontFamily:mono,fontSize:6,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap"}}>{ev.time}</span>
+                      <span style={{fontFamily:serif,fontSize:9,lineHeight:1.3,wordBreak:"break-word",color:sel?C.text:C.dim}}>{ev.title}</span>
                     </div>
                   ))
                 }
