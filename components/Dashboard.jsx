@@ -122,7 +122,7 @@ function useDrag(initial) {
 function Ring({ score, color, size = 52 }) {
   const r = (size - 6) / 2;
   const circ = 2 * Math.PI * r;
-  const pct = Math.min(Math.max((parseFloat(score) || 0) / 10, 0), 1);
+  const pct = Math.min(Math.max((parseFloat(score) || 0) / 100, 0), 1);
   return (
     <svg width={size} height={size} style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.dimmer} strokeWidth={3}/>
@@ -130,7 +130,7 @@ function Ring({ score, color, size = 52 }) {
         strokeDasharray={`${pct * circ} ${circ}`} strokeLinecap="round"
         style={{ transition: "stroke-dasharray 0.4s ease" }}/>
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{ fill: score ? C.text : C.dim, fontSize: 14, fontFamily: serif,
+        style={{ fill: score ? C.text : C.dim, fontSize: 12, fontFamily: serif,
           transform: "rotate(90deg)", transformOrigin: `${size/2}px ${size/2}px` }}>
         {score || "—"}
       </text>
@@ -259,7 +259,7 @@ function CalStrip({ selected, onSelect, events, syncing }) {
 
 // ─── HEALTH STRIP ─────────────────────────────────────────────────────────────
 function HealthStrip({ date }) {
-  const empty = { sleepScore:"", sleepHrs:"", sleepQuality:"", recoveryScore:"", hrv:"", rhr:"", strainScore:"", strainNote:"" };
+  const empty = { sleepScore:"", sleepHrs:"", sleepQuality:"", readinessScore:"", hrv:"", rhr:"", strainScore:"", strainNote:"" };
   const { value: d, setValue: setD, loaded } = useAutosave(date, "health", empty);
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(null);
@@ -277,12 +277,12 @@ function HealthStrip({ date }) {
       if (data.error) { setOuraAvail(false); return; }
       setOuraAvail(true);
       setD(prev => ({ ...prev,
-        sleepScore:    data.sleepScore    || prev.sleepScore,
-        sleepHrs:      data.sleepHrs      || prev.sleepHrs,
-        sleepQuality:  data.sleepQuality  || prev.sleepQuality,
-        recoveryScore: data.recoveryScore || prev.recoveryScore,
-        hrv:           data.hrv           || prev.hrv,
-        rhr:           data.rhr           || prev.rhr,
+        sleepScore:     data.sleepScore     || prev.sleepScore,
+        sleepHrs:       data.sleepHrs       || prev.sleepHrs,
+        sleepQuality:   data.sleepQuality   || prev.sleepQuality,
+        readinessScore: data.readinessScore || prev.readinessScore,
+        hrv:            data.hrv            || prev.hrv,
+        rhr:            data.rhr            || prev.rhr,
       }));
       setLastSync(new Date().toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" }));
     } catch (e) { console.warn("Oura sync failed", e); }
@@ -294,11 +294,11 @@ function HealthStrip({ date }) {
   }, [date, loaded]);
 
   const metrics = [
-    { key:"sleep",    label:"Sleep",    color:C.blue,   score:d.sleepScore,    setScore:set("sleepScore"),
-      fields:[{label:"Hours",value:d.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Quality",value:d.sleepQuality,onChange:set("sleepQuality"),unit:"/10"}] },
-    { key:"recovery", label:"Recovery", color:C.green,  score:d.recoveryScore, setScore:set("recoveryScore"),
+    { key:"sleep",     label:"Sleep",     color:C.blue,   score:d.sleepScore,     setScore:set("sleepScore"),
+      fields:[{label:"Hours",value:d.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Efficiency",value:d.sleepQuality,onChange:set("sleepQuality"),unit:"%"}] },
+    { key:"readiness", label:"Readiness", color:C.green,  score:d.readinessScore, setScore:set("readinessScore"),
       fields:[{label:"HRV",value:d.hrv,onChange:set("hrv"),unit:"ms"},{label:"Resting HR",value:d.rhr,onChange:set("rhr"),unit:"bpm"}] },
-    { key:"strain",   label:"Strain",   color:C.yellow, score:d.strainScore,   setScore:set("strainScore"),
+    { key:"strain",    label:"Strain",    color:C.yellow, score:d.strainScore,    setScore:set("strainScore"),
       fields:[{label:"Note",value:d.strainNote,onChange:set("strainNote"),unit:""}] },
   ];
 

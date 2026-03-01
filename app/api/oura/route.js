@@ -1,5 +1,8 @@
-// Fetches Oura Ring data for a given date range.
+// Fetches Oura Ring data for a given date.
 // Uses OURA_TOKEN env var (server-side, never exposed to browser).
+// - Scores (sleep, readiness) stay 0-100 as Oura shows them
+// - RHR comes from daily_sleep.lowest_heart_rate (actual BPM)
+// - HRV comes from daily_sleep.average_hrv (actual ms)
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -27,19 +30,25 @@ export async function GET(request) {
     const result = {};
 
     if (sleep) {
-      result.sleepScore = sleep.score != null ? (sleep.score / 10).toFixed(1) : "";
+      // Sleep score 0-100 as Oura shows it
+      result.sleepScore = sleep.score != null ? String(sleep.score) : "";
+      // Total sleep in hours
       const totalSec = sleep.contributors?.total_sleep_duration;
       result.sleepHrs = totalSec ? (totalSec / 3600).toFixed(1) : "";
+      // Sleep efficiency as a percentage (0-100)
       result.sleepQuality = sleep.contributors?.sleep_efficiency != null
-        ? (sleep.contributors.sleep_efficiency / 10).toFixed(1) : "";
+        ? String(sleep.contributors.sleep_efficiency) : "";
+      // Actual RHR in BPM — lowest_heart_rate is the real physiological value
+      result.rhr = sleep.lowest_heart_rate != null
+        ? String(Math.round(sleep.lowest_heart_rate)) : "";
+      // Actual HRV in ms — average_hrv is the real physiological value
+      result.hrv = sleep.average_hrv != null
+        ? String(Math.round(sleep.average_hrv)) : "";
     }
 
     if (readiness) {
-      result.recoveryScore = readiness.score != null ? (readiness.score / 10).toFixed(1) : "";
-      result.hrv = readiness.contributors?.hrv_balance != null
-        ? String(Math.round(readiness.contributors.hrv_balance)) : "";
-      result.rhr = readiness.contributors?.resting_heart_rate != null
-        ? String(Math.round(readiness.contributors.resting_heart_rate)) : "";
+      // Readiness score 0-100 as Oura shows it
+      result.readinessScore = readiness.score != null ? String(readiness.score) : "";
     }
 
     return Response.json(result);
