@@ -1,6 +1,14 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "../lib/supabase.js";
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
+  DragOverlay, defaultDropAnimationSideEffects,
+} from "@dnd-kit/core";
+import {
+  SortableContext, useSortable, verticalSortingStrategy, arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 const C = {
   bg:"#0A0A0A",panel:"#101010",border:"#191919",border2:"#222",
@@ -88,22 +96,6 @@ function useDbSave(date,type,empty,token) {
   return {value,setValue,loaded};
 }
 
-// ─── Drag ─────────────────────────────────────────────────────────────────────
-function useDrag(init) {
-  const [order,setOrder]=useState(init); const from=useRef(null);
-  const handlers=i=>({
-    draggable:true,
-    onDragStart:()=>{from.current=i;},
-    onDragOver:e=>e.preventDefault(),
-    onDrop:()=>{
-      if(from.current===null||from.current===i)return;
-      setOrder(o=>{const n=[...o];n.splice(i,0,n.splice(from.current,1)[0]);return n;});
-      from.current=null;
-    },
-  });
-  return {order,handlers};
-}
-
 // ─── Ring ─────────────────────────────────────────────────────────────────────
 function Ring({score,color,size=44}) {
   const r=(size-6)/2,circ=2*Math.PI*r,val=parseFloat(score)||0,pct=Math.min(val/100,1),elite=val>=90;
@@ -122,17 +114,32 @@ function Ring({score,color,size=44}) {
   );
 }
 
-// ─── Widget ───────────────────────────────────────────────────────────────────
-function Widget({label,color,dragHandlers,children}) {
+// ─── Sortable Section wrapper ──────────────────────────────────────────────────
+function SortableSection({ id, children, dragHandle }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id });
   return (
-    <div style={{background:C.panel,border:`1px solid ${C.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-      <div {...dragHandlers} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
-        cursor:"grab",userSelect:"none",borderBottom:`1px solid ${C.border}`,borderTop:`2px solid ${color}`}}>
-        <span style={{color:C.dimmer,fontSize:11}}>⠿</span>
-        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.25em",textTransform:"uppercase",color}}>{label}</span>
-      </div>
-      <div style={{flex:1,overflow:"auto",padding:12}}>{children}</div>
+    <div ref={setNodeRef} style={{
+      transform: CSS.Transform.toString(transform),
+      transition,
+      opacity: isDragging ? 0.35 : 1,
+      zIndex: isDragging ? 50 : "auto",
+      position: "relative",
+    }}>
+      {/* Pass drag handle props via context hack — render children with handle */}
+      {children({ dragHandleProps: { ...attributes, ...listeners } })}
     </div>
+  );
+}
+
+// ─── Drag handle dot ──────────────────────────────────────────────────────────
+function DragHandle({ dragHandleProps, style }) {
+  return (
+    <span {...dragHandleProps} style={{
+      cursor:"grab", color:C.dimmer, fontSize:13, lineHeight:1,
+      touchAction:"none", userSelect:"none", flexShrink:0,
+      ...style,
+    }}>⠿</span>
   );
 }
 
@@ -177,7 +184,7 @@ function UserMenu({session,token}) {
           : <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>{initials}</span>}
       </button>
       {open&&(
-        <div style={{position:"absolute",top:36,right:0,width:240,zIndex:100,
+        <div style={{position:"absolute",top:36,right:0,width:240,zIndex:200,
           background:C.panel,border:`1px solid ${C.border2}`,padding:16,
           display:"flex",flexDirection:"column",gap:12}}>
           <div>
@@ -214,13 +221,14 @@ function UserMenu({session,token}) {
 }
 
 // ─── CalStrip ─────────────────────────────────────────────────────────────────
-function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
+function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu,dragHandleProps}) {
   const [anchor,setAnchor]=useState(()=>new Date());
   const days=weekOf(anchor),today=todayKey();
   const months=[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ");
   return (
     <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`}}>
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px 8px",borderBottom:`1px solid ${C.border}`}}>
+        <DragHandle dragHandleProps={dragHandleProps}/>
         <div style={{fontFamily:serif,fontSize:20,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>
           {months} <span style={{color:C.accent,fontSize:15}}>{days[0].getFullYear()}</span>
         </div>
@@ -250,18 +258,18 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
                 borderBottom:`1px solid ${C.border}`,
                 borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.dim}`:`2px solid transparent`}}>
                 <span style={{fontFamily:mono,fontSize:10,color:sel?C.accent:C.dim}}>{DAY3[i]}</span>
-                <span style={{fontFamily:serif,fontSize:16,lineHeight:1,color:tod?C.accent:sel?C.text:C.text}}>{d.getDate()}</span>
+                <span style={{fontFamily:serif,fontSize:16,lineHeight:1,color:tod?C.accent:C.text}}>{d.getDate()}</span>
                 <div style={{display:"flex",gap:2,height:4,alignItems:"center"}}>
                   {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,  display:"inline-block"}}/>}
                   {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green, display:"inline-block"}}/>}
                   {dot.strain>=90   &&<span style={{width:3,height:3,borderRadius:"50%",background:C.yellow,display:"inline-block"}}/>}
                 </div>
               </div>
-              <div style={{padding:"3px 4px",display:"flex",flexDirection:"column",gap:3,minHeight:70}}>
+              <div style={{padding:"4px 5px",display:"flex",flexDirection:"column",gap:3,minHeight:70}}>
                 {evts.length===0
                   ?<span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
                   :evts.map((ev,ei)=>(
-                    <div key={ei} style={{display:"flex",gap:3,alignItems:"baseline"}}>
+                    <div key={ei} style={{display:"flex",gap:4,alignItems:"baseline"}}>
                       <span style={{fontFamily:mono,fontSize:9,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap"}}>{ev.time}</span>
                       <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:C.text}}>{ev.title}</span>
                     </div>
@@ -279,7 +287,7 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",strainScore:"",strainNote:""};
 
-function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd}) {
+function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragHandleProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
 
@@ -320,6 +328,10 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd}) {
   return (
     <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`,overflowX:"auto"}}>
       <div style={{display:"flex",minWidth:280}}>
+        {/* Drag handle on left side */}
+        <div style={{display:"flex",alignItems:"center",padding:"0 8px",borderRight:`1px solid ${C.border}`}}>
+          <DragHandle dragHandleProps={dragHandleProps}/>
+        </div>
         {metrics.map((m,mi)=>(
           <div key={m.key} style={{flex:"1 1 0",display:"flex",alignItems:"center",gap:10,
             padding:"10px 12px",minWidth:90,borderRight:mi<2?`1px solid ${C.border}`:"none"}}>
@@ -347,6 +359,20 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd}) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Widget (sortable card) ───────────────────────────────────────────────────
+function Widget({label,color,dragHandleProps,children}) {
+  return (
+    <div style={{background:C.panel,border:`1px solid ${C.border}`,display:"flex",flexDirection:"column",overflow:"hidden",height:"100%"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
+        borderBottom:`1px solid ${C.border}`,borderTop:`2px solid ${color}`}}>
+        <DragHandle dragHandleProps={dragHandleProps}/>
+        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.25em",textTransform:"uppercase",color}}>{label}</span>
+      </div>
+      <div style={{flex:1,overflow:"auto",padding:12}}>{children}</div>
     </div>
   );
 }
@@ -469,14 +495,18 @@ function LoginScreen() {
   );
 }
 
-// ─── Root ─────────────────────────────────────────────────────────────────────
-const WIDGETS=[
+// ─── Section definitions ──────────────────────────────────────────────────────
+// All 6 sections are sortable. "cal" and "health" are full-width; widgets are 2-col grid.
+const FULL_WIDTH = ["cal","health"];
+const WIDGET_DEFS = [
   {id:"notes",    label:"Notes",    color:C.accent, Comp:Notes},
   {id:"meals",    label:"Meals",    color:C.red,    Comp:Meals},
   {id:"tasks",    label:"Tasks",    color:C.blue,   Comp:Tasks},
   {id:"activity", label:"Activity", color:C.green,  Comp:Activity},
 ];
+const ALL_IDS = ["cal","health",...WIDGET_DEFS.map(w=>w.id)];
 
+// ─── Root ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -485,11 +515,15 @@ export default function Dashboard() {
   const [healthDots,setHealthDots]= useState({});
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
-  const {order,handlers}=useDrag(WIDGETS.map(w=>w.id));
+  const [order,     setOrder]     = useState(ALL_IDS);
+  const [activeId,  setActiveId]  = useState(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint:{ distance:8 } })
+  );
 
   useEffect(()=>{
     const supabase=createClient();
-    // Handle OAuth code landing on root page (PKCE flow fallback)
     const code=new URLSearchParams(window.location.search).get("code");
     if(code){
       supabase.auth.exchangeCodeForSession(code).then(()=>{
@@ -522,7 +556,14 @@ export default function Dashboard() {
     setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,strain:+data.strainScore||0}}));
   },[]);
 
-  const wMap=Object.fromEntries(WIDGETS.map(w=>[w.id,w]));
+  const wMap=Object.fromEntries(WIDGET_DEFS.map(w=>[w.id,w]));
+
+  function handleDragStart({active}){setActiveId(active.id);}
+  function handleDragEnd({active,over}){
+    setActiveId(null);
+    if(!over||active.id===over.id) return;
+    setOrder(o=>arrayMove(o,o.indexOf(active.id),o.indexOf(over.id)));
+  }
 
   if(!authReady) return (
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -530,6 +571,26 @@ export default function Dashboard() {
     </div>
   );
   if(!session) return <LoginScreen/>;
+
+  // Split order into rows: full-width sections stay full-width, widget sections pair up in 2-col
+  // We render them in order, grouping consecutive widgets into grid rows
+  const sections = order.map(id => ({
+    id,
+    isFullWidth: FULL_WIDTH.includes(id),
+    widget: wMap[id] || null,
+  }));
+
+  // Group sections for rendering
+  const rows = [];
+  let widgetBuffer = [];
+  function flushWidgets() {
+    if(widgetBuffer.length > 0) { rows.push({type:"widgets", items:[...widgetBuffer]}); widgetBuffer=[]; }
+  }
+  sections.forEach(s => {
+    if(s.isFullWidth) { flushWidgets(); rows.push({type:"full", item:s}); }
+    else { widgetBuffer.push(s); if(widgetBuffer.length===2) flushWidgets(); }
+  });
+  flushWidgets();
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
@@ -541,27 +602,58 @@ export default function Dashboard() {
         input::placeholder,textarea::placeholder{color:${C.dim};opacity:1;}
         a{text-decoration:none;}
         input,textarea,select{font-size:16px;}
-        @media(max-width:600px){.wgrid{grid-template-columns:1fr!important;}}
       `}</style>
 
-      <CalStrip selected={selected} onSelect={setSelected} events={events}
-        syncStatus={{syncing:syncing.size>0,lastSync}} healthDots={healthDots}
-        userMenu={<UserMenu session={session} token={token}/>}/>
+      <DndContext sensors={sensors} collisionDetection={closestCenter}
+        onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <SortableContext items={order} strategy={verticalSortingStrategy}>
+          {rows.map((row,ri) => {
+            if(row.type==="full") {
+              const {id} = row.item;
+              return (
+                <SortableSection key={id} id={id}>
+                  {({dragHandleProps}) => id==="cal"
+                    ? <CalStrip selected={selected} onSelect={setSelected} events={events}
+                        syncStatus={{syncing:syncing.size>0,lastSync}} healthDots={healthDots}
+                        userMenu={<UserMenu session={session} token={token}/>}
+                        dragHandleProps={dragHandleProps}/>
+                    : <HealthStrip date={selected} token={token}
+                        onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+                        dragHandleProps={dragHandleProps}/>
+                  }
+                </SortableSection>
+              );
+            }
+            // Widget row — 2 col grid
+            return (
+              <div key={`row-${ri}`} style={{display:"grid",gridTemplateColumns:`repeat(${row.items.length},1fr)`,gap:1,background:C.border,minHeight:220}}>
+                {row.items.map(({id,widget}) => (
+                  <SortableSection key={id} id={id}>
+                    {({dragHandleProps}) => (
+                      <Widget label={widget.label} color={widget.color} dragHandleProps={dragHandleProps}>
+                        <widget.Comp date={selected} token={token}/>
+                      </Widget>
+                    )}
+                  </SortableSection>
+                ))}
+              </div>
+            );
+          })}
+        </SortableContext>
 
-      <HealthStrip date={selected} token={token}
-        onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}/>
-
-      <div className="wgrid" style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",
-        gridAutoRows:"minmax(220px,auto)",gap:1,padding:1,background:C.border}}>
-        {order.map((id,i)=>{
-          const {label,color,Comp}=wMap[id];
-          return (
-            <Widget key={id} label={label} color={color} dragHandlers={handlers(i)}>
-              <Comp date={selected} token={token}/>
-            </Widget>
-          );
-        })}
-      </div>
+        <DragOverlay dropAnimation={{sideEffects:defaultDropAnimationSideEffects({styles:{active:{opacity:"0.35"}}})}}>
+          {activeId && (
+            <div style={{
+              background:C.panel,border:`1px solid ${C.accent}`,
+              padding:"12px 16px",fontFamily:mono,fontSize:10,
+              letterSpacing:"0.2em",textTransform:"uppercase",color:C.accent,
+              boxShadow:"0 8px 32px rgba(0,0,0,0.6)",
+            }}>
+              {activeId==="cal"?"Calendar":activeId==="health"?"Health":(wMap[activeId]?.label||activeId)}
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
