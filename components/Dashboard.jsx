@@ -222,10 +222,10 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
     <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`}}>
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px 8px",borderBottom:`1px solid ${C.border}`}}>
         <div style={{fontFamily:serif,fontSize:20,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>
-          {months} <span style={{color:C.dim,fontSize:15}}>{days[0].getFullYear()}</span>
+          {months} <span style={{color:C.accent,fontSize:15}}>{days[0].getFullYear()}</span>
         </div>
         <div style={{flex:1}}/>
-        <span style={{fontFamily:mono,fontSize:8,whiteSpace:"nowrap",letterSpacing:"0.08em",
+        <span style={{fontFamily:mono,fontSize:9,whiteSpace:"nowrap",letterSpacing:"0.06em",
           color:syncStatus.syncing?C.dimmer:C.green}}>
           {syncStatus.syncing?"syncing…":syncStatus.lastSync?`● ${syncStatus.lastSync}`:"● synced"}
         </span>
@@ -249,8 +249,8 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
               <div style={{padding:"6px 6px 3px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
                 borderBottom:`1px solid ${C.border}`,
                 borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.dim}`:`2px solid transparent`}}>
-                <span style={{fontFamily:mono,fontSize:7,color:sel?C.accent:C.dimmer}}>{DAY3[i]}</span>
-                <span style={{fontFamily:serif,fontSize:14,lineHeight:1,color:tod?C.accent:sel?C.text:C.dim}}>{d.getDate()}</span>
+                <span style={{fontFamily:mono,fontSize:9,color:sel?C.accent:C.dim}}>{DAY3[i]}</span>
+                <span style={{fontFamily:serif,fontSize:15,lineHeight:1,color:tod?C.accent:sel?C.text:C.text}}>{d.getDate()}</span>
                 <div style={{display:"flex",gap:2,height:4,alignItems:"center"}}>
                   {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,  display:"inline-block"}}/>}
                   {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green, display:"inline-block"}}/>}
@@ -259,11 +259,11 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
               </div>
               <div style={{padding:"3px 4px",display:"flex",flexDirection:"column",gap:2,minHeight:52}}>
                 {evts.length===0
-                  ?<span style={{fontFamily:mono,fontSize:7,color:C.dimmer}}>—</span>
+                  ?<span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
                   :evts.map((ev,ei)=>(
                     <div key={ei} style={{display:"flex",gap:3,alignItems:"baseline"}}>
-                      <span style={{fontFamily:mono,fontSize:6,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap"}}>{ev.time}</span>
-                      <span style={{fontFamily:serif,fontSize:9,lineHeight:1.3,wordBreak:"break-word",color:sel?C.text:C.dim}}>{ev.title}</span>
+                      <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap"}}>{ev.time}</span>
+                      <span style={{fontFamily:serif,fontSize:9,lineHeight:1.3,wordBreak:"break-word",color:sel?C.text:C.text}}>{ev.title}</span>
                     </div>
                   ))
                 }
@@ -329,16 +329,16 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd}) {
                 style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.18em",textTransform:"uppercase",color:m.color,marginBottom:5}}>{m.label}</div>
+              <div style={{fontFamily:mono,fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:5}}>{m.label}</div>
               <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                 {m.fields.map(f=>(
                   <div key={f.label}>
-                    <div style={{fontFamily:mono,fontSize:7,textTransform:"uppercase",color:C.dim,marginBottom:1}}>{f.label}</div>
+                    <div style={{fontFamily:mono,fontSize:9,textTransform:"uppercase",color:C.accent,marginBottom:2}}>{f.label}</div>
                     <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                       <input value={f.value} onChange={f.onChange} placeholder="—"
                         style={{background:"transparent",border:"none",outline:"none",padding:0,
-                          color:f.value?C.text:C.dim,fontFamily:serif,fontSize:16,width:36}}/>
-                      {f.unit&&<span style={{fontFamily:mono,fontSize:7,color:C.dim}}>{f.unit}</span>}
+                          color:f.value?C.text:C.dim,fontFamily:serif,fontSize:16,width:40}}/>
+                      {f.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.dim}}>{f.unit}</span>}
                     </div>
                   </div>
                 ))}
