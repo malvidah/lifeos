@@ -10,25 +10,16 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-// ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
-  bg:      "#0D0D0F",
-  surface: "#16171A",
-  card:    "#1C1D21",
-  border:  "#26272C",
-  border2: "#2E2F35",
-  text:    "#E8E4DC",
-  muted:   "#6B6870",
-  dim:     "#3A3840",
-  accent:  "#C4A882",
-  green:   "#4E9268",
-  blue:    "#4A82B0",
-  yellow:  "#B08A3E",
-  red:     "#A05050",
+  bg:"#0D0D0F", surface:"#16171A", card:"#1C1D21",
+  border:"#26272C", border2:"#2E2F35",
+  text:"#E8E4DC", muted:"#6B6870", dim:"#3A3840",
+  accent:"#C4A882", green:"#4E9268", blue:"#4A82B0",
+  yellow:"#B08A3E", red:"#A05050",
 };
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
-const R     = "12px"; // border radius
+const R = "12px";
 
 const toKey    = d => new Date(d).toISOString().split("T")[0];
 const todayKey = () => toKey(new Date());
@@ -54,24 +45,21 @@ async function estimateKcal(prompt) {
 // ─── DB ───────────────────────────────────────────────────────────────────────
 async function dbSave(date,type,data,token) {
   if (!token) return;
-  try {
-    await fetch("/api/entries",{method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-      body:JSON.stringify({date,type,data})});
-  } catch(e) { console.warn("save failed",e); }
+  try { await fetch("/api/entries",{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+    body:JSON.stringify({date,type,data})}); } catch(e) { console.warn(e); }
 }
 async function dbLoad(date,type,token) {
   if (!token) return null;
   try {
-    const r = await fetch(`/api/entries?date=${date}&type=${type}`,
-      {headers:{"Authorization":`Bearer ${token}`}});
+    const r = await fetch(`/api/entries?date=${date}&type=${type}`,{headers:{"Authorization":`Bearer ${token}`}});
     if (!r.ok) return null;
     return (await r.json()).data ?? null;
   } catch { return null; }
 }
 const MEM = {};
 function useDbSave(date,type,empty,token) {
-  const [value,_set]   = useState(()=>MEM[`${date}:${type}`]??empty);
+  const [value,_set] = useState(()=>MEM[`${date}:${type}`]??empty);
   const [loaded,setLoaded] = useState(`${date}:${type}` in MEM);
   const live=useRef(value), dateRef=useRef(date), timer=useRef(null);
   live.current=value;
@@ -118,30 +106,76 @@ function Ring({score,color,size=48}) {
   );
 }
 
-// ─── Card shell ───────────────────────────────────────────────────────────────
-function Card({children, style={}}) {
+// ─── Resizable container ──────────────────────────────────────────────────────
+function Resizable({defaultH, minH=100, children, fill=false}) {
+  const [h, setH] = useState(defaultH);
+  const dragging = useRef(false);
+  const startY = useRef(0);
+  const startH = useRef(0);
+
+  // If fill=true, stretch to remaining container height instead
+  if (fill) {
+    return <div style={{flex:1,minHeight:minH,display:"flex",flexDirection:"column"}}>{children}</div>;
+  }
+
+  function onPointerDown(e) {
+    e.preventDefault(); e.stopPropagation();
+    dragging.current=true;
+    startY.current=e.clientY;
+    startH.current=h;
+
+    function onMove(e) {
+      if (!dragging.current) return;
+      setH(Math.max(minH, startH.current + (e.clientY - startY.current)));
+    }
+    function onUp() {
+      dragging.current=false;
+      window.removeEventListener("pointermove",onMove);
+      window.removeEventListener("pointerup",onUp);
+    }
+    window.addEventListener("pointermove",onMove);
+    window.addEventListener("pointerup",onUp);
+  }
+
   return (
-    <div style={{
-      background:C.card, borderRadius:R,
-      border:`1px solid ${C.border}`,
-      overflow:"hidden",
-      boxShadow:"0 1px 3px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2)",
-      ...style,
-    }}>
-      {children}
+    <div style={{position:"relative",height:h,flexShrink:0}}>
+      <div style={{height:"100%"}}>{children}</div>
+      {/* Resize handle strip */}
+      <div onPointerDown={onPointerDown} style={{
+        position:"absolute",bottom:-4,left:0,right:0,height:10,
+        cursor:"ns-resize",zIndex:20,
+        display:"flex",alignItems:"center",justifyContent:"center",
+      }}>
+        <div className="resize-pill" style={{
+          width:36,height:4,borderRadius:3,
+          background:C.border2,transition:"background 0.15s, transform 0.15s",
+        }}/>
+      </div>
     </div>
   );
 }
 
-// ─── Sortable card wrapper ────────────────────────────────────────────────────
-function SortableCard({id, children}) {
+// ─── Card ─────────────────────────────────────────────────────────────────────
+function Card({children,style={}}) {
+  return (
+    <div style={{
+      background:C.card,borderRadius:R,border:`1px solid ${C.border}`,
+      overflow:"hidden",height:"100%",
+      boxShadow:"0 1px 3px rgba(0,0,0,0.4),0 4px 16px rgba(0,0,0,0.2)",
+      display:"flex",flexDirection:"column",
+      ...style,
+    }}>{children}</div>
+  );
+}
+
+// ─── Sortable wrapper ─────────────────────────────────────────────────────────
+function SortableCard({id,children}) {
   const {attributes,listeners,setNodeRef,transform,transition,isDragging} = useSortable({id});
   return (
     <div ref={setNodeRef} style={{
-      transform: CSS.Transform.toString(transform),
-      transition: transition || "transform 200ms cubic-bezier(.4,0,.2,1)",
-      opacity: isDragging ? 0 : 1,
-      height: "100%",
+      transform:CSS.Transform.toString(transform),
+      transition:transition||"transform 200ms cubic-bezier(.4,0,.2,1)",
+      opacity:isDragging?0:1,
     }}>
       {children({dragProps:{...attributes,...listeners}})}
     </div>
@@ -149,24 +183,20 @@ function SortableCard({id, children}) {
 }
 
 // ─── Widget card ─────────────────────────────────────────────────────────────
-function Widget({label, color, accent, dragProps, children}) {
+function Widget({label,color,dragProps,children}) {
   return (
-    <Card style={{display:"flex",flexDirection:"column",height:"100%"}}>
+    <Card>
       <div style={{
-        display:"flex",alignItems:"center",gap:8,
-        padding:"10px 14px",
-        borderBottom:`1px solid ${C.border}`,
+        display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+        borderBottom:`1px solid ${C.border}`,flexShrink:0,
       }}>
-        <div {...dragProps} style={{
-          cursor:"grab",color:C.dim,fontSize:16,lineHeight:1,
-          touchAction:"none",userSelect:"none",marginRight:2,
-        }}>⠿</div>
-        <div style={{width:3,height:14,borderRadius:2,background:color,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
+        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,
+          lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
+        <div style={{width:3,height:13,borderRadius:2,background:color,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
+          textTransform:"uppercase",color:C.muted}}>{label}</span>
       </div>
-      <div style={{flex:1,overflow:"auto",padding:14}}>
-        {children}
-      </div>
+      <div style={{flex:1,overflow:"auto",padding:14}}>{children}</div>
     </Card>
   );
 }
@@ -182,42 +212,30 @@ function UserMenu({session,token}) {
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
   const avatar=user?.user_metadata?.avatar_url;
 
+  useEffect(()=>{if(!token||!open)return;dbLoad("global","settings",token).then(d=>{if(d?.ouraToken)setOuraKey(d.ouraToken);});},[token,open]); // eslint-disable-line
   useEffect(()=>{
-    if (!token||!open) return;
-    dbLoad("global","settings",token).then(d=>{if(d?.ouraToken)setOuraKey(d.ouraToken);});
-  },[token,open]); // eslint-disable-line
-  useEffect(()=>{
-    if (!open) return;
+    if(!open)return;
     const fn=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
     document.addEventListener("mousedown",fn);
     return ()=>document.removeEventListener("mousedown",fn);
   },[open]);
 
-  async function saveKey() {
-    setSaving(true);
-    await dbSave("global","settings",{ouraToken:ouraKey},token);
-    setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
-  }
+  async function saveKey(){setSaving(true);await dbSave("global","settings",{ouraToken:ouraKey},token);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);}
 
   return (
     <div ref={ref} style={{position:"relative"}}>
       <button onClick={()=>setOpen(o=>!o)} style={{
         width:32,height:32,borderRadius:"50%",padding:0,cursor:"pointer",
         border:`1.5px solid ${C.border2}`,background:avatar?"transparent":C.surface,
-        overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",
-        transition:"border-color 0.15s",
-      }}>
-        {avatar
-          ? <img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
-          : <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{initials}</span>}
+        overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        {avatar?<img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
+          :<span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{initials}</span>}
       </button>
       {open&&(
-        <div style={{
-          position:"absolute",top:40,right:0,width:256,zIndex:300,
-          background:C.card,border:`1px solid ${C.border2}`,
-          borderRadius:R,padding:16,display:"flex",flexDirection:"column",gap:12,
-          boxShadow:"0 8px 32px rgba(0,0,0,0.6)",
-        }}>
+        <div style={{position:"absolute",top:40,right:0,width:256,zIndex:300,
+          background:C.card,border:`1px solid ${C.border2}`,borderRadius:R,
+          padding:16,display:"flex",flexDirection:"column",gap:12,
+          boxShadow:"0 8px 32px rgba(0,0,0,0.6)"}}>
           <div>
             <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
             <div style={{fontFamily:mono,fontSize:9,color:C.muted,marginTop:3}}>{user?.email}</div>
@@ -225,8 +243,7 @@ function UserMenu({session,token}) {
           <div style={{height:1,background:C.border}}/>
           <div>
             <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>Oura API Key</div>
-            <input type="password" value={ouraKey} onChange={e=>{setOuraKey(e.target.value);setSaved(false);}}
-              placeholder="paste token here"
+            <input type="password" value={ouraKey} onChange={e=>{setOuraKey(e.target.value);setSaved(false);}} placeholder="paste token here"
               style={{width:"100%",background:C.surface,border:`1px solid ${C.border2}`,borderRadius:6,outline:"none",
                 color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px",marginBottom:8}}/>
             <button onClick={saveKey} disabled={saving||!ouraKey.trim()} style={{
@@ -249,27 +266,19 @@ function UserMenu({session,token}) {
   );
 }
 
-// ─── Top bar (fixed, not draggable) ──────────────────────────────────────────
+// ─── TopBar ───────────────────────────────────────────────────────────────────
 function TopBar({session,token,syncStatus}) {
   return (
-    <div style={{
-      background:C.surface,
-      borderBottom:`1px solid ${C.border}`,
-      padding:"0 16px",
-      height:48,
-      display:"flex",alignItems:"center",gap:12,
-      flexShrink:0,
-      position:"sticky",top:0,zIndex:100,
-    }}>
+    <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 16px",
+      height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,
+      position:"sticky",top:0,zIndex:100}}>
       <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em"}}>Life OS</span>
       <div style={{flex:1}}/>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
-        <div style={{
-          width:6,height:6,borderRadius:"50%",
+        <div style={{width:6,height:6,borderRadius:"50%",
           background:syncStatus.syncing?C.yellow:C.green,
           boxShadow:syncStatus.syncing?`0 0 6px ${C.yellow}`:`0 0 6px ${C.green}`,
-          transition:"background 0.3s",
-        }}/>
+          transition:"background 0.3s"}}/>
         <span style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.06em"}}>
           {syncStatus.syncing?"syncing":syncStatus.lastSync||"synced"}
         </span>
@@ -279,56 +288,42 @@ function TopBar({session,token,syncStatus}) {
   );
 }
 
-// ─── CalStrip card ────────────────────────────────────────────────────────────
+// ─── CalStrip ────────────────────────────────────────────────────────────────
 function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
   const [anchor,setAnchor]=useState(()=>new Date());
   const days=weekOf(anchor),today=todayKey();
   const months=[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ");
-
   return (
     <Card>
-      {/* Cal header */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
-        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:16,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-        <span style={{fontFamily:serif,fontSize:18,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>
-          {months}
-        </span>
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
+        <span style={{fontFamily:serif,fontSize:18,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>{months}</span>
         <span style={{fontFamily:mono,fontSize:12,color:C.muted,marginLeft:2}}>{days[0].getFullYear()}</span>
         <div style={{flex:1}}/>
         {[["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
-          <button key={l} onClick={fn} style={{
-            background:"none",cursor:"pointer",border:`1px solid ${C.border2}`,
-            borderRadius:6,color:C.muted,fontFamily:mono,
-            padding:l==="today"?"4px 10px":"4px 8px",
-            fontSize:l==="today"?9:13,
-            letterSpacing:l==="today"?"0.1em":"0",
-            transition:"border-color 0.15s,color 0.15s",
-          }}>{l}</button>
+          <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
+            border:`1px solid ${C.border2}`,borderRadius:6,color:C.muted,fontFamily:mono,
+            padding:l==="today"?"4px 10px":"4px 8px",fontSize:l==="today"?9:13,
+            letterSpacing:l==="today"?"0.1em":"0",transition:"border-color 0.15s,color 0.15s"}}>{l}</button>
         ))}
       </div>
-      {/* Day grid */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flex:1}}>
         {days.map((d,i)=>{
           const k=toKey(d),sel=k===selected,tod=k===today;
           const evts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
           const dot=healthDots[k]||{};
           return (
-            <div key={k} onClick={()=>onSelect(k)} style={{
-              cursor:"pointer",
+            <div key={k} onClick={()=>onSelect(k)} style={{cursor:"pointer",
               borderRight:i<6?`1px solid ${C.border}`:"none",
-              background:sel?"rgba(196,168,130,0.06)":"transparent",
-              transition:"background 0.15s",
-            }}>
-              <div style={{
-                padding:"8px 6px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
+              background:sel?"rgba(196,168,130,0.06)":"transparent",transition:"background 0.15s"}}>
+              <div style={{padding:"8px 6px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
                 borderBottom:`1px solid ${C.border}`,
-                borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.muted}`:`2px solid transparent`,
-              }}>
+                borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.muted}`:`2px solid transparent`}}>
                 <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.08em",color:sel?C.accent:C.muted}}>{DAY3[i]}</span>
-                <span style={{fontFamily:serif,fontSize:17,lineHeight:1,color:tod?C.accent:sel?C.text:C.text}}>{d.getDate()}</span>
+                <span style={{fontFamily:serif,fontSize:17,lineHeight:1,color:tod?C.accent:C.text}}>{d.getDate()}</span>
                 <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
-                  {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,  display:"inline-block"}}/>}
-                  {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green, display:"inline-block"}}/>}
+                  {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
+                  {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green,display:"inline-block"}}/>}
                   {dot.strain>=90   &&<span style={{width:3,height:3,borderRadius:"50%",background:C.yellow,display:"inline-block"}}/>}
                 </div>
               </div>
@@ -351,60 +346,47 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
   );
 }
 
-// ─── HealthStrip card ─────────────────────────────────────────────────────────
+// ─── HealthStrip ──────────────────────────────────────────────────────────────
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",strainScore:"",strainNote:""};
-
 function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
-
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
   useEffect(()=>{
-    if (!loaded||!token) return;
+    if(!loaded||!token)return;
     onSyncStart("oura");
     fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(data=>{
-        if(data.error) return;
+        if(data.error)return;
         setH(p=>({...p,
-          sleepScore:     p.sleepScore     ||data.sleepScore     ||"",
-          sleepHrs:       p.sleepHrs       ||data.sleepHrs       ||"",
-          sleepEff:       p.sleepEff       ||data.sleepQuality   ||"",
-          readinessScore: p.readinessScore ||data.readinessScore ||"",
-          hrv:            p.hrv            ||data.hrv            ||"",
-          rhr:            p.rhr            ||data.rhr            ||"",
+          sleepScore:p.sleepScore||data.sleepScore||"",sleepHrs:p.sleepHrs||data.sleepHrs||"",
+          sleepEff:p.sleepEff||data.sleepQuality||"",readinessScore:p.readinessScore||data.readinessScore||"",
+          hrv:p.hrv||data.hrv||"",rhr:p.rhr||data.rhr||"",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
 
   const metrics=[
-    {key:"sleep",    label:"Sleep",    color:C.blue,
-      score:h.sleepScore, setScore:e=>setH(p=>({...p,sleepScore:e.target.value})),
+    {key:"sleep",label:"Sleep",color:C.blue,score:h.sleepScore,setScore:e=>setH(p=>({...p,sleepScore:e.target.value})),
       fields:[{label:"Hours",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Efficiency",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
-    {key:"readiness",label:"Readiness",color:C.green,
-      score:h.readinessScore,setScore:e=>setH(p=>({...p,readinessScore:e.target.value})),
+    {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,setScore:e=>setH(p=>({...p,readinessScore:e.target.value})),
       fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"Resting HR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
-    {key:"strain",   label:"Strain",   color:C.yellow,
-      score:h.strainScore,setScore:e=>setH(p=>({...p,strainScore:e.target.value})),
+    {key:"strain",label:"Strain",color:C.yellow,score:h.strainScore,setScore:e=>setH(p=>({...p,strainScore:e.target.value})),
       fields:[{label:"Note",value:h.strainNote,onChange:set("strainNote"),unit:""}]},
   ];
 
   return (
-    <Card>
+    <Card style={{overflow:"visible"}}>
       <div style={{display:"flex",alignItems:"stretch"}}>
-        {/* Drag handle column */}
         <div style={{display:"flex",alignItems:"center",padding:"0 10px",borderRight:`1px solid ${C.border}`}}>
-          <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:16,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
+          <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
         </div>
         {metrics.map((m,mi)=>(
-          <div key={m.key} style={{
-            flex:"1 1 0",display:"flex",alignItems:"center",gap:12,
-            padding:"12px 14px",
-            borderRight:mi<2?`1px solid ${C.border}`:"none",
-          }}>
+          <div key={m.key} style={{flex:"1 1 0",display:"flex",alignItems:"center",gap:12,
+            padding:"12px 14px",borderRight:mi<2?`1px solid ${C.border}`:"none"}}>
             <div style={{position:"relative",flexShrink:0}}>
               <Ring score={m.score} color={m.color} size={48}/>
-              <input value={m.score} onChange={m.setScore}
-                style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
+              <input value={m.score} onChange={m.setScore} style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
             </div>
             <div style={{flex:1,minWidth:0}}>
               <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:6}}>{m.label}</div>
@@ -437,11 +419,11 @@ function Notes({date,token}) {
       placeholder={loaded?"Write anything…":"Loading…"} disabled={!loaded}
       style={{background:"transparent",border:"none",outline:"none",resize:"none",padding:0,
         color:C.text,fontFamily:serif,fontSize:15,lineHeight:1.8,
-        width:"100%",height:"100%",minHeight:160,opacity:loaded?1:0.4}}/>
+        width:"100%",height:"100%",opacity:loaded?1:0.4}}/>
   );
 }
 
-// ─── RowList ──────────────────────────────────────────────────────────────────
+// ─── RowList ─────────────────────────────────────────────────────────────────
 function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token);
@@ -449,16 +431,15 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const total=safe.reduce((s,r)=>s+(r.kcal||0),0);
 
-  async function runEstimate(id,text) {
+  async function runEstimate(id,text){
     setRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
     const kcal=await estimateKcal(promptFn(text)).catch(()=>null);
     setRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
   }
-  function onKey(e,id,idx) {
+  function onKey(e,id,idx){
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
   }
-
   if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
@@ -476,7 +457,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
         </div>
       ))}
       {total>0&&(
-        <div style={{marginTop:"auto",paddingTop:8,paddingBottom:2,display:"flex",justifyContent:"flex-end",alignItems:"center",gap:6}}>
+        <div style={{marginTop:"auto",paddingTop:8,display:"flex",alignItems:"center",gap:8}}>
           <div style={{flex:1,height:1,background:C.border}}/>
           <span style={{fontFamily:mono,fontSize:11,color,opacity:0.9}}>{prefix}{total} kcal</span>
         </div>
@@ -484,7 +465,6 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
     </div>
   );
 }
-
 function Meals({date,token}){return <RowList date={date} type="meals" token={token} placeholder="What did you eat?" promptFn={t=>`Calories in: "${t}". Return JSON: {"kcal":420}`} prefix="" color={C.accent}/>;}
 function Activity({date,token}){return <RowList date={date} type="activity" token={token} placeholder="What did you do?" promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`} prefix="−" color={C.green}/>;}
 
@@ -495,8 +475,7 @@ function Tasks({date,token}) {
   const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
-
-  function onKey(e,id,idx) {
+  function onKey(e,id,idx){
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);}
   }
@@ -504,7 +483,8 @@ function Tasks({date,token}) {
   return (
     <div style={{flex:1,overflow:"auto"}}>
       {[...open,...done].map((row,idx)=>(
-        <div key={row.id} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0",minHeight:28,opacity:row.done?0.35:1,transition:"opacity 0.2s"}}>
+        <div key={row.id} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0",minHeight:28,
+          opacity:row.done?0.35:1,transition:"opacity 0.2s"}}>
           <button onClick={()=>setRows(safe.map(r=>r.id===row.id?{...r,done:!r.done}:r))}
             style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",
               border:`1.5px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
@@ -538,13 +518,9 @@ function LoginScreen() {
             scopes:"https://www.googleapis.com/auth/calendar.readonly",
             redirectTo:`${window.location.origin}/auth/callback`,
           }});
-        }} style={{
-          background:"none",border:`1px solid ${C.border2}`,borderRadius:8,
-          color:loading?C.muted:C.text,fontFamily:mono,fontSize:10,
-          letterSpacing:"0.15em",textTransform:"uppercase",
-          padding:"13px 32px",cursor:loading?"not-allowed":"pointer",
-          transition:"border-color 0.2s",
-        }}>
+        }} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:8,
+          color:loading?C.muted:C.text,fontFamily:mono,fontSize:10,letterSpacing:"0.15em",
+          textTransform:"uppercase",padding:"13px 32px",cursor:loading?"not-allowed":"pointer"}}>
           {loading?"redirecting…":"sign in with google"}
         </button>
       </div>
@@ -552,56 +528,15 @@ function LoginScreen() {
   );
 }
 
-// ─── Section IDs ─────────────────────────────────────────────────────────────
+// ─── Widget definitions ───────────────────────────────────────────────────────
 const WIDGET_DEFS = [
   {id:"notes",    label:"Notes",    color:C.accent, Comp:Notes},
-  {id:"meals",    label:"Meals",    color:C.red,    Comp:Meals},
   {id:"tasks",    label:"Tasks",    color:C.blue,   Comp:Tasks},
+  {id:"meals",    label:"Meals",    color:C.red,    Comp:Meals},
   {id:"activity", label:"Activity", color:C.green,  Comp:Activity},
 ];
-const DRAGGABLE_IDS = ["cal","health","notes","tasks","meals","activity"];
-
-// ─── Resizable card ───────────────────────────────────────────────────────────
-function ResizableCard({id, defaultHeight=240, children, style={}}) {
-  const [height, setHeight] = useState(defaultHeight);
-  const startY = useRef(null);
-  const startH = useRef(null);
-
-  function onMouseDown(e) {
-    e.preventDefault();
-    startY.current = e.clientY;
-    startH.current = height;
-    const onMove = e => {
-      const delta = e.clientY - startY.current;
-      setHeight(Math.max(120, startH.current + delta));
-    };
-    const onUp = () => {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }
-
-  return (
-    <div style={{position:"relative", height, ...style}}>
-      <Card style={{height:"100%",display:"flex",flexDirection:"column"}}>
-        {children}
-      </Card>
-      {/* Resize handle */}
-      <div onMouseDown={onMouseDown} style={{
-        position:"absolute",bottom:0,left:"10%",right:"10%",height:6,
-        cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center",
-        zIndex:10,borderRadius:"0 0 12px 12px",
-      }}>
-        <div style={{width:32,height:3,borderRadius:2,background:C.border2,transition:"background 0.15s"}}
-          onMouseEnter={e=>e.currentTarget.style.background=C.accent}
-          onMouseLeave={e=>e.currentTarget.style.background=C.border2}
-        />
-      </div>
-    </div>
-  );
-}
+const FULL_IDS   = ["cal","health"];
+const WIDGET_IDS = WIDGET_DEFS.map(w=>w.id);
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -612,8 +547,19 @@ export default function Dashboard() {
   const [healthDots,setHealthDots]= useState({});
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
-  const [order,     setOrder]     = useState(DRAGGABLE_IDS);
-  const [activeId,  setActiveId]  = useState(null);
+
+  // Full-width sections order
+  const [fullOrder, setFullOrder] = useState(FULL_IDS);
+  // Left column: first widget; right column: rest
+  const [leftId,    setLeftId]    = useState("notes");
+  const [rightOrder,setRightOrder]= useState(["tasks","meals","activity"]);
+
+  // Heights (resizable)
+  const [heights, setHeights] = useState({
+    cal:440, health:76,
+    notes:0, // 0 = fill remaining
+    tasks:200, meals:200, activity:200,
+  });
 
   const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}));
 
@@ -622,13 +568,12 @@ export default function Dashboard() {
     const code=new URLSearchParams(window.location.search).get("code");
     if(code){supabase.auth.exchangeCodeForSession(code).then(()=>window.history.replaceState({},document.title,window.location.pathname));}
     supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{setSession(session);setAuthReady(true);});
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);setAuthReady(true);});
     return ()=>subscription.unsubscribe();
   },[]);
 
   const token=session?.access_token;
   const googleToken=session?.provider_token;
-
   const startSync=useCallback(k=>setSyncing(s=>new Set([...s,k])),[]);
   const endSync=useCallback(k=>{
     setSyncing(s=>{const n=new Set(s);n.delete(k);return n;});
@@ -636,7 +581,7 @@ export default function Dashboard() {
   },[]);
 
   useEffect(()=>{
-    if(!googleToken) return;
+    if(!googleToken)return;
     startSync("cal");
     fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({token:googleToken,start:toKey(shift(new Date(),-7)),end:toKey(shift(new Date(),21))})})
@@ -649,11 +594,42 @@ export default function Dashboard() {
 
   const wMap=Object.fromEntries(WIDGET_DEFS.map(w=>[w.id,w]));
 
+  function makeResizeHandler(id) {
+    return function(e){
+      e.preventDefault(); e.stopPropagation();
+      const startY=e.clientY, startH=heights[id]||200;
+      function onMove(e){setHeights(h=>({...h,[id]:Math.max(80,startH+(e.clientY-startY))}));}
+      function onUp(){window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);}
+      window.addEventListener("pointermove",onMove);
+      window.addEventListener("pointerup",onUp);
+    };
+  }
+
+  // Bottom resize handle UI
+  function ResizeHandle({id}) {
+    return (
+      <div onPointerDown={makeResizeHandler(id)} style={{
+        height:10,display:"flex",alignItems:"center",justifyContent:"center",
+        cursor:"ns-resize",flexShrink:0,
+      }}>
+        <div style={{
+          width:32,height:3,borderRadius:2,background:C.border,
+          transition:"background 0.15s",
+        }}
+          onPointerEnter={e=>e.currentTarget.style.background=C.accent}
+          onPointerLeave={e=>e.currentTarget.style.background=C.border}
+        />
+      </div>
+    );
+  }
+
+  // Drag handling for full-width sections
+  const [activeId,setActiveId]=useState(null);
   function handleDragStart({active}){setActiveId(active.id);}
   function handleDragEnd({active,over}){
     setActiveId(null);
-    if(!over||active.id===over.id) return;
-    setOrder(o=>arrayMove(o,o.indexOf(active.id),o.indexOf(over.id)));
+    if(!over||active.id===over.id)return;
+    setFullOrder(o=>arrayMove(o,o.indexOf(active.id),o.indexOf(over.id)));
   }
 
   if(!authReady) return (
@@ -664,10 +640,8 @@ export default function Dashboard() {
   if(!session) return <LoginScreen/>;
 
   const syncStatus={syncing:syncing.size>0,lastSync};
-
-  // Separate full-width from widget sections
-  const fullSections = order.filter(id=>id==="cal"||id==="health");
-  const widgetIds = order.filter(id=>id!=="cal"&&id!=="health");
+  const leftWidget  = wMap[leftId];
+  const rightWidgets = rightOrder.map(id=>wMap[id]).filter(Boolean);
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
@@ -684,82 +658,71 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} syncStatus={syncStatus}/>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter}
-        onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <SortableContext items={order} strategy={verticalListSortingStrategy}>
+      <div style={{flex:1,padding:12,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
 
-          <div style={{flex:1,padding:12,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
-
-            {/* Full-width sortable sections (cal, health) */}
-            {order.filter(id=>id==="cal"||id==="health").map(id=>(
-              <SortableCard key={id} id={id}>
-                {({dragProps})=> id==="cal"
-                  ? <CalStrip selected={selected} onSelect={setSelected}
-                      events={events} healthDots={healthDots} dragProps={dragProps}/>
-                  : <HealthStrip date={selected} token={token}
-                      onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-                      dragProps={dragProps}/>
-                }
-              </SortableCard>
-            ))}
-
-            {/* Widget area: left column (notes) + right column (others) */}
-            {widgetIds.length > 0 && (
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,alignItems:"start"}}>
-                {/* Left col: first widget (notes by default) spans full height */}
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {widgetIds.filter((_,i)=>i===0).map(id=>{
-                    const w=wMap[id];
-                    return (
-                      <SortableCard key={id} id={id}>
-                        {({dragProps})=>(
-                          <ResizableCard id={id} defaultHeight={580}>
-                            <Widget label={w.label} color={w.color} dragProps={dragProps}>
-                              <w.Comp date={selected} token={token}/>
-                            </Widget>
-                          </ResizableCard>
-                        )}
-                      </SortableCard>
-                    );
-                  })}
+        {/* Full-width sections: cal + health, sortable between each other */}
+        <DndContext sensors={sensors} collisionDetection={closestCenter}
+          onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {fullOrder.map(id=>(
+                <div key={id}>
+                  <SortableCard id={id}>
+                    {({dragProps})=>
+                      id==="cal"
+                        ? <div style={{height:heights.cal}}>
+                            <CalStrip selected={selected} onSelect={setSelected}
+                              events={events} healthDots={healthDots} dragProps={dragProps}/>
+                          </div>
+                        : <HealthStrip date={selected} token={token}
+                            onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+                            dragProps={dragProps}/>
+                    }
+                  </SortableCard>
+                  {id==="cal" && <ResizeHandle id="cal"/>}
                 </div>
-
-                {/* Right col: remaining widgets, each resizable */}
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {widgetIds.filter((_,i)=>i>0).map(id=>{
-                    const w=wMap[id];
-                    return (
-                      <SortableCard key={id} id={id}>
-                        {({dragProps})=>(
-                          <ResizableCard id={id} defaultHeight={180}>
-                            <Widget label={w.label} color={w.color} dragProps={dragProps}>
-                              <w.Comp date={selected} token={token}/>
-                            </Widget>
-                          </ResizableCard>
-                        )}
-                      </SortableCard>
-                    );
-                  })}
-                </div>
+              ))}
+            </div>
+          </SortableContext>
+          <DragOverlay>
+            {activeId&&(
+              <div style={{background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
+                padding:"12px 18px",fontFamily:mono,fontSize:10,letterSpacing:"0.15em",
+                textTransform:"uppercase",color:C.accent,boxShadow:"0 12px 40px rgba(0,0,0,0.7)"}}>
+                {activeId==="cal"?"Calendar":"Health"}
               </div>
             )}
+          </DragOverlay>
+        </DndContext>
 
-          </div>
-        </SortableContext>
+        {/* Two-column widget area */}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,alignItems:"start"}}>
 
-        <DragOverlay dropAnimation={{sideEffects:defaultDropAnimationSideEffects({styles:{active:{opacity:"0"}}})}}>
-          {activeId&&(
-            <div style={{
-              background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
-              padding:"12px 18px",fontFamily:mono,fontSize:10,
-              letterSpacing:"0.15em",textTransform:"uppercase",color:C.accent,
-              boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
-            }}>
-              {activeId==="cal"?"Calendar":activeId==="health"?"Health":wMap[activeId]?.label}
+          {/* Left column: single tall widget (Notes by default) */}
+          <div style={{display:"flex",flexDirection:"column"}}>
+            <div style={{height:heights.notes||600,minHeight:120}}>
+              <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
+                <leftWidget.Comp date={selected} token={token}/>
+              </Widget>
             </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+            <ResizeHandle id="notes"/>
+          </div>
+
+          {/* Right column: stacked widgets with individual resize */}
+          <div style={{display:"flex",flexDirection:"column",gap:0}}>
+            {rightWidgets.map((w,i)=>(
+              <div key={w.id}>
+                <div style={{height:heights[w.id]||200,minHeight:80}}>
+                  <Widget label={w.label} color={w.color} dragProps={{}}>
+                    <w.Comp date={selected} token={token}/>
+                  </Widget>
+                </div>
+                <ResizeHandle id={w.id}/>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
