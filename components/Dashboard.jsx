@@ -679,9 +679,8 @@ export default function Dashboard() {
 
   // Heights (resizable)
   const [heights, setHeights] = useState({
-    cal:300, health:76,
-    notes:545,
-    tasks:175, meals:175, activity:175,
+    cal:300,
+    tasks:1, meals:1, activity:1,  // flex ratios for right column
   });
 
   const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}));
@@ -720,11 +719,24 @@ export default function Dashboard() {
   function makeResizeHandler(id) {
     return function(e){
       e.preventDefault(); e.stopPropagation();
-      const startY=e.clientY, startH=heights[id]||200;
-      function onMove(e){setHeights(h=>({...h,[id]:Math.max(80,startH+(e.clientY-startY))}));}
-      function onUp(){window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);}
-      window.addEventListener("pointermove",onMove);
-      window.addEventListener("pointerup",onUp);
+      if (id === "cal") {
+        // Cal uses px height
+        const startY=e.clientY, startH=heights.cal;
+        function onMove(e){setHeights(h=>({...h,cal:Math.max(120,startH+(e.clientY-startY))}));}
+        function onUp(){window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);}
+        window.addEventListener("pointermove",onMove);
+        window.addEventListener("pointerup",onUp);
+      } else {
+        // Right column widgets use flex ratios
+        const startY=e.clientY, startRatio=heights[id]||1;
+        function onMove(e){
+          const delta=(e.clientY-startY)/100; // scale delta to ratio units
+          setHeights(h=>({...h,[id]:Math.max(0.2,startRatio+delta)}));
+        }
+        function onUp(){window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);}
+        window.addEventListener("pointermove",onMove);
+        window.addEventListener("pointerup",onUp);
+      }
     };
   }
 
@@ -781,14 +793,14 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} syncStatus={syncStatus}/>
 
-      {/* Scrollable content area */}
-      <div style={{flex:1,overflowY:"auto",padding:"8px 10px 10px",display:"flex",flexDirection:"column",gap:6}}>
+      {/* Main layout — fills remaining height, no scroll, equal padding all sides */}
+      <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column",padding:10,gap:8,minHeight:0}}>
 
-        {/* Full-width sections: cal + health, sortable between each other */}
+        {/* Full-width: cal + health */}
         <DndContext sensors={sensors} collisionDetection={closestCenter}
           onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
-            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{display:"flex",flexDirection:"column",gap:8,flexShrink:0}}>
               {fullOrder.map(id=>(
                 <div key={id}>
                   <SortableCard id={id}>
@@ -819,33 +831,28 @@ export default function Dashboard() {
           </DragOverlay>
         </DndContext>
 
-        {/* Two-column widget area */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,alignItems:"start"}}>
+        {/* Widget area — fills all remaining vertical space */}
+        <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minHeight:0}}>
 
-          {/* Left column: Notes — height matches sum of right column */}
-          <div style={{display:"flex",flexDirection:"column"}}>
-            <div style={{height:heights.notes,minHeight:120}}>
-              <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
-                <leftWidget.Comp date={selected} token={token}/>
-              </Widget>
-            </div>
-            <ResizeHandle id="notes"/>
+          {/* Left: Notes fills full height */}
+          <div style={{minHeight:0}}>
+            <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
+              <leftWidget.Comp date={selected} token={token}/>
+            </Widget>
           </div>
 
-          {/* Right column: Tasks, Meals, Activity — stacked with resize handles between */}
-          <div style={{display:"flex",flexDirection:"column"}}>
-            {rightWidgets.map((w, i)=>(
-              <div key={w.id} style={{display:"flex",flexDirection:"column"}}>
-                <div style={{height:heights[w.id],minHeight:80}}>
+          {/* Right: Tasks/Meals/Activity share height equally, resizable between them */}
+          <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
+            {rightWidgets.map((w,i)=>(
+              <div key={w.id} style={{flex:heights[w.id]||1,minHeight:80,display:"flex",flexDirection:"column",gap:0}}>
+                <div style={{flex:1,minHeight:0}}>
                   <Widget label={w.label} color={w.color} dragProps={{}}>
                     <w.Comp date={selected} token={token}/>
                   </Widget>
                 </div>
-                {i < rightWidgets.length - 1 && <ResizeHandle id={w.id}/>}
+                {i < rightWidgets.length-1 && <ResizeHandle id={w.id}/>}
               </div>
             ))}
-            {/* Bottom resize handle for last right widget mirrors notes handle */}
-            <ResizeHandle id={rightWidgets[rightWidgets.length-1]?.id}/>
           </div>
         </div>
       </div>
