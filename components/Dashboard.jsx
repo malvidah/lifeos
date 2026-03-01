@@ -89,15 +89,20 @@ function useDbSave(date,type,empty,token) {
   useEffect(()=>{
     if (!token) return;
     const flush=()=>{clearTimeout(timer.current);dbSave(dateRef.current,type,live.current,token);};
+    const onVis=()=>{if(document.hidden)flush();};
     window.addEventListener("beforeunload",flush);
-    document.addEventListener("visibilitychange",()=>{if(document.hidden)flush();});
-    return ()=>window.removeEventListener("beforeunload",flush);
+    document.addEventListener("visibilitychange",onVis);
+    return ()=>{
+      window.removeEventListener("beforeunload",flush);
+      document.removeEventListener("visibilitychange",onVis);
+    };
   },[type,token]); // eslint-disable-line
   const setValue=useCallback(u=>{
     const next=typeof u==="function"?u(live.current):u;
     live.current=next; MEM[`${dateRef.current}:${type}`]=next; _set(next);
     clearTimeout(timer.current);
-    timer.current=setTimeout(()=>dbSave(dateRef.current,type,live.current,token),800);
+    // 400ms debounce - short enough that iOS page suspension doesn't eat it
+    timer.current=setTimeout(()=>dbSave(dateRef.current,type,live.current,token),400);
   },[type,token]);
   return {value,setValue,loaded};
 }
@@ -578,7 +583,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
             onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
             onKeyDown={e=>onKey(e,row.id,idx)} placeholder={idx===0?placeholder:""}
             style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
-              color:row.text?C.text:C.muted,fontFamily:serif,fontSize:15}}/>
+              color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
           <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
             {row.estimating?"…":row.kcal?`${prefix}${row.kcal}`:""}
           </span>
@@ -624,7 +629,7 @@ function Tasks({date,token}) {
             onKeyDown={e=>onKey(e,row.id,idx)}
             placeholder={idx===0&&open.length===1&&!row.text?"Add a task…":""}
             style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
-              color:row.done?C.muted:C.text,fontFamily:serif,fontSize:15,textDecoration:row.done?"line-through":"none"}}/>
+              color:row.done?C.muted:C.text,fontFamily:serif,fontSize:16,textDecoration:row.done?"line-through":"none"}}/>
         </div>
       ))}
     </div>
