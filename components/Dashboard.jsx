@@ -71,7 +71,41 @@ async function dbLoad(date,type,token) {
     return (await r.json()).data ?? null;
   } catch { return null; }
 }
-const MEM = {};
+const MEM = {}; // {key: value}
+const DIRTY = {}; // {key: bool} - has local unsaved changes
+
+// Merge two notes strings: combine unique lines from both
+function mergeNotes(local, remote) {
+  if (!local && !remote) return "";
+  if (!local) return remote;
+  if (!remote) return local;
+  if (local === remote) return local;
+  // Append remote lines that aren't already in local
+  const localLines = local.split("\n");
+  const remoteLines = remote.split("\n");
+  const localSet = new Set(localLines.map(l=>l.trim()).filter(Boolean));
+  const newLines = remoteLines.filter(l => l.trim() && !localSet.has(l.trim()));
+  if (newLines.length === 0) return local; // local is superset
+  return local + "\n" + newLines.join("\n");
+}
+
+// Merge two row arrays (tasks/meals/activity): union by id, remote wins for shared ids
+function mergeRows(local, remote) {
+  if (!Array.isArray(local) || !Array.isArray(remote)) return remote ?? local ?? [];
+  const merged = [...remote];
+  const remoteIds = new Set(remote.map(r=>r.id));
+  for (const row of local) {
+    if (!remoteIds.has(row.id)) merged.push(row);
+  }
+  return merged;
+}
+
+function mergeValues(type, local, remote) {
+  if (type === "notes") return mergeNotes(local, remote);
+  if (["tasks","meals","activity"].includes(type)) return mergeRows(local, remote);
+  return remote ?? local; // health etc: remote wins
+}
+
 function useDbSave(date,type,empty,token) {
   const [value,_set] = useState(()=>MEM[`${date}:${type}`]??empty);
   const [loaded,setLoaded] = useState(`${date}:${type}` in MEM);
@@ -80,16 +114,36 @@ function useDbSave(date,type,empty,token) {
   useEffect(()=>{
     if (!token) return;
     const key=`${date}:${type}`; dateRef.current=date;
-    if (key in MEM){_set(MEM[key]);live.current=MEM[key];setLoaded(true);return;}
-    setLoaded(false);_set(empty);live.current=empty;
-    dbLoad(date,type,token).then(v=>{
-      const val=v??empty; MEM[key]=val;_set(val);live.current=val;setLoaded(true);
+    if (key in MEM && !DIRTY[key]){_set(MEM[key]);live.current=MEM[key];setLoaded(true);return;}
+    const localVal = key in MEM ? MEM[key] : null;
+    setLoaded(false);
+    if (localVal === null) _set(empty);
+    dbLoad(date,type,token).then(remote=>{
+      let val;
+      if (localVal !== null && DIRTY[key]) {
+        // We have local unsaved changes — merge with remote
+        val = mergeValues(type, localVal, remote ?? empty);
+      } else {
+        val = remote ?? empty;
+      }
+      MEM[key]=val; DIRTY[key]=false; _set(val); live.current=val; setLoaded(true);
+      // If merge produced new content, save it back
+      if (localVal !== null && val !== remote) {
+        dbSave(date, type, val, token);
+      }
     });
   },[date,type,token]); // eslint-disable-line
   useEffect(()=>{
     if (!token) return;
     const flush=()=>{clearTimeout(timer.current);dbSave(dateRef.current,type,live.current,token);};
-    const onVis=()=>{if(document.hidden)flush();};
+    const onVis=()=>{
+      if(document.hidden){flush();}
+      else {
+        // App became visible — invalidate cache so re-fetch+merge happens on next date change or manual trigger
+        const key=`${dateRef.current}:${type}`;
+        if (!DIRTY[key]) delete MEM[key]; // clear stale cache so useEffect re-fetches
+      }
+    };
     window.addEventListener("beforeunload",flush);
     document.addEventListener("visibilitychange",onVis);
     return ()=>{
@@ -99,10 +153,14 @@ function useDbSave(date,type,empty,token) {
   },[type,token]); // eslint-disable-line
   const setValue=useCallback(u=>{
     const next=typeof u==="function"?u(live.current):u;
-    live.current=next; MEM[`${dateRef.current}:${type}`]=next; _set(next);
+    live.current=next;
+    const key=`${dateRef.current}:${type}`;
+    MEM[key]=next; DIRTY[key]=true; _set(next);
     clearTimeout(timer.current);
-    // 400ms debounce - short enough that iOS page suspension doesn't eat it
-    timer.current=setTimeout(()=>dbSave(dateRef.current,type,live.current,token),400);
+    timer.current=setTimeout(()=>{
+      dbSave(dateRef.current,type,live.current,token);
+      DIRTY[key]=false;
+    },400);
   },[type,token]);
   return {value,setValue,loaded};
 }
