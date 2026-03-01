@@ -412,281 +412,137 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}
 }
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
-// ─── Rich Notes editor ────────────────────────────────────────────────────────
-// Stores markdown, renders live with heading/bold/italic support.
-// # + space  → heading
-// Cmd+B      → **bold**
-// Cmd+I      → *italic*
-
+// ─── Notes ────────────────────────────────────────────────────────────────────
+// Plain textarea with a transparent overlay that colorizes "# heading" lines.
+// Cmd+B / Cmd+I wrap selected text in ** / *.
 function Notes({date,token}) {
   const {value,setValue,loaded} = useDbSave(date,"notes","",token);
-  const editorRef = useRef(null);
-  const isComposing = useRef(false);
-  // Track if we're in "heading mode" on the current line
-  const suppressNext = useRef(false);
+  const taRef  = useRef(null);
+  const preRef = useRef(null);
 
-  // Convert markdown string → array of line objects for rendering
-  function parseLines(md) {
-    return (md||"").split("\n").map(raw => {
-      if (/^# /.test(raw))   return {type:"h1",  text: raw.slice(2)};
-      if (/^## /.test(raw))  return {type:"h2",  text: raw.slice(3)};
-      // inline bold/italic within a line
-      return {type:"p", text: raw};
+  // Keep overlay scroll in sync with textarea
+  function syncScroll() {
+    if (taRef.current && preRef.current) {
+      preRef.current.scrollTop  = taRef.current.scrollTop;
+      preRef.current.scrollLeft = taRef.current.scrollLeft;
+    }
+  }
+
+  // Wrap selected text in textarea with a marker
+  function wrapSelection(marker) {
+    const ta = taRef.current;
+    if (!ta) return;
+    const {selectionStart: s, selectionEnd: e, value: v} = ta;
+    if (s === e) return; // nothing selected
+    const wrapped = v.slice(0,s) + marker + v.slice(s,e) + marker + v.slice(e);
+    setValue(wrapped);
+    // restore selection around the inner text
+    requestAnimationFrame(() => {
+      ta.focus();
+      ta.setSelectionRange(s + marker.length, e + marker.length);
     });
   }
 
-  // Inline bold/italic renderer — returns spans
-  function renderInline(text, key) {
-    // Split on **bold** and *italic* tokens
-    const parts = [];
-    const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
-    let last = 0, m;
-    while ((m = re.exec(text)) !== null) {
-      if (m.index > last) parts.push(<span key={last}>{text.slice(last, m.index)}</span>);
-      if (m[0].startsWith("**")) {
-        parts.push(<strong key={m.index} style={{fontWeight:700,color:C.text}}>{m[2]}</strong>);
-      } else {
-        parts.push(<em key={m.index} style={{fontStyle:"italic",color:C.text}}>{m[3]}</em>);
-      }
-      last = m.index + m[0].length;
-    }
-    if (last < text.length) parts.push(<span key={last}>{text.slice(last)}</span>);
-    return parts.length ? parts : text;
-  }
-
-  // Save cursor position (line + offset) before re-render
-  function getCursor() {
-    const sel = window.getSelection();
-    if (!sel.rangeCount || !editorRef.current) return null;
-    const range = sel.getRangeAt(0);
-    const lines = Array.from(editorRef.current.children);
-    for (let li = 0; li < lines.length; li++) {
-      if (lines[li].contains(range.startContainer)) {
-        return {line: li, offset: range.startOffset};
-      }
-    }
-    return null;
-  }
-
-  // Restore cursor after re-render
-  function setCursor(pos) {
-    if (!pos || !editorRef.current) return;
-    const lines = Array.from(editorRef.current.children);
-    const line = lines[pos.line];
-    if (!line) return;
-    try {
-      const sel = window.getSelection();
-      const range = document.createRange();
-      // Walk into text nodes
-      let node = line, offset = pos.offset;
-      const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
-      let textNode = walker.nextNode();
-      while (textNode) {
-        if (offset <= textNode.length) { node = textNode; break; }
-        offset -= textNode.length;
-        textNode = walker.nextNode();
-      }
-      range.setStart(node, Math.min(offset, node.textContent?.length||0));
-      range.collapse(true);
-      sel.removeAllRanges();
-      sel.addRange(range);
-    } catch {}
-  }
-
-  // Wrap selection in markdown markers
-  function wrapSelection(marker) {
-    const sel = window.getSelection();
-    if (!sel.rangeCount) return;
-    const range = sel.getRangeAt(0);
-    const selected = range.toString();
-    if (!selected) return;
-
-    // Find which line this is on
-    if (!editorRef.current) return;
-    const lines = value.split("\n");
-    const lineEls = Array.from(editorRef.current.children);
-    let targetLine = -1;
-    for (let i = 0; i < lineEls.length; i++) {
-      if (lineEls[i].contains(range.startContainer)) { targetLine = i; break; }
-    }
-    if (targetLine < 0) return;
-
-    // Get raw line text
-    const rawLine = lines[targetLine] || "";
-    // Figure out selected text within the raw line — use the rendered text position
-    const lineText = lineEls[targetLine]?.textContent || "";
-    const selText = selected;
-    const idx = rawLine.indexOf(selText);
-    if (idx < 0) return;
-
-    const before = rawLine.slice(0, idx);
-    const after = rawLine.slice(idx + selText.length);
-    lines[targetLine] = before + marker + selText + marker + after;
-    setValue(lines.join("\n"));
-  }
-
   function handleKeyDown(e) {
-    // Cmd/Ctrl + B → bold
-    if ((e.metaKey || e.ctrlKey) && e.key === "b") {
-      e.preventDefault();
-      wrapSelection("**");
-      return;
-    }
-    // Cmd/Ctrl + I → italic
-    if ((e.metaKey || e.ctrlKey) && e.key === "i") {
-      e.preventDefault();
-      wrapSelection("*");
-      return;
-    }
-    // Enter key — insert newline in our state
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const cursor = getCursor();
-      const lines = value.split("\n");
-      const li = cursor?.line ?? lines.length - 1;
-      lines.splice(li + 1, 0, "");
-      const nextCursor = {line: li + 1, offset: 0};
-      setValue(lines.join("\n"));
-      requestAnimationFrame(() => setCursor(nextCursor));
-      return;
-    }
-    // Backspace — remove char or merge lines
-    if (e.key === "Backspace") {
-      e.preventDefault();
-      const sel = window.getSelection();
-      if (!sel.rangeCount) return;
-      const range = sel.getRangeAt(0);
-      if (!range.collapsed) {
-        // Delete selection — handled via input event, let browser do it
-        return;
-      }
-      const cursor = getCursor();
-      if (!cursor) return;
-      const lines = value.split("\n");
-      const {line: li, offset} = cursor;
-      if (offset > 0) {
-        // Delete one char before cursor in raw line
-        const raw = lines[li];
-        lines[li] = raw.slice(0, offset - 1) + raw.slice(offset);
-        setValue(lines.join("\n"));
-        requestAnimationFrame(() => setCursor({line: li, offset: offset - 1}));
-      } else if (li > 0) {
-        // Merge with previous line
-        const prevLen = lines[li - 1].length;
-        lines[li - 1] = lines[li - 1] + lines[li];
-        lines.splice(li, 1);
-        setValue(lines.join("\n"));
-        requestAnimationFrame(() => setCursor({line: li - 1, offset: prevLen}));
-      }
-      return;
-    }
+    if ((e.metaKey || e.ctrlKey) && e.key === "b") { e.preventDefault(); wrapSelection("**"); }
+    if ((e.metaKey || e.ctrlKey) && e.key === "i") { e.preventDefault(); wrapSelection("*"); }
   }
 
-  function handleInput(e) {
-    if (isComposing.current) return;
-    // For regular character input, sync from DOM back to state
-    if (!editorRef.current) return;
-    const cursor = getCursor();
+  // Build colored overlay HTML — same font/size/line-height as textarea
+  // Lines starting with "# " get accent color; "## " get dimmer accent.
+  // Bold (**text**) and italic (*text*) are rendered styled.
+  // Everything else is transparent text (so only the color layer shows).
+  function buildOverlay(text) {
+    return (text||"").split("\n").map(line => {
+      let prefix = "", rest = line, prefixColor = null;
+      if (/^# /.test(line))  { prefix = "# ";  rest = line.slice(2);  prefixColor = C.accent; }
+      if (/^## /.test(line)) { prefix = "## "; rest = line.slice(3);  prefixColor = C.muted;  }
 
-    // Reconstruct markdown from rendered lines
-    const lineEls = Array.from(editorRef.current.children);
-    const lines = value.split("\n");
+      // Inline bold/italic in rest
+      const renderInline = (t) => {
+        const parts = [];
+        const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+        let last = 0, m;
+        while ((m = re.exec(t)) !== null) {
+          if (m.index > last) parts.push(`<span>${esc(t.slice(last, m.index))}</span>`);
+          if (m[0].startsWith("**"))
+            parts.push(`<span style="font-weight:700;color:${C.text}">${esc(m[2])}</span>`);
+          else
+            parts.push(`<span style="font-style:italic;color:${C.text}">${esc(m[3])}</span>`);
+          last = m.index + m[0].length;
+        }
+        if (last < t.length) parts.push(`<span>${esc(t.slice(last))}</span>`);
+        return parts.join("");
+      };
 
-    // Only update the line that changed
-    if (cursor && cursor.line < lineEls.length) {
-      const li = cursor.line;
-      const el = lineEls[li];
-      const rawText = el.textContent || "";
-
-      // Check if this line already has a heading prefix in our state
-      const existingLine = lines[li] || "";
-      let prefix = "";
-      if (existingLine.startsWith("# ")) prefix = "# ";
-      else if (existingLine.startsWith("## ")) prefix = "## ";
-
-      // Detect "# " typed at the start of a plain line
-      if (!prefix && rawText.startsWith("# ")) {
-        lines[li] = rawText; // rawText already has "# "
-      } else if (prefix) {
-        // keep prefix, text is just the visible part
-        lines[li] = prefix + rawText.replace(/^#+ /, "");
-      } else {
-        lines[li] = rawText;
+      if (prefixColor) {
+        return `<div><span style="color:${prefixColor};opacity:0.5">${esc(prefix)}</span><span style="color:${prefixColor}">${renderInline(rest)}</span></div>`;
       }
-
-      setValue(lines.join("\n"));
-      requestAnimationFrame(() => setCursor(cursor));
-    }
+      return `<div>${renderInline(rest)||" "}</div>`;
+    }).join("");
   }
 
-  // Handle "# " shortcut: when user types "# " we convert the line
-  function handleBeforeInput(e) {
-    if (e.data === " ") {
-      const cursor = getCursor();
-      if (!cursor) return;
-      const lines = value.split("\n");
-      const raw = lines[cursor.line] || "";
-      // If line is exactly "#" before the space
-      if (raw === "#") {
-        e.preventDefault();
-        lines[cursor.line] = "# ";
-        setValue(lines.join("\n"));
-        requestAnimationFrame(() => setCursor({line: cursor.line, offset: 2}));
-      } else if (raw === "##") {
-        e.preventDefault();
-        lines[cursor.line] = "## ";
-        setValue(lines.join("\n"));
-        requestAnimationFrame(() => setCursor({line: cursor.line, offset: 3}));
-      }
-    }
+  function esc(s) {
+    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
   }
-
-  const parsedLines = parseLines(value);
 
   if (!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
 
+  const sharedStyle = {
+    fontFamily: serif,
+    fontSize: 15,
+    lineHeight: "1.8",
+    letterSpacing: "0.01em",
+    padding: 0,
+    margin: 0,
+    border: "none",
+    outline: "none",
+    width: "100%",
+    height: "100%",
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "break-word",
+    boxSizing: "border-box",
+  };
+
   return (
-    <div style={{position:"relative",height:"100%",overflow:"auto"}}>
-      {/* Placeholder */}
-      {!value && (
-        <div style={{position:"absolute",top:0,left:0,pointerEvents:"none",
-          color:C.muted,fontFamily:serif,fontSize:15,lineHeight:1.8,userSelect:"none"}}>
-          Write anything… <span style={{fontSize:11,opacity:0.5}}>  # heading · ⌘B bold · ⌘I italic</span>
-        </div>
-      )}
+    <div style={{position:"relative", height:"100%", overflow:"hidden"}}>
+      {/* Colored overlay — pointer-events none, sits on top */}
       <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        spellCheck
+        ref={preRef}
+        aria-hidden
+        dangerouslySetInnerHTML={{__html: buildOverlay(value) || `<div style="color:${C.muted}">Write anything… &nbsp;<span style="font-size:11px;opacity:0.45">  # heading &nbsp;·&nbsp; ⌘B bold &nbsp;·&nbsp; ⌘I italic</span></div>`}}
+        style={{
+          ...sharedStyle,
+          position: "absolute",
+          inset: 0,
+          overflow: "hidden",
+          pointerEvents: "none",
+          color: "transparent",  // text is transparent; only styled spans show color
+          zIndex: 1,
+        }}
+      />
+      {/* Actual textarea — transparent text so overlay colors show through */}
+      <textarea
+        ref={taRef}
+        value={value}
+        onChange={e => { setValue(e.target.value); syncScroll(); }}
+        onScroll={syncScroll}
         onKeyDown={handleKeyDown}
-        onBeforeInput={handleBeforeInput}
-        onInput={handleInput}
-        onCompositionStart={()=>isComposing.current=true}
-        onCompositionEnd={()=>isComposing.current=false}
-        style={{outline:"none",minHeight:"100%",caretColor:C.accent,wordBreak:"break-word"}}
-      >
-        {parsedLines.map((line, i) => {
-          const content = renderInline(line.text, i);
-          if (line.type === "h1") return (
-            <div key={i} style={{
-              fontFamily:serif, fontSize:22, fontWeight:700,
-              color:C.text, lineHeight:1.4, marginBottom:2, marginTop: i>0?8:0,
-            }}>{content || "\u200B"}</div>
-          );
-          if (line.type === "h2") return (
-            <div key={i} style={{
-              fontFamily:serif, fontSize:17, fontWeight:700,
-              color:C.accent, lineHeight:1.4, marginBottom:2, marginTop: i>0?6:0,
-            }}>{content || "\u200B"}</div>
-          );
-          return (
-            <div key={i} style={{
-              fontFamily:serif, fontSize:15, lineHeight:1.8, color:C.text, minHeight:"1.8em",
-            }}>{content || "\u200B"}</div>
-          );
-        })}
-      </div>
+        placeholder=""
+        style={{
+          ...sharedStyle,
+          position: "absolute",
+          inset: 0,
+          resize: "none",
+          background: "transparent",
+          caretColor: C.accent,
+          color: "transparent",
+          WebkitTextFillColor: "transparent",
+          zIndex: 2,
+          overflow: "auto",
+        }}
+      />
     </div>
   );
 }
@@ -824,9 +680,9 @@ export default function Dashboard() {
 
   // Heights (resizable)
   const [heights, setHeights] = useState({
-    cal:440, health:76,
-    notes:0, // 0 = fill remaining
-    tasks:200, meals:200, activity:200,
+    cal:320, health:76,
+    notes:500,
+    tasks:185, meals:185, activity:185,
   });
 
   const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}));
@@ -901,7 +757,7 @@ export default function Dashboard() {
   }
 
   if(!authReady) return (
-    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{background:C.bg,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <span style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.2em"}}>loading…</span>
     </div>
   );
@@ -912,10 +768,10 @@ export default function Dashboard() {
   const rightWidgets = rightOrder.map(id=>wMap[id]).filter(Boolean);
 
   return (
-    <div style={{background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
+    <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        body{background:${C.bg};}
+        html,body{height:100%;overflow:hidden;background:${C.bg};}
         ::-webkit-scrollbar{width:3px;height:3px;}
         ::-webkit-scrollbar-thumb{background:${C.border2};border-radius:4px;}
         button{border-radius:0;}
@@ -926,7 +782,8 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} syncStatus={syncStatus}/>
 
-      <div style={{flex:1,padding:12,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+      {/* Scrollable content area */}
+      <div style={{flex:1,overflowY:"auto",padding:12,display:"flex",flexDirection:"column",gap:8}}>
 
         {/* Full-width sections: cal + health, sortable between each other */}
         <DndContext sensors={sensors} collisionDetection={closestCenter}
@@ -966,9 +823,9 @@ export default function Dashboard() {
         {/* Two-column widget area */}
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,alignItems:"start"}}>
 
-          {/* Left column: single tall widget (Notes by default) */}
+          {/* Left column: Notes */}
           <div style={{display:"flex",flexDirection:"column"}}>
-            <div style={{height:heights.notes||600,minHeight:120}}>
+            <div style={{height:heights.notes||500,minHeight:120}}>
               <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
                 <leftWidget.Comp date={selected} token={token}/>
               </Widget>
@@ -976,11 +833,11 @@ export default function Dashboard() {
             <ResizeHandle id="notes"/>
           </div>
 
-          {/* Right column: stacked widgets with individual resize */}
+          {/* Right column: Tasks, Meals, Activity */}
           <div style={{display:"flex",flexDirection:"column",gap:0}}>
-            {rightWidgets.map((w,i)=>(
+            {rightWidgets.map((w)=>(
               <div key={w.id}>
-                <div style={{height:heights[w.id]||200,minHeight:80}}>
+                <div style={{height:heights[w.id]||185,minHeight:80}}>
                   <Widget label={w.label} color={w.color} dragProps={{}}>
                     <w.Comp date={selected} token={token}/>
                   </Widget>
