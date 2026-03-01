@@ -457,8 +457,8 @@ function Notes({date,token}) {
   function buildOverlay(text) {
     return (text||"").split("\n").map(line => {
       let prefix = "", rest = line, prefixColor = null;
-      if (/^# /.test(line))  { prefix = "# ";  rest = line.slice(2);  prefixColor = C.accent; }
-      if (/^## /.test(line)) { prefix = "## "; rest = line.slice(3);  prefixColor = C.muted;  }
+      if (/^# /.test(line))  { prefix = "# ";  rest = line.slice(2);  prefixColor = "#D4A853"; }  // brighter gold
+      if (/^## /.test(line)) { prefix = "## "; rest = line.slice(3);  prefixColor = C.blue;    }  // blue for h2
 
       // Inline bold/italic in rest
       const renderInline = (t) => {
@@ -513,7 +513,7 @@ function Notes({date,token}) {
       <div
         ref={preRef}
         aria-hidden
-        dangerouslySetInnerHTML={{__html: buildOverlay(value) || `<div style="color:${C.muted}">Write anything… &nbsp;<span style="font-size:11px;opacity:0.45">  # heading &nbsp;·&nbsp; ⌘B bold &nbsp;·&nbsp; ⌘I italic</span></div>`}}
+        dangerouslySetInnerHTML={{__html: (value && value.trim()) ? buildOverlay(value) : `<div style="color:${C.muted};font-style:italic">Write anything…<span style="font-size:11px;opacity:0.4;margin-left:12px;font-style:normal"># heading &nbsp;·&nbsp; ⌘B bold &nbsp;·&nbsp; ⌘I italic</span></div>`}}
         style={{
           ...sharedStyle,
           position: "absolute",
