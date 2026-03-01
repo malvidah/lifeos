@@ -10,15 +10,27 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+// ─── Design tokens ────────────────────────────────────────────────────────────
 const C = {
-  bg:"#0A0A0A",panel:"#101010",border:"#191919",border2:"#222",
-  text:"#DDD8D0",dim:"#4A4744",dimmer:"#282624",accent:"#B8A882",
-  green:"#5A9470",blue:"#4A7A9B",yellow:"#A8864A",red:"#9B4A4A",
+  bg:      "#0D0D0F",
+  surface: "#16171A",
+  card:    "#1C1D21",
+  border:  "#26272C",
+  border2: "#2E2F35",
+  text:    "#E8E4DC",
+  muted:   "#6B6870",
+  dim:     "#3A3840",
+  accent:  "#C4A882",
+  green:   "#4E9268",
+  blue:    "#4A82B0",
+  yellow:  "#B08A3E",
+  red:     "#A05050",
 };
 const serif = "Georgia, 'Times New Roman', serif";
-const mono  = "'SF Mono', ui-monospace, monospace";
+const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
+const R     = "12px"; // border radius
 
-const toKey    = d  => new Date(d).toISOString().split("T")[0];
+const toKey    = d => new Date(d).toISOString().split("T")[0];
 const todayKey = () => toKey(new Date());
 const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 const DAY3 = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
@@ -48,7 +60,6 @@ async function dbSave(date,type,data,token) {
       body:JSON.stringify({date,type,data})});
   } catch(e) { console.warn("save failed",e); }
 }
-
 async function dbLoad(date,type,token) {
   if (!token) return null;
   try {
@@ -58,16 +69,12 @@ async function dbLoad(date,type,token) {
     return (await r.json()).data ?? null;
   } catch { return null; }
 }
-
 const MEM = {};
-
 function useDbSave(date,type,empty,token) {
-  const ck = `${date}:${type}`;
-  const [value,_set]    = useState(()=>MEM[ck]??empty);
-  const [loaded,setLoaded] = useState(ck in MEM);
+  const [value,_set]   = useState(()=>MEM[`${date}:${type}`]??empty);
+  const [loaded,setLoaded] = useState(`${date}:${type}` in MEM);
   const live=useRef(value), dateRef=useRef(date), timer=useRef(null);
   live.current=value;
-
   useEffect(()=>{
     if (!token) return;
     const key=`${date}:${type}`; dateRef.current=date;
@@ -77,7 +84,6 @@ function useDbSave(date,type,empty,token) {
       const val=v??empty; MEM[key]=val;_set(val);live.current=val;setLoaded(true);
     });
   },[date,type,token]); // eslint-disable-line
-
   useEffect(()=>{
     if (!token) return;
     const flush=()=>{clearTimeout(timer.current);dbSave(dateRef.current,type,live.current,token);};
@@ -85,61 +91,83 @@ function useDbSave(date,type,empty,token) {
     document.addEventListener("visibilitychange",()=>{if(document.hidden)flush();});
     return ()=>window.removeEventListener("beforeunload",flush);
   },[type,token]); // eslint-disable-line
-
   const setValue=useCallback(u=>{
     const next=typeof u==="function"?u(live.current):u;
     live.current=next; MEM[`${dateRef.current}:${type}`]=next; _set(next);
     clearTimeout(timer.current);
     timer.current=setTimeout(()=>dbSave(dateRef.current,type,live.current,token),800);
   },[type,token]);
-
   return {value,setValue,loaded};
 }
 
 // ─── Ring ─────────────────────────────────────────────────────────────────────
-function Ring({score,color,size=44}) {
-  const r=(size-6)/2,circ=2*Math.PI*r,val=parseFloat(score)||0,pct=Math.min(val/100,1),elite=val>=90;
+function Ring({score,color,size=48}) {
+  const r=(size-7)/2,circ=2*Math.PI*r,val=parseFloat(score)||0,pct=Math.min(val/100,1),elite=val>=90;
   return (
     <svg width={size} height={size} style={{transform:"rotate(-90deg)",flexShrink:0}}>
-      <circle cx={size/2} cy={size/2} r={r} fill={elite?color+"22":"none"} stroke={C.dimmer} strokeWidth={3}/>
+      <circle cx={size/2} cy={size/2} r={r} fill={elite?color+"18":"none"} stroke={C.dim} strokeWidth={3}/>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color}
-        strokeWidth={elite?4:3} strokeLinecap="round" strokeDasharray={`${pct*circ} ${circ}`}
-        style={{transition:"stroke-dasharray 0.4s ease"}}/>
+        strokeWidth={elite?4:2.5} strokeLinecap="round" strokeDasharray={`${pct*circ} ${circ}`}
+        style={{transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:elite?color:score?C.text:C.dim,fontSize:10,fontFamily:serif,
-          fontWeight:elite?"bold":"normal",transform:"rotate(90deg)",transformOrigin:`${size/2}px ${size/2}px`}}>
+        style={{fill:score?C.text:C.muted,fontSize:11,fontFamily:serif,
+          transform:"rotate(90deg)",transformOrigin:`${size/2}px ${size/2}px`}}>
         {score||"—"}
       </text>
     </svg>
   );
 }
 
-// ─── Sortable Section wrapper ──────────────────────────────────────────────────
-function SortableSection({ id, children, dragHandle }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+// ─── Card shell ───────────────────────────────────────────────────────────────
+function Card({children, style={}}) {
   return (
-    <div ref={setNodeRef} style={{
-      transform: CSS.Transform.toString(transform),
-      transition,
-      opacity: isDragging ? 0.35 : 1,
-      zIndex: isDragging ? 50 : "auto",
-      position: "relative",
+    <div style={{
+      background:C.card, borderRadius:R,
+      border:`1px solid ${C.border}`,
+      overflow:"hidden",
+      boxShadow:"0 1px 3px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2)",
+      ...style,
     }}>
-      {/* Pass drag handle props via context hack — render children with handle */}
-      {children({ dragHandleProps: { ...attributes, ...listeners } })}
+      {children}
     </div>
   );
 }
 
-// ─── Drag handle dot ──────────────────────────────────────────────────────────
-function DragHandle({ dragHandleProps, style }) {
+// ─── Sortable card wrapper ────────────────────────────────────────────────────
+function SortableCard({id, children}) {
+  const {attributes,listeners,setNodeRef,transform,transition,isDragging} = useSortable({id});
   return (
-    <span {...dragHandleProps} style={{
-      cursor:"grab", color:C.dimmer, fontSize:13, lineHeight:1,
-      touchAction:"none", userSelect:"none", flexShrink:0,
-      ...style,
-    }}>⠿</span>
+    <div ref={setNodeRef} style={{
+      transform: CSS.Transform.toString(transform),
+      transition: transition || "transform 200ms cubic-bezier(.4,0,.2,1)",
+      opacity: isDragging ? 0 : 1,
+      height: "100%",
+    }}>
+      {children({dragProps:{...attributes,...listeners}})}
+    </div>
+  );
+}
+
+// ─── Widget card ─────────────────────────────────────────────────────────────
+function Widget({label, color, accent, dragProps, children}) {
+  return (
+    <Card style={{display:"flex",flexDirection:"column",height:"100%"}}>
+      <div style={{
+        display:"flex",alignItems:"center",gap:8,
+        padding:"10px 14px",
+        borderBottom:`1px solid ${C.border}`,
+      }}>
+        <div {...dragProps} style={{
+          cursor:"grab",color:C.dim,fontSize:16,lineHeight:1,
+          touchAction:"none",userSelect:"none",marginRight:2,
+        }}>⠿</div>
+        <div style={{width:3,height:14,borderRadius:2,background:color,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
+      </div>
+      <div style={{flex:1,overflow:"auto",padding:14}}>
+        {children}
+      </div>
+    </Card>
   );
 }
 
@@ -151,15 +179,13 @@ function UserMenu({session,token}) {
   const [saving,setSaving]=useState(false);
   const ref=useRef(null);
   const user=session?.user;
-  const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()
-    ||user?.email?.[0]?.toUpperCase()||"?";
+  const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
   const avatar=user?.user_metadata?.avatar_url;
 
   useEffect(()=>{
     if (!token||!open) return;
     dbLoad("global","settings",token).then(d=>{if(d?.ouraToken)setOuraKey(d.ouraToken);});
   },[token,open]); // eslint-disable-line
-
   useEffect(()=>{
     if (!open) return;
     const fn=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
@@ -176,42 +202,45 @@ function UserMenu({session,token}) {
   return (
     <div ref={ref} style={{position:"relative"}}>
       <button onClick={()=>setOpen(o=>!o)} style={{
-        width:28,height:28,borderRadius:"50%",padding:0,cursor:"pointer",flexShrink:0,
-        border:`1px solid ${C.border2}`,background:avatar?"transparent":C.dimmer,
-        overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+        width:32,height:32,borderRadius:"50%",padding:0,cursor:"pointer",
+        border:`1.5px solid ${C.border2}`,background:avatar?"transparent":C.surface,
+        overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center",
+        transition:"border-color 0.15s",
+      }}>
         {avatar
-          ? <img src={avatar} width={28} height={28} style={{objectFit:"cover"}} alt=""/>
-          : <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>{initials}</span>}
+          ? <img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
+          : <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{initials}</span>}
       </button>
       {open&&(
-        <div style={{position:"absolute",top:36,right:0,width:240,zIndex:200,
-          background:C.panel,border:`1px solid ${C.border2}`,padding:16,
-          display:"flex",flexDirection:"column",gap:12}}>
+        <div style={{
+          position:"absolute",top:40,right:0,width:256,zIndex:300,
+          background:C.card,border:`1px solid ${C.border2}`,
+          borderRadius:R,padding:16,display:"flex",flexDirection:"column",gap:12,
+          boxShadow:"0 8px 32px rgba(0,0,0,0.6)",
+        }}>
           <div>
-            <div style={{fontFamily:serif,fontSize:13,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
-            <div style={{fontFamily:mono,fontSize:8,color:C.dim,marginTop:2}}>{user?.email}</div>
+            <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
+            <div style={{fontFamily:mono,fontSize:9,color:C.muted,marginTop:3}}>{user?.email}</div>
           </div>
-          <div style={{borderTop:`1px solid ${C.border}`}}/>
+          <div style={{height:1,background:C.border}}/>
           <div>
-            <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.dim,marginBottom:6}}>
-              Oura API Key
-            </div>
+            <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>Oura API Key</div>
             <input type="password" value={ouraKey} onChange={e=>{setOuraKey(e.target.value);setSaved(false);}}
               placeholder="paste token here"
-              style={{width:"100%",background:C.bg,border:`1px solid ${C.border2}`,outline:"none",
-                color:C.text,fontFamily:mono,fontSize:10,padding:"6px 8px",marginBottom:6}}/>
+              style={{width:"100%",background:C.surface,border:`1px solid ${C.border2}`,borderRadius:6,outline:"none",
+                color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px",marginBottom:8}}/>
             <button onClick={saveKey} disabled={saving||!ouraKey.trim()} style={{
-              width:"100%",background:"none",border:`1px solid ${C.border2}`,
-              color:saved?C.green:ouraKey.trim()?C.text:C.dim,
-              fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",
-              padding:"5px 10px",cursor:ouraKey.trim()?"pointer":"default"}}>
+              width:"100%",background:saved?C.green+"22":"none",border:`1px solid ${saved?C.green:C.border2}`,
+              borderRadius:6,color:saved?C.green:ouraKey.trim()?C.text:C.muted,
+              fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",
+              padding:"7px",cursor:ouraKey.trim()?"pointer":"default",transition:"all 0.2s"}}>
               {saved?"saved ✓":saving?"saving…":"save key"}
             </button>
           </div>
-          <div style={{borderTop:`1px solid ${C.border}`}}/>
+          <div style={{height:1,background:C.border}}/>
           <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
             style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer",
-              color:C.dim,fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase"}}>
+              color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase"}}>
             sign out →
           </button>
         </div>
@@ -220,58 +249,96 @@ function UserMenu({session,token}) {
   );
 }
 
-// ─── CalStrip ─────────────────────────────────────────────────────────────────
-function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu,dragHandleProps}) {
+// ─── Top bar (fixed, not draggable) ──────────────────────────────────────────
+function TopBar({session,token,syncStatus}) {
+  return (
+    <div style={{
+      background:C.surface,
+      borderBottom:`1px solid ${C.border}`,
+      padding:"0 16px",
+      height:48,
+      display:"flex",alignItems:"center",gap:12,
+      flexShrink:0,
+      position:"sticky",top:0,zIndex:100,
+    }}>
+      <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em"}}>Life OS</span>
+      <div style={{flex:1}}/>
+      <div style={{display:"flex",alignItems:"center",gap:6}}>
+        <div style={{
+          width:6,height:6,borderRadius:"50%",
+          background:syncStatus.syncing?C.yellow:C.green,
+          boxShadow:syncStatus.syncing?`0 0 6px ${C.yellow}`:`0 0 6px ${C.green}`,
+          transition:"background 0.3s",
+        }}/>
+        <span style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.06em"}}>
+          {syncStatus.syncing?"syncing":syncStatus.lastSync||"synced"}
+        </span>
+      </div>
+      <UserMenu session={session} token={token}/>
+    </div>
+  );
+}
+
+// ─── CalStrip card ────────────────────────────────────────────────────────────
+function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
   const [anchor,setAnchor]=useState(()=>new Date());
   const days=weekOf(anchor),today=todayKey();
   const months=[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ");
+
   return (
-    <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px 8px",borderBottom:`1px solid ${C.border}`}}>
-        <DragHandle dragHandleProps={dragHandleProps}/>
-        <div style={{fontFamily:serif,fontSize:20,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>
-          {months} <span style={{color:C.accent,fontSize:15}}>{days[0].getFullYear()}</span>
-        </div>
-        <div style={{flex:1}}/>
-        <span style={{fontFamily:mono,fontSize:9,whiteSpace:"nowrap",letterSpacing:"0.06em",
-          color:syncStatus.syncing?C.dimmer:C.green}}>
-          {syncStatus.syncing?"syncing…":syncStatus.lastSync?`● ${syncStatus.lastSync}`:"● synced"}
+    <Card>
+      {/* Cal header */}
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:`1px solid ${C.border}`}}>
+        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:16,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
+        <span style={{fontFamily:serif,fontSize:18,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>
+          {months}
         </span>
+        <span style={{fontFamily:mono,fontSize:12,color:C.muted,marginLeft:2}}>{days[0].getFullYear()}</span>
+        <div style={{flex:1}}/>
         {[["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
-          <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
-            border:`1px solid ${C.border2}`,color:C.dim,fontFamily:mono,
-            padding:l==="today"?"3px 7px":"3px 6px",fontSize:l==="today"?8:12,letterSpacing:l==="today"?"0.1em":0}}>
-            {l}
-          </button>
+          <button key={l} onClick={fn} style={{
+            background:"none",cursor:"pointer",border:`1px solid ${C.border2}`,
+            borderRadius:6,color:C.muted,fontFamily:mono,
+            padding:l==="today"?"4px 10px":"4px 8px",
+            fontSize:l==="today"?9:13,
+            letterSpacing:l==="today"?"0.1em":"0",
+            transition:"border-color 0.15s,color 0.15s",
+          }}>{l}</button>
         ))}
-        {userMenu}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)"}}>
+      {/* Day grid */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)"}}>
         {days.map((d,i)=>{
           const k=toKey(d),sel=k===selected,tod=k===today;
           const evts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
           const dot=healthDots[k]||{};
           return (
-            <div key={k} onClick={()=>onSelect(k)} style={{cursor:"pointer",
-              borderRight:i<6?`1px solid ${C.border}`:"none",background:sel?"#FFFFFF05":"transparent"}}>
-              <div style={{padding:"6px 6px 3px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
+            <div key={k} onClick={()=>onSelect(k)} style={{
+              cursor:"pointer",
+              borderRight:i<6?`1px solid ${C.border}`:"none",
+              background:sel?"rgba(196,168,130,0.06)":"transparent",
+              transition:"background 0.15s",
+            }}>
+              <div style={{
+                padding:"8px 6px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
                 borderBottom:`1px solid ${C.border}`,
-                borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.dim}`:`2px solid transparent`}}>
-                <span style={{fontFamily:mono,fontSize:10,color:sel?C.accent:C.dim}}>{DAY3[i]}</span>
-                <span style={{fontFamily:serif,fontSize:16,lineHeight:1,color:tod?C.accent:C.text}}>{d.getDate()}</span>
-                <div style={{display:"flex",gap:2,height:4,alignItems:"center"}}>
+                borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.muted}`:`2px solid transparent`,
+              }}>
+                <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.08em",color:sel?C.accent:C.muted}}>{DAY3[i]}</span>
+                <span style={{fontFamily:serif,fontSize:17,lineHeight:1,color:tod?C.accent:sel?C.text:C.text}}>{d.getDate()}</span>
+                <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
                   {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,  display:"inline-block"}}/>}
                   {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green, display:"inline-block"}}/>}
                   {dot.strain>=90   &&<span style={{width:3,height:3,borderRadius:"50%",background:C.yellow,display:"inline-block"}}/>}
                 </div>
               </div>
-              <div style={{padding:"4px 5px",display:"flex",flexDirection:"column",gap:3,minHeight:70}}>
+              <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",gap:3,minHeight:80}}>
                 {evts.length===0
                   ?<span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
                   :evts.map((ev,ei)=>(
                     <div key={ei} style={{display:"flex",gap:4,alignItems:"baseline"}}>
-                      <span style={{fontFamily:mono,fontSize:9,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap"}}>{ev.time}</span>
-                      <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:C.text}}>{ev.title}</span>
+                      <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap",opacity:0.9}}>{ev.time}</span>
+                      <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:sel?C.text:"#AAA5A0"}}>{ev.title}</span>
                     </div>
                   ))
                 }
@@ -280,25 +347,23 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu,dragH
           );
         })}
       </div>
-    </div>
+    </Card>
   );
 }
 
-// ─── HealthStrip ──────────────────────────────────────────────────────────────
+// ─── HealthStrip card ─────────────────────────────────────────────────────────
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",strainScore:"",strainNote:""};
 
-function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragHandleProps}) {
+function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
 
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
-
   useEffect(()=>{
     if (!loaded||!token) return;
     onSyncStart("oura");
     fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json())
-      .then(data=>{
+      .then(r=>r.json()).then(data=>{
         if(data.error) return;
         setH(p=>({...p,
           sleepScore:     p.sleepScore     ||data.sleepScore     ||"",
@@ -308,49 +373,50 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragHandle
           hrv:            p.hrv            ||data.hrv            ||"",
           rhr:            p.rhr            ||data.rhr            ||"",
         }));
-      })
-      .catch(()=>{})
-      .finally(()=>onSyncEnd("oura"));
+      }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
 
   const metrics=[
     {key:"sleep",    label:"Sleep",    color:C.blue,
-      score:h.sleepScore,    setScore:e=>setH(p=>({...p,sleepScore:e.target.value})),
-      fields:[{label:"Hrs",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Eff",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
+      score:h.sleepScore, setScore:e=>setH(p=>({...p,sleepScore:e.target.value})),
+      fields:[{label:"Hours",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Efficiency",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
     {key:"readiness",label:"Readiness",color:C.green,
       score:h.readinessScore,setScore:e=>setH(p=>({...p,readinessScore:e.target.value})),
-      fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"RHR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
+      fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"Resting HR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
     {key:"strain",   label:"Strain",   color:C.yellow,
-      score:h.strainScore,   setScore:e=>setH(p=>({...p,strainScore:e.target.value})),
+      score:h.strainScore,setScore:e=>setH(p=>({...p,strainScore:e.target.value})),
       fields:[{label:"Note",value:h.strainNote,onChange:set("strainNote"),unit:""}]},
   ];
 
   return (
-    <div style={{background:C.panel,borderBottom:`1px solid ${C.border}`,overflowX:"auto"}}>
-      <div style={{display:"flex",minWidth:280}}>
-        {/* Drag handle on left side */}
-        <div style={{display:"flex",alignItems:"center",padding:"0 8px",borderRight:`1px solid ${C.border}`}}>
-          <DragHandle dragHandleProps={dragHandleProps}/>
+    <Card>
+      <div style={{display:"flex",alignItems:"stretch"}}>
+        {/* Drag handle column */}
+        <div style={{display:"flex",alignItems:"center",padding:"0 10px",borderRight:`1px solid ${C.border}`}}>
+          <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:16,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
         </div>
         {metrics.map((m,mi)=>(
-          <div key={m.key} style={{flex:"1 1 0",display:"flex",alignItems:"center",gap:10,
-            padding:"10px 12px",minWidth:90,borderRight:mi<2?`1px solid ${C.border}`:"none"}}>
+          <div key={m.key} style={{
+            flex:"1 1 0",display:"flex",alignItems:"center",gap:12,
+            padding:"12px 14px",
+            borderRight:mi<2?`1px solid ${C.border}`:"none",
+          }}>
             <div style={{position:"relative",flexShrink:0}}>
-              <Ring score={m.score} color={m.color} size={44}/>
+              <Ring score={m.score} color={m.color} size={48}/>
               <input value={m.score} onChange={m.setScore}
                 style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
             </div>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontFamily:mono,fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:5}}>{m.label}</div>
-              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+              <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:6}}>{m.label}</div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                 {m.fields.map(f=>(
                   <div key={f.label}>
-                    <div style={{fontFamily:mono,fontSize:9,textTransform:"uppercase",color:C.accent,marginBottom:2}}>{f.label}</div>
+                    <div style={{fontFamily:mono,fontSize:8,textTransform:"uppercase",color:C.muted,marginBottom:2,letterSpacing:"0.08em"}}>{f.label}</div>
                     <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                       <input value={f.value} onChange={f.onChange} placeholder="—"
                         style={{background:"transparent",border:"none",outline:"none",padding:0,
-                          color:f.value?C.text:C.dim,fontFamily:serif,fontSize:16,width:40}}/>
-                      {f.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.dim}}>{f.unit}</span>}
+                          color:f.value?C.text:C.dim,fontFamily:serif,fontSize:17,width:f.unit?38:80}}/>
+                      {f.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{f.unit}</span>}
                     </div>
                   </div>
                 ))}
@@ -359,21 +425,7 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragHandle
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ─── Widget (sortable card) ───────────────────────────────────────────────────
-function Widget({label,color,dragHandleProps,children}) {
-  return (
-    <div style={{background:C.panel,border:`1px solid ${C.border}`,display:"flex",flexDirection:"column",overflow:"hidden",height:"100%"}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",
-        borderBottom:`1px solid ${C.border}`,borderTop:`2px solid ${color}`}}>
-        <DragHandle dragHandleProps={dragHandleProps}/>
-        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.25em",textTransform:"uppercase",color}}>{label}</span>
-      </div>
-      <div style={{flex:1,overflow:"auto",padding:12}}>{children}</div>
-    </div>
+    </Card>
   );
 }
 
@@ -384,8 +436,8 @@ function Notes({date,token}) {
     <textarea value={value} onChange={e=>setValue(e.target.value)}
       placeholder={loaded?"Write anything…":"Loading…"} disabled={!loaded}
       style={{background:"transparent",border:"none",outline:"none",resize:"none",padding:0,
-        color:C.text,fontFamily:serif,fontSize:16,lineHeight:1.8,
-        width:"100%",height:"100%",minHeight:180,opacity:loaded?1:0.4}}/>
+        color:C.text,fontFamily:serif,fontSize:15,lineHeight:1.8,
+        width:"100%",height:"100%",minHeight:160,opacity:loaded?1:0.4}}/>
   );
 }
 
@@ -402,31 +454,33 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
     const kcal=await estimateKcal(promptFn(text)).catch(()=>null);
     setRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
   }
-
   function onKey(e,id,idx) {
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
   }
 
-  if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.dimmer}}>Loading…</div>;
+  if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
       {safe.map((row,idx)=>(
-        <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:26}}>
+        <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
           <input ref={el=>refs.current[row.id]=el} value={row.text}
             onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
             onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
             onKeyDown={e=>onKey(e,row.id,idx)} placeholder={idx===0?placeholder:""}
             style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
-              color:row.text?C.text:C.dim,fontFamily:serif,fontSize:16}}/>
-          <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right"}}>
+              color:row.text?C.text:C.muted,fontFamily:serif,fontSize:15}}/>
+          <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
             {row.estimating?"…":row.kcal?`${prefix}${row.kcal}`:""}
           </span>
         </div>
       ))}
-      {total>0&&<div style={{textAlign:"right",marginTop:8,paddingTop:6,borderTop:`1px solid ${C.border}`}}>
-        <span style={{fontFamily:mono,fontSize:11,color}}>{prefix}{total} kcal</span>
-      </div>}
+      {total>0&&(
+        <div style={{marginTop:"auto",paddingTop:8,paddingBottom:2,display:"flex",justifyContent:"flex-end",alignItems:"center",gap:6}}>
+          <div style={{flex:1,height:1,background:C.border}}/>
+          <span style={{fontFamily:mono,fontSize:11,color,opacity:0.9}}>{prefix}{total} kcal</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -446,24 +500,23 @@ function Tasks({date,token}) {
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);}
   }
-
-  if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.dimmer}}>Loading…</div>;
+  if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
   return (
     <div style={{flex:1,overflow:"auto"}}>
       {[...open,...done].map((row,idx)=>(
-        <div key={row.id} style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",minHeight:26,opacity:row.done?0.33:1}}>
+        <div key={row.id} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0",minHeight:28,opacity:row.done?0.35:1,transition:"opacity 0.2s"}}>
           <button onClick={()=>setRows(safe.map(r=>r.id===row.id?{...r,done:!r.done}:r))}
-            style={{width:13,height:13,flexShrink:0,borderRadius:2,padding:0,cursor:"pointer",
-              border:`1px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
-              display:"flex",alignItems:"center",justifyContent:"center"}}>
-            {row.done&&<span style={{fontSize:8,color:C.bg}}>✓</span>}
+            style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",
+              border:`1.5px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
+              display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
+            {row.done&&<span style={{fontSize:8,color:C.bg,lineHeight:1}}>✓</span>}
           </button>
           <input ref={el=>refs.current[row.id]=el} value={row.text}
             onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
             onKeyDown={e=>onKey(e,row.id,idx)}
-            placeholder={idx===0&&open.length===1&&!row.text?"Task · Enter for new line":""}
+            placeholder={idx===0&&open.length===1&&!row.text?"Add a task…":""}
             style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
-              color:row.done?C.dim:C.text,fontFamily:serif,fontSize:16,textDecoration:row.done?"line-through":"none"}}/>
+              color:row.done?C.muted:C.text,fontFamily:serif,fontSize:15,textDecoration:row.done?"line-through":"none"}}/>
         </div>
       ))}
     </div>
@@ -476,8 +529,8 @@ function LoginScreen() {
   return (
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{textAlign:"center"}}>
-        <div style={{fontFamily:serif,fontSize:28,color:C.text,marginBottom:8,letterSpacing:"-0.02em"}}>Life OS</div>
-        <div style={{fontFamily:mono,fontSize:9,color:C.dim,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:40}}>your personal dashboard</div>
+        <div style={{fontFamily:serif,fontSize:32,color:C.text,marginBottom:6,letterSpacing:"-0.02em"}}>Life OS</div>
+        <div style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:48}}>your personal dashboard</div>
         <button disabled={loading} onClick={async()=>{
           setLoading(true);
           const supabase=createClient();
@@ -485,9 +538,13 @@ function LoginScreen() {
             scopes:"https://www.googleapis.com/auth/calendar.readonly",
             redirectTo:`${window.location.origin}/auth/callback`,
           }});
-        }} style={{background:"none",border:`1px solid ${C.border2}`,color:loading?C.dim:C.text,
-          fontFamily:mono,fontSize:10,letterSpacing:"0.2em",textTransform:"uppercase",
-          padding:"12px 28px",cursor:loading?"not-allowed":"pointer"}}>
+        }} style={{
+          background:"none",border:`1px solid ${C.border2}`,borderRadius:8,
+          color:loading?C.muted:C.text,fontFamily:mono,fontSize:10,
+          letterSpacing:"0.15em",textTransform:"uppercase",
+          padding:"13px 32px",cursor:loading?"not-allowed":"pointer",
+          transition:"border-color 0.2s",
+        }}>
           {loading?"redirecting…":"sign in with google"}
         </button>
       </div>
@@ -495,16 +552,14 @@ function LoginScreen() {
   );
 }
 
-// ─── Section definitions ──────────────────────────────────────────────────────
-// All 6 sections are sortable. "cal" and "health" are full-width; widgets are 2-col grid.
-const FULL_WIDTH = ["cal","health"];
+// ─── Section IDs ─────────────────────────────────────────────────────────────
 const WIDGET_DEFS = [
   {id:"notes",    label:"Notes",    color:C.accent, Comp:Notes},
   {id:"meals",    label:"Meals",    color:C.red,    Comp:Meals},
   {id:"tasks",    label:"Tasks",    color:C.blue,   Comp:Tasks},
   {id:"activity", label:"Activity", color:C.green,  Comp:Activity},
 ];
-const ALL_IDS = ["cal","health",...WIDGET_DEFS.map(w=>w.id)];
+const DRAGGABLE_IDS = ["cal","health",...WIDGET_DEFS.map(w=>w.id)];
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -515,21 +570,15 @@ export default function Dashboard() {
   const [healthDots,setHealthDots]= useState({});
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
-  const [order,     setOrder]     = useState(ALL_IDS);
+  const [order,     setOrder]     = useState(DRAGGABLE_IDS);
   const [activeId,  setActiveId]  = useState(null);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint:{ distance:8 } })
-  );
+  const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}));
 
   useEffect(()=>{
     const supabase=createClient();
     const code=new URLSearchParams(window.location.search).get("code");
-    if(code){
-      supabase.auth.exchangeCodeForSession(code).then(()=>{
-        window.history.replaceState({},document.title,window.location.pathname);
-      });
-    }
+    if(code){supabase.auth.exchangeCodeForSession(code).then(()=>window.history.replaceState({},document.title,window.location.pathname));}
     supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});
     const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{setSession(session);setAuthReady(true);});
     return ()=>subscription.unsubscribe();
@@ -567,93 +616,89 @@ export default function Dashboard() {
 
   if(!authReady) return (
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <span style={{fontFamily:mono,fontSize:9,color:C.dimmer,letterSpacing:"0.2em"}}>loading…</span>
+      <span style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.2em"}}>loading…</span>
     </div>
   );
   if(!session) return <LoginScreen/>;
 
-  // Split order into rows: full-width sections stay full-width, widget sections pair up in 2-col
-  // We render them in order, grouping consecutive widgets into grid rows
-  const sections = order.map(id => ({
-    id,
-    isFullWidth: FULL_WIDTH.includes(id),
-    widget: wMap[id] || null,
-  }));
+  const syncStatus={syncing:syncing.size>0,lastSync};
 
-  // Group sections for rendering
-  const rows = [];
-  let widgetBuffer = [];
-  function flushWidgets() {
-    if(widgetBuffer.length > 0) { rows.push({type:"widgets", items:[...widgetBuffer]}); widgetBuffer=[]; }
-  }
-  sections.forEach(s => {
-    if(s.isFullWidth) { flushWidgets(); rows.push({type:"full", item:s}); }
-    else { widgetBuffer.push(s); if(widgetBuffer.length===2) flushWidgets(); }
+  // Build render list: group consecutive widgets into 2-col rows
+  const rows=[];
+  let buf=[];
+  const flush=()=>{if(buf.length){rows.push({type:"widgets",items:[...buf]});buf=[];}};
+  order.forEach(id=>{
+    if(id==="cal"||id==="health"){flush();rows.push({type:"full",id});}
+    else{buf.push(id);if(buf.length===2)flush();}
   });
-  flushWidgets();
+  flush();
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        body{background:${C.bg};}
         ::-webkit-scrollbar{width:3px;height:3px;}
-        ::-webkit-scrollbar-thumb{background:#222;}
+        ::-webkit-scrollbar-thumb{background:${C.border2};border-radius:4px;}
         button{border-radius:0;}
-        input::placeholder,textarea::placeholder{color:${C.dim};opacity:1;}
+        input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
         a{text-decoration:none;}
         input,textarea,select{font-size:16px;}
       `}</style>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter}
-        onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <SortableContext items={order} strategy={verticalListSortingStrategy}>
-          {rows.map((row,ri) => {
-            if(row.type==="full") {
-              const {id} = row.item;
-              return (
-                <SortableSection key={id} id={id}>
-                  {({dragHandleProps}) => id==="cal"
-                    ? <CalStrip selected={selected} onSelect={setSelected} events={events}
-                        syncStatus={{syncing:syncing.size>0,lastSync}} healthDots={healthDots}
-                        userMenu={<UserMenu session={session} token={token}/>}
-                        dragHandleProps={dragHandleProps}/>
-                    : <HealthStrip date={selected} token={token}
-                        onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-                        dragHandleProps={dragHandleProps}/>
-                  }
-                </SortableSection>
-              );
-            }
-            // Widget row — 2 col grid
-            return (
-              <div key={`row-${ri}`} style={{display:"grid",gridTemplateColumns:`repeat(${row.items.length},1fr)`,gap:1,background:C.border,minHeight:220}}>
-                {row.items.map(({id,widget}) => (
-                  <SortableSection key={id} id={id}>
-                    {({dragHandleProps}) => (
-                      <Widget label={widget.label} color={widget.color} dragHandleProps={dragHandleProps}>
-                        <widget.Comp date={selected} token={token}/>
-                      </Widget>
-                    )}
-                  </SortableSection>
-                ))}
-              </div>
-            );
-          })}
-        </SortableContext>
+      <TopBar session={session} token={token} syncStatus={syncStatus}/>
 
-        <DragOverlay dropAnimation={{sideEffects:defaultDropAnimationSideEffects({styles:{active:{opacity:"0.35"}}})}}>
-          {activeId && (
-            <div style={{
-              background:C.panel,border:`1px solid ${C.accent}`,
-              padding:"12px 16px",fontFamily:mono,fontSize:10,
-              letterSpacing:"0.2em",textTransform:"uppercase",color:C.accent,
-              boxShadow:"0 8px 32px rgba(0,0,0,0.6)",
-            }}>
-              {activeId==="cal"?"Calendar":activeId==="health"?"Health":(wMap[activeId]?.label||activeId)}
-            </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+      <div style={{flex:1,padding:12,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter}
+          onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <SortableContext items={order} strategy={verticalListSortingStrategy}>
+            {rows.map((row,ri)=>{
+              if(row.type==="full") {
+                return (
+                  <SortableCard key={row.id} id={row.id}>
+                    {({dragProps})=> row.id==="cal"
+                      ? <CalStrip selected={selected} onSelect={setSelected}
+                          events={events} healthDots={healthDots} dragProps={dragProps}/>
+                      : <HealthStrip date={selected} token={token}
+                          onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+                          dragProps={dragProps}/>
+                    }
+                  </SortableCard>
+                );
+              }
+              return (
+                <div key={`row-${ri}`} style={{display:"grid",gridTemplateColumns:`repeat(${row.items.length},1fr)`,gap:8,minHeight:220}}>
+                  {row.items.map(id=>{
+                    const w=wMap[id];
+                    return (
+                      <SortableCard key={id} id={id}>
+                        {({dragProps})=>(
+                          <Widget label={w.label} color={w.color} dragProps={dragProps}>
+                            <w.Comp date={selected} token={token}/>
+                          </Widget>
+                        )}
+                      </SortableCard>
+                    );
+                  })}
+                </div>
+              );
+            })}
+          </SortableContext>
+
+          <DragOverlay dropAnimation={{sideEffects:defaultDropAnimationSideEffects({styles:{active:{opacity:"0"}}})}} >
+            {activeId&&(
+              <div style={{
+                background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
+                padding:"12px 18px",fontFamily:mono,fontSize:10,
+                letterSpacing:"0.15em",textTransform:"uppercase",color:C.accent,
+                boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
+              }}>
+                {activeId==="cal"?"Calendar":activeId==="health"?"Health":wMap[activeId]?.label}
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      </div>
     </div>
   );
 }
