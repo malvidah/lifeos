@@ -520,7 +520,7 @@ function Notes({date,token}) {
     fontFamily:serif, fontSize:15, lineHeight:"1.8",
     padding:0, margin:0, border:"none", outline:"none",
     width:"100%", height:"100%", resize:"none",
-    background:"transparent", color:C.text, caretColor:C.accent,
+    background:"transparent", color:C.text, caretColor:C.text,
     whiteSpace:"pre-wrap", wordBreak:"break-word",
   };
 
@@ -544,12 +544,8 @@ function Notes({date,token}) {
     >
       {value && value.trim()
         ? renderContent(value)
-        : <div style={{color:C.muted,fontFamily:serif,fontSize:15,lineHeight:"1.8"}}>
+        : <div style={{color:C.muted,fontFamily:serif,fontSize:15,lineHeight:"1.8",fontStyle:"italic"}}>
             What's on your mind?
-            <span style={{display:"block",fontFamily:mono,fontSize:9,letterSpacing:"0.1em",
-              textTransform:"uppercase",color:C.dim,marginTop:6,opacity:0.7}}>
-              # heading &nbsp;·&nbsp; ⌘B bold &nbsp;·&nbsp; ⌘I italic
-            </span>
           </div>
       }
     </div>
@@ -808,20 +804,41 @@ export default function Dashboard() {
       <TopBar session={session} token={token} syncStatus={syncStatus}/>
 
       {mobile ? (
-        /* ── MOBILE: single scrollable column ───────────────────────────── */
+        /* ── MOBILE: single scrollable column with drag ─────────────────── */
         <div style={{flex:1,overflowY:"auto",padding:8,display:"flex",flexDirection:"column",gap:8}}>
-          {/* Calendar */}
-          <div style={{height:calH,flexShrink:0}}>
-            <CalStrip selected={selected} onSelect={setSelected}
-              events={events} healthDots={healthDots} dragProps={{}}/>
-          </div>
-          {/* Health */}
-          <HealthStrip date={selected} token={token}
-            onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-            dragProps={{}}/>
-          {/* All widgets stacked */}
+          {/* Cal + Health sortable */}
+          <DndContext sensors={sensors} collisionDetection={closestCenter}
+            onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
+              {fullOrder.map(id=>(
+                <div key={id}>
+                  <SortableCard id={id}>
+                    {({dragProps})=>
+                      id==="cal"
+                        ? <div style={{height:calH,flexShrink:0}}>
+                            <CalStrip selected={selected} onSelect={setSelected}
+                              events={events} healthDots={healthDots} dragProps={dragProps}/>
+                          </div>
+                        : <HealthStrip date={selected} token={token}
+                            onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+                            dragProps={dragProps}/>
+                    }
+                  </SortableCard>
+                </div>
+              ))}
+            </SortableContext>
+            <DragOverlay>
+              {activeId&&(
+                <div style={{background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
+                  padding:"12px 18px",fontFamily:mono,fontSize:10,color:C.accent}}>
+                  {activeId==="cal"?"Calendar":"Health"}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+          {/* Widgets stacked, each draggable by their grab handle */}
           {[leftWidget,...rightWidgets].map(w=>(
-            <div key={w.id} style={{minHeight:200}}>
+            <div key={w.id} style={{minHeight:220}}>
               <Widget label={w.label} color={w.color} dragProps={{}}>
                 <w.Comp date={selected} token={token}/>
               </Widget>
