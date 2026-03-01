@@ -680,9 +680,9 @@ export default function Dashboard() {
 
   // Heights (resizable)
   const [heights, setHeights] = useState({
-    cal:320, health:76,
-    notes:500,
-    tasks:185, meals:185, activity:185,
+    cal:300, health:76,
+    notes:545,
+    tasks:175, meals:175, activity:175,
   });
 
   const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}));
@@ -783,7 +783,7 @@ export default function Dashboard() {
       <TopBar session={session} token={token} syncStatus={syncStatus}/>
 
       {/* Scrollable content area */}
-      <div style={{flex:1,overflowY:"auto",padding:12,display:"flex",flexDirection:"column",gap:8}}>
+      <div style={{flex:1,overflowY:"auto",padding:"8px 10px 10px",display:"flex",flexDirection:"column",gap:6}}>
 
         {/* Full-width sections: cal + health, sortable between each other */}
         <DndContext sensors={sensors} collisionDetection={closestCenter}
@@ -821,11 +821,11 @@ export default function Dashboard() {
         </DndContext>
 
         {/* Two-column widget area */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,alignItems:"start"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,alignItems:"start"}}>
 
-          {/* Left column: Notes */}
+          {/* Left column: Notes — height matches sum of right column */}
           <div style={{display:"flex",flexDirection:"column"}}>
-            <div style={{height:heights.notes||500,minHeight:120}}>
+            <div style={{height:heights.notes,minHeight:120}}>
               <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
                 <leftWidget.Comp date={selected} token={token}/>
               </Widget>
@@ -833,18 +833,20 @@ export default function Dashboard() {
             <ResizeHandle id="notes"/>
           </div>
 
-          {/* Right column: Tasks, Meals, Activity */}
-          <div style={{display:"flex",flexDirection:"column",gap:0}}>
-            {rightWidgets.map((w)=>(
-              <div key={w.id}>
-                <div style={{height:heights[w.id]||185,minHeight:80}}>
+          {/* Right column: Tasks, Meals, Activity — stacked with resize handles between */}
+          <div style={{display:"flex",flexDirection:"column"}}>
+            {rightWidgets.map((w, i)=>(
+              <div key={w.id} style={{display:"flex",flexDirection:"column"}}>
+                <div style={{height:heights[w.id],minHeight:80}}>
                   <Widget label={w.label} color={w.color} dragProps={{}}>
                     <w.Comp date={selected} token={token}/>
                   </Widget>
                 </div>
-                <ResizeHandle id={w.id}/>
+                {i < rightWidgets.length - 1 && <ResizeHandle id={w.id}/>}
               </div>
             ))}
+            {/* Bottom resize handle for last right widget mirrors notes handle */}
+            <ResizeHandle id={rightWidgets[rightWidgets.length-1]?.id}/>
           </div>
         </div>
       </div>
