@@ -6,11 +6,17 @@
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
+  const debug = searchParams.get("debug") === "1";
   const token = process.env.OURA_TOKEN;
 
   if (!token) return Response.json({ error: "OURA_TOKEN not set" }, { status: 401 });
 
   try {
+    // Sleep sessions may start the night before, so fetch date-1 through date
+    const prev = new Date(date);
+    prev.setDate(prev.getDate() - 1);
+    const prevDate = prev.toISOString().split("T")[0];
+
     const [sleepRes, readinessRes, sessionRes] = await Promise.all([
       fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${date}&end_date=${date}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -18,8 +24,7 @@ export async function GET(request) {
       fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${date}&end_date=${date}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
-      // sleep sessions have the actual physiological RHR + HRV values
-      fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${date}&end_date=${date}`, {
+      fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${prevDate}&end_date=${date}`, {
         headers: { Authorization: `Bearer ${token}` },
       }),
     ]);
@@ -28,10 +33,16 @@ export async function GET(request) {
     const readinessData = await readinessRes.json();
     const sessionData = await sessionRes.json();
 
+    if (debug) {
+      return Response.json({ sleepData, readinessData, sessionData });
+    }
+
     const daily = sleepData.data?.[0];
     const readiness = readinessData.data?.[0];
-    // Use the longest sleep session (main sleep, not naps)
-    const sessions = sessionData.data ?? [];
+
+    // Filter to sessions whose `day` matches our target date (Oura assigns day based on wake time)
+    const sessions = (sessionData.data ?? []).filter(s => s.day === date);
+    // Pick longest session (main sleep vs naps)
     const mainSession = sessions.sort((a, b) =>
       (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0)
     )[0];
@@ -51,16 +62,17 @@ export async function GET(request) {
     }
 
     if (mainSession) {
-      // These are actual physiological values, not scores
       if (mainSession.lowest_heart_rate != null)
         result.rhr = String(Math.round(mainSession.lowest_heart_rate));
       if (mainSession.average_hrv != null)
         result.hrv = String(Math.round(mainSession.average_hrv));
-      // Fallback sleep hours from session if daily didn't have it
       if (!result.sleepHrs && mainSession.total_sleep_duration)
         result.sleepHrs = (mainSession.total_sleep_duration / 3600).toFixed(1);
+      if (!result.sleepQuality && mainSession.efficiency)
+        result.sleepQuality = String(mainSession.efficiency);
     }
 
+    result._debug = { sessionsFound: sessions.length, sessionDay: mainSession?.day, date };
     return Response.json(result);
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });

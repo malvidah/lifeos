@@ -122,15 +122,18 @@ function useDrag(initial) {
 function Ring({ score, color, size = 52 }) {
   const r = (size - 6) / 2;
   const circ = 2 * Math.PI * r;
-  const pct = Math.min(Math.max((parseFloat(score) || 0) / 100, 0), 1);
+  const val = parseFloat(score) || 0;
+  const pct = Math.min(Math.max(val / 100, 0), 1);
+  const isElite = val >= 90;
   return (
     <svg width={size} height={size} style={{ transform: "rotate(-90deg)", flexShrink: 0 }}>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.dimmer} strokeWidth={3}/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={3}
+      <circle cx={size/2} cy={size/2} r={r} fill={isElite ? color + "22" : "none"} stroke={C.dimmer} strokeWidth={3}/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={isElite ? 4 : 3}
         strokeDasharray={`${pct * circ} ${circ}`} strokeLinecap="round"
         style={{ transition: "stroke-dasharray 0.4s ease" }}/>
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{ fill: score ? C.text : C.dim, fontSize: 12, fontFamily: serif,
+        style={{ fill: isElite ? color : score ? C.text : C.dim, fontSize: 12, fontFamily: serif,
+          fontWeight: isElite ? "bold" : "normal",
           transform: "rotate(90deg)", transformOrigin: `${size/2}px ${size/2}px` }}>
         {score || "—"}
       </text>
@@ -166,6 +169,27 @@ function CalStrip({ selected, onSelect, events, syncing }) {
   const days = weekOf(anchor);
   const today = todayKey();
   const months = [...new Set(days.map(d => MON3[d.getMonth()]))].join(" · ");
+
+  // Read health scores from localStorage for dot indicators
+  const [healthDots, setHealthDots] = useState({});
+  useEffect(() => {
+    const dots = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith("los:") && key.endsWith(":health")) {
+        try {
+          const dateKey = key.split(":")[1];
+          const data = JSON.parse(localStorage.getItem(key));
+          dots[dateKey] = {
+            sleep: parseFloat(data.sleepScore) || 0,
+            readiness: parseFloat(data.readinessScore) || 0,
+            strain: parseFloat(data.strainScore) || 0,
+          };
+        } catch {}
+      }
+    }
+    setHealthDots(dots);
+  }, [selected]);
 
   return (
     <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}` }}>
@@ -223,6 +247,12 @@ function CalStrip({ selected, onSelect, events, syncing }) {
                 <span style={{ fontFamily: serif, fontSize: 17, lineHeight: 1, color: isTod ? C.accent : isSel ? C.text : C.dim }}>
                   {d.getDate()}
                 </span>
+                {/* 90+ health dots */}
+                <div style={{ display: "flex", gap: 2, marginLeft: "auto", alignItems: "center" }}>
+                  {healthDots[k]?.sleep >= 90 && <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.blue, display: "inline-block" }}/>}
+                  {healthDots[k]?.readiness >= 90 && <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.green, display: "inline-block" }}/>}
+                  {healthDots[k]?.strain >= 90 && <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.yellow, display: "inline-block" }}/>}
+                </div>
               </div>
 
               {/* Events list */}
