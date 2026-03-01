@@ -249,21 +249,21 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
               <div style={{padding:"6px 6px 3px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
                 borderBottom:`1px solid ${C.border}`,
                 borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.dim}`:`2px solid transparent`}}>
-                <span style={{fontFamily:mono,fontSize:9,color:sel?C.accent:C.dim}}>{DAY3[i]}</span>
-                <span style={{fontFamily:serif,fontSize:15,lineHeight:1,color:tod?C.accent:sel?C.text:C.text}}>{d.getDate()}</span>
+                <span style={{fontFamily:mono,fontSize:10,color:sel?C.accent:C.dim}}>{DAY3[i]}</span>
+                <span style={{fontFamily:serif,fontSize:16,lineHeight:1,color:tod?C.accent:sel?C.text:C.text}}>{d.getDate()}</span>
                 <div style={{display:"flex",gap:2,height:4,alignItems:"center"}}>
                   {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,  display:"inline-block"}}/>}
                   {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green, display:"inline-block"}}/>}
                   {dot.strain>=90   &&<span style={{width:3,height:3,borderRadius:"50%",background:C.yellow,display:"inline-block"}}/>}
                 </div>
               </div>
-              <div style={{padding:"3px 4px",display:"flex",flexDirection:"column",gap:2,minHeight:52}}>
+              <div style={{padding:"3px 4px",display:"flex",flexDirection:"column",gap:3,minHeight:70}}>
                 {evts.length===0
                   ?<span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
                   :evts.map((ev,ei)=>(
                     <div key={ei} style={{display:"flex",gap:3,alignItems:"baseline"}}>
-                      <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap"}}>{ev.time}</span>
-                      <span style={{fontFamily:serif,fontSize:9,lineHeight:1.3,wordBreak:"break-word",color:sel?C.text:C.text}}>{ev.title}</span>
+                      <span style={{fontFamily:mono,fontSize:9,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap"}}>{ev.time}</span>
+                      <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:C.text}}>{ev.title}</span>
                     </div>
                   ))
                 }
@@ -385,9 +385,6 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
   if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.dimmer}}>Loading…</div>;
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
-      {total>0&&<div style={{textAlign:"right",marginBottom:6}}>
-        <span style={{fontFamily:mono,fontSize:11,color}}>{prefix}{total} kcal</span>
-      </div>}
       {safe.map((row,idx)=>(
         <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:26}}>
           <input ref={el=>refs.current[row.id]=el} value={row.text}
@@ -401,6 +398,9 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
           </span>
         </div>
       ))}
+      {total>0&&<div style={{textAlign:"right",marginTop:8,paddingTop:6,borderTop:`1px solid ${C.border}`}}>
+        <span style={{fontFamily:mono,fontSize:11,color}}>{prefix}{total} kcal</span>
+      </div>}
     </div>
   );
 }
