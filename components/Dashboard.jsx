@@ -671,6 +671,24 @@ const WIDGET_DEFS = [
 const FULL_IDS   = ["cal","health"];
 const WIDGET_IDS = WIDGET_DEFS.map(w=>w.id);
 
+// ─── ResizeHandle ────────────────────────────────────────────────────────────
+function ResizeHandle({onPointerDown}) {
+  return (
+    <div onPointerDown={onPointerDown} style={{
+      height:10,display:"flex",alignItems:"center",justifyContent:"center",
+      cursor:"ns-resize",flexShrink:0,
+    }}>
+      <div style={{
+        width:32,height:3,borderRadius:2,background:C.border,
+        transition:"background 0.15s",
+      }}
+        onPointerEnter={e=>e.currentTarget.style.background=C.accent}
+        onPointerLeave={e=>e.currentTarget.style.background=C.border}
+      />
+    </div>
+  );
+}
+
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [session,   setSession]   = useState(null);
@@ -750,23 +768,8 @@ export default function Dashboard() {
     };
   }
 
-  // Bottom resize handle UI
-  function ResizeHandle({id}) {
-    return (
-      <div onPointerDown={makeResizeHandler(id)} style={{
-        height:10,display:"flex",alignItems:"center",justifyContent:"center",
-        cursor:"ns-resize",flexShrink:0,
-      }}>
-        <div style={{
-          width:32,height:3,borderRadius:2,background:C.border,
-          transition:"background 0.15s",
-        }}
-          onPointerEnter={e=>e.currentTarget.style.background=C.accent}
-          onPointerLeave={e=>e.currentTarget.style.background=C.border}
-        />
-      </div>
-    );
-  }
+  // All hooks must be called before any conditional returns
+  const mobile = useIsMobile();
 
   // Drag handling for full-width sections
   const [activeId,setActiveId]=useState(null);
@@ -787,9 +790,6 @@ export default function Dashboard() {
   const syncStatus={syncing:syncing.size>0,lastSync};
   const leftWidget  = wMap[leftId];
   const rightWidgets = rightOrder.map(id=>wMap[id]).filter(Boolean);
-  const mobile = useIsMobile();
-
-  // Mobile calendar is shorter
   const calH = mobile ? 200 : heights.cal;
 
   return (
@@ -851,7 +851,7 @@ export default function Dashboard() {
                               dragProps={dragProps}/>
                       }
                     </SortableCard>
-                    {id==="cal" && <ResizeHandle id="cal"/>}
+                    {id==="cal" && <ResizeHandle onPointerDown={makeResizeHandler("cal")}/> }
                   </div>
                 ))}
               </div>
@@ -882,7 +882,7 @@ export default function Dashboard() {
                       <w.Comp date={selected} token={token}/>
                     </Widget>
                   </div>
-                  {i < rightWidgets.length-1 && <ResizeHandle id={w.id}/>}
+                  {i < rightWidgets.length-1 && <ResizeHandle onPointerDown={makeResizeHandler(w.id)}/>}
                 </div>
               ))}
             </div>
