@@ -559,7 +559,49 @@ const WIDGET_DEFS = [
   {id:"tasks",    label:"Tasks",    color:C.blue,   Comp:Tasks},
   {id:"activity", label:"Activity", color:C.green,  Comp:Activity},
 ];
-const DRAGGABLE_IDS = ["cal","health",...WIDGET_DEFS.map(w=>w.id)];
+const DRAGGABLE_IDS = ["cal","health","notes","tasks","meals","activity"];
+
+// ─── Resizable card ───────────────────────────────────────────────────────────
+function ResizableCard({id, defaultHeight=240, children, style={}}) {
+  const [height, setHeight] = useState(defaultHeight);
+  const startY = useRef(null);
+  const startH = useRef(null);
+
+  function onMouseDown(e) {
+    e.preventDefault();
+    startY.current = e.clientY;
+    startH.current = height;
+    const onMove = e => {
+      const delta = e.clientY - startY.current;
+      setHeight(Math.max(120, startH.current + delta));
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
+
+  return (
+    <div style={{position:"relative", height, ...style}}>
+      <Card style={{height:"100%",display:"flex",flexDirection:"column"}}>
+        {children}
+      </Card>
+      {/* Resize handle */}
+      <div onMouseDown={onMouseDown} style={{
+        position:"absolute",bottom:0,left:"10%",right:"10%",height:6,
+        cursor:"ns-resize",display:"flex",alignItems:"center",justifyContent:"center",
+        zIndex:10,borderRadius:"0 0 12px 12px",
+      }}>
+        <div style={{width:32,height:3,borderRadius:2,background:C.border2,transition:"background 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.background=C.accent}
+          onMouseLeave={e=>e.currentTarget.style.background=C.border2}
+        />
+      </div>
+    </div>
+  );
+}
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -623,15 +665,9 @@ export default function Dashboard() {
 
   const syncStatus={syncing:syncing.size>0,lastSync};
 
-  // Build render list: group consecutive widgets into 2-col rows
-  const rows=[];
-  let buf=[];
-  const flush=()=>{if(buf.length){rows.push({type:"widgets",items:[...buf]});buf=[];}};
-  order.forEach(id=>{
-    if(id==="cal"||id==="health"){flush();rows.push({type:"full",id});}
-    else{buf.push(id);if(buf.length===2)flush();}
-  });
-  flush();
+  // Separate full-width from widget sections
+  const fullSections = order.filter(id=>id==="cal"||id==="health");
+  const widgetIds = order.filter(id=>id!=="cal"&&id!=="health");
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
@@ -648,57 +684,82 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} syncStatus={syncStatus}/>
 
-      <div style={{flex:1,padding:12,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter}
-          onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <SortableContext items={order} strategy={verticalListSortingStrategy}>
-            {rows.map((row,ri)=>{
-              if(row.type==="full") {
-                return (
-                  <SortableCard key={row.id} id={row.id}>
-                    {({dragProps})=> row.id==="cal"
-                      ? <CalStrip selected={selected} onSelect={setSelected}
-                          events={events} healthDots={healthDots} dragProps={dragProps}/>
-                      : <HealthStrip date={selected} token={token}
-                          onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-                          dragProps={dragProps}/>
-                    }
-                  </SortableCard>
-                );
-              }
-              return (
-                <div key={`row-${ri}`} style={{display:"grid",gridTemplateColumns:`repeat(${row.items.length},1fr)`,gap:8,minHeight:220}}>
-                  {row.items.map(id=>{
+      <DndContext sensors={sensors} collisionDetection={closestCenter}
+        onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <SortableContext items={order} strategy={verticalListSortingStrategy}>
+
+          <div style={{flex:1,padding:12,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+
+            {/* Full-width sortable sections (cal, health) */}
+            {order.filter(id=>id==="cal"||id==="health").map(id=>(
+              <SortableCard key={id} id={id}>
+                {({dragProps})=> id==="cal"
+                  ? <CalStrip selected={selected} onSelect={setSelected}
+                      events={events} healthDots={healthDots} dragProps={dragProps}/>
+                  : <HealthStrip date={selected} token={token}
+                      onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+                      dragProps={dragProps}/>
+                }
+              </SortableCard>
+            ))}
+
+            {/* Widget area: left column (notes) + right column (others) */}
+            {widgetIds.length > 0 && (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,alignItems:"start"}}>
+                {/* Left col: first widget (notes by default) spans full height */}
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {widgetIds.filter((_,i)=>i===0).map(id=>{
                     const w=wMap[id];
                     return (
                       <SortableCard key={id} id={id}>
                         {({dragProps})=>(
-                          <Widget label={w.label} color={w.color} dragProps={dragProps}>
-                            <w.Comp date={selected} token={token}/>
-                          </Widget>
+                          <ResizableCard id={id} defaultHeight={580}>
+                            <Widget label={w.label} color={w.color} dragProps={dragProps}>
+                              <w.Comp date={selected} token={token}/>
+                            </Widget>
+                          </ResizableCard>
                         )}
                       </SortableCard>
                     );
                   })}
                 </div>
-              );
-            })}
-          </SortableContext>
 
-          <DragOverlay dropAnimation={{sideEffects:defaultDropAnimationSideEffects({styles:{active:{opacity:"0"}}})}} >
-            {activeId&&(
-              <div style={{
-                background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
-                padding:"12px 18px",fontFamily:mono,fontSize:10,
-                letterSpacing:"0.15em",textTransform:"uppercase",color:C.accent,
-                boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
-              }}>
-                {activeId==="cal"?"Calendar":activeId==="health"?"Health":wMap[activeId]?.label}
+                {/* Right col: remaining widgets, each resizable */}
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {widgetIds.filter((_,i)=>i>0).map(id=>{
+                    const w=wMap[id];
+                    return (
+                      <SortableCard key={id} id={id}>
+                        {({dragProps})=>(
+                          <ResizableCard id={id} defaultHeight={180}>
+                            <Widget label={w.label} color={w.color} dragProps={dragProps}>
+                              <w.Comp date={selected} token={token}/>
+                            </Widget>
+                          </ResizableCard>
+                        )}
+                      </SortableCard>
+                    );
+                  })}
+                </div>
               </div>
             )}
-          </DragOverlay>
-        </DndContext>
-      </div>
+
+          </div>
+        </SortableContext>
+
+        <DragOverlay dropAnimation={{sideEffects:defaultDropAnimationSideEffects({styles:{active:{opacity:"0"}}})}}>
+          {activeId&&(
+            <div style={{
+              background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
+              padding:"12px 18px",fontFamily:mono,fontSize:10,
+              letterSpacing:"0.15em",textTransform:"uppercase",color:C.accent,
+              boxShadow:"0 12px 40px rgba(0,0,0,0.7)",
+            }}>
+              {activeId==="cal"?"Calendar":activeId==="health"?"Health":wMap[activeId]?.label}
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
     </div>
   );
 }
