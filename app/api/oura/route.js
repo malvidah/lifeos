@@ -40,8 +40,12 @@ export async function GET(request) {
     const daily = sleepData.data?.[0];
     const readiness = readinessData.data?.[0];
 
-    // Filter to sessions whose `day` matches our target date (Oura assigns day based on wake time)
-    const sessions = (sessionData.data ?? []).filter(s => s.day === date);
+    // Oura assigns session `day` based on sleep start, but we want sessions where you WOKE UP on `date`
+    // So filter by bedtime_end falling on the target date (in local time)
+    const sessions = (sessionData.data ?? []).filter(s => {
+      if (!s.bedtime_end) return false;
+      return s.bedtime_end.slice(0, 10) === date;
+    });
     // Pick longest session (main sleep vs naps)
     const mainSession = sessions.sort((a, b) =>
       (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0)
@@ -51,8 +55,7 @@ export async function GET(request) {
 
     if (daily) {
       result.sleepScore = daily.score != null ? String(daily.score) : "";
-      const totalSec = daily.contributors?.total_sleep_duration;
-      result.sleepHrs = totalSec ? (totalSec / 3600).toFixed(1) : "";
+      // contributors.total_sleep_duration is a score (0-100), not seconds — get hours from session
       result.sleepQuality = daily.contributors?.sleep_efficiency != null
         ? String(daily.contributors.sleep_efficiency) : "";
     }
