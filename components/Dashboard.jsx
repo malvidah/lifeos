@@ -412,14 +412,282 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}
 }
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
+// ─── Rich Notes editor ────────────────────────────────────────────────────────
+// Stores markdown, renders live with heading/bold/italic support.
+// # + space  → heading
+// Cmd+B      → **bold**
+// Cmd+I      → *italic*
+
 function Notes({date,token}) {
-  const {value,setValue,loaded}=useDbSave(date,"notes","",token);
+  const {value,setValue,loaded} = useDbSave(date,"notes","",token);
+  const editorRef = useRef(null);
+  const isComposing = useRef(false);
+  // Track if we're in "heading mode" on the current line
+  const suppressNext = useRef(false);
+
+  // Convert markdown string → array of line objects for rendering
+  function parseLines(md) {
+    return (md||"").split("\n").map(raw => {
+      if (/^# /.test(raw))   return {type:"h1",  text: raw.slice(2)};
+      if (/^## /.test(raw))  return {type:"h2",  text: raw.slice(3)};
+      // inline bold/italic within a line
+      return {type:"p", text: raw};
+    });
+  }
+
+  // Inline bold/italic renderer — returns spans
+  function renderInline(text, key) {
+    // Split on **bold** and *italic* tokens
+    const parts = [];
+    const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+    let last = 0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) parts.push(<span key={last}>{text.slice(last, m.index)}</span>);
+      if (m[0].startsWith("**")) {
+        parts.push(<strong key={m.index} style={{fontWeight:700,color:C.text}}>{m[2]}</strong>);
+      } else {
+        parts.push(<em key={m.index} style={{fontStyle:"italic",color:C.text}}>{m[3]}</em>);
+      }
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) parts.push(<span key={last}>{text.slice(last)}</span>);
+    return parts.length ? parts : text;
+  }
+
+  // Save cursor position (line + offset) before re-render
+  function getCursor() {
+    const sel = window.getSelection();
+    if (!sel.rangeCount || !editorRef.current) return null;
+    const range = sel.getRangeAt(0);
+    const lines = Array.from(editorRef.current.children);
+    for (let li = 0; li < lines.length; li++) {
+      if (lines[li].contains(range.startContainer)) {
+        return {line: li, offset: range.startOffset};
+      }
+    }
+    return null;
+  }
+
+  // Restore cursor after re-render
+  function setCursor(pos) {
+    if (!pos || !editorRef.current) return;
+    const lines = Array.from(editorRef.current.children);
+    const line = lines[pos.line];
+    if (!line) return;
+    try {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      // Walk into text nodes
+      let node = line, offset = pos.offset;
+      const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+      let textNode = walker.nextNode();
+      while (textNode) {
+        if (offset <= textNode.length) { node = textNode; break; }
+        offset -= textNode.length;
+        textNode = walker.nextNode();
+      }
+      range.setStart(node, Math.min(offset, node.textContent?.length||0));
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch {}
+  }
+
+  // Wrap selection in markdown markers
+  function wrapSelection(marker) {
+    const sel = window.getSelection();
+    if (!sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const selected = range.toString();
+    if (!selected) return;
+
+    // Find which line this is on
+    if (!editorRef.current) return;
+    const lines = value.split("\n");
+    const lineEls = Array.from(editorRef.current.children);
+    let targetLine = -1;
+    for (let i = 0; i < lineEls.length; i++) {
+      if (lineEls[i].contains(range.startContainer)) { targetLine = i; break; }
+    }
+    if (targetLine < 0) return;
+
+    // Get raw line text
+    const rawLine = lines[targetLine] || "";
+    // Figure out selected text within the raw line — use the rendered text position
+    const lineText = lineEls[targetLine]?.textContent || "";
+    const selText = selected;
+    const idx = rawLine.indexOf(selText);
+    if (idx < 0) return;
+
+    const before = rawLine.slice(0, idx);
+    const after = rawLine.slice(idx + selText.length);
+    lines[targetLine] = before + marker + selText + marker + after;
+    setValue(lines.join("\n"));
+  }
+
+  function handleKeyDown(e) {
+    // Cmd/Ctrl + B → bold
+    if ((e.metaKey || e.ctrlKey) && e.key === "b") {
+      e.preventDefault();
+      wrapSelection("**");
+      return;
+    }
+    // Cmd/Ctrl + I → italic
+    if ((e.metaKey || e.ctrlKey) && e.key === "i") {
+      e.preventDefault();
+      wrapSelection("*");
+      return;
+    }
+    // Enter key — insert newline in our state
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const cursor = getCursor();
+      const lines = value.split("\n");
+      const li = cursor?.line ?? lines.length - 1;
+      lines.splice(li + 1, 0, "");
+      const nextCursor = {line: li + 1, offset: 0};
+      setValue(lines.join("\n"));
+      requestAnimationFrame(() => setCursor(nextCursor));
+      return;
+    }
+    // Backspace — remove char or merge lines
+    if (e.key === "Backspace") {
+      e.preventDefault();
+      const sel = window.getSelection();
+      if (!sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      if (!range.collapsed) {
+        // Delete selection — handled via input event, let browser do it
+        return;
+      }
+      const cursor = getCursor();
+      if (!cursor) return;
+      const lines = value.split("\n");
+      const {line: li, offset} = cursor;
+      if (offset > 0) {
+        // Delete one char before cursor in raw line
+        const raw = lines[li];
+        lines[li] = raw.slice(0, offset - 1) + raw.slice(offset);
+        setValue(lines.join("\n"));
+        requestAnimationFrame(() => setCursor({line: li, offset: offset - 1}));
+      } else if (li > 0) {
+        // Merge with previous line
+        const prevLen = lines[li - 1].length;
+        lines[li - 1] = lines[li - 1] + lines[li];
+        lines.splice(li, 1);
+        setValue(lines.join("\n"));
+        requestAnimationFrame(() => setCursor({line: li - 1, offset: prevLen}));
+      }
+      return;
+    }
+  }
+
+  function handleInput(e) {
+    if (isComposing.current) return;
+    // For regular character input, sync from DOM back to state
+    if (!editorRef.current) return;
+    const cursor = getCursor();
+
+    // Reconstruct markdown from rendered lines
+    const lineEls = Array.from(editorRef.current.children);
+    const lines = value.split("\n");
+
+    // Only update the line that changed
+    if (cursor && cursor.line < lineEls.length) {
+      const li = cursor.line;
+      const el = lineEls[li];
+      const rawText = el.textContent || "";
+
+      // Check if this line already has a heading prefix in our state
+      const existingLine = lines[li] || "";
+      let prefix = "";
+      if (existingLine.startsWith("# ")) prefix = "# ";
+      else if (existingLine.startsWith("## ")) prefix = "## ";
+
+      // Detect "# " typed at the start of a plain line
+      if (!prefix && rawText.startsWith("# ")) {
+        lines[li] = rawText; // rawText already has "# "
+      } else if (prefix) {
+        // keep prefix, text is just the visible part
+        lines[li] = prefix + rawText.replace(/^#+ /, "");
+      } else {
+        lines[li] = rawText;
+      }
+
+      setValue(lines.join("\n"));
+      requestAnimationFrame(() => setCursor(cursor));
+    }
+  }
+
+  // Handle "# " shortcut: when user types "# " we convert the line
+  function handleBeforeInput(e) {
+    if (e.data === " ") {
+      const cursor = getCursor();
+      if (!cursor) return;
+      const lines = value.split("\n");
+      const raw = lines[cursor.line] || "";
+      // If line is exactly "#" before the space
+      if (raw === "#") {
+        e.preventDefault();
+        lines[cursor.line] = "# ";
+        setValue(lines.join("\n"));
+        requestAnimationFrame(() => setCursor({line: cursor.line, offset: 2}));
+      } else if (raw === "##") {
+        e.preventDefault();
+        lines[cursor.line] = "## ";
+        setValue(lines.join("\n"));
+        requestAnimationFrame(() => setCursor({line: cursor.line, offset: 3}));
+      }
+    }
+  }
+
+  const parsedLines = parseLines(value);
+
+  if (!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
+
   return (
-    <textarea value={value} onChange={e=>setValue(e.target.value)}
-      placeholder={loaded?"Write anything…":"Loading…"} disabled={!loaded}
-      style={{background:"transparent",border:"none",outline:"none",resize:"none",padding:0,
-        color:C.text,fontFamily:serif,fontSize:15,lineHeight:1.8,
-        width:"100%",height:"100%",opacity:loaded?1:0.4}}/>
+    <div style={{position:"relative",height:"100%",overflow:"auto"}}>
+      {/* Placeholder */}
+      {!value && (
+        <div style={{position:"absolute",top:0,left:0,pointerEvents:"none",
+          color:C.muted,fontFamily:serif,fontSize:15,lineHeight:1.8,userSelect:"none"}}>
+          Write anything… <span style={{fontSize:11,opacity:0.5}}>  # heading · ⌘B bold · ⌘I italic</span>
+        </div>
+      )}
+      <div
+        ref={editorRef}
+        contentEditable
+        suppressContentEditableWarning
+        spellCheck
+        onKeyDown={handleKeyDown}
+        onBeforeInput={handleBeforeInput}
+        onInput={handleInput}
+        onCompositionStart={()=>isComposing.current=true}
+        onCompositionEnd={()=>isComposing.current=false}
+        style={{outline:"none",minHeight:"100%",caretColor:C.accent,wordBreak:"break-word"}}
+      >
+        {parsedLines.map((line, i) => {
+          const content = renderInline(line.text, i);
+          if (line.type === "h1") return (
+            <div key={i} style={{
+              fontFamily:serif, fontSize:22, fontWeight:700,
+              color:C.text, lineHeight:1.4, marginBottom:2, marginTop: i>0?8:0,
+            }}>{content || "\u200B"}</div>
+          );
+          if (line.type === "h2") return (
+            <div key={i} style={{
+              fontFamily:serif, fontSize:17, fontWeight:700,
+              color:C.accent, lineHeight:1.4, marginBottom:2, marginTop: i>0?6:0,
+            }}>{content || "\u200B"}</div>
+          );
+          return (
+            <div key={i} style={{
+              fontFamily:serif, fontSize:15, lineHeight:1.8, color:C.text, minHeight:"1.8em",
+            }}>{content || "\u200B"}</div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
