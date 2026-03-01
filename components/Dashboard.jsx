@@ -22,9 +22,10 @@ const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 
 // ─── Responsive hook ──────────────────────────────────────────────────────────
 function useIsMobile() {
-  const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+  const [mobile, setMobile] = useState(false); // always false on SSR
   useEffect(() => {
     const fn = () => setMobile(window.innerWidth < 768);
+    fn(); // set correct value immediately on mount
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
   }, []);
