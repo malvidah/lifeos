@@ -179,11 +179,7 @@ function Widget({ label, color, dragHandlers, children }) {
 
 // ─── CalStrip ─────────────────────────────────────────────────────────────────
 function CalStrip({ selected, onSelect, events, syncStatus, healthDots }) {
-  const [anchor, setAnchor] = useState(() => {
-    const d = new Date();
-    if (d.getDay() === 0) d.setDate(d.getDate() + 1);
-    return d;
-  });
+  const [anchor, setAnchor] = useState(() => new Date());
   const days   = weekOf(anchor);
   const today  = todayKey();
   const months = [...new Set(days.map(d => MON3[d.getMonth()]))].join(" · ");
@@ -489,10 +485,7 @@ const WIDGETS = [
 ];
 
 export default function Dashboard() {
-  const [selected, setSelected] = useState(() => {
-    const d = new Date();
-    return d.getDay() === 0 ? toKey(shift(d, 1)) : todayKey();
-  });
+  const [selected, setSelected] = useState(todayKey);
   const [events,     setEvents]     = useState({});
   const [healthDots, setHealthDots] = useState({});
   const [syncing,    setSyncing]    = useState(new Set());
