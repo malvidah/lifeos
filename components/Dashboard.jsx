@@ -17,17 +17,37 @@ function parseJSON(text, fallback) {
   catch { return fallback; }
 }
 
-// ─── STORAGE ──────────────────────────────────────────────────────────────────
-function persist(date, type, data) {
-  try { localStorage.setItem(`los:${date}:${type}`, JSON.stringify(data)); }
-  catch (e) { console.warn("save err", e); }
-}
-function recall(date, type) {
+// ─── DATABASE ─────────────────────────────────────────────────────────────────
+async function dbSave(date, type, data) {
   try {
-    const v = localStorage.getItem(`los:${date}:${type}`);
-    return Promise.resolve(v ? JSON.parse(v) : null);
-  } catch { return Promise.resolve(null); }
+    await fetch("/api/entries", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ date, type, data }),
+    });
+  } catch (e) { console.warn("db save failed", e); }
 }
+
+async function dbLoad(date, type) {
+  try {
+    const r = await fetch(`/api/entries?date=${date}&type=${type}`);
+    const json = await r.json();
+    return json.data ?? null;
+  } catch { return null; }
+}
+
+async function dbLoadDay(date) {
+  try {
+    const r = await fetch(`/api/entries?date=${date}`);
+    const json = await r.json();
+    return json.day ?? {};
+  } catch { return {}; }
+}
+
+// ─── LOCAL CACHE (fast reads, db is source of truth) ─────────────────────────
+const cache = {};
+function cacheSet(date, type, data) { cache[`${date}:${type}`] = data; }
+function cacheGet(date, type) { return cache[`${date}:${type}`] ?? undefined; }
 
 // ─── DATE ─────────────────────────────────────────────────────────────────────
 const toKey = d => new Date(d).toISOString().split("T")[0];
@@ -50,43 +70,61 @@ const C = {
 const serif = "Georgia, 'Times New Roman', serif";
 const mono = "'SF Mono', ui-monospace, monospace";
 
-// ─── AUTOSAVE HOOK ────────────────────────────────────────────────────────────
-function useAutosave(date, type, initialValue) {
-  const [value, setValueState] = useState(() => {
-    try {
-      const v = localStorage.getItem(`los:${date}:${type}`);
-      return v ? JSON.parse(v) : initialValue;
-    } catch { return initialValue; }
-  });
-  const [loaded] = useState(true);
+// ─── DB AUTOSAVE HOOK ─────────────────────────────────────────────────────────
+// Loads from DB on mount/date change, saves to DB debounced on every change
+function useDbSave(date, type, initialValue) {
+  const [value, setValueState] = useState(initialValue);
+  const [loaded, setLoaded] = useState(false);
   const latestRef = useRef(value);
   const dateRef = useRef(date);
+  const timerRef = useRef(null);
   latestRef.current = value;
 
+  // Load from DB when date changes
   useEffect(() => {
-    if (dateRef.current !== date) {
-      persist(dateRef.current, type, latestRef.current);
-      dateRef.current = date;
-      try {
-        const v = localStorage.getItem(`los:${date}:${type}`);
-        setValueState(v ? JSON.parse(v) : initialValue);
-      } catch { setValueState(initialValue); }
-    }
-  }, [date, type, initialValue]);
+    setLoaded(false);
+    setValueState(initialValue);
+    latestRef.current = initialValue;
+    dateRef.current = date;
 
-  const timerRef = useRef(null);
+    // Check in-memory cache first for instant load
+    const cached = cacheGet(date, type);
+    if (cached !== undefined) {
+      setValueState(cached);
+      latestRef.current = cached;
+      setLoaded(true);
+      return;
+    }
+
+    dbLoad(date, type).then(data => {
+      const v = data ?? initialValue;
+      cacheSet(date, type, v);
+      setValueState(v);
+      latestRef.current = v;
+      setLoaded(true);
+    });
+  }, [date, type]);
+
   const setValue = useCallback((v) => {
-    setValueState(v);
-    latestRef.current = v;
+    const val = typeof v === "function" ? v(latestRef.current) : v;
+    setValueState(val);
+    latestRef.current = val;
+    cacheSet(dateRef.current, type, val);
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => persist(dateRef.current, type, latestRef.current), 400);
+    timerRef.current = setTimeout(() => {
+      dbSave(dateRef.current, type, latestRef.current);
+    }, 600);
   }, [type]);
 
+  // Flush on unmount / page hide
   useEffect(() => {
-    const flush = () => persist(dateRef.current, type, latestRef.current);
+    const flush = () => {
+      clearTimeout(timerRef.current);
+      dbSave(dateRef.current, type, latestRef.current);
+    };
     window.addEventListener("beforeunload", flush);
     window.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
-    return () => { flush(); window.removeEventListener("beforeunload", flush); };
+    return () => window.removeEventListener("beforeunload", flush);
   }, [type]);
 
   return { value, setValue, loaded };
@@ -150,7 +188,7 @@ function Widget({ label, color, drag, children }) {
 }
 
 // ─── CALENDAR STRIP ───────────────────────────────────────────────────────────
-function CalStrip({ selected, onSelect, events, calSyncing, ouraSync, ouraSyncing, ouraLastSync, ouraAvail }) {
+function CalStrip({ selected, onSelect, events, calSyncing, ouraSync, ouraSyncing, ouraLastSync, ouraAvail, healthDots }) {
   const initAnchor = () => {
     const d = new Date();
     if (d.getDay() === 0) d.setDate(d.getDate() + 1);
@@ -163,29 +201,9 @@ function CalStrip({ selected, onSelect, events, calSyncing, ouraSync, ouraSyncin
   const monthLabel = uniqueMonths.join(" · ");
   const year = days[0].getFullYear();
 
-  const [dots, setDots] = useState({});
-  useEffect(() => {
-    const d = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith("los:") && key.endsWith(":health")) {
-        try {
-          const dk = key.split(":")[1];
-          const h = JSON.parse(localStorage.getItem(key));
-          d[dk] = { sleep: +h.sleepScore||0, readiness: +h.readinessScore||0, strain: +h.strainScore||0 };
-        } catch {}
-      }
-    }
-    setDots(d);
-  }, [selected]);
-
   return (
     <div style={{ background: C.panel, borderBottom: `1px solid ${C.border}` }}>
-      {/* Header */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        padding: "10px 12px 8px", borderBottom: `1px solid ${C.border}`,
-      }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 12px 8px", borderBottom: `1px solid ${C.border}` }}>
         <div style={{ fontFamily: serif, fontSize: 20, color: C.text, letterSpacing: "-0.02em", lineHeight: 1 }}>
           {monthLabel} <span style={{ color: C.dim, fontSize: 15 }}>{year}</span>
         </div>
@@ -196,8 +214,7 @@ function CalStrip({ selected, onSelect, events, calSyncing, ouraSync, ouraSyncin
         {[["‹", () => setAnchor(d => shift(d,-7))], ["today", () => { setAnchor(new Date()); onSelect(todayKey()); }], ["›", () => setAnchor(d => shift(d,7))]].map(([l,fn]) => (
           <button key={l} onClick={fn} style={{
             background: "none", border: `1px solid ${C.border2}`, color: C.dim,
-            padding: l==="today" ? "3px 7px" : "3px 6px",
-            cursor: "pointer", fontFamily: mono,
+            padding: l==="today" ? "3px 7px" : "3px 6px", cursor: "pointer", fontFamily: mono,
             fontSize: l==="today" ? 8 : 12, letterSpacing: l==="today" ? "0.1em" : 0,
           }}>{l}</button>
         ))}
@@ -214,23 +231,20 @@ function CalStrip({ selected, onSelect, events, calSyncing, ouraSync, ouraSyncin
         )}
       </div>
 
-      {/* Week grid */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
         {days.map((d, i) => {
           const k = toKey(d);
           const isTod = k === today;
           const isSel = k === selected;
           const evts = (events[k] || []).slice().sort((a,b) => (a.time||"").localeCompare(b.time||""));
-          const dot = dots[k] || {};
+          const dot = healthDots[k] || {};
           return (
             <div key={k} onClick={() => onSelect(k)} style={{
               borderRight: i < 6 ? `1px solid ${C.border}` : "none",
-              background: isSel ? "#FFFFFF05" : "transparent",
-              cursor: "pointer",
+              background: isSel ? "#FFFFFF05" : "transparent", cursor: "pointer",
             }}>
               <div style={{
-                padding: "6px 6px 3px",
-                borderBottom: `1px solid ${C.border}`,
+                padding: "6px 6px 3px", borderBottom: `1px solid ${C.border}`,
                 borderTop: isSel ? `2px solid ${C.accent}` : isTod ? `2px solid ${C.dim}` : `2px solid transparent`,
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
               }}>
@@ -264,10 +278,15 @@ function CalStrip({ selected, onSelect, events, calSyncing, ouraSync, ouraSyncin
 }
 
 // ─── HEALTH STRIP ─────────────────────────────────────────────────────────────
-function HealthStrip({ date, syncRef }) {
+function HealthStrip({ date, syncRef, onHealthChange }) {
   const empty = { sleepScore:"", sleepHrs:"", sleepQuality:"", readinessScore:"", hrv:"", rhr:"", strainScore:"", strainNote:"" };
-  const { value: d, setValue: setD, loaded } = useAutosave(date, "health", empty);
+  const { value: d, setValue: setD, loaded } = useDbSave(date, "health", empty);
   const set = k => v => setD(prev => ({ ...prev, [k]: v }));
+
+  // Notify parent when health scores change (for calendar dots)
+  useEffect(() => {
+    if (loaded) onHealthChange(date, d);
+  }, [d, loaded]);
 
   const syncOura = useCallback(async () => {
     try {
@@ -306,8 +325,7 @@ function HealthStrip({ date, syncRef }) {
         {metrics.map((m, mi) => (
           <div key={m.key} style={{
             flex: "1 1 0", display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 12px", borderRight: mi < 2 ? `1px solid ${C.border}` : "none",
-            minWidth: 90,
+            padding: "10px 12px", borderRight: mi < 2 ? `1px solid ${C.border}` : "none", minWidth: 90,
           }}>
             <div style={{ position: "relative", flexShrink: 0 }}>
               <Ring score={m.score} color={m.color} size={44}/>
@@ -340,12 +358,14 @@ function HealthStrip({ date, syncRef }) {
 
 // ─── NOTES ────────────────────────────────────────────────────────────────────
 function Notes({ date }) {
-  const { value: text, setValue: setText } = useAutosave(date, "notes", "");
+  const { value: text, setValue: setText, loaded } = useDbSave(date, "notes", "");
   return (
     <textarea value={text} onChange={e => setText(e.target.value)}
-      placeholder="Write anything · autosaves"
+      placeholder={loaded ? "Write anything · saves to database" : "Loading…"}
+      disabled={!loaded}
       style={{ background:"transparent",border:"none",outline:"none",resize:"none",
-        color:C.text,fontFamily:serif,fontSize:13,lineHeight:1.8,width:"100%",height:"100%",minHeight:180,padding:0 }}
+        color:C.text,fontFamily:serif,fontSize:13,lineHeight:1.8,width:"100%",height:"100%",minHeight:180,padding:0,
+        opacity: loaded ? 1 : 0.4 }}
     />
   );
 }
@@ -353,7 +373,7 @@ function Notes({ date }) {
 // ─── ROW LIST ─────────────────────────────────────────────────────────────────
 function RowList({ date, type, placeholder, estimatePrompt, calLabel, accentColor }) {
   const emptyRows = () => [{ id: Date.now(), text: "", kcal: null }];
-  const { value: rows, setValue: setRows } = useAutosave(date, type, emptyRows());
+  const { value: rows, setValue: setRows, loaded } = useDbSave(date, type, emptyRows());
   const refs = useRef({});
   const safeRows = Array.isArray(rows) ? rows : emptyRows();
   const total = safeRows.reduce((s, r) => s + (r.kcal || 0), 0);
@@ -382,6 +402,8 @@ function RowList({ date, type, placeholder, estimatePrompt, calLabel, accentColo
       setTimeout(() => refs.current[prevId]?.focus(), 30);
     }
   }
+
+  if (!loaded) return <div style={{ fontFamily:mono, fontSize:9, color:C.dimmer }}>Loading…</div>;
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"100%" }}>
@@ -424,7 +446,7 @@ function Activity({ date }) {
 // ─── TASKS ────────────────────────────────────────────────────────────────────
 function Tasks({ date, calTasks }) {
   const emptyRows = () => [{ id: Date.now(), text: "", done: false, fromCal: false }];
-  const { value: rows, setValue: setRows, loaded } = useAutosave(date, "tasks", emptyRows());
+  const { value: rows, setValue: setRows, loaded } = useDbSave(date, "tasks", emptyRows());
   const refs = useRef({});
   const safeRows = Array.isArray(rows) ? rows : emptyRows();
 
@@ -449,6 +471,8 @@ function Tasks({ date, calTasks }) {
       if (prev) setTimeout(() => refs.current[prev]?.focus(), 30);
     }
   }
+
+  if (!loaded) return <div style={{ fontFamily:mono, fontSize:9, color:C.dimmer }}>Loading…</div>;
 
   const open = safeRows.filter(r => !r.done);
   const done = safeRows.filter(r => r.done);
@@ -485,7 +509,7 @@ function Settings({ gcalToken, setGcalToken, onClose }) {
   const [gcal, setGcal] = useState(gcalToken);
   function save() {
     setGcalToken(gcal.trim());
-    persist("global", "tokens", { gcal: gcal.trim() });
+    dbSave("global", "tokens", { gcal: gcal.trim() });
     onClose();
   }
   return (
@@ -504,9 +528,9 @@ function Settings({ gcalToken, setGcalToken, onClose }) {
           </div>
         </div>
         <div style={{ marginBottom:20,padding:"10px 12px",border:`1px solid ${C.border}`,background:C.bg }}>
-          <div style={{ fontFamily:mono,fontSize:7,color:C.dim,marginBottom:4,letterSpacing:"0.15em" }}>OURA + ANTHROPIC API</div>
+          <div style={{ fontFamily:mono,fontSize:7,color:C.dim,marginBottom:4,letterSpacing:"0.15em" }}>SERVER KEYS</div>
           <div style={{ fontFamily:mono,fontSize:7,color:C.dimmer,lineHeight:1.6 }}>
-            Set OURA_TOKEN and ANTHROPIC_API_KEY in Vercel → Settings → Environment Variables.
+            OURA_TOKEN, ANTHROPIC_API_KEY, SUPABASE_URL, SUPABASE_ANON_KEY — set in Vercel → Settings → Environment Variables.
           </div>
         </div>
         <div style={{ display:"flex",gap:8,justifyContent:"flex-end" }}>
@@ -545,11 +569,13 @@ export default function Dashboard() {
   const [ouraSyncing, setOuraSyncing] = useState(false);
   const [ouraLastSync, setOuraLastSync] = useState(null);
   const [ouraAvail, setOuraAvail] = useState(true);
+  const [healthDots, setHealthDots] = useState({});
   const { order, drag } = useDrag(WIDS);
   const syncRef = useRef(null);
 
+  // Load Google Calendar token from DB
   useEffect(() => {
-    recall("global","tokens").then(t => { if (t?.gcal) setGcalToken(t.gcal); });
+    dbLoad("global", "tokens").then(t => { if (t?.gcal) setGcalToken(t.gcal); });
   }, []);
 
   const syncCalendar = useCallback(async (gcalTok) => {
@@ -580,6 +606,14 @@ export default function Dashboard() {
     setOuraSyncing(false);
   }
 
+  // Health dots fed up from HealthStrip
+  const handleHealthChange = useCallback((date, data) => {
+    setHealthDots(prev => ({
+      ...prev,
+      [date]: { sleep: +data.sleepScore||0, readiness: +data.readinessScore||0, strain: +data.strainScore||0 }
+    }));
+  }, []);
+
   return (
     <div style={{ background:C.bg, minHeight:"100vh", color:C.text, display:"flex", flexDirection:"column" }}>
       <style>{`
@@ -595,11 +629,9 @@ export default function Dashboard() {
       `}</style>
 
       {showSettings && (
-        <Settings
-          gcalToken={gcalToken}
+        <Settings gcalToken={gcalToken}
           setGcalToken={t => { setGcalToken(t); syncCalendar(t); }}
-          onClose={() => setShowSettings(false)}
-        />
+          onClose={() => setShowSettings(false)} />
       )}
 
       <CalStrip
@@ -607,9 +639,10 @@ export default function Dashboard() {
         events={events} calSyncing={calSyncing}
         ouraSync={handleOuraSync} ouraSyncing={ouraSyncing}
         ouraLastSync={ouraLastSync} ouraAvail={ouraAvail}
+        healthDots={healthDots}
       />
 
-      <HealthStrip date={selected} syncRef={syncRef} />
+      <HealthStrip date={selected} syncRef={syncRef} onHealthChange={handleHealthChange} />
 
       <div className="widget-grid" style={{
         flex:1, display:"grid", gridTemplateColumns:"1fr 1fr",
@@ -626,14 +659,12 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Settings gear — discreet, bottom right */}
       <button onClick={() => setShowSettings(true)} style={{
         position:"fixed", bottom:14, right:14,
         background:C.panel, border:`1px solid ${C.border2}`,
         color:C.dim, fontFamily:mono, fontSize:11,
         width:28, height:28, cursor:"pointer",
-        display:"flex", alignItems:"center", justifyContent:"center",
-        zIndex:50,
+        display:"flex", alignItems:"center", justifyContent:"center", zIndex:50,
       }}>⚙</button>
     </div>
   );
