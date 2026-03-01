@@ -6,7 +6,7 @@ import {
   DragOverlay, defaultDropAnimationSideEffects,
 } from "@dnd-kit/core";
 import {
-  SortableContext, useSortable, verticalSortingStrategy, arrayMove,
+  SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -606,7 +606,7 @@ export default function Dashboard() {
 
       <DndContext sensors={sensors} collisionDetection={closestCenter}
         onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <SortableContext items={order} strategy={verticalSortingStrategy}>
+        <SortableContext items={order} strategy={verticalListSortingStrategy}>
           {rows.map((row,ri) => {
             if(row.type==="full") {
               const {id} = row.item;
