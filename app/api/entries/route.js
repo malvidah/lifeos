@@ -1,11 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
 function getSupabase(req) {
-  // Get the user's JWT from the Authorization header
+  // Get token from Authorization header OR query param (sendBeacon fallback)
   const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '');
+  const { searchParams } = new URL(req.url);
+  const token = auth.replace('Bearer ', '') || searchParams.get('token') || '';
   
-  // Create a client authenticated as this user
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,

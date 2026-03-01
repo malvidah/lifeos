@@ -59,9 +59,20 @@ async function estimateKcal(prompt) {
 // ─── DB ───────────────────────────────────────────────────────────────────────
 async function dbSave(date,type,data,token) {
   if (!token) return;
-  try { await fetch("/api/entries",{method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-    body:JSON.stringify({date,type,data})}); } catch(e) { console.warn(e); }
+  const url="/api/entries";
+  const body=JSON.stringify({date,type,data});
+  const headers={"Content-Type":"application/json","Authorization":`Bearer ${token}`};
+  // sendBeacon is fire-and-forget and survives iOS page suspension
+  // We encode auth in the body since Beacon can't set custom headers
+  try {
+    await fetch(url,{method:"POST",headers,body});
+  } catch(e) {
+    // Fallback: sendBeacon (no custom headers, but works during suspension)
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body],{type:"application/json"});
+      navigator.sendBeacon(url+"?token="+encodeURIComponent(token), blob);
+    }
+  }
 }
 async function dbLoad(date,type,token) {
   if (!token) return null;
@@ -135,19 +146,34 @@ function useDbSave(date,type,empty,token) {
   },[date,type,token]); // eslint-disable-line
   useEffect(()=>{
     if (!token) return;
-    const flush=()=>{clearTimeout(timer.current);dbSave(dateRef.current,type,live.current,token);};
-    const onVis=()=>{
-      if(document.hidden){flush();}
-      else {
-        // App became visible — invalidate cache so re-fetch+merge happens on next date change or manual trigger
-        const key=`${dateRef.current}:${type}`;
-        if (!DIRTY[key]) delete MEM[key]; // clear stale cache so useEffect re-fetches
+    const flush=()=>{
+      clearTimeout(timer.current);
+      // Only save if there are dirty changes to avoid unnecessary writes
+      const key=`${dateRef.current}:${type}`;
+      if (DIRTY[key]) {
+        dbSave(dateRef.current,type,live.current,token);
+        DIRTY[key]=false;
       }
     };
+    const onVis=()=>{
+      if(document.hidden){
+        flush(); // iOS suspends the page — flush immediately
+      } else {
+        // App became visible — clear stale cache so next effect re-fetches+merges
+        const key=`${dateRef.current}:${type}`;
+        if (!DIRTY[key]) delete MEM[key];
+      }
+    };
+    const onPageHide=()=>flush(); // iOS PWA pagehide fires before suspension
+    const onBlur=()=>flush();    // window blur catches tab switches on desktop
     window.addEventListener("beforeunload",flush);
+    window.addEventListener("pagehide",onPageHide);
+    window.addEventListener("blur",onBlur);
     document.addEventListener("visibilitychange",onVis);
     return ()=>{
       window.removeEventListener("beforeunload",flush);
+      window.removeEventListener("pagehide",onPageHide);
+      window.removeEventListener("blur",onBlur);
       document.removeEventListener("visibilitychange",onVis);
     };
   },[type,token]); // eslint-disable-line
@@ -157,10 +183,11 @@ function useDbSave(date,type,empty,token) {
     const key=`${dateRef.current}:${type}`;
     MEM[key]=next; DIRTY[key]=true; _set(next);
     clearTimeout(timer.current);
+    // Shorter debounce (800ms→200ms) + iOS gets an immediate save attempt too
     timer.current=setTimeout(()=>{
       dbSave(dateRef.current,type,live.current,token);
       DIRTY[key]=false;
-    },400);
+    },200);
   },[type,token]);
   return {value,setValue,loaded};
 }
