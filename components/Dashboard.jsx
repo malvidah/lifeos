@@ -19,6 +19,19 @@ const C = {
 };
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
+
+// ─── Responsive hook ──────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [mobile, setMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+  useEffect(() => {
+    const fn = () => setMobile(window.innerWidth < 768);
+    window.addEventListener("resize", fn);
+    return () => window.removeEventListener("resize", fn);
+  }, []);
+  return mobile;
+}
+
+
 const R = "12px";
 
 const toKey    = d => new Date(d).toISOString().split("T")[0];
@@ -293,51 +306,73 @@ function TopBar({session,token,syncStatus}) {
 // ─── CalStrip ────────────────────────────────────────────────────────────────
 function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
   const [anchor,setAnchor]=useState(()=>new Date());
+  const mobile = useIsMobile();
   const days=weekOf(anchor),today=todayKey();
   const months=[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ");
+
   return (
     <Card>
+      {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
         <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-        <span style={{fontFamily:serif,fontSize:18,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>{months}</span>
-        <span style={{fontFamily:mono,fontSize:12,color:C.muted,marginLeft:2}}>{days[0].getFullYear()}</span>
+        <span style={{fontFamily:serif,fontSize:mobile?15:18,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>{months}</span>
+        <span style={{fontFamily:mono,fontSize:mobile?10:12,color:C.muted,marginLeft:2}}>{days[0].getFullYear()}</span>
         <div style={{flex:1}}/>
         {[["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
           <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
             border:`1px solid ${C.border2}`,borderRadius:6,color:C.muted,fontFamily:mono,
-            padding:l==="today"?"4px 10px":"4px 8px",fontSize:l==="today"?9:13,
-            letterSpacing:l==="today"?"0.1em":"0",transition:"border-color 0.15s,color 0.15s"}}>{l}</button>
+            padding:l==="today"?"4px 8px":"4px 7px",fontSize:l==="today"?9:13,
+            letterSpacing:l==="today"?"0.08em":"0",transition:"border-color 0.15s,color 0.15s"}}>{l}</button>
         ))}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flex:1}}>
+
+      {/* Day columns */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flex:1,overflow:"hidden"}}>
         {days.map((d,i)=>{
           const k=toKey(d),sel=k===selected,tod=k===today;
-          const evts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+          const allEvts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+          // On mobile show max 2 events, on desktop show all
+          const evts = mobile ? allEvts.slice(0,2) : allEvts;
           const dot=healthDots[k]||{};
           return (
             <div key={k} onClick={()=>onSelect(k)} style={{cursor:"pointer",
               borderRight:i<6?`1px solid ${C.border}`:"none",
-              background:sel?"rgba(196,168,130,0.06)":"transparent",transition:"background 0.15s"}}>
-              <div style={{padding:"8px 6px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
-                borderBottom:`1px solid ${C.border}`,
+              background:sel?"rgba(196,168,130,0.06)":"transparent",transition:"background 0.15s",
+              display:"flex",flexDirection:"column"}}>
+              {/* Day header */}
+              <div style={{padding:mobile?"6px 3px 3px":"8px 6px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
+                borderBottom:`1px solid ${C.border}`,flexShrink:0,
                 borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.muted}`:`2px solid transparent`}}>
-                <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.08em",color:sel?C.accent:C.muted}}>{DAY3[i]}</span>
-                <span style={{fontFamily:serif,fontSize:17,lineHeight:1,color:tod?C.accent:C.text}}>{d.getDate()}</span>
-                <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
+                <span style={{fontFamily:mono,fontSize:mobile?7:9,letterSpacing:"0.06em",color:sel?C.accent:C.muted}}>{DAY3[i]}</span>
+                <span style={{fontFamily:serif,fontSize:mobile?14:17,lineHeight:1,color:tod?C.accent:C.text}}>{d.getDate()}</span>
+                {!mobile && <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
                   {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
                   {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green,display:"inline-block"}}/>}
                   {dot.strain>=90   &&<span style={{width:3,height:3,borderRadius:"50%",background:C.yellow,display:"inline-block"}}/>}
-                </div>
+                </div>}
               </div>
-              <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",gap:3,minHeight:80}}>
+              {/* Events */}
+              <div style={{padding:mobile?"3px 3px":"5px 6px",display:"flex",flexDirection:"column",gap:mobile?2:3,flex:1,overflow:"hidden"}}>
                 {evts.length===0
-                  ?<span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
-                  :evts.map((ev,ei)=>(
-                    <div key={ei} style={{display:"flex",gap:4,alignItems:"baseline"}}>
-                      <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap",opacity:0.9}}>{ev.time}</span>
-                      <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:sel?C.text:"#AAA5A0"}}>{ev.title}</span>
+                  ? !mobile && <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
+                  : evts.map((ev,ei)=>(
+                    <div key={ei}>
+                      {mobile
+                        ? <div style={{
+                            width:"100%",height:3,borderRadius:2,
+                            background:ev.color||C.accent,opacity:0.8,marginBottom:1
+                          }}/>
+                        : <div style={{display:"flex",gap:4,alignItems:"baseline"}}>
+                            <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap",opacity:0.9}}>{ev.time}</span>
+                            <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:sel?C.text:"#AAA5A0",
+                              overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{ev.title}</span>
+                          </div>
+                      }
                     </div>
                   ))
+                }
+                {mobile && allEvts.length > 2 &&
+                  <span style={{fontFamily:mono,fontSize:7,color:C.dim}}>+{allEvts.length-2}</span>
                 }
               </div>
             </div>
@@ -347,7 +382,6 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
     </Card>
   );
 }
-
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",strainScore:"",strainNote:""};
 function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
@@ -377,15 +411,17 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}
       fields:[{label:"Note",value:h.strainNote,onChange:set("strainNote"),unit:""}]},
   ];
 
+  const mobileH = useIsMobile();
   return (
     <Card style={{overflow:"visible"}}>
-      <div style={{display:"flex",alignItems:"stretch"}}>
-        <div style={{display:"flex",alignItems:"center",padding:"0 10px",borderRight:`1px solid ${C.border}`}}>
+      <div style={{display:"flex",alignItems:"stretch",flexWrap:mobileH?"wrap":"nowrap"}}>
+        {!mobileH && <div style={{display:"flex",alignItems:"center",padding:"0 10px",borderRight:`1px solid ${C.border}`}}>
           <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-        </div>
+        </div>}
         {metrics.map((m,mi)=>(
-          <div key={m.key} style={{flex:"1 1 0",display:"flex",alignItems:"center",gap:12,
-            padding:"12px 14px",borderRight:mi<2?`1px solid ${C.border}`:"none"}}>
+          <div key={m.key} style={{flex:mobileH?"1 1 30%":"1 1 0",display:"flex",alignItems:"center",gap:mobileH?8:12,
+            padding:mobileH?"10px 10px":"12px 14px",borderRight:(!mobileH&&mi<2)?`1px solid ${C.border}`:"none",
+            borderBottom:mobileH&&mi<2?`1px solid ${C.border}`:"none"}}>
             <div style={{position:"relative",flexShrink:0}}>
               <Ring score={m.score} color={m.color} size={48}/>
               <input value={m.score} onChange={m.setScore} style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
@@ -746,6 +782,10 @@ export default function Dashboard() {
   const syncStatus={syncing:syncing.size>0,lastSync};
   const leftWidget  = wMap[leftId];
   const rightWidgets = rightOrder.map(id=>wMap[id]).filter(Boolean);
+  const mobile = useIsMobile();
+
+  // Mobile calendar is shorter
+  const calH = mobile ? 200 : heights.cal;
 
   return (
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -762,69 +802,88 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} syncStatus={syncStatus}/>
 
-      {/* Main layout — fills remaining height, no scroll, equal padding all sides */}
-      <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column",padding:10,gap:8,minHeight:0}}>
+      {mobile ? (
+        /* ── MOBILE: single scrollable column ───────────────────────────── */
+        <div style={{flex:1,overflowY:"auto",padding:8,display:"flex",flexDirection:"column",gap:8}}>
+          {/* Calendar */}
+          <div style={{height:calH,flexShrink:0}}>
+            <CalStrip selected={selected} onSelect={setSelected}
+              events={events} healthDots={healthDots} dragProps={{}}/>
+          </div>
+          {/* Health */}
+          <HealthStrip date={selected} token={token}
+            onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+            dragProps={{}}/>
+          {/* All widgets stacked */}
+          {[leftWidget,...rightWidgets].map(w=>(
+            <div key={w.id} style={{minHeight:200}}>
+              <Widget label={w.label} color={w.color} dragProps={{}}>
+                <w.Comp date={selected} token={token}/>
+              </Widget>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* ── DESKTOP: fixed layout ──────────────────────────────────────── */
+        <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column",padding:10,gap:8,minHeight:0}}>
 
-        {/* Full-width: cal + health */}
-        <DndContext sensors={sensors} collisionDetection={closestCenter}
-          onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-          <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
-            <div style={{display:"flex",flexDirection:"column",gap:0,flexShrink:0}}>
-              {fullOrder.map((id,idx)=>(
-                <div key={id} style={{marginBottom:idx<fullOrder.length-1?8:0}}>
-                  <SortableCard id={id}>
-                    {({dragProps})=>
-                      id==="cal"
-                        ? <div style={{height:heights.cal}}>
-                            <CalStrip selected={selected} onSelect={setSelected}
-                              events={events} healthDots={healthDots} dragProps={dragProps}/>
-                          </div>
-                        : <HealthStrip date={selected} token={token}
-                            onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-                            dragProps={dragProps}/>
-                    }
-                  </SortableCard>
-                  {id==="cal" && <ResizeHandle id="cal"/>}
+          {/* Full-width: cal + health */}
+          <DndContext sensors={sensors} collisionDetection={closestCenter}
+            onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
+              <div style={{display:"flex",flexDirection:"column",gap:0,flexShrink:0}}>
+                {fullOrder.map((id,idx)=>(
+                  <div key={id} style={{marginBottom:idx<fullOrder.length-1?8:0}}>
+                    <SortableCard id={id}>
+                      {({dragProps})=>
+                        id==="cal"
+                          ? <div style={{height:heights.cal}}>
+                              <CalStrip selected={selected} onSelect={setSelected}
+                                events={events} healthDots={healthDots} dragProps={dragProps}/>
+                            </div>
+                          : <HealthStrip date={selected} token={token}
+                              onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+                              dragProps={dragProps}/>
+                      }
+                    </SortableCard>
+                    {id==="cal" && <ResizeHandle id="cal"/>}
+                  </div>
+                ))}
+              </div>
+            </SortableContext>
+            <DragOverlay>
+              {activeId&&(
+                <div style={{background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
+                  padding:"12px 18px",fontFamily:mono,fontSize:10,letterSpacing:"0.15em",
+                  textTransform:"uppercase",color:C.accent,boxShadow:"0 12px 40px rgba(0,0,0,0.7)"}}>
+                  {activeId==="cal"?"Calendar":"Health"}
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
+
+          {/* Widget area — fills remaining space */}
+          <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minHeight:0}}>
+            <div style={{minHeight:0,height:"100%"}}>
+              <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
+                <leftWidget.Comp date={selected} token={token}/>
+              </Widget>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
+              {rightWidgets.map((w,i)=>(
+                <div key={w.id} style={{flex:heights[w.id]||1,minHeight:80,display:"flex",flexDirection:"column"}}>
+                  <div style={{flex:1,minHeight:0}}>
+                    <Widget label={w.label} color={w.color} dragProps={{}}>
+                      <w.Comp date={selected} token={token}/>
+                    </Widget>
+                  </div>
+                  {i < rightWidgets.length-1 && <ResizeHandle id={w.id}/>}
                 </div>
               ))}
             </div>
-          </SortableContext>
-          <DragOverlay>
-            {activeId&&(
-              <div style={{background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
-                padding:"12px 18px",fontFamily:mono,fontSize:10,letterSpacing:"0.15em",
-                textTransform:"uppercase",color:C.accent,boxShadow:"0 12px 40px rgba(0,0,0,0.7)"}}>
-                {activeId==="cal"?"Calendar":"Health"}
-              </div>
-            )}
-          </DragOverlay>
-        </DndContext>
-
-        {/* Widget area — fills all remaining vertical space */}
-        <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minHeight:0}}>
-
-          {/* Left: Notes fills full height */}
-          <div style={{minHeight:0,height:"100%"}}>
-            <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
-              <leftWidget.Comp date={selected} token={token}/>
-            </Widget>
-          </div>
-
-          {/* Right: Tasks/Meals/Activity share height equally, resizable between them */}
-          <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
-            {rightWidgets.map((w,i)=>(
-              <div key={w.id} style={{flex:heights[w.id]||1,minHeight:80,display:"flex",flexDirection:"column",gap:0}}>
-                <div style={{flex:1,minHeight:0}}>
-                  <Widget label={w.label} color={w.color} dragProps={{}}>
-                    <w.Comp date={selected} token={token}/>
-                  </Widget>
-                </div>
-                {i < rightWidgets.length-1 && <ResizeHandle id={w.id}/>}
-              </div>
-            ))}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
