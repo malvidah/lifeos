@@ -464,21 +464,21 @@ function Notes({date,token}) {
         const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
         let last = 0, m;
         while ((m = re.exec(t)) !== null) {
-          if (m.index > last) parts.push(`<span>${esc(t.slice(last, m.index))}</span>`);
+          if (m.index > last) parts.push(`<span style="color:${C.text}">${esc(t.slice(last, m.index))}</span>`);
           if (m[0].startsWith("**"))
             parts.push(`<span style="font-weight:700;color:${C.text}">${esc(m[2])}</span>`);
           else
             parts.push(`<span style="font-style:italic;color:${C.text}">${esc(m[3])}</span>`);
           last = m.index + m[0].length;
         }
-        if (last < t.length) parts.push(`<span>${esc(t.slice(last))}</span>`);
+        if (last < t.length) parts.push(`<span style="color:${C.text}">${esc(t.slice(last))}</span>`);
         return parts.join("");
       };
 
       if (prefixColor) {
         return `<div><span style="color:${prefixColor};opacity:0.5">${esc(prefix)}</span><span style="color:${prefixColor}">${renderInline(rest)}</span></div>`;
       }
-      return `<div>${renderInline(rest)||" "}</div>`;
+      return `<div style="color:${C.text}">${renderInline(rest)||" "}</div>`;
     }).join("");
   }
 
@@ -518,7 +518,6 @@ function Notes({date,token}) {
           inset: 0,
           overflow: "hidden",
           pointerEvents: "none",
-          color: "transparent",  // text is transparent; only styled spans show color
           zIndex: 1,
         }}
       />
