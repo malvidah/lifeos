@@ -287,7 +287,7 @@ function TopBar({session,token,syncStatus}) {
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 16px",
       height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,
       position:"sticky",top:0,zIndex:100}}>
-      <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em"}}>Life OS</span>
+      <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em"}}>{new Date().toLocaleDateString("en-US",{month:"long",day:"numeric"})}</span>
       <div style={{flex:1}}/>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         <div style={{width:6,height:6,borderRadius:"50%",
