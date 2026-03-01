@@ -185,19 +185,21 @@ function SortableCard({id,children}) {
 // ─── Widget card ─────────────────────────────────────────────────────────────
 function Widget({label,color,dragProps,children}) {
   return (
-    <Card>
-      <div style={{
-        display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
-        borderBottom:`1px solid ${C.border}`,flexShrink:0,
-      }}>
-        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,
-          lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-        <div style={{width:3,height:13,borderRadius:2,background:color,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
-          textTransform:"uppercase",color:C.muted}}>{label}</span>
-      </div>
-      <div style={{flex:1,overflow:"auto",padding:14}}>{children}</div>
-    </Card>
+    <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
+      <Card>
+        <div style={{
+          display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+          borderBottom:`1px solid ${C.border}`,flexShrink:0,
+        }}>
+          <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,
+            lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
+          <div style={{width:3,height:13,borderRadius:2,background:color,flexShrink:0}}/>
+          <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
+            textTransform:"uppercase",color:C.muted}}>{label}</span>
+        </div>
+        <div style={{flex:1,overflow:"auto",padding:14,minHeight:0}}>{children}</div>
+      </Card>
+    </div>
   );
 }
 
@@ -800,9 +802,9 @@ export default function Dashboard() {
         <DndContext sensors={sensors} collisionDetection={closestCenter}
           onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
-            <div style={{display:"flex",flexDirection:"column",gap:8,flexShrink:0}}>
-              {fullOrder.map(id=>(
-                <div key={id}>
+            <div style={{display:"flex",flexDirection:"column",gap:0,flexShrink:0}}>
+              {fullOrder.map((id,idx)=>(
+                <div key={id} style={{marginBottom:idx<fullOrder.length-1?8:0}}>
                   <SortableCard id={id}>
                     {({dragProps})=>
                       id==="cal"
@@ -835,7 +837,7 @@ export default function Dashboard() {
         <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minHeight:0}}>
 
           {/* Left: Notes fills full height */}
-          <div style={{minHeight:0}}>
+          <div style={{minHeight:0,height:"100%"}}>
             <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
               <leftWidget.Comp date={selected} token={token}/>
             </Widget>
