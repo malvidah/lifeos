@@ -3,12 +3,12 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "../lib/supabase.js";
 
 const C = {
-  bg:"#0A0A0A", panel:"#101010", border:"#191919", border2:"#222",
-  text:"#DDD8D0", dim:"#4A4744", dimmer:"#282624", accent:"#B8A882",
-  green:"#5A9470", blue:"#4A7A9B", yellow:"#A8864A", red:"#9B4A4A",
+  bg:"#0A0A0A",panel:"#101010",border:"#191919",border2:"#222",
+  text:"#DDD8D0",dim:"#4A4744",dimmer:"#282624",accent:"#B8A882",
+  green:"#5A9470",blue:"#4A7A9B",yellow:"#A8864A",red:"#9B4A4A",
 };
-const serif = "Georgia,'Times New Roman',serif";
-const mono  = "'SF Mono',ui-monospace,monospace";
+const serif = "Georgia, 'Times New Roman', serif";
+const mono  = "'SF Mono', ui-monospace, monospace";
 
 const toKey    = d  => new Date(d).toISOString().split("T")[0];
 const todayKey = () => toKey(new Date());
@@ -16,15 +16,15 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 const DAY3 = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 function weekOf(anchor) {
-  const d = new Date(anchor);
-  d.setDate(d.getDate() - ((d.getDay()+6)%7));
+  const d=new Date(anchor); d.setDate(d.getDate()-((d.getDay()+6)%7));
   return Array.from({length:7},(_,i)=>shift(d,i));
 }
 
+// ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt) {
   const r = await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:64,
-      system:"Return only valid JSON with a single `kcal` integer field. No prose.",
+      system:"Return only valid JSON with a single `kcal` integer field.",
       messages:[{role:"user",content:prompt}]})});
   const d = await r.json();
   const text = d.content?.find(b=>b.type==="text")?.text||"{}";
@@ -32,14 +32,17 @@ async function estimateKcal(prompt) {
 }
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
-async function dbSave(date, type, data, token) {
+async function dbSave(date,type,data,token) {
+  if (!token) return;
   try {
     await fetch("/api/entries",{method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
       body:JSON.stringify({date,type,data})});
-  } catch(e) { console.warn("db save failed",e); }
+  } catch(e) { console.warn("save failed",e); }
 }
-async function dbLoad(date, type, token) {
+
+async function dbLoad(date,type,token) {
+  if (!token) return null;
   try {
     const r = await fetch(`/api/entries?date=${date}&type=${type}`,
       {headers:{"Authorization":`Bearer ${token}`}});
@@ -50,10 +53,10 @@ async function dbLoad(date, type, token) {
 
 const MEM = {};
 
-function useDbSave(date, type, empty, token) {
+function useDbSave(date,type,empty,token) {
   const ck = `${date}:${type}`;
-  const [value,  _set]     = useState(()=>MEM[ck]??empty);
-  const [loaded, setLoaded] = useState(ck in MEM);
+  const [value,_set]    = useState(()=>MEM[ck]??empty);
+  const [loaded,setLoaded] = useState(ck in MEM);
   const live=useRef(value), dateRef=useRef(date), timer=useRef(null);
   live.current=value;
 
@@ -63,7 +66,7 @@ function useDbSave(date, type, empty, token) {
     if (key in MEM){_set(MEM[key]);live.current=MEM[key];setLoaded(true);return;}
     setLoaded(false);_set(empty);live.current=empty;
     dbLoad(date,type,token).then(v=>{
-      const val=v??empty; MEM[key]=val; _set(val); live.current=val; setLoaded(true);
+      const val=v??empty; MEM[key]=val;_set(val);live.current=val;setLoaded(true);
     });
   },[date,type,token]); // eslint-disable-line
 
@@ -75,8 +78,8 @@ function useDbSave(date, type, empty, token) {
     return ()=>window.removeEventListener("beforeunload",flush);
   },[type,token]); // eslint-disable-line
 
-  const setValue = useCallback(upd=>{
-    const next=typeof upd==="function"?upd(live.current):upd;
+  const setValue=useCallback(u=>{
+    const next=typeof u==="function"?u(live.current):u;
     live.current=next; MEM[`${dateRef.current}:${type}`]=next; _set(next);
     clearTimeout(timer.current);
     timer.current=setTimeout(()=>dbSave(dateRef.current,type,live.current,token),800);
@@ -85,16 +88,23 @@ function useDbSave(date, type, empty, token) {
   return {value,setValue,loaded};
 }
 
+// ─── Drag ─────────────────────────────────────────────────────────────────────
 function useDrag(init) {
   const [order,setOrder]=useState(init); const from=useRef(null);
-  const handlers=i=>({draggable:true,
-    onDragStart:()=>{from.current=i;},onDragOver:e=>e.preventDefault(),
-    onDrop:()=>{if(from.current===null||from.current===i)return;
+  const handlers=i=>({
+    draggable:true,
+    onDragStart:()=>{from.current=i;},
+    onDragOver:e=>e.preventDefault(),
+    onDrop:()=>{
+      if(from.current===null||from.current===i)return;
       setOrder(o=>{const n=[...o];n.splice(i,0,n.splice(from.current,1)[0]);return n;});
-      from.current=null;}});
+      from.current=null;
+    },
+  });
   return {order,handlers};
 }
 
+// ─── Ring ─────────────────────────────────────────────────────────────────────
 function Ring({score,color,size=44}) {
   const r=(size-6)/2,circ=2*Math.PI*r,val=parseFloat(score)||0,pct=Math.min(val/100,1),elite=val>=90;
   return (
@@ -112,6 +122,7 @@ function Ring({score,color,size=44}) {
   );
 }
 
+// ─── Widget ───────────────────────────────────────────────────────────────────
 function Widget({label,color,dragHandlers,children}) {
   return (
     <div style={{background:C.panel,border:`1px solid ${C.border}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -125,103 +136,77 @@ function Widget({label,color,dragHandlers,children}) {
   );
 }
 
-// ─── User menu ────────────────────────────────────────────────────────────────
-function UserMenu({ session, ouraToken, onOuraTokenSave }) {
-  const [open,    setOpen]    = useState(false);
-  const [draft,   setDraft]   = useState(ouraToken);
-  const [saving,  setSaving]  = useState(false);
-  const [signOut, setSignOut] = useState(false);
-  const ref = useRef(null);
+// ─── UserMenu ─────────────────────────────────────────────────────────────────
+function UserMenu({session,token}) {
+  const [open,setOpen]=useState(false);
+  const [ouraKey,setOuraKey]=useState("");
+  const [saved,setSaved]=useState(false);
+  const [saving,setSaving]=useState(false);
+  const ref=useRef(null);
+  const user=session?.user;
+  const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()
+    ||user?.email?.[0]?.toUpperCase()||"?";
+  const avatar=user?.user_metadata?.avatar_url;
 
-  // Keep draft in sync if token loads after mount
-  useEffect(() => setDraft(ouraToken), [ouraToken]);
+  useEffect(()=>{
+    if (!token||!open) return;
+    dbLoad("global","settings",token).then(d=>{if(d?.ouraToken)setOuraKey(d.ouraToken);});
+  },[token,open]); // eslint-disable-line
 
-  // Close on outside click
-  useEffect(() => {
+  useEffect(()=>{
     if (!open) return;
-    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
+    const fn=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
+    document.addEventListener("mousedown",fn);
+    return ()=>document.removeEventListener("mousedown",fn);
+  },[open]);
 
-  const avatar = session?.user?.user_metadata?.avatar_url;
-  const name   = session?.user?.user_metadata?.full_name || session?.user?.email || "user";
-  const initials = name.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
-
-  async function save() {
+  async function saveKey() {
     setSaving(true);
-    await onOuraTokenSave(draft.trim());
-    setSaving(false);
-    setOpen(false);
-  }
-
-  async function handleSignOut() {
-    setSignOut(true);
-    const supabase = createClient();
-    await supabase.auth.signOut();
+    await dbSave("global","settings",{ouraToken:ouraKey},token);
+    setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
   }
 
   return (
-    <div ref={ref} style={{position:"fixed",bottom:14,right:14,zIndex:100}}>
-      {/* Avatar bubble */}
+    <div ref={ref} style={{position:"relative"}}>
       <button onClick={()=>setOpen(o=>!o)} style={{
-        width:32,height:32,borderRadius:"50%",border:`1px solid ${C.border2}`,
-        background:C.panel,cursor:"pointer",padding:0,overflow:"hidden",
-        display:"flex",alignItems:"center",justifyContent:"center",
-      }}>
+        width:28,height:28,borderRadius:"50%",padding:0,cursor:"pointer",flexShrink:0,
+        border:`1px solid ${C.border2}`,background:avatar?"transparent":C.dimmer,
+        overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
         {avatar
-          ? <img src={avatar} width={32} height={32} style={{borderRadius:"50%",display:"block"}} alt=""/>
-          : <span style={{fontFamily:mono,fontSize:11,color:C.dim}}>{initials}</span>
-        }
+          ? <img src={avatar} width={28} height={28} style={{objectFit:"cover"}} alt=""/>
+          : <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>{initials}</span>}
       </button>
-
-      {/* Dropdown */}
-      {open && (
-        <div style={{position:"absolute",bottom:40,right:0,width:280,
-          background:C.panel,border:`1px solid ${C.border2}`,padding:16}}>
-          {/* User info */}
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:16,
-            paddingBottom:16,borderBottom:`1px solid ${C.border}`}}>
-            {avatar
-              ? <img src={avatar} width={28} height={28} style={{borderRadius:"50%"}} alt=""/>
-              : <div style={{width:28,height:28,borderRadius:"50%",background:C.border2,
-                  display:"flex",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{fontFamily:mono,fontSize:10,color:C.dim}}>{initials}</span>
-                </div>
-            }
-            <span style={{fontFamily:mono,fontSize:10,color:C.dim,overflow:"hidden",
-              textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{name}</span>
+      {open&&(
+        <div style={{position:"absolute",top:36,right:0,width:240,zIndex:100,
+          background:C.panel,border:`1px solid ${C.border2}`,padding:16,
+          display:"flex",flexDirection:"column",gap:12}}>
+          <div>
+            <div style={{fontFamily:serif,fontSize:13,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
+            <div style={{fontFamily:mono,fontSize:8,color:C.dim,marginTop:2}}>{user?.email}</div>
           </div>
-
-          {/* Oura token */}
-          <div style={{marginBottom:16}}>
-            <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",
-              color:C.dim,marginBottom:6}}>Oura API Token</div>
-            <input
-              value={draft} onChange={e=>setDraft(e.target.value)}
-              placeholder="Paste your Oura personal token"
-              type="password"
-              style={{width:"100%",background:C.bg,border:`1px solid ${C.border2}`,
-                color:C.text,fontFamily:mono,fontSize:11,padding:"7px 10px",outline:"none"}}
-            />
-            <div style={{fontFamily:mono,fontSize:7,color:C.dimmer,marginTop:4}}>
-              cloud.ouraring.com → Personal Access Tokens
+          <div style={{borderTop:`1px solid ${C.border}`}}/>
+          <div>
+            <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.dim,marginBottom:6}}>
+              Oura API Key
             </div>
-          </div>
-
-          {/* Actions */}
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={save} disabled={saving} style={{
-              flex:1,background:C.accent,border:"none",color:C.bg,
-              fontFamily:mono,fontSize:8,letterSpacing:"0.15em",padding:"7px 0",cursor:"pointer"}}>
-              {saving?"saving…":"save"}
-            </button>
-            <button onClick={handleSignOut} disabled={signOut} style={{
-              flex:1,background:"none",border:`1px solid ${C.border2}`,color:C.dim,
-              fontFamily:mono,fontSize:8,letterSpacing:"0.15em",padding:"7px 0",cursor:"pointer"}}>
-              {signOut?"signing out…":"sign out"}
+            <input type="password" value={ouraKey} onChange={e=>{setOuraKey(e.target.value);setSaved(false);}}
+              placeholder="paste token here"
+              style={{width:"100%",background:C.bg,border:`1px solid ${C.border2}`,outline:"none",
+                color:C.text,fontFamily:mono,fontSize:10,padding:"6px 8px",marginBottom:6}}/>
+            <button onClick={saveKey} disabled={saving||!ouraKey.trim()} style={{
+              width:"100%",background:"none",border:`1px solid ${C.border2}`,
+              color:saved?C.green:ouraKey.trim()?C.text:C.dim,
+              fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",
+              padding:"5px 10px",cursor:ouraKey.trim()?"pointer":"default"}}>
+              {saved?"saved ✓":saving?"saving…":"save key"}
             </button>
           </div>
+          <div style={{borderTop:`1px solid ${C.border}`}}/>
+          <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
+            style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer",
+              color:C.dim,fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase"}}>
+            sign out →
+          </button>
         </div>
       )}
     </div>
@@ -229,7 +214,7 @@ function UserMenu({ session, ouraToken, onOuraTokenSave }) {
 }
 
 // ─── CalStrip ─────────────────────────────────────────────────────────────────
-function CalStrip({selected,onSelect,events,syncStatus,healthDots}) {
+function CalStrip({selected,onSelect,events,syncStatus,healthDots,userMenu}) {
   const [anchor,setAnchor]=useState(()=>new Date());
   const days=weekOf(anchor),today=todayKey();
   const months=[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ");
@@ -247,8 +232,11 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots}) {
         {[["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
           <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
             border:`1px solid ${C.border2}`,color:C.dim,fontFamily:mono,
-            padding:l==="today"?"3px 7px":"3px 6px",fontSize:l==="today"?8:12,letterSpacing:l==="today"?"0.1em":0}}>{l}</button>
+            padding:l==="today"?"3px 7px":"3px 6px",fontSize:l==="today"?8:12,letterSpacing:l==="today"?"0.1em":0}}>
+            {l}
+          </button>
         ))}
+        {userMenu}
       </div>
       <div style={{display:"grid",gridTemplateColumns:"repeat(7, 1fr)"}}>
         {days.map((d,i)=>{
@@ -290,18 +278,18 @@ function CalStrip({selected,onSelect,events,syncStatus,healthDots}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY = {sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",strainScore:"",strainNote:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",strainScore:"",strainNote:""};
 
-function HealthStrip({date,token,ouraToken,onHealthChange,onSyncStart,onSyncEnd}) {
+function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
 
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
 
   useEffect(()=>{
-    if (!loaded||!ouraToken) return;
+    if (!loaded||!token) return;
     onSyncStart("oura");
-    fetch(`/api/oura?date=${date}`,{headers:{"x-oura-token":ouraToken}})
+    fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json())
       .then(data=>{
         if(data.error) return;
@@ -316,7 +304,7 @@ function HealthStrip({date,token,ouraToken,onHealthChange,onSyncStart,onSyncEnd}
       })
       .catch(()=>{})
       .finally(()=>onSyncEnd("oura"));
-  },[date,loaded,ouraToken]); // eslint-disable-line
+  },[date,loaded,token]); // eslint-disable-line
 
   const metrics=[
     {key:"sleep",    label:"Sleep",    color:C.blue,
@@ -364,18 +352,23 @@ function HealthStrip({date,token,ouraToken,onHealthChange,onSyncStart,onSyncEnd}
   );
 }
 
+// ─── Notes ────────────────────────────────────────────────────────────────────
 function Notes({date,token}) {
   const {value,setValue,loaded}=useDbSave(date,"notes","",token);
-  return <textarea value={value} onChange={e=>setValue(e.target.value)}
-    placeholder={loaded?"Write anything…":"Loading…"} disabled={!loaded}
-    style={{background:"transparent",border:"none",outline:"none",resize:"none",padding:0,
-      color:C.text,fontFamily:serif,fontSize:16,lineHeight:1.8,width:"100%",height:"100%",minHeight:180,opacity:loaded?1:0.4}}/>;
+  return (
+    <textarea value={value} onChange={e=>setValue(e.target.value)}
+      placeholder={loaded?"Write anything…":"Loading…"} disabled={!loaded}
+      style={{background:"transparent",border:"none",outline:"none",resize:"none",padding:0,
+        color:C.text,fontFamily:serif,fontSize:16,lineHeight:1.8,
+        width:"100%",height:"100%",minHeight:180,opacity:loaded?1:0.4}}/>
+  );
 }
 
+// ─── RowList ──────────────────────────────────────────────────────────────────
 function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token);
-  const inputRefs=useRef({});
+  const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const total=safe.reduce((s,r)=>s+(r.kcal||0),0);
 
@@ -384,22 +377,26 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
     const kcal=await estimateKcal(promptFn(text)).catch(()=>null);
     setRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
   }
+
   function onKey(e,id,idx) {
-    if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>inputRefs.current[row.id]?.focus(),30);}
-    if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>inputRefs.current[t]?.focus(),30);}
+    if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
+    if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
   }
 
   if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.dimmer}}>Loading…</div>;
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
-      {total>0&&<div style={{textAlign:"right",marginBottom:6}}><span style={{fontFamily:mono,fontSize:11,color}}>{prefix}{total} kcal</span></div>}
+      {total>0&&<div style={{textAlign:"right",marginBottom:6}}>
+        <span style={{fontFamily:mono,fontSize:11,color}}>{prefix}{total} kcal</span>
+      </div>}
       {safe.map((row,idx)=>(
         <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:26}}>
-          <input ref={el=>inputRefs.current[row.id]=el} value={row.text}
+          <input ref={el=>refs.current[row.id]=el} value={row.text}
             onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
             onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
             onKeyDown={e=>onKey(e,row.id,idx)} placeholder={idx===0?placeholder:""}
-            style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,color:row.text?C.text:C.dim,fontFamily:serif,fontSize:16}}/>
+            style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
+              color:row.text?C.text:C.dim,fontFamily:serif,fontSize:16}}/>
           <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right"}}>
             {row.estimating?"…":row.kcal?`${prefix}${row.kcal}`:""}
           </span>
@@ -412,16 +409,17 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
 function Meals({date,token}){return <RowList date={date} type="meals" token={token} placeholder="What did you eat?" promptFn={t=>`Calories in: "${t}". Return JSON: {"kcal":420}`} prefix="" color={C.accent}/>;}
 function Activity({date,token}){return <RowList date={date} type="activity" token={token} placeholder="What did you do?" promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`} prefix="−" color={C.green}/>;}
 
+// ─── Tasks ────────────────────────────────────────────────────────────────────
 function Tasks({date,token}) {
   const mkRow=()=>({id:Date.now(),text:"",done:false});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token);
-  const inputRefs=useRef({});
+  const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
 
-  function onKey(e,id,idx){
-    if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>inputRefs.current[row.id]?.focus(),30);}
-    if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>inputRefs.current[safe[idx-1].id]?.focus(),30);}
+  function onKey(e,id,idx) {
+    if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
+    if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);}
   }
 
   if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.dimmer}}>Loading…</div>;
@@ -435,7 +433,7 @@ function Tasks({date,token}) {
               display:"flex",alignItems:"center",justifyContent:"center"}}>
             {row.done&&<span style={{fontSize:8,color:C.bg}}>✓</span>}
           </button>
-          <input ref={el=>inputRefs.current[row.id]=el} value={row.text}
+          <input ref={el=>refs.current[row.id]=el} value={row.text}
             onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
             onKeyDown={e=>onKey(e,row.id,idx)}
             placeholder={idx===0&&open.length===1&&!row.text?"Task · Enter for new line":""}
@@ -447,6 +445,7 @@ function Tasks({date,token}) {
   );
 }
 
+// ─── Login ────────────────────────────────────────────────────────────────────
 function LoginScreen() {
   const [loading,setLoading]=useState(false);
   return (
@@ -473,24 +472,22 @@ function LoginScreen() {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 const WIDGETS=[
-  {id:"notes",    label:"Notes",    color:C.accent,Comp:Notes},
-  {id:"meals",    label:"Meals",    color:C.red,   Comp:Meals},
-  {id:"tasks",    label:"Tasks",    color:C.blue,  Comp:Tasks},
-  {id:"activity", label:"Activity", color:C.green, Comp:Activity},
+  {id:"notes",    label:"Notes",    color:C.accent, Comp:Notes},
+  {id:"meals",    label:"Meals",    color:C.red,    Comp:Meals},
+  {id:"tasks",    label:"Tasks",    color:C.blue,   Comp:Tasks},
+  {id:"activity", label:"Activity", color:C.green,  Comp:Activity},
 ];
 
 export default function Dashboard() {
-  const [session,    setSession]    = useState(null);
-  const [authReady,  setAuthReady]  = useState(false);
-  const [selected,   setSelected]   = useState(todayKey);
-  const [events,     setEvents]     = useState({});
-  const [healthDots, setHealthDots] = useState({});
-  const [syncing,    setSyncing]    = useState(new Set());
-  const [lastSync,   setLastSync]   = useState(null);
-  const [ouraToken,  setOuraToken]  = useState("");
+  const [session,   setSession]   = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [selected,  setSelected]  = useState(todayKey);
+  const [events,    setEvents]    = useState({});
+  const [healthDots,setHealthDots]= useState({});
+  const [syncing,   setSyncing]   = useState(new Set());
+  const [lastSync,  setLastSync]  = useState(null);
   const {order,handlers}=useDrag(WIDGETS.map(w=>w.id));
 
-  // Auth
   useEffect(()=>{
     const supabase=createClient();
     supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});
@@ -498,24 +495,8 @@ export default function Dashboard() {
     return ()=>subscription.unsubscribe();
   },[]);
 
-  const token       = session?.access_token;
-  const googleToken = session?.provider_token;
-
-  // Load Oura token from DB once authenticated
-  useEffect(()=>{
-    if (!token) return;
-    fetch(`/api/entries?date=global&type=settings`,{headers:{"Authorization":`Bearer ${token}`}})
-      .then(r=>r.json())
-      .then(j=>{ if(j.data?.ouraToken) setOuraToken(j.data.ouraToken); })
-      .catch(()=>{});
-  },[token]);
-
-  async function saveOuraToken(t) {
-    setOuraToken(t);
-    await fetch("/api/entries",{method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-      body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:t}})});
-  }
+  const token=session?.access_token;
+  const googleToken=session?.provider_token;
 
   const startSync=useCallback(k=>setSyncing(s=>new Set([...s,k])),[]);
   const endSync=useCallback(k=>{
@@ -523,7 +504,6 @@ export default function Dashboard() {
     setLastSync(new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}));
   },[]);
 
-  // Google Calendar sync
   useEffect(()=>{
     if(!googleToken) return;
     startSync("cal");
@@ -538,29 +518,31 @@ export default function Dashboard() {
 
   const wMap=Object.fromEntries(WIDGETS.map(w=>[w.id,w]));
 
-  if (!authReady) return (
+  if(!authReady) return (
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <span style={{fontFamily:mono,fontSize:9,color:C.dimmer,letterSpacing:"0.2em"}}>loading…</span>
     </div>
   );
-  if (!session) return <LoginScreen/>;
+  if(!session) return <LoginScreen/>;
 
   return (
     <div style={{background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        ::-webkit-scrollbar{width:3px;height:3px;}::-webkit-scrollbar-thumb{background:#222;}
+        ::-webkit-scrollbar{width:3px;height:3px;}
+        ::-webkit-scrollbar-thumb{background:#222;}
         button{border-radius:0;}
         input::placeholder,textarea::placeholder{color:${C.dim};opacity:1;}
         a{text-decoration:none;}
         input,textarea,select{font-size:16px;}
-        @media(max-width:600px){.wgrid{grid-template-columns:1fr !important;}}
+        @media(max-width:600px){.wgrid{grid-template-columns:1fr!important;}}
       `}</style>
 
-      <CalStrip selected={selected} onSelect={setSelected}
-        events={events} syncStatus={{syncing:syncing.size>0,lastSync}} healthDots={healthDots}/>
+      <CalStrip selected={selected} onSelect={setSelected} events={events}
+        syncStatus={{syncing:syncing.size>0,lastSync}} healthDots={healthDots}
+        userMenu={<UserMenu session={session} token={token}/>}/>
 
-      <HealthStrip date={selected} token={token} ouraToken={ouraToken}
+      <HealthStrip date={selected} token={token}
         onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}/>
 
       <div className="wgrid" style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",
@@ -574,8 +556,6 @@ export default function Dashboard() {
           );
         })}
       </div>
-
-      <UserMenu session={session} ouraToken={ouraToken} onOuraTokenSave={saveOuraToken}/>
     </div>
   );
 }
