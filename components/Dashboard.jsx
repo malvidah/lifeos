@@ -20,22 +20,16 @@ function parseJSON(text, fallback) {
   catch { return fallback; }
 }
 
-// ─── STORAGE ──────────────────────────────────────────────────────────────────
-async function persist(date, type, data) {
-  try {
-    await fetch("/api/data", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ key: `los:${date}:${type}`, value: data }),
-    });
-  } catch (e) { console.warn("save err", e); }
+// ─── STORAGE — localStorage (persists on this device, no server needed) ───────
+function persist(date, type, data) {
+  try { localStorage.setItem(`los:${date}:${type}`, JSON.stringify(data)); } 
+  catch (e) { console.warn("save err", e); }
 }
-async function recall(date, type) {
-  try {
-    const r = await fetch(`/api/data?key=los:${date}:${type}`);
-    const json = await r.json();
-    return json.value ?? null;
-  } catch { return null; }
+function recall(date, type) {
+  try { 
+    const v = localStorage.getItem(`los:${date}:${type}`);
+    return Promise.resolve(v ? JSON.parse(v) : null);
+  } catch { return Promise.resolve(null); }
 }
 
 // ─── DATE ─────────────────────────────────────────────────────────────────────
@@ -61,33 +55,31 @@ const serif = "Georgia, 'Times New Roman', serif";
 const mono = "'SF Mono', ui-monospace, monospace";
 
 // ─── SAFE AUTOSAVE HOOK ───────────────────────────────────────────────────────
-// Fixes the race condition: ref always holds latest value, save is imperative
 function useAutosave(date, type, initialValue) {
-  const [value, setValueState] = useState(initialValue);
-  const [loaded, setLoaded] = useState(false);
-  const latestRef = useRef(value);          // always current, no stale closure
+  const [value, setValueState] = useState(() => {
+    // Load synchronously on first render — localStorage is sync
+    try {
+      const v = localStorage.getItem(`los:${date}:${type}`);
+      return v ? JSON.parse(v) : initialValue;
+    } catch { return initialValue; }
+  });
+  const [loaded, setLoaded] = useState(true);
+  const latestRef = useRef(value);
   const dateRef = useRef(date);
-
-  // Track latest value in ref on every render
   latestRef.current = value;
 
-  // Load when date changes — save current date's data first
+  // When date changes: save current, load new
   useEffect(() => {
-    const prevDate = dateRef.current;
-    // Flush current value before switching dates
-    if (prevDate !== date && loaded) {
-      persist(prevDate, type, latestRef.current);
+    if (dateRef.current !== date) {
+      persist(dateRef.current, type, latestRef.current);
+      dateRef.current = date;
+      try {
+        const v = localStorage.getItem(`los:${date}:${type}`);
+        setValueState(v ? JSON.parse(v) : initialValue);
+      } catch { setValueState(initialValue); }
     }
-    dateRef.current = date;
-    setLoaded(false);
-    recall(date, type).then(v => {
-      setValueState(v !== null ? v : initialValue);
-      setLoaded(true);
-    });
-    // eslint-disable-next-line
-  }, [date]);
+  }, [date, type, initialValue]);
 
-  // Debounced autosave (500ms after last change)
   const timerRef = useRef(null);
   const setValue = useCallback((v) => {
     setValueState(v);
@@ -95,18 +87,15 @@ function useAutosave(date, type, initialValue) {
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       persist(dateRef.current, type, latestRef.current);
-    }, 500);
+    }, 400);
   }, [type]);
 
-  // Save on unmount / page hide
+  // Save on unmount and page hide
   useEffect(() => {
     const flush = () => persist(dateRef.current, type, latestRef.current);
     window.addEventListener("beforeunload", flush);
     window.addEventListener("visibilitychange", () => { if (document.hidden) flush(); });
-    return () => {
-      flush();
-      window.removeEventListener("beforeunload", flush);
-    };
+    return () => { flush(); window.removeEventListener("beforeunload", flush); };
   }, [type]);
 
   return { value, setValue, loaded };
