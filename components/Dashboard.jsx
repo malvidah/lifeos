@@ -419,26 +419,19 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}
 // Cmd+B / Cmd+I wrap selected text in ** / *.
 function Notes({date,token}) {
   const {value,setValue,loaded} = useDbSave(date,"notes","",token);
-  const taRef  = useRef(null);
-  const preRef = useRef(null);
+  const [editing, setEditing] = useState(false);
+  const taRef = useRef(null);
 
-  // Keep overlay scroll in sync with textarea
-  function syncScroll() {
-    if (taRef.current && preRef.current) {
-      preRef.current.scrollTop  = taRef.current.scrollTop;
-      preRef.current.scrollLeft = taRef.current.scrollLeft;
-    }
-  }
+  useEffect(() => {
+    if (editing) taRef.current?.focus();
+  }, [editing]);
 
-  // Wrap selected text in textarea with a marker
   function wrapSelection(marker) {
     const ta = taRef.current;
     if (!ta) return;
-    const {selectionStart: s, selectionEnd: e, value: v} = ta;
-    if (s === e) return; // nothing selected
-    const wrapped = v.slice(0,s) + marker + v.slice(s,e) + marker + v.slice(e);
-    setValue(wrapped);
-    // restore selection around the inner text
+    const {selectionStart:s, selectionEnd:e, value:v} = ta;
+    if (s === e) return;
+    setValue(v.slice(0,s) + marker + v.slice(s,e) + marker + v.slice(e));
     requestAnimationFrame(() => {
       ta.focus();
       ta.setSelectionRange(s + marker.length, e + marker.length);
@@ -446,104 +439,78 @@ function Notes({date,token}) {
   }
 
   function handleKeyDown(e) {
-    if ((e.metaKey || e.ctrlKey) && e.key === "b") { e.preventDefault(); wrapSelection("**"); }
-    if ((e.metaKey || e.ctrlKey) && e.key === "i") { e.preventDefault(); wrapSelection("*"); }
+    if ((e.metaKey||e.ctrlKey) && e.key==="b") { e.preventDefault(); wrapSelection("**"); }
+    if ((e.metaKey||e.ctrlKey) && e.key==="i") { e.preventDefault(); wrapSelection("*"); }
   }
 
-  // Build colored overlay HTML — same font/size/line-height as textarea
-  // Lines starting with "# " get accent color; "## " get dimmer accent.
-  // Bold (**text**) and italic (*text*) are rendered styled.
-  // Everything else is transparent text (so only the color layer shows).
-  function buildOverlay(text) {
-    return (text||"").split("\n").map(line => {
-      let prefix = "", rest = line, prefixColor = null;
-      if (/^# /.test(line))  { prefix = "# ";  rest = line.slice(2);  prefixColor = "#D4A853"; }  // brighter gold
-      if (/^## /.test(line)) { prefix = "## "; rest = line.slice(3);  prefixColor = C.blue;    }  // blue for h2
-
-      // Inline bold/italic in rest
-      const renderInline = (t) => {
-        const parts = [];
-        const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
-        let last = 0, m;
-        while ((m = re.exec(t)) !== null) {
-          if (m.index > last) parts.push(`<span style="color:${C.text}">${esc(t.slice(last, m.index))}</span>`);
-          if (m[0].startsWith("**"))
-            parts.push(`<span style="font-weight:700;color:${C.text}">${esc(m[2])}</span>`);
-          else
-            parts.push(`<span style="font-style:italic;color:${C.text}">${esc(m[3])}</span>`);
-          last = m.index + m[0].length;
-        }
-        if (last < t.length) parts.push(`<span style="color:${C.text}">${esc(t.slice(last))}</span>`);
-        return parts.join("");
-      };
-
-      if (prefixColor) {
-        return `<div><span style="color:${prefixColor};opacity:0.5">${esc(prefix)}</span><span style="color:${prefixColor}">${renderInline(rest)}</span></div>`;
+  // Render markdown as React elements
+  function renderContent(text) {
+    if (!text || !text.trim()) return null;
+    return text.split("\n").map((line, i) => {
+      // Heading
+      if (line.startsWith("# ")) {
+        return <div key={i} style={{color:"#D4A853",fontFamily:serif,fontSize:15,lineHeight:"1.8"}}>{renderInline(line.slice(2))}</div>;
       }
-      return `<div style="color:${C.text}">${renderInline(rest)||" "}</div>`;
-    }).join("");
+      // Empty line
+      if (!line.trim()) {
+        return <div key={i} style={{height:"1.8em"}}>&nbsp;</div>;
+      }
+      // Normal
+      return <div key={i} style={{color:C.text,fontFamily:serif,fontSize:15,lineHeight:"1.8"}}>{renderInline(line)}</div>;
+    });
   }
 
-  function esc(s) {
-    return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  function renderInline(text) {
+    const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+    const parts = []; let last=0, m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) parts.push(text.slice(last, m.index));
+      if (m[0].startsWith("**")) parts.push(<strong key={m.index}>{m[2]}</strong>);
+      else parts.push(<em key={m.index}>{m[3]}</em>);
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) parts.push(text.slice(last));
+    return parts;
   }
 
   if (!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
 
-  const sharedStyle = {
-    fontFamily: serif,
-    fontSize: 15,
-    lineHeight: "1.8",
-    letterSpacing: "0.01em",
-    padding: 0,
-    margin: 0,
-    border: "none",
-    outline: "none",
-    width: "100%",
-    height: "100%",
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-    overflowWrap: "break-word",
-    boxSizing: "border-box",
+  const textareaStyle = {
+    fontFamily:serif, fontSize:15, lineHeight:"1.8",
+    padding:0, margin:0, border:"none", outline:"none",
+    width:"100%", height:"100%", resize:"none",
+    background:"transparent", color:C.text, caretColor:C.accent,
+    whiteSpace:"pre-wrap", wordBreak:"break-word",
   };
 
-  return (
-    <div style={{position:"relative", height:"100%", overflow:"hidden"}}>
-      {/* Colored overlay — pointer-events none, sits on top */}
-      <div
-        ref={preRef}
-        aria-hidden
-        dangerouslySetInnerHTML={{__html: (value && value.trim()) ? buildOverlay(value) : `<div style="color:${C.muted};font-style:italic">Write anything…<span style="font-size:11px;opacity:0.4;margin-left:12px;font-style:normal"># heading &nbsp;·&nbsp; ⌘B bold &nbsp;·&nbsp; ⌘I italic</span></div>`}}
-        style={{
-          ...sharedStyle,
-          position: "absolute",
-          inset: 0,
-          overflow: "hidden",
-          pointerEvents: "none",
-          zIndex: 1,
-        }}
-      />
-      {/* Actual textarea — transparent text so overlay colors show through */}
+  if (editing) {
+    return (
       <textarea
         ref={taRef}
         value={value}
-        onChange={e => { setValue(e.target.value); syncScroll(); }}
-        onScroll={syncScroll}
+        onChange={e => setValue(e.target.value)}
+        onBlur={() => setEditing(false)}
         onKeyDown={handleKeyDown}
-        placeholder=""
-        style={{
-          ...sharedStyle,
-          position: "absolute",
-          inset: 0,
-          resize: "none",
-          background: "transparent",
-          caretColor: C.accent,
-          color: "transparent",
-          WebkitTextFillColor: "transparent",
-          zIndex: 2,
-          overflow: "auto",
-        }}
+        style={textareaStyle}
       />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setEditing(true)}
+      style={{height:"100%", overflow:"auto", cursor:"text"}}
+    >
+      {value && value.trim()
+        ? renderContent(value)
+        : <div style={{color:C.muted,fontFamily:serif,fontSize:15,lineHeight:"1.8"}}>
+            What's on your mind?
+            <span style={{display:"block",fontFamily:mono,fontSize:9,letterSpacing:"0.1em",
+              textTransform:"uppercase",color:C.dim,marginTop:6,opacity:0.7}}>
+              # heading &nbsp;·&nbsp; ⌘B bold &nbsp;·&nbsp; ⌘I italic
+            </span>
+          </div>
+      }
     </div>
   );
 }
