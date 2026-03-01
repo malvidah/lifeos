@@ -120,35 +120,35 @@ function mergeValues(type, local, remote) {
 function useDbSave(date,type,empty,token) {
   const [value,_set] = useState(()=>MEM[`${date}:${type}`]??empty);
   const [loaded,setLoaded] = useState(`${date}:${type}` in MEM);
+  const [rev,setRev] = useState(0); // bump to force re-fetch from DB
   const live=useRef(value), dateRef=useRef(date), timer=useRef(null);
   live.current=value;
+
+  // fetch+merge whenever date/type/token changes OR rev is bumped (visibility restore)
   useEffect(()=>{
     if (!token) return;
     const key=`${date}:${type}`; dateRef.current=date;
-    if (key in MEM && !DIRTY[key]){_set(MEM[key]);live.current=MEM[key];setLoaded(true);return;}
-    const localVal = key in MEM ? MEM[key] : null;
-    setLoaded(false);
-    if (localVal === null) _set(empty);
+    // Skip fetch only if we have clean cached data and rev hasn't changed
+    if (key in MEM && !DIRTY[key] && rev===0){_set(MEM[key]);live.current=MEM[key];setLoaded(true);return;}
+    const localVal = (key in MEM) ? MEM[key] : null;
+    if (localVal === null) { setLoaded(false); _set(empty); }
     dbLoad(date,type,token).then(remote=>{
+      const local = live.current; // use live ref in case user typed during fetch
       let val;
-      if (localVal !== null && DIRTY[key]) {
-        // We have local unsaved changes — merge with remote
-        val = mergeValues(type, localVal, remote ?? empty);
+      if (local !== empty && local !== (remote??empty)) {
+        val = mergeValues(type, local, remote ?? empty);
       } else {
         val = remote ?? empty;
       }
       MEM[key]=val; DIRTY[key]=false; _set(val); live.current=val; setLoaded(true);
-      // If merge produced new content, save it back
-      if (localVal !== null && val !== remote) {
-        dbSave(date, type, val, token);
-      }
+      if (val !== remote && remote !== null) dbSave(date,type,val,token); // save merge
     });
-  },[date,type,token]); // eslint-disable-line
+  },[date,type,token,rev]); // eslint-disable-line
+
   useEffect(()=>{
     if (!token) return;
     const flush=()=>{
       clearTimeout(timer.current);
-      // Only save if there are dirty changes to avoid unnecessary writes
       const key=`${dateRef.current}:${type}`;
       if (DIRTY[key]) {
         dbSave(dateRef.current,type,live.current,token);
@@ -156,34 +156,37 @@ function useDbSave(date,type,empty,token) {
       }
     };
     const onVis=()=>{
-      if(document.hidden){
-        flush(); // iOS suspends the page — flush immediately
+      if (document.hidden) {
+        flush(); // page going away — save immediately
       } else {
-        // App became visible — clear stale cache so next effect re-fetches+merges
-        const key=`${dateRef.current}:${type}`;
-        if (!DIRTY[key]) delete MEM[key];
+        // page restored — flush then re-fetch to pick up changes from other devices
+        flush();
+        setRev(r=>r+1);
       }
     };
-    const onPageHide=()=>flush(); // iOS PWA pagehide fires before suspension
-    const onBlur=()=>flush();    // window blur catches tab switches on desktop
+    const onPageHide=()=>flush();
+    // Poll every 30s to catch mobile edits on desktop
+    const poll=setInterval(()=>{
+      const key=`${dateRef.current}:${type}`;
+      if (!DIRTY[key]) setRev(r=>r+1);
+    }, 30000);
     window.addEventListener("beforeunload",flush);
     window.addEventListener("pagehide",onPageHide);
-    window.addEventListener("blur",onBlur);
     document.addEventListener("visibilitychange",onVis);
     return ()=>{
       window.removeEventListener("beforeunload",flush);
       window.removeEventListener("pagehide",onPageHide);
-      window.removeEventListener("blur",onBlur);
       document.removeEventListener("visibilitychange",onVis);
+      clearInterval(poll);
     };
   },[type,token]); // eslint-disable-line
+
   const setValue=useCallback(u=>{
     const next=typeof u==="function"?u(live.current):u;
     live.current=next;
     const key=`${dateRef.current}:${type}`;
     MEM[key]=next; DIRTY[key]=true; _set(next);
     clearTimeout(timer.current);
-    // Shorter debounce (800ms→200ms) + iOS gets an immediate save attempt too
     timer.current=setTimeout(()=>{
       dbSave(dateRef.current,type,live.current,token);
       DIRTY[key]=false;
