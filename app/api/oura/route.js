@@ -80,9 +80,7 @@ export async function GET(request) {
       if (!result.sleepQuality && mainSession.efficiency) result.sleepQuality = String(mainSession.efficiency);
       // Sleep stages in minutes
     }
-    const activityUrl = `https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${nextDate}`;
-    console.log('[oura] date:', date, 'activityUrl:', activityUrl, 'token prefix:', ouraToken?.slice(0,8));
-    console.log('[oura] activity raw:', JSON.stringify(activityData).slice(0,300));
+
     const activity = (activityData.data ?? []).find(d => d.day === date) || activityData.data?.[0];
     if (activity) {
       if (activity.score != null)           result.activityScore   = String(activity.score);

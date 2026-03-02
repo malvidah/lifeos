@@ -1449,7 +1449,6 @@ export default function Dashboard() {
   },[]);
 
   const token=session?.access_token;
-  if(typeof window!=="undefined") window.__token=token;
   const userId=session?.user?.id ?? null;
   const sessionGoogleToken=session?.provider_token; // only present right after login
   const startSync=useCallback(k=>setSyncing(s=>new Set([...s,k])),[]);
