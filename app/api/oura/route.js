@@ -80,7 +80,8 @@ export async function GET(request) {
       if (!result.sleepQuality && mainSession.efficiency) result.sleepQuality = String(mainSession.efficiency);
       // Sleep stages in minutes
     }
-    const activity = activityData.data?.[0];
+    console.log('[oura] activity raw:', JSON.stringify(activityData).slice(0,300));
+    const activity = (activityData.data ?? []).find(d => d.day === date) || activityData.data?.[0];
     if (activity) {
       if (activity.score != null)           result.activityScore   = String(activity.score);
       // total_calories = full day burn (matches Oura "Total Burn")
@@ -96,7 +97,7 @@ export async function GET(request) {
     // Calm: inverted from Oura stress_high (minutes in high-stress HRV state)
     // stress_high = 0 → totally calm day → score 100
     // stress_high = 500 → very stressed day → score 0
-    const stress = stressData.data?.[0];
+    const stress = (stressData.data ?? []).find(d => d.day === date) || stressData.data?.[0];
     if (stress) {
       const stressHigh = stress.stress_high ?? null;   // seconds
       const recoveryHigh = stress.recovery_high ?? null; // seconds
