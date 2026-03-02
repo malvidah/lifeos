@@ -966,7 +966,7 @@ function Shimmer({width="100%", height=14, style={}}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",resilienceScore:"",stressMins:"",recoveryMins:"",deepMins:"",remMins:"",lightMins:"",awakeMins:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",resilienceScore:"",stressMins:"",recoveryMins:""};
 
 function fmtMins(val) {
   const m = parseInt(val)||0;
@@ -976,256 +976,9 @@ function fmtMins(val) {
   return rem ? `${h}h ${rem}m` : `${h}h`;
 }
 
-function SleepDetail({h}) {
-  const stages = [
-    {label:"Deep",   mins:parseInt(h.deepMins)||0,   color:"#4A82B0"},
-    {label:"REM",    mins:parseInt(h.remMins)||0,    color:"#8B6BB5"},
-    {label:"Light",  mins:parseInt(h.lightMins)||0,  color:"#6B9CC4"},
-    {label:"Awake",  mins:parseInt(h.awakeMins)||0,  color:"#8A7060"},
-  ];
-  const total = stages.reduce((s,st)=>s+st.mins,0)||1;
-  return (
-    <div style={{padding:"14px 16px"}}>
-      <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>Sleep Stages</div>
-      {/* Stacked bar */}
-      <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",marginBottom:12}}>
-        {stages.map(st=>st.mins>0&&(
-          <div key={st.label} style={{flex:st.mins/total,background:st.color,minWidth:2}}/>
-        ))}
-      </div>
-      {/* Legend */}
-      <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
-        {stages.map(st=>(
-          <div key={st.label} style={{display:"flex",alignItems:"center",gap:5}}>
-            <div style={{width:8,height:8,borderRadius:2,background:st.color,flexShrink:0}}/>
-            <div>
-              <div style={{fontFamily:mono,fontSize:8,color:C.muted,textTransform:"uppercase"}}>{st.label}</div>
-              <div style={{fontFamily:serif,fontSize:14,color:st.mins?C.text:C.dim}}>{fmtMins(st.mins)}</div>
-            </div>
-          </div>
-        ))}
-        {h.sleepEff&&(
-          <div style={{display:"flex",alignItems:"center",gap:5}}>
-            <div style={{width:8,height:8,borderRadius:2,background:C.border2,flexShrink:0}}/>
-            <div>
-              <div style={{fontFamily:mono,fontSize:8,color:C.muted,textTransform:"uppercase"}}>Efficiency</div>
-              <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{h.sleepEff}%</div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ReadinessDetail({h}) {
-  const items=[
-    {label:"HRV",value:h.hrv,unit:"ms"},
-    {label:"Resting HR",value:h.rhr,unit:"bpm"},
-    {label:"Score",value:h.readinessScore,unit:"/ 100"},
-  ];
-  return (
-    <div style={{padding:"14px 16px",display:"flex",gap:24,flexWrap:"wrap"}}>
-      {items.map(it=>(
-        <div key={it.label}>
-          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>{it.label}</div>
-          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-            <span style={{fontFamily:serif,fontSize:22,color:it.value?C.text:C.dim}}>{it.value||"—"}</span>
-            {it.value&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{it.unit}</span>}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-const SPORT_EMOJI = {
-  Run:"🏃",Ride:"🚴",Swim:"🏊",Walk:"🚶",Hike:"🥾",
-  WeightTraining:"🏋️",Yoga:"🧘",Workout:"💪",
-  VirtualRide:"🚴",VirtualRun:"🏃",Soccer:"⚽",
-  Rowing:"🚣",Kayaking:"🛶",Surfing:"🏄",
-  Snowboard:"🏂",AlpineSki:"⛷️",NordicSki:"⛷️",
-  default:"🏅",
-};
-function sportEmoji(type){return SPORT_EMOJI[type]||SPORT_EMOJI.default;}
-
-function ActivityDetail({h,ouraWorkouts,stravaActivities}) {
-  const oura = ouraWorkouts||[];
-  const strava = stravaActivities||[];
-  const hasAny = oura.length>0||strava.length>0;
-  return (
-    <div style={{padding:"14px 16px"}}>
-      {/* Strava activities */}
-      {strava.length>0&&(
-        <>
-          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:"#FC4C02",marginBottom:8}}>Strava</div>
-          {strava.map((a,i)=>(
-            <div key={a.id||i} style={{display:"flex",alignItems:"baseline",gap:10,padding:"5px 0",
-              borderBottom:i<strava.length-1?`1px solid ${C.border}`:"none"}}>
-              <span style={{fontSize:14,flexShrink:0}}>{sportEmoji(a.sport||a.type)}</span>
-              <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span>
-              <span style={{fontFamily:mono,fontSize:10,color:C.muted,flexShrink:0}}>{fmtMins(a.duration)}</span>
-              {a.distance&&<span style={{fontFamily:mono,fontSize:10,color:C.blue,flexShrink:0}}>{a.distance}km</span>}
-              {a.calories&&<span style={{fontFamily:mono,fontSize:10,color:C.accent,flexShrink:0}}>{a.calories}kcal</span>}
-            </div>
-          ))}
-          {oura.length>0&&<div style={{height:1,background:C.border,margin:"8px 0"}}/>}
-        </>
-      )}
-      {/* Oura workouts */}
-      {oura.length>0&&(
-        <>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-            <span style={{fontSize:11}}>⭕</span>
-            <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Oura Workouts</span>
-          </div>
-          {oura.map((w,i)=>(
-            <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"4px 0",
-              borderBottom:i<oura.length-1?`1px solid ${C.border}`:"none"}}>
-              <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,textTransform:"capitalize"}}>{w.activity.replace(/_/g," ")}</span>
-              <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{fmtMins(w.duration)}</span>
-              {w.calories&&<span style={{fontFamily:mono,fontSize:10,color:C.accent}}>{w.calories} kcal</span>}
-              {w.distance&&<span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{w.distance}km</span>}
-            </div>
-          ))}
-        </>
-      )}
-      {/* Oura summary stats */}
-      <div style={{display:"flex",gap:24,flexWrap:"wrap",marginTop:hasAny?12:0}}>
-        {[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Total Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Active Cal",value:h.activeCalories,unit:"cal"}].map(it=>(
-          <div key={it.label}>
-            <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>{it.label}</div>
-            <div style={{display:"flex",alignItems:"baseline",gap:4}}>
-              <span style={{fontFamily:serif,fontSize:22,color:it.value?C.text:C.dim}}>{it.value||"—"}</span>
-              {it.value&&it.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{it.unit}</span>}
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Oura stress levels: 0=unknown/missing, 1=restored, 2=relaxed, 3=engaged, 4=stressed
-const STRESS_ZONES = [
-  {level:1, label:"Restored", color:"#4A82B0", y:0.88},
-  {level:2, label:"Relaxed",  color:"#4E9268", y:0.62},
-  {level:3, label:"Engaged",  color:"#B08A3E", y:0.37},
-  {level:4, label:"Stressed", color:"#A05050", y:0.10},
-];
-function stressColor(s){
-  if(s<=0)return null;
-  return STRESS_ZONES.find(z=>z.level===s)?.color || "#857F78";
-}
-function stressY(s, h){
-  // map level 1-4 to y position in chart (1=bottom=restored, 4=top=stressed)
-  if(!s||s<1||s>4)return null;
-  const zone = STRESS_ZONES.find(z=>z.level===s);
-  return zone ? zone.y * h : null;
-}
-
-function ResilienceDetail({h, ouraDetail}) {
-  const stressM  = parseInt(h.stressMins)||0;
-  const recoverM = parseInt(h.recoveryMins)||0;
-  const total    = stressM+recoverM||1;
-  const timeline = ouraDetail?.stressTimeline; // [{t: unix_seconds, s: 0-4}]
-
-  const W=460, H=110, PAD={t:8,r:36,b:20,l:4};
-  const cw=W-PAD.l-PAD.r, ch=H-PAD.t-PAD.b;
-
-  // Oura timestamps are Unix seconds — multiply by 1000 for JS Date
-  const pts = useMemo(()=>{
-    if(!timeline?.length) return [];
-    const valid = timeline.filter(p=>p.s>0 && p.s<=4);
-    if(valid.length===0) return [];
-    const toMs = p => (p.t > 1e10 ? p.t : p.t*1000); // handle both ms and s
-    const times = valid.map(toMs);
-    const tMin = Math.min(...times), tMax = Math.max(...times);
-    const span = tMax-tMin||1;
-    return valid.map(p=>{
-      const x = PAD.l + ((toMs(p)-tMin)/span)*cw;
-      const y = PAD.t + (1-(p.s-1)/3)*ch; // s:1(restored)→bottom, s:4(stressed)→top
-      return {x, y, s:p.s, ms:toMs(p)};
-    });
-  },[timeline]);
-
-  // ~5 evenly spaced hour labels
-  const hourLabels = useMemo(()=>{
-    if(pts.length<2) return [];
-    const tMin=pts[0].ms, tMax=pts[pts.length-1].ms, span=tMax-tMin||1;
-    const labels=[];
-    for(let i=0;i<=4;i++){
-      const ms = tMin + (i/4)*span;
-      const d  = new Date(ms);
-      const x  = PAD.l + ((ms-tMin)/span)*cw;
-      labels.push({x, label:d.getHours().toString().padStart(2,"0")});
-    }
-    return labels;
-  },[pts]);
-
-  const linePts = pts.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-  const hasData = pts.length>1;
-
-  return (
-    <div style={{padding:"14px 16px"}}>
-      {hasData ? (
-        <div style={{marginBottom:12}}>
-          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:6}}>Daytime Stress</div>
-          <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",display:"block"}}>
-            {/* Zone bands */}
-            {STRESS_ZONES.map((z,i)=>(
-              <rect key={z.level} x={PAD.l} y={PAD.t+(i/4)*ch} width={cw} height={ch/4} fill={z.color} opacity={0.07}/>
-            ))}
-            {/* Zone labels */}
-            {STRESS_ZONES.map((z,i)=>(
-              <text key={z.level} x={W-2} y={PAD.t+(i/4)*ch+ch/8+3}
-                textAnchor="end" fontSize={6} fontFamily="monospace" fill={z.color} opacity={0.75}>{z.label}</text>
-            ))}
-            {/* Line */}
-            <polyline points={linePts} fill="none" stroke={C.muted} strokeWidth={1} strokeLinejoin="round" opacity={0.4}/>
-            {/* Dots */}
-            {pts.map((p,i)=>(
-              <circle key={i} cx={p.x} cy={p.y} r={pts.length>80?1.2:2}
-                fill={stressColor(p.s)} opacity={0.9}/>
-            ))}
-            {/* Hour labels */}
-            {hourLabels.map(({x,label},i)=>(
-              <text key={i} x={x} y={H-2} textAnchor="middle"
-                fontSize={7} fontFamily="monospace" fill={C.muted}>{label}</text>
-            ))}
-          </svg>
-        </div>
-      ) : (
-        <div style={{fontFamily:mono,fontSize:9,color:C.dim,marginBottom:12,padding:"16px 0",textAlign:"center"}}>
-          No stress timeline — wear your ring during the day
-        </div>
-      )}
-      {/* Bar + legend */}
-      <div style={{display:"flex",height:6,borderRadius:3,overflow:"hidden",marginBottom:10}}>
-        <div style={{flex:stressM/total,background:"#A05050",minWidth:stressM?2:0}}/>
-        <div style={{flex:recoverM/total,background:"#4A82B0",minWidth:recoverM?2:0}}/>
-      </div>
-      <div style={{display:"flex",gap:20}}>
-        {[{label:"Stressed",val:stressM,col:"#A05050"},{label:"Restored",val:recoverM,col:"#4A82B0"}].map(({label,val,col})=>(
-          <div key={label} style={{display:"flex",alignItems:"center",gap:6}}>
-            <div style={{width:7,height:7,borderRadius:2,background:col}}/>
-            <div>
-              <div style={{fontFamily:mono,fontSize:7,color:C.muted,textTransform:"uppercase",letterSpacing:"0.1em"}}>{label}</div>
-              <div style={{fontFamily:serif,fontSize:15,color:val?C.text:C.dim}}>{fmtMins(val)}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
-  const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
-  const [active,setActive]=useState("sleep");
-  const [ouraDetail,setOuraDetail]=useState(null); // full oura response for detail panels
-  const [stravaActivities,setStravaActivities]=useState([]); // strava activities for this date
 
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
   useEffect(()=>{
@@ -1235,7 +988,6 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
       .then(r=>r.json()).then(data=>{
         console.log("[oura]", date, data);
         if(data.error)return;
-        setOuraDetail(data);
         setH(p=>({...p,
           sleepScore:data.sleepScore||p.sleepScore||"",
           sleepHrs:data.sleepHrs||p.sleepHrs||"",
@@ -1250,24 +1002,10 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
           resilienceScore:data.resilienceScore||p.resilienceScore||"",
           stressMins:data.stressMins||p.stressMins||"",
           recoveryMins:data.recoveryMins||p.recoveryMins||"",
-          // sleep stages from oura (not user-editable, just display)
-          deepMins:data.sleepStages?.deep!=null?String(data.sleepStages.deep):p.deepMins||"",
-          remMins:data.sleepStages?.rem!=null?String(data.sleepStages.rem):p.remMins||"",
-          lightMins:data.sleepStages?.light!=null?String(data.sleepStages.light):p.lightMins||"",
-          awakeMins:data.sleepStages?.awake!=null?String(data.sleepStages.awake):p.awakeMins||"",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
 
-  // Fetch Strava activities for this date
-  useEffect(()=>{
-    if(!token)return;
-    setStravaActivities([]);
-    fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(data=>{
-        if(data.activities&&Array.isArray(data.activities))setStravaActivities(data.activities);
-      }).catch(()=>{});
-  },[date,token]); // eslint-disable-line
 
   const purple = "#8B6BB5";
   // All fields are read-only — data comes from Oura, no onChange handlers
@@ -1282,12 +1020,6 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
       fields:[{label:"Stress",value:fmtMins(h.stressMins),unit:""},{label:"Recov.",value:fmtMins(h.recoveryMins),unit:""}]},
   ];
 
-  const detailMap = {
-    sleep:     <SleepDetail h={h}/>,
-    readiness: <ReadinessDetail h={h}/>,
-    activity:  <ActivityDetail h={h} ouraWorkouts={ouraDetail?.workouts} stravaActivities={stravaActivities}/>,
-    resilience: <ResilienceDetail h={h} ouraDetail={ouraDetail}/>,
-  };
 
   return (
     <Card>
@@ -1302,15 +1034,11 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
       </div>
       {/* Metrics row */}
       <div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
-        {metrics.map((m,mi)=>{
-          const isActive = active===m.key;
-          return (
-            <div key={m.key} onClick={()=>setActive(m.key)}
+        {metrics.map((m,mi)=>(
+            <div key={m.key}
               style={{flex:"1 0 auto",minWidth:130,display:"flex",alignItems:"center",gap:12,
-                padding:"12px 14px",cursor:"pointer",transition:"background 0.15s",
-                background:isActive?`${m.color}10`:"transparent",
-                borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
-                borderBottom:isActive?`2px solid ${m.color}`:`2px solid transparent`}}>
+                padding:"12px 14px",
+                borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none"}}>
               <div style={{flexShrink:0}}>
                 <Ring score={m.score} color={m.color} size={48}/>
               </div>
@@ -1329,18 +1057,12 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
                 </div>
               </div>
             </div>
-          );
-        })}
-      </div>
-      {/* Detail panel — expands below the metric row */}
-      <div style={{borderTop:`1px solid ${C.border}`}}>
-        {detailMap[active]}
+        ))}
       </div>
     </Card>
   );
 }
 
-// ─── Notes ────────────────────────────────────────────────────────────────────
 // ─── Notes ────────────────────────────────────────────────────────────────────
 // Plain textarea with a transparent overlay that colorizes "# heading" lines.
 // Cmd+B / Cmd+I wrap selected text in ** / *.
