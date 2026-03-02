@@ -27,10 +27,6 @@ export async function POST(request) {
     }
   }
 
-  // Fall back to env key only if user hasn't set their own
-  // Remove this fallback line to require users to supply their own key
-  if (!anthropicKey) anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
-
   if (!anthropicKey) {
     return Response.json({ error: "No Anthropic API key configured" }, { status: 402 });
   }

@@ -379,15 +379,16 @@ function UserMenu({session,token,userId}) {
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
 function TopBar({session,token,userId,syncStatus}) {
-  const [dateStr, setDateStr] = useState("");
+  const [greeting, setGreeting] = useState("");
   useEffect(() => {
-    setDateStr(new Date().toLocaleDateString("en-US",{month:"long",day:"numeric"}));
+    const day = new Date().toLocaleDateString("en-US",{weekday:"long"});
+    setGreeting(`It's ${day},`);
   }, []);
   return (
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 16px",
       height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,
       position:"sticky",top:0,zIndex:100}}>
-      <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em"}}>{dateStr}</span>
+      <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em",fontStyle:"italic"}}>{greeting}</span>
       <div style={{flex:1}}/>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         <div style={{width:6,height:6,borderRadius:"50%",
@@ -415,14 +416,18 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
       {/* Header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
         <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-        <span style={{fontFamily:serif,fontSize:mobile?15:18,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>{months}</span>
-        <span style={{fontFamily:mono,fontSize:mobile?10:12,color:C.muted,marginLeft:2}}>{days[0].getFullYear()}</span>
+        <span style={{fontFamily:serif,fontSize:mobile?15:18,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>
+          {selected ? new Date(selected+"T12:00:00").toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : months}
+        </span>
         <div style={{flex:1}}/>
         {[["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
           <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
-            border:`1px solid ${C.border2}`,borderRadius:6,color:C.muted,fontFamily:mono,
-            padding:l==="today"?"4px 8px":"4px 7px",fontSize:l==="today"?9:13,
-            letterSpacing:l==="today"?"0.08em":"0",transition:"border-color 0.15s,color 0.15s"}}>{l}</button>
+            border:"none",color:C.muted,fontFamily:mono,
+            padding:l==="today"?"4px 6px":"4px 5px",fontSize:l==="today"?9:14,
+            letterSpacing:l==="today"?"0.08em":"0",opacity:0.7,
+            transition:"opacity 0.15s,color 0.15s"}}
+            onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+            onMouseLeave={e=>e.currentTarget.style.opacity="0.7"}>{l}</button>
         ))}
       </div>
 
