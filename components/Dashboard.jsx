@@ -66,12 +66,15 @@ function weekOf(anchor) {
 }
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
-async function estimateKcal(prompt) {
-  const r = await fetch("/api/ai",{method:"POST",headers:{"Content-Type":"application/json"},
+async function estimateKcal(prompt, token) {
+  const headers = {"Content-Type":"application/json"};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const r = await fetch("/api/ai",{method:"POST",headers,
     body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:64,
-      system:"Return only valid JSON with a single `kcal` integer field.",
+      system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
       messages:[{role:"user",content:prompt}]})});
   const d = await r.json();
+  if (d.error) { console.warn("[ai]", d.error); return null; }
   const text = d.content?.find(b=>b.type==="text")?.text||"{}";
   try { return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null; } catch { return null; }
 }
@@ -771,7 +774,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       </div>
 
       {/* ── Events for selected day ───────────────────────────────────────── */}
-      <div style={{padding:"10px 16px 20px", overflowY:"auto", flex:1, minHeight:0, paddingBottom:24}}>
+      <div style={{padding:"10px 16px 24px"}}>
         <div style={{
           fontFamily:mono, fontSize:8, color:C.muted,
           letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:8,
@@ -851,19 +854,21 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
         console.log("[oura]", date, data);
         if(data.error)return;
         // Only fill fields that don't already have manually entered values
+        // Oura scores update throughout the day — always take the latest from Oura.
+        // Only fall back to existing value if Oura returned nothing for that field.
         setH(p=>({...p,
-          sleepScore:p.sleepScore||data.sleepScore||"",
-          sleepHrs:p.sleepHrs||data.sleepHrs||"",
-          sleepEff:p.sleepEff||data.sleepQuality||"",
-          readinessScore:p.readinessScore||data.readinessScore||"",
-          hrv:p.hrv||data.hrv||"",
-          rhr:p.rhr||data.rhr||"",
-          activityScore:p.activityScore||data.activityScore||"",
-          activeCalories:p.activeCalories||data.activeCalories||"",
-          steps:p.steps||data.steps||"",
-          calmScore:p.calmScore||data.calmScore||"",
-          stressMins:p.stressMins||data.stressMins||"",
-          recoveryMins:p.recoveryMins||data.recoveryMins||"",
+          sleepScore:data.sleepScore||p.sleepScore||"",
+          sleepHrs:data.sleepHrs||p.sleepHrs||"",
+          sleepEff:data.sleepQuality||p.sleepEff||"",
+          readinessScore:data.readinessScore||p.readinessScore||"",
+          hrv:data.hrv||p.hrv||"",
+          rhr:data.rhr||p.rhr||"",
+          activityScore:data.activityScore||p.activityScore||"",
+          activeCalories:data.activeCalories||p.activeCalories||"",
+          steps:data.steps||p.steps||"",
+          calmScore:data.calmScore||p.calmScore||"",
+          stressMins:data.stressMins||p.stressMins||"",
+          recoveryMins:data.recoveryMins||p.recoveryMins||"",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
@@ -1038,7 +1043,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
 
   async function runEstimate(id,text){
     setRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
-    const kcal=await estimateKcal(promptFn(text)).catch(()=>null);
+    const kcal=await estimateKcal(promptFn(text),token).catch(()=>null);
     setRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
   }
   function onKey(e,id,idx){
@@ -1339,7 +1344,7 @@ export default function Dashboard() {
   const syncStatus={syncing:syncing.size>0,lastSync};
   const leftWidget  = wMap[leftId];
   const rightWidgets = rightOrder.map(id=>wMap[id]).filter(Boolean);
-  const calH = mobile ? 280 : heights.cal;
+  const calH = heights.cal;
 
   return (
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -1369,7 +1374,7 @@ export default function Dashboard() {
                   <SortableCard id={id}>
                     {({dragProps})=>
                       id==="cal"
-                        ? <div style={{height:calH,flexShrink:0}}>
+                        ? <div>
                             <CalStrip selected={selected} onSelect={setSelected}
                               events={events} healthDots={healthDots} dragProps={dragProps}/>
                           </div>
