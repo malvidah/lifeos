@@ -628,7 +628,18 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
   }
 
   const selKey    = toKey(selDate);
-  const selEvents = (events[selKey] || []).slice().sort((a,b) => (a.time||"").localeCompare(b.time||""));
+  // Parse "7:00 PM" / "8:00 AM" style times to 24h minutes for correct sort
+  function timeToMins(t) {
+    if (!t) return 9999;
+    const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!m) return 9999;
+    let h = parseInt(m[1]), min = parseInt(m[2]);
+    const period = (m[3]||"").toUpperCase();
+    if (period === "PM" && h !== 12) h += 12;
+    if (period === "AM" && h === 12) h = 0;
+    return h * 60 + min;
+  }
+  const selEvents = (events[selKey] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
   const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
   // Tap a visible day — only fires on clean taps (< 8px total drag)
@@ -638,7 +649,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
   };
 
   return (
-    <div style={{userSelect:"none"}}>
+    <div style={{userSelect:"none", display:"flex", flexDirection:"column", height:"100%"}}>
 
       {/* ── Static month + year header ────────────────────────────────────── */}
       <div style={{
@@ -740,7 +751,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       </div>
 
       {/* ── Events for selected day ───────────────────────────────────────── */}
-      <div style={{padding:"10px 16px 20px", overflowY:"auto", minHeight:48, maxHeight: desktop ? 260 : 180}}>
+      <div style={{padding:"10px 16px 20px", overflowY:"auto", flex:1, minHeight:0, paddingBottom:24}}>
         <div style={{
           fontFamily:mono, fontSize:8, color:C.muted,
           letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:8,
@@ -806,7 +817,7 @@ function Shimmer({width="100%", height=14, style={}}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:"",calmScore:"",recoveryMins:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:"",calmScore:"",stressMins:"",recoveryMins:""};
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
@@ -831,6 +842,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
           activeCalories:p.activeCalories||data.activeCalories||"",
           steps:p.steps||data.steps||"",
           calmScore:p.calmScore||data.calmScore||"",
+          stressMins:p.stressMins||data.stressMins||"",
           recoveryMins:p.recoveryMins||data.recoveryMins||"",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
@@ -845,7 +857,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,setScore:e=>setH(p=>({...p,activityScore:e.target.value})),
       fields:[{label:"Cal Burned",value:h.activeCalories,onChange:set("activeCalories"),unit:"kcal"},{label:"Steps",value:h.steps,onChange:set("steps"),unit:""}]},
     {key:"calm",label:"Calm",color:purple,score:h.calmScore,setScore:e=>setH(p=>({...p,calmScore:e.target.value})),
-      fields:[{label:"Recovery",value:h.recoveryMins,onChange:set("recoveryMins"),unit:"min"}]},
+      fields:[{label:"Stress",value:h.stressMins,onChange:set("stressMins"),unit:"min"},{label:"Recovery",value:h.recoveryMins,onChange:set("recoveryMins"),unit:"min"}]},
   ];
 
   return (

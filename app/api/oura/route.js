@@ -76,22 +76,25 @@ export async function GET(request) {
     }
 
     // Calm score: derived from Oura daily stress
-    // Oura daily_stress has stress_high (minutes stressed) and recovery_high (minutes in recovery)
-    // We compute calm as 100 - stress_score where stress_score maps stress_high minutes to 0-100
-    // Alternatively use the day_summary for a rough score
+    // stress_high = minutes in high-stress state during the day
+    // recovery_high = minutes in active recovery state
+    // Calm score = weighted balance: more recovery, less stress = higher calm
     const stress = stressData.data?.[0];
     if (stress != null) {
-      // stress_high: minutes with high stress (0 = very calm, ~240+ = very stressed)
-      // recovery_high: minutes in recovery state
-      // We create a 0-100 calm score: max stress is ~480 mins (8h of high stress in a day)
       const stressHigh = stress.stress_high ?? null;
       const recoveryHigh = stress.recovery_high ?? null;
-      if (stressHigh != null) {
-        // Calm = inverse of stress. 0 stress_high mins = 100 calm; 480+ mins = 0 calm
-        const calmScore = Math.max(0, Math.round(100 - (stressHigh / 4.8)));
-        result.calmScore = String(calmScore);
-      }
+      // Expose raw minutes for display
+      if (stressHigh != null) result.stressMins = String(stressHigh);
       if (recoveryHigh != null) result.recoveryMins = String(recoveryHigh);
+      // Calm score: start at 100, penalize stress mins (max ~300min = very stressed day),
+      // then add back recovery credit. Capped 0-100.
+      if (stressHigh != null) {
+        const stressPenalty = Math.min(stressHigh / 3, 70); // 300 stress mins → -70pts
+        const recoveryBonus = recoveryHigh ? Math.min(recoveryHigh / 10, 30) : 0; // 300 recovery mins → +30pts
+        const calmScore = Math.max(0, Math.min(100, Math.round(100 - stressPenalty + recoveryBonus - 30)));
+        // -30 baseline offset so ~100 stress mins with no recovery = ~57 (realistic midpoint)
+        result.calmScore = String(Math.max(0, Math.min(100, calmScore)));
+      }
     }
 
     return Response.json(result);
