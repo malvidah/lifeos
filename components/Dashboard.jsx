@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "../lib/supabase.js";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
@@ -1050,7 +1050,7 @@ function ResilienceDetail({h, ouraDetail}) {
   const cw=W-PAD.l-PAD.r, ch=H-PAD.t-PAD.b;
 
   // Build chart points from timeline
-  const pts = React.useMemo(()=>{
+  const pts = useMemo(()=>{
     if(!timeline||timeline.length===0)return [];
     // Filter to valid readings (s > 0)
     const valid = timeline.filter(p=>p.s>0);
@@ -1069,7 +1069,7 @@ function ResilienceDetail({h, ouraDetail}) {
   },[timeline, h.date]);
 
   // Hour labels for x-axis from timeline
-  const hourLabels = React.useMemo(()=>{
+  const hourLabels = useMemo(()=>{
     if(!timeline||timeline.length===0)return [];
     const valid = timeline.filter(p=>p.s>0);
     if(valid.length<2)return [];
