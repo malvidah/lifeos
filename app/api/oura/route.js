@@ -93,12 +93,15 @@ export async function GET(request) {
     // stress_high = 500 → very stressed day → score 0
     const stress = stressData.data?.[0];
     if (stress) {
-      const stressHigh = stress.stress_high ?? null;
-      const recoveryHigh = stress.recovery_high ?? null;
-      if (stressHigh != null) result.stressMins = String(stressHigh);
-      if (recoveryHigh != null) result.recoveryMins = String(recoveryHigh);
+      const stressHigh = stress.stress_high ?? null;   // seconds
+      const recoveryHigh = stress.recovery_high ?? null; // seconds
+      // Convert seconds → minutes for display
+      if (stressHigh != null) result.stressMins = String(Math.round(stressHigh / 60));
+      if (recoveryHigh != null) result.recoveryMins = String(Math.round(recoveryHigh / 60));
       if (stressHigh != null) {
-        result.resilienceScore = String(Math.max(0, Math.min(100, Math.round(100 - stressHigh / 5))));
+        // 500 minutes (30000s) of stress = score 0; recalibrate using minutes
+        const stressMins = stressHigh / 60;
+        result.resilienceScore = String(Math.max(0, Math.min(100, Math.round(100 - stressMins / 5))));
       }
       // Time-series stress data: array of {timestamp, stress_level} at ~5-min intervals
       // stress_level: 0=unknown, 1=restored, 2=relaxed, 3=engaged, 4=stressed

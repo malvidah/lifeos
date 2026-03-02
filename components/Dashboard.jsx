@@ -970,10 +970,7 @@ function ActivityDetail({h,ouraWorkouts,stravaActivities}) {
       {/* Strava activities */}
       {strava.length>0&&(
         <>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Strava_logo_symbol.svg/120px-Strava_logo_symbol.svg.png" width={12} height={12} style={{objectFit:"contain"}} alt=""/>
-            <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</span>
-          </div>
+          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:"#FC4C02",marginBottom:8}}>Strava</div>
           {strava.map((a,i)=>(
             <div key={a.id||i} style={{display:"flex",alignItems:"baseline",gap:10,padding:"5px 0",
               borderBottom:i<strava.length-1?`1px solid ${C.border}`:"none"}}>
@@ -1040,123 +1037,96 @@ function stressY(s, h){
 }
 
 function ResilienceDetail({h, ouraDetail}) {
-  const stressM   = parseInt(h.stressMins)||0;
-  const recoverM  = parseInt(h.recoveryMins)||0;
-  const total     = stressM+recoverM||1;
-  const timeline  = ouraDetail?.stressTimeline;
+  const stressM  = parseInt(h.stressMins)||0;
+  const recoverM = parseInt(h.recoveryMins)||0;
+  const total    = stressM+recoverM||1;
+  const timeline = ouraDetail?.stressTimeline; // [{t: unix_seconds, s: 0-4}]
 
-  // Chart dimensions
-  const W=460, H=110, PAD={t:8,r:8,b:24,l:0};
+  const W=460, H=110, PAD={t:8,r:36,b:20,l:4};
   const cw=W-PAD.l-PAD.r, ch=H-PAD.t-PAD.b;
 
-  // Build chart points from timeline
+  // Oura timestamps are Unix seconds — multiply by 1000 for JS Date
   const pts = useMemo(()=>{
-    if(!timeline||timeline.length===0)return [];
-    // Filter to valid readings (s > 0)
-    const valid = timeline.filter(p=>p.s>0);
-    if(valid.length===0)return [];
-    // Map to chart X by time-of-day (0-24h span)
-    const dayStr = h.date||"";
-    // Find min/max time for x axis
-    const times = valid.map(p=>new Date(p.t).getTime());
+    if(!timeline?.length) return [];
+    const valid = timeline.filter(p=>p.s>0 && p.s<=4);
+    if(valid.length===0) return [];
+    const toMs = p => (p.t > 1e10 ? p.t : p.t*1000); // handle both ms and s
+    const times = valid.map(toMs);
     const tMin = Math.min(...times), tMax = Math.max(...times);
     const span = tMax-tMin||1;
     return valid.map(p=>{
-      const x = PAD.l + ((new Date(p.t).getTime()-tMin)/span)*cw;
-      const y = PAD.t + (1-(p.s-1)/3)*ch; // s:1→bottom, s:4→top
-      return {x,y,s:p.s,t:p.t};
+      const x = PAD.l + ((toMs(p)-tMin)/span)*cw;
+      const y = PAD.t + (1-(p.s-1)/3)*ch; // s:1(restored)→bottom, s:4(stressed)→top
+      return {x, y, s:p.s, ms:toMs(p)};
     });
-  },[timeline, h.date]);
-
-  // Hour labels for x-axis from timeline
-  const hourLabels = useMemo(()=>{
-    if(!timeline||timeline.length===0)return [];
-    const valid = timeline.filter(p=>p.s>0);
-    if(valid.length<2)return [];
-    const times = valid.map(p=>new Date(p.t).getTime());
-    const tMin = Math.min(...times), tMax = Math.max(...times);
-    const span = tMax-tMin||1;
-    // Show ~5 hour labels
-    const labels=[];
-    const tMinD=new Date(tMin), tMaxD=new Date(tMax);
-    const startHour=tMinD.getHours(), endHour=tMaxD.getHours()+(tMaxD.getDate()!==tMinD.getDate()?24:0);
-    const step=Math.ceil((endHour-startHour)/4)||1;
-    for(let hr=Math.ceil(startHour/step)*step;hr<=endHour;hr+=step){
-      const t=new Date(tMin); t.setHours(tMinD.getHours()+hr-startHour,0,0,0);
-      const x=PAD.l+((t.getTime()-tMin)/span)*cw;
-      if(x>=PAD.l&&x<=PAD.l+cw){
-        const disp=((tMinD.getHours()+hr-startHour)%24).toString().padStart(2,"0");
-        labels.push({x,label:disp});
-      }
-    }
-    return labels;
   },[timeline]);
 
-  // Build SVG polyline from pts
-  const linePts = pts.map(p=>`${p.x},${p.y}`).join(" ");
+  // ~5 evenly spaced hour labels
+  const hourLabels = useMemo(()=>{
+    if(pts.length<2) return [];
+    const tMin=pts[0].ms, tMax=pts[pts.length-1].ms, span=tMax-tMin||1;
+    const labels=[];
+    for(let i=0;i<=4;i++){
+      const ms = tMin + (i/4)*span;
+      const d  = new Date(ms);
+      const x  = PAD.l + ((ms-tMin)/span)*cw;
+      labels.push({x, label:d.getHours().toString().padStart(2,"0")});
+    }
+    return labels;
+  },[pts]);
 
+  const linePts = pts.map(p=>`${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
   const hasData = pts.length>1;
 
   return (
     <div style={{padding:"14px 16px"}}>
-      {/* Daytime stress chart */}
       {hasData ? (
         <div style={{marginBottom:12}}>
           <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:6}}>Daytime Stress</div>
-          <div style={{position:"relative",overflowX:"auto"}}>
-            <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",display:"block"}} preserveAspectRatio="none">
-              {/* Zone background bands */}
-              {STRESS_ZONES.map((z,i)=>{
-                const y1=PAD.t+((i)/4)*ch, y2=PAD.t+((i+1)/4)*ch;
-                return <rect key={z.level} x={PAD.l} y={y1} width={cw} height={ch/4}
-                  fill={z.color} opacity={0.06}/>;
-              })}
-              {/* Zone labels on right */}
-              {STRESS_ZONES.map((z,i)=>(
-                <text key={z.level} x={W-PAD.r-2} y={PAD.t+(i/4)*ch+ch/8+4}
-                  textAnchor="end" fontSize={6} fontFamily="monospace"
-                  fill={z.color} opacity={0.7}>{z.label}</text>
-              ))}
-              {/* Connecting line */}
-              <polyline points={linePts} fill="none" stroke={C.muted} strokeWidth={1.2} strokeLinejoin="round" opacity={0.5}/>
-              {/* Dots colored by stress level */}
-              {pts.map((p,i)=>(
-                <circle key={i} cx={p.x} cy={p.y} r={pts.length>60?1.5:2.5}
-                  fill={stressColor(p.s)} opacity={0.9}/>
-              ))}
-              {/* X-axis hour labels */}
-              {hourLabels.map(({x,label})=>(
-                <text key={label} x={x} y={H-2} textAnchor="middle"
-                  fontSize={7} fontFamily="monospace" fill={C.muted}>{label}</text>
-              ))}
-            </svg>
-          </div>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",display:"block"}}>
+            {/* Zone bands */}
+            {STRESS_ZONES.map((z,i)=>(
+              <rect key={z.level} x={PAD.l} y={PAD.t+(i/4)*ch} width={cw} height={ch/4} fill={z.color} opacity={0.07}/>
+            ))}
+            {/* Zone labels */}
+            {STRESS_ZONES.map((z,i)=>(
+              <text key={z.level} x={W-2} y={PAD.t+(i/4)*ch+ch/8+3}
+                textAnchor="end" fontSize={6} fontFamily="monospace" fill={z.color} opacity={0.75}>{z.label}</text>
+            ))}
+            {/* Line */}
+            <polyline points={linePts} fill="none" stroke={C.muted} strokeWidth={1} strokeLinejoin="round" opacity={0.4}/>
+            {/* Dots */}
+            {pts.map((p,i)=>(
+              <circle key={i} cx={p.x} cy={p.y} r={pts.length>80?1.2:2}
+                fill={stressColor(p.s)} opacity={0.9}/>
+            ))}
+            {/* Hour labels */}
+            {hourLabels.map(({x,label},i)=>(
+              <text key={i} x={x} y={H-2} textAnchor="middle"
+                fontSize={7} fontFamily="monospace" fill={C.muted}>{label}</text>
+            ))}
+          </svg>
         </div>
       ) : (
         <div style={{fontFamily:mono,fontSize:9,color:C.dim,marginBottom:12,padding:"16px 0",textAlign:"center"}}>
           No stress timeline — wear your ring during the day
         </div>
       )}
-      {/* Stressed / Recovery summary */}
+      {/* Bar + legend */}
       <div style={{display:"flex",height:6,borderRadius:3,overflow:"hidden",marginBottom:10}}>
         <div style={{flex:stressM/total,background:"#A05050",minWidth:stressM?2:0}}/>
         <div style={{flex:recoverM/total,background:"#4A82B0",minWidth:recoverM?2:0}}/>
       </div>
       <div style={{display:"flex",gap:20}}>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:7,height:7,borderRadius:2,background:"#A05050"}}/>
-          <div>
-            <div style={{fontFamily:mono,fontSize:7,color:C.muted,textTransform:"uppercase",letterSpacing:"0.1em"}}>Stressed</div>
-            <div style={{fontFamily:serif,fontSize:15,color:stressM?C.text:C.dim}}>{fmtMins(stressM)}</div>
+        {[{label:"Stressed",val:stressM,col:"#A05050"},{label:"Restored",val:recoverM,col:"#4A82B0"}].map(({label,val,col})=>(
+          <div key={label} style={{display:"flex",alignItems:"center",gap:6}}>
+            <div style={{width:7,height:7,borderRadius:2,background:col}}/>
+            <div>
+              <div style={{fontFamily:mono,fontSize:7,color:C.muted,textTransform:"uppercase",letterSpacing:"0.1em"}}>{label}</div>
+              <div style={{fontFamily:serif,fontSize:15,color:val?C.text:C.dim}}>{fmtMins(val)}</div>
+            </div>
           </div>
-        </div>
-        <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:7,height:7,borderRadius:2,background:"#4A82B0"}}/>
-          <div>
-            <div style={{fontFamily:mono,fontSize:7,color:C.muted,textTransform:"uppercase",letterSpacing:"0.1em"}}>Restored</div>
-            <div style={{fontFamily:serif,fontSize:15,color:recoverM?C.text:C.dim}}>{fmtMins(recoverM)}</div>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -1459,7 +1429,7 @@ function Activity({date,token,userId}) {
     <div style={{display:"flex",flexDirection:"column",gap:0,height:"100%"}}>
       {strava.length>0&&(
         <div style={{padding:"10px 14px 6px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Strava_logo_symbol.svg/120px-Strava_logo_symbol.svg.png" width={11} height={11} style={{objectFit:"contain"}} alt=""/><span style={{fontFamily:mono,fontSize:7,letterSpacing:"0.15em",textTransform:"uppercase",color:"#FC4C02"}}>Strava</span></div>
+          <div style={{fontFamily:mono,fontSize:7,letterSpacing:"0.15em",textTransform:"uppercase",color:"#FC4C02",marginBottom:6}}>Strava</div>
           {strava.map((a,i)=>(
             <div key={a.id||i} style={{display:"flex",alignItems:"baseline",gap:8,padding:"3px 0",
               borderBottom:i<strava.length-1?`1px solid ${C.border}`:"none"}}>
