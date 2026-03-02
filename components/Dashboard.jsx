@@ -1182,12 +1182,35 @@ function Notes({date,userId,token}) {
 }
 
 // ─── RowList ─────────────────────────────────────────────────────────────────
-function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
+// syncedRows: [{id, text, kcal, source}] — read-only rows injected from Oura/Strava
+function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[]}) {
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
+  const syncEstState=useRef({}); // id -> kcal value, null=in-flight
+  const [syncEstTick,setSyncEstTick]=useState(0); // just to trigger re-render
   const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
-  const total=safe.reduce((s,r)=>s+(r.kcal||0),0);
+  const manualTotal=safe.reduce((s,r)=>s+(r.kcal||0),0);
+  const syncTotal=syncedRows.reduce((s,r)=>s+(r.kcal||syncEstState.current[r.id]||0),0);
+  const total=manualTotal+syncTotal;
+
+  // Auto-estimate kcal for synced rows that lack it
+  useEffect(()=>{
+    if(!token)return;
+    syncedRows.forEach(row=>{
+      if(!row.kcal && row.text && !syncEstState.current[row.id] && syncEstState.current[row.id]!==null){
+        syncEstState.current[row.id]=null; // mark as in-flight
+        setSyncEstTick(t=>t+1);
+        estimateKcal(promptFn(row.text),token).then(kcal=>{
+          syncEstState.current[row.id]=kcal||0;
+          setSyncEstTick(t=>t+1);
+        }).catch(()=>{
+          syncEstState.current[row.id]=0;
+          setSyncEstTick(t=>t+1);
+        });
+      }
+    });
+  },[syncedRows,token]); // eslint-disable-line
 
   async function runEstimate(id,text){
     setRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
@@ -1207,14 +1230,29 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
   );
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
-      {/* Scrollable rows — flex:1 fills space, total stays visible below */}
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
+        {/* Synced rows — read-only, same visual style as manual rows */}
+        {syncedRows.map(row=>{
+          const kcal=row.kcal||syncEstState.current[row.id];
+          const estimating=syncEstState.current[row.id]===null;
+          return (
+            <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
+              <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.text}</span>
+              <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
+                {estimating?"…":kcal?`${prefix}${kcal}`:""}
+              </span>
+              <SourceBadge source={row.source}/>
+            </div>
+          );
+        })}
+        {/* Manual rows */}
         {safe.map((row,idx)=>(
           <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
             <input ref={el=>refs.current[row.id]=el} value={row.text}
               onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
               onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
-              onKeyDown={e=>onKey(e,row.id,idx)} placeholder={idx===0?placeholder:""}
+              onKeyDown={e=>onKey(e,row.id,idx)} placeholder={idx===0&&syncedRows.length===0?placeholder:idx===0?"+ add more":""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
                 color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
             <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
@@ -1223,7 +1261,6 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
           </div>
         ))}
       </div>
-      {/* Total always visible at bottom, outside scroll area */}
       {total>0&&(
         <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:8,borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
@@ -1281,77 +1318,39 @@ function mergeWorkouts(ouraWorkouts, stravaActivities) {
 }
 
 function Activity({date,token,userId}) {
-  const [workouts, setWorkouts] = useState([]); // merged oura+strava
-  const [estimating, setEstimating] = useState({}); // id -> bool
+  const [syncedRows, setSyncedRows] = useState([]);
 
   useEffect(()=>{
     if(!token)return;
-    setWorkouts([]);
+    setSyncedRows([]);
     const headers = {Authorization:`Bearer ${token}`};
     Promise.all([
       fetch(`/api/oura?date=${date}`,{headers}).then(r=>r.json()).catch(()=>({})),
       fetch(`/api/strava?date=${date}`,{headers}).then(r=>r.json()).catch(()=>({})),
     ]).then(([ouraData, stravaData])=>{
-      const ouraWorkouts = ouraData.workouts||[];
-      const stravaActivities = stravaData.activities||[];
-      const merged = mergeWorkouts(ouraWorkouts, stravaActivities);
-      setWorkouts(merged);
-      // Auto-estimate calories for any workout missing them
-      merged.forEach((w,i)=>{
-        if(!w.calories && w.name){
-          estimateWorkoutKcal(w, i, token, merged, setWorkouts, setEstimating);
-        }
-      });
+      const merged = mergeWorkouts(ouraData.workouts||[], stravaData.activities||[]);
+      // Convert to RowList-compatible format: text is a rich description, kcal from source if available
+      setSyncedRows(merged.map(w=>({
+        id: w.id || `${w.source}-${w.sport}-${w.durationMins}`,
+        source: w.source,
+        kcal: w.calories||null,
+        text: [
+          w.name,
+          w.durationMins ? fmtMins(w.durationMins) : null,
+          w.distance ? `${w.distance}km` : null,
+          w.avgHr ? `${w.avgHr}bpm avg` : null,
+        ].filter(Boolean).join(" · "),
+      })));
     });
   },[date,token]); // eslint-disable-line
 
   return (
-    <div style={{display:"flex",flexDirection:"column",gap:0,height:"100%"}}>
-      {workouts.length>0&&(
-        <div style={{padding:"8px 14px 6px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-          {workouts.map((w,i)=>(
-            <div key={w.id||i} style={{display:"flex",alignItems:"center",gap:7,padding:"4px 0",
-              borderBottom:i<workouts.length-1?`1px solid ${C.border}`:"none"}}>
-              <span style={{fontSize:13,flexShrink:0}}>{sportEmoji(w.sport)}</span>
-              <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
-                textTransform:"capitalize"}}>{w.name}</span>
-              {w.durationMins&&<span style={{fontFamily:mono,fontSize:10,color:C.muted,flexShrink:0}}>{fmtMins(w.durationMins)}</span>}
-              {w.distance&&<span style={{fontFamily:mono,fontSize:10,color:C.blue,flexShrink:0}}>{w.distance}km</span>}
-              <span style={{fontFamily:mono,fontSize:10,color:C.accent,flexShrink:0,minWidth:38,textAlign:"right"}}>
-                {estimating[i]?"…":w.calories?`${w.calories}kcal`:""}
-              </span>
-              <SourceBadge source={w.source}/>
-            </div>
-          ))}
-        </div>
-      )}
-      <div style={{flex:1,minHeight:0}}>
-        <RowList date={date} type="activity" token={token} userId={userId}
-          placeholder="Add activity…"
-          promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`}
-          prefix="−" color={C.green}/>
-      </div>
-    </div>
+    <RowList date={date} type="activity" token={token} userId={userId}
+      syncedRows={syncedRows}
+      placeholder="What did you do?"
+      promptFn={t=>`Calories burned for activity: "${t}" for a typical adult. Include duration and distance hints if present in the text. Return JSON: {"kcal":300}`}
+      prefix="−" color={C.green}/>
   );
-}
-
-async function estimateWorkoutKcal(workout, idx, token, currentWorkouts, setWorkouts, setEstimating) {
-  setEstimating(prev=>({...prev,[idx]:true}));
-  try {
-    const desc = [
-      workout.name,
-      workout.durationMins ? `${workout.durationMins} minutes` : null,
-      workout.distance ? `${workout.distance}km` : null,
-      workout.avgHr ? `avg HR ${workout.avgHr}bpm` : null,
-    ].filter(Boolean).join(", ");
-    const kcal = await estimateKcal(
-      `Calories burned for: "${desc}" for a typical adult. Return JSON: {"kcal":300}`,
-      token
-    );
-    setWorkouts(prev => prev.map((w,i) => i===idx ? {...w, calories:kcal} : w));
-  } catch(e) { /* silent fail */ }
-  finally { setEstimating(prev=>({...prev,[idx]:false})); }
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
