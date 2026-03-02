@@ -58,12 +58,6 @@ const toKey = d => {
 };
 const todayKey = () => toKey(new Date());
 const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
-const DAY3 = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-const MON3 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-function weekOf(anchor) {
-  const d=new Date(anchor); d.setDate(d.getDate()-d.getDay());
-  return Array.from({length:7},(_,i)=>shift(d,i));
-}
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt, token) {
@@ -234,55 +228,6 @@ function Ring({score,color,size=48}) {
         {score||"—"}
       </text>
     </svg>
-  );
-}
-
-// ─── Resizable container ──────────────────────────────────────────────────────
-function Resizable({defaultH, minH=100, children, fill=false}) {
-  const [h, setH] = useState(defaultH);
-  const dragging = useRef(false);
-  const startY = useRef(0);
-  const startH = useRef(0);
-
-  // If fill=true, stretch to remaining container height instead
-  if (fill) {
-    return <div style={{flex:1,minHeight:minH,display:"flex",flexDirection:"column"}}>{children}</div>;
-  }
-
-  function onPointerDown(e) {
-    e.preventDefault(); e.stopPropagation();
-    dragging.current=true;
-    startY.current=e.clientY;
-    startH.current=h;
-
-    function onMove(e) {
-      if (!dragging.current) return;
-      setH(Math.max(minH, startH.current + (e.clientY - startY.current)));
-    }
-    function onUp() {
-      dragging.current=false;
-      window.removeEventListener("pointermove",onMove);
-      window.removeEventListener("pointerup",onUp);
-    }
-    window.addEventListener("pointermove",onMove);
-    window.addEventListener("pointerup",onUp);
-  }
-
-  return (
-    <div style={{position:"relative",height:h,flexShrink:0}}>
-      <div style={{height:"100%"}}>{children}</div>
-      {/* Resize handle strip */}
-      <div onPointerDown={onPointerDown} style={{
-        position:"absolute",bottom:-4,left:0,right:0,height:10,
-        cursor:"ns-resize",zIndex:20,
-        display:"flex",alignItems:"center",justifyContent:"center",
-      }}>
-        <div className="resize-pill" style={{
-          width:36,height:4,borderRadius:3,
-          background:C.border2,transition:"background 0.15s, transform 0.15s",
-        }}/>
-      </div>
-    </div>
   );
 }
 
@@ -1200,6 +1145,8 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
   const inFlight=useRef(new Set());
   const refs=useRef({});
+  const [,forceRender]=useState(0);
+  const bump=()=>forceRender(n=>n+1);
 
   // Separate manual rows from persisted synced rows
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
@@ -1238,16 +1185,17 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
 
     needsEstimate.forEach(row=>{
       inFlight.current.add(row.id);
+      bump();
       estimateKcal(promptFn(row.text),token).then(kcal=>{
         inFlight.current.delete(row.id);
-        if(!kcal)return;
+        if(!kcal){bump();return;}
         setRows(prev=>{
           const all=Array.isArray(prev)?prev:[mkRow()];
           const manuals=all.filter(r=>!r.synced);
           const synced=mergedSyncedRef.current.map(r=>r.id===row.id?{...r,kcal,synced:true}:{...r,synced:true});
           return [...synced,...manuals];
         });
-      }).catch(()=>{ inFlight.current.delete(row.id); });
+      }).catch(()=>{ inFlight.current.delete(row.id); bump(); });
     });
   },[syncedRows,loaded,token]); // eslint-disable-line
 
@@ -1279,12 +1227,12 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
-        {/* Synced rows — read-only, badge left, kcal right */}
         {mergedSynced.map(row=>(
           <div key={row.id} style={{display:"flex",alignItems:"center",gap:8,padding:"2px 0",minHeight:28}}>
-            <SourceBadge source={row.source}/>
             <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
-              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.text}</span>
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:6}}>
+              {row.text} <SourceBadge source={row.source}/>
+            </span>
             <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
               {inFlight.current.has(row.id)?"…":row.kcal?`${prefix}${row.kcal}`:""}
             </span>
@@ -1464,32 +1412,13 @@ function LoginScreen() {
 }
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
-const WIDGET_DEFS = [
-  {id:"notes",    label:"Notes",    color:C.accent, Comp:Notes},
-  {id:"tasks",    label:"Tasks",    color:C.blue,   Comp:Tasks},
-  {id:"meals",    label:"Meals",    color:C.red,    Comp:Meals},
-  {id:"activity", label:"Activity", color:C.green,  Comp:Activity},
+const WIDGETS = [
+  {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
+  {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
+  {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals},
+  {id:"activity", label:"Activity", color:()=>C.green,  Comp:Activity},
 ];
-const FULL_IDS   = ["cal","health"];
-const WIDGET_IDS = WIDGET_DEFS.map(w=>w.id);
-
-// ─── ResizeHandle ────────────────────────────────────────────────────────────
-function ResizeHandle({onPointerDown}) {
-  return (
-    <div onPointerDown={onPointerDown} style={{
-      height:10,display:"flex",alignItems:"center",justifyContent:"center",
-      cursor:"ns-resize",flexShrink:0,
-    }}>
-      <div style={{
-        width:32,height:3,borderRadius:2,background:C.border,
-        transition:"background 0.15s",
-      }}
-        onPointerEnter={e=>e.currentTarget.style.background=C.accent}
-        onPointerLeave={e=>e.currentTarget.style.background=C.border}
-      />
-    </div>
-  );
-}
+const FULL_IDS = ["cal","health"];
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -1509,17 +1438,7 @@ export default function Dashboard() {
   const [lastSync,  setLastSync]  = useState(null);
   const [googleToken,setGoogleToken] = useState(null);
 
-  // Full-width sections order
   const [fullOrder, setFullOrder] = useState(FULL_IDS);
-  // Left column: first widget; right column: rest
-  const [leftId,    setLeftId]    = useState("notes");
-  const [rightOrder,setRightOrder]= useState(["tasks","meals","activity"]);
-
-  // Heights (resizable)
-  const [heights, setHeights] = useState({
-    cal:300,
-    tasks:1, meals:1, activity:1,  // flex ratios for right column
-  });
 
   const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}));
 
@@ -1626,36 +1545,7 @@ export default function Dashboard() {
     });
   },[token,userId]); // eslint-disable-line
 
-  const wMap=Object.fromEntries(WIDGET_DEFS.map(w=>[w.id,w]));
-
-  function makeResizeHandler(id) {
-    return function(e){
-      e.preventDefault(); e.stopPropagation();
-      if (id === "cal") {
-        // Cal uses px height
-        const startY=e.clientY, startH=heights.cal;
-        function onMove(e){setHeights(h=>({...h,cal:Math.max(120,startH+(e.clientY-startY))}));}
-        function onUp(){window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);}
-        window.addEventListener("pointermove",onMove);
-        window.addEventListener("pointerup",onUp);
-      } else {
-        // Right column widgets use flex ratios
-        const startY=e.clientY, startRatio=heights[id]||1;
-        function onMove(e){
-          const delta=(e.clientY-startY)/100; // scale delta to ratio units
-          setHeights(h=>({...h,[id]:Math.max(0.2,startRatio+delta)}));
-        }
-        function onUp(){window.removeEventListener("pointermove",onMove);window.removeEventListener("pointerup",onUp);}
-        window.addEventListener("pointermove",onMove);
-        window.addEventListener("pointerup",onUp);
-      }
-    };
-  }
-
-  // All hooks must be called before any conditional returns
   const mobile = useIsMobile();
-
-  // Drag handling for full-width sections
   const [activeId,setActiveId]=useState(null);
   function handleDragStart({active}){setActiveId(active.id);}
   function handleDragEnd({active,over}){
@@ -1672,9 +1562,7 @@ export default function Dashboard() {
   if(!session) return <LoginScreen/>;
 
   const syncStatus={syncing:syncing.size>0,lastSync};
-  const leftWidget  = wMap[leftId];
-  const rightWidgets = rightOrder.map(id=>wMap[id]).filter(Boolean);
-  const calH = heights.cal;
+  const [leftWidget,...rightWidgets] = WIDGETS;
 
   return (
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -1729,7 +1617,7 @@ export default function Dashboard() {
           {/* Widgets stacked, each draggable by their grab handle */}
           {[leftWidget,...rightWidgets].map(w=>(
             <div key={w.id} style={{minHeight:220}}>
-              <Widget label={w.label} color={w.color} dragProps={{}}>
+              <Widget label={w.label} color={w.color()} dragProps={{}}>
                 <w.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
@@ -1757,7 +1645,7 @@ export default function Dashboard() {
           <div style={{display:"flex",gap:8,alignItems:"stretch",minHeight:480}}>
             {/* Notes — left, wider */}
             <div style={{flex:"2 1 0",minWidth:0}}>
-              <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
+              <Widget label={leftWidget.label} color={leftWidget.color()} dragProps={{}}>
                 <leftWidget.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
@@ -1765,7 +1653,7 @@ export default function Dashboard() {
             <div style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
               {rightWidgets.map(w=>(
                 <div key={w.id} style={{flex:"1 1 0",minHeight:140}}>
-                  <Widget label={w.label} color={w.color} dragProps={{}}>
+                  <Widget label={w.label} color={w.color()} dragProps={{}}>
                     <w.Comp date={selected} token={token} userId={userId}/>
                   </Widget>
                 </div>
