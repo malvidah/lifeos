@@ -25,10 +25,23 @@ export async function GET(request) {
   const ouraToken = settingsRow?.data?.ouraToken;
   if (!ouraToken) return Response.json({ error: "no_token" });
 
-  const r = await fetch(
-    `https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${date}`,
-    { headers: { Authorization: `Bearer ${ouraToken}` } }
-  );
-  const raw = await r.json();
-  return Response.json({ date, status: r.status, raw });
+  const h = { Authorization: `Bearer ${ouraToken}` };
+  const [sleep, readiness, activity, personal] = await Promise.all([
+    fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${date}&end_date=${date}`, {headers:h}).then(r=>r.json()),
+    fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${date}&end_date=${date}`, {headers:h}).then(r=>r.json()),
+    fetch(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${date}`, {headers:h}).then(r=>r.json()),
+    fetch(`https://api.ouraring.com/v2/usercollection/personal_info`, {headers:h}).then(r=>r.json()),
+  ]);
+
+  return Response.json({
+    date,
+    sleep_count: sleep.data?.length,
+    sleep_score: sleep.data?.[0]?.score,
+    readiness_count: readiness.data?.length,
+    readiness_score: readiness.data?.[0]?.score,
+    activity_count: activity.data?.length,
+    activity_score: activity.data?.[0]?.score,
+    activity_raw: activity.data?.[0],
+    personal_info: personal,
+  });
 }
