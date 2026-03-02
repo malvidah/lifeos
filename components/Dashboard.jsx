@@ -82,117 +82,103 @@ async function dbLoad(date,type,token) {
     return (await r.json()).data ?? null;
   } catch { return null; }
 }
-const MEM = {}; // {key: value}
-const DIRTY = {}; // {key: bool} - has local unsaved changes
+// Module-level cache — keyed by "userId:date:type" to prevent cross-user bleed
+const MEM = {};
+const DIRTY = {};
+let CURRENT_USER_ID = null;
 
-// Merge two notes strings: combine unique lines from both
-function mergeNotes(local, remote) {
-  if (!local && !remote) return "";
-  if (!local) return remote;
-  if (!remote) return local;
-  if (local === remote) return local;
-  // Append remote lines that aren't already in local
-  const localLines = local.split("\n");
-  const remoteLines = remote.split("\n");
-  const localSet = new Set(localLines.map(l=>l.trim()).filter(Boolean));
-  const newLines = remoteLines.filter(l => l.trim() && !localSet.has(l.trim()));
-  if (newLines.length === 0) return local; // local is superset
-  return local + "\n" + newLines.join("\n");
-}
-
-// Merge two row arrays (tasks/meals/activity): union by id, remote wins for shared ids
-function mergeRows(local, remote) {
-  if (!Array.isArray(local) || !Array.isArray(remote)) return remote ?? local ?? [];
-  const merged = [...remote];
-  const remoteIds = new Set(remote.map(r=>r.id));
-  for (const row of local) {
-    if (!remoteIds.has(row.id)) merged.push(row);
+// Call this when auth state changes — wipes cache for previous user
+function clearCacheForUser(newUserId) {
+  if (CURRENT_USER_ID && CURRENT_USER_ID !== newUserId) {
+    // Different user logged in — purge everything
+    for (const k of Object.keys(MEM)) delete MEM[k];
+    for (const k of Object.keys(DIRTY)) delete DIRTY[k];
   }
-  return merged;
+  CURRENT_USER_ID = newUserId;
 }
 
-function mergeValues(type, local, remote) {
-  if (type === "notes") return mergeNotes(local, remote);
-  if (["tasks","meals","activity"].includes(type)) return mergeRows(local, remote);
-  return remote ?? local; // health etc: remote wins
-}
+function useDbSave(date, type, empty, token, userId) {
+  // Include userId in cache key so different users never share cache entries
+  const cacheKey = `${userId||"anon"}:${date}:${type}`;
+  const [value, _set] = useState(() => MEM[cacheKey] ?? empty);
+  const [loaded, setLoaded] = useState(cacheKey in MEM);
+  const [rev, setRev] = useState(0);
+  const live = useRef(value);
+  const dateRef = useRef(date);
+  const timerRef = useRef(null);
+  live.current = value;
 
-function useDbSave(date,type,empty,token) {
-  const [value,_set] = useState(()=>MEM[`${date}:${type}`]??empty);
-  const [loaded,setLoaded] = useState(`${date}:${type}` in MEM);
-  const [rev,setRev] = useState(0); // bump to force re-fetch from DB
-  const live=useRef(value), dateRef=useRef(date), timer=useRef(null);
-  live.current=value;
-
-  // fetch+merge whenever date/type/token changes OR rev is bumped (visibility restore)
-  useEffect(()=>{
-    if (!token) return;
-    const key=`${date}:${type}`; dateRef.current=date;
-    // Skip fetch only if we have clean cached data and rev hasn't changed
-    if (key in MEM && !DIRTY[key] && rev===0){_set(MEM[key]);live.current=MEM[key];setLoaded(true);return;}
-    const localVal = (key in MEM) ? MEM[key] : null;
-    if (localVal === null) { setLoaded(false); _set(empty); }
-    dbLoad(date,type,token).then(remote=>{
-      const local = live.current; // use live ref in case user typed during fetch
-      let val;
-      if (local !== empty && local !== (remote??empty)) {
-        val = mergeValues(type, local, remote ?? empty);
+  // Fetch from DB whenever date/type/token/userId changes, or rev bumps (poll/visibility)
+  useEffect(() => {
+    if (!token || !userId) return;
+    dateRef.current = date;
+    // Use cache only for initial render (rev===0) when data is clean
+    if (rev === 0 && cacheKey in MEM && !DIRTY[cacheKey]) {
+      _set(MEM[cacheKey]); live.current = MEM[cacheKey]; setLoaded(true); return;
+    }
+    // Always fetch from DB on rev bump or dirty state
+    dbLoad(date, type, token).then(remote => {
+      if (DIRTY[cacheKey]) {
+        // User has typed since we started fetching — last local write wins, don't overwrite
+        // But save immediately to push local to DB
+        dbSave(date, type, live.current, token);
+        DIRTY[cacheKey] = false;
       } else {
-        val = remote ?? empty;
+        // No local changes — accept DB value authoritatively
+        const val = remote ?? empty;
+        MEM[cacheKey] = val; _set(val); live.current = val;
       }
-      MEM[key]=val; DIRTY[key]=false; _set(val); live.current=val; setLoaded(true);
-      if (val !== remote && remote !== null) dbSave(date,type,val,token); // save merge
-    });
-  },[date,type,token,rev]); // eslint-disable-line
+      setLoaded(true);
+    }).catch(() => setLoaded(true)); // on error, show what we have
+  }, [date, type, token, userId, rev]); // eslint-disable-line
 
-  useEffect(()=>{
+  useEffect(() => {
     if (!token) return;
-    const flush=()=>{
-      clearTimeout(timer.current);
-      const key=`${dateRef.current}:${type}`;
-      if (DIRTY[key]) {
-        dbSave(dateRef.current,type,live.current,token);
-        DIRTY[key]=false;
+    const flush = () => {
+      clearTimeout(timerRef.current);
+      if (DIRTY[cacheKey]) {
+        dbSave(dateRef.current, type, live.current, token);
+        DIRTY[cacheKey] = false;
       }
     };
-    const onVis=()=>{
+    const onVis = () => {
       if (document.hidden) {
-        flush(); // page going away — save immediately
+        flush(); // leaving — save immediately
       } else {
-        // page restored — flush then re-fetch to pick up changes from other devices
-        flush();
-        setRev(r=>r+1);
+        flush(); // returning — save then re-fetch
+        setRev(r => r + 1);
       }
     };
-    const onPageHide=()=>flush();
-    // Poll every 30s to catch mobile edits on desktop
-    const poll=setInterval(()=>{
-      const key=`${dateRef.current}:${type}`;
-      if (!DIRTY[key]) setRev(r=>r+1);
+    const onPageHide = () => flush();
+    // Poll every 30s passively — only if no local dirty changes
+    const poll = setInterval(() => {
+      if (!DIRTY[cacheKey]) setRev(r => r + 1);
     }, 30000);
-    window.addEventListener("beforeunload",flush);
-    window.addEventListener("pagehide",onPageHide);
-    document.addEventListener("visibilitychange",onVis);
-    return ()=>{
-      window.removeEventListener("beforeunload",flush);
-      window.removeEventListener("pagehide",onPageHide);
-      document.removeEventListener("visibilitychange",onVis);
+    window.addEventListener("beforeunload", flush);
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVis);
       clearInterval(poll);
     };
-  },[type,token]); // eslint-disable-line
+  }, [type, token, cacheKey]); // eslint-disable-line
 
-  const setValue=useCallback(u=>{
-    const next=typeof u==="function"?u(live.current):u;
-    live.current=next;
-    const key=`${dateRef.current}:${type}`;
-    MEM[key]=next; DIRTY[key]=true; _set(next);
-    clearTimeout(timer.current);
-    timer.current=setTimeout(()=>{
-      dbSave(dateRef.current,type,live.current,token);
-      DIRTY[key]=false;
-    },200);
-  },[type,token]);
-  return {value,setValue,loaded};
+  const setValue = useCallback(u => {
+    const next = typeof u === "function" ? u(live.current) : u;
+    live.current = next;
+    MEM[cacheKey] = next;
+    DIRTY[cacheKey] = true;
+    _set(next);
+    clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      dbSave(dateRef.current, type, live.current, token);
+      DIRTY[cacheKey] = false;
+    }, 200);
+  }, [type, token, cacheKey]); // eslint-disable-line
+
+  return { value, setValue, loaded };
 }
 
 // ─── Ring ─────────────────────────────────────────────────────────────────────
@@ -482,8 +468,8 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
 }
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:""};
-function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
-  const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token);
+function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
+  const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
   useEffect(()=>{
@@ -550,8 +536,8 @@ function HealthStrip({date,token,onHealthChange,onSyncStart,onSyncEnd,dragProps}
 // ─── Notes ────────────────────────────────────────────────────────────────────
 // Plain textarea with a transparent overlay that colorizes "# heading" lines.
 // Cmd+B / Cmd+I wrap selected text in ** / *.
-function Notes({date,token}) {
-  const {value,setValue,loaded} = useDbSave(date,"notes","",token);
+function Notes({date,userId,token}) {
+  const {value,setValue,loaded} = useDbSave(date,"notes","",token,userId);
   const [editing, setEditing] = useState(false);
   const taRef = useRef(null);
 
@@ -645,9 +631,9 @@ function Notes({date,token}) {
 }
 
 // ─── RowList ─────────────────────────────────────────────────────────────────
-function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
+function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
-  const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token);
+  const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
   const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const total=safe.reduce((s,r)=>s+(r.kcal||0),0);
@@ -686,13 +672,13 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token}) {
     </div>
   );
 }
-function Meals({date,token}){return <RowList date={date} type="meals" token={token} placeholder="What did you eat?" promptFn={t=>`Calories in: "${t}". Return JSON: {"kcal":420}`} prefix="" color={C.accent}/>;}
-function Activity({date,token}){return <RowList date={date} type="activity" token={token} placeholder="What did you do?" promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`} prefix="−" color={C.green}/>;}
+function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Calories in: "${t}". Return JSON: {"kcal":420}`} prefix="" color={C.accent}/>;}
+function Activity({date,token,userId}){return <RowList date={date} type="activity" token={token} userId={userId} placeholder="What did you do?" promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`} prefix="−" color={C.green}/>;}
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
-function Tasks({date,token}) {
+function Tasks({date,token,userId}) {
   const mkRow=()=>({id:Date.now(),text:"",done:false});
-  const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token);
+  const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
   const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
@@ -805,12 +791,19 @@ export default function Dashboard() {
     const supabase=createClient();
     const code=new URLSearchParams(window.location.search).get("code");
     if(code){supabase.auth.exchangeCodeForSession(code).then(()=>window.history.replaceState({},document.title,window.location.pathname));}
-    supabase.auth.getSession().then(({data:{session}})=>{setSession(session);setAuthReady(true);});
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,s)=>{setSession(s);setAuthReady(true);});
+    supabase.auth.getSession().then(({data:{session}})=>{
+      clearCacheForUser(session?.user?.id ?? null);
+      setSession(session);setAuthReady(true);
+    });
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,s)=>{
+      clearCacheForUser(s?.user?.id ?? null);
+      setSession(s);setAuthReady(true);
+    });
     return ()=>subscription.unsubscribe();
   },[]);
 
   const token=session?.access_token;
+  const userId=session?.user?.id ?? null;
   const googleToken=session?.provider_token;
   const startSync=useCallback(k=>setSyncing(s=>new Set([...s,k])),[]);
   const endSync=useCallback(k=>{
@@ -911,7 +904,7 @@ export default function Dashboard() {
                             <CalStrip selected={selected} onSelect={setSelected}
                               events={events} healthDots={healthDots} dragProps={dragProps}/>
                           </div>
-                        : <HealthStrip date={selected} token={token}
+                        : <HealthStrip date={selected} token={token} userId={userId}
                             onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
                             dragProps={dragProps}/>
                     }
@@ -932,7 +925,7 @@ export default function Dashboard() {
           {[leftWidget,...rightWidgets].map(w=>(
             <div key={w.id} style={{minHeight:220}}>
               <Widget label={w.label} color={w.color} dragProps={{}}>
-                <w.Comp date={selected} token={token}/>
+                <w.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
           ))}
@@ -955,7 +948,7 @@ export default function Dashboard() {
                               <CalStrip selected={selected} onSelect={setSelected}
                                 events={events} healthDots={healthDots} dragProps={dragProps}/>
                             </div>
-                          : <HealthStrip date={selected} token={token}
+                          : <HealthStrip date={selected} token={token} userId={userId}
                               onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
                               dragProps={dragProps}/>
                       }
@@ -980,7 +973,7 @@ export default function Dashboard() {
           <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minHeight:0}}>
             <div style={{minHeight:0,height:"100%"}}>
               <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
-                <leftWidget.Comp date={selected} token={token}/>
+                <leftWidget.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
@@ -988,7 +981,7 @@ export default function Dashboard() {
                 <div key={w.id} style={{flex:heights[w.id]||1,minHeight:80,display:"flex",flexDirection:"column"}}>
                   <div style={{flex:1,minHeight:0}}>
                     <Widget label={w.label} color={w.color} dragProps={{}}>
-                      <w.Comp date={selected} token={token}/>
+                      <w.Comp date={selected} token={token} userId={userId}/>
                     </Widget>
                   </div>
                   {i < rightWidgets.length-1 && <ResizeHandle onPointerDown={makeResizeHandler(w.id)}/>}
