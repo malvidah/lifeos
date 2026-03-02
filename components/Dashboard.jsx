@@ -840,22 +840,158 @@ function Shimmer({width="100%", height=14, style={}}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:"",calmScore:"",stressMins:"",recoveryMins:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:"",calmScore:"",stressMins:"",recoveryMins:"",deepMins:"",remMins:"",lightMins:"",awakeMins:""};
+
+function fmtMins(val) {
+  const m = parseInt(val)||0;
+  if (!m) return "—";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m/60), rem = m%60;
+  return rem ? `${h}h ${rem}m` : `${h}h`;
+}
+
+function SleepDetail({h}) {
+  const stages = [
+    {label:"Deep",   mins:parseInt(h.deepMins)||0,   color:"#4A82B0"},
+    {label:"REM",    mins:parseInt(h.remMins)||0,    color:"#8B6BB5"},
+    {label:"Light",  mins:parseInt(h.lightMins)||0,  color:"#6B9CC4"},
+    {label:"Awake",  mins:parseInt(h.awakeMins)||0,  color:"#8A7060"},
+  ];
+  const total = stages.reduce((s,st)=>s+st.mins,0)||1;
+  return (
+    <div style={{padding:"14px 16px"}}>
+      <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>Sleep Stages</div>
+      {/* Stacked bar */}
+      <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",marginBottom:12}}>
+        {stages.map(st=>st.mins>0&&(
+          <div key={st.label} style={{flex:st.mins/total,background:st.color,minWidth:2}}/>
+        ))}
+      </div>
+      {/* Legend */}
+      <div style={{display:"flex",gap:16,flexWrap:"wrap"}}>
+        {stages.map(st=>(
+          <div key={st.label} style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:8,height:8,borderRadius:2,background:st.color,flexShrink:0}}/>
+            <div>
+              <div style={{fontFamily:mono,fontSize:8,color:C.muted,textTransform:"uppercase"}}>{st.label}</div>
+              <div style={{fontFamily:serif,fontSize:14,color:st.mins?C.text:C.dim}}>{fmtMins(st.mins)}</div>
+            </div>
+          </div>
+        ))}
+        {h.sleepEff&&(
+          <div style={{display:"flex",alignItems:"center",gap:5}}>
+            <div style={{width:8,height:8,borderRadius:2,background:C.border2,flexShrink:0}}/>
+            <div>
+              <div style={{fontFamily:mono,fontSize:8,color:C.muted,textTransform:"uppercase"}}>Efficiency</div>
+              <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{h.sleepEff}%</div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ReadinessDetail({h}) {
+  const items=[
+    {label:"HRV",value:h.hrv,unit:"ms"},
+    {label:"Resting HR",value:h.rhr,unit:"bpm"},
+    {label:"Score",value:h.readinessScore,unit:"/ 100"},
+  ];
+  return (
+    <div style={{padding:"14px 16px",display:"flex",gap:24,flexWrap:"wrap"}}>
+      {items.map(it=>(
+        <div key={it.label}>
+          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>{it.label}</div>
+          <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+            <span style={{fontFamily:serif,fontSize:22,color:it.value?C.text:C.dim}}>{it.value||"—"}</span>
+            {it.value&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{it.unit}</span>}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ActivityDetail({h,ouraWorkouts}) {
+  const workouts = ouraWorkouts||[];
+  return (
+    <div style={{padding:"14px 16px"}}>
+      {workouts.length>0&&(
+        <>
+          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>Oura Workouts</div>
+          {workouts.map((w,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"4px 0",
+              borderBottom:i<workouts.length-1?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,textTransform:"capitalize"}}>{w.activity.replace(/_/g," ")}</span>
+              <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{fmtMins(w.duration)}</span>
+              {w.calories&&<span style={{fontFamily:mono,fontSize:10,color:C.accent}}>{w.calories} kcal</span>}
+              {w.distance&&<span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{w.distance}km</span>}
+            </div>
+          ))}
+        </>
+      )}
+      <div style={{display:"flex",gap:24,flexWrap:"wrap",marginTop:workouts.length?12:0}}>
+        {[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Cal Burned",value:h.activeCalories,unit:"kcal"}].map(it=>(
+          <div key={it.label}>
+            <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>{it.label}</div>
+            <div style={{display:"flex",alignItems:"baseline",gap:4}}>
+              <span style={{fontFamily:serif,fontSize:22,color:it.value?C.text:C.dim}}>{it.value||"—"}</span>
+              {it.value&&it.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{it.unit}</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CalmDetail({h}) {
+  const stressM = parseInt(h.stressMins)||0;
+  const recoverM = parseInt(h.recoveryMins)||0;
+  const total = stressM+recoverM||1;
+  return (
+    <div style={{padding:"14px 16px"}}>
+      <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>Stress vs Recovery</div>
+      <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",marginBottom:12}}>
+        <div style={{flex:stressM/total,background:"#A05050",minWidth:stressM?2:0}}/>
+        <div style={{flex:recoverM/total,background:"#4E9268",minWidth:recoverM?2:0}}/>
+      </div>
+      <div style={{display:"flex",gap:20}}>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:8,height:8,borderRadius:2,background:"#A05050"}}/>
+          <div>
+            <div style={{fontFamily:mono,fontSize:8,color:C.muted,textTransform:"uppercase"}}>Stress</div>
+            <div style={{fontFamily:serif,fontSize:16,color:stressM?C.text:C.dim}}>{fmtMins(stressM)}</div>
+          </div>
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:6}}>
+          <div style={{width:8,height:8,borderRadius:2,background:"#4E9268"}}/>
+          <div>
+            <div style={{fontFamily:mono,fontSize:8,color:C.muted,textTransform:"uppercase"}}>Recovery</div>
+            <div style={{fontFamily:serif,fontSize:16,color:recoverM?C.text:C.dim}}>{fmtMins(recoverM)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
+  const [active,setActive]=useState("sleep");
+  const [ouraDetail,setOuraDetail]=useState(null); // full oura response for detail panels
+
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
   useEffect(()=>{
     if(!loaded||!token)return;
     onSyncStart("oura");
     fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(data=>{
-        // error:"no_token" means user hasn't set up Oura — silent, not an error
         console.log("[oura]", date, data);
         if(data.error)return;
-        // Only fill fields that don't already have manually entered values
-        // Oura scores update throughout the day — always take the latest from Oura.
-        // Only fall back to existing value if Oura returned nothing for that field.
+        setOuraDetail(data);
         setH(p=>({...p,
           sleepScore:data.sleepScore||p.sleepScore||"",
           sleepHrs:data.sleepHrs||p.sleepHrs||"",
@@ -869,6 +1005,11 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
           calmScore:data.calmScore||p.calmScore||"",
           stressMins:data.stressMins||p.stressMins||"",
           recoveryMins:data.recoveryMins||p.recoveryMins||"",
+          // sleep stages from oura (not user-editable, just display)
+          deepMins:data.sleepStages?.deep!=null?String(data.sleepStages.deep):p.deepMins||"",
+          remMins:data.sleepStages?.rem!=null?String(data.sleepStages.rem):p.remMins||"",
+          lightMins:data.sleepStages?.light!=null?String(data.sleepStages.light):p.lightMins||"",
+          awakeMins:data.sleepStages?.awake!=null?String(data.sleepStages.awake):p.awakeMins||"",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
@@ -876,18 +1017,25 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
   const purple = "#8B6BB5";
   const metrics=[
     {key:"sleep",label:"Sleep",color:C.blue,score:h.sleepScore,setScore:e=>setH(p=>({...p,sleepScore:e.target.value})),
-      fields:[{label:"Hours",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Efficiency",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
+      fields:[{label:"Hours",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Effic.",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
     {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,setScore:e=>setH(p=>({...p,readinessScore:e.target.value})),
-      fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"Resting HR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
+      fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"RHR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,setScore:e=>setH(p=>({...p,activityScore:e.target.value})),
-      fields:[{label:"Cal Burned",value:h.activeCalories,onChange:set("activeCalories"),unit:"kcal"},{label:"Steps",value:h.steps,onChange:set("steps"),unit:""}]},
+      fields:[{label:"Cals",value:h.activeCalories,onChange:set("activeCalories"),unit:"kcal"},{label:"Steps",value:h.steps,onChange:set("steps"),unit:""}]},
     {key:"calm",label:"Calm",color:purple,score:h.calmScore,setScore:e=>setH(p=>({...p,calmScore:e.target.value})),
-      fields:[{label:"Stress",value:h.stressMins,onChange:set("stressMins"),unit:"min"},{label:"Recovery",value:h.recoveryMins,onChange:set("recoveryMins"),unit:"min"}]},
+      fields:[{label:"Stress",value:fmtMins(h.stressMins),unit:""},{label:"Recov.",value:fmtMins(h.recoveryMins),unit:""}]},
   ];
+
+  const detailMap = {
+    sleep:     <SleepDetail h={h}/>,
+    readiness: <ReadinessDetail h={h}/>,
+    activity:  <ActivityDetail h={h} ouraWorkouts={ouraDetail?.workouts}/>,
+    calm:      <CalmDetail h={h}/>,
+  };
 
   return (
     <Card>
-      {/* Card header — matches Widget/Calendar style */}
+      {/* Card header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
         borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
         <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,
@@ -896,33 +1044,48 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
         <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
           textTransform:"uppercase",color:C.muted}}>Health</span>
       </div>
-      {/* Metrics row — scrollable horizontally on mobile */}
+      {/* Metrics row */}
       <div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
-        {metrics.map((m,mi)=>(
-          <div key={m.key} style={{flex:"1 0 auto",minWidth:130,display:"flex",alignItems:"center",gap:12,
-            padding:"12px 14px",borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none"}}>
-            <div style={{position:"relative",flexShrink:0}}>
-              <Ring score={m.score} color={m.color} size={48}/>
-              <input value={m.score} onChange={m.setScore} style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
-            </div>
-            <div style={{flex:1,minWidth:0}}>
-              <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:6}}>{m.label}</div>
-              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                {m.fields.map(f=>(
-                  <div key={f.label}>
-                    <div style={{fontFamily:mono,fontSize:8,textTransform:"uppercase",color:C.muted,marginBottom:2,letterSpacing:"0.08em"}}>{f.label}</div>
-                    <div style={{display:"flex",alignItems:"baseline",gap:2}}>
-                      <input value={f.value} onChange={f.onChange} placeholder="—"
-                        style={{background:"transparent",border:"none",outline:"none",padding:0,
-                          color:f.value?C.text:C.dim,fontFamily:serif,fontSize:17,width:f.unit?38:80}}/>
-                      {f.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{f.unit}</span>}
+        {metrics.map((m,mi)=>{
+          const isActive = active===m.key;
+          return (
+            <div key={m.key} onClick={()=>setActive(m.key)}
+              style={{flex:"1 0 auto",minWidth:130,display:"flex",alignItems:"center",gap:12,
+                padding:"12px 14px",cursor:"pointer",transition:"background 0.15s",
+                background:isActive?`${m.color}10`:"transparent",
+                borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
+                borderBottom:isActive?`2px solid ${m.color}`:`2px solid transparent`}}>
+              <div style={{position:"relative",flexShrink:0}}>
+                <Ring score={m.score} color={m.color} size={48}/>
+                <input value={m.score} onChange={m.setScore} onClick={e=>e.stopPropagation()}
+                  style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:6}}>{m.label}</div>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  {m.fields.map(f=>(
+                    <div key={f.label}>
+                      <div style={{fontFamily:mono,fontSize:8,textTransform:"uppercase",color:C.muted,marginBottom:2,letterSpacing:"0.08em"}}>{f.label}</div>
+                      <div style={{display:"flex",alignItems:"baseline",gap:2}}>
+                        {f.onChange
+                          ? <input value={f.value} onChange={f.onChange} placeholder="—" onClick={e=>e.stopPropagation()}
+                              style={{background:"transparent",border:"none",outline:"none",padding:0,
+                                color:f.value?C.text:C.dim,fontFamily:serif,fontSize:17,width:f.unit?38:80}}/>
+                          : <span style={{fontFamily:serif,fontSize:17,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
+                        }
+                        {f.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{f.unit}</span>}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
+      </div>
+      {/* Detail panel — expands below the metric row */}
+      <div style={{borderTop:`1px solid ${C.border}`}}>
+        {detailMap[active]}
       </div>
     </Card>
   );
@@ -1086,7 +1249,35 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
   );
 }
 function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Calories in: "${t}". Return JSON: {"kcal":420}`} prefix="" color={C.accent}/>;}
-function Activity({date,token,userId}){return <RowList date={date} type="activity" token={token} userId={userId} placeholder="What did you do?" promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`} prefix="−" color={C.green}/>;}
+function Activity({date,token,userId}) {
+  // Pull oura workouts for this date and pre-populate rows if not already set
+  const {value:rows,setValue:setRows,loaded}=useDbSave(date,"activity",[{id:1,text:"",kcal:null}],token,userId);
+  const safe=Array.isArray(rows)&&rows.length?rows:[{id:1,text:"",kcal:null}];
+  const [synced,setSynced]=useState(false);
+
+  useEffect(()=>{
+    if(!loaded||!token||synced)return;
+    fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
+      .then(r=>r.json()).then(data=>{
+        if(data.error||!data.workouts?.length)return;
+        // Only pre-populate if rows are blank
+        const hasContent=safe.some(r=>r.text&&r.text.trim());
+        if(hasContent)return;
+        const synced=data.workouts.map((w,i)=>({
+          id:Date.now()+i,
+          text:w.activity.replace(/_/g," ")+(w.duration?` (${Math.floor(w.duration/60)}m)`:""),
+          kcal:w.calories||null,
+        }));
+        setRows([...synced,{id:Date.now()+999,text:"",kcal:null}]);
+      }).catch(()=>{});
+    setSynced(true);
+  },[date,loaded,token]); // eslint-disable-line
+
+  return <RowList date={date} type="activity" token={token} userId={userId}
+    placeholder="What did you do?"
+    promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`}
+    prefix="−" color={C.green}/>;
+}
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 function Tasks({date,token,userId}) {
