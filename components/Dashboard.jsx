@@ -878,7 +878,7 @@ function Shimmer({width="100%", height=14, style={}}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:"",resilienceScore:"",stressMins:"",recoveryMins:"",deepMins:"",remMins:"",lightMins:"",awakeMins:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",resilienceScore:"",stressMins:"",recoveryMins:"",deepMins:"",remMins:"",lightMins:"",awakeMins:""};
 
 function fmtMins(val) {
   const m = parseInt(val)||0;
@@ -1004,7 +1004,7 @@ function ActivityDetail({h,ouraWorkouts,stravaActivities}) {
       )}
       {/* Oura summary stats */}
       <div style={{display:"flex",gap:24,flexWrap:"wrap",marginTop:hasAny?12:0}}>
-        {[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Cal Burned",value:h.activeCalories,unit:"kcal"}].map(it=>(
+        {[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Total Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Active Cal",value:h.activeCalories,unit:"cal"}].map(it=>(
           <div key={it.label}>
             <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>{it.label}</div>
             <div style={{display:"flex",alignItems:"baseline",gap:4}}>
@@ -1157,6 +1157,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
           rhr:data.rhr||p.rhr||"",
           activityScore:data.activityScore||p.activityScore||"",
           activeCalories:data.activeCalories||p.activeCalories||"",
+          totalCalories:data.totalCalories||p.totalCalories||"",
           steps:data.steps||p.steps||"",
           resilienceScore:data.resilienceScore||p.resilienceScore||"",
           stressMins:data.stressMins||p.stressMins||"",
@@ -1187,7 +1188,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,setScore:e=>setH(p=>({...p,readinessScore:e.target.value})),
       fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"RHR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,setScore:e=>setH(p=>({...p,activityScore:e.target.value})),
-      fields:[{label:"Cals",value:h.activeCalories,onChange:set("activeCalories"),unit:"kcal"},{label:"Steps",value:h.steps,onChange:set("steps"),unit:""}]},
+      fields:[{label:"Total Burn",value:h.totalCalories||h.activeCalories,onChange:set("totalCalories"),unit:"cal"},{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",onChange:set("steps"),unit:""}]},
     {key:"resilience",label:"Resilience",color:purple,score:h.resilienceScore,setScore:e=>setH(p=>({...p,resilienceScore:e.target.value})),
       fields:[{label:"Stress",value:fmtMins(h.stressMins),unit:""},{label:"Recov.",value:fmtMins(h.recoveryMins),unit:""}]},
   ];

@@ -80,12 +80,17 @@ export async function GET(request) {
       };
     }
     const activity = activityData.data?.[0];
-    console.log("[oura-activity]", date, JSON.stringify(activityData).slice(0,300));
+    console.log("[oura-activity-full]", date, JSON.stringify(activity ?? activityData));
     if (activity) {
       if (activity.score != null)           result.activityScore   = String(activity.score);
-      const cals = activity.active_calories ?? activity.total_calories ?? null;
-      if (cals != null) result.activeCalories = String(Math.round(cals));
-      if (activity.steps != null)           result.steps           = String(activity.steps); // plain number string, no commas
+      // total_calories = full day burn (matches Oura "Total Burn")
+      // active_calories = active-only portion
+      const totalCals  = activity.total_calories  ?? null;
+      const activeCals = activity.active_calories ?? null;
+      if (totalCals  != null) result.totalCalories  = String(Math.round(totalCals));
+      if (activeCals != null) result.activeCalories = String(Math.round(activeCals));
+      // steps — Oura v2 uses "steps" directly
+      if (activity.steps != null) result.steps = String(activity.steps);
     }
 
     // Calm: inverted from Oura stress_high (minutes in high-stress HRV state)
