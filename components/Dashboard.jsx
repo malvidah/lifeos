@@ -1390,6 +1390,7 @@ function LoginScreen() {
           await supabase.auth.signInWithOAuth({provider:"google",options:{
             scopes:"https://www.googleapis.com/auth/calendar.readonly",
             redirectTo:`${window.location.origin}/auth/callback`,
+            queryParams:{access_type:"offline",prompt:"consent"},
           }});
         }} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:8,
           color:loading?C.muted:C.text,fontFamily:mono,fontSize:10,letterSpacing:"0.15em",
@@ -1459,6 +1460,7 @@ export default function Dashboard() {
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
   const sessionGoogleToken=session?.provider_token; // only present right after login
+  const sessionRefreshToken=session?.provider_refresh_token; // only present right after login
   const startSync=useCallback(k=>setSyncing(s=>new Set([...s,k])),[]);
   const endSync=useCallback(k=>{
     setSyncing(s=>{const n=new Set(s);n.delete(k);return n;});
@@ -1470,11 +1472,11 @@ export default function Dashboard() {
     if(!sessionGoogleToken||!token)return;
     fetch("/api/google-token",{method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-      body:JSON.stringify({googleToken:sessionGoogleToken})})
+      body:JSON.stringify({googleToken:sessionGoogleToken,refreshToken:sessionRefreshToken})})
       .catch(()=>{});
   },[sessionGoogleToken,token]);
 
-  // Fetch calendar events — get token from DB if not in session
+  // Fetch calendar events — auto-refresh token if expired
   useEffect(()=>{
     if(!token)return;
     startSync("cal");
@@ -1482,28 +1484,37 @@ export default function Dashboard() {
     const start=toKey(shift(new Date(),-30));
     const end=toKey(shift(new Date(),60));
 
-    const fetchCal=(gToken)=>{
+    const doFetch=(gToken)=>fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({token:gToken,start,end,tz})}).then(r=>r.json());
+
+    const tryRefresh=(refreshToken)=>
+      fetch("/api/google-refresh",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+        body:JSON.stringify({refreshToken})}).then(r=>r.json());
+
+    const fetchCal=(gToken, refreshToken)=>{
       setGoogleToken(gToken);
-      fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({token:gToken,start,end,tz})})
-        .then(r=>r.json())
-        .then(d=>{
-          if(d.events&&Object.keys(d.events).length>0){
-            setEvents(d.events);
-          } else if(d.error){
+      doFetch(gToken).then(async d=>{
+        if(d.events&&Object.keys(d.events).length>0){
+          setEvents(d.events);
+        } else if(d.error&&refreshToken){
+          // Token expired — try to refresh silently
+          const r=await tryRefresh(refreshToken).catch(()=>({}));
+          if(r.googleToken){
+            setGoogleToken(r.googleToken);
+            const d2=await doFetch(r.googleToken).catch(()=>({}));
+            if(d2.events) setEvents(d2.events);
           }
-        })
-        .catch(()=>{})
-        .finally(()=>endSync("cal"));
+        }
+      }).catch(()=>{}).finally(()=>endSync("cal"));
     };
 
     if(sessionGoogleToken){
-      fetchCal(sessionGoogleToken);
+      fetchCal(sessionGoogleToken, sessionRefreshToken);
     } else {
       fetch("/api/google-token",{headers:{"Authorization":`Bearer ${token}`}})
         .then(r=>r.json())
         .then(d=>{
-          if(d.googleToken) fetchCal(d.googleToken);
+          if(d.googleToken) fetchCal(d.googleToken, d.refreshToken);
           else endSync("cal");
         })
         .catch(()=>endSync("cal"));

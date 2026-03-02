@@ -1,6 +1,3 @@
-// Stores and retrieves the Google OAuth provider_token for calendar access.
-// The provider_token only lives in the Supabase session at first login — 
-// we persist it so it survives page reloads.
 import { createClient } from '@supabase/supabase-js';
 
 function getUserClient(req) {
@@ -22,11 +19,11 @@ export async function POST(req) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { googleToken } = await req.json();
+  const { googleToken, refreshToken } = await req.json();
   if (!googleToken) return Response.json({ error: 'no token' }, { status: 400 });
 
   const { error } = await supabase.from('entries').upsert(
-    { date: '0000-00-00', type: 'google_token', data: { token: googleToken }, user_id: user.id, updated_at: new Date().toISOString() },
+    { date: '0000-00-00', type: 'google_token', data: { token: googleToken, refreshToken: refreshToken || null }, user_id: user.id, updated_at: new Date().toISOString() },
     { onConflict: 'date,type,user_id' }
   );
   if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -44,5 +41,8 @@ export async function GET(req) {
     .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', user.id)
     .maybeSingle();
   if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ googleToken: data?.data?.token || null });
+  return Response.json({
+    googleToken: data?.data?.token || null,
+    refreshToken: data?.data?.refreshToken || null,
+  });
 }
