@@ -61,21 +61,22 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt, token) {
-  if (!token) throw new Error("no_token");
-  const r = await fetch("/api/ai",{method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-    body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:64,
-      system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
-      messages:[{role:"user",content:prompt}]})});
+  const r = await fetch("/api/ai", {
+    method: "POST",
+    headers: {"Content-Type":"application/json", "Authorization":`Bearer ${token}`},
+    body: JSON.stringify({
+      model: "claude-haiku-4-5",
+      max_tokens: 64,
+      system: "Return only valid JSON with a single `kcal` integer field. No explanation.",
+      messages: [{role:"user", content:prompt}],
+    }),
+  });
   const d = await r.json();
-  window._lastAiDebug = {status:r.status, body:d, prompt};
-  if (!r.ok || d.error) throw new Error(d.error || `http_${r.status}`);
-  const text = d.content?.find(b=>b.type==="text")?.text||"{}";
+  if (!r.ok || d.error) throw new Error(JSON.stringify(d.error) || `http_${r.status}`);
+  const text = d.content?.find(b => b.type === "text")?.text || "";
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("no_json_in_response");
-  const kcal = JSON.parse(match[0]).kcal||null;
-  if (!kcal) throw new Error("no_kcal_in_response");
-  return kcal;
+  if (!match) throw new Error("no_json");
+  return JSON.parse(match[0]).kcal || null;
 }
 
 // ─── Oura response cache (per date+user, avoids double-fetching) ─────────────
@@ -1141,56 +1142,41 @@ function Notes({date,userId,token}) {
 }
 
 // ─── RowList ─────────────────────────────────────────────────────────────────
-// syncedRows: [{id, text, kcal, source}] — always live from Oura/Strava.
-// AI estimates stored separately as a plain {id:kcal} map in DB (type+"_kcal").
 function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[]}) {
-  const mkRow=()=>({id:Date.now(),text:"",kcal:null});
-  const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
-  const {value:savedKcals,setValue:setSavedKcals,loaded:kcalsLoaded}=useDbSave(date,type+"_kcal",{},token,userId);
-  const inFlight=useRef(new Set());
-  const failed=useRef(new Map());
-  const refs=useRef({});
-  const [,forceRender]=useState(0);
-  const bump=()=>forceRender(n=>n+1);
+  const mkRow = () => ({id: Date.now(), text: "", kcal: null});
+  const {value:rows, setValue:setRows, loaded} = useDbSave(date, type, [mkRow()], token, userId);
+  const {value:aiKcals, setValue:setAiKcals, loaded:aiLoaded} = useDbSave(date, type+"_kcal", {}, token, userId);
+  const inFlight = useRef(new Set());
+  const refs = useRef({});
 
-  // Only manual rows live in the main DB entry
-  const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
-  const manualRows=safe.filter(r=>!r.synced);
+  const manualRows = (Array.isArray(rows) && rows.length ? rows : [mkRow()]).filter(r => !r.synced);
 
-  // Synced rows always from live API — overlay any saved AI estimates
-  const kcalMap=(kcalsLoaded&&savedKcals&&typeof savedKcals==='object')?savedKcals:{};
-  const mergedSynced=syncedRows.map(live=>({
-    ...live, kcal: live.kcal || kcalMap[live.id] || null,
-  }));
+  // Synced rows are always live from API; overlay saved AI estimates
+  const kcalMap = (aiLoaded && aiKcals && typeof aiKcals === "object") ? aiKcals : {};
+  const mergedSynced = syncedRows.map(r => ({...r, kcal: r.kcal || kcalMap[r.id] || null}));
 
-  const manualTotal=manualRows.reduce((s,r)=>s+(r.kcal||0),0);
-  const syncTotal=mergedSynced.reduce((s,r)=>s+(r.kcal||0),0);
-  const total=manualTotal+syncTotal;
+  const total = [...manualRows, ...mergedSynced].reduce((s, r) => s + (r.kcal || 0), 0);
 
   // Auto-estimate kcal for synced rows with no native calories
-  const mergedSyncedRef=useRef([]);
-  mergedSyncedRef.current=mergedSynced;
+  useEffect(() => {
+    if (!token || !loaded || !aiLoaded) return;
+    mergedSynced
+      .filter(r => !r.kcal && r.text && !inFlight.current.has(r.id))
+      .forEach(row => {
+        inFlight.current.add(row.id);
+        estimateKcal(promptFn(row.text), token)
+          .then(kcal => {
+            inFlight.current.delete(row.id);
+            if (kcal) setAiKcals(prev => ({...(prev||{}), [row.id]: kcal}));
+          })
+          .catch(() => inFlight.current.delete(row.id));
+      });
+  }, [syncedRows, loaded, aiLoaded, token]); // eslint-disable-line
 
-  useEffect(()=>{
-    if(!token||!loaded||!kcalsLoaded)return;
-    const needsEstimate=mergedSyncedRef.current.filter(r=>!r.kcal&&r.text&&!inFlight.current.has(r.id)&&!failed.current.has(r.id));
-    if(!needsEstimate.length)return;
-    needsEstimate.forEach(row=>{
-      inFlight.current.add(row.id);
-      bump();
-      estimateKcal(promptFn(row.text),token).then(kcal=>{
-        inFlight.current.delete(row.id);
-        if(!kcal){failed.current.set(row.id,'no_kcal');bump();return;}
-        setSavedKcals(prev=>({...(typeof prev==='object'&&prev?prev:{}),[row.id]:kcal}));
-      }).catch(e=>{inFlight.current.delete(row.id);failed.current.set(row.id,e?.message||'err');bump();});
-    });
-  },[syncedRows,loaded,kcalsLoaded,token]); // eslint-disable-line
-
-  async function runEstimate(id,text){
-    setRows(prev=>(Array.isArray(prev)?prev:[mkRow()]).map(r=>r.id===id?{...r,estimating:true}:r));
-    let kcal=null;
-    try { kcal=await estimateKcal(promptFn(text),token); } catch(e) { console.error("[AI manual]",e?.message); }
-    setRows(prev=>(Array.isArray(prev)?prev:[mkRow()]).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
+  async function runEstimate(id, text) {
+    setRows(prev => (Array.isArray(prev) ? prev : [mkRow()]).map(r => r.id === id ? {...r, estimating:true} : r));
+    const kcal = await estimateKcal(promptFn(text), token).catch(() => null);
+    setRows(prev => (Array.isArray(prev) ? prev : [mkRow()]).map(r => r.id === id ? {...r, kcal, estimating:false} : r));
   }
   function onKey(e,id,idx){
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();const cur=safe.filter(r=>!r.synced);const sIdx=cur.findIndex(r=>r.id===id);const ins=[...cur.slice(0,sIdx+1),row,...cur.slice(sIdx+1)];setRows([...mergedSynced.map(r=>({...r,synced:true})),...ins]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
