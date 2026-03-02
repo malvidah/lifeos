@@ -328,13 +328,17 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
   const avatar=user?.user_metadata?.avatar_url;
 
+  const [loadErr,setLoadErr]=useState(false);
   useEffect(()=>{
     if(!token||!open)return;
-    dbLoad("global","settings",token,userId).then(d=>{
+    setLoadErr(false);
+    dbLoad("global","settings",token).then(d=>{
+      console.log("[settings load]", d);
+      if(d===null){setLoadErr(true);return;}
       if(d?.ouraToken)setOuraKey(d.ouraToken);
       if(d?.anthropicKey)setAnthropicKey(d.anthropicKey);
-    });
-  },[token,open,userId]); // eslint-disable-line
+    }).catch(e=>{console.error("[settings load err]",e);setLoadErr(true);});
+  },[token,open]); // eslint-disable-line
   useEffect(()=>{
     if(!open)return;
     const fn=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
@@ -344,8 +348,21 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
   async function saveSettings(){
     setSaving(true);
-    await dbSave("global","settings",{ouraToken:ouraKey,anthropicKey},token);
-    setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
+    try {
+      const r = await fetch("/api/entries",{
+        method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey,anthropicKey}}),
+      });
+      const result = await r.json();
+      console.log("[settings save]", r.status, result);
+      if(!r.ok) throw new Error(result.error||r.status);
+      setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
+    } catch(e) {
+      console.error("[settings save err]",e);
+      setSaving(false);setSaved(false);
+      alert("Save failed: "+e.message);
+    }
   }
 
   return (
@@ -378,6 +395,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                   color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px"}}/>
             </div>
           ))}
+          {loadErr&&<div style={{fontFamily:mono,fontSize:8,color:C.red,letterSpacing:"0.08em"}}>
+            couldn't load saved keys — check console
+          </div>}
           <button onClick={saveSettings} disabled={saving} style={{
             width:"100%",background:saved?C.green+"22":"none",border:`1px solid ${saved?C.green:C.border2}`,
             borderRadius:6,color:saved?C.green:C.text,
