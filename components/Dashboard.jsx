@@ -1191,42 +1191,72 @@ function Notes({date,userId,token}) {
 }
 
 // ─── RowList ─────────────────────────────────────────────────────────────────
-// syncedRows: [{id, text, kcal, source}] — read-only rows injected from Oura/Strava
+// syncedRows: [{id, text, kcal, source}] injected from Oura/Strava.
+// Synced rows are stored inside the DB rows array (flag: synced:true) so AI
+// estimates survive page reloads without re-calling the API.
 function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[]}) {
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
-  const syncKcal=useRef({}); // id -> estimated kcal (number) or 0 if failed
-  const syncFlight=useRef(new Set()); // ids currently being estimated
-  const [,forceRender]=useState(0);
+  const inFlight=useRef(new Set());
   const refs=useRef({});
+
+  // Separate manual rows from persisted synced rows
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
-  const manualTotal=safe.reduce((s,r)=>s+(r.kcal||0),0);
-  const syncTotal=syncedRows.reduce((s,r)=>s+(r.kcal||syncKcal.current[r.id]||0),0);
+  const manualRows=safe.filter(r=>!r.synced);
+  const persistedSynced=safe.filter(r=>r.synced); // synced rows already in DB
+
+  // Merge: live syncedRows take precedence for identity; use persisted kcal if available
+  const mergedSynced=syncedRows.map(live=>{
+    const saved=persistedSynced.find(p=>p.id===live.id);
+    return saved ? {...live, kcal:live.kcal||saved.kcal} : live;
+  });
+
+  const manualTotal=manualRows.reduce((s,r)=>s+(r.kcal||0),0);
+  const syncTotal=mergedSynced.reduce((s,r)=>s+(r.kcal||0),0);
   const total=manualTotal+syncTotal;
 
-  // Auto-estimate kcal for synced rows that lack it
-  useEffect(()=>{
-    if(!token)return;
-    let needsRender=false;
-    syncedRows.forEach(row=>{
-      const alreadyDone = row.id in syncKcal.current;
-      const inFlight = syncFlight.current.has(row.id);
-      if(!row.kcal && row.text && !alreadyDone && !inFlight){
-        syncFlight.current.add(row.id);
-        needsRender=true;
-        estimateKcal(promptFn(row.text),token).then(kcal=>{
-          syncKcal.current[row.id]=kcal||0;
-          syncFlight.current.delete(row.id);
-          forceRender(n=>n+1);
-        }).catch(()=>{
-          syncKcal.current[row.id]=0;
-          syncFlight.current.delete(row.id);
-          forceRender(n=>n+1);
-        });
-      }
+  // Persist synced rows (with kcal) into DB rows array — functional update avoids stale closure
+  function persistSynced(updated) {
+    setRows(prev=>{
+      const all=Array.isArray(prev)?prev:[mkRow()];
+      const manuals=all.filter(r=>!r.synced);
+      return [...updated.map(r=>({...r,synced:true})),...manuals];
     });
-    if(needsRender) forceRender(n=>n+1);
-  },[syncedRows,token]); // eslint-disable-line
+  }
+
+  // Auto-estimate kcal for synced rows missing it, then persist
+  useEffect(()=>{
+    if(!token||!loaded)return;
+    const needsEstimate=mergedSynced.filter(r=>!r.kcal&&r.text&&!inFlight.current.has(r.id));
+    if(needsEstimate.length===0)return;
+
+    // Persist current state first (with nulls) so UI updates immediately
+    persistSynced(mergedSynced);
+
+    needsEstimate.forEach(row=>{
+      inFlight.current.add(row.id);
+      estimateKcal(promptFn(row.text),token).then(kcal=>{
+        inFlight.current.delete(row.id);
+        if(!kcal)return;
+        // Update this row's kcal in the full merged set and persist
+        setRows(prev=>{
+          const all=Array.isArray(prev)?prev:[mkRow()];
+          const syncedInDb=all.filter(r=>r.synced);
+          const manuals=all.filter(r=>!r.synced);
+          const updated=mergedSynced.map(r=>r.id===row.id?{...r,kcal}:
+            syncedInDb.find(s=>s.id===r.id)||r);
+          return [...updated.map(r=>({...r,synced:true})),...manuals];
+        });
+      }).catch(()=>{ inFlight.current.delete(row.id); });
+    });
+  },[syncedRows,loaded,token]); // eslint-disable-line
+
+  // When syncedRows arrive (from API), sync them into DB if not already there
+  useEffect(()=>{
+    if(!loaded||syncedRows.length===0)return;
+    const anyNew=syncedRows.some(live=>!persistedSynced.find(p=>p.id===live.id));
+    if(anyNew) persistSynced(mergedSynced);
+  },[syncedRows,loaded]); // eslint-disable-line
 
   async function runEstimate(id,text){
     setRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
@@ -1234,9 +1264,10 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
     setRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
   }
   function onKey(e,id,idx){
-    if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
-    if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
+    if(e.key==="Enter"){e.preventDefault();const row=mkRow();const cur=safe.filter(r=>!r.synced);const sIdx=cur.findIndex(r=>r.id===id);const ins=[...cur.slice(0,sIdx+1),row,...cur.slice(sIdx+1)];setRows([...mergedSynced.map(r=>({...r,synced:true})),...ins]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
+    if(e.key==="Backspace"&&manualRows[idx]?.text===""&&manualRows.length>1){e.preventDefault();const kept=manualRows.filter(r=>r.id!==id);setRows([...mergedSynced.map(r=>({...r,synced:true})),...kept]);const t=manualRows[idx-1]?.id??manualRows[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
   }
+
   if(!loaded) return (
     <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
       <Shimmer width="75%" height={13}/>
@@ -1244,31 +1275,29 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
       <Shimmer width="65%" height={13}/>
     </div>
   );
+
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
-        {/* Synced rows — read-only, same visual style as manual rows */}
-        {syncedRows.map(row=>{
-          const kcal=row.kcal||syncKcal.current[row.id];
-          const estimating=syncFlight.current.has(row.id);
-          return (
-            <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
-              <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.text}</span>
-              <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
-                {estimating?"…":kcal?`${prefix}${kcal}`:""}
-              </span>
-              <SourceBadge source={row.source}/>
-            </div>
-          );
-        })}
+        {/* Synced rows — read-only, badge left, kcal right */}
+        {mergedSynced.map(row=>(
+          <div key={row.id} style={{display:"flex",alignItems:"center",gap:8,padding:"2px 0",minHeight:28}}>
+            <SourceBadge source={row.source}/>
+            <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.text}</span>
+            <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
+              {inFlight.current.has(row.id)?"…":row.kcal?`${prefix}${row.kcal}`:""}
+            </span>
+          </div>
+        ))}
         {/* Manual rows */}
-        {safe.map((row,idx)=>(
+        {manualRows.map((row,idx)=>(
           <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
             <input ref={el=>refs.current[row.id]=el} value={row.text}
               onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
               onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
-              onKeyDown={e=>onKey(e,row.id,idx)} placeholder={idx===0&&syncedRows.length===0?placeholder:idx===0?"+ add more":""}
+              onKeyDown={e=>onKey(e,row.id,idx)}
+              placeholder={idx===0&&mergedSynced.length===0?placeholder:idx===0?"+ add more":""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
                 color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
             <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
