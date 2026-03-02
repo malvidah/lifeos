@@ -1144,6 +1144,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
   const inFlight=useRef(new Set());
+  const failed=useRef(new Set());
   const refs=useRef({});
   const [,forceRender]=useState(0);
   const bump=()=>forceRender(n=>n+1);
@@ -1199,7 +1200,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
       bump();
       estimateKcal(promptFn(row.text),token).then(kcal=>{
         inFlight.current.delete(row.id);
-        if(!kcal){bump();return;}
+        if(!kcal){failed.current.add(row.id);bump();return;}
         // Patch kcal into DB rows — careful not to touch other rows' kcal
         setRows(prev=>{
           const all=Array.isArray(prev)?prev:[mkRow()];
@@ -1211,7 +1212,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
           }
           return [...synced,...manuals];
         });
-      }).catch(()=>{ inFlight.current.delete(row.id); bump(); });
+      }).catch(()=>{ inFlight.current.delete(row.id); failed.current.add(row.id); bump(); });
     });
   },[syncedRows,loaded,token]); // eslint-disable-line
 
@@ -1243,7 +1244,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
               {row.text} <SourceBadge source={row.source}/>
             </span>
             <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
-              {inFlight.current.has(row.id)?"…":row.kcal?`${prefix}${row.kcal}`:""}
+              {inFlight.current.has(row.id)?"…":row.kcal?`${prefix}${row.kcal}`:failed.current.has(row.id)?<span style={{color:"#e53935",fontWeight:600}}>—</span>:""}
             </span>
           </div>
         ))}
