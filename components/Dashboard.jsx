@@ -732,7 +732,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       </div>
 
       {/* ── Events for selected day ───────────────────────────────────────── */}
-      <div style={{padding:"10px 16px", overflowY:"auto", maxHeight: desktop ? 180 : 120, minHeight:48}}>
+      <div style={{padding:"10px 16px", overflowY:"auto", minHeight:48, maxHeight: desktop ? 240 : 160}}>
         <div style={{
           fontFamily:mono, fontSize:8, color:C.muted,
           letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:8,
@@ -832,7 +832,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
 
   const mobileH = useIsMobile();
   return (
-    <Card style={{overflow:"visible"}}>
+    <Card>
       <div style={{display:"flex",alignItems:"stretch",flexWrap:mobileH?"wrap":"nowrap"}}>
         {!mobileH && <div style={{display:"flex",alignItems:"center",padding:"0 10px",borderRight:`1px solid ${C.border}`}}>
           <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
@@ -840,7 +840,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
         {metrics.map((m,mi)=>(
           <div key={m.key} style={{flex:mobileH?"1 1 30%":"1 1 0",display:"flex",alignItems:"center",gap:mobileH?8:12,
             padding:mobileH?"10px 10px":"12px 14px",borderRight:(!mobileH&&mi<2)?`1px solid ${C.border}`:"none",
-            borderBottom:mobileH&&mi<2?`1px solid ${C.border}`:"none"}}>
+            borderBottom:mobileH&&mi<metrics.length-1?`1px solid ${C.border}`:"none"}}>
             <div style={{position:"relative",flexShrink:0}}>
               <Ring score={m.score} color={m.color} size={48}/>
               <input value={m.score} onChange={m.setScore} style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
@@ -1284,7 +1284,7 @@ export default function Dashboard() {
   const syncStatus={syncing:syncing.size>0,lastSync};
   const leftWidget  = wMap[leftId];
   const rightWidgets = rightOrder.map(id=>wMap[id]).filter(Boolean);
-  const calH = mobile ? 200 : heights.cal;
+  const calH = mobile ? 280 : heights.cal;
 
   return (
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
