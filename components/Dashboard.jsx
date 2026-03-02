@@ -462,268 +462,193 @@ function offsetToDate(n) {
   return d;
 }
 
-// Mobile parallax drum-roll picker — clean rewrite
+// Mobile date picker — horizontal day strip with physics momentum
+// Month and year are static labels (snap discretely). Only the day ribbon moves.
 function MobileCalPicker({selected, onSelect, events}) {
   const today = todayKey();
-  const DAY_W = 52; // px per day slot
+  const DAY_W = 52;
 
-  // liveOffset: fractional days from epoch. This is THE single source of truth.
-  // Initialize to the selected date so it's always correct from mount.
-  const liveOffset = useRef(dayOffset(selected));
-  const velocity   = useRef(0);       // px/frame during momentum
-  const lastX      = useRef(null);
-  const lastT      = useRef(null);
-  const rafId      = useRef(null);
-  const [tick, setTick] = useState(0); // force re-render
-
-  const repaint = () => setTick(t => t + 1);
+  // Single source of truth: fractional day offset from epoch
+  const liveOff = useRef(dayOffset(selected));
+  const vel     = useRef(0);
+  const lastX   = useRef(null);
+  const lastT   = useRef(null);
+  const rafId   = useRef(null);
+  const [, bump] = useState(0);
+  const repaint  = () => bump(n => n + 1);
 
   function cancelRaf() {
     if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; }
   }
 
-  // Snap to nearest integer day and fire onSelect
-  function snapToNearest() {
+  // Snap liveOff to integer, fire onSelect once
+  function snap() {
     cancelRaf();
-    // Use same rounding as render (floor + 0.5) to guarantee consistency
-    const n = Math.floor(liveOffset.current + 0.5);
-    liveOffset.current = n;
-    velocity.current = 0;
+    const n = Math.round(liveOff.current);
+    liveOff.current = n;
+    vel.current = 0;
     repaint();
     onSelect(toKey(offsetToDate(n)));
   }
 
-  // Momentum: apply velocity with friction until it settles, then snap
-  function startMomentum() {
+  function runMomentum() {
     cancelRaf();
-    const FRICTION = 0.85; // per-frame decay
-    const step = () => {
-      velocity.current *= FRICTION;
-      liveOffset.current -= velocity.current / DAY_W;
+    const tick = () => {
+      vel.current *= 0.88;
+      liveOff.current -= vel.current / DAY_W;
       repaint();
-      if (Math.abs(velocity.current) > 0.3) {
-        rafId.current = requestAnimationFrame(step);
+      if (Math.abs(vel.current) > 0.4) {
+        rafId.current = requestAnimationFrame(tick);
       } else {
-        snapToNearest();
+        snap();
       }
     };
-    rafId.current = requestAnimationFrame(step);
+    rafId.current = requestAnimationFrame(tick);
   }
 
-  function onTouchStart(e) {
+  const onTouchStart = e => {
     cancelRaf();
-    velocity.current = 0;
+    vel.current = 0;
     lastX.current = e.touches[0].clientX;
     lastT.current = performance.now();
-  }
+  };
 
-  function onTouchMove(e) {
+  const onTouchMove = e => {
     e.preventDefault();
     const x = e.touches[0].clientX;
     const t = performance.now();
     const dt = Math.max(t - lastT.current, 1);
     const dx = x - lastX.current;
-    // velocity in px/frame (assuming ~16ms frames)
-    velocity.current = (dx / dt) * 16;
-    liveOffset.current -= dx / DAY_W;
+    vel.current = (dx / dt) * 16; // px/frame @ 60fps
+    liveOff.current -= dx / DAY_W;
     lastX.current = x;
     lastT.current = t;
     repaint();
-  }
+  };
 
-  function onTouchEnd() {
-    if (Math.abs(velocity.current) > 1) {
-      startMomentum();
-    } else {
-      snapToNearest();
-    }
-  }
+  const onTouchEnd = () => {
+    Math.abs(vel.current) > 1.5 ? runMomentum() : snap();
+  };
 
-  // Sync when "today" button fires externally
+  // Sync when parent forces a date (e.g. "today" button)
   useEffect(() => {
     const n = dayOffset(selected);
-    if (Math.round(liveOffset.current) !== n) {
+    if (Math.round(liveOff.current) !== n) {
       cancelRaf();
-      liveOffset.current = n;
-      velocity.current = 0;
+      liveOff.current = n;
+      vel.current = 0;
       repaint();
     }
   }, [selected]); // eslint-disable-line
-
-  // Cleanup on unmount
   useEffect(() => () => cancelRaf(), []); // eslint-disable-line
 
-  const offset = liveOffset.current;
-  const centerDate = offsetToDate(offset);
-  const centerYear = centerDate.getFullYear();
-  const centerMonth = centerDate.getMonth();
+  // Derived from liveOff
+  const off      = liveOff.current;
+  const selInt   = Math.round(off);          // which day is "selected"
+  const fracSlot = off - selInt;             // sub-slot pixel fraction [-0.5, 0.5]
+  const selDate  = offsetToDate(selInt);
+  const selMonth = MONTHS_FULL[selDate.getMonth()];
+  const selYear  = selDate.getFullYear();
 
-  // ── Month position math ────────────────────────────────────────────────────
-  // Months from epoch (continuous float)
-  const daysInCenterMonth = new Date(centerYear, centerMonth + 1, 0).getDate();
-  const monthsFromEpoch = (centerYear - 2026) * 12 + centerMonth
-    + (centerDate.getDate() - 1) / daysInCenterMonth;
-  const MONTH_W = 96; // px per month — must be wide enough to read
-
-  // ── Year position math ─────────────────────────────────────────────────────
-  const yearsFromEpoch = offset / 365.25; // continuous float
-  const YEAR_W = 120; // px per year
-
-  // ── Build visible items ────────────────────────────────────────────────────
-  // Days: 10 either side of center
-  const N_DAYS = 10;
-  // Use floor so the "selected" slot is stable during the drag — only advances when
-  // you've moved more than one full day width past the previous day.
-  // The fractional part (offset - centerDayInt) drives the sub-slot pixel offset.
-  const centerDayInt = Math.floor(offset + 0.5); // equivalent to round but explicit
-  const fracWithinSlot = offset - centerDayInt;  // always in [-0.5, 0.5]
-  const visibleDays = [];
-  for (let i = -N_DAYS; i <= N_DAYS; i++) {
-    visibleDays.push({ d: offsetToDate(centerDayInt + i), i });
+  // Build day items: 12 either side
+  const N = 12;
+  const dayItems = [];
+  for (let i = -N; i <= N; i++) {
+    dayItems.push({ d: offsetToDate(selInt + i), i });
   }
 
-  // Months: 4 either side
-  const centerMonthFloat = monthsFromEpoch;
-  const centerMonthInt = Math.floor(centerMonthFloat); // floor = only flip at month boundary
-  const visibleMonths = [];
-  for (let i = -4; i <= 4; i++) {
-    const mFromEpoch = centerMonthInt + i;
-    const yr = 2026 + Math.floor(mFromEpoch / 12);
-    const mo = ((mFromEpoch % 12) + 12) % 12;
-    visibleMonths.push({ label: MONTHS_FULL[mo], yr, mFromEpoch, i });
-  }
+  const selKey    = toKey(selDate);
+  const selEvents = (events[selKey] || []).slice().sort((a,b) => (a.time||"").localeCompare(b.time||""));
+  const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
-  // Years: 2 either side
-  const centerYearInt = Math.round(yearsFromEpoch) + 2026;
-  const visibleYears = [-2,-1,0,1,2].map(i => centerYearInt + i);
-
-  const snappedKey = toKey(offsetToDate(centerDayInt));
-  const selEvents = (events[snappedKey] || []).slice().sort((a,b) => (a.time||"").localeCompare(b.time||""));
-
-  // ── Ribbon helper ──────────────────────────────────────────────────────────
-  // positionPx: how far the center item is from its natural 0 position
-  // We shift the row by -positionPx so the center item sits at the viewport center
-  function RibbonRow({ items, itemW, positionFloat, height, renderItem, touchHandlers = {} }) {
-    // offsetPx: sub-item fractional scroll position
-    const offsetPx = (positionFloat - Math.round(positionFloat)) * itemW;
-    return (
-      <div style={{
-        height, overflow:"hidden", position:"relative",
-        borderBottom:`1px solid ${C.border}`, flexShrink:0,
-      }}>
-        <div style={{
-          position:"absolute", top:0, bottom:0,
-          left:"50%",
-          display:"flex", alignItems:"center",
-          transform:`translateX(calc(-50% - ${offsetPx}px))`,
-          willChange:"transform",
-        }} {...touchHandlers}>
-          {items.map((item, idx) => renderItem(item, idx))}
-        </div>
-      </div>
-    );
-  }
-
-  const dayTouchHandlers = { onTouchStart, onTouchMove, onTouchEnd };
+  // Tap a visible day to jump directly to it
+  const tapDay = (i) => {
+    cancelRaf();
+    liveOff.current = selInt + i;
+    snap();
+  };
 
   return (
     <div style={{userSelect:"none", overflow:"hidden"}}>
 
-      {/* ── YEAR ribbon ──────────────────────────────────────────────────── */}
-      <RibbonRow
-        items={visibleYears}
-        itemW={YEAR_W}
-        positionFloat={yearsFromEpoch}
-        height={26}
-        renderItem={(yr, idx) => {
-          const isCtr = yr === centerYearInt;
-          return (
-            <div key={yr} style={{
-              width:YEAR_W, textAlign:"center", flexShrink:0,
-              fontFamily:mono, fontSize:9, letterSpacing:"0.18em",
-              color: isCtr ? C.muted : C.dim,
-              lineHeight:"26px",
-            }}>{yr}</div>
-          );
-        }}
-      />
-
-      {/* ── MONTH ribbon ─────────────────────────────────────────────────── */}
-      <RibbonRow
-        items={visibleMonths}
-        itemW={MONTH_W}
-        positionFloat={centerMonthFloat}
-        height={38}
-        renderItem={({label, mFromEpoch, i}, idx) => {
-          const isCtr = i === 0;
-          return (
-            <div key={mFromEpoch} style={{
-              width:MONTH_W, textAlign:"center", flexShrink:0,
-              fontFamily:serif,
-              fontSize: isCtr ? 17 : 13,
-              color: isCtr ? C.text : C.dim,
-              lineHeight:"38px",
-              transition:"font-size 0.12s, color 0.12s",
-            }}>{label}</div>
-          );
-        }}
-      />
-
-      {/* ── DAY ribbon — touch target ─────────────────────────────────────── */}
+      {/* ── Static month + year header ────────────────────────────────────── */}
       <div style={{
-        height:62, overflow:"hidden", position:"relative",
+        display:"flex", alignItems:"baseline", gap:8,
+        padding:"8px 16px 6px",
+        borderBottom:`1px solid ${C.border}`,
+        flexShrink:0,
+      }}>
+        <span style={{
+          fontFamily:serif, fontSize:18, letterSpacing:"-0.02em",
+          color:C.text, lineHeight:1,
+        }}>{selMonth}</span>
+        <span style={{
+          fontFamily:mono, fontSize:10, letterSpacing:"0.12em",
+          color:C.muted, lineHeight:1,
+        }}>{selYear}</span>
+      </div>
+
+      {/* ── Day ribbon ───────────────────────────────────────────────────── */}
+      <div style={{
+        height:66, overflow:"hidden", position:"relative",
         borderBottom:`1px solid ${C.border}`, flexShrink:0,
         touchAction:"none",
       }}
-        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-        {/* Center highlight */}
-        <div style={{
-          position:"absolute", inset:"0", margin:"auto",
-          width:DAY_W, top:0, bottom:0, left:"50%",
-          transform:"translateX(-50%)",
-          background:`${C.accent}18`,
-          borderLeft:`1px solid ${C.accent}30`,
-          borderRight:`1px solid ${C.accent}30`,
-          pointerEvents:"none",
-        }}/>
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+      >
+        {/* Center slot highlight */}
         <div style={{
           position:"absolute", top:0, bottom:0,
-          left:"50%",
+          left:"50%", transform:"translateX(-50%)",
+          width:DAY_W,
+          background:`${C.accent}15`,
+          borderLeft:`1px solid ${C.accent}25`,
+          borderRight:`1px solid ${C.accent}25`,
+          pointerEvents:"none",
+        }}/>
+
+        {/* Scrolling row */}
+        <div style={{
+          position:"absolute", top:0, bottom:0, left:"50%",
           display:"flex", alignItems:"center",
-          // Fractional offset within the current day slot
-          transform:`translateX(calc(-50% - ${fracWithinSlot * DAY_W}px))`,
+          transform:`translateX(calc(-50% - ${fracSlot * DAY_W}px))`,
           willChange:"transform",
         }}>
-          {visibleDays.map(({d, i}) => {
-            const k = toKey(d);
-            const isCtr = i === 0;
-            const isTdy = k === today;
+          {dayItems.map(({d, i}) => {
+            const k      = toKey(d);
+            const isCtr  = i === 0;
+            const isTdy  = k === today;
             const hasEvt = (events[k]||[]).length > 0;
-            const dayNames = ["Su","Mo","Tu","We","Th","Fr","Sa"];
             return (
               <div key={k}
+                onClick={() => tapDay(i)}
                 style={{
                   width:DAY_W, flexShrink:0, textAlign:"center",
-                  padding:"8px 0 6px",
+                  padding:"10px 0 6px",
+                  cursor: isCtr ? "default" : "pointer",
                 }}>
                 <div style={{
                   fontFamily:mono, fontSize:8, letterSpacing:"0.07em",
                   color: isCtr ? C.accent : C.muted,
-                  marginBottom:3, opacity: isCtr ? 1 : 0.6,
-                }}>{dayNames[d.getDay()]}</div>
+                  opacity: isCtr ? 1 : Math.max(0.25, 1 - Math.abs(i) * 0.12),
+                  marginBottom:4,
+                }}>{DAY_NAMES[d.getDay()]}</div>
                 <div style={{
                   fontFamily:serif,
-                  fontSize: isCtr ? 23 : 17,
-                  lineHeight:1,
-                  color: isTdy && isCtr ? C.accent : isCtr ? C.text : C.muted,
+                  fontSize: isCtr ? 22 : 16,
                   fontWeight: isCtr ? "600" : "normal",
-                  transition:"font-size 0.08s",
+                  lineHeight:1,
+                  color: isTdy ? C.accent : isCtr ? C.text : C.muted,
+                  opacity: isCtr ? 1 : Math.max(0.25, 1 - Math.abs(i) * 0.1),
                 }}>{d.getDate()}</div>
                 {hasEvt && (
                   <div style={{
                     width:3, height:3, borderRadius:"50%",
                     background: isCtr ? C.accent : C.dim,
                     margin:"4px auto 0",
+                    opacity: isCtr ? 1 : 0.5,
                   }}/>
                 )}
               </div>
@@ -733,12 +658,12 @@ function MobileCalPicker({selected, onSelect, events}) {
       </div>
 
       {/* ── Events for selected day ───────────────────────────────────────── */}
-      <div style={{padding:"10px 16px", overflowY:"auto", flex:1}}>
+      <div style={{padding:"10px 16px", overflowY:"auto", flex:1, minHeight:60}}>
         <div style={{
           fontFamily:mono, fontSize:8, color:C.muted,
           letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:8,
         }}>
-          {offsetToDate(centerDayInt).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
+          {selDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
         </div>
         {selEvents.length === 0
           ? <span style={{fontFamily:mono, fontSize:9, color:C.dim}}>No events</span>
@@ -758,7 +683,6 @@ function MobileCalPicker({selected, onSelect, events}) {
     </div>
   );
 }
-
 function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
   const mobile = useIsMobile();
   const [anchor, setAnchor] = useState(() => new Date());
