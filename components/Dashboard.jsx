@@ -448,109 +448,291 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange}) {
 }
 
 // ─── CalStrip ────────────────────────────────────────────────────────────────
-function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
-  const [anchor,setAnchor]=useState(()=>new Date());
-  const mobile = useIsMobile();
-  const days=weekOf(anchor),today=todayKey();
-  const months=[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ");
-  const year=days[0].getFullYear();
+// Day 0 = Jan 1 2026 (arbitrary fixed epoch for offset math)
+const CAL_EPOCH = new Date("2026-01-01T00:00:00");
+const MONTHS_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-  // Touch swipe for mobile week navigation
-  const swipeRef=useRef(null);
-  const touchStartX=useRef(null);
-  function onTouchStart(e){touchStartX.current=e.touches[0].clientX;}
-  function onTouchEnd(e){
-    if(touchStartX.current===null)return;
-    const dx=e.changedTouches[0].clientX-touchStartX.current;
-    if(Math.abs(dx)>40){
-      if(dx<0) setAnchor(d=>shift(d,7));   // swipe left = next week
-      else     setAnchor(d=>shift(d,-7));  // swipe right = prev week
-    }
-    touchStartX.current=null;
+function dayOffset(dateOrKey) {
+  const d = typeof dateOrKey === "string" ? new Date(dateOrKey + "T12:00:00") : dateOrKey;
+  return Math.round((d - CAL_EPOCH) / 86400000);
+}
+function offsetToDate(n) {
+  const d = new Date(CAL_EPOCH);
+  d.setDate(d.getDate() + Math.round(n));
+  return d;
+}
+
+// Mobile parallax drum-roll picker
+function MobileCalPicker({selected, onSelect, events}) {
+  const today = todayKey();
+  const containerRef = useRef(null);
+  const [containerW, setContainerW] = useState(375);
+
+  // Live drag offset (fractional days), committed on release
+  const dragOffset  = useRef(0);   // current drag delta in px
+  const velocity    = useRef(0);   // px/ms
+  const lastX       = useRef(null);
+  const lastT       = useRef(null);
+  const rafId       = useRef(null);
+  const committed   = useRef(dayOffset(selected)); // integer days from epoch
+  const [render,    setRender]    = useState(0);   // bump to repaint
+  const liveOffset  = useRef(0);  // fractional offset in days (float)
+
+  // Measure container width
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(e => setContainerW(e[0].contentRect.width));
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // DAY_W: width in px for one day on the day ribbon
+  const DAY_W = Math.min(56, containerW / 7);
+
+  function cancelRaf() { if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; } }
+
+  function snap(targetFrac) {
+    cancelRaf();
+    const target = Math.round(targetFrac);
+    const dateKey = toKey(offsetToDate(target));
+    committed.current = target;
+    liveOffset.current = target;
+    dragOffset.current = 0;
+    onSelect(dateKey);
+    setRender(r => r + 1);
   }
 
+  function runMomentum() {
+    cancelRaf();
+    const FRICTION = 0.88;
+    const tick = () => {
+      velocity.current *= FRICTION;
+      if (Math.abs(velocity.current) < 0.02) {
+        snap(liveOffset.current);
+        return;
+      }
+      liveOffset.current -= velocity.current / DAY_W;
+      setRender(r => r + 1);
+      rafId.current = requestAnimationFrame(tick);
+    };
+    rafId.current = requestAnimationFrame(tick);
+  }
+
+  function onTouchStart(e) {
+    cancelRaf();
+    lastX.current = e.touches[0].clientX;
+    lastT.current = performance.now();
+    velocity.current = 0;
+    dragOffset.current = 0;
+  }
+
+  function onTouchMove(e) {
+    e.preventDefault();
+    const x = e.touches[0].clientX;
+    const t = performance.now();
+    const dx = x - lastX.current;
+    const dt = t - lastT.current || 1;
+    velocity.current = dx / dt; // px/ms
+    liveOffset.current -= dx / DAY_W;
+    lastX.current = x;
+    lastT.current = t;
+    setRender(r => r + 1);
+  }
+
+  function onTouchEnd() {
+    if (Math.abs(velocity.current) < 0.05) {
+      snap(liveOffset.current);
+    } else {
+      runMomentum();
+    }
+  }
+
+  // Sync liveOffset when selected changes externally (e.g. "today" button)
+  useEffect(() => {
+    const n = dayOffset(selected);
+    if (Math.round(liveOffset.current) !== n) {
+      committed.current = n;
+      liveOffset.current = n;
+      setRender(r => r + 1);
+    }
+  }, [selected]);
+
+  // Derive display from liveOffset
+  const centerDate  = offsetToDate(liveOffset.current);
+  const centerYear  = centerDate.getFullYear();
+  const centerMonth = centerDate.getMonth();
+  const daysInMonth = new Date(centerYear, centerMonth + 1, 0).getDate();
+  const dayInMonth  = centerDate.getDate(); // 1-based
+
+  // Year band: position = fraction of year elapsed → moves ~1px per 4 days
+  // We show a ribbon of years centered on centerYear
+  const yearFrac    = (liveOffset.current) / 365.25;   // years from epoch
+  const yearPx      = yearFrac * 120;  // 120px per year visually
+
+  // Month band: position in months from epoch
+  const monthsFromEpoch = (centerYear - 2026) * 12 + centerMonth; // months since Jan 2026
+  const monthFracWithin = (dayInMonth - 1) / daysInMonth;        // 0→1 within month
+  const monthFloat      = monthsFromEpoch + monthFracWithin;
+  const MONTH_W = 100; // px per month on ribbon
+
+  // Day band: DAY_W px per day
+  const dayPx = liveOffset.current * DAY_W;
+
+  // Build visible day range for day ribbon (±14 days around center)
+  const visibleDays = [];
+  for (let i = -14; i <= 14; i++) {
+    const d = offsetToDate(Math.round(liveOffset.current) + i);
+    visibleDays.push({ d, offset: i });
+  }
+
+  // Build visible months for month ribbon (±5 months)
+  const visibleMonths = [];
+  for (let i = -5; i <= 5; i++) {
+    const mIdx = monthsFromEpoch + i;
+    const yr   = 2026 + Math.floor(mIdx / 12);
+    const mo   = ((mIdx % 12) + 12) % 12;
+    visibleMonths.push({ label: MONTHS_FULL[mo].slice(0,3).toUpperCase(), yr, mIdx, i });
+  }
+
+  // Build visible years (±2)
+  const centerYearInt = Math.round(yearFrac) + 2026;
+  const visibleYears = [-2,-1,0,1,2].map(i => centerYearInt + i);
+
+  const selKey = toKey(offsetToDate(Math.round(liveOffset.current)));
+
   return (
-    <Card>
-      {/* Header — matches Widget label style */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-        <div style={{width:3,height:13,borderRadius:2,background:C.blue,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",textTransform:"uppercase",color:C.muted}}>Calendar</span>
-        <div style={{flex:1}}/>
-        {[["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
-          <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
-            border:"none",color:C.muted,fontFamily:mono,
-            padding:l==="today"?"4px 6px":"4px 5px",fontSize:l==="today"?9:14,
-            letterSpacing:l==="today"?"0.08em":"0",opacity:0.7,
-            transition:"opacity 0.15s,color 0.15s"}}
-            onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-            onMouseLeave={e=>e.currentTarget.style.opacity="0.7"}>{l}</button>
-        ))}
+    <div ref={containerRef} style={{overflow:"hidden",userSelect:"none"}}>
+      {/* ── Year ribbon ── very slow */}
+      <div style={{
+        height:28, overflow:"hidden", position:"relative",
+        borderBottom:`1px solid ${C.border}`,
+        background:"transparent",
+      }}>
+        <div style={{
+          position:"absolute", top:0,
+          left:"50%",
+          display:"flex", alignItems:"center",
+          transform:`translateX(calc(-50% - ${yearPx % (120 * visibleYears.length)}px))`,
+          willChange:"transform",
+          transition:"none",
+        }}>
+          {visibleYears.map(yr => (
+            <div key={yr} style={{
+              width:120, textAlign:"center", flexShrink:0,
+              fontFamily:mono, fontSize:9, letterSpacing:"0.2em",
+              color: yr === centerYear ? C.muted : C.dim,
+              textTransform:"uppercase",
+              lineHeight:"28px",
+            }}>{yr}</div>
+          ))}
+        </div>
       </div>
 
-      {/* Month label row — sits above day grid */}
-      <div style={{padding:"6px 14px 4px",display:"flex",alignItems:"baseline",gap:6,flexShrink:0,
-        borderBottom:`1px solid ${C.border}`}}>
-        <span style={{fontFamily:serif,fontSize:mobile?13:14,color:C.text,letterSpacing:"-0.01em"}}>{months}</span>
-        <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{year}</span>
+      {/* ── Month ribbon ── medium speed */}
+      <div style={{
+        height:36, overflow:"hidden", position:"relative",
+        borderBottom:`1px solid ${C.border}`,
+      }}>
+        <div style={{
+          position:"absolute", top:0,
+          left:"50%",
+          display:"flex", alignItems:"center",
+          transform:`translateX(calc(-50% - ${(monthFloat % (MONTH_W * 24)) * MONTH_W}px))`,
+          willChange:"transform",
+        }}>
+          {visibleMonths.map(({label,yr,mIdx,i}) => {
+            const isCenter = i === 0;
+            return (
+              <div key={mIdx} style={{
+                width:MONTH_W, textAlign:"center", flexShrink:0,
+                fontFamily:serif, fontSize: isCenter ? 16 : 13,
+                letterSpacing:"-0.01em",
+                color: isCenter ? C.text : C.muted,
+                lineHeight:"36px",
+                transition:"font-size 0.15s, color 0.15s",
+              }}>{label.charAt(0) + label.slice(1).toLowerCase()}</div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Day columns — swipeable on mobile */}
-      <div ref={swipeRef}
-        onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
-        style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flexShrink:0,overflow:"hidden"}}>
-        {days.map((d,i)=>{
-          const k=toKey(d),sel=k===selected,tod=k===today;
-          const allEvts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
-          const dot=healthDots[k]||{};
-          return (
-            <div key={k} onClick={()=>onSelect(k)} style={{cursor:"pointer",
-              borderRight:i<6?`1px solid ${C.border}`:"none",
-              background:sel?`${C.accent}0D`:"transparent",transition:"background 0.15s",
-              display:"flex",flexDirection:"column"}}>
-              {/* Day number header */}
-              <div style={{padding:mobile?"6px 3px 4px":"8px 6px 5px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
-                borderBottom:`1px solid ${C.border}`,flexShrink:0,
-                borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.muted}`:`2px solid transparent`}}>
-                <span style={{fontFamily:mono,fontSize:mobile?7:9,letterSpacing:"0.06em",color:sel?C.accent:C.muted}}>{DAY3[i]}</span>
-                <span style={{fontFamily:serif,fontSize:mobile?14:17,lineHeight:1,color:tod?C.accent:C.text}}>{d.getDate()}</span>
-                {!mobile && <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
-                  {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
-                  {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green,display:"inline-block"}}/>}
-                </div>}
+      {/* ── Day ribbon ── fastest, touch target */}
+      <div
+        onTouchStart={onTouchStart}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onTouchEnd}
+        style={{
+          height:56, overflow:"hidden", position:"relative",
+          borderBottom:`1px solid ${C.border}`,
+          touchAction:"none",
+        }}
+      >
+        {/* Center selection indicator */}
+        <div style={{
+          position:"absolute", top:0, bottom:0,
+          left:"50%", transform:"translateX(-50%)",
+          width:DAY_W,
+          background:`${C.accent}18`,
+          borderLeft:`1px solid ${C.accent}40`,
+          borderRight:`1px solid ${C.accent}40`,
+          pointerEvents:"none",
+        }}/>
+        <div style={{
+          position:"absolute", top:0,
+          left:"50%",
+          display:"flex", alignItems:"center",
+          transform:`translateX(calc(-50% - ${(liveOffset.current % visibleDays.length) * DAY_W}px - ${(liveOffset.current - Math.round(liveOffset.current)) * DAY_W}px))`,
+          willChange:"transform",
+        }}>
+          {visibleDays.map(({d, offset}) => {
+            const k = toKey(d);
+            const isSelected = offset === 0;
+            const isToday = k === today;
+            const hasEvents = (events[k]||[]).length > 0;
+            const dayNames = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+            return (
+              <div key={k} onClick={() => snap(Math.round(liveOffset.current) + offset)}
+                style={{
+                  width:DAY_W, flexShrink:0, textAlign:"center",
+                  cursor:"pointer", padding:"6px 0",
+                }}>
+                <div style={{
+                  fontFamily:mono, fontSize:8, letterSpacing:"0.06em",
+                  color: isSelected ? C.accent : C.muted,
+                  marginBottom:2,
+                }}>{dayNames[d.getDay()]}</div>
+                <div style={{
+                  fontFamily:serif, fontSize: isSelected ? 22 : 17,
+                  lineHeight:1, fontWeight: isSelected ? "600" : "normal",
+                  color: isToday ? C.accent : isSelected ? C.text : C.muted,
+                  transition:"font-size 0.1s",
+                }}>{d.getDate()}</div>
+                {hasEvents && <div style={{
+                  width:4, height:4, borderRadius:"50%",
+                  background: isSelected ? C.accent : C.dim,
+                  margin:"3px auto 0",
+                }}/>}
               </div>
-              {/* Desktop: events inside each column */}
-              {!mobile && (
-                <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",gap:3,flex:1,overflow:"hidden"}}>
-                  {allEvts.length===0
-                    ? <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
-                    : allEvts.map((ev,ei)=>(
-                        <div key={ei} style={{display:"flex",gap:4,alignItems:"baseline"}}>
-                          <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap",opacity:0.9}}>{ev.time}</span>
-                          <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:sel?C.text:"#AAA5A0",
-                            overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{ev.title}</span>
-                        </div>
-                    ))
-                  }
-                </div>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
-      {/* Mobile: selected day events shown below the grid */}
-      {mobile && (()=>{
-        const selEvts=(events[selected]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
-        const selDay = days.find(d=>toKey(d)===selected);
-        const selLabel = selDay ? selDay.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}) : "";
+      {/* Selected day events list */}
+      {(()=>{
+        const selEvts = (events[selKey]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+        const selDate = offsetToDate(Math.round(liveOffset.current));
+        const selLabel = selDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
         return (
-          <div style={{borderTop:`1px solid ${C.border}`,padding:"10px 14px",flex:1,overflowY:"auto",minHeight:0}}>
-            {selLabel && <div style={{fontFamily:mono,fontSize:8,color:C.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{selLabel}</div>}
-            {selEvts.length===0
+          <div style={{padding:"10px 16px", minHeight:60, flex:1, overflowY:"auto"}}>
+            <div style={{fontFamily:mono,fontSize:8,color:C.muted,letterSpacing:"0.1em",
+              textTransform:"uppercase",marginBottom:8}}>{selLabel}</div>
+            {selEvts.length === 0
               ? <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>No events</span>
-              : selEvts.map((ev,i)=>(
-                  <div key={i} style={{display:"flex",gap:10,alignItems:"baseline",padding:"4px 0",borderBottom:i<selEvts.length-1?`1px solid ${C.border}`:"none"}}>
+              : selEvts.map((ev,i) => (
+                  <div key={i} style={{display:"flex",gap:10,alignItems:"baseline",
+                    padding:"5px 0",
+                    borderBottom:i<selEvts.length-1?`1px solid ${C.border}`:"none"}}>
                     <span style={{fontFamily:mono,fontSize:10,color:ev.color||C.accent,flexShrink:0,minWidth:60}}>{ev.time}</span>
                     <span style={{fontFamily:serif,fontSize:14,lineHeight:1.4,color:C.text}}>{ev.title}</span>
                   </div>
@@ -559,6 +741,97 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
           </div>
         );
       })()}
+    </div>
+  );
+}
+
+function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
+  const mobile = useIsMobile();
+  const [anchor, setAnchor] = useState(() => new Date());
+  const days = weekOf(anchor), today = todayKey();
+
+  return (
+    <Card>
+      {/* Header */}
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+        borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,
+          touchAction:"none",userSelect:"none"}}>⠿</div>
+        <div style={{width:3,height:13,borderRadius:2,background:C.blue,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
+          textTransform:"uppercase",color:C.muted}}>Calendar</span>
+        <div style={{flex:1}}/>
+        {mobile
+          ? <button onClick={() => onSelect(todayKey())} style={{
+              background:"none",border:"none",cursor:"pointer",color:C.muted,
+              fontFamily:mono,fontSize:9,letterSpacing:"0.08em",opacity:0.7,padding:"4px 6px"}}>today</button>
+          : [["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
+              <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
+                border:"none",color:C.muted,fontFamily:mono,
+                padding:l==="today"?"4px 6px":"4px 5px",fontSize:l==="today"?9:14,
+                letterSpacing:l==="today"?"0.08em":"0",opacity:0.7,transition:"opacity 0.15s"}}
+                onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+                onMouseLeave={e=>e.currentTarget.style.opacity="0.7"}>{l}</button>
+          ))
+        }
+      </div>
+
+      {mobile
+        ? <MobileCalPicker selected={selected} onSelect={onSelect} events={events}/>
+        : (<>
+            {/* Desktop: month label + 7-day grid */}
+            <div style={{padding:"6px 14px 4px",display:"flex",alignItems:"baseline",gap:6,
+              flexShrink:0,borderBottom:`1px solid ${C.border}`}}>
+              <span style={{fontFamily:serif,fontSize:14,color:C.text,letterSpacing:"-0.01em"}}>
+                {[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ")}
+              </span>
+              <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{days[0].getFullYear()}</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flexShrink:0,overflow:"hidden"}}>
+              {days.map((d,i)=>{
+                const k=toKey(d),sel=k===selected,tod=k===today;
+                const allEvts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+                const dot=healthDots[k]||{};
+                return (
+                  <div key={k} onClick={()=>onSelect(k)} style={{cursor:"pointer",
+                    borderRight:i<6?`1px solid ${C.border}`:"none",
+                    background:sel?`${C.accent}0D`:"transparent",transition:"background 0.15s",
+                    display:"flex",flexDirection:"column"}}>
+                    <div style={{padding:"8px 6px 5px",display:"flex",flexDirection:"column",
+                      alignItems:"center",gap:1,
+                      borderBottom:`1px solid ${C.border}`,flexShrink:0,
+                      borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.muted}`:`2px solid transparent`}}>
+                      <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.06em",
+                        color:sel?C.accent:C.muted}}>{DAY3[i]}</span>
+                      <span style={{fontFamily:serif,fontSize:17,lineHeight:1,
+                        color:tod?C.accent:C.text}}>{d.getDate()}</span>
+                      <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
+                        {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
+                        {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green,display:"inline-block"}}/>}
+                      </div>
+                    </div>
+                    <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",
+                      gap:3,flex:1,overflow:"hidden"}}>
+                      {allEvts.length===0
+                        ? <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
+                        : allEvts.map((ev,ei)=>(
+                            <div key={ei} style={{display:"flex",gap:4,alignItems:"baseline"}}>
+                              <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,
+                                flexShrink:0,whiteSpace:"nowrap",opacity:0.9}}>{ev.time}</span>
+                              <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,
+                                wordBreak:"break-word",color:sel?C.text:"#AAA5A0",
+                                overflow:"hidden",display:"-webkit-box",
+                                WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{ev.title}</span>
+                            </div>
+                        ))
+                      }
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>)
+      }
     </Card>
   );
 }
