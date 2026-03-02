@@ -70,13 +70,27 @@ async function estimateKcal(prompt, token) {
   const headers = {"Content-Type":"application/json"};
   if (token) headers["Authorization"] = `Bearer ${token}`;
   const r = await fetch("/api/ai",{method:"POST",headers,
-    body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:64,
+    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:64,
       system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
       messages:[{role:"user",content:prompt}]})});
   const d = await r.json();
   if (d.error) { console.warn("[ai]", d.error); return null; }
   const text = d.content?.find(b=>b.type==="text")?.text||"{}";
   try { return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null; } catch { return null; }
+}
+
+// ─── Oura response cache (per date+user, avoids double-fetching) ─────────────
+const _ouraCache = {};
+function ouraKey(userId, date) { return `${userId}|${date}`; }
+function cachedOuraFetch(date, token, userId) {
+  const k = ouraKey(userId, date);
+  if (_ouraCache[k]) return _ouraCache[k];
+  const p = fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
+    .then(r=>r.json()).catch(()=>({}));
+  _ouraCache[k] = p;
+  // Expire after 5 minutes
+  setTimeout(()=>{ delete _ouraCache[k]; }, 5 * 60 * 1000);
+  return p;
 }
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
@@ -998,8 +1012,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
   useEffect(()=>{
     if(!loaded||!token)return;
     onSyncStart("oura");
-    fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(data=>{
+    cachedOuraFetch(date, token, userId).then(data=>{
         console.log("[oura]", date, data);
         if(data.error)return;
         setH(p=>({...p,
@@ -1186,30 +1199,37 @@ function Notes({date,userId,token}) {
 function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[]}) {
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
-  const syncEstState=useRef({}); // id -> kcal value, null=in-flight
-  const [syncEstTick,setSyncEstTick]=useState(0); // just to trigger re-render
+  const syncKcal=useRef({}); // id -> estimated kcal (number) or 0 if failed
+  const syncFlight=useRef(new Set()); // ids currently being estimated
+  const [,forceRender]=useState(0);
   const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const manualTotal=safe.reduce((s,r)=>s+(r.kcal||0),0);
-  const syncTotal=syncedRows.reduce((s,r)=>s+(r.kcal||syncEstState.current[r.id]||0),0);
+  const syncTotal=syncedRows.reduce((s,r)=>s+(r.kcal||syncKcal.current[r.id]||0),0);
   const total=manualTotal+syncTotal;
 
   // Auto-estimate kcal for synced rows that lack it
   useEffect(()=>{
     if(!token)return;
+    let needsRender=false;
     syncedRows.forEach(row=>{
-      if(!row.kcal && row.text && !syncEstState.current[row.id] && syncEstState.current[row.id]!==null){
-        syncEstState.current[row.id]=null; // mark as in-flight
-        setSyncEstTick(t=>t+1);
+      const alreadyDone = row.id in syncKcal.current;
+      const inFlight = syncFlight.current.has(row.id);
+      if(!row.kcal && row.text && !alreadyDone && !inFlight){
+        syncFlight.current.add(row.id);
+        needsRender=true;
         estimateKcal(promptFn(row.text),token).then(kcal=>{
-          syncEstState.current[row.id]=kcal||0;
-          setSyncEstTick(t=>t+1);
+          syncKcal.current[row.id]=kcal||0;
+          syncFlight.current.delete(row.id);
+          forceRender(n=>n+1);
         }).catch(()=>{
-          syncEstState.current[row.id]=0;
-          setSyncEstTick(t=>t+1);
+          syncKcal.current[row.id]=0;
+          syncFlight.current.delete(row.id);
+          forceRender(n=>n+1);
         });
       }
     });
+    if(needsRender) forceRender(n=>n+1);
   },[syncedRows,token]); // eslint-disable-line
 
   async function runEstimate(id,text){
@@ -1233,8 +1253,8 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
         {/* Synced rows — read-only, same visual style as manual rows */}
         {syncedRows.map(row=>{
-          const kcal=row.kcal||syncEstState.current[row.id];
-          const estimating=syncEstState.current[row.id]===null;
+          const kcal=row.kcal||syncKcal.current[row.id];
+          const estimating=syncFlight.current.has(row.id);
           return (
             <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
               <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
@@ -1321,17 +1341,16 @@ function Activity({date,token,userId}) {
   const [syncedRows, setSyncedRows] = useState([]);
 
   useEffect(()=>{
-    if(!token)return;
+    if(!token||!userId)return;
     setSyncedRows([]);
-    const headers = {Authorization:`Bearer ${token}`};
+    // Use cached Oura response if HealthStrip already fetched it; Strava fetched fresh
     Promise.all([
-      fetch(`/api/oura?date=${date}`,{headers}).then(r=>r.json()).catch(()=>({})),
-      fetch(`/api/strava?date=${date}`,{headers}).then(r=>r.json()).catch(()=>({})),
+      cachedOuraFetch(date, token, userId),
+      fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({})),
     ]).then(([ouraData, stravaData])=>{
       const merged = mergeWorkouts(ouraData.workouts||[], stravaData.activities||[]);
-      // Convert to RowList-compatible format: text is a rich description, kcal from source if available
       setSyncedRows(merged.map(w=>({
-        id: w.id || `${w.source}-${w.sport}-${w.durationMins}`,
+        id: String(w.id || `${w.source}-${w.sport}-${w.durationMins}`),
         source: w.source,
         kcal: w.calories||null,
         text: [
@@ -1342,7 +1361,7 @@ function Activity({date,token,userId}) {
         ].filter(Boolean).join(" · "),
       })));
     });
-  },[date,token]); // eslint-disable-line
+  },[date,token,userId]); // eslint-disable-line
 
   return (
     <RowList date={date} type="activity" token={token} userId={userId}
