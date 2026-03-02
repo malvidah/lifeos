@@ -73,9 +73,10 @@ export async function GET(request) {
   }
 
   try {
-    // Get start/end of requested date in epoch seconds
-    const dayStart = Math.floor(new Date(date + 'T00:00:00').getTime() / 1000);
-    const dayEnd   = Math.floor(new Date(date + 'T23:59:59').getTime() / 1000);
+    // Wide UTC window: pad ±12h around the requested date so any local timezone
+    // offset is covered. We filter by start_date_local in the result.
+    const dayStart = Math.floor(new Date(date + 'T00:00:00Z').getTime() / 1000) - 12 * 3600;
+    const dayEnd   = Math.floor(new Date(date + 'T23:59:59Z').getTime() / 1000) + 12 * 3600;
 
     const r = await fetch(
       `https://www.strava.com/api/v3/athlete/activities?after=${dayStart}&before=${dayEnd}&per_page=20`,
@@ -99,7 +100,12 @@ export async function GET(request) {
       startTime: a.start_date_local,
     }));
 
-    return Response.json({ activities: result });
+    // Filter to only activities whose local date matches the requested date
+    const filtered = result.filter(a => {
+      if (!a.startTime) return true; // keep if no time info
+      return a.startTime.slice(0, 10) === date;
+    });
+    return Response.json({ activities: filtered });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }

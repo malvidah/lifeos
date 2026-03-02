@@ -1029,7 +1029,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,
       fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}]},
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,
-      fields:[{label:"Total Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",unit:""}]},
+      fields:[{label:"Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",unit:""}]},
     {key:"resilience",label:"Resilience",color:purple,score:h.resilienceScore,
       fields:[{label:"Stress",value:fmtMins(h.stressMins),unit:""},{label:"Recov.",value:fmtMins(h.recoveryMins),unit:""}]},
   ];
