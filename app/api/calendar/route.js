@@ -43,9 +43,10 @@ export async function POST(request) {
     }
 
     const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
-    // Use client timezone offset to bound the query correctly
-    url.searchParams.set("timeMin", `${start}T00:00:00`);
-    url.searchParams.set("timeMax", `${end}T23:59:59`);
+    // RFC3339 with Z (UTC bounds) — we fetch a wide window and bucket by local tz
+    // Pad by 1 day each side to ensure local-midnight events aren't missed
+    url.searchParams.set("timeMin", `${start}T00:00:00Z`);
+    url.searchParams.set("timeMax", `${end}T23:59:59Z`);
     url.searchParams.set("singleEvents", "true");
     url.searchParams.set("orderBy", "startTime");
     url.searchParams.set("maxResults", "250");

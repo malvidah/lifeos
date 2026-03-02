@@ -417,25 +417,28 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({session,token,userId,syncStatus,theme,onThemeChange}) {
-  const [greeting, setGreeting] = useState("");
+function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) {
+  // Format selected date as "Mon, Mar 1" — the actual context anchor
+  const [dateLabel, setDateLabel] = useState("");
+  const [isToday, setIsToday] = useState(false);
   useEffect(() => {
-    function update() {
-      const now = new Date();
-      const day = now.toLocaleDateString("en-US",{weekday:"long",timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});
-      setGreeting(`It's ${day},`);
-    }
-    update();
-    // Update at midnight
-    const ms = new Date().setHours(24,0,0,0) - Date.now();
-    const t = setTimeout(update, ms);
-    return () => clearTimeout(t);
-  }, []);
+    if (!selected) return;
+    const selDate = new Date(selected + "T12:00:00");
+    const today = toKey(new Date());
+    setIsToday(selected === today);
+    setDateLabel(selDate.toLocaleDateString("en-US", {
+      weekday: "short", month: "short", day: "numeric"
+    }));
+  }, [selected]);
   return (
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 16px",
       height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,
       position:"sticky",top:0,zIndex:100}}>
-      <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em",}}>{greeting}</span>
+      <div style={{display:"flex",alignItems:"baseline",gap:7}}>
+        <span style={{fontFamily:serif,fontSize:16,color:C.text,letterSpacing:"-0.01em"}}>{dateLabel}</span>
+        {isToday && <span style={{fontFamily:mono,fontSize:8,color:C.accent,letterSpacing:"0.12em",
+          textTransform:"uppercase",opacity:0.9}}>today</span>}
+      </div>
       <div style={{flex:1}}/>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         <div style={{width:6,height:6,borderRadius:"50%",
@@ -502,9 +505,9 @@ function offsetToDate(n) {
 
 // Mobile date picker — horizontal day strip with physics momentum
 // Month and year are static labels (snap discretely). Only the day ribbon moves.
-function MobileCalPicker({selected, onSelect, events}) {
+function MobileCalPicker({selected, onSelect, events, desktop=false}) {
   const today = todayKey();
-  const DAY_W = 52;
+  const DAY_W = desktop ? 72 : 52;
 
   // Single source of truth: fractional day offset from epoch
   const liveOff    = useRef(dayOffset(selected));
@@ -658,11 +661,15 @@ function MobileCalPicker({selected, onSelect, events}) {
       <div style={{
         height:66, overflow:"hidden", position:"relative",
         borderBottom:`1px solid ${C.border}`, flexShrink:0,
-        touchAction:"none",
+        touchAction:"none", cursor: desktop ? "grab" : "default",
       }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
+        onMouseDown={desktop ? e => { onTouchStart({touches:[{clientX:e.clientX}]}); } : undefined}
+        onMouseMove={desktop ? e => { if(e.buttons!==1)return; onTouchMove({preventDefault:()=>{},touches:[{clientX:e.clientX}]}); } : undefined}
+        onMouseUp={desktop ? e => { onTouchEnd(); } : undefined}
+        onMouseLeave={desktop ? e => { if(e.buttons===1) onTouchEnd(); } : undefined}
       >
         {/* Center slot highlight */}
         <div style={{
@@ -751,8 +758,6 @@ function MobileCalPicker({selected, onSelect, events}) {
 }
 function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
   const mobile = useIsMobile();
-  const [anchor, setAnchor] = useState(() => new Date());
-  const days = weekOf(anchor), today = todayKey();
 
   return (
     <Card>
@@ -765,76 +770,16 @@ function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
         <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
           textTransform:"uppercase",color:C.muted}}>Calendar</span>
         <div style={{flex:1}}/>
-        {mobile
-          ? <button onClick={() => onSelect(todayKey())} style={{
-              background:"none",border:"none",cursor:"pointer",color:C.muted,
-              fontFamily:mono,fontSize:9,letterSpacing:"0.08em",opacity:0.7,padding:"4px 6px"}}>today</button>
-          : [["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
-              <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
-                border:"none",color:C.muted,fontFamily:mono,
-                padding:l==="today"?"4px 6px":"4px 5px",fontSize:l==="today"?9:14,
-                letterSpacing:l==="today"?"0.08em":"0",opacity:0.7,transition:"opacity 0.15s"}}
-                onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-                onMouseLeave={e=>e.currentTarget.style.opacity="0.7"}>{l}</button>
-          ))
-        }
+        <button onClick={() => onSelect(todayKey())} style={{
+          background:"none",border:"none",cursor:"pointer",color:C.muted,
+          fontFamily:mono,fontSize:9,letterSpacing:"0.08em",opacity:0.7,padding:"4px 6px",
+          transition:"opacity 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.opacity="1"}
+          onMouseLeave={e=>e.currentTarget.style.opacity="0.7"}>today</button>
       </div>
 
-      {mobile
-        ? <MobileCalPicker selected={selected} onSelect={onSelect} events={events}/>
-        : (<>
-            <div style={{padding:"6px 14px 4px",display:"flex",alignItems:"baseline",gap:6,
-              flexShrink:0,borderBottom:`1px solid ${C.border}`}}>
-              <span style={{fontFamily:serif,fontSize:14,color:C.text,letterSpacing:"-0.01em"}}>
-                {[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ")}
-              </span>
-              <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{days[0].getFullYear()}</span>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flexShrink:0,overflow:"hidden"}}>
-              {days.map((d,i)=>{
-                const k=toKey(d),sel=k===selected,tod=k===today;
-                const allEvts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
-                const dot=healthDots[k]||{};
-                return (
-                  <div key={k} onClick={()=>onSelect(k)} style={{cursor:"pointer",
-                    borderRight:i<6?`1px solid ${C.border}`:"none",
-                    background:sel?`${C.accent}0D`:"transparent",transition:"background 0.15s",
-                    display:"flex",flexDirection:"column"}}>
-                    <div style={{padding:"8px 6px 5px",display:"flex",flexDirection:"column",
-                      alignItems:"center",gap:1,
-                      borderBottom:`1px solid ${C.border}`,flexShrink:0,
-                      borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.muted}`:`2px solid transparent`}}>
-                      <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.06em",
-                        color:sel?C.accent:C.muted}}>{DAY3[i]}</span>
-                      <span style={{fontFamily:serif,fontSize:17,lineHeight:1,
-                        color:tod?C.accent:C.text}}>{d.getDate()}</span>
-                      <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
-                        {dot.sleep>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
-                        {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green,display:"inline-block"}}/>}
-                      </div>
-                    </div>
-                    <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",
-                      gap:3,flex:1,overflow:"hidden"}}>
-                      {allEvts.length===0
-                        ? <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
-                        : allEvts.map((ev,ei)=>(
-                            <div key={ei} style={{display:"flex",gap:4,alignItems:"baseline"}}>
-                              <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,
-                                flexShrink:0,whiteSpace:"nowrap",opacity:0.9}}>{ev.time}</span>
-                              <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,
-                                wordBreak:"break-word",color:sel?C.text:"#AAA5A0",
-                                overflow:"hidden",display:"-webkit-box",
-                                WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{ev.title}</span>
-                            </div>
-                        ))
-                      }
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </>)
-      }
+      {/* Same picker on both — mobile uses touch, desktop uses click */}
+      <MobileCalPicker selected={selected} onSelect={onSelect} events={events} desktop={!mobile}/>
     </Card>
   );
 }
@@ -1233,20 +1178,58 @@ export default function Dashboard() {
 
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
-  const googleToken=session?.provider_token;
+  const sessionGoogleToken=session?.provider_token; // only present right after login
   const startSync=useCallback(k=>setSyncing(s=>new Set([...s,k])),[]);
   const endSync=useCallback(k=>{
     setSyncing(s=>{const n=new Set(s);n.delete(k);return n;});
     setLastSync(new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}));
   },[]);
 
+  // When we get a fresh provider_token from Google (right after login), save it to DB
   useEffect(()=>{
-    if(!googleToken)return;
+    if(!sessionGoogleToken||!token)return;
+    fetch("/api/google-token",{method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+      body:JSON.stringify({googleToken:sessionGoogleToken})})
+      .catch(()=>{});
+  },[sessionGoogleToken,token]);
+
+  // Fetch calendar events — get token from DB if not in session
+  useEffect(()=>{
+    if(!token)return;
     startSync("cal");
-    fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({token:googleToken,start:toKey(shift(new Date(),-7)),end:toKey(shift(new Date(),21)),tz:Intl.DateTimeFormat().resolvedOptions().timeZone})})
-      .then(r=>r.json()).then(d=>{console.log("[cal] keys:",Object.keys(d.events||{}));if(d.events)setEvents(d.events);else console.warn("[cal] no events:",d);}).catch(e=>console.error("[cal] err:",e)).finally(()=>endSync("cal"));
-  },[googleToken]); // eslint-disable-line
+    const tz=Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const start=toKey(shift(new Date(),-30));
+    const end=toKey(shift(new Date(),60));
+
+    const fetchCal=(googleToken)=>{
+      fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({token:googleToken,start,end,tz})})
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.events&&Object.keys(d.events).length>0){
+            setEvents(d.events);
+          } else if(d.error){
+            console.warn("[cal] API error:",d.error);
+          }
+        })
+        .catch(e=>console.error("[cal] fetch err:",e))
+        .finally(()=>endSync("cal"));
+    };
+
+    if(sessionGoogleToken){
+      fetchCal(sessionGoogleToken);
+    } else {
+      // Retrieve stored token from DB
+      fetch("/api/google-token",{headers:{"Authorization":`Bearer ${token}`}})
+        .then(r=>r.json())
+        .then(d=>{
+          if(d.googleToken) fetchCal(d.googleToken);
+          else { console.warn("[cal] no stored google token"); endSync("cal"); }
+        })
+        .catch(()=>endSync("cal"));
+    }
+  },[token]); // eslint-disable-line
 
   const onHealthChange=useCallback((date,data)=>{
     setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0}}));
@@ -1316,7 +1299,7 @@ export default function Dashboard() {
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
       `}</style>
 
-      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme}/>
+      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>
 
       {mobile ? (
         /* ── MOBILE: single scrollable column with drag ─────────────────── */
