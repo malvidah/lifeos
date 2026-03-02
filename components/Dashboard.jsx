@@ -62,16 +62,25 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt, token) {
   if (!token) return null;
-  const r = await fetch("/api/ai",{method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:64,
-      system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
-      messages:[{role:"user",content:prompt}]})});
-  const d = await r.json();
-  // Expose error to UI so we can debug — stored in window for inspection
-  if (d.error) { window._lastAiError=d; return null; }
-  const text = d.content?.find(b=>b.type==="text")?.text||"{}";
-  try { return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null; } catch { return null; }
+  try {
+    const r = await fetch("/api/ai",{method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:64,
+        system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
+        messages:[{role:"user",content:prompt}]})});
+    const d = await r.json();
+    window._lastAiDebug = {status: r.status, body: d, prompt};
+    if (!r.ok || d.error) { console.error("[AI] error:", d); return null; }
+    const text = d.content?.find(b=>b.type==="text")?.text||"{}";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) { console.error("[AI] no JSON in response:", text); return null; }
+    const kcal = JSON.parse(match[0]).kcal||null;
+    console.log("[AI] estimated:", kcal, "for:", prompt.slice(0,60));
+    return kcal;
+  } catch(e) {
+    console.error("[AI] exception:", e);
+    return null;
+  }
 }
 
 // ─── Oura response cache (per date+user, avoids double-fetching) ─────────────
