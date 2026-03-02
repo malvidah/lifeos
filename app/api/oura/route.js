@@ -31,17 +31,23 @@ export async function GET(request) {
   if (!ouraToken) return Response.json({ error: "no_token" }, { status: 404 });
 
   try {
+    // Oura records sleep/readiness the morning AFTER — so we need to look ahead by 1 day
+    const next1 = new Date(date);
+    next1.setDate(next1.getDate() + 1);
+    const nextDate = next1.toISOString().split("T")[0];
+
     const prev2 = new Date(date);
     prev2.setDate(prev2.getDate() - 2);
     const prevDate2 = prev2.toISOString().split("T")[0];
 
+    const h = { Authorization: `Bearer ${ouraToken}` };
     const [sleepRes, readinessRes, sessionRes, activityRes, stressRes, workoutRes] = await Promise.all([
-      fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
-      fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
-      fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${prevDate2}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
-      fetch(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
-      fetch(`https://api.ouraring.com/v2/usercollection/daily_stress?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
-      fetch(`https://api.ouraring.com/v2/usercollection/workout?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
+      fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${date}&end_date=${nextDate}`, { headers: h }),
+      fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${date}&end_date=${nextDate}`, { headers: h }),
+      fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${prevDate2}&end_date=${nextDate}`, { headers: h }),
+      fetch(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${date}`, { headers: h }),
+      fetch(`https://api.ouraring.com/v2/usercollection/daily_stress?start_date=${date}&end_date=${date}`, { headers: h }),
+      fetch(`https://api.ouraring.com/v2/usercollection/workout?start_date=${date}&end_date=${date}`, { headers: h }),
     ]);
 
     const sleepData     = await sleepRes.json();
@@ -51,8 +57,11 @@ export async function GET(request) {
     const stressData    = await stressRes.json();
     const workoutData   = await workoutRes.json();
 
-    const daily      = sleepData.data?.[0];
-    const readiness  = readinessData.data?.[0];
+    // Sleep/readiness are recorded the next morning — find the record closest to our date
+    const sleepRecords = sleepData.data ?? [];
+    const daily = sleepRecords.find(d => d.day === date) || sleepRecords[0];
+    const readinessRecords = readinessData.data ?? [];
+    const readiness = readinessRecords.find(d => d.day === date) || readinessRecords[0];
     const sessions   = sessionData.data ?? [];
     const mainSession = sessions
       .filter(s => s.type === "long_sleep")
