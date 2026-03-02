@@ -297,9 +297,10 @@ function Widget({label,color,dragProps,children}) {
 }
 
 // ─── UserMenu ─────────────────────────────────────────────────────────────────
-function UserMenu({session,token}) {
+function UserMenu({session,token,userId}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
+  const [anthropicKey,setAnthropicKey]=useState("");
   const [saved,setSaved]=useState(false);
   const [saving,setSaving]=useState(false);
   const ref=useRef(null);
@@ -307,7 +308,13 @@ function UserMenu({session,token}) {
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
   const avatar=user?.user_metadata?.avatar_url;
 
-  useEffect(()=>{if(!token||!open)return;dbLoad("global","settings",token).then(d=>{if(d?.ouraToken)setOuraKey(d.ouraToken);});},[token,open]); // eslint-disable-line
+  useEffect(()=>{
+    if(!token||!open)return;
+    dbLoad("global","settings",token,userId).then(d=>{
+      if(d?.ouraToken)setOuraKey(d.ouraToken);
+      if(d?.anthropicKey)setAnthropicKey(d.anthropicKey);
+    });
+  },[token,open,userId]); // eslint-disable-line
   useEffect(()=>{
     if(!open)return;
     const fn=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false);};
@@ -315,7 +322,11 @@ function UserMenu({session,token}) {
     return ()=>document.removeEventListener("mousedown",fn);
   },[open]);
 
-  async function saveKey(){setSaving(true);await dbSave("global","settings",{ouraToken:ouraKey},token);setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);}
+  async function saveSettings(){
+    setSaving(true);
+    await dbSave("global","settings",{ouraToken:ouraKey,anthropicKey},token);
+    setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
+  }
 
   return (
     <div ref={ref} style={{position:"relative"}}>
@@ -327,28 +338,33 @@ function UserMenu({session,token}) {
           :<span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{initials}</span>}
       </button>
       {open&&(
-        <div style={{position:"absolute",top:40,right:0,width:256,zIndex:300,
+        <div style={{position:"absolute",top:40,right:0,width:272,zIndex:300,
           background:C.card,border:`1px solid ${C.border2}`,borderRadius:R,
-          padding:16,display:"flex",flexDirection:"column",gap:12,
+          padding:16,display:"flex",flexDirection:"column",gap:10,
           boxShadow:"0 8px 32px rgba(0,0,0,0.6)"}}>
           <div>
             <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
             <div style={{fontFamily:mono,fontSize:9,color:C.muted,marginTop:3}}>{user?.email}</div>
           </div>
           <div style={{height:1,background:C.border}}/>
-          <div>
-            <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>Oura API Key</div>
-            <input type="password" value={ouraKey} onChange={e=>{setOuraKey(e.target.value);setSaved(false);}} placeholder="paste token here"
-              style={{width:"100%",background:C.surface,border:`1px solid ${C.border2}`,borderRadius:6,outline:"none",
-                color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px",marginBottom:8}}/>
-            <button onClick={saveKey} disabled={saving||!ouraKey.trim()} style={{
-              width:"100%",background:saved?C.green+"22":"none",border:`1px solid ${saved?C.green:C.border2}`,
-              borderRadius:6,color:saved?C.green:ouraKey.trim()?C.text:C.muted,
-              fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",
-              padding:"7px",cursor:ouraKey.trim()?"pointer":"default",transition:"all 0.2s"}}>
-              {saved?"saved ✓":saving?"saving…":"save key"}
-            </button>
-          </div>
+          {[
+            {label:"Oura API Key",value:ouraKey,set:setOuraKey,ph:"paste token here"},
+            {label:"Anthropic API Key",value:anthropicKey,set:setAnthropicKey,ph:"sk-ant-…"},
+          ].map(({label,value,set,ph})=>(
+            <div key={label}>
+              <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:5}}>{label}</div>
+              <input type="password" value={value} onChange={e=>{set(e.target.value);setSaved(false);}} placeholder={ph}
+                style={{width:"100%",background:C.surface,border:`1px solid ${C.border2}`,borderRadius:6,outline:"none",
+                  color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px"}}/>
+            </div>
+          ))}
+          <button onClick={saveSettings} disabled={saving} style={{
+            width:"100%",background:saved?C.green+"22":"none",border:`1px solid ${saved?C.green:C.border2}`,
+            borderRadius:6,color:saved?C.green:C.text,
+            fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",
+            padding:"7px",cursor:"pointer",transition:"all 0.2s"}}>
+            {saved?"saved ✓":saving?"saving…":"save settings"}
+          </button>
           <div style={{height:1,background:C.border}}/>
           <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
             style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer",
@@ -362,7 +378,7 @@ function UserMenu({session,token}) {
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({session,token,syncStatus}) {
+function TopBar({session,token,userId,syncStatus}) {
   const [dateStr, setDateStr] = useState("");
   useEffect(() => {
     setDateStr(new Date().toLocaleDateString("en-US",{month:"long",day:"numeric"}));
@@ -382,7 +398,7 @@ function TopBar({session,token,syncStatus}) {
           {syncStatus.syncing?"syncing":syncStatus.lastSync||"synced"}
         </span>
       </div>
-      <UserMenu session={session} token={token}/>
+      <UserMenu session={session} token={token} userId={userId}/>
     </div>
   );
 }
@@ -466,6 +482,20 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
     </Card>
   );
 }
+
+// ─── Skeleton shimmer ─────────────────────────────────────────────────────────
+function Shimmer({width="100%", height=14, style={}}) {
+  return (
+    <div style={{
+      width, height, borderRadius:4,
+      background:`linear-gradient(90deg, ${C.border} 25%, ${C.border2} 50%, ${C.border} 75%)`,
+      backgroundSize:"200% 100%",
+      animation:"shimmer 1.4s infinite",
+      ...style,
+    }}/>
+  );
+}
+
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:""};
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
@@ -477,11 +507,16 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     onSyncStart("oura");
     fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(data=>{
+        // error:"no_token" means user hasn't set up Oura — silent, not an error
         if(data.error)return;
+        // Only fill fields that don't already have manually entered values
         setH(p=>({...p,
-          sleepScore:p.sleepScore||data.sleepScore||"",sleepHrs:p.sleepHrs||data.sleepHrs||"",
-          sleepEff:p.sleepEff||data.sleepQuality||"",readinessScore:p.readinessScore||data.readinessScore||"",
-          hrv:p.hrv||data.hrv||"",rhr:p.rhr||data.rhr||"",
+          sleepScore:p.sleepScore||data.sleepScore||"",
+          sleepHrs:p.sleepHrs||data.sleepHrs||"",
+          sleepEff:p.sleepEff||data.sleepQuality||"",
+          readinessScore:p.readinessScore||data.readinessScore||"",
+          hrv:p.hrv||data.hrv||"",
+          rhr:p.rhr||data.rhr||"",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
@@ -592,7 +627,14 @@ function Notes({date,userId,token}) {
     return parts;
   }
 
-  if (!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
+  if (!loaded) return (
+    <div style={{display:"flex",flexDirection:"column",gap:10,padding:"4px 0"}}>
+      <Shimmer width="80%" height={14}/>
+      <Shimmer width="60%" height={14}/>
+      <Shimmer width="70%" height={14}/>
+      <Shimmer width="40%" height={14}/>
+    </div>
+  );
 
   const textareaStyle = {
     fontFamily:serif, fontSize:16, lineHeight:"1.7",
@@ -647,25 +689,35 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
   }
-  if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
+  if(!loaded) return (
+    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
+      <Shimmer width="75%" height={13}/>
+      <Shimmer width="55%" height={13}/>
+      <Shimmer width="65%" height={13}/>
+    </div>
+  );
   return (
-    <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
-      {safe.map((row,idx)=>(
-        <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
-          <input ref={el=>refs.current[row.id]=el} value={row.text}
-            onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
-            onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
-            onKeyDown={e=>onKey(e,row.id,idx)} placeholder={idx===0?placeholder:""}
-            style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
-              color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
-          <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
-            {row.estimating?"…":row.kcal?`${prefix}${row.kcal}`:""}
-          </span>
-        </div>
-      ))}
+    <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
+      {/* Scrollable rows — flex:1 fills space, total stays visible below */}
+      <div style={{flex:1,overflowY:"auto",minHeight:0}}>
+        {safe.map((row,idx)=>(
+          <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
+            <input ref={el=>refs.current[row.id]=el} value={row.text}
+              onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
+              onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
+              onKeyDown={e=>onKey(e,row.id,idx)} placeholder={idx===0?placeholder:""}
+              style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
+                color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
+            <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
+              {row.estimating?"…":row.kcal?`${prefix}${row.kcal}`:""}
+            </span>
+          </div>
+        ))}
+      </div>
+      {/* Total always visible at bottom, outside scroll area */}
       {total>0&&(
-        <div style={{marginTop:"auto",paddingTop:8,display:"flex",alignItems:"center",gap:8}}>
-          <div style={{flex:1,height:1,background:C.border}}/>
+        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:8,borderTop:`1px solid ${C.border}`}}>
+          <div style={{flex:1}}/>
           <span style={{fontFamily:mono,fontSize:11,color,opacity:0.9}}>{prefix}{total} kcal</span>
         </div>
       )}
@@ -686,7 +738,13 @@ function Tasks({date,token,userId}) {
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);}
   }
-  if(!loaded) return <div style={{fontFamily:mono,fontSize:9,color:C.muted}}>Loading…</div>;
+  if(!loaded) return (
+    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
+      <Shimmer width="75%" height={13}/>
+      <Shimmer width="55%" height={13}/>
+      <Shimmer width="65%" height={13}/>
+    </div>
+  );
   return (
     <div style={{flex:1,overflow:"auto"}}>
       {[...open,...done].map((row,idx)=>(
@@ -884,9 +942,10 @@ export default function Dashboard() {
         input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
         a{text-decoration:none;}
         input,textarea,select{font-size:16px;}
+        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
       `}</style>
 
-      <TopBar session={session} token={token} syncStatus={syncStatus}/>
+      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus}/>
 
       {mobile ? (
         /* ── MOBILE: single scrollable column with drag ─────────────────── */
