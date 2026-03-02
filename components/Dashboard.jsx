@@ -427,7 +427,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
     const today = toKey(new Date());
     setIsToday(selected === today);
     setDateLabel(selDate.toLocaleDateString("en-US", {
-      weekday: "short", month: "short", day: "numeric"
+      weekday: "long", month: "long", day: "numeric"
     }));
   }, [selected]);
   return (
@@ -649,7 +649,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       }}>
         <span style={{
           fontFamily:serif, fontSize:18, letterSpacing:"-0.02em",
-          color:C.text, lineHeight:1,
+          color:C.muted, lineHeight:1,
         }}>{selMonth}</span>
         <span style={{
           fontFamily:mono, fontSize:10, letterSpacing:"0.12em",
@@ -757,7 +757,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               }}>
                 <span style={{fontFamily:mono, fontSize:10, color:ev.color||C.accent,
                   flexShrink:0, minWidth:64}}>{ev.time}</span>
-                <span style={{fontFamily:serif, fontSize:14, lineHeight:1.4, color:C.text}}>{ev.title}</span>
+                <span style={{fontFamily:serif, fontSize:14, lineHeight:1.4, color:C.muted}}>{ev.title}</span>
               </div>
           ))
         }
