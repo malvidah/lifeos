@@ -758,7 +758,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     <div style={{width:3,height:3,borderRadius:"50%",
                       background:C.accent, opacity: isCtr ? 1 : 0.5}}/>
                   )}
-                  {(healthDots[k]?.resilience >= 85) && (
+                  {(healthDots[k]?.recovery >= 85) && (
                     <div style={{width:3,height:3,borderRadius:"50%",
                       background:"#8B6BB5", opacity: isCtr ? 1 : 0.5}}/>
                   )}
@@ -947,6 +947,13 @@ function fmtMins(val) {
   const h = Math.floor(m/60), rem = m%60;
   return rem ? `${h}h ${rem}m` : `${h}h`;
 }
+function fmtMinsField(val) {
+  const m = parseInt(val)||0;
+  if (!m) return {value:"—", unit:""};
+  if (m < 60) return {value:String(m), unit:"m"};
+  const h = Math.floor(m/60), rem = m%60;
+  return rem ? {value:`${h}h ${rem}`, unit:"m"} : {value:String(h), unit:"h"};
+}
 
 
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
@@ -987,8 +994,8 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
       fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}]},
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,
       fields:[{label:"Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Active",value:h.activeMinutes,unit:"min"}]},
-    {key:"resilience",label:"Resilience",color:purple,score:h.resilienceScore,
-      fields:[{label:"Stress",value:fmtMins(h.stressMins),unit:""},{label:"Recov.",value:fmtMins(h.recoveryMins),unit:""}]},
+    {key:"recovery",label:"Recovery",color:purple,score:h.resilienceScore,
+      fields:[{label:"Stress",...fmtMinsField(h.stressMins)},{label:"Recov.",...fmtMinsField(h.recoveryMins)}]},
   ];
 
 
@@ -1504,7 +1511,7 @@ export default function Dashboard() {
   },[token]); // eslint-disable-line
 
   const onHealthChange=useCallback((date,data)=>{
-    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,resilience:+data.resilienceScore||0}}));
+    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,recovery:+data.resilienceScore||0}}));
   },[]);
 
   // Prefetch Oura scores for ±14 days around today so dots show without clicking each day
@@ -1521,7 +1528,7 @@ export default function Dashboard() {
               sleep:+data.sleepScore||0,
               readiness:+data.readinessScore||0,
               activity:+data.activityScore||0,
-              resilience:+data.resilienceScore||0,
+              recovery:+data.resilienceScore||0,
             }}));
           }).catch(()=>{});
       }, i*150); // stagger 150ms apart to avoid hammering
