@@ -72,8 +72,9 @@ export async function GET(request) {
     console.log("[oura-activity]", date, JSON.stringify(activityData).slice(0,300));
     if (activity) {
       if (activity.score != null)           result.activityScore   = String(activity.score);
-      if (activity.active_calories != null) result.activeCalories  = String(Math.round(activity.active_calories));
-      if (activity.steps != null)           result.steps           = String(activity.steps.toLocaleString ? activity.steps.toLocaleString() : activity.steps);
+      const cals = activity.active_calories ?? activity.total_calories ?? null;
+      if (cals != null) result.activeCalories = String(Math.round(cals));
+      if (activity.steps != null)           result.steps           = String(activity.steps); // plain number string, no commas
     }
 
     // Calm: inverted from Oura stress_high (minutes in high-stress HRV state)

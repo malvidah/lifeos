@@ -1296,6 +1296,27 @@ export default function Dashboard() {
     setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,calm:+data.calmScore||0}}));
   },[]);
 
+  // Prefetch Oura scores for ±14 days around today so dots show without clicking each day
+  useEffect(()=>{
+    if(!token||!userId)return;
+    const dates=[];
+    for(let i=-14;i<=1;i++) dates.push(toKey(shift(new Date(),i)));
+    dates.forEach((d,i)=>{
+      setTimeout(()=>{
+        fetch(`/api/oura?date=${d}`,{headers:{Authorization:`Bearer ${token}`}})
+          .then(r=>r.json()).then(data=>{
+            if(data.error)return;
+            setHealthDots(prev=>({...prev,[d]:{
+              sleep:+data.sleepScore||0,
+              readiness:+data.readinessScore||0,
+              activity:+data.activityScore||0,
+              calm:+data.calmScore||0,
+            }}));
+          }).catch(()=>{});
+      }, i*150); // stagger 150ms apart to avoid hammering
+    });
+  },[token,userId]); // eslint-disable-line
+
   const wMap=Object.fromEntries(WIDGET_DEFS.map(w=>[w.id,w]));
 
   function makeResizeHandler(id) {
