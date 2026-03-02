@@ -35,12 +35,13 @@ export async function GET(request) {
     prev2.setDate(prev2.getDate() - 2);
     const prevDate2 = prev2.toISOString().split("T")[0];
 
-    const [sleepRes, readinessRes, sessionRes, activityRes, stressRes] = await Promise.all([
+    const [sleepRes, readinessRes, sessionRes, activityRes, stressRes, workoutRes] = await Promise.all([
       fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
       fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
       fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${prevDate2}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
       fetch(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
       fetch(`https://api.ouraring.com/v2/usercollection/daily_stress?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
+      fetch(`https://api.ouraring.com/v2/usercollection/workout?start_date=${date}&end_date=${date}`, { headers: { Authorization: `Bearer ${ouraToken}` } }),
     ]);
 
     const sleepData     = await sleepRes.json();
@@ -48,6 +49,7 @@ export async function GET(request) {
     const sessionData   = await sessionRes.json();
     const activityData  = await activityRes.json();
     const stressData    = await stressRes.json();
+    const workoutData   = await workoutRes.json();
 
     const daily      = sleepData.data?.[0];
     const readiness  = readinessData.data?.[0];
@@ -100,6 +102,19 @@ export async function GET(request) {
       }
     }
 
+
+    // Workout sessions
+    const workouts = workoutData.data ?? [];
+    if (workouts.length > 0) {
+      result.workouts = workouts.map(w => ({
+        source:   'oura',
+        activity: w.activity || 'workout',
+        durationMins: Math.round((w.duration ?? 0) / 60),
+        calories: w.calories != null ? Math.round(w.calories) : null,
+        distance: w.distance != null ? +(w.distance / 1000).toFixed(2) : null,
+        startTime: w.start_datetime || null,
+      }));
+    }
 
     return Response.json(result);
   } catch (e) {

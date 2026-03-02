@@ -968,6 +968,20 @@ function Shimmer({width="100%", height=14, style={}}) {
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",resilienceScore:"",stressMins:"",recoveryMins:""};
 
+const SPORT_EMOJI = {
+  Run:"🏃",Ride:"🚴",Swim:"🏊",Walk:"🚶",Hike:"🥾",
+  WeightTraining:"🏋️",Yoga:"🧘",Workout:"💪",
+  VirtualRide:"🚴",VirtualRun:"🏃",Soccer:"⚽",
+  Rowing:"🚣",Kayaking:"🛶",Surfing:"🏄",
+  Snowboard:"🏂",AlpineSki:"⛷️",NordicSki:"⛷️",
+  default:"🏅",
+};
+function sportEmoji(type){
+  if(!type)return SPORT_EMOJI.default;
+  const k=Object.keys(SPORT_EMOJI).find(k=>k.toLowerCase()===type.toLowerCase().replace(/_/g,""));
+  return SPORT_EMOJI[k]||SPORT_EMOJI.default;
+}
+
 function fmtMins(val) {
   const m = parseInt(val)||0;
   if (!m) return "—";
@@ -1220,41 +1234,125 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
   );
 }
 function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Calories in: "${t}". Return JSON: {"kcal":420}`} prefix="" color={C.accent}/>;}
+function SourceBadge({source}) {
+  const isStrava = source === "strava";
+  return (
+    <span style={{
+      fontFamily:mono, fontSize:6, letterSpacing:"0.12em", textTransform:"uppercase",
+      color: isStrava ? "#FC4C02" : "#B8A882",
+      border: `1px solid ${isStrava ? "#FC4C02" : "#B8A882"}`,
+      borderRadius:3, padding:"1px 4px", flexShrink:0, opacity:0.8,
+    }}>{isStrava ? "Strava" : "Oura"}</span>
+  );
+}
+
+// Merge Oura workouts + Strava activities, deduplicating by overlapping type+time
+function mergeWorkouts(oura, strava) {
+  // Normalise activity name for fuzzy matching
+  const norm = s => (s||"").toLowerCase().replace(/[^a-z]/g,"");
+  const merged = [];
+
+  // Start with Strava (higher quality names + data)
+  for (const s of strava) {
+    merged.push({ source:"strava", name:s.name, sport:s.sport||s.type,
+      durationMins:s.duration?Math.round(s.duration/60):null,
+      distance:s.distance, calories:s.calories,
+      avgHr:s.avgHr, startTime:s.startTime, id:s.id });
+  }
+
+  // Add Oura workouts that aren't duplicated by a Strava entry
+  for (const o of oura) {
+    const oType = norm(o.activity);
+    const isDupe = merged.some(m => {
+      if(norm(m.sport)===oType || norm(m.name).includes(oType)) {
+        // Close enough in duration (within 5 min) counts as same session
+        const timeDiff = Math.abs((m.durationMins||0)-(o.durationMins||0));
+        return timeDiff <= 5;
+      }
+      return false;
+    });
+    if (!isDupe) {
+      merged.push({ source:"oura", name:o.activity.replace(/_/g," "),
+        sport:o.activity, durationMins:o.durationMins,
+        distance:o.distance, calories:o.calories,
+        startTime:o.startTime });
+    }
+  }
+  return merged;
+}
+
 function Activity({date,token,userId}) {
-  const [strava,setStrava]=useState([]);
+  const [workouts, setWorkouts] = useState([]); // merged oura+strava
+  const [estimating, setEstimating] = useState({}); // id -> bool
 
   useEffect(()=>{
     if(!token)return;
-    setStrava([]);
-    fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(d=>{if(d.activities)setStrava(d.activities);}).catch(()=>{});
+    setWorkouts([]);
+    const headers = {Authorization:`Bearer ${token}`};
+    Promise.all([
+      fetch(`/api/oura?date=${date}`,{headers}).then(r=>r.json()).catch(()=>({})),
+      fetch(`/api/strava?date=${date}`,{headers}).then(r=>r.json()).catch(()=>({})),
+    ]).then(([ouraData, stravaData])=>{
+      const ouraWorkouts = ouraData.workouts||[];
+      const stravaActivities = stravaData.activities||[];
+      const merged = mergeWorkouts(ouraWorkouts, stravaActivities);
+      setWorkouts(merged);
+      // Auto-estimate calories for any workout missing them
+      merged.forEach((w,i)=>{
+        if(!w.calories && w.name){
+          estimateWorkoutKcal(w, i, token, merged, setWorkouts, setEstimating);
+        }
+      });
+    });
   },[date,token]); // eslint-disable-line
 
   return (
     <div style={{display:"flex",flexDirection:"column",gap:0,height:"100%"}}>
-      {strava.length>0&&(
-        <div style={{padding:"10px 14px 6px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontFamily:mono,fontSize:7,letterSpacing:"0.15em",textTransform:"uppercase",color:"#FC4C02",marginBottom:6}}>Strava</div>
-          {strava.map((a,i)=>(
-            <div key={a.id||i} style={{display:"flex",alignItems:"baseline",gap:8,padding:"3px 0",
-              borderBottom:i<strava.length-1?`1px solid ${C.border}`:"none"}}>
-              <span style={{fontSize:13}}>{sportEmoji(a.sport||a.type)}</span>
-              <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span>
-              <span style={{fontFamily:mono,fontSize:10,color:C.muted,flexShrink:0}}>{fmtMins(a.duration)}</span>
-              {a.distance&&<span style={{fontFamily:mono,fontSize:10,color:C.blue,flexShrink:0}}>{a.distance}km</span>}
-              {a.calories&&<span style={{fontFamily:mono,fontSize:10,color:C.accent,flexShrink:0}}>{a.calories}kcal</span>}
+      {workouts.length>0&&(
+        <div style={{padding:"8px 14px 6px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+          {workouts.map((w,i)=>(
+            <div key={w.id||i} style={{display:"flex",alignItems:"center",gap:7,padding:"4px 0",
+              borderBottom:i<workouts.length-1?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontSize:13,flexShrink:0}}>{sportEmoji(w.sport)}</span>
+              <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",
+                textTransform:"capitalize"}}>{w.name}</span>
+              {w.durationMins&&<span style={{fontFamily:mono,fontSize:10,color:C.muted,flexShrink:0}}>{fmtMins(w.durationMins)}</span>}
+              {w.distance&&<span style={{fontFamily:mono,fontSize:10,color:C.blue,flexShrink:0}}>{w.distance}km</span>}
+              <span style={{fontFamily:mono,fontSize:10,color:C.accent,flexShrink:0,minWidth:38,textAlign:"right"}}>
+                {estimating[i]?"…":w.calories?`${w.calories}kcal`:""}
+              </span>
+              <SourceBadge source={w.source}/>
             </div>
           ))}
         </div>
       )}
       <div style={{flex:1,minHeight:0}}>
         <RowList date={date} type="activity" token={token} userId={userId}
-          placeholder="What did you do?"
+          placeholder="Add activity…"
           promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`}
           prefix="−" color={C.green}/>
       </div>
     </div>
   );
+}
+
+async function estimateWorkoutKcal(workout, idx, token, currentWorkouts, setWorkouts, setEstimating) {
+  setEstimating(prev=>({...prev,[idx]:true}));
+  try {
+    const desc = [
+      workout.name,
+      workout.durationMins ? `${workout.durationMins} minutes` : null,
+      workout.distance ? `${workout.distance}km` : null,
+      workout.avgHr ? `avg HR ${workout.avgHr}bpm` : null,
+    ].filter(Boolean).join(", ");
+    const kcal = await estimateKcal(
+      `Calories burned for: "${desc}" for a typical adult. Return JSON: {"kcal":300}`,
+      token
+    );
+    setWorkouts(prev => prev.map((w,i) => i===idx ? {...w, calories:kcal} : w));
+  } catch(e) { /* silent fail */ }
+  finally { setEstimating(prev=>({...prev,[idx]:false})); }
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
