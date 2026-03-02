@@ -716,13 +716,21 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   opacity: isCtr ? 1 : Math.max(0.25, 1 - Math.abs(i) * 0.1),
                 }}>{d.getDate()}</div>
                 <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4,alignItems:"center"}}>
-                  {(healthDots[k]?.sleep >= 90) && (
+                  {(healthDots[k]?.sleep >= 85) && (
                     <div style={{width:3,height:3,borderRadius:"50%",
                       background:C.blue, opacity: isCtr ? 1 : 0.5}}/>
                   )}
-                  {(healthDots[k]?.readiness >= 90) && (
+                  {(healthDots[k]?.readiness >= 85) && (
                     <div style={{width:3,height:3,borderRadius:"50%",
                       background:C.green, opacity: isCtr ? 1 : 0.5}}/>
+                  )}
+                  {(healthDots[k]?.activity >= 85) && (
+                    <div style={{width:3,height:3,borderRadius:"50%",
+                      background:C.accent, opacity: isCtr ? 1 : 0.5}}/>
+                  )}
+                  {(healthDots[k]?.calm >= 85) && (
+                    <div style={{width:3,height:3,borderRadius:"50%",
+                      background:"#8B6BB5", opacity: isCtr ? 1 : 0.5}}/>
                   )}
                 </div>
               </div>
@@ -798,7 +806,7 @@ function Shimmer({width="100%", height=14, style={}}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:"",calmScore:"",recoveryMins:""};
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
@@ -822,10 +830,13 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
           activityScore:p.activityScore||data.activityScore||"",
           activeCalories:p.activeCalories||data.activeCalories||"",
           steps:p.steps||data.steps||"",
+          calmScore:p.calmScore||data.calmScore||"",
+          recoveryMins:p.recoveryMins||data.recoveryMins||"",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
 
+  const purple = "#8B6BB5";
   const metrics=[
     {key:"sleep",label:"Sleep",color:C.blue,score:h.sleepScore,setScore:e=>setH(p=>({...p,sleepScore:e.target.value})),
       fields:[{label:"Hours",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Efficiency",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
@@ -833,19 +844,26 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
       fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"Resting HR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,setScore:e=>setH(p=>({...p,activityScore:e.target.value})),
       fields:[{label:"Cal Burned",value:h.activeCalories,onChange:set("activeCalories"),unit:"kcal"},{label:"Steps",value:h.steps,onChange:set("steps"),unit:""}]},
+    {key:"calm",label:"Calm",color:purple,score:h.calmScore,setScore:e=>setH(p=>({...p,calmScore:e.target.value})),
+      fields:[{label:"Recovery",value:h.recoveryMins,onChange:set("recoveryMins"),unit:"min"}]},
   ];
 
-  const mobileH = useIsMobile();
   return (
     <Card>
-      <div style={{display:"flex",alignItems:"stretch",flexWrap:mobileH?"wrap":"nowrap"}}>
-        {!mobileH && <div style={{display:"flex",alignItems:"center",padding:"0 10px",borderRight:`1px solid ${C.border}`}}>
-          <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-        </div>}
+      {/* Card header — matches Widget/Calendar style */}
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+        borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
+        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,
+          touchAction:"none",userSelect:"none"}}>⠿</div>
+        <div style={{width:3,height:13,borderRadius:2,background:C.green,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
+          textTransform:"uppercase",color:C.muted}}>Health</span>
+      </div>
+      {/* Metrics row — scrollable horizontally on mobile */}
+      <div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
         {metrics.map((m,mi)=>(
-          <div key={m.key} style={{flex:mobileH?"1 1 30%":"1 1 0",display:"flex",alignItems:"center",gap:mobileH?8:12,
-            padding:mobileH?"10px 10px":"12px 14px",borderRight:(!mobileH&&mi<2)?`1px solid ${C.border}`:"none",
-            borderBottom:mobileH&&mi<metrics.length-1?`1px solid ${C.border}`:"none"}}>
+          <div key={m.key} style={{flex:"1 0 auto",minWidth:130,display:"flex",alignItems:"center",gap:12,
+            padding:"12px 14px",borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none"}}>
             <div style={{position:"relative",flexShrink:0}}>
               <Ring score={m.score} color={m.color} size={48}/>
               <input value={m.score} onChange={m.setScore} style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
@@ -1238,7 +1256,7 @@ export default function Dashboard() {
   },[token]); // eslint-disable-line
 
   const onHealthChange=useCallback((date,data)=>{
-    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0}}));
+    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,calm:+data.calmScore||0}}));
   },[]);
 
   const wMap=Object.fromEntries(WIDGET_DEFS.map(w=>[w.id,w]));
@@ -1350,30 +1368,40 @@ export default function Dashboard() {
           ))}
         </div>
       ) : (
-        /* ── DESKTOP: two-column scrollable layout, matches mobile feel ─── */
-        <div style={{flex:1,display:"flex",gap:10,padding:10,overflow:"hidden",minHeight:0}}>
+        /* ── DESKTOP: stacked layout — cal, health, then 2-col widgets ─── */
+        <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column",gap:8}}>
 
-          {/* Left column: cal + health stacked */}
-          <div style={{width:420,flexShrink:0,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
-            <div style={{height:360,flexShrink:0}}>
-              <CalStrip selected={selected} onSelect={setSelected}
-                events={events} healthDots={healthDots} dragProps={{}}/>
-            </div>
+          {/* Calendar — full width, fixed height */}
+          <div style={{height:360,flexShrink:0}}>
+            <CalStrip selected={selected} onSelect={setSelected}
+              events={events} healthDots={healthDots} dragProps={{}}/>
+          </div>
+
+          {/* Health strip — full width */}
+          <div style={{flexShrink:0}}>
             <HealthStrip date={selected} token={token} userId={userId}
               onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
               dragProps={{}}/>
           </div>
 
-          {/* Right column: widgets in a 2-col grid, scrollable */}
-          <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,
-            alignContent:"start",overflowY:"auto",minWidth:0}}>
-            {[leftWidget,...rightWidgets].map(w=>(
-              <div key={w.id} style={{minHeight:240}}>
-                <Widget label={w.label} color={w.color} dragProps={{}}>
-                  <w.Comp date={selected} token={token} userId={userId}/>
-                </Widget>
-              </div>
-            ))}
+          {/* Widgets — notes on left (wider), tasks+meals+activity on right */}
+          <div style={{display:"flex",gap:8,alignItems:"stretch",minHeight:480}}>
+            {/* Notes — left, wider */}
+            <div style={{flex:"2 1 0",minWidth:0}}>
+              <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
+                <leftWidget.Comp date={selected} token={token} userId={userId}/>
+              </Widget>
+            </div>
+            {/* Tasks, Meals, Activity stacked on right */}
+            <div style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
+              {rightWidgets.map(w=>(
+                <div key={w.id} style={{flex:"1 1 0",minHeight:140}}>
+                  <Widget label={w.label} color={w.color} dragProps={{}}>
+                    <w.Comp date={selected} token={token} userId={userId}/>
+                  </Widget>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
