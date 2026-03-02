@@ -453,17 +453,51 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange}) {
 
 // ─── CalStrip ─────────────────────────────────────────────────────────────────
 // Single epoch: Jan 1 2026. All offsets are integer days from this point.
-const CAL_EPOCH = new Date("2026-01-01T00:00:00");
 const MONTHS_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-function dayOffset(dateOrKey) {
-  const d = typeof dateOrKey === "string" ? new Date(dateOrKey + "T12:00:00") : dateOrKey;
-  return Math.round((d - CAL_EPOCH) / 86400000);
+// Convert a YYYY-MM-DD key or Date to an integer day number.
+// We avoid epoch subtraction entirely — just count calendar days from a fixed point.
+// This sidesteps ALL timezone/DST issues.
+function keyToDayNum(key) {
+  // key is always "YYYY-MM-DD" local date
+  const [y, m, d] = key.split("-").map(Number);
+  // Days since a distant fixed point (Jan 1 2000) using pure calendar math
+  // Zeller-like: count days in each year/month without Date arithmetic
+  function daysFromY2K(yr, mo, dy) {
+    let total = 0;
+    for (let y = 2000; y < yr; y++) {
+      total += (y%4===0&&(y%100!==0||y%400===0)) ? 366 : 365;
+    }
+    const mdays = [0,31,28,31,30,31,30,31,31,30,31,30,31];
+    if (yr%4===0&&(yr%100!==0||yr%400===0)) mdays[2]=29;
+    for (let m2 = 1; m2 < mo; m2++) total += mdays[m2];
+    return total + dy - 1;
+  }
+  return daysFromY2K(y, m, d);
 }
+
+function dayOffset(dateOrKey) {
+  const key = typeof dateOrKey === "string" ? dateOrKey : toKey(dateOrKey);
+  return keyToDayNum(key);
+}
+
 function offsetToDate(n) {
-  const d = new Date(CAL_EPOCH);
-  d.setDate(d.getDate() + Math.round(n));
-  return d;
+  // Convert day number back to a local Date at noon
+  // We walk from Y2K adding years/months until we land on the right day
+  let rem = Math.round(n);
+  let yr = 2000;
+  while (true) {
+    const isLeap = yr%4===0&&(yr%100!==0||yr%400===0);
+    const ydays = isLeap ? 366 : 365;
+    if (rem < ydays) break;
+    rem -= ydays; yr++;
+  }
+  const mdays = [0,31,28,31,30,31,30,31,31,30,31,30,31];
+  if (yr%4===0&&(yr%100!==0||yr%400===0)) mdays[2]=29;
+  let mo = 1;
+  while (rem >= mdays[mo]) { rem -= mdays[mo]; mo++; }
+  // Return as a local noon Date (noon avoids any DST edge)
+  return new Date(yr, mo-1, rem+1, 12, 0, 0);
 }
 
 // Mobile date picker — horizontal day strip with physics momentum
@@ -486,26 +520,46 @@ function MobileCalPicker({selected, onSelect, events}) {
     if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; }
   }
 
-  function snap() {
+  // Animate liveOff toward a target with spring ease-out
+  function animateTo(target) {
     cancelRaf();
-    const n = Math.round(liveOff.current);
-    liveOff.current = n;
     vel.current = 0;
-    repaint();
-    onSelect(toKey(offsetToDate(n)));
+    const startVal = liveOff.current;
+    const startTime = performance.now();
+    const DURATION = 280; // ms — feel of a physical spinner click
+    const tick = (now) => {
+      const t = Math.min((now - startTime) / DURATION, 1);
+      // Ease-out cubic: decelerates gently into place
+      const ease = 1 - Math.pow(1 - t, 3);
+      liveOff.current = startVal + (target - startVal) * ease;
+      repaint();
+      if (t < 1) {
+        rafId.current = requestAnimationFrame(tick);
+      } else {
+        liveOff.current = target;
+        repaint();
+        onSelect(toKey(offsetToDate(target)));
+      }
+    };
+    rafId.current = requestAnimationFrame(tick);
+  }
+
+  function snap() {
+    animateTo(Math.round(liveOff.current));
   }
 
   function runMomentum() {
     cancelRaf();
-    const FRICTION = 0.82; // enough to feel natural, not over-shoot
+    const FRICTION = 0.86;
     const tick = () => {
       vel.current *= FRICTION;
       liveOff.current -= vel.current / DAY_W;
       repaint();
-      if (Math.abs(vel.current) > 0.5) {
+      // Once velocity is low enough, hand off to the smooth snap animation
+      if (Math.abs(vel.current) > 1.5) {
         rafId.current = requestAnimationFrame(tick);
       } else {
-        snap();
+        animateTo(Math.round(liveOff.current));
       }
     };
     rafId.current = requestAnimationFrame(tick);
@@ -523,12 +577,12 @@ function MobileCalPicker({selected, onSelect, events}) {
     e.preventDefault();
     const x  = e.touches[0].clientX;
     const t  = performance.now();
-    const dt = Math.max(t - lastT.current, 4); // min 4ms to avoid spike
+    const dt = Math.max(t - lastT.current, 4);
     const dx = x - lastX.current;
     totalDrag.current += Math.abs(dx);
-    // Rolling average: blend new velocity with previous (smooths out jitter)
+    // Rolling average velocity (px/frame at 60fps)
     const newVel = (dx / dt) * 16;
-    vel.current = vel.current * 0.4 + newVel * 0.6;
+    vel.current = vel.current * 0.5 + newVel * 0.5;
     liveOff.current -= dx / DAY_W;
     lastX.current = x;
     lastT.current = t;
@@ -536,8 +590,7 @@ function MobileCalPicker({selected, onSelect, events}) {
   };
 
   const onTouchEnd = () => {
-    // Only run momentum if there was a real swipe (>8px total drag)
-    if (totalDrag.current > 8 && Math.abs(vel.current) > 1.0) {
+    if (totalDrag.current > 8 && Math.abs(vel.current) > 1.5) {
       runMomentum();
     } else {
       snap();
@@ -575,12 +628,10 @@ function MobileCalPicker({selected, onSelect, events}) {
   const selEvents = (events[selKey] || []).slice().sort((a,b) => (a.time||"").localeCompare(b.time||""));
   const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
-  // Tap a visible day — only fires if it was a clean tap (< 6px drag)
-  const tapDay = (i) => {
-    if (totalDrag.current > 6) return; // was a swipe, not a tap
-    cancelRaf();
-    liveOff.current = selInt + i;
-    snap();
+  // Tap a visible day — only fires on clean taps (< 8px total drag)
+  const tapDay = (targetOffset) => {
+    if (totalDrag.current > 8) return;
+    animateTo(targetOffset);
   };
 
   return (
@@ -638,7 +689,7 @@ function MobileCalPicker({selected, onSelect, events}) {
             const hasEvt = (events[k]||[]).length > 0;
             return (
               <div key={k}
-                onClick={() => tapDay(i)}
+                onClick={() => tapDay(selInt + i)}
                 style={{
                   width:DAY_W, flexShrink:0, textAlign:"center",
                   padding:"10px 0 6px",
@@ -1194,7 +1245,7 @@ export default function Dashboard() {
     startSync("cal");
     fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({token:googleToken,start:toKey(shift(new Date(),-7)),end:toKey(shift(new Date(),21)),tz:Intl.DateTimeFormat().resolvedOptions().timeZone})})
-      .then(r=>r.json()).then(d=>{if(d.events)setEvents(d.events);}).catch(()=>{}).finally(()=>endSync("cal"));
+      .then(r=>r.json()).then(d=>{console.log("[cal] keys:",Object.keys(d.events||{}));if(d.events)setEvents(d.events);else console.warn("[cal] no events:",d);}).catch(e=>console.error("[cal] err:",e)).finally(()=>endSync("cal"));
   },[googleToken]); // eslint-disable-line
 
   const onHealthChange=useCallback((date,data)=>{
