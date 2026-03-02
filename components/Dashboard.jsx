@@ -837,8 +837,39 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     </div>
   );
 }
-function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
+function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps, token}) {
   const mobile = useIsMobile();
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({title:"", startTime:"", endTime:"", allDay:false});
+  const [saving, setSaving] = useState(false);
+  const [saveErr, setSaveErr] = useState("");
+
+  function openAdd() { setForm({title:"",startTime:"",endTime:"",allDay:false}); setSaveErr(""); setAdding(true); }
+  function closeAdd() { setAdding(false); }
+
+  async function submitEvent(e) {
+    e.preventDefault();
+    if (!form.title.trim()) return;
+    setSaving(true); setSaveErr("");
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    try {
+      const res = await fetch("/api/calendar-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: form.title.trim(), date: selected, startTime: form.allDay?"":form.startTime, endTime: form.allDay?"":form.endTime, allDay: form.allDay, tz }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { setSaveErr(data.error || "Failed to create event"); setSaving(false); return; }
+      // Optimistically add to local events
+      const newEv = {
+        title: form.title.trim(),
+        time: form.allDay ? "all day" : (form.startTime ? form.startTime : "all day"),
+        color: "#B8A882",
+      };
+      setEvents(prev => ({ ...prev, [selected]: [...(prev[selected]||[]), newEv] }));
+      setSaving(false); setAdding(false);
+    } catch(err) { setSaveErr(err.message); setSaving(false); }
+  }
 
   return (
     <Card>
@@ -857,7 +888,64 @@ function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
           transition:"opacity 0.15s"}}
           onMouseEnter={e=>e.currentTarget.style.opacity="1"}
           onMouseLeave={e=>e.currentTarget.style.opacity="0.7"}>today</button>
+        <button onClick={openAdd} style={{
+          background:"none",border:`1px solid ${C.border2}`,borderRadius:5,cursor:"pointer",
+          color:C.muted,fontFamily:mono,fontSize:13,lineHeight:1,padding:"2px 7px",
+          transition:"all 0.15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}
+          title="Add event">+</button>
       </div>
+
+      {/* Quick-add form */}
+      {adding && (
+        <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,background:`${C.blue}08`}}>
+          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>
+            New event · {new Date(selected+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}
+          </div>
+          <input autoFocus value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}
+            placeholder="Event title"
+            style={{width:"100%",background:"transparent",border:"none",borderBottom:`1px solid ${C.border2}`,
+              outline:"none",padding:"4px 0",fontFamily:serif,fontSize:16,color:C.text,marginBottom:10}} />
+          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
+            <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
+              <input type="checkbox" checked={form.allDay} onChange={e=>setForm(f=>({...f,allDay:e.target.checked}))}
+                style={{accentColor:C.blue,width:12,height:12}}/>
+              <span style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.08em"}}>All day</span>
+            </label>
+            {!form.allDay && (
+              <>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontFamily:mono,fontSize:9,color:C.muted}}>Start</span>
+                  <input type="time" value={form.startTime} onChange={e=>setForm(f=>({...f,startTime:e.target.value}))}
+                    style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:4,
+                      outline:"none",padding:"3px 6px",fontFamily:mono,fontSize:10,color:C.text}}/>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontFamily:mono,fontSize:9,color:C.muted}}>End</span>
+                  <input type="time" value={form.endTime} onChange={e=>setForm(f=>({...f,endTime:e.target.value}))}
+                    style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:4,
+                      outline:"none",padding:"3px 6px",fontFamily:mono,fontSize:10,color:C.text}}/>
+                </div>
+              </>
+            )}
+          </div>
+          {saveErr && <div style={{fontFamily:mono,fontSize:9,color:"#A05050",marginBottom:8}}>{saveErr}</div>}
+          <div style={{display:"flex",gap:8}}>
+            <button onClick={submitEvent} disabled={saving||!form.title.trim()} style={{
+              background:C.blue,border:"none",borderRadius:5,padding:"6px 14px",
+              color:"#fff",fontFamily:mono,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",
+              cursor:saving||!form.title.trim()?"not-allowed":"pointer",opacity:saving||!form.title.trim()?0.5:1}}>
+              {saving?"saving…":"add to google cal"}
+            </button>
+            <button onClick={closeAdd} style={{
+              background:"none",border:`1px solid ${C.border2}`,borderRadius:5,padding:"6px 14px",
+              color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",cursor:"pointer"}}>
+              cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Same picker on both — mobile uses touch, desktop uses click */}
       <MobileCalPicker selected={selected} onSelect={onSelect} events={events} healthDots={healthDots} desktop={!mobile}/>
@@ -1182,14 +1270,15 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
   },[date,token]); // eslint-disable-line
 
   const purple = "#8B6BB5";
+  // All fields are read-only — data comes from Oura, no onChange handlers
   const metrics=[
-    {key:"sleep",label:"Sleep",color:C.blue,score:h.sleepScore,setScore:e=>setH(p=>({...p,sleepScore:e.target.value})),
-      fields:[{label:"Hours",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Effic.",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
-    {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,setScore:e=>setH(p=>({...p,readinessScore:e.target.value})),
-      fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"RHR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
-    {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,setScore:e=>setH(p=>({...p,activityScore:e.target.value})),
-      fields:[{label:"Total Burn",value:h.totalCalories||h.activeCalories,onChange:set("totalCalories"),unit:"cal"},{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",onChange:set("steps"),unit:""}]},
-    {key:"resilience",label:"Resilience",color:purple,score:h.resilienceScore,setScore:e=>setH(p=>({...p,resilienceScore:e.target.value})),
+    {key:"sleep",label:"Sleep",color:C.blue,score:h.sleepScore,
+      fields:[{label:"Hours",value:h.sleepHrs,unit:"h"},{label:"Effic.",value:h.sleepEff,unit:"%"}]},
+    {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,
+      fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}]},
+    {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,
+      fields:[{label:"Total Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",unit:""}]},
+    {key:"resilience",label:"Resilience",color:purple,score:h.resilienceScore,
       fields:[{label:"Stress",value:fmtMins(h.stressMins),unit:""},{label:"Recov.",value:fmtMins(h.recoveryMins),unit:""}]},
   ];
 
@@ -1222,10 +1311,8 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
                 background:isActive?`${m.color}10`:"transparent",
                 borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
                 borderBottom:isActive?`2px solid ${m.color}`:`2px solid transparent`}}>
-              <div style={{position:"relative",flexShrink:0}}>
+              <div style={{flexShrink:0}}>
                 <Ring score={m.score} color={m.color} size={48}/>
-                <input value={m.score} onChange={m.setScore} onClick={e=>e.stopPropagation()}
-                  style={{position:"absolute",inset:0,opacity:0,cursor:"text",width:"100%",fontSize:16}}/>
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:6}}>{m.label}</div>
@@ -1234,12 +1321,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
                     <div key={f.label}>
                       <div style={{fontFamily:mono,fontSize:8,textTransform:"uppercase",color:C.muted,marginBottom:2,letterSpacing:"0.08em"}}>{f.label}</div>
                       <div style={{display:"flex",alignItems:"baseline",gap:2}}>
-                        {f.onChange
-                          ? <input value={f.value} onChange={f.onChange} placeholder="—" onClick={e=>e.stopPropagation()}
-                              style={{background:"transparent",border:"none",outline:"none",padding:0,
-                                color:f.value?C.text:C.dim,fontFamily:serif,fontSize:17,width:f.unit?38:80}}/>
-                          : <span style={{fontFamily:serif,fontSize:17,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
-                        }
+                        <span style={{fontFamily:serif,fontSize:17,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
                         {f.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{f.unit}</span>}
                       </div>
                     </div>
@@ -1563,6 +1645,7 @@ export default function Dashboard() {
   const [healthDots,setHealthDots]= useState({});
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
+  const [googleToken,setGoogleToken] = useState(null);
 
   // Full-width sections order
   const [fullOrder, setFullOrder] = useState(FULL_IDS);
@@ -1628,9 +1711,10 @@ export default function Dashboard() {
     const start=toKey(shift(new Date(),-30));
     const end=toKey(shift(new Date(),60));
 
-    const fetchCal=(googleToken)=>{
+    const fetchCal=(gToken)=>{
+      setGoogleToken(gToken);
       fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({token:googleToken,start,end,tz})})
+        body:JSON.stringify({token:gToken,start,end,tz})})
         .then(r=>r.json())
         .then(d=>{
           if(d.events&&Object.keys(d.events).length>0){
@@ -1646,7 +1730,6 @@ export default function Dashboard() {
     if(sessionGoogleToken){
       fetchCal(sessionGoogleToken);
     } else {
-      // Retrieve stored token from DB
       fetch("/api/google-token",{headers:{"Authorization":`Bearer ${token}`}})
         .then(r=>r.json())
         .then(d=>{
@@ -1762,7 +1845,8 @@ export default function Dashboard() {
                       id==="cal"
                         ? <div>
                             <CalStrip selected={selected} onSelect={setSelected}
-                              events={events} healthDots={healthDots} dragProps={dragProps}/>
+                              events={events} setEvents={setEvents} healthDots={healthDots}
+                              token={token} googleToken={googleToken} dragProps={dragProps}/>
                           </div>
                         : <HealthStrip date={selected} token={token} userId={userId}
                             onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
@@ -1797,7 +1881,8 @@ export default function Dashboard() {
           {/* Calendar — full width, fixed height */}
           <div style={{height:360,flexShrink:0}}>
             <CalStrip selected={selected} onSelect={setSelected}
-              events={events} healthDots={healthDots} dragProps={{}}/>
+              events={events} setEvents={setEvents} healthDots={healthDots}
+              token={token} googleToken={googleToken} dragProps={{}}/>
           </div>
 
           {/* Health strip — full width */}
