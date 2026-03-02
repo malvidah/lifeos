@@ -273,7 +273,7 @@ function Card({children,style={}}) {
   return (
     <div style={{
       background:C.card,borderRadius:R,border:`1px solid ${C.border}`,
-      overflow:"hidden",height:"100%",
+      overflow:"clip",height:"100%",
       boxShadow:C.shadow,
       display:"flex",flexDirection:"column",
       ...style,
@@ -505,7 +505,7 @@ function offsetToDate(n) {
 
 // Mobile date picker — horizontal day strip with physics momentum
 // Month and year are static labels (snap discretely). Only the day ribbon moves.
-function MobileCalPicker({selected, onSelect, events, desktop=false}) {
+function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false}) {
   const today = todayKey();
   const DAY_W = desktop ? 72 : 52;
 
@@ -638,7 +638,7 @@ function MobileCalPicker({selected, onSelect, events, desktop=false}) {
   };
 
   return (
-    <div style={{userSelect:"none", overflow:"hidden"}}>
+    <div style={{userSelect:"none"}}>
 
       {/* ── Static month + year header ────────────────────────────────────── */}
       <div style={{
@@ -693,7 +693,6 @@ function MobileCalPicker({selected, onSelect, events, desktop=false}) {
             const k      = toKey(d);
             const isCtr  = i === 0;
             const isTdy  = k === today;
-            const hasEvt = (events[k]||[]).length > 0;
             return (
               <div key={k}
                 onClick={() => tapDay(selInt + i)}
@@ -716,14 +715,16 @@ function MobileCalPicker({selected, onSelect, events, desktop=false}) {
                   color: isTdy ? C.accent : isCtr ? C.text : C.muted,
                   opacity: isCtr ? 1 : Math.max(0.25, 1 - Math.abs(i) * 0.1),
                 }}>{d.getDate()}</div>
-                {hasEvt && (
-                  <div style={{
-                    width:3, height:3, borderRadius:"50%",
-                    background: isCtr ? C.accent : C.dim,
-                    margin:"4px auto 0",
-                    opacity: isCtr ? 1 : 0.5,
-                  }}/>
-                )}
+                <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4,alignItems:"center"}}>
+                  {(healthDots[k]?.sleep >= 90) && (
+                    <div style={{width:3,height:3,borderRadius:"50%",
+                      background:C.blue, opacity: isCtr ? 1 : 0.5}}/>
+                  )}
+                  {(healthDots[k]?.readiness >= 90) && (
+                    <div style={{width:3,height:3,borderRadius:"50%",
+                      background:C.green, opacity: isCtr ? 1 : 0.5}}/>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -731,7 +732,7 @@ function MobileCalPicker({selected, onSelect, events, desktop=false}) {
       </div>
 
       {/* ── Events for selected day ───────────────────────────────────────── */}
-      <div style={{padding:"10px 16px", overflowY:"auto", flex:1, minHeight:60}}>
+      <div style={{padding:"10px 16px", overflowY:"auto", maxHeight: desktop ? 180 : 120, minHeight:48}}>
         <div style={{
           fontFamily:mono, fontSize:8, color:C.muted,
           letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:8,
@@ -779,7 +780,7 @@ function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
       </div>
 
       {/* Same picker on both — mobile uses touch, desktop uses click */}
-      <MobileCalPicker selected={selected} onSelect={onSelect} events={events} desktop={!mobile}/>
+      <MobileCalPicker selected={selected} onSelect={onSelect} events={events} healthDots={healthDots} desktop={!mobile}/>
     </Card>
   );
 }
