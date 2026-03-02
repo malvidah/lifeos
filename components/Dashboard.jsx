@@ -485,8 +485,10 @@ function MobileCalPicker({selected, onSelect, events}) {
   // Snap to nearest integer day and fire onSelect
   function snapToNearest() {
     cancelRaf();
-    const n = Math.round(liveOffset.current);
+    // Use same rounding as render (floor + 0.5) to guarantee consistency
+    const n = Math.floor(liveOffset.current + 0.5);
     liveOffset.current = n;
+    velocity.current = 0;
     repaint();
     onSelect(toKey(offsetToDate(n)));
   }
@@ -570,7 +572,11 @@ function MobileCalPicker({selected, onSelect, events}) {
   // ── Build visible items ────────────────────────────────────────────────────
   // Days: 10 either side of center
   const N_DAYS = 10;
-  const centerDayInt = Math.round(offset);
+  // Use floor so the "selected" slot is stable during the drag — only advances when
+  // you've moved more than one full day width past the previous day.
+  // The fractional part (offset - centerDayInt) drives the sub-slot pixel offset.
+  const centerDayInt = Math.floor(offset + 0.5); // equivalent to round but explicit
+  const fracWithinSlot = offset - centerDayInt;  // always in [-0.5, 0.5]
   const visibleDays = [];
   for (let i = -N_DAYS; i <= N_DAYS; i++) {
     visibleDays.push({ d: offsetToDate(centerDayInt + i), i });
@@ -578,7 +584,7 @@ function MobileCalPicker({selected, onSelect, events}) {
 
   // Months: 4 either side
   const centerMonthFloat = monthsFromEpoch;
-  const centerMonthInt = Math.round(centerMonthFloat);
+  const centerMonthInt = Math.floor(centerMonthFloat); // floor = only flip at month boundary
   const visibleMonths = [];
   for (let i = -4; i <= 4; i++) {
     const mFromEpoch = centerMonthInt + i;
@@ -685,7 +691,7 @@ function MobileCalPicker({selected, onSelect, events}) {
           left:"50%",
           display:"flex", alignItems:"center",
           // Fractional offset within the current day slot
-          transform:`translateX(calc(-50% - ${(offset - centerDayInt) * DAY_W}px))`,
+          transform:`translateX(calc(-50% - ${fracWithinSlot * DAY_W}px))`,
           willChange:"transform",
         }}>
           {visibleDays.map(({d, i}) => {
@@ -1311,8 +1317,8 @@ export default function Dashboard() {
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
         html,body{height:100%;overflow:hidden;background:${C.bg};}
-        ::-webkit-scrollbar{width:3px;height:3px;}
-        ::-webkit-scrollbar-thumb{background:${C.border2};border-radius:4px;}
+        ::-webkit-scrollbar{display:none;}
+        *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
         input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
         a{text-decoration:none;}
