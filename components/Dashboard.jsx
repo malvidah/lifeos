@@ -324,6 +324,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
   const [anthropicKey,setAnthropicKey]=useState("");
+  const [stravaClientId,setStravaClientId]=useState("");
+  const [stravaClientSecret,setStravaClientSecret]=useState("");
+  const [stravaConnected,setStravaConnected]=useState(false);
   const [saved,setSaved]=useState(false);
   const [saving,setSaving]=useState(false);
   const ref=useRef(null);
@@ -340,6 +343,11 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
       if(d===null){setLoadErr(true);return;}
       if(d?.ouraToken)setOuraKey(d.ouraToken);
       if(d?.anthropicKey)setAnthropicKey(d.anthropicKey);
+      if(d?.stravaClientId)setStravaClientId(d.stravaClientId);
+      if(d?.stravaClientSecret)setStravaClientSecret(d.stravaClientSecret);
+      // Check if strava token exists
+      fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
+        .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
     }).catch(e=>{console.error("[settings load err]",e);setLoadErr(true);});
   },[token,open]); // eslint-disable-line
   useEffect(()=>{
@@ -355,7 +363,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
       const r = await fetch("/api/entries",{
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey,anthropicKey}}),
+        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey,anthropicKey,stravaClientId,stravaClientSecret}}),
       });
       const result = await r.json();
       console.log("[settings save]", r.status, result);
@@ -398,6 +406,36 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                   color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px"}}/>
             </div>
           ))}
+          <div style={{height:1,background:C.border}}/>
+          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</div>
+          {[
+            {label:"Strava Client ID",value:stravaClientId,set:setStravaClientId,ph:"12345",pw:false},
+            {label:"Strava Client Secret",value:stravaClientSecret,set:setStravaClientSecret,ph:"abc123…",pw:true},
+          ].map(({label,value,set,ph,pw})=>(
+            <div key={label}>
+              <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:5}}>{label}</div>
+              <input type={pw?"password":"text"} value={value} onChange={e=>{set(e.target.value);setSaved(false);}} placeholder={ph}
+                style={{width:"100%",background:C.surface,border:`1px solid ${C.border2}`,borderRadius:6,outline:"none",
+                  color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px"}}/>
+            </div>
+          ))}
+          <button
+            disabled={!stravaClientId||!stravaClientSecret||!saved}
+            onClick={()=>{
+              const redirect=encodeURIComponent(window.location.origin+"/strava-callback");
+              const scope="read,activity:read_all";
+              window.open(`https://www.strava.com/oauth/authorize?client_id=${stravaClientId}&redirect_uri=${redirect}&response_type=code&scope=${scope}&approval_prompt=auto`,"_blank","width=600,height=700");
+            }}
+            style={{
+              width:"100%",background:stravaConnected?C.green+"22":"transparent",
+              border:`1px solid ${stravaConnected?C.green:"#FC4C02"}`,
+              borderRadius:6,color:stravaConnected?C.green:"#FC4C02",
+              fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",
+              padding:"7px",cursor:(!stravaClientId||!stravaClientSecret||!saved)?"not-allowed":"pointer",
+              opacity:(!stravaClientId||!stravaClientSecret||!saved)?0.5:1,transition:"all 0.2s"}}>
+            {stravaConnected?"✓ strava connected":"connect strava"}
+          </button>
+          <div style={{height:1,background:C.border}}/>
           {loadErr&&<div style={{fontFamily:mono,fontSize:8,color:C.red,letterSpacing:"0.08em"}}>
             couldn't load saved keys — check console
           </div>}
@@ -913,16 +951,52 @@ function ReadinessDetail({h}) {
   );
 }
 
-function ActivityDetail({h,ouraWorkouts}) {
-  const workouts = ouraWorkouts||[];
+const SPORT_EMOJI = {
+  Run:"🏃",Ride:"🚴",Swim:"🏊",Walk:"🚶",Hike:"🥾",
+  WeightTraining:"🏋️",Yoga:"🧘",Workout:"💪",
+  VirtualRide:"🚴",VirtualRun:"🏃",Soccer:"⚽",
+  Rowing:"🚣",Kayaking:"🛶",Surfing:"🏄",
+  Snowboard:"🏂",AlpineSki:"⛷️",NordicSki:"⛷️",
+  default:"🏅",
+};
+function sportEmoji(type){return SPORT_EMOJI[type]||SPORT_EMOJI.default;}
+
+function ActivityDetail({h,ouraWorkouts,stravaActivities}) {
+  const oura = ouraWorkouts||[];
+  const strava = stravaActivities||[];
+  const hasAny = oura.length>0||strava.length>0;
   return (
     <div style={{padding:"14px 16px"}}>
-      {workouts.length>0&&(
+      {/* Strava activities */}
+      {strava.length>0&&(
         <>
-          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>Oura Workouts</div>
-          {workouts.map((w,i)=>(
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+            <span style={{fontSize:11}}>🟠</span>
+            <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</span>
+          </div>
+          {strava.map((a,i)=>(
+            <div key={a.id||i} style={{display:"flex",alignItems:"baseline",gap:10,padding:"5px 0",
+              borderBottom:i<strava.length-1?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontSize:14,flexShrink:0}}>{sportEmoji(a.sport||a.type)}</span>
+              <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span>
+              <span style={{fontFamily:mono,fontSize:10,color:C.muted,flexShrink:0}}>{fmtMins(a.duration)}</span>
+              {a.distance&&<span style={{fontFamily:mono,fontSize:10,color:C.blue,flexShrink:0}}>{a.distance}km</span>}
+              {a.calories&&<span style={{fontFamily:mono,fontSize:10,color:C.accent,flexShrink:0}}>{a.calories}kcal</span>}
+            </div>
+          ))}
+          {oura.length>0&&<div style={{height:1,background:C.border,margin:"8px 0"}}/>}
+        </>
+      )}
+      {/* Oura workouts */}
+      {oura.length>0&&(
+        <>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+            <span style={{fontSize:11}}>⭕</span>
+            <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Oura Workouts</span>
+          </div>
+          {oura.map((w,i)=>(
             <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"4px 0",
-              borderBottom:i<workouts.length-1?`1px solid ${C.border}`:"none"}}>
+              borderBottom:i<oura.length-1?`1px solid ${C.border}`:"none"}}>
               <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,textTransform:"capitalize"}}>{w.activity.replace(/_/g," ")}</span>
               <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{fmtMins(w.duration)}</span>
               {w.calories&&<span style={{fontFamily:mono,fontSize:10,color:C.accent}}>{w.calories} kcal</span>}
@@ -931,7 +1005,8 @@ function ActivityDetail({h,ouraWorkouts}) {
           ))}
         </>
       )}
-      <div style={{display:"flex",gap:24,flexWrap:"wrap",marginTop:workouts.length?12:0}}>
+      {/* Oura summary stats */}
+      <div style={{display:"flex",gap:24,flexWrap:"wrap",marginTop:hasAny?12:0}}>
         {[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Cal Burned",value:h.activeCalories,unit:"kcal"}].map(it=>(
           <div key={it.label}>
             <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:4}}>{it.label}</div>
@@ -982,6 +1057,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
   const [active,setActive]=useState("sleep");
   const [ouraDetail,setOuraDetail]=useState(null); // full oura response for detail panels
+  const [stravaActivities,setStravaActivities]=useState([]); // strava activities for this date
 
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
   useEffect(()=>{
@@ -1014,6 +1090,16 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
 
+  // Fetch Strava activities for this date
+  useEffect(()=>{
+    if(!token)return;
+    setStravaActivities([]);
+    fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
+      .then(r=>r.json()).then(data=>{
+        if(data.activities&&Array.isArray(data.activities))setStravaActivities(data.activities);
+      }).catch(()=>{});
+  },[date,token]); // eslint-disable-line
+
   const purple = "#8B6BB5";
   const metrics=[
     {key:"sleep",label:"Sleep",color:C.blue,score:h.sleepScore,setScore:e=>setH(p=>({...p,sleepScore:e.target.value})),
@@ -1029,7 +1115,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
   const detailMap = {
     sleep:     <SleepDetail h={h}/>,
     readiness: <ReadinessDetail h={h}/>,
-    activity:  <ActivityDetail h={h} ouraWorkouts={ouraDetail?.workouts}/>,
+    activity:  <ActivityDetail h={h} ouraWorkouts={ouraDetail?.workouts} stravaActivities={stravaActivities}/>,
     calm:      <CalmDetail h={h}/>,
   };
 
@@ -1250,33 +1336,40 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId}) {
 }
 function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Calories in: "${t}". Return JSON: {"kcal":420}`} prefix="" color={C.accent}/>;}
 function Activity({date,token,userId}) {
-  // Pull oura workouts for this date and pre-populate rows if not already set
-  const {value:rows,setValue:setRows,loaded}=useDbSave(date,"activity",[{id:1,text:"",kcal:null}],token,userId);
-  const safe=Array.isArray(rows)&&rows.length?rows:[{id:1,text:"",kcal:null}];
-  const [synced,setSynced]=useState(false);
+  const [strava,setStrava]=useState([]);
 
   useEffect(()=>{
-    if(!loaded||!token||synced)return;
-    fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(data=>{
-        if(data.error||!data.workouts?.length)return;
-        // Only pre-populate if rows are blank
-        const hasContent=safe.some(r=>r.text&&r.text.trim());
-        if(hasContent)return;
-        const synced=data.workouts.map((w,i)=>({
-          id:Date.now()+i,
-          text:w.activity.replace(/_/g," ")+(w.duration?` (${Math.floor(w.duration/60)}m)`:""),
-          kcal:w.calories||null,
-        }));
-        setRows([...synced,{id:Date.now()+999,text:"",kcal:null}]);
-      }).catch(()=>{});
-    setSynced(true);
-  },[date,loaded,token]); // eslint-disable-line
+    if(!token)return;
+    setStrava([]);
+    fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
+      .then(r=>r.json()).then(d=>{if(d.activities)setStrava(d.activities);}).catch(()=>{});
+  },[date,token]); // eslint-disable-line
 
-  return <RowList date={date} type="activity" token={token} userId={userId}
-    placeholder="What did you do?"
-    promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`}
-    prefix="−" color={C.green}/>;
+  return (
+    <div style={{display:"flex",flexDirection:"column",gap:0,height:"100%"}}>
+      {strava.length>0&&(
+        <div style={{padding:"10px 14px 6px",borderBottom:`1px solid ${C.border}`}}>
+          <div style={{fontFamily:mono,fontSize:7,letterSpacing:"0.15em",textTransform:"uppercase",color:"#FC4C02",marginBottom:6}}>🟠 Strava</div>
+          {strava.map((a,i)=>(
+            <div key={a.id||i} style={{display:"flex",alignItems:"baseline",gap:8,padding:"3px 0",
+              borderBottom:i<strava.length-1?`1px solid ${C.border}`:"none"}}>
+              <span style={{fontSize:13}}>{sportEmoji(a.sport||a.type)}</span>
+              <span style={{fontFamily:serif,fontSize:14,color:C.text,flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{a.name}</span>
+              <span style={{fontFamily:mono,fontSize:10,color:C.muted,flexShrink:0}}>{fmtMins(a.duration)}</span>
+              {a.distance&&<span style={{fontFamily:mono,fontSize:10,color:C.blue,flexShrink:0}}>{a.distance}km</span>}
+              {a.calories&&<span style={{fontFamily:mono,fontSize:10,color:C.accent,flexShrink:0}}>{a.calories}kcal</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      <div style={{flex:1,minHeight:0}}>
+        <RowList date={date} type="activity" token={token} userId={userId}
+          placeholder="What did you do?"
+          promptFn={t=>`Calories burned: "${t}" for a typical adult. Return JSON: {"kcal":300}`}
+          prefix="−" color={C.green}/>
+      </div>
+    </div>
+  );
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
