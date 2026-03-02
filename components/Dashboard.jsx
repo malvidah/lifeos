@@ -74,7 +74,8 @@ async function estimateKcal(prompt, token) {
       system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
       messages:[{role:"user",content:prompt}]})});
   const d = await r.json();
-  if (d.error) { console.warn("[ai]", d.error); return null; }
+  console.log("[estimateKcal] status:", r.status, "response:", JSON.stringify(d).slice(0,200));
+  if (d.error) { console.warn("[estimateKcal] error:", d.error, d.debug||""); return null; }
   const text = d.content?.find(b=>b.type==="text")?.text||"{}";
   try { return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null; } catch { return null; }
 }
@@ -1348,7 +1349,9 @@ function Activity({date,token,userId}) {
       cachedOuraFetch(date, token, userId),
       fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({})),
     ]).then(([ouraData, stravaData])=>{
+      console.log("[activity] oura workouts:", ouraData.workouts||[], "strava:", stravaData.activities||[]);
       const merged = mergeWorkouts(ouraData.workouts||[], stravaData.activities||[]);
+      console.log("[activity] merged:", merged);
       setSyncedRows(merged.map(w=>({
         id: String(w.id || `${w.source}-${w.sport}-${w.durationMins}`),
         source: w.source,
