@@ -64,7 +64,7 @@ async function estimateKcal(prompt, token) {
   if (!token) throw new Error("no_token");
   const r = await fetch("/api/ai",{method:"POST",
     headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-    body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:64,
+    body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:64,
       system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
       messages:[{role:"user",content:prompt}]})});
   const d = await r.json();
