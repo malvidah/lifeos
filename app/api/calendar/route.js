@@ -1,19 +1,19 @@
 // Fetches Google Calendar events server-side using a stored OAuth token.
 // The client POSTs { token, start, end } — we call GCal and return shaped events.
 
-function fmtTime(dateTime) {
+function fmtTime(dateTime, tz) {
   if (!dateTime) return "all day";
   const d = new Date(dateTime);
   return d.toLocaleTimeString("en-US", {
-    hour: "numeric", minute: "2-digit", hour12: true, timeZone: "America/Los_Angeles"
+    hour: "numeric", minute: "2-digit", hour12: true, timeZone: tz || "UTC"
   });
 }
 
-function localDateKey(dateTimeOrDate, timeZone = "America/Los_Angeles") {
+function localDateKey(dateTimeOrDate, timeZone) {
   if (!dateTimeOrDate) return null;
   // All-day events have just a date string
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateTimeOrDate)) return dateTimeOrDate;
-  return new Date(dateTimeOrDate).toLocaleDateString("en-CA", { timeZone }); // en-CA = YYYY-MM-DD
+  return new Date(dateTimeOrDate).toLocaleDateString("en-CA", { timeZone: timeZone || "UTC" }); // en-CA = YYYY-MM-DD
 }
 
 function eventColor(title = "") {
@@ -34,7 +34,7 @@ function zoomUrl(event) {
 
 export async function POST(request) {
   try {
-    const { token, start, end } = await request.json();
+    const { token, start, end, tz } = await request.json();
 
     // Use env var as fallback if no token passed
     const accessToken = token || process.env.GOOGLE_CALENDAR_TOKEN;
@@ -43,8 +43,9 @@ export async function POST(request) {
     }
 
     const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
-    url.searchParams.set("timeMin", `${start}T00:00:00-08:00`);
-    url.searchParams.set("timeMax", `${end}T23:59:59-08:00`);
+    // Use client timezone offset to bound the query correctly
+    url.searchParams.set("timeMin", `${start}T00:00:00`);
+    url.searchParams.set("timeMax", `${end}T23:59:59`);
     url.searchParams.set("singleEvents", "true");
     url.searchParams.set("orderBy", "startTime");
     url.searchParams.set("maxResults", "250");
@@ -65,12 +66,12 @@ export async function POST(request) {
     const byDay = {};
     for (const ev of items) {
       const dateStr = ev.start?.dateTime || ev.start?.date;
-      const key = localDateKey(dateStr);
+      const key = localDateKey(dateStr, tz);
       if (!key) continue;
       if (!byDay[key]) byDay[key] = [];
       byDay[key].push({
         title: ev.summary || "(no title)",
-        time: ev.start?.date ? "all day" : fmtTime(ev.start?.dateTime),
+        time: ev.start?.date ? "all day" : fmtTime(ev.start?.dateTime, tz),
         color: eventColor(ev.summary),
         zoomUrl: zoomUrl(ev),
         allDay: !!ev.start?.date,

@@ -51,7 +51,11 @@ function useIsMobile() {
 
 const R = "12px";
 
-const toKey    = d => new Date(d).toISOString().split("T")[0];
+const toKey = d => {
+  const dt = d instanceof Date ? d : new Date(d);
+  // Use local date parts — toISOString() gives UTC which is wrong for US timezones at night
+  return [dt.getFullYear(), String(dt.getMonth()+1).padStart(2,"0"), String(dt.getDate()).padStart(2,"0")].join("-");
+};
 const todayKey = () => toKey(new Date());
 const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 const DAY3 = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -469,19 +473,19 @@ function MobileCalPicker({selected, onSelect, events}) {
   const DAY_W = 52;
 
   // Single source of truth: fractional day offset from epoch
-  const liveOff = useRef(dayOffset(selected));
-  const vel     = useRef(0);
-  const lastX   = useRef(null);
-  const lastT   = useRef(null);
-  const rafId   = useRef(null);
-  const [, bump] = useState(0);
-  const repaint  = () => bump(n => n + 1);
+  const liveOff    = useRef(dayOffset(selected));
+  const vel        = useRef(0);          // px/frame rolling average
+  const lastX      = useRef(null);
+  const lastT      = useRef(null);
+  const totalDrag  = useRef(0);          // total px dragged this gesture
+  const rafId      = useRef(null);
+  const [, bump]   = useState(0);
+  const repaint    = () => bump(n => n + 1);
 
   function cancelRaf() {
     if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; }
   }
 
-  // Snap liveOff to integer, fire onSelect once
   function snap() {
     cancelRaf();
     const n = Math.round(liveOff.current);
@@ -493,11 +497,12 @@ function MobileCalPicker({selected, onSelect, events}) {
 
   function runMomentum() {
     cancelRaf();
+    const FRICTION = 0.82; // enough to feel natural, not over-shoot
     const tick = () => {
-      vel.current *= 0.88;
+      vel.current *= FRICTION;
       liveOff.current -= vel.current / DAY_W;
       repaint();
-      if (Math.abs(vel.current) > 0.4) {
+      if (Math.abs(vel.current) > 0.5) {
         rafId.current = requestAnimationFrame(tick);
       } else {
         snap();
@@ -509,17 +514,21 @@ function MobileCalPicker({selected, onSelect, events}) {
   const onTouchStart = e => {
     cancelRaf();
     vel.current = 0;
+    totalDrag.current = 0;
     lastX.current = e.touches[0].clientX;
     lastT.current = performance.now();
   };
 
   const onTouchMove = e => {
     e.preventDefault();
-    const x = e.touches[0].clientX;
-    const t = performance.now();
-    const dt = Math.max(t - lastT.current, 1);
+    const x  = e.touches[0].clientX;
+    const t  = performance.now();
+    const dt = Math.max(t - lastT.current, 4); // min 4ms to avoid spike
     const dx = x - lastX.current;
-    vel.current = (dx / dt) * 16; // px/frame @ 60fps
+    totalDrag.current += Math.abs(dx);
+    // Rolling average: blend new velocity with previous (smooths out jitter)
+    const newVel = (dx / dt) * 16;
+    vel.current = vel.current * 0.4 + newVel * 0.6;
     liveOff.current -= dx / DAY_W;
     lastX.current = x;
     lastT.current = t;
@@ -527,7 +536,12 @@ function MobileCalPicker({selected, onSelect, events}) {
   };
 
   const onTouchEnd = () => {
-    Math.abs(vel.current) > 1.5 ? runMomentum() : snap();
+    // Only run momentum if there was a real swipe (>8px total drag)
+    if (totalDrag.current > 8 && Math.abs(vel.current) > 1.0) {
+      runMomentum();
+    } else {
+      snap();
+    }
   };
 
   // Sync when parent forces a date (e.g. "today" button)
@@ -561,8 +575,9 @@ function MobileCalPicker({selected, onSelect, events}) {
   const selEvents = (events[selKey] || []).slice().sort((a,b) => (a.time||"").localeCompare(b.time||""));
   const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
-  // Tap a visible day to jump directly to it
+  // Tap a visible day — only fires if it was a clean tap (< 6px drag)
   const tapDay = (i) => {
+    if (totalDrag.current > 6) return; // was a swipe, not a tap
     cancelRaf();
     liveOff.current = selInt + i;
     snap();
@@ -1178,7 +1193,7 @@ export default function Dashboard() {
     if(!googleToken)return;
     startSync("cal");
     fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({token:googleToken,start:toKey(shift(new Date(),-7)),end:toKey(shift(new Date(),21))})})
+      body:JSON.stringify({token:googleToken,start:toKey(shift(new Date(),-7)),end:toKey(shift(new Date(),21)),tz:Intl.DateTimeFormat().resolvedOptions().timeZone})})
       .then(r=>r.json()).then(d=>{if(d.events)setEvents(d.events);}).catch(()=>{}).finally(()=>endSync("cal"));
   },[googleToken]); // eslint-disable-line
 
