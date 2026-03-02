@@ -60,18 +60,20 @@ const todayKey = () => toKey(new Date());
 const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
-async function estimateKcal(prompt, token) {
+async function estimateNutrition(prompt, token) {
   if (!token) return null;
   try {
     const r = await fetch("/api/ai",{method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
       body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:64,
-        system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
+        system:"Return only valid JSON. No explanation.",
         messages:[{role:"user",content:prompt}]})});
     const d = await r.json();
     if (d.error) return null;
     const text = d.content?.find(b=>b.type==="text")?.text||"{}";
-    return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null;
+    const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
+    if (!parsed.kcal) return null;
+    return parsed; // e.g. {kcal:420, protein:30} or {kcal:300}
   } catch { return null; }
 }
 
@@ -679,7 +681,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       }}>
         <span style={{
           fontFamily:serif, fontSize:18, letterSpacing:"-0.02em",
-          color:C.muted, lineHeight:1,
+          color:C.text, lineHeight:1,
         }}>{selMonth}</span>
         <span style={{
           fontFamily:mono, fontSize:10, letterSpacing:"0.12em",
@@ -787,7 +789,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               }}>
                 <span style={{fontFamily:mono, fontSize:10, color:ev.color||C.accent,
                   flexShrink:0, minWidth:64}}>{ev.time}</span>
-                <span style={{fontFamily:serif, fontSize:14, lineHeight:1.4, color:C.muted}}>{ev.title}</span>
+                <span style={{fontFamily:serif, fontSize:14, lineHeight:1.4, color:C.text}}>{ev.title}</span>
               </div>
           ))
         }
@@ -1148,41 +1150,47 @@ function Notes({date,userId,token}) {
 // ─── RowList ─────────────────────────────────────────────────────────────────
 // syncedRows: live from API, may have native kcal (Strava) or need estimation (Oura)
 // AI estimates for synced rows persist to DB under type+"_kcal" key
-function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[]}) {
-  const mkRow = () => ({id:Date.now(), text:"", kcal:null});
+function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[],showProtein=false}) {
+  const mkRow = () => ({id:Date.now(), text:"", kcal:null, protein:null});
   const {value:rows, setValue:setRows, loaded} = useDbSave(date, type, [mkRow()], token, userId);
-  const {value:savedKcals, setValue:setSavedKcals, loaded:kcalsLoaded} = useDbSave(date, type+"_kcal", {}, token, userId);
+  const {value:savedEstimates, setValue:setSavedEstimates, loaded:estimatesLoaded} = useDbSave(date, type+"_kcal", {}, token, userId);
   const estimating = useRef(new Set());
   const refs = useRef({});
   const [tick, setTick] = useState(0);
 
   const safe = Array.isArray(rows) && rows.length ? rows : [mkRow()];
-  const kcalMap = (kcalsLoaded && savedKcals && typeof savedKcals === "object") ? savedKcals : {};
+  const estMap = (estimatesLoaded && savedEstimates && typeof savedEstimates === "object") ? savedEstimates : {};
 
   // Merge saved AI estimates into synced rows
-  const merged = syncedRows.map(r => ({...r, kcal: r.kcal || kcalMap[r.id] || null}));
-  const total = [...safe, ...merged].reduce((s,r) => s + (r.kcal||0), 0);
+  const merged = syncedRows.map(r => {
+    const saved = estMap[r.id];
+    const kcal = r.kcal || (typeof saved === "object" ? saved?.kcal : saved) || null;
+    const protein = r.protein || (typeof saved === "object" ? saved?.protein : null) || null;
+    return {...r, kcal, protein};
+  });
+  const totalKcal = [...safe, ...merged].reduce((s,r) => s + (r.kcal||0), 0);
+  const totalProtein = showProtein ? [...safe, ...merged].reduce((s,r) => s + (r.protein||0), 0) : 0;
 
-  // Estimate kcal for synced rows with no native calories
+  // Estimate for synced rows with no native calories
   useEffect(() => {
-    if (!token || !loaded || !kcalsLoaded) return;
+    if (!token || !loaded || !estimatesLoaded) return;
     merged
       .filter(r => !r.kcal && r.text && !estimating.current.has(r.id))
       .forEach(row => {
         estimating.current.add(row.id);
         setTick(t => t+1);
-        estimateKcal(promptFn(row.text), token).then(kcal => {
+        estimateNutrition(promptFn(row.text), token).then(result => {
           estimating.current.delete(row.id);
-          if (kcal) setSavedKcals(prev => ({...(typeof prev==="object"&&prev?prev:{}), [row.id]:kcal}));
+          if (result) setSavedEstimates(prev => ({...(typeof prev==="object"&&prev?prev:{}), [row.id]:result}));
           else setTick(t => t+1);
         });
       });
-  }, [syncedRows, loaded, kcalsLoaded, token]); // eslint-disable-line
+  }, [syncedRows, loaded, estimatesLoaded, token]); // eslint-disable-line
 
   async function runEstimate(id, text) {
     setRows(safe.map(r => r.id===id ? {...r, estimating:true} : r));
-    const kcal = await estimateKcal(promptFn(text), token);
-    setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal, estimating:false} : r));
+    const result = await estimateNutrition(promptFn(text), token);
+    setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null, estimating:false} : r));
   }
 
   function onKey(e, id, idx) {
@@ -1211,6 +1219,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
 
   const rowStyle = {display:"flex", alignItems:"baseline", gap:8, padding:"2px 0", minHeight:28};
   const kcalStyle = {fontFamily:mono, fontSize:10, color, flexShrink:0, minWidth:38, textAlign:"right", opacity:0.85};
+  const proteinStyle = {fontFamily:mono, fontSize:10, color:C.blue, flexShrink:0, minWidth:30, textAlign:"right", opacity:0.85};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -1223,6 +1232,11 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
             </span>
             <SourceBadge source={row.source}/>
             <span style={{flex:1}}/>
+            {showProtein && (
+              <span style={proteinStyle}>
+                {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}p` : ""}
+              </span>
+            )}
             <span style={kcalStyle}>
               {estimating.current.has(row.id) ? "…" : row.kcal ? `${prefix}${row.kcal}` : ""}
             </span>
@@ -1231,29 +1245,39 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         {safe.map((row, idx) => (
           <div key={row.id} style={rowStyle}>
             <input ref={el=>refs.current[row.id]=el} value={row.text}
-              onChange={e => setRows(safe.map(r => r.id===row.id ? {...r,text:e.target.value,kcal:null} : r))}
+              onChange={e => setRows(safe.map(r => r.id===row.id ? {...r,text:e.target.value,kcal:null,protein:null} : r))}
               onBlur={e => { const r=safe.find(r=>r.id===row.id); if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating) runEstimate(row.id,e.target.value); }}
               onKeyDown={e => onKey(e,row.id,idx)}
               placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+ add more" : ""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
+            {showProtein && (
+              <span style={proteinStyle}>
+                {row.estimating ? "…" : row.protein ? `${row.protein}p` : ""}
+              </span>
+            )}
             <span style={kcalStyle}>
               {row.estimating ? "…" : row.kcal ? `${prefix}${row.kcal}` : ""}
             </span>
           </div>
         ))}
       </div>
-      {total > 0 && (
-        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",borderTop:`1px solid ${C.border}`}}>
+      {(totalKcal > 0 || totalProtein > 0) && (
+        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:12,borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
-          <span style={{fontFamily:mono,fontSize:11,color,opacity:0.9}}>{prefix}{total} kcal</span>
+          {showProtein && totalProtein > 0 && (
+            <span style={{fontFamily:mono,fontSize:11,color:C.blue,opacity:0.9}}>{totalProtein}g protein</span>
+          )}
+          {totalKcal > 0 && (
+            <span style={{fontFamily:mono,fontSize:11,color,opacity:0.9}}>{prefix}{totalKcal} kcal</span>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Calories in: "${t}". Return JSON: {"kcal":420}`} prefix="" color={C.accent}/>;}
+function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={C.accent} showProtein/>;}
 function SourceBadge({source}) {
   const isStrava = source === "strava";
   return (
@@ -1291,7 +1315,7 @@ function mergeWorkouts(ouraWorkouts, stravaActivities) {
       return false;
     });
     if (!isDupe) {
-      merged.push({ source:"oura", name:(w.activity||"workout").replace(/_/g," "),
+      merged.push({ source:"oura", name:w.activity||"Workout",
         sport:w.activity, durationMins:w.durationMins,
         distance:w.distance, calories:w.calories,
         startTime:w.startTime });
@@ -1319,7 +1343,7 @@ function Activity({date,token,userId}) {
         text: [
           w.name,
           w.durationMins ? fmtMins(w.durationMins) : null,
-          w.distance ? `${w.distance}km` : null,
+          w.distance ? `${(w.distance * 0.621371).toFixed(1)}mi` : null,
           w.avgHr ? `${w.avgHr}bpm avg` : null,
         ].filter(Boolean).join(" · "),
       })));

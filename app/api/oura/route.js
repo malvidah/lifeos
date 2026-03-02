@@ -116,12 +116,12 @@ export async function GET(request) {
     }
 
 
-    // Workout sessions
-    const workouts = workoutData.data ?? [];
+    // Workout sessions — filter to only the requested day
+    const workouts = (workoutData.data ?? []).filter(w => w.day === date);
     if (workouts.length > 0) {
       result.workouts = workouts.map(w => ({
         source:   'oura',
-        activity: w.activity || 'workout',
+        activity: (w.activity || 'workout').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
         durationMins: Math.round((w.duration ?? 0) / 60),
         calories: w.calories != null ? Math.round(w.calories) : null,
         distance: w.distance != null ? +(w.distance / 1000).toFixed(2) : null,
