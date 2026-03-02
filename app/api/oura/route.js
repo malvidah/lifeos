@@ -72,7 +72,6 @@ export async function GET(request) {
       // Sleep stages in minutes
     }
     const activity = activityData.data?.[0];
-    console.log("[oura-activity-full]", date, JSON.stringify(activity ?? activityData));
     if (activity) {
       if (activity.score != null)           result.activityScore   = String(activity.score);
       // total_calories = full day burn (matches Oura "Total Burn")

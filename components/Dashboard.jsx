@@ -1,9 +1,9 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "../lib/supabase.js";
 import {
   DndContext, closestCenter, PointerSensor, useSensor, useSensors,
-  DragOverlay, defaultDropAnimationSideEffects,
+  DragOverlay,
 } from "@dnd-kit/core";
 import {
   SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
@@ -74,8 +74,7 @@ async function estimateKcal(prompt, token) {
       system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
       messages:[{role:"user",content:prompt}]})});
   const d = await r.json();
-  console.log("[estimateKcal] status:", r.status, "response:", JSON.stringify(d).slice(0,200));
-  if (d.error) { console.warn("[estimateKcal] error:", d.error, d.debug||""); return null; }
+  if (d.error) return null;
   const text = d.content?.find(b=>b.type==="text")?.text||"{}";
   try { return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null; } catch { return null; }
 }
@@ -354,7 +353,6 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     if(!token||!open)return;
     setLoadErr(false);
     dbLoad("global","settings",token).then(d=>{
-      console.log("[settings load]", d);
       if(d===null){setLoadErr(true);return;}
       if(d?.ouraToken)setOuraKey(d.ouraToken);
       if(d?.anthropicKey)setAnthropicKey(d.anthropicKey);
@@ -363,7 +361,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
       // Check if strava token exists
       fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
         .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
-    }).catch(e=>{console.error("[settings load err]",e);setLoadErr(true);});
+    }).catch(()=>setLoadErr(true));
   },[token,open]); // eslint-disable-line
   useEffect(()=>{
     if(!open)return;
@@ -381,11 +379,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
         body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey,anthropicKey,stravaClientId,stravaClientSecret}}),
       });
       const result = await r.json();
-      console.log("[settings save]", r.status, result);
       if(!r.ok) throw new Error(result.error||r.status);
       setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
     } catch(e) {
-      console.error("[settings save err]",e);
       setSaving(false);setSaved(false);
       alert("Save failed: "+e.message);
     }
@@ -1014,7 +1010,6 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     if(!loaded||!token)return;
     onSyncStart("oura");
     cachedOuraFetch(date, token, userId).then(data=>{
-        console.log("[oura]", date, data);
         if(data.error)return;
         setH(p=>({...p,
           sleepScore:data.sleepScore||p.sleepScore||"",
@@ -1349,9 +1344,7 @@ function Activity({date,token,userId}) {
       cachedOuraFetch(date, token, userId),
       fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({})),
     ]).then(([ouraData, stravaData])=>{
-      console.log("[activity] oura workouts:", ouraData.workouts||[], "strava:", stravaData.activities||[]);
       const merged = mergeWorkouts(ouraData.workouts||[], stravaData.activities||[]);
-      console.log("[activity] merged:", merged);
       setSyncedRows(merged.map(w=>({
         id: String(w.id || `${w.source}-${w.sport}-${w.durationMins}`),
         source: w.source,
@@ -1560,10 +1553,9 @@ export default function Dashboard() {
           if(d.events&&Object.keys(d.events).length>0){
             setEvents(d.events);
           } else if(d.error){
-            console.warn("[cal] API error:",d.error);
           }
         })
-        .catch(e=>console.error("[cal] fetch err:",e))
+        .catch(()=>{})
         .finally(()=>endSync("cal"));
     };
 
@@ -1574,7 +1566,7 @@ export default function Dashboard() {
         .then(r=>r.json())
         .then(d=>{
           if(d.googleToken) fetchCal(d.googleToken);
-          else { console.warn("[cal] no stored google token"); endSync("cal"); }
+          else endSync("cal");
         })
         .catch(()=>endSync("cal"));
     }
