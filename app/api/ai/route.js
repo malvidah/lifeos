@@ -12,14 +12,13 @@ export async function POST(request) {
       { global: { headers: { Authorization: `Bearer ${jwt}` } } }
     );
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser()
-      .catch(() => ({ data: {}, error: "catch" }));
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user?.id) return Response.json({ error: "unauthorized" }, { status: 401 });
 
     const { data: settingsRow } = await supabase
       .from("entries").select("data")
       .eq("type", "settings").eq("date", "global").eq("user_id", user.id)
-      .maybeSingle().catch(() => ({ data: null }));
+      .maybeSingle();
 
     const anthropicKey = settingsRow?.data?.anthropicKey;
     if (!anthropicKey) return Response.json({ error: "no_anthropic_key" }, { status: 402 });
