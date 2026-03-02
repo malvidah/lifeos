@@ -1141,86 +1141,52 @@ function Notes({date,userId,token}) {
 }
 
 // ─── RowList ─────────────────────────────────────────────────────────────────
-// syncedRows: [{id, text, kcal, source}] injected from Oura/Strava.
-// Synced rows are stored inside the DB rows array (flag: synced:true) so AI
-// estimates survive page reloads without re-calling the API.
+// syncedRows: [{id, text, kcal, source}] — always live from Oura/Strava.
+// AI estimates stored separately as a plain {id:kcal} map in DB (type+"_kcal").
 function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[]}) {
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
+  const {value:savedKcals,setValue:setSavedKcals,loaded:kcalsLoaded}=useDbSave(date,type+"_kcal",{},token,userId);
   const inFlight=useRef(new Set());
   const failed=useRef(new Map());
   const refs=useRef({});
   const [,forceRender]=useState(0);
   const bump=()=>forceRender(n=>n+1);
 
-  // Separate manual rows from persisted synced rows
+  // Only manual rows live in the main DB entry
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const manualRows=safe.filter(r=>!r.synced);
-  const persistedSynced=safe.filter(r=>r.synced); // synced rows already in DB
 
-  // Merge live syncedRows with any persisted kcal (estimation survives re-renders)
-  // persistedSynced kcal wins — it's what we actually estimated/saved
-  const mergedSynced=syncedRows.map(live=>{
-    const saved=persistedSynced.find(p=>p.id===live.id);
-    return {...live, kcal: saved?.kcal || live.kcal || null};
-  });
+  // Synced rows always from live API — overlay any saved AI estimates
+  const kcalMap=(kcalsLoaded&&savedKcals&&typeof savedKcals==='object')?savedKcals:{};
+  const mergedSynced=syncedRows.map(live=>({
+    ...live, kcal: live.kcal || kcalMap[live.id] || null,
+  }));
 
   const manualTotal=manualRows.reduce((s,r)=>s+(r.kcal||0),0);
   const syncTotal=mergedSynced.reduce((s,r)=>s+(r.kcal||0),0);
   const total=manualTotal+syncTotal;
 
-  // Persist new syncedRows into DB — never overwrite existing kcal values
-  const didPersistRef = useRef(new Set());
-  useEffect(()=>{
-    if(!loaded||syncedRows.length===0)return;
-    const hasNew=syncedRows.some(r=>!didPersistRef.current.has(r.id));
-    if(!hasNew)return;
-    syncedRows.forEach(r=>didPersistRef.current.add(r.id));
-    setRows(prev=>{
-      const all=Array.isArray(prev)?prev:[mkRow()];
-      const manuals=all.filter(r=>!r.synced);
-      const existing=all.filter(r=>r.synced);
-      const merged=syncedRows.map(live=>{
-        const ex=existing.find(e=>e.id===live.id);
-        // preserve any kcal already estimated — never stomp with null
-        return {...live, kcal: ex?.kcal || live.kcal || null, synced:true};
-      });
-      return [...merged,...manuals];
-    });
-  },[syncedRows,loaded]); // eslint-disable-line
-
-  // Auto-estimate kcal for synced rows that don't have one yet
-  const mergedSyncedRef = useRef([]);
-  mergedSyncedRef.current = mergedSynced;
+  // Auto-estimate kcal for synced rows with no native calories
+  const mergedSyncedRef=useRef([]);
+  mergedSyncedRef.current=mergedSynced;
 
   useEffect(()=>{
-    if(!token||!loaded)return;
-    const current = mergedSyncedRef.current;
-    const needsEstimate=current.filter(r=>!r.kcal&&r.text&&!inFlight.current.has(r.id));
-    if(needsEstimate.length===0)return;
-
+    if(!token||!loaded||!kcalsLoaded)return;
+    const needsEstimate=mergedSyncedRef.current.filter(r=>!r.kcal&&r.text&&!inFlight.current.has(r.id)&&!failed.current.has(r.id));
+    if(!needsEstimate.length)return;
     needsEstimate.forEach(row=>{
       inFlight.current.add(row.id);
       bump();
       estimateKcal(promptFn(row.text),token).then(kcal=>{
         inFlight.current.delete(row.id);
         if(!kcal){failed.current.set(row.id,'no_kcal');bump();return;}
-        // Patch kcal into DB rows — careful not to touch other rows' kcal
-        setRows(prev=>{
-          const all=Array.isArray(prev)?prev:[mkRow()];
-          const manuals=all.filter(r=>!r.synced);
-          const synced=all.filter(r=>r.synced).map(r=>r.id===row.id?{...r,kcal}:r);
-          if(!synced.find(r=>r.id===row.id)){
-            const live=mergedSyncedRef.current.find(r=>r.id===row.id);
-            if(live) synced.push({...live,kcal,synced:true});
-          }
-          return [...synced,...manuals];
-        });
-      }).catch((e)=>{ inFlight.current.delete(row.id); failed.current.set(row.id, e?.message||'fetch_err'); bump(); });
+        setSavedKcals(prev=>({...(typeof prev==='object'&&prev?prev:{}),[row.id]:kcal}));
+      }).catch(e=>{inFlight.current.delete(row.id);failed.current.set(row.id,e?.message||'err');bump();});
     });
-  },[syncedRows,loaded,token]); // eslint-disable-line
+  },[syncedRows,loaded,kcalsLoaded,token]); // eslint-disable-line
 
-  async function runEstimate(id,text){
+    async function runEstimate(id,text){
     setRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
     const kcal=await estimateKcal(promptFn(text),token).catch(()=>null);
     setRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
