@@ -971,7 +971,7 @@ function ActivityDetail({h,ouraWorkouts,stravaActivities}) {
       {strava.length>0&&(
         <>
           <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-            <span style={{fontSize:11}}>🟠</span>
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Strava_logo_symbol.svg/120px-Strava_logo_symbol.svg.png" width={12} height={12} style={{objectFit:"contain"}} alt=""/>
             <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</span>
           </div>
           {strava.map((a,i)=>(
@@ -1459,7 +1459,7 @@ function Activity({date,token,userId}) {
     <div style={{display:"flex",flexDirection:"column",gap:0,height:"100%"}}>
       {strava.length>0&&(
         <div style={{padding:"10px 14px 6px",borderBottom:`1px solid ${C.border}`}}>
-          <div style={{fontFamily:mono,fontSize:7,letterSpacing:"0.15em",textTransform:"uppercase",color:"#FC4C02",marginBottom:6}}>🟠 Strava</div>
+          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:6}}><img src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e8/Strava_logo_symbol.svg/120px-Strava_logo_symbol.svg.png" width={11} height={11} style={{objectFit:"contain"}} alt=""/><span style={{fontFamily:mono,fontSize:7,letterSpacing:"0.15em",textTransform:"uppercase",color:"#FC4C02"}}>Strava</span></div>
           {strava.map((a,i)=>(
             <div key={a.id||i} style={{display:"flex",alignItems:"baseline",gap:8,padding:"3px 0",
               borderBottom:i<strava.length-1?`1px solid ${C.border}`:"none"}}>
