@@ -97,9 +97,8 @@ export async function GET(request) {
       if (activeSecs > 0) result.activeMinutes = String(Math.round(activeSecs / 60));
     }
 
-    // Calm: inverted from Oura stress_high (minutes in high-stress HRV state)
-    // stress_high = 0 → totally calm day → score 100
-    // stress_high = 500 → very stressed day → score 0
+    // Recovery score = recovery / (recovery + stress) × 100
+    // Gives 100 when stress=0 and recovery>0, blank when no data yet
     const stress = (stressData.data ?? []).find(d => d.day === date) || stressData.data?.[0];
     if (stress) {
       const stressHigh = stress.stress_high ?? null;   // seconds
@@ -107,11 +106,13 @@ export async function GET(request) {
       // Convert seconds → minutes for display
       if (stressHigh != null) result.stressMins = String(Math.round(stressHigh / 60));
       if (recoveryHigh != null) result.recoveryMins = String(Math.round(recoveryHigh / 60));
-      if (stressHigh != null) {
-        // 500 minutes (30000s) of stress = score 0; recalibrate using minutes
-        const stressMins = stressHigh / 60;
-        result.resilienceScore = String(Math.max(0, Math.min(100, Math.round(100 - stressMins / 5))));
+      const recov = recoveryHigh ?? 0;
+      const str   = stressHigh ?? 0;
+      const total = recov + str;
+      if (total > 0) {
+        result.resilienceScore = String(Math.round((recov / total) * 100));
       }
+      // If total === 0, no data yet — leave resilienceScore unset (ring shows "—")
     }
 
 
