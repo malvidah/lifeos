@@ -1166,10 +1166,12 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
         {syncedRows.map(row=>(
           <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
-            <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
+            <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-              {row.text} <SourceBadge source={row.source}/>
+              {row.text}
             </span>
+            <SourceBadge source={row.source}/>
+            <span style={{flex:1}}/>
             <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
               {row.kcal?`${prefix}${row.kcal}`:""}
             </span>
