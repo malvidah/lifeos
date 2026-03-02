@@ -21,14 +21,14 @@ const THEMES = {
     shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
   },
   light: {
-    // Warm parchment — Substack-inspired, no harsh whites or shadows
-    bg:"#F7F4F0", surface:"#F0EDE8", card:"#FAF8F5",
-    border:"#E5E0D8", border2:"#D8D2C8",
-    text:"#1C1916", muted:"#8C8680", dim:"#C4BFB8",
-    accent:"#9B6B3A", green:"#3D7A52", blue:"#3A6A94",
-    yellow:"#9A7A2A", red:"#8A3A3A",
-    shadow:"0 1px 2px rgba(60,40,20,0.06),0 2px 8px rgba(60,40,20,0.04)",
-    shadowSm:"0 1px 2px rgba(60,40,20,0.05)",
+    // Warm parchment — Substack-inspired. bg and card are close tones, no harsh whites.
+    bg:"#EFEBE4", surface:"#E8E4DC", card:"#F5F2ED",
+    border:"#DDD8D0", border2:"#CCC7BE",
+    text:"#1A1714", muted:"#857F78", dim:"#C0BAB2",
+    accent:"#8B6030", green:"#376B48", blue:"#2E5A82",
+    yellow:"#8A6A20", red:"#7A3030",
+    shadow:"0 1px 2px rgba(40,25,10,0.07),0 2px 6px rgba(40,25,10,0.04)",
+    shadowSm:"0 1px 2px rgba(40,25,10,0.05)",
   },
 };
 // C is set at render time via setTheme — default dark
@@ -447,8 +447,8 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange}) {
   );
 }
 
-// ─── CalStrip ────────────────────────────────────────────────────────────────
-// Day 0 = Jan 1 2026 (arbitrary fixed epoch for offset math)
+// ─── CalStrip ─────────────────────────────────────────────────────────────────
+// Single epoch: Jan 1 2026. All offsets are integer days from this point.
 const CAL_EPOCH = new Date("2026-01-01T00:00:00");
 const MONTHS_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -462,285 +462,293 @@ function offsetToDate(n) {
   return d;
 }
 
-// Mobile parallax drum-roll picker
+// Mobile parallax drum-roll picker — clean rewrite
 function MobileCalPicker({selected, onSelect, events}) {
   const today = todayKey();
-  const containerRef = useRef(null);
-  const [containerW, setContainerW] = useState(375);
+  const DAY_W = 52; // px per day slot
 
-  // Live drag offset (fractional days), committed on release
-  const dragOffset  = useRef(0);   // current drag delta in px
-  const velocity    = useRef(0);   // px/ms
-  const lastX       = useRef(null);
-  const lastT       = useRef(null);
-  const rafId       = useRef(null);
-  const committed   = useRef(dayOffset(selected)); // integer days from epoch
-  const [render,    setRender]    = useState(0);   // bump to repaint
-  const liveOffset  = useRef(0);  // fractional offset in days (float)
+  // liveOffset: fractional days from epoch. This is THE single source of truth.
+  // Initialize to the selected date so it's always correct from mount.
+  const liveOffset = useRef(dayOffset(selected));
+  const velocity   = useRef(0);       // px/frame during momentum
+  const lastX      = useRef(null);
+  const lastT      = useRef(null);
+  const rafId      = useRef(null);
+  const [tick, setTick] = useState(0); // force re-render
 
-  // Measure container width
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const ro = new ResizeObserver(e => setContainerW(e[0].contentRect.width));
-    ro.observe(containerRef.current);
-    return () => ro.disconnect();
-  }, []);
+  const repaint = () => setTick(t => t + 1);
 
-  // DAY_W: width in px for one day on the day ribbon
-  const DAY_W = Math.min(56, containerW / 7);
-
-  function cancelRaf() { if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; } }
-
-  function snap(targetFrac) {
-    cancelRaf();
-    const target = Math.round(targetFrac);
-    const dateKey = toKey(offsetToDate(target));
-    committed.current = target;
-    liveOffset.current = target;
-    dragOffset.current = 0;
-    onSelect(dateKey);
-    setRender(r => r + 1);
+  function cancelRaf() {
+    if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; }
   }
 
-  function runMomentum() {
+  // Snap to nearest integer day and fire onSelect
+  function snapToNearest() {
     cancelRaf();
-    const FRICTION = 0.88;
-    const tick = () => {
+    const n = Math.round(liveOffset.current);
+    liveOffset.current = n;
+    repaint();
+    onSelect(toKey(offsetToDate(n)));
+  }
+
+  // Momentum: apply velocity with friction until it settles, then snap
+  function startMomentum() {
+    cancelRaf();
+    const FRICTION = 0.85; // per-frame decay
+    const step = () => {
       velocity.current *= FRICTION;
-      if (Math.abs(velocity.current) < 0.02) {
-        snap(liveOffset.current);
-        return;
-      }
       liveOffset.current -= velocity.current / DAY_W;
-      setRender(r => r + 1);
-      rafId.current = requestAnimationFrame(tick);
+      repaint();
+      if (Math.abs(velocity.current) > 0.3) {
+        rafId.current = requestAnimationFrame(step);
+      } else {
+        snapToNearest();
+      }
     };
-    rafId.current = requestAnimationFrame(tick);
+    rafId.current = requestAnimationFrame(step);
   }
 
   function onTouchStart(e) {
     cancelRaf();
+    velocity.current = 0;
     lastX.current = e.touches[0].clientX;
     lastT.current = performance.now();
-    velocity.current = 0;
-    dragOffset.current = 0;
   }
 
   function onTouchMove(e) {
     e.preventDefault();
     const x = e.touches[0].clientX;
     const t = performance.now();
+    const dt = Math.max(t - lastT.current, 1);
     const dx = x - lastX.current;
-    const dt = t - lastT.current || 1;
-    velocity.current = dx / dt; // px/ms
+    // velocity in px/frame (assuming ~16ms frames)
+    velocity.current = (dx / dt) * 16;
     liveOffset.current -= dx / DAY_W;
     lastX.current = x;
     lastT.current = t;
-    setRender(r => r + 1);
+    repaint();
   }
 
   function onTouchEnd() {
-    if (Math.abs(velocity.current) < 0.05) {
-      snap(liveOffset.current);
+    if (Math.abs(velocity.current) > 1) {
+      startMomentum();
     } else {
-      runMomentum();
+      snapToNearest();
     }
   }
 
-  // Sync liveOffset when selected changes externally (e.g. "today" button)
+  // Sync when "today" button fires externally
   useEffect(() => {
     const n = dayOffset(selected);
     if (Math.round(liveOffset.current) !== n) {
-      committed.current = n;
+      cancelRaf();
       liveOffset.current = n;
-      setRender(r => r + 1);
+      velocity.current = 0;
+      repaint();
     }
-  }, [selected]);
+  }, [selected]); // eslint-disable-line
 
-  // Derive display from liveOffset
-  const centerDate  = offsetToDate(liveOffset.current);
-  const centerYear  = centerDate.getFullYear();
+  // Cleanup on unmount
+  useEffect(() => () => cancelRaf(), []); // eslint-disable-line
+
+  const offset = liveOffset.current;
+  const centerDate = offsetToDate(offset);
+  const centerYear = centerDate.getFullYear();
   const centerMonth = centerDate.getMonth();
-  const daysInMonth = new Date(centerYear, centerMonth + 1, 0).getDate();
-  const dayInMonth  = centerDate.getDate(); // 1-based
 
-  // Year band: position = fraction of year elapsed → moves ~1px per 4 days
-  // We show a ribbon of years centered on centerYear
-  const yearFrac    = (liveOffset.current) / 365.25;   // years from epoch
-  const yearPx      = yearFrac * 120;  // 120px per year visually
+  // ── Month position math ────────────────────────────────────────────────────
+  // Months from epoch (continuous float)
+  const daysInCenterMonth = new Date(centerYear, centerMonth + 1, 0).getDate();
+  const monthsFromEpoch = (centerYear - 2026) * 12 + centerMonth
+    + (centerDate.getDate() - 1) / daysInCenterMonth;
+  const MONTH_W = 96; // px per month — must be wide enough to read
 
-  // Month band: position in months from epoch
-  const monthsFromEpoch = (centerYear - 2026) * 12 + centerMonth; // months since Jan 2026
-  const monthFracWithin = (dayInMonth - 1) / daysInMonth;        // 0→1 within month
-  const monthFloat      = monthsFromEpoch + monthFracWithin;
-  const MONTH_W = 100; // px per month on ribbon
+  // ── Year position math ─────────────────────────────────────────────────────
+  const yearsFromEpoch = offset / 365.25; // continuous float
+  const YEAR_W = 120; // px per year
 
-  // Day band: DAY_W px per day
-  const dayPx = liveOffset.current * DAY_W;
-
-  // Build visible day range for day ribbon (±14 days around center)
+  // ── Build visible items ────────────────────────────────────────────────────
+  // Days: 10 either side of center
+  const N_DAYS = 10;
+  const centerDayInt = Math.round(offset);
   const visibleDays = [];
-  for (let i = -14; i <= 14; i++) {
-    const d = offsetToDate(Math.round(liveOffset.current) + i);
-    visibleDays.push({ d, offset: i });
+  for (let i = -N_DAYS; i <= N_DAYS; i++) {
+    visibleDays.push({ d: offsetToDate(centerDayInt + i), i });
   }
 
-  // Build visible months for month ribbon (±5 months)
+  // Months: 4 either side
+  const centerMonthFloat = monthsFromEpoch;
+  const centerMonthInt = Math.round(centerMonthFloat);
   const visibleMonths = [];
-  for (let i = -5; i <= 5; i++) {
-    const mIdx = monthsFromEpoch + i;
-    const yr   = 2026 + Math.floor(mIdx / 12);
-    const mo   = ((mIdx % 12) + 12) % 12;
-    visibleMonths.push({ label: MONTHS_FULL[mo].slice(0,3).toUpperCase(), yr, mIdx, i });
+  for (let i = -4; i <= 4; i++) {
+    const mFromEpoch = centerMonthInt + i;
+    const yr = 2026 + Math.floor(mFromEpoch / 12);
+    const mo = ((mFromEpoch % 12) + 12) % 12;
+    visibleMonths.push({ label: MONTHS_FULL[mo], yr, mFromEpoch, i });
   }
 
-  // Build visible years (±2)
-  const centerYearInt = Math.round(yearFrac) + 2026;
+  // Years: 2 either side
+  const centerYearInt = Math.round(yearsFromEpoch) + 2026;
   const visibleYears = [-2,-1,0,1,2].map(i => centerYearInt + i);
 
-  const selKey = toKey(offsetToDate(Math.round(liveOffset.current)));
+  const snappedKey = toKey(offsetToDate(centerDayInt));
+  const selEvents = (events[snappedKey] || []).slice().sort((a,b) => (a.time||"").localeCompare(b.time||""));
 
-  return (
-    <div ref={containerRef} style={{overflow:"hidden",userSelect:"none"}}>
-      {/* ── Year ribbon ── very slow */}
+  // ── Ribbon helper ──────────────────────────────────────────────────────────
+  // positionPx: how far the center item is from its natural 0 position
+  // We shift the row by -positionPx so the center item sits at the viewport center
+  function RibbonRow({ items, itemW, positionFloat, height, renderItem, touchHandlers = {} }) {
+    // offsetPx: sub-item fractional scroll position
+    const offsetPx = (positionFloat - Math.round(positionFloat)) * itemW;
+    return (
       <div style={{
-        height:28, overflow:"hidden", position:"relative",
-        borderBottom:`1px solid ${C.border}`,
-        background:"transparent",
+        height, overflow:"hidden", position:"relative",
+        borderBottom:`1px solid ${C.border}`, flexShrink:0,
       }}>
-        <div style={{
-          position:"absolute", top:0,
-          left:"50%",
-          display:"flex", alignItems:"center",
-          transform:`translateX(calc(-50% - ${yearPx % (120 * visibleYears.length)}px))`,
-          willChange:"transform",
-          transition:"none",
-        }}>
-          {visibleYears.map(yr => (
-            <div key={yr} style={{
-              width:120, textAlign:"center", flexShrink:0,
-              fontFamily:mono, fontSize:9, letterSpacing:"0.2em",
-              color: yr === centerYear ? C.muted : C.dim,
-              textTransform:"uppercase",
-              lineHeight:"28px",
-            }}>{yr}</div>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Month ribbon ── medium speed */}
-      <div style={{
-        height:36, overflow:"hidden", position:"relative",
-        borderBottom:`1px solid ${C.border}`,
-      }}>
-        <div style={{
-          position:"absolute", top:0,
-          left:"50%",
-          display:"flex", alignItems:"center",
-          transform:`translateX(calc(-50% - ${(monthFloat % (MONTH_W * 24)) * MONTH_W}px))`,
-          willChange:"transform",
-        }}>
-          {visibleMonths.map(({label,yr,mIdx,i}) => {
-            const isCenter = i === 0;
-            return (
-              <div key={mIdx} style={{
-                width:MONTH_W, textAlign:"center", flexShrink:0,
-                fontFamily:serif, fontSize: isCenter ? 16 : 13,
-                letterSpacing:"-0.01em",
-                color: isCenter ? C.text : C.muted,
-                lineHeight:"36px",
-                transition:"font-size 0.15s, color 0.15s",
-              }}>{label.charAt(0) + label.slice(1).toLowerCase()}</div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Day ribbon ── fastest, touch target */}
-      <div
-        onTouchStart={onTouchStart}
-        onTouchMove={onTouchMove}
-        onTouchEnd={onTouchEnd}
-        style={{
-          height:56, overflow:"hidden", position:"relative",
-          borderBottom:`1px solid ${C.border}`,
-          touchAction:"none",
-        }}
-      >
-        {/* Center selection indicator */}
         <div style={{
           position:"absolute", top:0, bottom:0,
-          left:"50%", transform:"translateX(-50%)",
-          width:DAY_W,
+          left:"50%",
+          display:"flex", alignItems:"center",
+          transform:`translateX(calc(-50% - ${offsetPx}px))`,
+          willChange:"transform",
+        }} {...touchHandlers}>
+          {items.map((item, idx) => renderItem(item, idx))}
+        </div>
+      </div>
+    );
+  }
+
+  const dayTouchHandlers = { onTouchStart, onTouchMove, onTouchEnd };
+
+  return (
+    <div style={{userSelect:"none", overflow:"hidden"}}>
+
+      {/* ── YEAR ribbon ──────────────────────────────────────────────────── */}
+      <RibbonRow
+        items={visibleYears}
+        itemW={YEAR_W}
+        positionFloat={yearsFromEpoch}
+        height={26}
+        renderItem={(yr, idx) => {
+          const isCtr = yr === centerYearInt;
+          return (
+            <div key={yr} style={{
+              width:YEAR_W, textAlign:"center", flexShrink:0,
+              fontFamily:mono, fontSize:9, letterSpacing:"0.18em",
+              color: isCtr ? C.muted : C.dim,
+              lineHeight:"26px",
+            }}>{yr}</div>
+          );
+        }}
+      />
+
+      {/* ── MONTH ribbon ─────────────────────────────────────────────────── */}
+      <RibbonRow
+        items={visibleMonths}
+        itemW={MONTH_W}
+        positionFloat={centerMonthFloat}
+        height={38}
+        renderItem={({label, mFromEpoch, i}, idx) => {
+          const isCtr = i === 0;
+          return (
+            <div key={mFromEpoch} style={{
+              width:MONTH_W, textAlign:"center", flexShrink:0,
+              fontFamily:serif,
+              fontSize: isCtr ? 17 : 13,
+              color: isCtr ? C.text : C.dim,
+              lineHeight:"38px",
+              transition:"font-size 0.12s, color 0.12s",
+            }}>{label}</div>
+          );
+        }}
+      />
+
+      {/* ── DAY ribbon — touch target ─────────────────────────────────────── */}
+      <div style={{
+        height:62, overflow:"hidden", position:"relative",
+        borderBottom:`1px solid ${C.border}`, flexShrink:0,
+        touchAction:"none",
+      }}
+        onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+        {/* Center highlight */}
+        <div style={{
+          position:"absolute", inset:"0", margin:"auto",
+          width:DAY_W, top:0, bottom:0, left:"50%",
+          transform:"translateX(-50%)",
           background:`${C.accent}18`,
-          borderLeft:`1px solid ${C.accent}40`,
-          borderRight:`1px solid ${C.accent}40`,
+          borderLeft:`1px solid ${C.accent}30`,
+          borderRight:`1px solid ${C.accent}30`,
           pointerEvents:"none",
         }}/>
         <div style={{
-          position:"absolute", top:0,
+          position:"absolute", top:0, bottom:0,
           left:"50%",
           display:"flex", alignItems:"center",
-          transform:`translateX(calc(-50% - ${(liveOffset.current % visibleDays.length) * DAY_W}px - ${(liveOffset.current - Math.round(liveOffset.current)) * DAY_W}px))`,
+          // Fractional offset within the current day slot
+          transform:`translateX(calc(-50% - ${(offset - centerDayInt) * DAY_W}px))`,
           willChange:"transform",
         }}>
-          {visibleDays.map(({d, offset}) => {
+          {visibleDays.map(({d, i}) => {
             const k = toKey(d);
-            const isSelected = offset === 0;
-            const isToday = k === today;
-            const hasEvents = (events[k]||[]).length > 0;
+            const isCtr = i === 0;
+            const isTdy = k === today;
+            const hasEvt = (events[k]||[]).length > 0;
             const dayNames = ["Su","Mo","Tu","We","Th","Fr","Sa"];
             return (
-              <div key={k} onClick={() => snap(Math.round(liveOffset.current) + offset)}
+              <div key={k}
                 style={{
                   width:DAY_W, flexShrink:0, textAlign:"center",
-                  cursor:"pointer", padding:"6px 0",
+                  padding:"8px 0 6px",
                 }}>
                 <div style={{
-                  fontFamily:mono, fontSize:8, letterSpacing:"0.06em",
-                  color: isSelected ? C.accent : C.muted,
-                  marginBottom:2,
+                  fontFamily:mono, fontSize:8, letterSpacing:"0.07em",
+                  color: isCtr ? C.accent : C.muted,
+                  marginBottom:3, opacity: isCtr ? 1 : 0.6,
                 }}>{dayNames[d.getDay()]}</div>
                 <div style={{
-                  fontFamily:serif, fontSize: isSelected ? 22 : 17,
-                  lineHeight:1, fontWeight: isSelected ? "600" : "normal",
-                  color: isToday ? C.accent : isSelected ? C.text : C.muted,
-                  transition:"font-size 0.1s",
+                  fontFamily:serif,
+                  fontSize: isCtr ? 23 : 17,
+                  lineHeight:1,
+                  color: isTdy && isCtr ? C.accent : isCtr ? C.text : C.muted,
+                  fontWeight: isCtr ? "600" : "normal",
+                  transition:"font-size 0.08s",
                 }}>{d.getDate()}</div>
-                {hasEvents && <div style={{
-                  width:4, height:4, borderRadius:"50%",
-                  background: isSelected ? C.accent : C.dim,
-                  margin:"3px auto 0",
-                }}/>}
+                {hasEvt && (
+                  <div style={{
+                    width:3, height:3, borderRadius:"50%",
+                    background: isCtr ? C.accent : C.dim,
+                    margin:"4px auto 0",
+                  }}/>
+                )}
               </div>
             );
           })}
         </div>
       </div>
 
-      {/* Selected day events list */}
-      {(()=>{
-        const selEvts = (events[selKey]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
-        const selDate = offsetToDate(Math.round(liveOffset.current));
-        const selLabel = selDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
-        return (
-          <div style={{padding:"10px 16px", minHeight:60, flex:1, overflowY:"auto"}}>
-            <div style={{fontFamily:mono,fontSize:8,color:C.muted,letterSpacing:"0.1em",
-              textTransform:"uppercase",marginBottom:8}}>{selLabel}</div>
-            {selEvts.length === 0
-              ? <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>No events</span>
-              : selEvts.map((ev,i) => (
-                  <div key={i} style={{display:"flex",gap:10,alignItems:"baseline",
-                    padding:"5px 0",
-                    borderBottom:i<selEvts.length-1?`1px solid ${C.border}`:"none"}}>
-                    <span style={{fontFamily:mono,fontSize:10,color:ev.color||C.accent,flexShrink:0,minWidth:60}}>{ev.time}</span>
-                    <span style={{fontFamily:serif,fontSize:14,lineHeight:1.4,color:C.text}}>{ev.title}</span>
-                  </div>
-              ))
-            }
-          </div>
-        );
-      })()}
+      {/* ── Events for selected day ───────────────────────────────────────── */}
+      <div style={{padding:"10px 16px", overflowY:"auto", flex:1}}>
+        <div style={{
+          fontFamily:mono, fontSize:8, color:C.muted,
+          letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:8,
+        }}>
+          {offsetToDate(centerDayInt).toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
+        </div>
+        {selEvents.length === 0
+          ? <span style={{fontFamily:mono, fontSize:9, color:C.dim}}>No events</span>
+          : selEvents.map((ev, i) => (
+              <div key={i} style={{
+                display:"flex", gap:12, alignItems:"baseline",
+                padding:"5px 0",
+                borderBottom: i < selEvents.length-1 ? `1px solid ${C.border}` : "none",
+              }}>
+                <span style={{fontFamily:mono, fontSize:10, color:ev.color||C.accent,
+                  flexShrink:0, minWidth:64}}>{ev.time}</span>
+                <span style={{fontFamily:serif, fontSize:14, lineHeight:1.4, color:C.text}}>{ev.title}</span>
+              </div>
+          ))
+        }
+      </div>
     </div>
   );
 }
@@ -779,7 +787,6 @@ function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
       {mobile
         ? <MobileCalPicker selected={selected} onSelect={onSelect} events={events}/>
         : (<>
-            {/* Desktop: month label + 7-day grid */}
             <div style={{padding:"6px 14px 4px",display:"flex",alignItems:"baseline",gap:6,
               flexShrink:0,borderBottom:`1px solid ${C.border}`}}>
               <span style={{fontFamily:serif,fontSize:14,color:C.text,letterSpacing:"-0.01em"}}>
@@ -806,7 +813,7 @@ function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
                       <span style={{fontFamily:serif,fontSize:17,lineHeight:1,
                         color:tod?C.accent:C.text}}>{d.getDate()}</span>
                       <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
-                        {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
+                        {dot.sleep>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
                         {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green,display:"inline-block"}}/>}
                       </div>
                     </div>
@@ -835,7 +842,6 @@ function CalStrip({selected, onSelect, events, healthDots, dragProps}) {
     </Card>
   );
 }
-
 // ─── Skeleton shimmer ─────────────────────────────────────────────────────────
 function Shimmer({width="100%", height=14, style={}}) {
   return (
@@ -1208,6 +1214,10 @@ export default function Dashboard() {
   useEffect(()=>{
     localStorage.setItem("theme", theme);
     C = THEMES[theme] || THEMES.dark;
+    // Apply bg to document so html/body are correct color, not just the React root
+    document.documentElement.style.background = C.bg;
+    document.body.style.background = C.bg;
+    document.documentElement.style.colorScheme = theme === "light" ? "light" : "dark";
   },[theme]);
 
   useEffect(()=>{
