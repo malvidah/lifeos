@@ -1,9 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 
 export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const date = searchParams.get("date") || new Date().toISOString().split("T")[0];
-
   const authHeader = request.headers.get("authorization") || "";
   const jwt = authHeader.replace("Bearer ", "").trim();
   if (!jwt) return Response.json({ error: "unauthorized" }, { status: 401 });
@@ -26,22 +23,22 @@ export async function GET(request) {
   if (!ouraToken) return Response.json({ error: "no_token" });
 
   const h = { Authorization: `Bearer ${ouraToken}` };
-  const [sleep, readiness, activity, personal] = await Promise.all([
-    fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${date}&end_date=${date}`, {headers:h}).then(r=>r.json()),
-    fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${date}&end_date=${date}`, {headers:h}).then(r=>r.json()),
-    fetch(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${date}`, {headers:h}).then(r=>r.json()),
-    fetch(`https://api.ouraring.com/v2/usercollection/personal_info`, {headers:h}).then(r=>r.json()),
+
+  // Fetch a wide window to see what dates actually have data
+  const [activity, sleep, readiness] = await Promise.all([
+    fetch(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=2026-02-01&end_date=2026-03-02`, {headers:h}).then(r=>r.json()),
+    fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=2026-02-01&end_date=2026-03-02`, {headers:h}).then(r=>r.json()),
+    fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=2026-02-01&end_date=2026-03-02`, {headers:h}).then(r=>r.json()),
   ]);
 
   return Response.json({
-    date,
-    sleep_count: sleep.data?.length,
-    sleep_score: sleep.data?.[0]?.score,
-    readiness_count: readiness.data?.length,
-    readiness_score: readiness.data?.[0]?.score,
     activity_count: activity.data?.length,
-    activity_score: activity.data?.[0]?.score,
-    activity_raw: activity.data?.[0],
-    personal_info: personal,
+    activity_dates: activity.data?.map(d => ({date:d.day, score:d.score})),
+    sleep_count: sleep.data?.length,
+    sleep_dates: sleep.data?.map(d => ({date:d.day, score:d.score})),
+    readiness_count: readiness.data?.length,
+    readiness_dates: readiness.data?.map(d => ({date:d.day, score:d.score})),
+    activity_error: activity.error,
+    sleep_error: sleep.error,
   });
 }
