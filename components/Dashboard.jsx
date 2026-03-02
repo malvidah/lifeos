@@ -1186,10 +1186,11 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
     });
   },[syncedRows,loaded,kcalsLoaded,token]); // eslint-disable-line
 
-    async function runEstimate(id,text){
-    setRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
-    const kcal=await estimateKcal(promptFn(text),token).catch(()=>null);
-    setRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
+  async function runEstimate(id,text){
+    setRows(prev=>(Array.isArray(prev)?prev:[mkRow()]).map(r=>r.id===id?{...r,estimating:true}:r));
+    let kcal=null;
+    try { kcal=await estimateKcal(promptFn(text),token); } catch(e) { console.error("[AI manual]",e?.message); }
+    setRows(prev=>(Array.isArray(prev)?prev:[mkRow()]).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
   }
   function onKey(e,id,idx){
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();const cur=safe.filter(r=>!r.synced);const sIdx=cur.findIndex(r=>r.id===id);const ins=[...cur.slice(0,sIdx+1),row,...cur.slice(sIdx+1)];setRows([...mergedSynced.map(r=>({...r,synced:true})),...ins]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
