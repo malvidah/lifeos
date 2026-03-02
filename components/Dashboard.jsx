@@ -61,16 +61,21 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt, token) {
-  if (!token) return null;
-  const r = await fetch("/api/ai",{method:"POST",
-    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-    body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:64,
-      system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
-      messages:[{role:"user",content:prompt}]})});
-  const d = await r.json();
-  if (d.error) { console.warn("[ai]",d.error); return null; }
-  const text = d.content?.find(b=>b.type==="text")?.text||"{}";
-  try { return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null; } catch { return null; }
+  if (!token) { console.warn("[ai] no token"); return null; }
+  try {
+    const r = await fetch("/api/ai",{method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+      body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:64,
+        system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
+        messages:[{role:"user",content:prompt}]})});
+    const d = await r.json();
+    console.log("[ai] response", r.status, JSON.stringify(d).slice(0,200));
+    if (d.error) return null;
+    const text = d.content?.find(b=>b.type==="text")?.text||"{}";
+    const kcal = JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null;
+    console.log("[ai] kcal", kcal);
+    return kcal;
+  } catch(e) { console.error("[ai] exception", e.message); return null; }
 }
 
 // ─── Oura response cache (per date+user, avoids double-fetching) ─────────────
