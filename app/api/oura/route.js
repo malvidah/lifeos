@@ -98,7 +98,15 @@ export async function GET(request) {
       if (stressHigh != null) result.stressMins = String(stressHigh);
       if (recoveryHigh != null) result.recoveryMins = String(recoveryHigh);
       if (stressHigh != null) {
-        result.calmScore = String(Math.max(0, Math.min(100, Math.round(100 - stressHigh / 5))));
+        result.resilienceScore = String(Math.max(0, Math.min(100, Math.round(100 - stressHigh / 5))));
+      }
+      // Time-series stress data: array of {timestamp, stress_level} at ~5-min intervals
+      // stress_level: 0=unknown, 1=restored, 2=relaxed, 3=engaged, 4=stressed
+      if (stress.stress_data && Array.isArray(stress.stress_data)) {
+        result.stressTimeline = stress.stress_data.map(pt => ({
+          t: pt.timestamp,    // ISO timestamp
+          s: pt.stress_level, // 0-4
+        }));
       }
     }
 

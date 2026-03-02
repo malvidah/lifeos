@@ -800,7 +800,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     <div style={{width:3,height:3,borderRadius:"50%",
                       background:C.accent, opacity: isCtr ? 1 : 0.5}}/>
                   )}
-                  {(healthDots[k]?.calm >= 85) && (
+                  {(healthDots[k]?.resilience >= 85) && (
                     <div style={{width:3,height:3,borderRadius:"50%",
                       background:"#8B6BB5", opacity: isCtr ? 1 : 0.5}}/>
                   )}
@@ -878,7 +878,7 @@ function Shimmer({width="100%", height=14, style={}}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:"",calmScore:"",stressMins:"",recoveryMins:"",deepMins:"",remMins:"",lightMins:"",awakeMins:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:"",resilienceScore:"",stressMins:"",recoveryMins:"",deepMins:"",remMins:"",lightMins:"",awakeMins:""};
 
 function fmtMins(val) {
   const m = parseInt(val)||0;
@@ -1021,30 +1021,140 @@ function ActivityDetail({h,ouraWorkouts,stravaActivities}) {
   );
 }
 
-function CalmDetail({h}) {
-  const stressM = parseInt(h.stressMins)||0;
-  const recoverM = parseInt(h.recoveryMins)||0;
-  const total = stressM+recoverM||1;
+// Oura stress levels: 0=unknown/missing, 1=restored, 2=relaxed, 3=engaged, 4=stressed
+const STRESS_ZONES = [
+  {level:1, label:"Restored", color:"#4A82B0", y:0.88},
+  {level:2, label:"Relaxed",  color:"#4E9268", y:0.62},
+  {level:3, label:"Engaged",  color:"#B08A3E", y:0.37},
+  {level:4, label:"Stressed", color:"#A05050", y:0.10},
+];
+function stressColor(s){
+  if(s<=0)return null;
+  return STRESS_ZONES.find(z=>z.level===s)?.color || "#857F78";
+}
+function stressY(s, h){
+  // map level 1-4 to y position in chart (1=bottom=restored, 4=top=stressed)
+  if(!s||s<1||s>4)return null;
+  const zone = STRESS_ZONES.find(z=>z.level===s);
+  return zone ? zone.y * h : null;
+}
+
+function ResilienceDetail({h, ouraDetail}) {
+  const stressM   = parseInt(h.stressMins)||0;
+  const recoverM  = parseInt(h.recoveryMins)||0;
+  const total     = stressM+recoverM||1;
+  const timeline  = ouraDetail?.stressTimeline;
+
+  // Chart dimensions
+  const W=460, H=110, PAD={t:8,r:8,b:24,l:0};
+  const cw=W-PAD.l-PAD.r, ch=H-PAD.t-PAD.b;
+
+  // Build chart points from timeline
+  const pts = React.useMemo(()=>{
+    if(!timeline||timeline.length===0)return [];
+    // Filter to valid readings (s > 0)
+    const valid = timeline.filter(p=>p.s>0);
+    if(valid.length===0)return [];
+    // Map to chart X by time-of-day (0-24h span)
+    const dayStr = h.date||"";
+    // Find min/max time for x axis
+    const times = valid.map(p=>new Date(p.t).getTime());
+    const tMin = Math.min(...times), tMax = Math.max(...times);
+    const span = tMax-tMin||1;
+    return valid.map(p=>{
+      const x = PAD.l + ((new Date(p.t).getTime()-tMin)/span)*cw;
+      const y = PAD.t + (1-(p.s-1)/3)*ch; // s:1→bottom, s:4→top
+      return {x,y,s:p.s,t:p.t};
+    });
+  },[timeline, h.date]);
+
+  // Hour labels for x-axis from timeline
+  const hourLabels = React.useMemo(()=>{
+    if(!timeline||timeline.length===0)return [];
+    const valid = timeline.filter(p=>p.s>0);
+    if(valid.length<2)return [];
+    const times = valid.map(p=>new Date(p.t).getTime());
+    const tMin = Math.min(...times), tMax = Math.max(...times);
+    const span = tMax-tMin||1;
+    // Show ~5 hour labels
+    const labels=[];
+    const tMinD=new Date(tMin), tMaxD=new Date(tMax);
+    const startHour=tMinD.getHours(), endHour=tMaxD.getHours()+(tMaxD.getDate()!==tMinD.getDate()?24:0);
+    const step=Math.ceil((endHour-startHour)/4)||1;
+    for(let hr=Math.ceil(startHour/step)*step;hr<=endHour;hr+=step){
+      const t=new Date(tMin); t.setHours(tMinD.getHours()+hr-startHour,0,0,0);
+      const x=PAD.l+((t.getTime()-tMin)/span)*cw;
+      if(x>=PAD.l&&x<=PAD.l+cw){
+        const disp=((tMinD.getHours()+hr-startHour)%24).toString().padStart(2,"0");
+        labels.push({x,label:disp});
+      }
+    }
+    return labels;
+  },[timeline]);
+
+  // Build SVG polyline from pts
+  const linePts = pts.map(p=>`${p.x},${p.y}`).join(" ");
+
+  const hasData = pts.length>1;
+
   return (
     <div style={{padding:"14px 16px"}}>
-      <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>Stress vs Recovery</div>
-      <div style={{display:"flex",height:8,borderRadius:4,overflow:"hidden",marginBottom:12}}>
+      {/* Daytime stress chart */}
+      {hasData ? (
+        <div style={{marginBottom:12}}>
+          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:6}}>Daytime Stress</div>
+          <div style={{position:"relative",overflowX:"auto"}}>
+            <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",display:"block"}} preserveAspectRatio="none">
+              {/* Zone background bands */}
+              {STRESS_ZONES.map((z,i)=>{
+                const y1=PAD.t+((i)/4)*ch, y2=PAD.t+((i+1)/4)*ch;
+                return <rect key={z.level} x={PAD.l} y={y1} width={cw} height={ch/4}
+                  fill={z.color} opacity={0.06}/>;
+              })}
+              {/* Zone labels on right */}
+              {STRESS_ZONES.map((z,i)=>(
+                <text key={z.level} x={W-PAD.r-2} y={PAD.t+(i/4)*ch+ch/8+4}
+                  textAnchor="end" fontSize={6} fontFamily="monospace"
+                  fill={z.color} opacity={0.7}>{z.label}</text>
+              ))}
+              {/* Connecting line */}
+              <polyline points={linePts} fill="none" stroke={C.muted} strokeWidth={1.2} strokeLinejoin="round" opacity={0.5}/>
+              {/* Dots colored by stress level */}
+              {pts.map((p,i)=>(
+                <circle key={i} cx={p.x} cy={p.y} r={pts.length>60?1.5:2.5}
+                  fill={stressColor(p.s)} opacity={0.9}/>
+              ))}
+              {/* X-axis hour labels */}
+              {hourLabels.map(({x,label})=>(
+                <text key={label} x={x} y={H-2} textAnchor="middle"
+                  fontSize={7} fontFamily="monospace" fill={C.muted}>{label}</text>
+              ))}
+            </svg>
+          </div>
+        </div>
+      ) : (
+        <div style={{fontFamily:mono,fontSize:9,color:C.dim,marginBottom:12,padding:"16px 0",textAlign:"center"}}>
+          No stress timeline — wear your ring during the day
+        </div>
+      )}
+      {/* Stressed / Recovery summary */}
+      <div style={{display:"flex",height:6,borderRadius:3,overflow:"hidden",marginBottom:10}}>
         <div style={{flex:stressM/total,background:"#A05050",minWidth:stressM?2:0}}/>
-        <div style={{flex:recoverM/total,background:"#4E9268",minWidth:recoverM?2:0}}/>
+        <div style={{flex:recoverM/total,background:"#4A82B0",minWidth:recoverM?2:0}}/>
       </div>
       <div style={{display:"flex",gap:20}}>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:8,height:8,borderRadius:2,background:"#A05050"}}/>
+          <div style={{width:7,height:7,borderRadius:2,background:"#A05050"}}/>
           <div>
-            <div style={{fontFamily:mono,fontSize:8,color:C.muted,textTransform:"uppercase"}}>Stress</div>
-            <div style={{fontFamily:serif,fontSize:16,color:stressM?C.text:C.dim}}>{fmtMins(stressM)}</div>
+            <div style={{fontFamily:mono,fontSize:7,color:C.muted,textTransform:"uppercase",letterSpacing:"0.1em"}}>Stressed</div>
+            <div style={{fontFamily:serif,fontSize:15,color:stressM?C.text:C.dim}}>{fmtMins(stressM)}</div>
           </div>
         </div>
         <div style={{display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:8,height:8,borderRadius:2,background:"#4E9268"}}/>
+          <div style={{width:7,height:7,borderRadius:2,background:"#4A82B0"}}/>
           <div>
-            <div style={{fontFamily:mono,fontSize:8,color:C.muted,textTransform:"uppercase"}}>Recovery</div>
-            <div style={{fontFamily:serif,fontSize:16,color:recoverM?C.text:C.dim}}>{fmtMins(recoverM)}</div>
+            <div style={{fontFamily:mono,fontSize:7,color:C.muted,textTransform:"uppercase",letterSpacing:"0.1em"}}>Restored</div>
+            <div style={{fontFamily:serif,fontSize:15,color:recoverM?C.text:C.dim}}>{fmtMins(recoverM)}</div>
           </div>
         </div>
       </div>
@@ -1078,7 +1188,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
           activityScore:data.activityScore||p.activityScore||"",
           activeCalories:data.activeCalories||p.activeCalories||"",
           steps:data.steps||p.steps||"",
-          calmScore:data.calmScore||p.calmScore||"",
+          resilienceScore:data.resilienceScore||p.resilienceScore||"",
           stressMins:data.stressMins||p.stressMins||"",
           recoveryMins:data.recoveryMins||p.recoveryMins||"",
           // sleep stages from oura (not user-editable, just display)
@@ -1108,7 +1218,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
       fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"RHR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,setScore:e=>setH(p=>({...p,activityScore:e.target.value})),
       fields:[{label:"Cals",value:h.activeCalories,onChange:set("activeCalories"),unit:"kcal"},{label:"Steps",value:h.steps,onChange:set("steps"),unit:""}]},
-    {key:"calm",label:"Calm",color:purple,score:h.calmScore,setScore:e=>setH(p=>({...p,calmScore:e.target.value})),
+    {key:"resilience",label:"Resilience",color:purple,score:h.resilienceScore,setScore:e=>setH(p=>({...p,resilienceScore:e.target.value})),
       fields:[{label:"Stress",value:fmtMins(h.stressMins),unit:""},{label:"Recov.",value:fmtMins(h.recoveryMins),unit:""}]},
   ];
 
@@ -1116,7 +1226,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     sleep:     <SleepDetail h={h}/>,
     readiness: <ReadinessDetail h={h}/>,
     activity:  <ActivityDetail h={h} ouraWorkouts={ouraDetail?.workouts} stravaActivities={stravaActivities}/>,
-    calm:      <CalmDetail h={h}/>,
+    resilience: <ResilienceDetail h={h} ouraDetail={ouraDetail}/>,
   };
 
   return (
@@ -1577,7 +1687,7 @@ export default function Dashboard() {
   },[token]); // eslint-disable-line
 
   const onHealthChange=useCallback((date,data)=>{
-    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,calm:+data.calmScore||0}}));
+    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,resilience:+data.resilienceScore||0}}));
   },[]);
 
   // Prefetch Oura scores for ±14 days around today so dots show without clicking each day
@@ -1594,7 +1704,7 @@ export default function Dashboard() {
               sleep:+data.sleepScore||0,
               readiness:+data.readinessScore||0,
               activity:+data.activityScore||0,
-              calm:+data.calmScore||0,
+              resilience:+data.resilienceScore||0,
             }}));
           }).catch(()=>{});
       }, i*150); // stagger 150ms apart to avoid hammering
