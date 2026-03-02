@@ -45,9 +45,9 @@ export async function GET(request) {
       fetch(`https://api.ouraring.com/v2/usercollection/daily_sleep?start_date=${date}&end_date=${nextDate}`, { headers: h }),
       fetch(`https://api.ouraring.com/v2/usercollection/daily_readiness?start_date=${date}&end_date=${nextDate}`, { headers: h }),
       fetch(`https://api.ouraring.com/v2/usercollection/sleep?start_date=${prevDate2}&end_date=${nextDate}`, { headers: h }),
-      fetch(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${date}`, { headers: h }),
-      fetch(`https://api.ouraring.com/v2/usercollection/daily_stress?start_date=${date}&end_date=${date}`, { headers: h }),
-      fetch(`https://api.ouraring.com/v2/usercollection/workout?start_date=${date}&end_date=${date}`, { headers: h }),
+      fetch(`https://api.ouraring.com/v2/usercollection/daily_activity?start_date=${date}&end_date=${nextDate}`, { headers: h }),
+      fetch(`https://api.ouraring.com/v2/usercollection/daily_stress?start_date=${date}&end_date=${nextDate}`, { headers: h }),
+      fetch(`https://api.ouraring.com/v2/usercollection/workout?start_date=${date}&end_date=${nextDate}`, { headers: h }),
     ]);
 
     const sleepData     = await sleepRes.json();
