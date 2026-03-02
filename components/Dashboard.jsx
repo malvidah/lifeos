@@ -1247,35 +1247,34 @@ function SourceBadge({source}) {
 }
 
 // Merge Oura workouts + Strava activities, deduplicating by overlapping type+time
-function mergeWorkouts(oura, strava) {
-  // Normalise activity name for fuzzy matching
-  const norm = s => (s||"").toLowerCase().replace(/[^a-z]/g,"");
+function normalizeType(str) {
+  return (str||"").toLowerCase().replace(/[^a-z]/g,"");
+}
+function mergeWorkouts(ouraWorkouts, stravaActivities) {
   const merged = [];
 
   // Start with Strava (higher quality names + data)
-  for (const s of strava) {
-    merged.push({ source:"strava", name:s.name, sport:s.sport||s.type,
-      durationMins:s.duration?Math.round(s.duration/60):null,
-      distance:s.distance, calories:s.calories,
-      avgHr:s.avgHr, startTime:s.startTime, id:s.id });
+  for (const act of stravaActivities) {
+    merged.push({ source:"strava", name:act.name, sport:act.sport||act.type,
+      durationMins:act.duration?Math.round(act.duration/60):null,
+      distance:act.distance, calories:act.calories,
+      avgHr:act.avgHr, startTime:act.startTime, id:act.id });
   }
 
-  // Add Oura workouts that aren't duplicated by a Strava entry
-  for (const o of oura) {
-    const oType = norm(o.activity);
+  // Add Oura workouts not already covered by a Strava entry
+  for (const w of ouraWorkouts) {
+    const wType = normalizeType(w.activity);
     const isDupe = merged.some(m => {
-      if(norm(m.sport)===oType || norm(m.name).includes(oType)) {
-        // Close enough in duration (within 5 min) counts as same session
-        const timeDiff = Math.abs((m.durationMins||0)-(o.durationMins||0));
-        return timeDiff <= 5;
+      if(normalizeType(m.sport)===wType || normalizeType(m.name).includes(wType)) {
+        return Math.abs((m.durationMins||0)-(w.durationMins||0)) <= 5;
       }
       return false;
     });
     if (!isDupe) {
-      merged.push({ source:"oura", name:o.activity.replace(/_/g," "),
-        sport:o.activity, durationMins:o.durationMins,
-        distance:o.distance, calories:o.calories,
-        startTime:o.startTime });
+      merged.push({ source:"oura", name:(w.activity||"workout").replace(/_/g," "),
+        sport:w.activity, durationMins:w.durationMins,
+        distance:w.distance, calories:w.calories,
+        startTime:w.startTime });
     }
   }
   return merged;
