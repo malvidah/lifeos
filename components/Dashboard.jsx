@@ -653,7 +653,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
   const selKey    = toKey(selDate);
   // Parse "7:00 PM" / "8:00 AM" style times to 24h minutes for correct sort
   function timeToMins(t) {
-    if (!t) return 9999;
+    if (!t || t === "all day") return -1;
     const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
     if (!m) return 9999;
     let h = parseInt(m[1]), min = parseInt(m[2]);
