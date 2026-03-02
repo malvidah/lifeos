@@ -61,22 +61,24 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt, token) {
-  const r = await fetch("/api/ai", {
-    method: "POST",
-    headers: {"Content-Type":"application/json", "Authorization":`Bearer ${token}`},
-    body: JSON.stringify({
-      model: "claude-haiku-4-5",
-      max_tokens: 64,
-      system: "Return only valid JSON with a single `kcal` integer field. No explanation.",
-      messages: [{role:"user", content:prompt}],
-    }),
-  });
-  const d = await r.json();
-  if (!r.ok || d.error) throw new Error(JSON.stringify(d.error) || `http_${r.status}`);
-  const text = d.content?.find(b => b.type === "text")?.text || "";
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("no_json");
-  return JSON.parse(match[0]).kcal || null;
+  try {
+    const r = await fetch("/api/ai", {
+      method: "POST",
+      headers: {"Content-Type":"application/json", "Authorization":`Bearer ${token}`},
+      body: JSON.stringify({
+        model: "claude-haiku-4-5",
+        max_tokens: 64,
+        system: "Return only valid JSON with a single `kcal` integer field. No explanation.",
+        messages: [{role:"user", content:prompt}],
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok || d.error) return null;
+    const text = d.content?.find(b => b.type === "text")?.text || "";
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    return JSON.parse(match[0]).kcal || null;
+  } catch { return null; }
 }
 
 // ─── Oura response cache (per date+user, avoids double-fetching) ─────────────
@@ -1163,13 +1165,13 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         bump(n => n+1);
         estimateKcal(promptFn(row.text), token).then(kcal => {
           estimating.current.delete(row.id);
+          bump(n => n+1);
           if (kcal) setRows(prev => {
             const all = Array.isArray(prev) ? prev : [mkRow()];
             return all.find(r => r.id===row.id)
               ? all.map(r => r.id===row.id ? {...r, kcal} : r)
               : [...all.filter(r=>r.synced), {...row, kcal, synced:true}, ...all.filter(r=>!r.synced)];
           });
-          bump(n => n+1);
         });
       });
   }, [syncedRows, loaded, token]); // eslint-disable-line
