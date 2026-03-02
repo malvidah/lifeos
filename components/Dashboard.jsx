@@ -10,13 +10,24 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
-const C = {
-  bg:"#0D0D0F", surface:"#16171A", card:"#1C1D21",
-  border:"#26272C", border2:"#2E2F35",
-  text:"#E8E4DC", muted:"#6B6870", dim:"#3A3840",
-  accent:"#C4A882", green:"#4E9268", blue:"#4A82B0",
-  yellow:"#B08A3E", red:"#A05050",
+const THEMES = {
+  dark: {
+    bg:"#0D0D0F", surface:"#16171A", card:"#1C1D21",
+    border:"#26272C", border2:"#2E2F35",
+    text:"#E8E4DC", muted:"#6B6870", dim:"#3A3840",
+    accent:"#C4A882", green:"#4E9268", blue:"#4A82B0",
+    yellow:"#B08A3E", red:"#A05050",
+  },
+  light: {
+    bg:"#F5F2EE", surface:"#EDEAE5", card:"#FFFFFF",
+    border:"#D8D4CE", border2:"#C8C4BC",
+    text:"#1A1918", muted:"#7A7570", dim:"#B8B4AE",
+    accent:"#8B6B3D", green:"#2E7048", blue:"#2A5A8A",
+    yellow:"#8A6A1E", red:"#803030",
+  },
 };
+// C is set at render time via setTheme — default dark
+let C = THEMES.dark;
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 
@@ -297,7 +308,7 @@ function Widget({label,color,dragProps,children}) {
 }
 
 // ─── UserMenu ─────────────────────────────────────────────────────────────────
-function UserMenu({session,token,userId}) {
+function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
   const [anthropicKey,setAnthropicKey]=useState("");
@@ -366,6 +377,20 @@ function UserMenu({session,token,userId}) {
             {saved?"saved ✓":saving?"saving…":"save settings"}
           </button>
           <div style={{height:1,background:C.border}}/>
+          {/* Light / Dark toggle */}
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted}}>
+              {theme==="dark"?"Dark mode":"Light mode"}
+            </span>
+            <button onClick={()=>onThemeChange(t=>t==="dark"?"light":"dark")}
+              style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:20,cursor:"pointer",
+                padding:"3px 3px",display:"flex",alignItems:"center",width:40,
+                justifyContent:theme==="dark"?"flex-end":"flex-start",transition:"all 0.2s"}}>
+              <div style={{width:14,height:14,borderRadius:"50%",
+                background:theme==="dark"?C.accent:C.yellow,transition:"background 0.2s"}}/>
+            </button>
+          </div>
+          <div style={{height:1,background:C.border}}/>
           <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
             style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer",
               color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase"}}>
@@ -378,11 +403,19 @@ function UserMenu({session,token,userId}) {
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({session,token,userId,syncStatus}) {
+function TopBar({session,token,userId,syncStatus,theme,onThemeChange}) {
   const [greeting, setGreeting] = useState("");
   useEffect(() => {
-    const day = new Date().toLocaleDateString("en-US",{weekday:"long"});
-    setGreeting(`It's ${day},`);
+    function update() {
+      const now = new Date();
+      const day = now.toLocaleDateString("en-US",{weekday:"long",timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone});
+      setGreeting(`It's ${day},`);
+    }
+    update();
+    // Update at midnight
+    const ms = new Date().setHours(24,0,0,0) - Date.now();
+    const t = setTimeout(update, ms);
+    return () => clearTimeout(t);
   }, []);
   return (
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 16px",
@@ -399,7 +432,7 @@ function TopBar({session,token,userId,syncStatus}) {
           {syncStatus.syncing?"syncing":syncStatus.lastSync||"synced"}
         </span>
       </div>
-      <UserMenu session={session} token={token} userId={userId}/>
+      <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange}/>
     </div>
   );
 }
@@ -413,12 +446,11 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
 
   return (
     <Card>
-      {/* Header */}
+      {/* Header — matches Widget label style */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
         <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-        <span style={{fontFamily:serif,fontSize:mobile?15:18,color:C.text,letterSpacing:"-0.02em",lineHeight:1}}>
-          {selected ? new Date(selected+"T12:00:00").toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"}) : months}
-        </span>
+        <div style={{width:3,height:13,borderRadius:2,background:C.blue,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",textTransform:"uppercase",color:C.muted}}>Calendar</span>
         <div style={{flex:1}}/>
         {[["‹",()=>setAnchor(d=>shift(d,-7))],["today",()=>{setAnchor(new Date());onSelect(todayKey());}],["›",()=>setAnchor(d=>shift(d,7))]].map(([l,fn])=>(
           <button key={l} onClick={fn} style={{background:"none",cursor:"pointer",
@@ -432,20 +464,18 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
       </div>
 
       {/* Day columns */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flex:1,overflow:"hidden"}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flexShrink:0,overflow:"hidden"}}>
         {days.map((d,i)=>{
           const k=toKey(d),sel=k===selected,tod=k===today;
           const allEvts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
-          // On mobile show max 2 events, on desktop show all
-          const evts = mobile ? allEvts.slice(0,2) : allEvts;
           const dot=healthDots[k]||{};
           return (
             <div key={k} onClick={()=>onSelect(k)} style={{cursor:"pointer",
               borderRight:i<6?`1px solid ${C.border}`:"none",
-              background:sel?"rgba(196,168,130,0.06)":"transparent",transition:"background 0.15s",
+              background:sel?`${C.accent}0D`:"transparent",transition:"background 0.15s",
               display:"flex",flexDirection:"column"}}>
-              {/* Day header */}
-              <div style={{padding:mobile?"6px 3px 3px":"8px 6px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
+              {/* Day number header */}
+              <div style={{padding:mobile?"6px 3px 4px":"8px 6px 5px",display:"flex",flexDirection:"column",alignItems:"center",gap:1,
                 borderBottom:`1px solid ${C.border}`,flexShrink:0,
                 borderTop:sel?`2px solid ${C.accent}`:tod?`2px solid ${C.muted}`:`2px solid transparent`}}>
                 <span style={{fontFamily:mono,fontSize:mobile?7:9,letterSpacing:"0.06em",color:sel?C.accent:C.muted}}>{DAY3[i]}</span>
@@ -453,37 +483,48 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
                 {!mobile && <div style={{display:"flex",gap:2,height:4,alignItems:"center",marginTop:1}}>
                   {dot.sleep>=90    &&<span style={{width:3,height:3,borderRadius:"50%",background:C.blue,display:"inline-block"}}/>}
                   {dot.readiness>=90&&<span style={{width:3,height:3,borderRadius:"50%",background:C.green,display:"inline-block"}}/>}
-
                 </div>}
               </div>
-              {/* Events */}
-              <div style={{padding:mobile?"3px 3px":"5px 6px",display:"flex",flexDirection:"column",gap:mobile?2:3,flex:1,overflow:"hidden"}}>
-                {evts.length===0
-                  ? !mobile && <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
-                  : evts.map((ev,ei)=>(
-                    <div key={ei}>
-                      {mobile
-                        ? <div style={{
-                            width:"100%",height:3,borderRadius:2,
-                            background:ev.color||C.accent,opacity:0.8,marginBottom:1
-                          }}/>
-                        : <div style={{display:"flex",gap:4,alignItems:"baseline"}}>
-                            <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap",opacity:0.9}}>{ev.time}</span>
-                            <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:sel?C.text:"#AAA5A0",
-                              overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{ev.title}</span>
-                          </div>
-                      }
-                    </div>
-                  ))
-                }
-                {mobile && allEvts.length > 2 &&
-                  <span style={{fontFamily:mono,fontSize:7,color:C.dim}}>+{allEvts.length-2}</span>
-                }
-              </div>
+              {/* Desktop: events inside each column */}
+              {!mobile && (
+                <div style={{padding:"5px 6px",display:"flex",flexDirection:"column",gap:3,flex:1,overflow:"hidden"}}>
+                  {allEvts.length===0
+                    ? <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>—</span>
+                    : allEvts.map((ev,ei)=>(
+                        <div key={ei} style={{display:"flex",gap:4,alignItems:"baseline"}}>
+                          <span style={{fontFamily:mono,fontSize:8,color:ev.color||C.accent,flexShrink:0,whiteSpace:"nowrap",opacity:0.9}}>{ev.time}</span>
+                          <span style={{fontFamily:serif,fontSize:11,lineHeight:1.4,wordBreak:"break-word",color:sel?C.text:"#AAA5A0",
+                            overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{ev.title}</span>
+                        </div>
+                    ))
+                  }
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      {/* Mobile: selected day events shown below the grid */}
+      {mobile && (()=>{
+        const selEvts=(events[selected]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+        const selDay = days.find(d=>toKey(d)===selected);
+        const selLabel = selDay ? selDay.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"}) : "";
+        return (
+          <div style={{borderTop:`1px solid ${C.border}`,padding:"10px 14px",flex:1,overflowY:"auto",minHeight:0}}>
+            {selLabel && <div style={{fontFamily:mono,fontSize:8,color:C.muted,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:8}}>{selLabel}</div>}
+            {selEvts.length===0
+              ? <span style={{fontFamily:mono,fontSize:9,color:C.dim}}>No events</span>
+              : selEvts.map((ev,i)=>(
+                  <div key={i} style={{display:"flex",gap:10,alignItems:"baseline",padding:"4px 0",borderBottom:i<selEvts.length-1?`1px solid ${C.border}`:"none"}}>
+                    <span style={{fontFamily:mono,fontSize:10,color:ev.color||C.accent,flexShrink:0,minWidth:60}}>{ev.time}</span>
+                    <span style={{fontFamily:serif,fontSize:14,lineHeight:1.4,color:C.text}}>{ev.title}</span>
+                  </div>
+              ))
+            }
+          </div>
+        );
+      })()}
     </Card>
   );
 }
@@ -828,6 +869,13 @@ function ResizeHandle({onPointerDown}) {
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
+  const [theme, setTheme] = useState(() => {
+    if (typeof window !== "undefined") return localStorage.getItem("theme") || "dark";
+    return "dark";
+  });
+  // Set C globally before any render
+  C = THEMES[theme] || THEMES.dark;
+
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [selected,  setSelected]  = useState(todayKey);
@@ -849,6 +897,11 @@ export default function Dashboard() {
   });
 
   const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}));
+
+  useEffect(()=>{
+    localStorage.setItem("theme", theme);
+    C = THEMES[theme] || THEMES.dark;
+  },[theme]);
 
   useEffect(()=>{
     const supabase=createClient();
@@ -950,7 +1003,7 @@ export default function Dashboard() {
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
       `}</style>
 
-      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus}/>
+      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme}/>
 
       {mobile ? (
         /* ── MOBILE: single scrollable column with drag ─────────────────── */
