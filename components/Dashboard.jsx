@@ -61,7 +61,7 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt, token) {
-  if (!token) { console.warn("[ai] no token"); return null; }
+  if (!token) return null;
   try {
     const r = await fetch("/api/ai",{method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
@@ -69,13 +69,10 @@ async function estimateKcal(prompt, token) {
         system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
         messages:[{role:"user",content:prompt}]})});
     const d = await r.json();
-    console.log("[ai] response", r.status, JSON.stringify(d).slice(0,200));
     if (d.error) return null;
     const text = d.content?.find(b=>b.type==="text")?.text||"{}";
-    const kcal = JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null;
-    console.log("[ai] kcal", kcal);
-    return kcal;
-  } catch(e) { console.error("[ai] exception", e.message); return null; }
+    return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null;
+  } catch { return null; }
 }
 
 // ─── Oura response cache (per date+user, avoids double-fetching) ─────────────
@@ -1141,64 +1138,105 @@ function Notes({date,userId,token}) {
 }
 
 // ─── RowList ─────────────────────────────────────────────────────────────────
+// syncedRows: live from API, may have native kcal (Strava) or need estimation (Oura)
+// AI estimates for synced rows persist to DB under type+"_kcal" key
 function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[]}) {
-  const mkRow=()=>({id:Date.now(),text:"",kcal:null});
-  const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
-  const refs=useRef({});
-  const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
-  const manualTotal=safe.reduce((s,r)=>s+(r.kcal||0),0);
-  const syncTotal=syncedRows.reduce((s,r)=>s+(r.kcal||0),0);
-  const total=manualTotal+syncTotal;
+  const mkRow = () => ({id:Date.now(), text:"", kcal:null});
+  const {value:rows, setValue:setRows, loaded} = useDbSave(date, type, [mkRow()], token, userId);
+  const {value:savedKcals, setValue:setSavedKcals, loaded:kcalsLoaded} = useDbSave(date, type+"_kcal", {}, token, userId);
+  const estimating = useRef(new Set());
+  const refs = useRef({});
+  const [tick, setTick] = useState(0);
 
-  async function runEstimate(id,text){
-    setRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
-    const kcal=await estimateKcal(promptFn(text),token).catch(()=>null);
-    setRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal,estimating:false}:r));
+  const safe = Array.isArray(rows) && rows.length ? rows : [mkRow()];
+  const kcalMap = (kcalsLoaded && savedKcals && typeof savedKcals === "object") ? savedKcals : {};
+
+  // Merge saved AI estimates into synced rows
+  const merged = syncedRows.map(r => ({...r, kcal: r.kcal || kcalMap[r.id] || null}));
+  const total = [...safe, ...merged].reduce((s,r) => s + (r.kcal||0), 0);
+
+  // Estimate kcal for synced rows with no native calories
+  useEffect(() => {
+    if (!token || !loaded || !kcalsLoaded) return;
+    merged
+      .filter(r => !r.kcal && r.text && !estimating.current.has(r.id))
+      .forEach(row => {
+        estimating.current.add(row.id);
+        setTick(t => t+1);
+        estimateKcal(promptFn(row.text), token).then(kcal => {
+          estimating.current.delete(row.id);
+          if (kcal) setSavedKcals(prev => ({...(typeof prev==="object"&&prev?prev:{}), [row.id]:kcal}));
+          else setTick(t => t+1);
+        });
+      });
+  }, [syncedRows, loaded, kcalsLoaded, token]); // eslint-disable-line
+
+  async function runEstimate(id, text) {
+    setRows(safe.map(r => r.id===id ? {...r, estimating:true} : r));
+    const kcal = await estimateKcal(promptFn(text), token);
+    setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal, estimating:false} : r));
   }
-  function onKey(e,id,idx){
-    if(e.key==="Enter"){e.preventDefault();const row=mkRow();const i=safe.findIndex(r=>r.id===id);setRows([...safe.slice(0,i+1),row,...safe.slice(i+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
-    if(e.key==="Backspace"&&safe[idx]?.text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
+
+  function onKey(e, id, idx) {
+    if (e.key==="Enter") {
+      e.preventDefault();
+      const row = mkRow();
+      const i = safe.findIndex(r => r.id===id);
+      setRows([...safe.slice(0,i+1), row, ...safe.slice(i+1)]);
+      setTimeout(() => refs.current[row.id]?.focus(), 30);
+    }
+    if (e.key==="Backspace" && safe[idx]?.text==="" && safe.length>1) {
+      e.preventDefault();
+      setRows(safe.filter(r => r.id!==id));
+      const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
+      setTimeout(() => refs.current[t]?.focus(), 30);
+    }
   }
-  if(!loaded) return (
+
+  if (!loaded) return (
     <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
       <Shimmer width="75%" height={13}/>
       <Shimmer width="55%" height={13}/>
       <Shimmer width="65%" height={13}/>
     </div>
   );
+
+  const rowStyle = {display:"flex", alignItems:"baseline", gap:8, padding:"2px 0", minHeight:28};
+  const kcalStyle = {fontFamily:mono, fontSize:10, color, flexShrink:0, minWidth:38, textAlign:"right", opacity:0.85};
+
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
-        {syncedRows.map(row=>(
-          <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
+        {merged.map(row => (
+          <div key={row.id} style={rowStyle}>
             <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
               {row.text}
             </span>
             <SourceBadge source={row.source}/>
             <span style={{flex:1}}/>
-            <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
-              {row.kcal?`${prefix}${row.kcal}`:""}
+            <span style={kcalStyle}>
+              {estimating.current.has(row.id) ? "…" : row.kcal ? `${prefix}${row.kcal}` : ""}
             </span>
           </div>
         ))}
-        {safe.map((row,idx)=>(
-          <div key={row.id} style={{display:"flex",alignItems:"baseline",gap:8,padding:"2px 0",minHeight:28}}>
+        {safe.map((row, idx) => (
+          <div key={row.id} style={rowStyle}>
             <input ref={el=>refs.current[row.id]=el} value={row.text}
-              onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
-              onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
-              onKeyDown={e=>onKey(e,row.id,idx)}
-              placeholder={idx===0&&syncedRows.length===0?placeholder:idx===0?"+ add more":""}
-              style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
-                color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
-            <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
-              {row.estimating?"…":row.kcal?`${prefix}${row.kcal}`:""}
+              onChange={e => setRows(safe.map(r => r.id===row.id ? {...r,text:e.target.value,kcal:null} : r))}
+              onBlur={e => { const r=safe.find(r=>r.id===row.id); if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating) runEstimate(row.id,e.target.value); }}
+              onKeyDown={e => onKey(e,row.id,idx)}
+              placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+ add more" : ""}
+              style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
+                lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
+            <span style={kcalStyle}>
+              {row.estimating ? "…" : row.kcal ? `${prefix}${row.kcal}` : ""}
             </span>
           </div>
         ))}
       </div>
-      {total>0&&(
-        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:8,borderTop:`1px solid ${C.border}`}}>
+      {total > 0 && (
+        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
           <span style={{fontFamily:mono,fontSize:11,color,opacity:0.9}}>{prefix}{total} kcal</span>
         </div>
