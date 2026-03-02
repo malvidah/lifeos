@@ -17,13 +17,18 @@ const THEMES = {
     text:"#E8E4DC", muted:"#6B6870", dim:"#3A3840",
     accent:"#C4A882", green:"#4E9268", blue:"#4A82B0",
     yellow:"#B08A3E", red:"#A05050",
+    shadow:"0 1px 2px rgba(0,0,0,0.5),0 4px 16px rgba(0,0,0,0.25)",
+    shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
   },
   light: {
-    bg:"#F5F2EE", surface:"#EDEAE5", card:"#FFFFFF",
-    border:"#D8D4CE", border2:"#C8C4BC",
-    text:"#1A1918", muted:"#7A7570", dim:"#B8B4AE",
-    accent:"#8B6B3D", green:"#2E7048", blue:"#2A5A8A",
-    yellow:"#8A6A1E", red:"#803030",
+    // Warm parchment — Substack-inspired, no harsh whites or shadows
+    bg:"#F7F4F0", surface:"#F0EDE8", card:"#FAF8F5",
+    border:"#E5E0D8", border2:"#D8D2C8",
+    text:"#1C1916", muted:"#8C8680", dim:"#C4BFB8",
+    accent:"#9B6B3A", green:"#3D7A52", blue:"#3A6A94",
+    yellow:"#9A7A2A", red:"#8A3A3A",
+    shadow:"0 1px 2px rgba(60,40,20,0.06),0 2px 8px rgba(60,40,20,0.04)",
+    shadowSm:"0 1px 2px rgba(60,40,20,0.05)",
   },
 };
 // C is set at render time via setTheme — default dark
@@ -265,7 +270,7 @@ function Card({children,style={}}) {
     <div style={{
       background:C.card,borderRadius:R,border:`1px solid ${C.border}`,
       overflow:"hidden",height:"100%",
-      boxShadow:"0 1px 3px rgba(0,0,0,0.4),0 4px 16px rgba(0,0,0,0.2)",
+      boxShadow:C.shadow,
       display:"flex",flexDirection:"column",
       ...style,
     }}>{children}</div>
@@ -352,7 +357,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
         <div style={{position:"absolute",top:40,right:0,width:272,zIndex:300,
           background:C.card,border:`1px solid ${C.border2}`,borderRadius:R,
           padding:16,display:"flex",flexDirection:"column",gap:10,
-          boxShadow:"0 8px 32px rgba(0,0,0,0.6)"}}>
+          boxShadow:C.shadow}}>
           <div>
             <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
             <div style={{fontFamily:mono,fontSize:9,color:C.muted,marginTop:3}}>{user?.email}</div>
@@ -383,11 +388,16 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               {theme==="dark"?"Dark mode":"Light mode"}
             </span>
             <button onClick={()=>onThemeChange(t=>t==="dark"?"light":"dark")}
-              style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:20,cursor:"pointer",
-                padding:"3px 3px",display:"flex",alignItems:"center",width:40,
-                justifyContent:theme==="dark"?"flex-end":"flex-start",transition:"all 0.2s"}}>
-              <div style={{width:14,height:14,borderRadius:"50%",
-                background:theme==="dark"?C.accent:C.yellow,transition:"background 0.2s"}}/>
+              style={{
+                background:theme==="dark"?"rgba(196,168,130,0.15)":"rgba(155,107,58,0.12)",
+                border:`1px solid ${C.border2}`,borderRadius:20,cursor:"pointer",
+                padding:3,display:"flex",alignItems:"center",width:44,height:24,
+                justifyContent:theme==="dark"?"flex-end":"flex-start",
+                transition:"all 0.25s"}}>
+              <div style={{width:16,height:16,borderRadius:"50%",
+                background:C.accent,
+                boxShadow:C.shadowSm,
+                transition:"all 0.25s"}}/>
             </button>
           </div>
           <div style={{height:1,background:C.border}}/>
@@ -421,7 +431,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange}) {
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 16px",
       height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,
       position:"sticky",top:0,zIndex:100}}>
-      <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em",fontStyle:"italic"}}>{greeting}</span>
+      <span style={{fontFamily:serif,fontSize:15,color:C.text,letterSpacing:"-0.01em",}}>{greeting}</span>
       <div style={{flex:1}}/>
       <div style={{display:"flex",alignItems:"center",gap:6}}>
         <div style={{width:6,height:6,borderRadius:"50%",
@@ -443,6 +453,21 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
   const mobile = useIsMobile();
   const days=weekOf(anchor),today=todayKey();
   const months=[...new Set(days.map(d=>MON3[d.getMonth()]))].join(" · ");
+  const year=days[0].getFullYear();
+
+  // Touch swipe for mobile week navigation
+  const swipeRef=useRef(null);
+  const touchStartX=useRef(null);
+  function onTouchStart(e){touchStartX.current=e.touches[0].clientX;}
+  function onTouchEnd(e){
+    if(touchStartX.current===null)return;
+    const dx=e.changedTouches[0].clientX-touchStartX.current;
+    if(Math.abs(dx)>40){
+      if(dx<0) setAnchor(d=>shift(d,7));   // swipe left = next week
+      else     setAnchor(d=>shift(d,-7));  // swipe right = prev week
+    }
+    touchStartX.current=null;
+  }
 
   return (
     <Card>
@@ -463,8 +488,17 @@ function CalStrip({selected,onSelect,events,healthDots,dragProps}) {
         ))}
       </div>
 
-      {/* Day columns */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flexShrink:0,overflow:"hidden"}}>
+      {/* Month label row — sits above day grid */}
+      <div style={{padding:"6px 14px 4px",display:"flex",alignItems:"baseline",gap:6,flexShrink:0,
+        borderBottom:`1px solid ${C.border}`}}>
+        <span style={{fontFamily:serif,fontSize:mobile?13:14,color:C.text,letterSpacing:"-0.01em"}}>{months}</span>
+        <span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{year}</span>
+      </div>
+
+      {/* Day columns — swipeable on mobile */}
+      <div ref={swipeRef}
+        onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}
+        style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",flexShrink:0,overflow:"hidden"}}>
         {days.map((d,i)=>{
           const k=toKey(d),sel=k===selected,tod=k===today;
           const allEvts=(events[k]||[]).slice().sort((a,b)=>(a.time||"").localeCompare(b.time||""));
@@ -710,7 +744,7 @@ function Notes({date,userId,token}) {
     >
       {value && value.trim()
         ? renderContent(value)
-        : <div style={{color:C.muted,fontFamily:serif,fontSize:16,lineHeight:"1.7",fontStyle:"italic"}}>
+        : <div style={{color:C.muted,fontFamily:serif,fontSize:16,lineHeight:"1.7"}}>
             What's on your mind?
           </div>
       }
