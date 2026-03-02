@@ -924,7 +924,7 @@ function Shimmer({width="100%", height=14, style={}}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",resilienceScore:"",stressMins:"",recoveryMins:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",activeMinutes:"",resilienceScore:"",stressMins:"",recoveryMins:""};
 
 const SPORT_EMOJI = {
   Run:"🏃",Ride:"🚴",Swim:"🏊",Walk:"🚶",Hike:"🥾",
@@ -969,6 +969,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
           activeCalories:data.activeCalories||p.activeCalories||"",
           totalCalories:data.totalCalories||p.totalCalories||"",
           steps:data.steps||p.steps||"",
+          activeMinutes:data.activeMinutes||p.activeMinutes||"",
           resilienceScore:data.resilienceScore||p.resilienceScore||"",
           stressMins:data.stressMins||p.stressMins||"",
           recoveryMins:data.recoveryMins||p.recoveryMins||"",
@@ -985,7 +986,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,
       fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}]},
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,
-      fields:[{label:"Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",unit:""}]},
+      fields:[{label:"Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Active",value:h.activeMinutes,unit:"min"}]},
     {key:"resilience",label:"Resilience",color:purple,score:h.resilienceScore,
       fields:[{label:"Stress",value:fmtMins(h.stressMins),unit:""},{label:"Recov.",value:fmtMins(h.recoveryMins),unit:""}]},
   ];

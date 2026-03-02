@@ -92,6 +92,9 @@ export async function GET(request) {
       if (activeCals != null) result.activeCalories = String(Math.round(activeCals));
       // steps — Oura v2 uses "steps" directly
       if (activity.steps != null) result.steps = String(activity.steps);
+      // Active minutes = medium + high activity time (in seconds → minutes)
+      const activeSecs = (activity.medium_activity_time ?? 0) + (activity.high_activity_time ?? 0);
+      if (activeSecs > 0) result.activeMinutes = String(Math.round(activeSecs / 60));
     }
 
     // Calm: inverted from Oura stress_high (minutes in high-stress HRV state)
