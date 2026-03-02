@@ -61,17 +61,21 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt, token) {
-  if (!token) return null;
+  if (!token) throw new Error("no_token");
   const r = await fetch("/api/ai",{method:"POST",
     headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-    body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:64,
+    body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:64,
       system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
       messages:[{role:"user",content:prompt}]})});
   const d = await r.json();
-  // Expose error to UI so we can debug — stored in window for inspection
-  if (d.error) { window._lastAiError=d; return null; }
+  window._lastAiDebug = {status:r.status, body:d, prompt};
+  if (!r.ok || d.error) throw new Error(d.error || `http_${r.status}`);
   const text = d.content?.find(b=>b.type==="text")?.text||"{}";
-  try { return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null; } catch { return null; }
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("no_json_in_response");
+  const kcal = JSON.parse(match[0]).kcal||null;
+  if (!kcal) throw new Error("no_kcal_in_response");
+  return kcal;
 }
 
 // ─── Oura response cache (per date+user, avoids double-fetching) ─────────────
@@ -1144,7 +1148,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   const mkRow=()=>({id:Date.now(),text:"",kcal:null});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,type,[mkRow()],token,userId);
   const inFlight=useRef(new Set());
-  const failed=useRef(new Set());
+  const failed=useRef(new Map());
   const refs=useRef({});
   const [,forceRender]=useState(0);
   const bump=()=>forceRender(n=>n+1);
@@ -1200,7 +1204,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
       bump();
       estimateKcal(promptFn(row.text),token).then(kcal=>{
         inFlight.current.delete(row.id);
-        if(!kcal){failed.current.add(row.id);bump();return;}
+        if(!kcal){failed.current.set(row.id,'no_kcal');bump();return;}
         // Patch kcal into DB rows — careful not to touch other rows' kcal
         setRows(prev=>{
           const all=Array.isArray(prev)?prev:[mkRow()];
@@ -1212,7 +1216,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
           }
           return [...synced,...manuals];
         });
-      }).catch(()=>{ inFlight.current.delete(row.id); failed.current.add(row.id); bump(); });
+      }).catch((e)=>{ inFlight.current.delete(row.id); failed.current.set(row.id, e?.message||'fetch_err'); bump(); });
     });
   },[syncedRows,loaded,token]); // eslint-disable-line
 
@@ -1244,7 +1248,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
               {row.text} <SourceBadge source={row.source}/>
             </span>
             <span style={{fontFamily:mono,fontSize:10,color,flexShrink:0,minWidth:38,textAlign:"right",opacity:0.85}}>
-              {inFlight.current.has(row.id)?"…":row.kcal?`${prefix}${row.kcal}`:failed.current.has(row.id)?<span style={{color:"#e53935",fontWeight:600}}>—</span>:""}
+              {inFlight.current.has(row.id)?"…":row.kcal?`${prefix}${row.kcal}`:failed.current.has(row.id)?<span style={{color:"#e53935",fontSize:9}} title={failed.current.get?.(row.id)||"err"}>{failed.current.get?.(row.id)||"err"}</span>:""}
             </span>
           </div>
         ))}
