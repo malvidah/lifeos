@@ -732,7 +732,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       </div>
 
       {/* ── Events for selected day ───────────────────────────────────────── */}
-      <div style={{padding:"10px 16px", overflowY:"auto", minHeight:48, maxHeight: desktop ? 240 : 160}}>
+      <div style={{padding:"10px 16px 20px", overflowY:"auto", minHeight:48, maxHeight: desktop ? 260 : 180}}>
         <div style={{
           fontFamily:mono, fontSize:8, color:C.muted,
           letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:8,
@@ -798,7 +798,7 @@ function Shimmer({width="100%", height=14, style={}}) {
 }
 
 // ─── HealthStrip ──────────────────────────────────────────────────────────────
-const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:""};
+const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",steps:""};
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const set=k=>e=>setH(p=>({...p,[k]:e.target.value}));
@@ -809,6 +809,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(data=>{
         // error:"no_token" means user hasn't set up Oura — silent, not an error
+        console.log("[oura]", date, data);
         if(data.error)return;
         // Only fill fields that don't already have manually entered values
         setH(p=>({...p,
@@ -818,6 +819,9 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
           readinessScore:p.readinessScore||data.readinessScore||"",
           hrv:p.hrv||data.hrv||"",
           rhr:p.rhr||data.rhr||"",
+          activityScore:p.activityScore||data.activityScore||"",
+          activeCalories:p.activeCalories||data.activeCalories||"",
+          steps:p.steps||data.steps||"",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
@@ -827,7 +831,8 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
       fields:[{label:"Hours",value:h.sleepHrs,onChange:set("sleepHrs"),unit:"h"},{label:"Efficiency",value:h.sleepEff,onChange:set("sleepEff"),unit:"%"}]},
     {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,setScore:e=>setH(p=>({...p,readinessScore:e.target.value})),
       fields:[{label:"HRV",value:h.hrv,onChange:set("hrv"),unit:"ms"},{label:"Resting HR",value:h.rhr,onChange:set("rhr"),unit:"bpm"}]},
-
+    {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,setScore:e=>setH(p=>({...p,activityScore:e.target.value})),
+      fields:[{label:"Cal Burned",value:h.activeCalories,onChange:set("activeCalories"),unit:"kcal"},{label:"Steps",value:h.steps,onChange:set("steps"),unit:""}]},
   ];
 
   const mobileH = useIsMobile();
@@ -1233,7 +1238,7 @@ export default function Dashboard() {
   },[token]); // eslint-disable-line
 
   const onHealthChange=useCallback((date,data)=>{
-    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0}}));
+    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0}}));
   },[]);
 
   const wMap=Object.fromEntries(WIDGET_DEFS.map(w=>[w.id,w]));
@@ -1345,63 +1350,30 @@ export default function Dashboard() {
           ))}
         </div>
       ) : (
-        /* ── DESKTOP: fixed layout ──────────────────────────────────────── */
-        <div style={{flex:1,overflow:"hidden",display:"flex",flexDirection:"column",padding:10,gap:8,minHeight:0}}>
+        /* ── DESKTOP: two-column scrollable layout, matches mobile feel ─── */
+        <div style={{flex:1,display:"flex",gap:10,padding:10,overflow:"hidden",minHeight:0}}>
 
-          {/* Full-width: cal + health */}
-          <DndContext sensors={sensors} collisionDetection={closestCenter}
-            onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
-              <div style={{display:"flex",flexDirection:"column",gap:0,flexShrink:0}}>
-                {fullOrder.map((id,idx)=>(
-                  <div key={id} style={{marginBottom:idx<fullOrder.length-1?8:0}}>
-                    <SortableCard id={id}>
-                      {({dragProps})=>
-                        id==="cal"
-                          ? <div style={{height:heights.cal}}>
-                              <CalStrip selected={selected} onSelect={setSelected}
-                                events={events} healthDots={healthDots} dragProps={dragProps}/>
-                            </div>
-                          : <HealthStrip date={selected} token={token} userId={userId}
-                              onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-                              dragProps={dragProps}/>
-                      }
-                    </SortableCard>
-                    {id==="cal" && <ResizeHandle onPointerDown={makeResizeHandler("cal")}/> }
-                  </div>
-                ))}
+          {/* Left column: cal + health stacked */}
+          <div style={{width:420,flexShrink:0,display:"flex",flexDirection:"column",gap:8,overflowY:"auto"}}>
+            <div style={{height:360,flexShrink:0}}>
+              <CalStrip selected={selected} onSelect={setSelected}
+                events={events} healthDots={healthDots} dragProps={{}}/>
+            </div>
+            <HealthStrip date={selected} token={token} userId={userId}
+              onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+              dragProps={{}}/>
+          </div>
+
+          {/* Right column: widgets in a 2-col grid, scrollable */}
+          <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,
+            alignContent:"start",overflowY:"auto",minWidth:0}}>
+            {[leftWidget,...rightWidgets].map(w=>(
+              <div key={w.id} style={{minHeight:240}}>
+                <Widget label={w.label} color={w.color} dragProps={{}}>
+                  <w.Comp date={selected} token={token} userId={userId}/>
+                </Widget>
               </div>
-            </SortableContext>
-            <DragOverlay>
-              {activeId&&(
-                <div style={{background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
-                  padding:"12px 18px",fontFamily:mono,fontSize:10,letterSpacing:"0.15em",
-                  textTransform:"uppercase",color:C.accent,boxShadow:"0 12px 40px rgba(0,0,0,0.7)"}}>
-                  {activeId==="cal"?"Calendar":"Health"}
-                </div>
-              )}
-            </DragOverlay>
-          </DndContext>
-
-          {/* Widget area — fills remaining space */}
-          <div style={{flex:1,display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,minHeight:0}}>
-            <div style={{minHeight:0,height:"100%"}}>
-              <Widget label={leftWidget.label} color={leftWidget.color} dragProps={{}}>
-                <leftWidget.Comp date={selected} token={token} userId={userId}/>
-              </Widget>
-            </div>
-            <div style={{display:"flex",flexDirection:"column",gap:8,minHeight:0}}>
-              {rightWidgets.map((w,i)=>(
-                <div key={w.id} style={{flex:heights[w.id]||1,minHeight:80,display:"flex",flexDirection:"column"}}>
-                  <div style={{flex:1,minHeight:0}}>
-                    <Widget label={w.label} color={w.color} dragProps={{}}>
-                      <w.Comp date={selected} token={token} userId={userId}/>
-                    </Widget>
-                  </div>
-                  {i < rightWidgets.length-1 && <ResizeHandle onPointerDown={makeResizeHandler(w.id)}/>}
-                </div>
-              ))}
-            </div>
+            ))}
           </div>
         </div>
       )}
