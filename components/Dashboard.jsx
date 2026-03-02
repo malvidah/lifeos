@@ -67,14 +67,15 @@ function weekOf(anchor) {
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateKcal(prompt, token) {
-  const headers = {"Content-Type":"application/json"};
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-  const r = await fetch("/api/ai",{method:"POST",headers,
+  if (!token) return null;
+  const r = await fetch("/api/ai",{method:"POST",
+    headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
     body:JSON.stringify({model:"claude-sonnet-4-6",max_tokens:64,
       system:"Return only valid JSON with a single `kcal` integer field. No explanation.",
       messages:[{role:"user",content:prompt}]})});
   const d = await r.json();
-  if (d.error) return null;
+  // Expose error to UI so we can debug — stored in window for inspection
+  if (d.error) { window._lastAiError=d; return null; }
   const text = d.content?.find(b=>b.type==="text")?.text||"{}";
   try { return JSON.parse(text.match(/\{[\s\S]*\}/)[0]).kcal||null; } catch { return null; }
 }
@@ -1225,27 +1226,26 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   }
 
   // Auto-estimate kcal for synced rows missing it, then persist
+  // Use ref to avoid stale closure on mergedSynced
+  const mergedSyncedRef = useRef([]);
+  mergedSyncedRef.current = mergedSynced;
+
   useEffect(()=>{
     if(!token||!loaded)return;
-    const needsEstimate=mergedSynced.filter(r=>!r.kcal&&r.text&&!inFlight.current.has(r.id));
+    const current = mergedSyncedRef.current;
+    const needsEstimate=current.filter(r=>!r.kcal&&r.text&&!inFlight.current.has(r.id));
     if(needsEstimate.length===0)return;
-
-    // Persist current state first (with nulls) so UI updates immediately
-    persistSynced(mergedSynced);
 
     needsEstimate.forEach(row=>{
       inFlight.current.add(row.id);
       estimateKcal(promptFn(row.text),token).then(kcal=>{
         inFlight.current.delete(row.id);
         if(!kcal)return;
-        // Update this row's kcal in the full merged set and persist
         setRows(prev=>{
           const all=Array.isArray(prev)?prev:[mkRow()];
-          const syncedInDb=all.filter(r=>r.synced);
           const manuals=all.filter(r=>!r.synced);
-          const updated=mergedSynced.map(r=>r.id===row.id?{...r,kcal}:
-            syncedInDb.find(s=>s.id===r.id)||r);
-          return [...updated.map(r=>({...r,synced:true})),...manuals];
+          const synced=mergedSyncedRef.current.map(r=>r.id===row.id?{...r,kcal,synced:true}:{...r,synced:true});
+          return [...synced,...manuals];
         });
       }).catch(()=>{ inFlight.current.delete(row.id); });
     });
