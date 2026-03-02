@@ -837,7 +837,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     </div>
   );
 }
-function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps, token}) {
+function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps, token, googleToken}) {
   const mobile = useIsMobile();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({title:"", startTime:"", endTime:"", allDay:false});
@@ -856,7 +856,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
       const res = await fetch("/api/calendar-create", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title: form.title.trim(), date: selected, startTime: form.allDay?"":form.startTime, endTime: form.allDay?"":form.endTime, allDay: form.allDay, tz }),
+        body: JSON.stringify({ title: form.title.trim(), date: selected, startTime: form.allDay?"":form.startTime, endTime: form.allDay?"":form.endTime, allDay: form.allDay, tz, googleToken }),
       });
       const data = await res.json();
       if (!res.ok || data.error) { setSaveErr(data.error || "Failed to create event"); setSaving(false); return; }
