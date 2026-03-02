@@ -1153,27 +1153,38 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   const manualRows=safe.filter(r=>!r.synced);
   const persistedSynced=safe.filter(r=>r.synced); // synced rows already in DB
 
-  // Merge: live syncedRows take precedence for identity; use persisted kcal if available
+  // Merge live syncedRows with any persisted kcal (estimation survives re-renders)
+  // persistedSynced kcal wins — it's what we actually estimated/saved
   const mergedSynced=syncedRows.map(live=>{
     const saved=persistedSynced.find(p=>p.id===live.id);
-    return saved ? {...live, kcal:live.kcal||saved.kcal} : live;
+    return {...live, kcal: saved?.kcal || live.kcal || null};
   });
 
   const manualTotal=manualRows.reduce((s,r)=>s+(r.kcal||0),0);
   const syncTotal=mergedSynced.reduce((s,r)=>s+(r.kcal||0),0);
   const total=manualTotal+syncTotal;
 
-  // Persist synced rows (with kcal) into DB rows array — functional update avoids stale closure
-  function persistSynced(updated) {
+  // Persist new syncedRows into DB — never overwrite existing kcal values
+  const didPersistRef = useRef(new Set());
+  useEffect(()=>{
+    if(!loaded||syncedRows.length===0)return;
+    const hasNew=syncedRows.some(r=>!didPersistRef.current.has(r.id));
+    if(!hasNew)return;
+    syncedRows.forEach(r=>didPersistRef.current.add(r.id));
     setRows(prev=>{
       const all=Array.isArray(prev)?prev:[mkRow()];
       const manuals=all.filter(r=>!r.synced);
-      return [...updated.map(r=>({...r,synced:true})),...manuals];
+      const existing=all.filter(r=>r.synced);
+      const merged=syncedRows.map(live=>{
+        const ex=existing.find(e=>e.id===live.id);
+        // preserve any kcal already estimated — never stomp with null
+        return {...live, kcal: ex?.kcal || live.kcal || null, synced:true};
+      });
+      return [...merged,...manuals];
     });
-  }
+  },[syncedRows,loaded]); // eslint-disable-line
 
-  // Auto-estimate kcal for synced rows missing it, then persist
-  // Use ref to avoid stale closure on mergedSynced
+  // Auto-estimate kcal for synced rows that don't have one yet
   const mergedSyncedRef = useRef([]);
   mergedSyncedRef.current = mergedSynced;
 
@@ -1189,22 +1200,20 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
       estimateKcal(promptFn(row.text),token).then(kcal=>{
         inFlight.current.delete(row.id);
         if(!kcal){bump();return;}
+        // Patch kcal into DB rows — careful not to touch other rows' kcal
         setRows(prev=>{
           const all=Array.isArray(prev)?prev:[mkRow()];
           const manuals=all.filter(r=>!r.synced);
-          const synced=mergedSyncedRef.current.map(r=>r.id===row.id?{...r,kcal,synced:true}:{...r,synced:true});
+          const synced=all.filter(r=>r.synced).map(r=>r.id===row.id?{...r,kcal}:r);
+          if(!synced.find(r=>r.id===row.id)){
+            const live=mergedSyncedRef.current.find(r=>r.id===row.id);
+            if(live) synced.push({...live,kcal,synced:true});
+          }
           return [...synced,...manuals];
         });
       }).catch(()=>{ inFlight.current.delete(row.id); bump(); });
     });
   },[syncedRows,loaded,token]); // eslint-disable-line
-
-  // When syncedRows arrive (from API), sync them into DB if not already there
-  useEffect(()=>{
-    if(!loaded||syncedRows.length===0)return;
-    const anyNew=syncedRows.some(live=>!persistedSynced.find(p=>p.id===live.id));
-    if(anyNew) persistSynced(mergedSynced);
-  },[syncedRows,loaded]); // eslint-disable-line
 
   async function runEstimate(id,text){
     setRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
