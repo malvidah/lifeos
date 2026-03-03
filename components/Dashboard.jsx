@@ -781,7 +781,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     </div>
   );
 }
-function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps, token, googleToken}) {
+function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps, token}) {
   const mobile = useIsMobile();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({title:"", startTime:"", endTime:"", allDay:false});
@@ -800,7 +800,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
       const res = await fetch("/api/calendar-create", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title: form.title.trim(), date: selected, startTime: form.allDay?"":form.startTime, endTime: form.allDay?"":form.endTime, allDay: form.allDay, tz, googleToken }),
+        body: JSON.stringify({ title: form.title.trim(), date: selected, startTime: form.allDay?"":form.startTime, endTime: form.allDay?"":form.endTime, allDay: form.allDay, tz }),
       });
       const data = await res.json();
       if (!res.ok || data.error) { setSaveErr(data.error || "Failed to create event"); setSaving(false); return; }
@@ -1251,11 +1251,11 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
             <span style={{flex:1}}/>
             {showProtein && (
               <span style={proteinStyle}>
-                {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}p` : ""}
+                {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g protein` : ""}
               </span>
             )}
             <span style={kcalStyle}>
-              {estimating.current.has(row.id) ? "…" : row.kcal ? `${prefix}${row.kcal}` : ""}
+              {estimating.current.has(row.id) ? "…" : row.kcal ? `${prefix}${row.kcal} kcal` : ""}
             </span>
           </div>
         ))}
@@ -1270,11 +1270,11 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
             {showProtein && (
               <span style={proteinStyle}>
-                {row.estimating ? "…" : row.protein ? `${row.protein}p` : ""}
+                {row.estimating ? "…" : row.protein ? `${row.protein}g protein` : ""}
               </span>
             )}
             <span style={kcalStyle}>
-              {row.estimating ? "…" : row.kcal ? `${prefix}${row.kcal}` : ""}
+              {row.estimating ? "…" : row.kcal ? `${prefix}${row.kcal} kcal` : ""}
             </span>
           </div>
         ))}
@@ -1429,7 +1429,7 @@ function LoginScreen() {
           setLoading(true);
           const supabase=createClient();
           await supabase.auth.signInWithOAuth({provider:"google",options:{
-            scopes:"https://www.googleapis.com/auth/calendar.readonly",
+            scopes:"https://www.googleapis.com/auth/calendar",
             redirectTo:`${window.location.origin}/auth/callback`,
             queryParams:{access_type:"offline",prompt:"consent"},
           }});
@@ -1620,7 +1620,7 @@ export default function Dashboard() {
                         ? <div>
                             <CalStrip selected={selected} onSelect={setSelected}
                               events={events} setEvents={setEvents} healthDots={healthDots}
-                              token={token} googleToken={googleToken} dragProps={dragProps}/>
+                              token={token} dragProps={dragProps}/>
                           </div>
                         : <HealthStrip date={selected} token={token} userId={userId}
                             onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
@@ -1656,7 +1656,7 @@ export default function Dashboard() {
           <div style={{flexShrink:0}}>
             <CalStrip selected={selected} onSelect={setSelected}
               events={events} setEvents={setEvents} healthDots={healthDots}
-              token={token} googleToken={googleToken} dragProps={{}}/>
+              token={token} dragProps={{}}/>
           </div>
 
           {/* Health strip — full width */}
