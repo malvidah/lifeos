@@ -582,7 +582,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               </button>
             </div>
             <a
-              href="https://claude.ai/customize"
+              href="https://claude.ai/settings/connectors?modal=add-custom-connector"
               target="_blank" rel="noreferrer"
               style={{
                 display:"flex",alignItems:"center",justifyContent:"center",
