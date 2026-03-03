@@ -56,7 +56,7 @@ export async function POST(request) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20250929',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 500,
         system: `You parse natural language into structured actions for a personal dashboard.
 Return ONLY valid JSON, no markdown. The format:

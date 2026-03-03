@@ -49,13 +49,14 @@ export async function POST(request) {
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-haiku-4-5-20250929',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 600,
           system: `You are a thoughtful personal wellness coach embedded in someone's Life OS dashboard. Be warm, observant, and concise. Use specific data points when relevant. Keep responses to 2-3 sentences unless asked for more detail.`,
           messages,
         }),
       });
       const data = await res.json();
+      if (data.error) return Response.json({ error: `Anthropic API error: ${data.error.message}` }, { status: 500 });
       const text = data.content?.find(b => b.type === 'text')?.text || '';
       return Response.json({ insight: text });
     }
@@ -167,7 +168,7 @@ export async function POST(request) {
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20250929',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 400,
         system: `You are a thoughtful personal wellness coach embedded in someone's Life OS dashboard. Generate 2-3 brief, specific insights based on their data. Be warm and observant, not preachy. Reference specific numbers and patterns. 
 
@@ -179,7 +180,8 @@ Format: Use a natural conversational tone. No headers or bullet points. Separate
     });
 
     const insightData = await res.json();
-    const insight = insightData.content?.find(b => b.type === 'text')?.text || 'No data available yet to generate insights.';
+    if (insightData.error) return Response.json({ error: `Anthropic API error: ${insightData.error.message}` }, { status: 500 });
+    const insight = insightData.content?.find(b => b.type === 'text')?.text || 'No insights generated.';
 
     // Cache the insight
     await supabase.from('entries').upsert(
