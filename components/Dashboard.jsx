@@ -5,28 +5,30 @@ import { createClient } from "../lib/supabase.js";
 
 const THEMES = {
   dark: {
-    // All surfaces unified — bg=surface=card, one warm-grey tone
-    bg:"#222220",      surface:"#222220",   card:"#222220",
-    border:"#2E2D2B",  border2:"#3A3936",
-    text:"#E4DAD0",    muted:"#726C66",     dim:"#302E2C",
-    accent:"#D4882A",
-    green:"#4A9E6A",   blue:"#4A80B0",
-    purple:"#906AC0",  red:"#B85040",       orange:"#D4882A",
-    yellow:"#C09030",
-    shadow:"0 1px 3px rgba(0,0,0,0.6),0 4px 16px rgba(0,0,0,0.35)",
-    shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
+    // 3 depth levels: bg (page) < surface/card (bars+cards) < well (inset inputs)
+    // Direction: bg is medium-dark, surface is lighter, well is darkest
+    bg:"#141412",      surface:"#232220",   card:"#232220",
+    well:"#0C0B0A",    border:"#2C2A28",    border2:"#383532",
+    text:"#E2D8CE",    muted:"#706860",     dim:"#383330",
+    accent:"#D08828",
+    green:"#4A9A68",   blue:"#4878A8",
+    purple:"#8860B8",  red:"#B04840",       orange:"#D08828",
+    yellow:"#B88828",
+    shadow:"0 1px 3px rgba(0,0,0,0.5),0 4px 16px rgba(0,0,0,0.3)",
+    shadowSm:"0 1px 3px rgba(0,0,0,0.35)",
   },
   light: {
-    // All surfaces unified — bg=surface=card, one warm cream tone
-    bg:"#E6DFD4",      surface:"#E6DFD4",   card:"#E6DFD4",
-    border:"#D6CECC",  border2:"#C4BCB8",
-    text:"#3A2E22",    muted:"#8A7E72",     dim:"#B8B0A6",
-    accent:"#C07818",
-    green:"#3A7050",   blue:"#3A6490",
-    purple:"#68509A",  red:"#8A3C36",       orange:"#C07818",
-    yellow:"#8A6C18",
-    shadow:"0 1px 2px rgba(40,28,16,0.08),0 3px 10px rgba(40,28,16,0.05)",
-    shadowSm:"0 1px 2px rgba(40,28,16,0.06)",
+    // 3 depth levels: bg (page) < surface/card (bars+cards) < well (inset inputs)
+    // Direction: bg slightly darker taupe, surface is the main cream, well is darkest
+    bg:"#D4CCB8",      surface:"#EAE3D6",   card:"#EAE3D6",
+    well:"#C4BCAA",    border:"#D4CCBE",    border2:"#BEB6A8",
+    text:"#362A1C",    muted:"#887870",     dim:"#ACA49A",
+    accent:"#B87018",
+    green:"#38684A",   blue:"#386088",
+    purple:"#604888",  red:"#843830",       orange:"#B87018",
+    yellow:"#806818",
+    shadow:"0 1px 2px rgba(36,24,12,0.08),0 3px 10px rgba(36,24,12,0.05)",
+    shadowSm:"0 1px 2px rgba(36,24,12,0.06)",
   },
 };
 // C is set at render time via setTheme — default dark
@@ -1077,7 +1079,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||C.accent}`, lineHeight:1.3, opacity:0.7}}>
                         {ev.time !== "all day" ? ev.time : ""}
                       </div>
-                      <div style={{fontFamily:serif, fontSize:F.sm, color:`${ev.color||C.accent}`,
+                      <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||C.accent}`,
                         lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
                         {ev.title}
                       </div>
@@ -2247,7 +2249,7 @@ function ChatFloat({date, token, userId}) {
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
         width: "100%", maxWidth: 560,
-        background: C.bg,
+        background: C.well,
         borderRadius: 10,
         border: "none",
         padding: "8px 8px 8px 14px",
