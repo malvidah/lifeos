@@ -422,7 +422,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               <span style={{fontFamily:mono,fontSize:11,color:C.dim}}>v1.0.0</span>
             </div>
             <a
-              href="https://github.com/malvidah/lifeos/releases/latest/download/Day.Loop-1.0.0-universal.dmg"
+              href="https://github.com/malvidah/lifeos/releases/latest/download/Day.Loop-1.0.0-arm64.zip"
               style={{
                 display:"flex",alignItems:"center",justifyContent:"center",gap:8,
                 width:"100%",padding:"8px",boxSizing:"border-box",
