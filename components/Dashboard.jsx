@@ -455,48 +455,118 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             </button>
           </div>
           <div style={{height:1,background:C.border}}/>
-          {/* AI Agent Token */}
+          {/* Connect to Claude */}
           <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>AI Agent Access</span>
-              {agentToken?.exists&&<span style={{fontFamily:mono,fontSize:12,color:C.green,letterSpacing:"0.08em"}}>✓ active</span>}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Connect to Claude</span>
+              {agentToken?.exists && <span style={{fontFamily:mono,fontSize:11,color:C.green,letterSpacing:"0.06em"}}>✓ token ready</span>}
             </div>
-            <div style={{fontFamily:mono,fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.5}}>
-              Paste this token into Claude to let it read and write your DayLoop directly from chat.
+
+            {/* Step 1 — generate token */}
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:10}}>
+              <div style={{
+                width:18,height:18,borderRadius:"50%",flexShrink:0,marginTop:1,
+                background: agentToken?.exists ? C.green+"33" : C.accent+"22",
+                border:`1px solid ${agentToken?.exists ? C.green : C.accent}`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontFamily:mono,fontSize:10,color:agentToken?.exists?C.green:C.accent,
+              }}>1</div>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:mono,fontSize:11,color:C.text,marginBottom:4}}>Generate your token</div>
+                {agentFull ? (
+                  <div>
+                    <div style={{
+                      fontFamily:mono,fontSize:10,color:C.accent,
+                      background:C.surface,border:`1px solid ${C.border2}`,
+                      borderRadius:4,padding:"5px 7px",wordBreak:"break-all",
+                      marginBottom:5,userSelect:"all",cursor:"text",lineHeight:1.4,
+                    }}>{agentFull}</div>
+                    <div style={{display:"flex",gap:5}}>
+                      <button onClick={()=>{navigator.clipboard.writeText(agentFull);setAgentCopied(true);setTimeout(()=>setAgentCopied(false),2000);}}
+                        style={{flex:1,background:agentCopied?C.green+"22":"none",border:`1px solid ${agentCopied?C.green:C.border2}`,
+                          borderRadius:4,color:agentCopied?C.green:C.text,fontFamily:mono,fontSize:10,
+                          letterSpacing:"0.1em",textTransform:"uppercase",padding:"4px 0",cursor:"pointer"}}>
+                        {agentCopied?"copied ✓":"copy token"}
+                      </button>
+                      <button onClick={()=>setAgentFull(null)}
+                        style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:4,
+                          color:C.muted,fontFamily:mono,fontSize:10,padding:"4px 7px",cursor:"pointer"}}>
+                        hide
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={generateAgentToken} disabled={agentLoading}
+                    style={{width:"100%",background:agentToken?.exists?"none":C.accent+"15",
+                      border:`1px solid ${agentToken?.exists?C.border2:C.accent}`,
+                      borderRadius:4,color:agentToken?.exists?C.muted:C.accent,fontFamily:mono,fontSize:10,
+                      letterSpacing:"0.1em",textTransform:"uppercase",padding:"5px 0",
+                      cursor:agentLoading?"default":"pointer",opacity:agentLoading?0.5:1}}>
+                    {agentLoading?"generating…":agentToken?.exists?"show / regenerate":"generate token →"}
+                  </button>
+                )}
+              </div>
             </div>
-            {agentFull ? (
-              <div>
-                <div style={{
-                  fontFamily:mono,fontSize:11,color:C.accent,
-                  background:C.surface,border:`1px solid ${C.border2}`,
-                  borderRadius:5,padding:"6px 8px",wordBreak:"break-all",
-                  marginBottom:6,userSelect:"all",cursor:"text",
-                }}>
-                  {agentFull}
+
+            {/* Step 2 — open Claude settings */}
+            <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:10}}>
+              <div style={{
+                width:18,height:18,borderRadius:"50%",flexShrink:0,marginTop:1,
+                background:C.surface,border:`1px solid ${C.border2}`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontFamily:mono,fontSize:10,color:C.muted,
+              }}>2</div>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:mono,fontSize:11,color:C.text,marginBottom:4}}>Add connector in Claude</div>
+                <div style={{fontFamily:mono,fontSize:10,color:C.dim,marginBottom:5,lineHeight:1.5}}>
+                  Settings → Connectors → Add custom connector
                 </div>
-                <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>{navigator.clipboard.writeText(agentFull);setAgentCopied(true);setTimeout(()=>setAgentCopied(false),2000);}}
-                    style={{flex:1,background:agentCopied?C.green+"22":"none",border:`1px solid ${agentCopied?C.green:C.border2}`,
-                      borderRadius:5,color:agentCopied?C.green:C.text,fontFamily:mono,fontSize:11,
-                      letterSpacing:"0.1em",textTransform:"uppercase",padding:"5px 0",cursor:"pointer"}}>
-                    {agentCopied?"copied ✓":"copy"}
+                <a href="https://claude.ai/settings/integrations" target="_blank" rel="noreferrer"
+                  style={{
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                    width:"100%",padding:"5px 0",boxSizing:"border-box",
+                    background:"none",border:`1px solid ${C.border2}`,
+                    borderRadius:4,textDecoration:"none",
+                    color:C.text,fontFamily:mono,fontSize:10,
+                    letterSpacing:"0.1em",textTransform:"uppercase",
+                    transition:"border-color 0.15s",
+                  }}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor=C.border2}
+                >
+                  open claude settings →
+                </a>
+              </div>
+            </div>
+
+            {/* Step 3 — paste URL */}
+            <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
+              <div style={{
+                width:18,height:18,borderRadius:"50%",flexShrink:0,marginTop:1,
+                background:C.surface,border:`1px solid ${C.border2}`,
+                display:"flex",alignItems:"center",justifyContent:"center",
+                fontFamily:mono,fontSize:10,color:C.muted,
+              }}>3</div>
+              <div style={{flex:1}}>
+                <div style={{fontFamily:mono,fontSize:11,color:C.text,marginBottom:4}}>Paste the server URL</div>
+                <div style={{
+                  fontFamily:mono,fontSize:10,color:C.accent,
+                  background:C.surface,border:`1px solid ${C.border2}`,
+                  borderRadius:4,padding:"5px 7px",userSelect:"all",cursor:"text",
+                  display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,
+                }}>
+                  <span>dayloop.me/mcp</span>
+                  <button onClick={()=>navigator.clipboard.writeText('https://dayloop.me/mcp')}
+                    style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontFamily:mono,fontSize:9,
+                      letterSpacing:"0.08em",textTransform:"uppercase",padding:0,flexShrink:0}}>
+                    copy
                   </button>
-                  <button onClick={()=>setAgentFull(null)}
-                    style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,
-                      color:C.muted,fontFamily:mono,fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
-                    hide
-                  </button>
+                </div>
+                <div style={{fontFamily:mono,fontSize:10,color:C.dim,marginTop:4,lineHeight:1.5}}>
+                  In Advanced settings, paste your token.
                 </div>
               </div>
-            ) : (
-              <button onClick={generateAgentToken} disabled={agentLoading}
-                style={{width:"100%",background:"none",border:`1px solid ${C.border2}`,
-                  borderRadius:5,color:C.text,fontFamily:mono,fontSize:12,
-                  letterSpacing:"0.1em",textTransform:"uppercase",padding:"6px 0",
-                  cursor:agentLoading?"default":"pointer",opacity:agentLoading?0.5:1}}>
-                {agentLoading?"generating…":agentToken?.exists?"regenerate token":"generate token"}
-              </button>
-            )}
+            </div>
           </div>
           <div style={{height:1,background:C.border}}/>
           {/* Light / Dark toggle */}
