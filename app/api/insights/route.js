@@ -110,10 +110,22 @@ export async function POST(request) {
     const parts = [];
     parts.push(`## Today (${date})`);
 
-    // Insights are based on Oura health data only — not manual entries
     if (today.health) {
       const h = today.health;
       parts.push(`Health: Sleep ${h.sleepScore || '?'} (${h.sleepHrs || '?'}h, ${h.sleepEff || '?'}% eff), Readiness ${h.readinessScore || '?'} (HRV ${h.hrv || '?'}ms, RHR ${h.rhr || '?'}bpm), Activity ${h.activityScore || '?'} (${h.activeCalories || '?'} cal burned, ${h.activeMinutes || '?'} active min), Recovery ${h.resilienceScore || '?'} (stress ${h.stressMins || '?'}min, recovery ${h.recoveryMins || '?'}min)`);
+    }
+    if (today.notes) { const n = typeof today.notes === 'string' ? today.notes : JSON.stringify(today.notes); parts.push(`Notes: ${n.slice(0, 500)}`); }
+    if (today.meals && Array.isArray(today.meals)) {
+      const meals = today.meals.filter(r => r.text?.trim()).map(r => `${r.text}${r.protein ? ` (${r.protein}g protein, ${r.kcal} kcal)` : r.kcal ? ` (${r.kcal} kcal)` : ''}`);
+      if (meals.length) parts.push(`Meals: ${meals.join(', ')}`);
+    }
+    if (today.tasks && Array.isArray(today.tasks)) {
+      const tasks = today.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
+      if (tasks.length) parts.push(`Tasks: ${tasks.join(', ')}`);
+    }
+    if (today.activity && Array.isArray(today.activity)) {
+      const acts = today.activity.filter(r => r.text?.trim()).map(r => r.text);
+      if (acts.length) parts.push(`Activity: ${acts.join(', ')}`);
     }
 
     if (recentHealth.length) {
