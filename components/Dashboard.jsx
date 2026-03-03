@@ -378,7 +378,9 @@ function Widget({label,color,children,slim,collapsed,onToggle,headerRight}) {
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
             textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
-          {headerRight}
+          <span style={{opacity:collapsed?0:1,transition:"opacity 0.2s ease",pointerEvents:collapsed?"none":"auto"}}>
+            {headerRight}
+          </span>
         </div>
         {!collapsed&&(
           <div style={slim ? {padding:"14px 16px"} : {flex:1,overflow:"auto",padding:16,minHeight:0}}>{children}</div>
