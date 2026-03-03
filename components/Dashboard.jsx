@@ -1457,15 +1457,16 @@ function LoginScreen() {
   );
 }
 
-// ─── InsightBar (unified insights + voice/chat input) ────────────────────────
-function InsightBar({date, token, userId}) {
+// ─── InsightBar (responsive: sidebar on desktop, floating bubble on mobile) ───
+function InsightBar({date, token, userId, mode}) {
   const [messages, setMessages] = useState([]); // {role, content, type?}
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [listening, setListening] = useState(false);
-  const [expanded, setExpanded] = useState(false);
+  const [open, setOpen] = useState(false); // mobile drawer open state
   const recognitionRef = useRef(null);
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
   const prevDate = useRef(date);
   const loaded = useRef(false);
 
@@ -1498,14 +1499,12 @@ function InsightBar({date, token, userId}) {
     if (loaded.current) return;
     loaded.current = true;
 
-    // Try cache first
     dbLoad(date, "insights", token).then(cached => {
       const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
       if (cached?.text && age < 4 * 60 * 60 * 1000) {
         setMessages([{ role: "assistant", content: cached.text, type: "insight" }]);
         return;
       }
-      // Generate fresh
       setBusy(true);
       fetch("/api/insights", {
         method: "POST",
@@ -1518,28 +1517,25 @@ function InsightBar({date, token, userId}) {
     });
   }, [date, token, userId]); // eslint-disable-line
 
+  // Auto-scroll on new messages
+  useEffect(() => {
+    setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }), 80);
+  }, [messages, busy]);
+
   function toggleMic() {
-    if (listening) {
-      recognitionRef.current?.stop();
-      setListening(false);
-    } else {
-      recognitionRef.current?.start();
-      setListening(true);
-    }
+    if (listening) { recognitionRef.current?.stop(); setListening(false); }
+    else { recognitionRef.current?.start(); setListening(true); }
   }
 
   async function send() {
     if (!input.trim() || busy) return;
     const userText = input.trim();
     setInput("");
-    setExpanded(true);
     setMessages(prev => [...prev, { role: "user", content: userText }]);
     setBusy(true);
 
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-      // First, try voice-action to parse entries
       const actionRes = await fetch("/api/voice-action", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -1548,15 +1544,12 @@ function InsightBar({date, token, userId}) {
       const actionData = await actionRes.json();
 
       if (actionData.ok && actionData.results?.length > 0) {
-        // It was an action — refresh widgets and show summary
         const types = actionData.results.map(r => r.type);
         window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types } }));
         setMessages(prev => [...prev, { role: "assistant", content: actionData.summary, type: "action" }]);
       } else if (actionData.error) {
-        // API route returned an error (key missing, auth, etc.)
         setMessages(prev => [...prev, { role: "assistant", content: actionData.error, type: "error" }]);
       } else {
-        // No actions detected — treat as a question about data
         const existingMsgs = messages.filter(m => m.role === "user" || m.role === "assistant");
         const convHistory = [
           ...existingMsgs.map(m => ({ role: m.role, content: m.content })),
@@ -1578,106 +1571,87 @@ function InsightBar({date, token, userId}) {
       setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong: " + e.message, type: "error" }]);
     }
     setBusy(false);
-    setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }), 100);
   }
 
   const hasMic = !!recognitionRef.current;
   const hasMessages = messages.length > 0;
 
-  return (
-    <div style={{
-      flexShrink: 0,
-      borderTop: `1px solid ${C.border}`,
-      background: C.card,
-      display: "flex", flexDirection: "column",
-      maxHeight: expanded ? "45vh" : 160,
-      transition: "max-height 0.3s ease",
-    }}>
-      {/* Message area */}
-      {hasMessages && (
-        <div ref={scrollRef} style={{
-          flex: 1, overflowY: "auto", minHeight: 0,
-          padding: "10px 14px 4px",
-        }}>
-          {messages.map((m, i) => (
-            <div key={i} style={{
-              marginBottom: 8,
-              display: "flex", flexDirection: "column",
-              alignItems: m.role === "user" ? "flex-end" : "flex-start",
+  // ── Shared: message list ──────────────────────────────────────────────────
+  function MessageList() {
+    return (
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", minHeight: 0, padding: "12px 14px 4px" }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{
+            marginBottom: 10, display: "flex", flexDirection: "column",
+            alignItems: m.role === "user" ? "flex-end" : "flex-start",
+          }}>
+            <div style={{
+              maxWidth: "88%",
+              padding: m.role === "user" ? "7px 13px" : "0",
+              borderRadius: m.role === "user" ? 14 : 0,
+              background: m.role === "user" ? `${C.accent}18` : "transparent",
             }}>
+              {m.type === "action" && (
+                <div style={{ fontFamily: mono, fontSize: 8, letterSpacing: "0.1em", color: C.green, textTransform: "uppercase", marginBottom: 3 }}>✓ updated</div>
+              )}
               <div style={{
-                maxWidth: "85%",
-                padding: m.role === "user" ? "6px 12px" : "0",
-                borderRadius: m.role === "user" ? 12 : 0,
-                background: m.role === "user" ? `${C.accent}15` : "transparent",
-              }}>
-                {m.type === "action" && (
-                  <div style={{
-                    fontFamily: mono, fontSize: 8, letterSpacing: "0.1em",
-                    color: C.green, textTransform: "uppercase", marginBottom: 3,
-                  }}>✓ updated</div>
-                )}
-                <div style={{
-                  fontFamily: m.role === "user" ? mono : serif,
-                  fontSize: m.role === "user" ? 13 : 14,
-                  lineHeight: 1.6,
-                  color: m.type === "error" ? C.red : m.role === "user" ? C.muted : C.text,
-                  whiteSpace: "pre-line",
-                }}>{m.content}</div>
-              </div>
+                fontFamily: m.role === "user" ? mono : serif,
+                fontSize: m.role === "user" ? 12 : 13,
+                lineHeight: 1.65,
+                color: m.type === "error" ? C.red : m.role === "user" ? C.muted : C.text,
+                whiteSpace: "pre-line",
+              }}>{m.content}</div>
             </div>
-          ))}
-          {busy && (
-            <div style={{ padding: "4px 0" }}>
-              <Shimmer width="65%" height={12} />
-            </div>
-          )}
-        </div>
-      )}
+          </div>
+        ))}
+        {!hasMessages && busy && (
+          <>
+            <Shimmer width="85%" height={11} />
+            <div style={{ height: 6 }} />
+            <Shimmer width="65%" height={11} />
+            <div style={{ height: 6 }} />
+            <Shimmer width="50%" height={11} />
+          </>
+        )}
+        {hasMessages && busy && (
+          <div style={{ paddingBottom: 4 }}><Shimmer width="55%" height={11} /></div>
+        )}
+      </div>
+    );
+  }
 
-      {!hasMessages && busy && (
-        <div style={{ padding: "10px 14px" }}>
-          <Shimmer width="80%" height={12} />
-          <div style={{ height: 6 }} />
-          <Shimmer width="60%" height={12} />
-        </div>
-      )}
-
-      {/* Input — ChatGPT-style pill */}
-      <div style={{
-        flexShrink: 0,
-        padding: "8px 12px 10px",
-      }}>
+  // ── Shared: input pill ────────────────────────────────────────────────────
+  function InputPill({ autoFocus }) {
+    return (
+      <div style={{ flexShrink: 0, padding: "8px 12px 10px" }}>
         <div style={{
-          display: "flex", alignItems: "center", gap: 0,
+          display: "flex", alignItems: "center",
           background: C.surface, borderRadius: 24,
           border: `1px solid ${C.border}`,
-          padding: "4px 4px 4px 16px",
-          transition: "border-color 0.15s",
+          padding: "4px 4px 4px 14px",
         }}>
-          <input value={input}
+          <input
+            ref={inputRef}
+            autoFocus={autoFocus}
+            value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === "Enter") send(); }}
-            onFocus={() => { if (messages.length > 1) setExpanded(true); }}
-            placeholder={busy ? "Thinking…" : "Add entries or ask about your day…"}
+            placeholder={busy ? "Thinking…" : "Add entries or ask…"}
             disabled={busy}
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
-              fontFamily: serif, fontSize: 15, color: C.text,
-              padding: "8px 0", opacity: busy ? 0.5 : 1,
-            }} />
-
-          {/* Voice or Send — swaps based on input */}
+              fontFamily: serif, fontSize: 14, color: C.text,
+              padding: "7px 0", opacity: busy ? 0.5 : 1,
+            }}
+          />
           {input.trim() ? (
             <button onClick={send} disabled={busy} style={{
-              background: C.text, border: "none",
-              borderRadius: "50%", width: 32, height: 32,
-              cursor: busy ? "default" : "pointer",
+              background: C.text, border: "none", borderRadius: "50%",
+              width: 30, height: 30, cursor: busy ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, opacity: busy ? 0.4 : 1,
-              transition: "opacity 0.15s",
+              flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
             }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="19" x2="12" y2="5"/>
                 <polyline points="5 12 12 5 19 12"/>
               </svg>
@@ -1685,30 +1659,146 @@ function InsightBar({date, token, userId}) {
           ) : hasMic ? (
             <button onClick={toggleMic} style={{
               background: listening ? C.red : `${C.text}10`,
-              border: "none",
-              borderRadius: 16, height: 32,
-              padding: "0 12px",
-              cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              border: "none", borderRadius: 14, height: 30, padding: "0 10px",
+              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
               flexShrink: 0, transition: "all 0.2s",
             }}>
-              {/* Waveform icon */}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={listening ? "#fff" : C.muted} strokeWidth="2" strokeLinecap="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={listening ? "#fff" : C.muted} strokeWidth="2" strokeLinecap="round">
                 <line x1="4" y1="8" x2="4" y2="16"/>
                 <line x1="8" y1="5" x2="8" y2="19"/>
                 <line x1="12" y1="3" x2="12" y2="21"/>
                 <line x1="16" y1="5" x2="16" y2="19"/>
                 <line x1="20" y1="8" x2="20" y2="16"/>
               </svg>
-              <span style={{
-                fontFamily: mono, fontSize: 10, letterSpacing: "0.05em",
-                color: listening ? "#fff" : C.muted,
-              }}>{listening ? "Listening…" : "Voice"}</span>
+              <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.05em", color: listening ? "#fff" : C.muted }}>
+                {listening ? "Listening…" : "Voice"}
+              </span>
             </button>
           ) : null}
         </div>
       </div>
-    </div>
+    );
+  }
+
+  // ── SIDEBAR mode (desktop) ────────────────────────────────────────────────
+  if (mode === "sidebar") {
+    return (
+      <div style={{
+        width: 272, flexShrink: 0,
+        borderLeft: `1px solid ${C.border}`,
+        background: C.card,
+        display: "flex", flexDirection: "column",
+        height: "100%", overflow: "hidden",
+      }}>
+        {/* Header */}
+        <div style={{
+          flexShrink: 0,
+          padding: "12px 14px 10px",
+          borderBottom: `1px solid ${C.border}`,
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.15em", color: C.muted, textTransform: "uppercase" }}>
+            dayloop
+          </span>
+          <span style={{ fontFamily: mono, fontSize: 9, color: `${C.muted}80` }}>
+            {date}
+          </span>
+        </div>
+        <MessageList />
+        <InputPill />
+      </div>
+    );
+  }
+
+  // ── MOBILE mode: floating bubble + slide-up drawer ────────────────────────
+  const unread = hasMessages && !open;
+  return (
+    <>
+      {/* Backdrop */}
+      {open && (
+        <div
+          onClick={() => setOpen(false)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 998,
+            background: "rgba(0,0,0,0.4)",
+            backdropFilter: "blur(2px)",
+          }}
+        />
+      )}
+
+      {/* Slide-up drawer */}
+      <div style={{
+        position: "fixed", left: 0, right: 0, bottom: 0, zIndex: 999,
+        height: open ? "65vh" : 0,
+        transition: "height 0.35s cubic-bezier(0.32, 0.72, 0, 1)",
+        background: C.card,
+        borderTop: open ? `1px solid ${C.border}` : "none",
+        borderRadius: "16px 16px 0 0",
+        display: "flex", flexDirection: "column",
+        overflow: "hidden",
+        boxShadow: open ? "0 -8px 32px rgba(0,0,0,0.3)" : "none",
+      }}>
+        {/* Drawer handle + header */}
+        {open && (
+          <div style={{
+            flexShrink: 0,
+            padding: "10px 16px 8px",
+            borderBottom: `1px solid ${C.border}`,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+          }}>
+            <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.15em", color: C.muted, textTransform: "uppercase" }}>dayloop</span>
+            <button onClick={() => setOpen(false)} style={{
+              background: "transparent", border: "none", cursor: "pointer",
+              padding: 4, color: C.muted,
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        )}
+        {open && <MessageList />}
+        {open && <InputPill autoFocus />}
+      </div>
+
+      {/* Floating bubble */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          position: "fixed", bottom: 20, right: 20, zIndex: 1000,
+          width: 52, height: 52, borderRadius: "50%",
+          background: C.accent,
+          border: "none", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
+          transition: "transform 0.2s, box-shadow 0.2s",
+        }}
+        onMouseEnter={e => { e.currentTarget.style.transform = "scale(1.08)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(0,0,0,0.4)"; }}
+        onMouseLeave={e => { e.currentTarget.style.transform = "scale(1)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)"; }}
+      >
+        {open ? (
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/>
+            <line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        ) : (
+          <>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            {unread && (
+              <div style={{
+                position: "absolute", top: 8, right: 8,
+                width: 9, height: 9, borderRadius: "50%",
+                background: C.green,
+                border: `2px solid ${C.accent}`,
+              }} />
+            )}
+          </>
+        )}
+      </button>
+    </>
   );
 }
 
@@ -1875,8 +1965,9 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>
 
       {mobile ? (
-        /* ── MOBILE: single scrollable column with drag ─────────────────── */
-        <div style={{flex:1,overflowY:"auto",padding:8,display:"flex",flexDirection:"column",gap:8}}>
+        /* ── MOBILE: scrollable column + floating InsightBar bubble ─────── */
+        <>
+          <div style={{flex:1,overflowY:"auto",padding:8,display:"flex",flexDirection:"column",gap:8}}>
           {/* Cal + Health sortable */}
           <DndContext sensors={sensors} collisionDetection={closestCenter}
             onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -1917,9 +2008,13 @@ export default function Dashboard() {
             </div>
           ))}
         </div>
+          <InsightBar date={selected} token={token} userId={userId} mode="mobile"/>
+        </>
       ) : (
-        /* ── DESKTOP: stacked layout — cal, health, then 2-col widgets ─── */
-        <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column",gap:8}}>
+        /* ── DESKTOP: main content + sidebar ───────────────────────────── */
+        <div style={{flex:1,display:"flex",minHeight:0,overflow:"hidden"}}>
+          {/* Main scrollable content */}
+          <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column",gap:8}}>
 
           {/* Calendar — full width, auto-height based on view mode */}
           <div style={{flexShrink:0}}>
@@ -1955,10 +2050,9 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+          <InsightBar date={selected} token={token} userId={userId} mode="sidebar"/>
+        </div>
       )}
-
-      {/* Unified insight + chat bar */}
-      <InsightBar date={selected} token={token} userId={userId}/>
     </div>
   );
 }
