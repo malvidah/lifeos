@@ -528,7 +528,7 @@ function offsetToDate(n) {
 // Month and year are static labels (snap discretely). Only the day ribbon moves.
 function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false}) {
   const today = todayKey();
-  const DAY_W = desktop ? 72 : 52;
+  const DAY_W = desktop ? 148 : 110;
 
   // Single source of truth: fractional day offset from epoch
   const liveOff    = useRef(dayOffset(selected));
@@ -550,10 +550,9 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     vel.current = 0;
     const startVal = liveOff.current;
     const startTime = performance.now();
-    const DURATION = 280; // ms — feel of a physical spinner click
+    const DURATION = 280;
     const tick = (now) => {
       const t = Math.min((now - startTime) / DURATION, 1);
-      // Ease-out cubic: decelerates gently into place
       const ease = 1 - Math.pow(1 - t, 3);
       liveOff.current = startVal + (target - startVal) * ease;
       repaint();
@@ -568,9 +567,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     rafId.current = requestAnimationFrame(tick);
   }
 
-  function snap() {
-    animateTo(Math.round(liveOff.current));
-  }
+  function snap() { animateTo(Math.round(liveOff.current)); }
 
   function runMomentum() {
     cancelRaf();
@@ -579,7 +576,6 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       vel.current *= FRICTION;
       liveOff.current -= vel.current / DAY_W;
       repaint();
-      // Once velocity is low enough, hand off to the smooth snap animation
       if (Math.abs(vel.current) > 1.5) {
         rafId.current = requestAnimationFrame(tick);
       } else {
@@ -604,7 +600,6 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     const dt = Math.max(t - lastT.current, 4);
     const dx = x - lastX.current;
     totalDrag.current += Math.abs(dx);
-    // Rolling average velocity (px/frame at 60fps)
     const newVel = (dx / dt) * 16;
     vel.current = vel.current * 0.5 + newVel * 0.5;
     liveOff.current -= dx / DAY_W;
@@ -635,21 +630,21 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
 
   // Derived from liveOff
   const off      = liveOff.current;
-  const selInt   = Math.round(off);          // which day is "selected"
-  const fracSlot = off - selInt;             // sub-slot pixel fraction [-0.5, 0.5]
+  const selInt   = Math.round(off);
+  const fracSlot = off - selInt;
   const selDate  = offsetToDate(selInt);
   const selMonth = MONTHS_FULL[selDate.getMonth()];
   const selYear  = selDate.getFullYear();
 
-  // Build day items: 12 either side
-  const N = 12;
+  // Build day items: enough to fill screen
+  const N = desktop ? 8 : 6;
   const dayItems = [];
   for (let i = -N; i <= N; i++) {
     dayItems.push({ d: offsetToDate(selInt + i), i });
   }
 
-  const selKey    = toKey(selDate);
-  // Parse "7:00 PM" / "8:00 AM" style times to 24h minutes for correct sort
+  const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+
   function timeToMins(t) {
     if (!t || t === "all day") return -1;
     const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
@@ -660,17 +655,16 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     if (period === "AM" && h === 12) h = 0;
     return h * 60 + min;
   }
-  const selEvents = (events[selKey] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
-  const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
 
-  // Tap a visible day — only fires on clean taps (< 8px total drag)
   const tapDay = (targetOffset) => {
     if (totalDrag.current > 8) return;
     animateTo(targetOffset);
   };
 
+  const MAX_EVENTS = desktop ? 6 : 4;
+
   return (
-    <div style={{userSelect:"none", display:"flex", flexDirection:"column", height:"100%"}}>
+    <div style={{userSelect:"none", display:"flex", flexDirection:"column"}}>
 
       {/* ── Static month + year header ────────────────────────────────────── */}
       <div style={{
@@ -689,80 +683,94 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         }}>{selYear}</span>
       </div>
 
-      {/* ── Day ribbon ───────────────────────────────────────────────────── */}
+      {/* ── Day columns with events ──────────────────────────────────────── */}
       <div style={{
-        height:66, overflow:"hidden", position:"relative",
-        borderBottom:`1px solid ${C.border}`, flexShrink:0,
+        overflow:"hidden", position:"relative",
         touchAction:"none", cursor: desktop ? "grab" : "default",
+        padding:"8px 0 12px",
       }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
         onMouseDown={desktop ? e => { onTouchStart({touches:[{clientX:e.clientX}]}); } : undefined}
         onMouseMove={desktop ? e => { if(e.buttons!==1)return; onTouchMove({preventDefault:()=>{},touches:[{clientX:e.clientX}]}); } : undefined}
-        onMouseUp={desktop ? e => { onTouchEnd(); } : undefined}
+        onMouseUp={desktop ? () => { onTouchEnd(); } : undefined}
         onMouseLeave={desktop ? e => { if(e.buttons===1) onTouchEnd(); } : undefined}
       >
-        {/* Center slot highlight */}
-        <div style={{
-          position:"absolute", top:0, bottom:0,
-          left:"50%", transform:"translateX(-50%)",
-          width:DAY_W,
-          background:`${C.accent}15`,
-          borderLeft:`1px solid ${C.accent}25`,
-          borderRight:`1px solid ${C.accent}25`,
-          pointerEvents:"none",
-        }}/>
-
         {/* Scrolling row */}
         <div style={{
-          position:"absolute", top:0, bottom:0, left:"50%",
-          display:"flex", alignItems:"center",
-          transform:`translateX(calc(-50% - ${fracSlot * DAY_W}px))`,
+          display:"flex", alignItems:"flex-start",
+          marginLeft:"50%",
+          transform:`translateX(calc(-${DAY_W/2}px - ${fracSlot * DAY_W}px))`,
           willChange:"transform",
         }}>
           {dayItems.map(({d, i}) => {
             const k      = toKey(d);
             const isCtr  = i === 0;
             const isTdy  = k === today;
+            const dayEvents = (events[k] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
+            const dist = Math.abs(i);
+            const opacity = isCtr ? 1 : Math.max(0.2, 1 - dist * 0.15);
+
             return (
               <div key={k}
                 onClick={() => tapDay(selInt + i)}
                 style={{
-                  width:DAY_W, flexShrink:0, textAlign:"center",
-                  padding:"10px 0 6px",
+                  width:DAY_W, flexShrink:0,
+                  padding:"4px 3px",
                   cursor: isCtr ? "default" : "pointer",
+                  opacity,
+                  transition: "opacity 0.15s",
+                  borderLeft: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
+                  borderRight: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
+                  background: isCtr ? `${C.accent}08` : "transparent",
+                  borderRadius: 6,
+                  minHeight: 100,
                 }}>
-                <div style={{
-                  fontFamily:mono, fontSize:8, letterSpacing:"0.07em",
-                  color: isCtr ? C.accent : C.muted,
-                  opacity: isCtr ? 1 : Math.max(0.25, 1 - Math.abs(i) * 0.12),
-                  marginBottom:4,
-                }}>{DAY_NAMES[d.getDay()]}</div>
-                <div style={{
-                  fontFamily:serif,
-                  fontSize: isCtr ? 22 : 16,
-                  fontWeight: isCtr ? "600" : "normal",
-                  lineHeight:1,
-                  color: isTdy ? C.accent : isCtr ? C.text : C.muted,
-                  opacity: isCtr ? 1 : Math.max(0.25, 1 - Math.abs(i) * 0.1),
-                }}>{d.getDate()}</div>
-                <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4,alignItems:"center"}}>
-                  {(healthDots[k]?.sleep >= 85) && (
-                    <div style={{width:3,height:3,borderRadius:"50%",
-                      background:C.blue, opacity: isCtr ? 1 : 0.5}}/>
-                  )}
-                  {(healthDots[k]?.readiness >= 85) && (
-                    <div style={{width:3,height:3,borderRadius:"50%",
-                      background:C.green, opacity: isCtr ? 1 : 0.5}}/>
-                  )}
-                  {(healthDots[k]?.activity >= 85) && (
-                    <div style={{width:3,height:3,borderRadius:"50%",
-                      background:C.accent, opacity: isCtr ? 1 : 0.5}}/>
-                  )}
-                  {(healthDots[k]?.recovery >= 85) && (
-                    <div style={{width:3,height:3,borderRadius:"50%",
-                      background:"#8B6BB5", opacity: isCtr ? 1 : 0.5}}/>
+                {/* Date header */}
+                <div style={{textAlign:"center", marginBottom:6, paddingTop:2}}>
+                  <div style={{
+                    fontFamily:mono, fontSize:8, letterSpacing:"0.07em",
+                    color: isCtr ? C.accent : C.muted,
+                    marginBottom:3,
+                  }}>{DAY_NAMES[d.getDay()]}</div>
+                  <div style={{
+                    fontFamily:serif,
+                    fontSize: isCtr ? 20 : 15,
+                    fontWeight: isCtr ? "600" : "normal",
+                    lineHeight:1,
+                    color: isTdy ? C.accent : isCtr ? C.text : C.muted,
+                  }}>{d.getDate()}</div>
+                  {/* Health dots */}
+                  <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
+                    {(healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
+                    {(healthDots[k]?.readiness >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
+                    {(healthDots[k]?.activity >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
+                    {(healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"#8B6BB5"}}/>}
+                  </div>
+                </div>
+
+                {/* Event cards */}
+                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                  {dayEvents.slice(0, MAX_EVENTS).map((ev,j) => (
+                    <div key={j} style={{
+                      padding:"2px 4px", borderRadius:3,
+                      borderLeft:`2px solid ${ev.color||C.accent}`,
+                      background:`${ev.color||C.accent}10`,
+                    }}>
+                      <div style={{fontFamily:mono, fontSize:7, color:C.muted, lineHeight:1.2}}>
+                        {ev.time !== "all day" ? ev.time : ""}
+                      </div>
+                      <div style={{fontFamily:serif, fontSize:10, color: isCtr ? C.text : C.muted,
+                        lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        {ev.title}
+                      </div>
+                    </div>
+                  ))}
+                  {dayEvents.length > MAX_EVENTS && (
+                    <span style={{fontFamily:mono, fontSize:7, color:C.muted, textAlign:"center", padding:"1px 0"}}>
+                      +{dayEvents.length - MAX_EVENTS} more
+                    </span>
                   )}
                 </div>
               </div>
@@ -770,241 +778,12 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           })}
         </div>
       </div>
-
-      {/* ── Events for selected day ───────────────────────────────────────── */}
-      <div style={{padding:"10px 16px 24px"}}>
-        <div style={{
-          fontFamily:mono, fontSize:8, color:C.muted,
-          letterSpacing:"0.12em", textTransform:"uppercase", marginBottom:8,
-        }}>
-          {selDate.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
-        </div>
-        {selEvents.length === 0
-          ? <span style={{fontFamily:mono, fontSize:9, color:C.dim}}>No events</span>
-          : selEvents.map((ev, i) => (
-              <div key={i} style={{
-                display:"flex", gap:12, alignItems:"baseline",
-                padding:"5px 0",
-                borderBottom: i < selEvents.length-1 ? `1px solid ${C.border}` : "none",
-              }}>
-                <span style={{fontFamily:mono, fontSize:10, color:ev.color||C.accent,
-                  flexShrink:0, minWidth:64}}>{ev.time}</span>
-                <span style={{fontFamily:serif, fontSize:14, lineHeight:1.4, color:C.text}}>{ev.title}</span>
-              </div>
-          ))
-        }
-      </div>
     </div>
   );
 }
-
-// ─── Week View ───────────────────────────────────────────────────────────────
-function WeekView({selected, onSelect, events, healthDots}) {
-  const selDate = new Date(selected + "T12:00:00");
-  // Get Monday of the selected week
-  const day = selDate.getDay();
-  const mondayOff = day === 0 ? -6 : 1 - day;
-  const monday = new Date(selDate);
-  monday.setDate(monday.getDate() + mondayOff);
-
-  const days = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(d.getDate() + i);
-    days.push(d);
-  }
-
-  const NAMES = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-  const today = todayKey();
-
-  function timeToMins(t) {
-    if (!t || t === "all day") return -1;
-    const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-    if (!m) return 9999;
-    let h = parseInt(m[1]), min = parseInt(m[2]);
-    const p = (m[3]||"").toUpperCase();
-    if (p === "PM" && h !== 12) h += 12;
-    if (p === "AM" && h === 12) h = 0;
-    return h * 60 + min;
-  }
-
-  return (
-    <div style={{padding:"6px 8px 16px", flex:1, overflow:"auto"}}>
-      <div style={{display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:4}}>
-        {days.map((d, i) => {
-          const k = toKey(d);
-          const isSel = k === selected;
-          const isTdy = k === today;
-          const dayEvents = (events[k] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
-          const dots = healthDots[k];
-          return (
-            <div key={k} onClick={() => onSelect(k)}
-              style={{
-                cursor:"pointer", padding:"6px 4px", borderRadius:8,
-                background: isSel ? `${C.accent}12` : "transparent",
-                border: isSel ? `1px solid ${C.accent}30` : "1px solid transparent",
-                minHeight: 100,
-              }}>
-              <div style={{textAlign:"center", marginBottom:6}}>
-                <div style={{fontFamily:mono, fontSize:8, letterSpacing:"0.08em",
-                  color: isSel ? C.accent : C.muted}}>{NAMES[i]}</div>
-                <div style={{fontFamily:serif, fontSize:16, fontWeight: isSel ? "600" : "normal",
-                  color: isTdy ? C.accent : isSel ? C.text : C.muted,
-                  lineHeight:1.4}}>{d.getDate()}</div>
-                {dots && (
-                  <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:2,height:4}}>
-                    {dots.sleep >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
-                    {dots.readiness >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
-                    {dots.activity >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
-                  </div>
-                )}
-              </div>
-              <div style={{display:"flex",flexDirection:"column",gap:2}}>
-                {dayEvents.slice(0,4).map((ev,j) => (
-                  <div key={j} style={{
-                    padding:"2px 4px", borderRadius:3,
-                    borderLeft:`2px solid ${ev.color||C.accent}`,
-                    background:`${ev.color||C.accent}10`,
-                  }}>
-                    <div style={{fontFamily:mono, fontSize:7, color:C.muted, lineHeight:1.2}}>
-                      {ev.time !== "all day" ? ev.time : ""}
-                    </div>
-                    <div style={{fontFamily:serif, fontSize:10, color:C.text, lineHeight:1.3,
-                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{ev.title}</div>
-                  </div>
-                ))}
-                {dayEvents.length > 4 && (
-                  <span style={{fontFamily:mono, fontSize:7, color:C.muted, textAlign:"center"}}>
-                    +{dayEvents.length - 4} more
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-// ─── Month View ──────────────────────────────────────────────────────────────
-function MonthView({selected, onSelect, events, healthDots}) {
-  const selDate = new Date(selected + "T12:00:00");
-  const year = selDate.getFullYear();
-  const month = selDate.getMonth();
-  const today = todayKey();
-
-  // First day of month and total days
-  const firstDay = new Date(year, month, 1);
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  // Monday-start: 0=Mon, 6=Sun
-  let startOffset = firstDay.getDay() - 1;
-  if (startOffset < 0) startOffset = 6;
-
-  const NAMES = ["M","T","W","T","F","S","S"];
-
-  // Navigate months
-  const prevMonth = () => {
-    const d = new Date(year, month - 1, 1);
-    onSelect(toKey(d));
-  };
-  const nextMonth = () => {
-    const d = new Date(year, month + 1, 1);
-    onSelect(toKey(d));
-  };
-
-  function timeToMins(t) {
-    if (!t || t === "all day") return -1;
-    const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
-    if (!m) return 9999;
-    let h = parseInt(m[1]), min = parseInt(m[2]);
-    const p = (m[3]||"").toUpperCase();
-    if (p === "PM" && h !== 12) h += 12;
-    if (p === "AM" && h === 12) h = 0;
-    return h * 60 + min;
-  }
-
-  const selKey = selected;
-  const selEvents = (events[selKey] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
-
-  return (
-    <div style={{display:"flex", flexDirection:"column", flex:1, overflow:"hidden"}}>
-      {/* Month navigation */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:16,padding:"6px 16px"}}>
-        <button onClick={prevMonth} style={{background:"none",border:"none",cursor:"pointer",
-          color:C.muted,fontFamily:mono,fontSize:14,padding:"2px 8px"}}>‹</button>
-        <span style={{fontFamily:serif,fontSize:16,color:C.text,letterSpacing:"-0.02em",minWidth:120,textAlign:"center"}}>
-          {MONTHS_FULL[month]} {year}
-        </span>
-        <button onClick={nextMonth} style={{background:"none",border:"none",cursor:"pointer",
-          color:C.muted,fontFamily:mono,fontSize:14,padding:"2px 8px"}}>›</button>
-      </div>
-
-      {/* Day name headers */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 12px"}}>
-        {NAMES.map((n,i)=>(
-          <div key={i} style={{textAlign:"center",fontFamily:mono,fontSize:8,color:C.muted,
-            letterSpacing:"0.08em",padding:"4px 0"}}>{n}</div>
-        ))}
-      </div>
-
-      {/* Calendar grid */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 12px",gap:1}}>
-        {Array.from({length:startOffset}).map((_,i)=><div key={`e${i}`}/>)}
-        {Array.from({length:daysInMonth}).map((_,i)=>{
-          const day = i + 1;
-          const k = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
-          const isSel = k === selected;
-          const isTdy = k === today;
-          const hasEvents = events[k] && events[k].length > 0;
-          const dots = healthDots[k];
-          return (
-            <div key={k} onClick={() => onSelect(k)} style={{
-              textAlign:"center", padding:"4px 2px", cursor:"pointer", borderRadius:6,
-              background: isSel ? `${C.accent}15` : "transparent",
-            }}>
-              <div style={{
-                fontFamily:serif, fontSize:13,
-                color: isTdy ? C.accent : isSel ? C.text : C.muted,
-                fontWeight: isSel ? "600" : "normal",
-                lineHeight:1.6,
-              }}>{day}</div>
-              <div style={{display:"flex",gap:2,justifyContent:"center",height:4}}>
-                {hasEvents && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
-                {dots?.sleep >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
-                {dots?.readiness >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Selected day events below grid */}
-      <div style={{padding:"8px 16px 12px", borderTop:`1px solid ${C.border}`, marginTop:6, flex:1, overflowY:"auto"}}>
-        <div style={{fontFamily:mono, fontSize:8, color:C.muted, letterSpacing:"0.12em",
-          textTransform:"uppercase", marginBottom:6}}>
-          {new Date(selected+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
-        </div>
-        {selEvents.length === 0
-          ? <span style={{fontFamily:mono, fontSize:9, color:C.dim}}>No events</span>
-          : selEvents.map((ev, i) => (
-              <div key={i} style={{display:"flex", gap:12, alignItems:"baseline",
-                padding:"4px 0", borderBottom: i < selEvents.length-1 ? `1px solid ${C.border}` : "none"}}>
-                <span style={{fontFamily:mono, fontSize:10, color:ev.color||C.accent,
-                  flexShrink:0, minWidth:64}}>{ev.time}</span>
-                <span style={{fontFamily:serif, fontSize:13, lineHeight:1.4, color:C.text}}>{ev.title}</span>
-              </div>
-          ))
-        }
-      </div>
-    </div>
-  );
-}
-
 function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps, token, googleToken}) {
   const mobile = useIsMobile();
   const [adding, setAdding] = useState(false);
-  const [calView, setCalView] = useState("day");  // day | week | month
   const [form, setForm] = useState({title:"", startTime:"", endTime:"", allDay:false});
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
@@ -1025,7 +804,6 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
       });
       const data = await res.json();
       if (!res.ok || data.error) { setSaveErr(data.error || "Failed to create event"); setSaving(false); return; }
-      // Optimistically add to local events
       const newEv = {
         title: form.title.trim(),
         time: form.allDay ? "all day" : (form.startTime ? form.startTime : "all day"),
@@ -1048,22 +826,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
           textTransform:"uppercase",color:C.muted}}>Calendar</span>
         <div style={{flex:1}}/>
 
-        {/* View mode toggle */}
-        <div style={{display:"flex",gap:0,background:C.surface,borderRadius:5,padding:2,border:`1px solid ${C.border}`}}>
-          {["day","week","month"].map(v=>(
-            <button key={v} onClick={()=>setCalView(v)} style={{
-              background: calView===v ? C.card : "transparent",
-              border: calView===v ? `1px solid ${C.border2}` : "1px solid transparent",
-              borderRadius:4, cursor:"pointer", padding:"3px 8px",
-              fontFamily:mono, fontSize:8, letterSpacing:"0.08em",
-              color: calView===v ? C.text : C.muted,
-              textTransform:"uppercase", lineHeight:1,
-              transition:"all 0.15s",
-            }}>{v[0].toUpperCase()}</button>
-          ))}
-        </div>
-
-        <button onClick={() => { onSelect(todayKey()); setCalView("day"); }} style={{
+        <button onClick={() => onSelect(todayKey())} style={{
           background:"none",border:`1px solid ${C.border2}`,borderRadius:5,cursor:"pointer",
           color:C.muted,fontFamily:mono,fontSize:8,letterSpacing:"0.08em",padding:"4px 8px",
           transition:"all 0.15s"}}
@@ -1129,10 +892,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
         </div>
       )}
 
-      {/* Same picker on both — mobile uses touch, desktop uses click */}
-      {calView === "day" && <MobileCalPicker selected={selected} onSelect={onSelect} events={events} healthDots={healthDots} desktop={!mobile}/>}
-      {calView === "week" && <WeekView selected={selected} onSelect={onSelect} events={events} healthDots={healthDots}/>}
-      {calView === "month" && <MonthView selected={selected} onSelect={onSelect} events={events} healthDots={healthDots}/>}
+      <MobileCalPicker selected={selected} onSelect={onSelect} events={events} healthDots={healthDots} desktop={!mobile}/>
     </Card>
   );
 }
