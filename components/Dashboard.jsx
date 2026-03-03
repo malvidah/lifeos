@@ -522,15 +522,6 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
           textTransform:"uppercase",opacity:0.9}}>today</span>}
       </div>
       <div style={{flex:1}}/>
-      <div style={{display:"flex",alignItems:"center",gap:6,WebkitAppRegion:"no-drag"}}>
-        <div style={{width:6,height:6,borderRadius:"50%",
-          background:syncStatus.syncing?C.yellow:C.green,
-          boxShadow:syncStatus.syncing?`0 0 6px ${C.yellow}`:`0 0 6px ${C.green}`,
-          transition:"background 0.3s"}}/>
-        <span style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.06em"}}>
-          {syncStatus.syncing?"syncing":syncStatus.lastSync||"synced"}
-        </span>
-      </div>
       <div style={{WebkitAppRegion:"no-drag"}}>
         <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange}/>
       </div>
