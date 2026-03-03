@@ -1508,7 +1508,7 @@ function Tasks({date,token,userId}) {
 function LoginScreen() {
   const [loading,setLoading]=useState(false);
   return (
-    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
+    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",position:"relative"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontFamily:serif,fontSize:32,color:C.text,marginBottom:6,letterSpacing:"-0.02em"}}>Day Loop</div>
         <div style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
