@@ -1449,44 +1449,51 @@ function InsightsCard({date, token, userId, healthKey}) {
   const [error, setError] = useState("");
   const [isFree, setIsFree] = useState(false);
   const prevDate = useRef(date);
-  const generated = useRef(false);   // has this date been generated yet?
-  const waitTimer = useRef(null);    // fallback timer for days with no Oura
+  const generatedWithKey = useRef(null); // healthKey used for last generation, null = not yet
+  const waitTimer = useRef(null);
 
   const BAD_VALUES = ["No data available", "No insights generated", "AI error"];
-  function isBadCache(t, cached) {
+
+  function cleanInsight(t) {
+    return t
+      .replace(/\*\*(.+?)\*\*/g, '$1')
+      .replace(/\*(.+?)\*/g, '$1')
+      .replace(/^#{1,3}\s+/gm, '')
+      .replace(/^[A-Za-z]+,\s+\w+ \d+\n+/, '')
+      .trim();
+  }
+
+  function isBadCache(t, cached, currentHealthKey) {
     if (!t) return true;
     if (BAD_VALUES.some(b => t.includes(b))) return true;
-    if (cached?.isWelcome && healthKey) return true;
+    if (cached?.isWelcome && currentHealthKey) return true;
     if (cached?.v !== 4) return true;
+    // If the insight was generated with different health data than what we have now, it's stale.
+    // e.g. generated with yesterday's bleeding data, or generated before Oura loaded.
+    if (cached?.healthKey !== undefined && cached.healthKey !== currentHealthKey) return true;
     return false;
   }
 
-  async function generate() {
-    if (!token || !userId || generated.current) return;
-    generated.current = true;
+  async function generate(currentHealthKey) {
+    if (!token || !userId) return;
+    if (generatedWithKey.current === currentHealthKey) return; // already generated for this exact state
+    generatedWithKey.current = currentHealthKey;
     clearTimeout(waitTimer.current);
     setBusy(true); setError(""); setIsFree(false);
     try {
       const cached = await dbLoad(date, "insights", token);
       const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
-      if (cached?.text && !isBadCache(cached.text, cached) && age < 4 * 60 * 60 * 1000) {
-        setText(cached.text); setBusy(false); return;
+      if (cached?.text && !isBadCache(cached.text, cached, currentHealthKey) && age < 4 * 60 * 60 * 1000) {
+        setText(cleanInsight(cached.text)); setBusy(false); return;
       }
       const res = await fetch("/api/insights", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ date }),
+        body: JSON.stringify({ date, healthKey: currentHealthKey }),
       });
       const data = await res.json();
       if (data.tier === "free") { setIsFree(true); }
-      else if (data.insight) setText(
-        data.insight
-          .replace(/\*\*(.+?)\*\*/g, '$1')   // **bold**
-          .replace(/\*(.+?)\*/g, '$1')        // *italic*
-          .replace(/^#{1,3}\s+/gm, '')        // ## headers
-          .replace(/^[A-Za-z]+,\s+\w+ \d+\n+/,'') // "Tuesday, March 3\n" date prefix
-          .trim()
-      );
+      else if (data.insight) setText(cleanInsight(data.insight));
       else if (data.error) setError(data.error);
     } catch (e) { setError(e.message); }
     setBusy(false);
@@ -1496,25 +1503,27 @@ function InsightsCard({date, token, userId, healthKey}) {
   useEffect(() => {
     if (prevDate.current === date) return;
     prevDate.current = date;
-    generated.current = false;
+    generatedWithKey.current = null;
     clearTimeout(waitTimer.current);
     setText(""); setError(""); setIsFree(false);
   }, [date]); // eslint-disable-line
 
-  // Wait for Oura data before generating — generate exactly once per date.
-  // If real health data arrives: generate immediately.
-  // If 3s passes with no Oura data: generate anyway (no ring / future date).
+  // Trigger generation:
+  // - If real health data is present: generate immediately with that key
+  // - If no health data after 3s: generate with the empty key (no-ring day / future date)
+  // - If health arrives AFTER the empty-key fallback fired: regenerate with real data
   useEffect(() => {
-    if (!token || !userId || generated.current) return;
+    if (!token || !userId) return;
     const [, sleep, readiness] = (healthKey || "::").split(":");
     const hasRealData = (+sleep > 0) || (+readiness > 0);
     if (hasRealData) {
-      // Oura has loaded — generate now with complete data
-      generate();
-    } else {
-      // Start/restart the fallback timer
       clearTimeout(waitTimer.current);
-      waitTimer.current = setTimeout(generate, 3000);
+      generate(healthKey);
+    } else {
+      // Only start the timer if we haven't generated yet
+      if (generatedWithKey.current !== null) return;
+      clearTimeout(waitTimer.current);
+      waitTimer.current = setTimeout(() => generate(healthKey), 3000);
     }
     return () => clearTimeout(waitTimer.current);
   }, [date, token, userId, healthKey]); // eslint-disable-line

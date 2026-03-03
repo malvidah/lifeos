@@ -31,7 +31,7 @@ export async function POST(request) {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-    const { date, messages } = await request.json();
+    const { date, healthKey } = await request.json();
     if (!date) return Response.json({ error: 'date required' }, { status: 400 });
 
     // Rate limit: 30 requests per user per hour
@@ -209,7 +209,7 @@ Rules:
 
     // Cache
     await supabase.from('entries').upsert(
-      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 4 }, user_id: user.id, updated_at: new Date().toISOString() },
+      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 4, healthKey: healthKey || '' }, user_id: user.id, updated_at: new Date().toISOString() },
       { onConflict: 'date,type,user_id' }
     );
 
