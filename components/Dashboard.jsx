@@ -700,8 +700,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         {/* Scrolling row */}
         <div style={{
           display:"flex", alignItems:"flex-start",
-          marginLeft:"50%",
-          transform:`translateX(calc(-${DAY_W/2}px - ${fracSlot * DAY_W}px))`,
+          position:"relative", left:"50%",
+          transform:`translateX(calc(-50% - ${fracSlot * DAY_W}px))`,
           willChange:"transform",
         }}>
           {dayItems.map(({d, i}) => {
@@ -1170,6 +1170,24 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         });
       });
   }, [syncedRows, loaded, estimatesLoaded, token]); // eslint-disable-line
+
+  // Auto-fill missing protein for rows that already have kcal but no protein
+  useEffect(() => {
+    if (!showProtein || !token || !loaded) return;
+    safe
+      .filter(r => r.text?.trim() && r.kcal && !r.protein && !estimating.current.has(r.id))
+      .forEach(row => {
+        estimating.current.add(row.id);
+        setTick(t => t+1);
+        estimateNutrition(promptFn(row.text), token).then(result => {
+          estimating.current.delete(row.id);
+          if (result?.protein) {
+            setRows(prev => (Array.isArray(prev)?prev:safe).map(r =>
+              r.id===row.id ? {...r, protein:result.protein, kcal:result.kcal||r.kcal} : r));
+          } else setTick(t => t+1);
+        });
+      });
+  }, [loaded, token, showProtein]); // eslint-disable-line
 
   async function runEstimate(id, text) {
     setRows(safe.map(r => r.id===id ? {...r, estimating:true} : r));
