@@ -14,14 +14,23 @@ const THEMES = {
     shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
   },
   light: {
-    // Warm parchment — Substack-inspired. bg and card are close tones, no harsh whites.
-    bg:"#EFEBE4", surface:"#E8E4DC", card:"#F5F2ED",
-    border:"#DDD8D0", border2:"#CCC7BE",
-    text:"#1A1714", muted:"#857F78", dim:"#C0BAB2",
-    accent:"#8B6030", green:"#376B48", blue:"#2E5A82",
-    yellow:"#8A6A20", red:"#7A3030",
-    shadow:"0 1px 2px rgba(40,25,10,0.07),0 2px 6px rgba(40,25,10,0.04)",
-    shadowSm:"0 1px 2px rgba(40,25,10,0.05)",
+    // Warm editorial — Substack palette, soft amber ink on cream
+    // bg and surface are warm-tinted so there's no harsh white anywhere
+    bg:"#F2EDE6",       // warm parchment page
+    surface:"#EAE4DB",  // slightly richer for inputs/inset areas
+    card:"#F8F5F0",     // cream card, just barely off the bg
+    border:"#E0D9CF",   // soft warm tan
+    border2:"#CFC8BC",  // slightly darker for focus rings
+    text:"#2C2418",     // deep warm ink (not pure black)
+    muted:"#9A8C7E",    // warm mid-tone
+    dim:"#C4BBB0",      // light warm placeholder
+    accent:"#C4A882",   // same warm gold as dark mode — top-bar consistent
+    green:"#3D7355",    // muted sage green
+    blue:"#3A6490",     // muted slate blue
+    yellow:"#9A7A2A",   // warm amber
+    red:"#8C4040",      // muted terracotta
+    shadow:"0 1px 2px rgba(44,36,24,0.06),0 3px 8px rgba(44,36,24,0.04)",
+    shadowSm:"0 1px 2px rgba(44,36,24,0.05)",
   },
 };
 // C is set at render time via setTheme — default dark
@@ -497,7 +506,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Oura */}
           <div style={row}>
             <SectionLabel info="Syncs your sleep score, HRV, readiness, and recovery data into your daily view. Requires a personal access token from your Oura account.">
-              Oura Ring {ouraConnected&&<span style={{color:C.green}}>✓</span>}
+              Oura {ouraConnected&&<span style={{color:C.green}}>✓</span>}
               {" "}<a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
                 style={{color:C.dim,textDecoration:"none",fontSize:10,fontFamily:mono,letterSpacing:"0.02em"}}>
                 (Get token →)
@@ -548,7 +557,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Claude */}
           <div style={row}>
             <SectionLabel info="Adds Day Loop as an MCP connector in Claude. Once connected, you can say things like 'add a task' or 'what's on my calendar' directly in any Claude conversation.">
-              Connect to Claude
+              Claude
             </SectionLabel>
             <div style={{
               display:"flex",alignItems:"center",gap:6,
@@ -575,18 +584,14 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               href="https://claude.ai/customize"
               target="_blank" rel="noreferrer"
               style={{
-                display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                display:"flex",alignItems:"center",justifyContent:"center",
                 width:"100%",padding:"7px 0",boxSizing:"border-box",
-                background:C.accent+"12",border:`1px solid ${C.accent+"55"}`,
+                background:C.accent+"18",border:`1px solid ${C.accent+"66"}`,
                 borderRadius:5,textDecoration:"none",
                 color:C.accent,fontFamily:mono,fontSize:10,
                 letterSpacing:"0.1em",textTransform:"uppercase",
               }}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
-              Open Claude Settings
+              Connect to Claude →
             </a>
           </div>
 
