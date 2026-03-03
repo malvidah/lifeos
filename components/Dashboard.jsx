@@ -1638,45 +1638,70 @@ function InsightBar({date, token, userId}) {
         </div>
       )}
 
-      {/* Input */}
+      {/* Input — ChatGPT-style pill */}
       <div style={{
         flexShrink: 0,
-        padding: "8px 10px",
-        display: "flex", gap: 8, alignItems: "center",
+        padding: "8px 12px 10px",
       }}>
-        {hasMic && (
-          <button onClick={toggleMic} style={{
-            background: listening ? C.red : "transparent",
-            border: `1px solid ${listening ? C.red : C.border2}`,
-            borderRadius: "50%", width: 32, height: 32, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, transition: "all 0.2s",
-          }}>
-            <span style={{ fontSize: 14, lineHeight: 1, color: listening ? "#fff" : C.muted }}>🎤</span>
-          </button>
-        )}
-        <input value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") send(); }}
-          onFocus={() => { if (messages.length > 1) setExpanded(true); }}
-          placeholder={busy ? "Thinking…" : "Add entries or ask about your day…"}
-          disabled={busy}
-          style={{
-            flex: 1, background: C.surface, border: `1px solid ${C.border}`,
-            borderRadius: 20, padding: "8px 16px", outline: "none",
-            fontFamily: serif, fontSize: 15, color: C.text,
-            opacity: busy ? 0.5 : 1,
-          }} />
-        {input.trim() && (
-          <button onClick={send} disabled={busy} style={{
-            background: C.accent, border: "none",
-            borderRadius: "50%", width: 32, height: 32, cursor: busy ? "default" : "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, opacity: busy ? 0.5 : 1,
-          }}>
-            <span style={{ color: "#fff", fontSize: 14, lineHeight: 1 }}>↑</span>
-          </button>
-        )}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 0,
+          background: C.surface, borderRadius: 24,
+          border: `1px solid ${C.border}`,
+          padding: "4px 4px 4px 16px",
+          transition: "border-color 0.15s",
+        }}>
+          <input value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter") send(); }}
+            onFocus={() => { if (messages.length > 1) setExpanded(true); }}
+            placeholder={busy ? "Thinking…" : "Add entries or ask about your day…"}
+            disabled={busy}
+            style={{
+              flex: 1, background: "transparent", border: "none", outline: "none",
+              fontFamily: serif, fontSize: 15, color: C.text,
+              padding: "8px 0", opacity: busy ? 0.5 : 1,
+            }} />
+
+          {/* Voice or Send — swaps based on input */}
+          {input.trim() ? (
+            <button onClick={send} disabled={busy} style={{
+              background: C.text, border: "none",
+              borderRadius: "50%", width: 32, height: 32,
+              cursor: busy ? "default" : "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, opacity: busy ? 0.4 : 1,
+              transition: "opacity 0.15s",
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.bg} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5"/>
+                <polyline points="5 12 12 5 19 12"/>
+              </svg>
+            </button>
+          ) : hasMic ? (
+            <button onClick={toggleMic} style={{
+              background: listening ? C.red : `${C.text}10`,
+              border: "none",
+              borderRadius: 16, height: 32,
+              padding: "0 12px",
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              flexShrink: 0, transition: "all 0.2s",
+            }}>
+              {/* Waveform icon */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={listening ? "#fff" : C.muted} strokeWidth="2" strokeLinecap="round">
+                <line x1="4" y1="8" x2="4" y2="16"/>
+                <line x1="8" y1="5" x2="8" y2="19"/>
+                <line x1="12" y1="3" x2="12" y2="21"/>
+                <line x1="16" y1="5" x2="16" y2="19"/>
+                <line x1="20" y1="8" x2="20" y2="16"/>
+              </svg>
+              <span style={{
+                fontFamily: mono, fontSize: 10, letterSpacing: "0.05em",
+                color: listening ? "#fff" : C.muted,
+              }}>{listening ? "Listening…" : "Voice"}</span>
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
