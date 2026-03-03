@@ -2,7 +2,7 @@ const { app, BrowserWindow, shell, protocol, session } = require('electron');
 const path = require('path');
 
 // Replace with your live URL (e.g. 'https://dayloop.app')
-const APP_URL = 'https://lifeos-malvidah.vercel.app';
+const APP_URL = 'https://dayloop.me';
 
 // Custom protocol so OAuth can redirect back into the app
 // Supabase callback: dayloop://auth/callback?code=...
