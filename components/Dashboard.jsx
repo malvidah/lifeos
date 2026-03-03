@@ -741,27 +741,33 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           <span style={{fontFamily:mono,fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
         </div>
 
-        {/* Month nav — absolutely centered */}
+        {/* Date — absolutely centered, no arrows */}
         <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
-          display:'flex',alignItems:'center',gap:2}}>
-          <NavBtn onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()-1);onSelect(toKey(d));}} title="Back 1 year">«</NavBtn>
-          <NavBtn onClick={()=>{const d=new Date(selDate);const day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()-1);const max=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,max));onSelect(toKey(d));}} title="Back 1 month">‹</NavBtn>
-          <span style={{fontFamily:serif,fontSize:14,letterSpacing:'-0.01em',color:C.text,
-            minWidth:108,textAlign:'center',userSelect:'none'}}>{selMonth} {selYear}</span>
-          <NavBtn onClick={()=>{const d=new Date(selDate);const day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+1);const max=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,max));onSelect(toKey(d));}} title="Forward 1 month">›</NavBtn>
-          <NavBtn onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()+1);onSelect(toKey(d));}} title="Forward 1 year">»</NavBtn>
+          pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
+          <span style={{fontFamily:serif,fontSize:17,letterSpacing:'-0.02em',color:C.text}}>
+            {selMonth} {selDate.getDate()}, {selYear}
+          </span>
         </div>
 
-        {/* TODAY — right */}
-        <button onClick={()=>onSelect(todayKey())} style={{
-          marginLeft:'auto',flexShrink:0,
-          background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
-          color:C.muted,fontFamily:mono,fontSize:11,letterSpacing:'0.1em',
-          textTransform:'uppercase',padding:'4px 9px',transition:'all 0.15s'}}
-          onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
-          TODAY
-        </button>
+        {/* RIGHT: LAST YEAR + TODAY */}
+        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6}}>
+          <button onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()-1);onSelect(toKey(d));}} style={{
+            background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
+            color:C.muted,fontFamily:mono,fontSize:11,letterSpacing:'0.1em',
+            textTransform:'uppercase',padding:'4px 9px',transition:'all 0.15s'}}
+            onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+            onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
+            Last year
+          </button>
+          <button onClick={()=>onSelect(todayKey())} style={{
+            background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
+            color:C.muted,fontFamily:mono,fontSize:11,letterSpacing:'0.1em',
+            textTransform:'uppercase',padding:'4px 9px',transition:'all 0.15s'}}
+            onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+            onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
+            Today
+          </button>
+        </div>
       {/* ── Day columns with events ──────────────────────────────────────── */}
       <div style={{
         overflow:"hidden", position:"relative",
