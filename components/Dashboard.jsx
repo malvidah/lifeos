@@ -554,7 +554,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       </div>
       {/* Day Loop — centered */}
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
-        <span style={{fontFamily:serif,fontSize:17,color:C.dim,letterSpacing:"-0.02em",opacity:0.5}}>Day Loop</span>
+        <span style={{fontFamily:serif,fontSize:17,color:C.accent,letterSpacing:"-0.02em"}}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
