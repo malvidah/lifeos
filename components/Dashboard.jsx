@@ -1125,6 +1125,16 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
   const isNew = active !== null && !active.id;
   const color = active?.color || C.accent;
 
+  const to12h = t => {
+    if (!t || t === 'all day') return 'all day';
+    try {
+      const [h, m] = t.split(':').map(Number);
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      const h12 = h % 12 || 12;
+      return `${h12}:${String(m).padStart(2,'0')} ${ampm}`;
+    } catch { return t; }
+  };
+
   const toHHMM = t => {
     if (!t || t === 'all day') return '';
     try {
@@ -1182,8 +1192,8 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
         if (!res.ok||data.error){ setSaveErr(data.error||'Failed'); setSaving(false); return; }
         setEvents(prev=>({...prev,[selected]:[...(prev[selected]||[]),
           {id:data.eventId,title:form.title.trim(),
-           time:form.allDay?'all day':(form.startTime||'all day'),
-           endTime:form.allDay?null:form.endTime,allDay:form.allDay,color:'#B8A882'}]}));
+           time:form.allDay?'all day':to12h(form.startTime),
+           endTime:form.allDay?null:to12h(form.endTime),allDay:form.allDay,color:'#B8A882'}]}));
         closePanel();
       } else {
         const res = await fetch('/api/calendar-update', {
@@ -1195,8 +1205,8 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
         const data = await res.json();
         if (!res.ok||data.error){ setSaveErr(data.error||'Failed'); setSaving(false); return; }
         const updated = {...active,title:form.title.trim(),
-          time:form.allDay?'all day':(form.startTime||'all day'),
-          endTime:form.allDay?null:form.endTime,allDay:form.allDay};
+          time:form.allDay?'all day':to12h(form.startTime),
+          endTime:form.allDay?null:to12h(form.endTime),allDay:form.allDay};
         setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).map(e=>e.id===active.id?updated:e)}));
         setActive(updated); setDirty(false);
       }
