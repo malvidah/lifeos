@@ -1722,13 +1722,14 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
 
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
     borderRadius:4, padding:"2px 8px", whiteSpace:"nowrap"};
+  const COL_W = 44;
   const colProtein = {fontFamily:mono, fontSize:F.sm, color:C.blue, flexShrink:0,
-    width:28, textAlign:"right", whiteSpace:"nowrap"};
+    width:COL_W, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0,
-    width:34, textAlign:"right", whiteSpace:"nowrap"};
-  const rowStyle = {display:"flex", alignItems:"center", gap:8, padding:"3px 0", minHeight:28};
+    width:COL_W, textAlign:"center", whiteSpace:"nowrap"};
+  const rowStyle = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
   const hdrCol = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
-    color:C.muted, flexShrink:0, textAlign:"right"};
+    color:C.muted, flexShrink:0, textAlign:"center", width:COL_W};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -1771,14 +1772,16 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         ))}
       </div>
       {(totalKcal > 0 || totalProtein > 0) && (
-        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:6,borderTop:`1px solid ${C.border}`}}>
+        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:0,borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
-          {showProtein && totalProtein > 0 && (
-            <span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalProtein}</span>
+          {showProtein && (
+            <div style={{width:44,display:"flex",justifyContent:"center"}}>
+              {totalProtein > 0 && <span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalProtein}</span>}
+            </div>
           )}
-          {totalKcal > 0 && (
-            <span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>
-          )}
+          <div style={{width:44,display:"flex",justifyContent:"center"}}>
+            {totalKcal > 0 && <span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>}
+          </div>
         </div>
       )}
     </div>
@@ -2294,7 +2297,7 @@ function ChatFloat({date, token, userId}) {
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
-const MEALS_HDR = <span style={{display:"flex",gap:8}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:28,textAlign:"right"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:34,textAlign:"right"}}>kcal</span></span>;
+const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span></span>;
 const WIDGETS = [
   {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
