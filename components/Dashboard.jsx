@@ -65,15 +65,15 @@ async function estimateNutrition(prompt, token) {
   try {
     const r = await fetch("/api/ai",{method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-      body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:64,
-        system:"Return only valid JSON. No explanation.",
+      body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:80,
+        system:"You are a nutrition calculator. Return ONLY a JSON object with integer fields: kcal and protein (grams). No explanation, no markdown, no backticks. Example: {\"kcal\":450,\"protein\":35}",
         messages:[{role:"user",content:prompt}]})});
     const d = await r.json();
     if (d.error) return null;
     const text = d.content?.find(b=>b.type==="text")?.text||"{}";
     const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
     if (!parsed.kcal) return null;
-    return parsed; // e.g. {kcal:420, protein:30} or {kcal:300}
+    return { kcal: parsed.kcal, protein: parsed.protein || null };
   } catch { return null; }
 }
 
@@ -797,9 +797,214 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     </div>
   );
 }
+
+// ─── Week View ───────────────────────────────────────────────────────────────
+function WeekView({selected, onSelect, events, healthDots}) {
+  const selDate = new Date(selected + "T12:00:00");
+  // Get Monday of the selected week
+  const day = selDate.getDay();
+  const mondayOff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(selDate);
+  monday.setDate(monday.getDate() + mondayOff);
+
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(d.getDate() + i);
+    days.push(d);
+  }
+
+  const NAMES = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+  const today = todayKey();
+
+  function timeToMins(t) {
+    if (!t || t === "all day") return -1;
+    const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!m) return 9999;
+    let h = parseInt(m[1]), min = parseInt(m[2]);
+    const p = (m[3]||"").toUpperCase();
+    if (p === "PM" && h !== 12) h += 12;
+    if (p === "AM" && h === 12) h = 0;
+    return h * 60 + min;
+  }
+
+  return (
+    <div style={{padding:"6px 8px 16px", flex:1, overflow:"auto"}}>
+      <div style={{display:"grid", gridTemplateColumns:"repeat(7, 1fr)", gap:4}}>
+        {days.map((d, i) => {
+          const k = toKey(d);
+          const isSel = k === selected;
+          const isTdy = k === today;
+          const dayEvents = (events[k] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
+          const dots = healthDots[k];
+          return (
+            <div key={k} onClick={() => onSelect(k)}
+              style={{
+                cursor:"pointer", padding:"6px 4px", borderRadius:8,
+                background: isSel ? `${C.accent}12` : "transparent",
+                border: isSel ? `1px solid ${C.accent}30` : "1px solid transparent",
+                minHeight: 100,
+              }}>
+              <div style={{textAlign:"center", marginBottom:6}}>
+                <div style={{fontFamily:mono, fontSize:8, letterSpacing:"0.08em",
+                  color: isSel ? C.accent : C.muted}}>{NAMES[i]}</div>
+                <div style={{fontFamily:serif, fontSize:16, fontWeight: isSel ? "600" : "normal",
+                  color: isTdy ? C.accent : isSel ? C.text : C.muted,
+                  lineHeight:1.4}}>{d.getDate()}</div>
+                {dots && (
+                  <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:2,height:4}}>
+                    {dots.sleep >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
+                    {dots.readiness >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
+                    {dots.activity >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
+                  </div>
+                )}
+              </div>
+              <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                {dayEvents.slice(0,4).map((ev,j) => (
+                  <div key={j} style={{
+                    padding:"2px 4px", borderRadius:3,
+                    borderLeft:`2px solid ${ev.color||C.accent}`,
+                    background:`${ev.color||C.accent}10`,
+                  }}>
+                    <div style={{fontFamily:mono, fontSize:7, color:C.muted, lineHeight:1.2}}>
+                      {ev.time !== "all day" ? ev.time : ""}
+                    </div>
+                    <div style={{fontFamily:serif, fontSize:10, color:C.text, lineHeight:1.3,
+                      overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>{ev.title}</div>
+                  </div>
+                ))}
+                {dayEvents.length > 4 && (
+                  <span style={{fontFamily:mono, fontSize:7, color:C.muted, textAlign:"center"}}>
+                    +{dayEvents.length - 4} more
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ─── Month View ──────────────────────────────────────────────────────────────
+function MonthView({selected, onSelect, events, healthDots}) {
+  const selDate = new Date(selected + "T12:00:00");
+  const year = selDate.getFullYear();
+  const month = selDate.getMonth();
+  const today = todayKey();
+
+  // First day of month and total days
+  const firstDay = new Date(year, month, 1);
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  // Monday-start: 0=Mon, 6=Sun
+  let startOffset = firstDay.getDay() - 1;
+  if (startOffset < 0) startOffset = 6;
+
+  const NAMES = ["M","T","W","T","F","S","S"];
+
+  // Navigate months
+  const prevMonth = () => {
+    const d = new Date(year, month - 1, 1);
+    onSelect(toKey(d));
+  };
+  const nextMonth = () => {
+    const d = new Date(year, month + 1, 1);
+    onSelect(toKey(d));
+  };
+
+  function timeToMins(t) {
+    if (!t || t === "all day") return -1;
+    const m = t.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!m) return 9999;
+    let h = parseInt(m[1]), min = parseInt(m[2]);
+    const p = (m[3]||"").toUpperCase();
+    if (p === "PM" && h !== 12) h += 12;
+    if (p === "AM" && h === 12) h = 0;
+    return h * 60 + min;
+  }
+
+  const selKey = selected;
+  const selEvents = (events[selKey] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
+
+  return (
+    <div style={{display:"flex", flexDirection:"column", flex:1, overflow:"hidden"}}>
+      {/* Month navigation */}
+      <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:16,padding:"6px 16px"}}>
+        <button onClick={prevMonth} style={{background:"none",border:"none",cursor:"pointer",
+          color:C.muted,fontFamily:mono,fontSize:14,padding:"2px 8px"}}>‹</button>
+        <span style={{fontFamily:serif,fontSize:16,color:C.text,letterSpacing:"-0.02em",minWidth:120,textAlign:"center"}}>
+          {MONTHS_FULL[month]} {year}
+        </span>
+        <button onClick={nextMonth} style={{background:"none",border:"none",cursor:"pointer",
+          color:C.muted,fontFamily:mono,fontSize:14,padding:"2px 8px"}}>›</button>
+      </div>
+
+      {/* Day name headers */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 12px"}}>
+        {NAMES.map((n,i)=>(
+          <div key={i} style={{textAlign:"center",fontFamily:mono,fontSize:8,color:C.muted,
+            letterSpacing:"0.08em",padding:"4px 0"}}>{n}</div>
+        ))}
+      </div>
+
+      {/* Calendar grid */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",padding:"0 12px",gap:1}}>
+        {Array.from({length:startOffset}).map((_,i)=><div key={`e${i}`}/>)}
+        {Array.from({length:daysInMonth}).map((_,i)=>{
+          const day = i + 1;
+          const k = `${year}-${String(month+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+          const isSel = k === selected;
+          const isTdy = k === today;
+          const hasEvents = events[k] && events[k].length > 0;
+          const dots = healthDots[k];
+          return (
+            <div key={k} onClick={() => onSelect(k)} style={{
+              textAlign:"center", padding:"4px 2px", cursor:"pointer", borderRadius:6,
+              background: isSel ? `${C.accent}15` : "transparent",
+            }}>
+              <div style={{
+                fontFamily:serif, fontSize:13,
+                color: isTdy ? C.accent : isSel ? C.text : C.muted,
+                fontWeight: isSel ? "600" : "normal",
+                lineHeight:1.6,
+              }}>{day}</div>
+              <div style={{display:"flex",gap:2,justifyContent:"center",height:4}}>
+                {hasEvents && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
+                {dots?.sleep >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
+                {dots?.readiness >= 85 && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Selected day events below grid */}
+      <div style={{padding:"8px 16px 12px", borderTop:`1px solid ${C.border}`, marginTop:6, flex:1, overflowY:"auto"}}>
+        <div style={{fontFamily:mono, fontSize:8, color:C.muted, letterSpacing:"0.12em",
+          textTransform:"uppercase", marginBottom:6}}>
+          {new Date(selected+"T12:00:00").toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})}
+        </div>
+        {selEvents.length === 0
+          ? <span style={{fontFamily:mono, fontSize:9, color:C.dim}}>No events</span>
+          : selEvents.map((ev, i) => (
+              <div key={i} style={{display:"flex", gap:12, alignItems:"baseline",
+                padding:"4px 0", borderBottom: i < selEvents.length-1 ? `1px solid ${C.border}` : "none"}}>
+                <span style={{fontFamily:mono, fontSize:10, color:ev.color||C.accent,
+                  flexShrink:0, minWidth:64}}>{ev.time}</span>
+                <span style={{fontFamily:serif, fontSize:13, lineHeight:1.4, color:C.text}}>{ev.title}</span>
+              </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
 function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps, token, googleToken}) {
   const mobile = useIsMobile();
   const [adding, setAdding] = useState(false);
+  const [calView, setCalView] = useState("day");  // day | week | month
   const [form, setForm] = useState({title:"", startTime:"", endTime:"", allDay:false});
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState("");
@@ -842,12 +1047,29 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
         <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
           textTransform:"uppercase",color:C.muted}}>Calendar</span>
         <div style={{flex:1}}/>
-        <button onClick={() => onSelect(todayKey())} style={{
-          background:"none",border:"none",cursor:"pointer",color:C.muted,
-          fontFamily:mono,fontSize:9,letterSpacing:"0.08em",opacity:0.7,padding:"4px 6px",
-          transition:"opacity 0.15s"}}
-          onMouseEnter={e=>e.currentTarget.style.opacity="1"}
-          onMouseLeave={e=>e.currentTarget.style.opacity="0.7"}>today</button>
+
+        {/* View mode toggle */}
+        <div style={{display:"flex",gap:0,background:C.surface,borderRadius:5,padding:2,border:`1px solid ${C.border}`}}>
+          {["day","week","month"].map(v=>(
+            <button key={v} onClick={()=>setCalView(v)} style={{
+              background: calView===v ? C.card : "transparent",
+              border: calView===v ? `1px solid ${C.border2}` : "1px solid transparent",
+              borderRadius:4, cursor:"pointer", padding:"3px 8px",
+              fontFamily:mono, fontSize:8, letterSpacing:"0.08em",
+              color: calView===v ? C.text : C.muted,
+              textTransform:"uppercase", lineHeight:1,
+              transition:"all 0.15s",
+            }}>{v[0].toUpperCase()}</button>
+          ))}
+        </div>
+
+        <button onClick={() => { onSelect(todayKey()); setCalView("day"); }} style={{
+          background:"none",border:`1px solid ${C.border2}`,borderRadius:5,cursor:"pointer",
+          color:C.muted,fontFamily:mono,fontSize:8,letterSpacing:"0.08em",padding:"4px 8px",
+          transition:"all 0.15s"}}
+          onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
+          TODAY</button>
         <button onClick={openAdd} style={{
           background:"none",border:`1px solid ${C.border2}`,borderRadius:5,cursor:"pointer",
           color:C.muted,fontFamily:mono,fontSize:13,lineHeight:1,padding:"2px 7px",
@@ -908,7 +1130,9 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
       )}
 
       {/* Same picker on both — mobile uses touch, desktop uses click */}
-      <MobileCalPicker selected={selected} onSelect={onSelect} events={events} healthDots={healthDots} desktop={!mobile}/>
+      {calView === "day" && <MobileCalPicker selected={selected} onSelect={onSelect} events={events} healthDots={healthDots} desktop={!mobile}/>}
+      {calView === "week" && <WeekView selected={selected} onSelect={onSelect} events={events} healthDots={healthDots}/>}
+      {calView === "month" && <MonthView selected={selected} onSelect={onSelect} events={events} healthDots={healthDots}/>}
     </Card>
   );
 }
@@ -1227,9 +1451,24 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         {merged.map(row => (
           <div key={row.id} style={rowStyle}>
             <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:16,
-              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flexShrink:1,minWidth:0}}>
               {row.text}
             </span>
+            {row.details && row.details.length > 0 && (
+              <span style={{display:"flex",gap:6,flexShrink:0,alignItems:"baseline"}}>
+                {row.details.map((d,i) => {
+                  const match = d.match(/^(.*\d)\s*([a-z]+)$/i);
+                  const val = match ? match[1] : d;
+                  const unit = match ? match[2] : "";
+                  return (
+                    <span key={i} style={{whiteSpace:"nowrap"}}>
+                      <span style={{fontFamily:mono,fontSize:11,color:C.text,opacity:0.7}}>{val}</span>
+                      {unit && <span style={{fontFamily:mono,fontSize:8,color:C.muted,marginLeft:1}}>{unit}</span>}
+                    </span>
+                  );
+                })}
+              </span>
+            )}
             <SourceBadge source={row.source}/>
             <span style={{flex:1}}/>
             {showProtein && (
@@ -1277,7 +1516,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   );
 }
 
-function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={C.accent} showProtein/>;}
+function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate calories and protein grams for: "${t}"`} prefix="" color={C.accent} showProtein/>;}
 function SourceBadge({source}) {
   const isStrava = source === "strava";
   return (
@@ -1340,12 +1579,12 @@ function Activity({date,token,userId}) {
         id: String(w.id || `${w.source}-${w.sport}-${w.durationMins}`),
         source: w.source,
         kcal: w.calories||null,
-        text: [
-          w.name,
+        text: w.name,
+        details: [
           w.durationMins ? fmtMins(w.durationMins) : null,
           w.distance ? `${(w.distance * 0.621371).toFixed(1)}mi` : null,
-          w.avgHr ? `${w.avgHr}bpm avg` : null,
-        ].filter(Boolean).join(" · "),
+          w.avgHr ? `${w.avgHr}bpm` : null,
+        ].filter(Boolean),
       })));
     });
   },[date,token,userId]); // eslint-disable-line
@@ -1501,6 +1740,7 @@ export default function Dashboard() {
   },[sessionGoogleToken,token]);
 
   // Fetch calendar events — auto-refresh token if expired
+  const calRefreshRef = useRef(null);
   useEffect(()=>{
     if(!token)return;
     startSync("cal");
@@ -1509,40 +1749,68 @@ export default function Dashboard() {
     const end=toKey(shift(new Date(),60));
 
     const doFetch=(gToken)=>fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({token:gToken,start,end,tz})}).then(r=>r.json());
+      body:JSON.stringify({token:gToken,start,end,tz})}).then(r=>{
+        if(!r.ok) return r.json().then(d=>({...d,_httpError:true}));
+        return r.json();
+      });
 
     const tryRefresh=(refreshToken)=>
       fetch("/api/google-refresh",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
         body:JSON.stringify({refreshToken})}).then(r=>r.json());
 
-    const fetchCal=(gToken, refreshToken)=>{
+    const fetchCal=(gToken, refreshToken, isRetry=false)=>{
       setGoogleToken(gToken);
       doFetch(gToken).then(async d=>{
-        if(d.events&&Object.keys(d.events).length>0){
-          setEvents(d.events);
-        } else if(d.error&&refreshToken){
-          // Token expired — try to refresh silently
+        if(d.events && !d._httpError){
+          // Success — even empty events {} is valid (just means no events in range)
+          setEvents(prev => ({...prev, ...d.events}));
+        } else if(!isRetry && refreshToken){
+          // Token expired or error — try to refresh silently
           const r=await tryRefresh(refreshToken).catch(()=>({}));
           if(r.googleToken){
             setGoogleToken(r.googleToken);
-            const d2=await doFetch(r.googleToken).catch(()=>({}));
-            if(d2.events) setEvents(d2.events);
+            fetchCal(r.googleToken, refreshToken, true);
+            return;
           }
         }
       }).catch(()=>{}).finally(()=>endSync("cal"));
     };
 
-    if(sessionGoogleToken){
-      fetchCal(sessionGoogleToken, sessionRefreshToken);
-    } else {
+    const startFetch = () => {
+      if(sessionGoogleToken){
+        fetchCal(sessionGoogleToken, sessionRefreshToken);
+      } else {
+        fetch("/api/google-token",{headers:{"Authorization":`Bearer ${token}`}})
+          .then(r=>r.json())
+          .then(d=>{
+            if(d.googleToken) fetchCal(d.googleToken, d.refreshToken);
+            else endSync("cal");
+          })
+          .catch(()=>endSync("cal"));
+      }
+    };
+
+    startFetch();
+
+    // Proactively refresh every 45 min to prevent stale tokens
+    calRefreshRef.current = setInterval(()=>{
       fetch("/api/google-token",{headers:{"Authorization":`Bearer ${token}`}})
         .then(r=>r.json())
         .then(d=>{
-          if(d.googleToken) fetchCal(d.googleToken, d.refreshToken);
-          else endSync("cal");
-        })
-        .catch(()=>endSync("cal"));
-    }
+          if(d.refreshToken){
+            tryRefresh(d.refreshToken).then(r=>{
+              if(r.googleToken){
+                setGoogleToken(r.googleToken);
+                doFetch(r.googleToken).then(d2=>{
+                  if(d2.events&&!d2._httpError) setEvents(prev=>({...prev,...d2.events}));
+                }).catch(()=>{});
+              }
+            }).catch(()=>{});
+          }
+        }).catch(()=>{});
+    }, 45*60*1000);
+
+    return ()=>{ if(calRefreshRef.current) clearInterval(calRefreshRef.current); };
   },[token]); // eslint-disable-line
 
   const onHealthChange=useCallback((date,data)=>{
@@ -1652,8 +1920,8 @@ export default function Dashboard() {
         /* ── DESKTOP: stacked layout — cal, health, then 2-col widgets ─── */
         <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column",gap:8}}>
 
-          {/* Calendar — full width, fixed height */}
-          <div style={{height:360,flexShrink:0}}>
+          {/* Calendar — full width, auto-height based on view mode */}
+          <div style={{flexShrink:0}}>
             <CalStrip selected={selected} onSelect={setSelected}
               events={events} setEvents={setEvents} healthDots={healthDots}
               token={token} googleToken={googleToken} dragProps={{}}/>

@@ -22,8 +22,17 @@ export async function POST(req) {
   const { googleToken, refreshToken } = await req.json();
   if (!googleToken) return Response.json({ error: 'no token' }, { status: 400 });
 
+  // Never overwrite a saved refresh token with null — Google only sends it once
+  let finalRefresh = refreshToken || null;
+  if (!finalRefresh) {
+    const { data: existing } = await supabase.from('entries').select('data')
+      .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', user.id)
+      .maybeSingle();
+    finalRefresh = existing?.data?.refreshToken || null;
+  }
+
   const { error } = await supabase.from('entries').upsert(
-    { date: '0000-00-00', type: 'google_token', data: { token: googleToken, refreshToken: refreshToken || null }, user_id: user.id, updated_at: new Date().toISOString() },
+    { date: '0000-00-00', type: 'google_token', data: { token: googleToken, refreshToken: finalRefresh }, user_id: user.id, updated_at: new Date().toISOString() },
     { onConflict: 'date,type,user_id' }
   );
   if (error) return Response.json({ error: error.message }, { status: 500 });
