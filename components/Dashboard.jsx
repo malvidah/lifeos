@@ -1717,13 +1717,14 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
     </div>
   );
 
-  const rowStyle = {display:"flex", alignItems:"center", gap:6, padding:"3px 0", minHeight:28};
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
     borderRadius:4, padding:"2px 6px", whiteSpace:"nowrap"};
-  const kcalStyle = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
-    whiteSpace:"nowrap", color:C.orange};
-  const proteinStyle = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
-    whiteSpace:"nowrap", color:C.blue};
+  // Fixed-width columns so numbers align with totals chips
+  const colProtein = {fontFamily:mono, fontSize:F.sm, color:C.blue, flexShrink:0,
+    width:32, textAlign:"right", whiteSpace:"nowrap"};
+  const colKcal = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0,
+    width:38, textAlign:"right", whiteSpace:"nowrap"};
+  const rowStyle = {display:"flex", alignItems:"center", gap:8, padding:"3px 0", minHeight:28};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -1731,33 +1732,17 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         {merged.map(row => (
           <div key={row.id} style={rowStyle}>
             <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,
-              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flexShrink:1,minWidth:0}}>
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>
               {row.text}
             </span>
-            {row.details && row.details.length > 0 && (
-              <span style={{display:"flex",gap:6,flexShrink:0,alignItems:"baseline"}}>
-                {row.details.map((d,i) => {
-                  const match = d.match(/^(.*\d)\s*([a-z]+)$/i);
-                  const val = match ? match[1] : d;
-                  const unit = match ? match[2] : "";
-                  return (
-                    <span key={i} style={{whiteSpace:"nowrap"}}>
-                      <span style={{fontFamily:mono,fontSize:F.sm,color:C.text,opacity:0.7}}>{val}</span>
-                      {unit && <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,marginLeft:1}}>{unit}</span>}
-                    </span>
-                  );
-                })}
-              </span>
-            )}
             <SourceBadge source={row.source}/>
-            <span style={{flex:1}}/>
             {showProtein && (
-              <span style={proteinStyle}>
-                {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g protein` : null}
+              <span style={colProtein}>
+                {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g` : ""}
               </span>
             )}
-            <span style={kcalStyle}>
-              {estimating.current.has(row.id) ? "…" : row.kcal ? `${row.kcal} kcal` : null}
+            <span style={colKcal}>
+              {estimating.current.has(row.id) ? "…" : row.kcal ? `${row.kcal}` : ""}
             </span>
           </div>
         ))}
@@ -1770,27 +1755,25 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
               placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+ add more" : ""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
-            {showProtein && row.protein && (
-              <span style={proteinStyle}>
-                {row.estimating ? "…" : `${row.protein}g protein`}
+            {showProtein && (
+              <span style={colProtein}>
+                {row.estimating ? "…" : row.protein ? `${row.protein}g` : ""}
               </span>
             )}
-            {row.kcal && (
-              <span style={kcalStyle}>
-                {row.estimating ? "…" : `${row.kcal} kcal`}
-              </span>
-            )}
+            <span style={colKcal}>
+              {row.estimating ? "…" : row.kcal ? `${row.kcal}` : ""}
+            </span>
           </div>
         ))}
       </div>
       {(totalKcal > 0 || totalProtein > 0) && (
-        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:12,borderTop:`1px solid ${C.border}`}}>
+        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:8,borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
           {showProtein && totalProtein > 0 && (
-            <span style={{...chipBase,background:C.blue+"22",color:C.blue,fontSize:F.sm}}>{totalProtein}g protein</span>
+            <span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalProtein}g protein</span>
           )}
           {totalKcal > 0 && (
-            <span style={{...chipBase,background:C.orange+"22",color:C.orange,fontSize:F.sm}}>{totalKcal} kcal</span>
+            <span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal} kcal</span>
           )}
         </div>
       )}
