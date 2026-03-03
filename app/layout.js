@@ -1,4 +1,4 @@
-export const metadata = { title: "Life OS", description: "Personal dashboard" };
+export const metadata = { title: "Day Loop", description: "Your AI dashboard" };
 export const viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false };
 
 // This script runs synchronously before any paint — zero flash possible.
@@ -7,7 +7,7 @@ export const viewport = { width: "device-width", initialScale: 1, maximumScale: 
 const THEME_SCRIPT = `(function(){
   try {
     var t = localStorage.getItem("theme") || "dark";
-    var bg = t === "light" ? "#EFEBE4" : "#0D0D0F";
+    var bg = t === "light" ? "#EFEBE4" : "#0A0A0A";
     var el = document.documentElement;
     el.style.setProperty("background", bg, "important");
     el.style.setProperty("background-color", bg, "important");
@@ -27,8 +27,8 @@ export default function RootLayout({ children }) {
         <style dangerouslySetInnerHTML={{ __html: `
           html, body { margin: 0; padding: 0; }
           html[data-theme="light"], html[data-theme="light"] body { background: #EFEBE4 !important; }
-          html[data-theme="dark"], html[data-theme="dark"] body { background: #0D0D0F !important; }
-          html:not([data-theme]) body { background: #0D0D0F !important; }
+          html[data-theme="dark"], html[data-theme="dark"] body { background: #0A0A0A !important; }
+          html:not([data-theme]) body { background: #0A0A0A !important; }
         `}} />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>

@@ -12,7 +12,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 const THEMES = {
   dark: {
-    bg:"#0D0D0F", surface:"#16171A", card:"#1C1D21",
+    bg:"#0A0A0A", surface:"#16171A", card:"#1C1D21",
     border:"#26272C", border2:"#2E2F35",
     text:"#E8E4DC", muted:"#6B6870", dim:"#3A3840",
     accent:"#C4A882", green:"#4E9268", blue:"#4A82B0",
