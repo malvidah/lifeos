@@ -334,6 +334,10 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [stravaConnected,setStravaConnected]=useState(false);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
+  const [agentToken,setAgentToken]=useState(null);   // {masked, createdAt} or null
+  const [agentLoading,setAgentLoading]=useState(false);
+  const [agentCopied,setAgentCopied]=useState(false);
+  const [agentFull,setAgentFull]=useState(null);     // shown once after generate
   const ref=useRef(null);
   const user=session?.user;
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
@@ -346,6 +350,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     }).catch(()=>{});
     fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
+    // Load agent token status
+    fetch("/api/agent",{headers:{Authorization:`Bearer ${token}`}})
+      .then(r=>r.json()).then(d=>{if(d.exists)setAgentToken(d);}).catch(()=>{});
   },[token,open]); // eslint-disable-line
   useEffect(()=>{
     if(!open)return;
@@ -353,6 +360,19 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     document.addEventListener("mousedown",fn);
     return ()=>document.removeEventListener("mousedown",fn);
   },[open]);
+
+  async function generateAgentToken(){
+    setAgentLoading(true);
+    try {
+      const r=await fetch("/api/agent",{method:"PUT",headers:{Authorization:`Bearer ${token}`}});
+      const d=await r.json();
+      if(d.ok){
+        setAgentFull(d.token);
+        setAgentToken({exists:true, masked:d.token.slice(0,7)+'••••••••••••••••'+d.token.slice(-4)});
+      }
+    } catch(e){alert("Failed: "+e.message);}
+    setAgentLoading(false);
+  }
 
   async function saveOura(){
     if(!ouraKey.trim())return;
@@ -433,6 +453,50 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 padding:"8px",cursor:"pointer",transition:"all 0.2s"}}>
               {stravaConnected?"✓ strava connected":"connect strava"}
             </button>
+          </div>
+          <div style={{height:1,background:C.border}}/>
+          {/* AI Agent Token */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>AI Agent Access</span>
+              {agentToken?.exists&&<span style={{fontFamily:mono,fontSize:12,color:C.green,letterSpacing:"0.08em"}}>✓ active</span>}
+            </div>
+            <div style={{fontFamily:mono,fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.5}}>
+              Paste this token into Claude to let it read and write your DayLoop directly from chat.
+            </div>
+            {agentFull ? (
+              <div>
+                <div style={{
+                  fontFamily:mono,fontSize:11,color:C.accent,
+                  background:C.surface,border:`1px solid ${C.border2}`,
+                  borderRadius:5,padding:"6px 8px",wordBreak:"break-all",
+                  marginBottom:6,userSelect:"all",cursor:"text",
+                }}>
+                  {agentFull}
+                </div>
+                <div style={{display:"flex",gap:6}}>
+                  <button onClick={()=>{navigator.clipboard.writeText(agentFull);setAgentCopied(true);setTimeout(()=>setAgentCopied(false),2000);}}
+                    style={{flex:1,background:agentCopied?C.green+"22":"none",border:`1px solid ${agentCopied?C.green:C.border2}`,
+                      borderRadius:5,color:agentCopied?C.green:C.text,fontFamily:mono,fontSize:11,
+                      letterSpacing:"0.1em",textTransform:"uppercase",padding:"5px 0",cursor:"pointer"}}>
+                    {agentCopied?"copied ✓":"copy"}
+                  </button>
+                  <button onClick={()=>setAgentFull(null)}
+                    style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,
+                      color:C.muted,fontFamily:mono,fontSize:11,padding:"5px 8px",cursor:"pointer"}}>
+                    hide
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={generateAgentToken} disabled={agentLoading}
+                style={{width:"100%",background:"none",border:`1px solid ${C.border2}`,
+                  borderRadius:5,color:C.text,fontFamily:mono,fontSize:12,
+                  letterSpacing:"0.1em",textTransform:"uppercase",padding:"6px 0",
+                  cursor:agentLoading?"default":"pointer",opacity:agentLoading?0.5:1}}>
+                {agentLoading?"generating…":agentToken?.exists?"regenerate token":"generate token"}
+              </button>
+            )}
           </div>
           <div style={{height:1,background:C.border}}/>
           {/* Light / Dark toggle */}
