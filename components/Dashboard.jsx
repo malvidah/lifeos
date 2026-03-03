@@ -498,17 +498,20 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       weekday: "long", month: "long", day: "numeric"
     }));
   }, [selected]);
+  const isElectron = typeof window !== "undefined" && !!window.dayloopNative;
   return (
-    <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 16px",
+    <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,
+      padding:`0 16px 0 ${isElectron ? "88px" : "16px"}`,
       height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,
-      position:"sticky",top:0,zIndex:100}}>
+      position:"sticky",top:0,zIndex:100,
+      WebkitAppRegion:"drag",userSelect:"none"}}>
       <div style={{display:"flex",alignItems:"baseline",gap:7}}>
         <span style={{fontFamily:serif,fontSize:16,color:C.text,letterSpacing:"-0.01em"}}>{dateLabel}</span>
         {isToday && <span style={{fontFamily:mono,fontSize:12,color:C.accent,letterSpacing:"0.12em",
           textTransform:"uppercase",opacity:0.9}}>today</span>}
       </div>
       <div style={{flex:1}}/>
-      <div style={{display:"flex",alignItems:"center",gap:6}}>
+      <div style={{display:"flex",alignItems:"center",gap:6,WebkitAppRegion:"no-drag"}}>
         <div style={{width:6,height:6,borderRadius:"50%",
           background:syncStatus.syncing?C.yellow:C.green,
           boxShadow:syncStatus.syncing?`0 0 6px ${C.yellow}`:`0 0 6px ${C.green}`,
@@ -517,7 +520,9 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
           {syncStatus.syncing?"syncing":syncStatus.lastSync||"synced"}
         </span>
       </div>
-      <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange}/>
+      <div style={{WebkitAppRegion:"no-drag"}}>
+        <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange}/>
+      </div>
     </div>
   );
 }
