@@ -276,9 +276,9 @@ function SortableCard({id,children}) {
 }
 
 // ─── Widget card ─────────────────────────────────────────────────────────────
-function Widget({label,color,dragProps,children}) {
+function Widget({label,color,dragProps,children,slim}) {
   return (
-    <div style={{height:"100%",display:"flex",flexDirection:"column"}}>
+    <div style={slim ? {} : {height:"100%",display:"flex",flexDirection:"column"}}>
       <Card>
         <div style={{
           display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
@@ -290,7 +290,7 @@ function Widget({label,color,dragProps,children}) {
           <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
             textTransform:"uppercase",color:C.muted}}>{label}</span>
         </div>
-        <div style={{flex:1,overflow:"auto",padding:14,minHeight:0}}>{children}</div>
+        <div style={slim ? {padding:"12px 14px"} : {flex:1,overflow:"auto",padding:14,minHeight:0}}>{children}</div>
       </Card>
     </div>
   );
@@ -300,29 +300,22 @@ function Widget({label,color,dragProps,children}) {
 function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
-  const [stravaClientId,setStravaClientId]=useState("");
-  const [stravaClientSecret,setStravaClientSecret]=useState("");
+  const [ouraConnected,setOuraConnected]=useState(false);
   const [stravaConnected,setStravaConnected]=useState(false);
-  const [saved,setSaved]=useState(false);
   const [saving,setSaving]=useState(false);
+  const [saved,setSaved]=useState(false);
   const ref=useRef(null);
   const user=session?.user;
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
   const avatar=user?.user_metadata?.avatar_url;
 
-  const [loadErr,setLoadErr]=useState(false);
   useEffect(()=>{
     if(!token||!open)return;
-    setLoadErr(false);
     dbLoad("global","settings",token).then(d=>{
-      if(d===null){setLoadErr(true);return;}
-      if(d?.ouraToken)setOuraKey(d.ouraToken);
-      if(d?.stravaClientId)setStravaClientId(d.stravaClientId);
-      if(d?.stravaClientSecret)setStravaClientSecret(d.stravaClientSecret);
-      // Check if strava token exists
-      fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
-        .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
-    }).catch(()=>setLoadErr(true));
+      if(d?.ouraToken){setOuraKey(d.ouraToken);setOuraConnected(true);}
+    }).catch(()=>{});
+    fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
+      .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
   },[token,open]); // eslint-disable-line
   useEffect(()=>{
     if(!open)return;
@@ -331,21 +324,18 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     return ()=>document.removeEventListener("mousedown",fn);
   },[open]);
 
-  async function saveSettings(){
+  async function saveOura(){
+    if(!ouraKey.trim())return;
     setSaving(true);
     try {
-      const r = await fetch("/api/entries",{
+      await fetch("/api/entries",{
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey,stravaClientId,stravaClientSecret}}),
+        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey.trim()}}),
       });
-      const result = await r.json();
-      if(!r.ok) throw new Error(result.error||r.status);
-      setSaving(false);setSaved(true);setTimeout(()=>setSaved(false),2000);
-    } catch(e) {
-      setSaving(false);setSaved(false);
-      alert("Save failed: "+e.message);
-    }
+      setOuraConnected(true);setSaved(true);setTimeout(()=>setSaved(false),2000);
+    } catch(e){alert("Save failed: "+e.message);}
+    setSaving(false);
   }
 
   return (
@@ -358,65 +348,62 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           :<span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{initials}</span>}
       </button>
       {open&&(
-        <div style={{position:"absolute",top:40,right:0,width:272,zIndex:300,
+        <div style={{position:"absolute",top:40,right:0,width:280,zIndex:300,
           background:C.card,border:`1px solid ${C.border2}`,borderRadius:R,
-          padding:16,display:"flex",flexDirection:"column",gap:10,
+          padding:16,display:"flex",flexDirection:"column",gap:12,
           boxShadow:C.shadow}}>
           <div>
             <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
             <div style={{fontFamily:mono,fontSize:9,color:C.muted,marginTop:3}}>{user?.email}</div>
           </div>
           <div style={{height:1,background:C.border}}/>
-          {[
-            {label:"Oura API Key",value:ouraKey,set:setOuraKey,ph:"paste token here"},
-          ].map(({label,value,set,ph})=>(
-            <div key={label}>
-              <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:5}}>{label}</div>
-              <input type="password" value={value} onChange={e=>{set(e.target.value);setSaved(false);}} placeholder={ph}
-                style={{width:"100%",background:C.surface,border:`1px solid ${C.border2}`,borderRadius:6,outline:"none",
-                  color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px"}}/>
+
+          {/* Oura */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Oura Ring</span>
+              {ouraConnected&&<span style={{fontFamily:mono,fontSize:8,color:C.green,letterSpacing:"0.08em"}}>✓ connected</span>}
             </div>
-          ))}
-          <div style={{height:1,background:C.border}}/>
-          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</div>
-          {[
-            {label:"Strava Client ID",value:stravaClientId,set:setStravaClientId,ph:"12345",pw:false},
-            {label:"Strava Client Secret",value:stravaClientSecret,set:setStravaClientSecret,ph:"abc123…",pw:true},
-          ].map(({label,value,set,ph,pw})=>(
-            <div key={label}>
-              <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:5}}>{label}</div>
-              <input type={pw?"password":"text"} value={value} onChange={e=>{set(e.target.value);setSaved(false);}} placeholder={ph}
-                style={{width:"100%",background:C.surface,border:`1px solid ${C.border2}`,borderRadius:6,outline:"none",
-                  color:C.text,fontFamily:mono,fontSize:10,padding:"7px 10px"}}/>
+            <input
+              type="password" value={ouraKey}
+              onChange={e=>{setOuraKey(e.target.value);setOuraConnected(false);setSaved(false);}}
+              placeholder="Paste personal access token…"
+              style={{width:"100%",background:C.surface,border:`1px solid ${ouraConnected?C.green:C.border2}`,
+                borderRadius:6,outline:"none",color:C.text,fontFamily:mono,fontSize:10,
+                padding:"7px 10px",boxSizing:"border-box"}}/>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:6}}>
+              <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
+                style={{fontFamily:mono,fontSize:8,color:C.accent,letterSpacing:"0.06em",textDecoration:"none"}}>
+                Get your token →
+              </a>
+              <button onClick={saveOura} disabled={saving||!ouraKey.trim()} style={{
+                background:saved?C.green+"22":"none",border:`1px solid ${saved?C.green:C.border2}`,
+                borderRadius:5,color:saved?C.green:C.text,fontFamily:mono,fontSize:8,
+                letterSpacing:"0.1em",textTransform:"uppercase",padding:"4px 10px",cursor:"pointer"}}>
+                {saved?"saved ✓":saving?"saving…":"save"}
+              </button>
             </div>
-          ))}
-          <button
-            disabled={!stravaClientId||!stravaClientSecret||!saved}
-            onClick={()=>{
-              const redirect=encodeURIComponent(window.location.origin+"/strava-callback");
-              const scope="read,activity:read_all";
-              window.open(`https://www.strava.com/oauth/authorize?client_id=${stravaClientId}&redirect_uri=${redirect}&response_type=code&scope=${scope}&approval_prompt=auto`,"_blank","width=600,height=700");
-            }}
-            style={{
-              width:"100%",background:stravaConnected?C.green+"22":"transparent",
-              border:`1px solid ${stravaConnected?C.green:"#FC4C02"}`,
-              borderRadius:6,color:stravaConnected?C.green:"#FC4C02",
-              fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",
-              padding:"7px",cursor:(!stravaClientId||!stravaClientSecret||!saved)?"not-allowed":"pointer",
-              opacity:(!stravaClientId||!stravaClientSecret||!saved)?0.5:1,transition:"all 0.2s"}}>
-            {stravaConnected?"✓ strava connected":"connect strava"}
-          </button>
+          </div>
+
           <div style={{height:1,background:C.border}}/>
-          {loadErr&&<div style={{fontFamily:mono,fontSize:8,color:C.red,letterSpacing:"0.08em"}}>
-            couldn't load saved keys — check console
-          </div>}
-          <button onClick={saveSettings} disabled={saving} style={{
-            width:"100%",background:saved?C.green+"22":"none",border:`1px solid ${saved?C.green:C.border2}`,
-            borderRadius:6,color:saved?C.green:C.text,
-            fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",
-            padding:"7px",cursor:"pointer",transition:"all 0.2s"}}>
-            {saved?"saved ✓":saving?"saving…":"save settings"}
-          </button>
+
+          {/* Strava */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</span>
+              {stravaConnected&&<span style={{fontFamily:mono,fontSize:8,color:C.green,letterSpacing:"0.08em"}}>✓ connected</span>}
+            </div>
+            <button
+              onClick={()=>window.location.href="/api/strava-connect"}
+              style={{
+                width:"100%",background:stravaConnected?"transparent":"#FC4C0211",
+                border:`1px solid ${stravaConnected?C.green:"#FC4C02"}`,
+                borderRadius:6,color:stravaConnected?C.green:"#FC4C02",
+                fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",
+                padding:"8px",cursor:"pointer",transition:"all 0.2s"}}>
+              {stravaConnected?"✓ strava connected":"connect strava"}
+            </button>
+          </div>
           <div style={{height:1,background:C.border}}/>
           {/* Light / Dark toggle */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
@@ -1517,7 +1504,7 @@ function InsightsCard({date, token, userId, healthKey}) {
   const PLACEHOLDER = "Your sleep efficiency was strong and your HRV is trending upward this week.\n\nReadiness looks solid at 84 — your nervous system has recovered well from recent training load.\n\nThis time last year your sleep scores were lower; the consistency you've built since then is paying off.";
 
   return (
-    <Widget label="Insights" color={C.muted} dragProps={{}}>
+    <Widget label="Insights" color={C.muted} dragProps={{}} slim>
       <div style={{ position: "relative" }}>
         {busy && !isFree && (
           <div style={{ padding: "4px 0" }}>
@@ -1532,21 +1519,20 @@ function InsightsCard({date, token, userId, healthKey}) {
           <div style={{ fontFamily: mono, fontSize: 11, color: C.red, lineHeight: 1.5 }}>{error}</div>
         )}
         {isFree ? (
-          /* Free tier — single compact row with upgrade button */
-          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "2px 0" }}>
-            <div style={{
-              fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.5,
-              filter: "blur(4px)", userSelect: "none", pointerEvents: "none",
-              WebkitFilter: "blur(4px)", flex: 1, overflow: "hidden", whiteSpace: "nowrap",
-            }}>Your sleep efficiency is strong and HRV is trending upward this week.</div>
-            <button
-              onClick={() => window.location.href = "/upgrade"}
-              style={{
-                background: C.accent, border: "none", borderRadius: 6, flexShrink: 0,
-                color: "#fff", fontFamily: mono, fontSize: 8, letterSpacing: "0.1em",
-                textTransform: "uppercase", padding: "6px 12px", cursor: "pointer",
-                whiteSpace: "nowrap",
-              }}>✦ Upgrade</button>
+          /* Free tier — show real insight, nudge to upgrade for chat */
+          <div>
+            {text && <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line", marginBottom: 10 }}>{text}</div>}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 3, height: 3, borderRadius: "50%", background: C.accent, flexShrink: 0 }}/>
+              <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, letterSpacing: "0.06em" }}>
+                Chat with your data —
+              </span>
+              <button onClick={() => window.location.href = "/upgrade"} style={{
+                background: "none", border: "none", padding: 0, cursor: "pointer",
+                fontFamily: mono, fontSize: 9, color: C.accent, letterSpacing: "0.06em",
+                textDecoration: "underline", textUnderlineOffset: 3,
+              }}>upgrade to Premium</button>
+            </div>
           </div>
         ) : text ? (
           <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>

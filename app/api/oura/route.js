@@ -59,9 +59,9 @@ export async function GET(request) {
 
     // Sleep/readiness are recorded the next morning — find the record closest to our date
     const sleepRecords = sleepData.data ?? [];
-    const daily = sleepRecords.find(d => d.day === date) || sleepRecords[0];
+    const daily = sleepRecords.find(d => d.day === date) ?? null;
     const readinessRecords = readinessData.data ?? [];
-    const readiness = readinessRecords.find(d => d.day === date) || readinessRecords[0];
+    const readiness = readinessRecords.find(d => d.day === date) ?? null;
     const sessions   = sessionData.data ?? [];
     const mainSession = sessions
       .filter(s => s.type === "long_sleep")
@@ -81,7 +81,7 @@ export async function GET(request) {
       // Sleep stages in minutes
     }
 
-    const activity = (activityData.data ?? []).find(d => d.day === date) || activityData.data?.[0];
+    const activity = (activityData.data ?? []).find(d => d.day === date) ?? null;
     if (activity) {
       if (activity.score != null)           result.activityScore   = String(activity.score);
       // total_calories = full day burn (matches Oura "Total Burn")
@@ -99,7 +99,7 @@ export async function GET(request) {
 
     // Recovery score = recovery / (recovery + stress) × 100
     // Gives 100 when stress=0 and recovery>0, blank when no data yet
-    const stress = (stressData.data ?? []).find(d => d.day === date) || stressData.data?.[0];
+    const stress = (stressData.data ?? []).find(d => d.day === date) ?? null;
     if (stress) {
       const stressHigh = stress.stress_high ?? null;   // seconds
       const recoveryHigh = stress.recovery_high ?? null; // seconds

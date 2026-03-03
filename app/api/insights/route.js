@@ -45,20 +45,8 @@ export async function POST(request) {
 
     // ── Follow-up chat ──────────────────────────────────────────────────────
     if (messages?.length) {
-      if (!premium) {
-        // Track daily chat count for free users
-        const today = new Date().toISOString().split('T')[0];
-        const { data: chatRow } = await supabase.from('entries').select('data')
-          .eq('type', 'daily_chat').eq('date', today).eq('user_id', user.id).maybeSingle();
-        const count = chatRow?.data?.count || 0;
-        if (count >= 1) return Response.json({ tier: 'free', limit: true });
-
-        // Increment counter
-        await supabase.from('entries').upsert(
-          { date: today, type: 'daily_chat', data: { count: count + 1 }, user_id: user.id, updated_at: new Date().toISOString() },
-          { onConflict: 'date,type,user_id' }
-        );
-      }
+      // Chat is premium only
+      if (!premium) return Response.json({ tier: 'free', limit: true });
 
       // Build today's data context for chat so Claude doesn't ask for data it already has
       const { data: chatEntries } = await supabase.from('entries')
@@ -108,8 +96,7 @@ Rules: 1-3 sentences max. Be specific, reference actual numbers when available. 
       return Response.json({ insight: text });
     }
 
-    // ── Initial insight generation ──────────────────────────────────────────
-    if (!premium) return Response.json({ tier: 'free' });
+    // ── Initial insight generation — available to all users ──────────────────
 
     // Today's data (all entry types)
     const { data: todayEntries } = await supabase.from('entries')
