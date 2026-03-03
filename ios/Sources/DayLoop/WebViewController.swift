@@ -1,0 +1,206 @@
+import UIKit
+import WebKit
+
+private let appURL = URL(string: "https://dayloop.me")!
+
+class WebViewController: UIViewController {
+
+    // MARK: - Views
+
+    private lazy var webView: WKWebView = {
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+
+        // Share cookie/session storage with Safari so sign-in persists
+        config.websiteDataStore = .default()
+
+        let wv = WKWebView(frame: .zero, configuration: config)
+        wv.navigationDelegate = self
+        wv.uiDelegate = self
+        wv.scrollView.contentInsetAdjustmentBehavior = .never
+        wv.isOpaque = false
+        wv.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1) // matches C.bg
+        wv.scrollView.backgroundColor = wv.backgroundColor
+        wv.allowsBackForwardNavigationGestures = true
+
+        // Inject JS to tell the web app it's running in a native wrapper
+        let script = WKUserScript(
+            source: "window.dayloopNative = { platform: 'ios', version: '1.0.0' };",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: false
+        )
+        wv.configuration.userContentController.addUserScript(script)
+
+        return wv
+    }()
+
+    private lazy var refreshControl: UIRefreshControl = {
+        let rc = UIRefreshControl()
+        rc.tintColor = UIColor(white: 0.4, alpha: 1)
+        rc.addTarget(self, action: #selector(reload), for: .valueChanged)
+        return rc
+    }()
+
+    private lazy var offlineView: UIView = {
+        let v = UIView()
+        v.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
+        v.isHidden = true
+
+        let stack = UIStackView()
+        stack.axis = .vertical
+        stack.alignment = .center
+        stack.spacing = 12
+        stack.translatesAutoresizingMaskIntoConstraints = false
+
+        let icon = UILabel()
+        icon.text = "⚡"
+        icon.font = .systemFont(ofSize: 36)
+
+        let msg = UILabel()
+        msg.text = "No connection"
+        msg.font = UIFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        msg.textColor = UIColor(white: 0.4, alpha: 1)
+
+        let btn = UIButton(type: .system)
+        btn.setTitle("TRY AGAIN", for: .normal)
+        btn.titleLabel?.font = UIFont.monospacedSystemFont(ofSize: 11, weight: .regular)
+        btn.setTitleColor(UIColor(white: 0.5, alpha: 1), for: .normal)
+        btn.layer.borderColor = UIColor(white: 0.25, alpha: 1).cgColor
+        btn.layer.borderWidth = 1
+        btn.layer.cornerRadius = 6
+        btn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        btn.addTarget(self, action: #selector(reload), for: .touchUpInside)
+
+        [icon, msg, btn].forEach { stack.addArrangedSubview($0) }
+        v.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.centerXAnchor.constraint(equalTo: v.centerXAnchor),
+            stack.centerYAnchor.constraint(equalTo: v.centerYAnchor),
+        ])
+        return v
+    }()
+
+    // MARK: - Lifecycle
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
+        setupLayout()
+        loadApp()
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+
+    // MARK: - Layout
+
+    private func setupLayout() {
+        [webView, offlineView].forEach {
+            $0.translatesAutoresizingMaskIntoConstraints = false
+            view.addSubview($0)
+            NSLayoutConstraint.activate([
+                $0.topAnchor.constraint(equalTo: view.topAnchor),
+                $0.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+                $0.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+                $0.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            ])
+        }
+        webView.scrollView.addSubview(refreshControl)
+    }
+
+    // MARK: - Loading
+
+    private func loadApp() {
+        webView.load(URLRequest(url: appURL, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 15))
+    }
+
+    @objc private func reload() {
+        offlineView.isHidden = true
+        webView.isHidden = false
+        if webView.url == nil {
+            loadApp()
+        } else {
+            webView.reload()
+        }
+        refreshControl.endRefreshing()
+    }
+
+    // MARK: - Deep link (dayloop:// OAuth callback)
+
+    func handleDeepLink(_ url: URL) {
+        // Translate dayloop://auth/callback?code=... → https://dayloop.me/auth/callback?code=...
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.scheme = "https"
+        components?.host = "dayloop.me"
+        if let translated = components?.url {
+            webView.load(URLRequest(url: translated))
+        }
+    }
+}
+
+// MARK: - WKNavigationDelegate
+
+extension WebViewController: WKNavigationDelegate {
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        refreshControl.endRefreshing()
+        offlineView.isHidden = true
+    }
+
+    func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+        refreshControl.endRefreshing()
+        showOffline(error)
+    }
+
+    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+        refreshControl.endRefreshing()
+        showOffline(error)
+    }
+
+    // Open external links (Google OAuth, etc.) in Safari
+    func webView(
+        _ webView: WKWebView,
+        decidePolicyFor navigationAction: WKNavigationAction,
+        decisionHandler: @escaping (WKNavigationActionPolicy) -> Void
+    ) {
+        guard let url = navigationAction.request.url else { decisionHandler(.allow); return }
+
+        let host = url.host ?? ""
+        let isInternal = host.contains("dayloop.me") || host.contains("supabase.co")
+        let isOAuthReturn = url.scheme == "dayloop"
+
+        if isOAuthReturn {
+            handleDeepLink(url)
+            decisionHandler(.cancel)
+        } else if !isInternal && navigationAction.navigationType == .linkActivated {
+            UIApplication.shared.open(url)
+            decisionHandler(.cancel)
+        } else {
+            decisionHandler(.allow)
+        }
+    }
+
+    private func showOffline(_ error: Error) {
+        let nsError = error as NSError
+        // Ignore "Frame load interrupted" — happens on OAuth redirects, not a real error
+        if nsError.code == 102 { return }
+        webView.isHidden = true
+        offlineView.isHidden = false
+    }
+}
+
+// MARK: - WKUIDelegate (allow target=_blank links)
+
+extension WebViewController: WKUIDelegate {
+    func webView(
+        _ webView: WKWebView,
+        createWebViewWith configuration: WKWebViewConfiguration,
+        for navigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures
+    ) -> WKWebView? {
+        if let url = navigationAction.request.url {
+            UIApplication.shared.open(url)
+        }
+        return nil
+    }
+}

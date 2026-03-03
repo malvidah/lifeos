@@ -444,6 +444,34 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             </a>
           </div>
 
+          {/* iOS app */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>iPhone App</span>
+              <span style={{fontFamily:mono,fontSize:11,color:C.dim}}>TestFlight</span>
+            </div>
+            <a
+              href="https://testflight.apple.com/join/PLACEHOLDER"
+              style={{
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                width:"100%",padding:"8px",boxSizing:"border-box",
+                background:C.surface,border:`1px solid ${C.border2}`,
+                borderRadius:6,cursor:"pointer",textDecoration:"none",
+                color:C.text,fontFamily:mono,fontSize:12,
+                letterSpacing:"0.12em",textTransform:"uppercase",
+                transition:"border-color 0.15s",
+              }}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+              onMouseLeave={e=>e.currentTarget.style.borderColor=C.border2}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
+                <line x1="12" y1="18" x2="12" y2="18"/>
+              </svg>
+              Join TestFlight Beta
+            </a>
+          </div>
+
           <div style={{height:1,background:C.border}}/>
           <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
             style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer",
