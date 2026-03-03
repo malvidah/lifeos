@@ -22,7 +22,7 @@ const THEMES = {
     // Warm paper — Substack tones, topbar (surface) and cards in same cream family
     bg:"#CEC6BA",      surface:"#E5DED2",   card:"#E5DED2",
     border:"#DAD2C2",  border2:"#C8C0B0",
-    text:"#26201A",    muted:"#8C8074",     dim:"#C0B8AC",
+    text:"#3D2F20",    muted:"#8C8074",     dim:"#C0B8AC",
     // Orange-gold accent — same family as dark, adjusted for light bg contrast
     accent:"#C87818",
     green:"#3A7050",   blue:"#3A6898",
@@ -1454,7 +1454,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
     {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,
       fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}]},
     {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,
-      fields:[{label:"Burn",value:h.totalCalories||h.activeCalories,unit:"cal"},{label:"Active",value:h.activeMinutes,unit:"min"}]},
+      fields:[{label:"Burn",value:h.totalCalories||h.activeCalories,unit:"kcal"},{label:"Active",value:h.activeMinutes,unit:"min"}]},
     {key:"recovery",label:"Recovery",color:purple,score:h.resilienceScore,
       fields:[{label:"Stress",...fmtMinsField(h.stressMins)},{label:"Recov.",...fmtMinsField(h.recoveryMins)}]},
   ];
@@ -1485,7 +1485,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
                     <div key={f.label}>
-                      <div style={{fontFamily:sys,fontSize:F.sm,textTransform:"uppercase",color:C.muted,marginBottom:2,letterSpacing:"0.04em"}}>{f.label}</div>
+                      <div style={{fontFamily:sys,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
                       <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                         <span style={{fontFamily:serif,fontSize:F.md,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
                         {f.unit&&<span style={{fontFamily:sys,fontSize:F.sm,color:C.muted}}>{f.unit}</span>}
