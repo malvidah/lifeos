@@ -17,11 +17,10 @@ const THEMES = {
     yellow:"#D4A030",
     shadow:"0 1px 3px rgba(0,0,0,0.7),0 4px 20px rgba(0,0,0,0.4)",
     shadowSm:"0 1px 3px rgba(0,0,0,0.5)",
-    gradGlow:"0 0 18px rgba(232,144,58,0.55), 0 0 6px rgba(232,144,58,0.3)",
   },
   light: {
     // Warm paper — Substack tones, topbar (surface) and cards in same cream family
-    bg:"#EDE7DC",      surface:"#E5DED2",   card:"#F4F0E8",
+    bg:"#EDE7DC",      surface:"#E5DED2",   card:"#E5DED2",
     border:"#DAD2C2",  border2:"#C8C0B0",
     text:"#26201A",    muted:"#8C8074",     dim:"#C0B8AC",
     // Orange-gold accent — same family as dark, adjusted for light bg contrast
@@ -31,7 +30,6 @@ const THEMES = {
     yellow:"#907018",
     shadow:"0 1px 2px rgba(44,32,16,0.08),0 3px 10px rgba(44,32,16,0.05)",
     shadowSm:"0 1px 2px rgba(44,32,16,0.06)",
-    gradGlow:"0 0 12px rgba(200,120,24,0.25), 0 0 4px rgba(200,120,24,0.15)",
   },
 };
 // C is set at render time via setTheme — default dark
@@ -686,7 +684,6 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
         <span style={{
           fontFamily:serif,fontSize:17,letterSpacing:"-0.02em",
           color:C.accent,
-          textShadow:C.gradGlow,
         }}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
@@ -1927,7 +1924,7 @@ function LoginScreen() {
       <div style={{textAlign:"center"}}>
         <div style={{
           fontFamily:serif,fontSize:32,marginBottom:6,letterSpacing:"-0.02em",
-          color:C.accent,textShadow:C.gradGlow,
+          color:C.accent,
         }}>Day Loop</div>
         <div style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
