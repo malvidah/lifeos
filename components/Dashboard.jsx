@@ -8,7 +8,7 @@ const THEMES = {
     // 3 depth levels: bg (page) < surface/card (bars+cards) < well (inset inputs)
     // Direction: bg is medium-dark, surface is lighter, well is darkest
     bg:"#141412",      surface:"#232220",   card:"#232220",
-    well:"#0C0B0A",    border:"#2C2A28",    border2:"#383532",
+    well:"#1A1918",    border:"#2C2A28",    border2:"#383532",
     text:"#D8CEC2",    muted:"#6E6860",     dim:"#363230",
     accent:"#D08828",
     green:"#4A9A68",   blue:"#4878A8",
@@ -21,7 +21,7 @@ const THEMES = {
     // 3 depth levels: bg (page) < surface/card (bars+cards) < well (inset inputs)
     // Direction: bg slightly darker taupe, surface is the main cream, well is darkest
     bg:"#D4CCB8",      surface:"#EAE3D6",   card:"#EAE3D6",
-    well:"#C4BCAA",    border:"#D4CCBE",    border2:"#BEB6A8",
+    well:"#CBBFB0",    border:"#D4CCBE",    border2:"#BEB6A8",
     text:"#4A3C2E",    muted:"#887870",     dim:"#ACA49A",
     accent:"#B87018",
     green:"#38684A",   blue:"#386088",
@@ -1509,7 +1509,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
                     <div key={f.label}>
-                      <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
+                      <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.muted,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
                       <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                         <span style={{fontFamily:serif,fontSize:F.md,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
                         {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:C.muted}}>{f.unit}</span>}
