@@ -132,55 +132,91 @@ Rules: 1-3 sentences max. Be specific, reference actual numbers when available. 
     }
     const hasLastYear = Object.keys(lastYearData).some(d => Object.keys(lastYearData[d] || {}).length > 0);
 
-    // Build context
-    const parts = [`## Today (${date})`];
+    // Build context — dated per-day rows so the model can spot direction, not just averages
+    const DAY_NAMES_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const dateObj = new Date(date + 'T12:00:00');
+    const dayOfWeek = DAY_NAMES_FULL[dateObj.getDay()];
 
+    const parts = [`Date: ${dayOfWeek}, ${date}`];
+
+    // ── Today ──────────────────────────────────────────────────────────────
     if (today.health) {
       const h = today.health;
-      parts.push(`Health: Sleep ${h.sleepScore || '?'} (${h.sleepHrs || '?'}h, ${h.sleepEff || '?'}% eff), Readiness ${h.readinessScore || '?'} (HRV ${h.hrv || '?'}ms, RHR ${h.rhr || '?'}bpm), Activity ${h.activityScore || '?'} (${h.activeCalories || '?'} cal burned, ${h.activeMinutes || '?'} active min), Recovery ${h.resilienceScore || '?'} (stress ${h.stressMins || '?'}min, recovery ${h.recoveryMins || '?'}min)`);
+      const healthParts = [];
+      if (h.sleepScore)     healthParts.push(`sleep score ${h.sleepScore}${h.sleepHrs ? ` (${h.sleepHrs}h, ${h.sleepEff}% efficient)` : ''}`);
+      if (h.readinessScore) healthParts.push(`readiness ${h.readinessScore}`);
+      if (h.hrv)            healthParts.push(`HRV ${h.hrv}ms`);
+      if (h.rhr)            healthParts.push(`RHR ${h.rhr}bpm`);
+      if (h.activityScore)  healthParts.push(`activity score ${h.activityScore}${h.activeCalories ? ` (${h.activeCalories} cal, ${h.activeMinutes}min active)` : ''}`);
+      if (h.resilienceScore) healthParts.push(`recovery score ${h.resilienceScore} (${h.stressMins}min stress / ${h.recoveryMins}min recovery)`);
+      if (healthParts.length) parts.push(`Today's health: ${healthParts.join(', ')}`);
     }
     if (today.notes) {
       const n = typeof today.notes === 'string' ? today.notes : JSON.stringify(today.notes);
-      parts.push(`Notes: ${n.slice(0, 500)}`);
+      if (n.trim()) parts.push(`Today's notes: ${n.slice(0, 400)}`);
     }
-    if (today.meals && Array.isArray(today.meals)) {
-      const meals = today.meals.filter(r => r.text?.trim()).map(r => `${r.text}${r.protein ? ` (${r.protein}g protein, ${r.kcal} kcal)` : r.kcal ? ` (${r.kcal} kcal)` : ''}`);
-      if (meals.length) parts.push(`Meals: ${meals.join(', ')}`);
+    if (today.meals?.length) {
+      const meals = today.meals.filter(r => r.text?.trim()).map(r =>
+        `${r.text}${r.protein ? ` (${r.protein}g protein, ${r.kcal}kcal)` : r.kcal ? ` (${r.kcal}kcal)` : ''}`
+      );
+      if (meals.length) parts.push(`Today's meals: ${meals.join('; ')}`);
     }
-    if (today.tasks && Array.isArray(today.tasks)) {
-      const tasks = today.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
-      if (tasks.length) parts.push(`Tasks: ${tasks.join(', ')}`);
+    if (today.tasks?.length) {
+      const done = today.tasks.filter(r => r.done && r.text?.trim()).map(r => r.text);
+      const todo = today.tasks.filter(r => !r.done && r.text?.trim()).map(r => r.text);
+      if (done.length) parts.push(`Completed today: ${done.join(', ')}`);
+      if (todo.length) parts.push(`Still to do: ${todo.join(', ')}`);
     }
-    if (today.activity && Array.isArray(today.activity)) {
+    if (today.activity?.length) {
       const acts = today.activity.filter(r => r.text?.trim()).map(r => r.text);
-      if (acts.length) parts.push(`Activity: ${acts.join(', ')}`);
+      if (acts.length) parts.push(`Today's activity: ${acts.join(', ')}`);
     }
 
-    if (recentHealth.length) {
-      parts.push(`\n## Recent Trends (past 7 days)`);
-      const sleepScores = recentHealth.map(h => +h.sleepScore).filter(Boolean);
-      const readScores = recentHealth.map(h => +h.readinessScore).filter(Boolean);
-      const hrvs = recentHealth.map(h => +h.hrv).filter(Boolean);
-      if (sleepScores.length) parts.push(`Sleep scores: ${sleepScores.join(', ')} (avg ${Math.round(sleepScores.reduce((a, b) => a + b) / sleepScores.length)})`);
-      if (readScores.length) parts.push(`Readiness: ${readScores.join(', ')} (avg ${Math.round(readScores.reduce((a, b) => a + b) / readScores.length)})`);
-      if (hrvs.length) parts.push(`HRV: ${hrvs.join(', ')}ms (avg ${Math.round(hrvs.reduce((a, b) => a + b) / hrvs.length)}ms)`);
+    // ── Per-day history — each row dated so model can see direction ────────
+    if (recentHealth.length || recentActivity.length) {
+      parts.push('\nRecent days (most recent first):');
+      for (let i = 1; i <= 7; i++) {
+        const d = dateOffset(date, -i);
+        const h = recentHealth.find(r => r.date === d);
+        const a = recentActivity.find(r => r.date === d);
+        const dObj = new Date(d + 'T12:00:00');
+        const dName = DAY_NAMES_FULL[dObj.getDay()].slice(0,3);
+        const row = [];
+        if (h) {
+          if (h.sleepScore)     row.push(`sleep ${h.sleepScore}`);
+          if (h.readinessScore) row.push(`readiness ${h.readinessScore}`);
+          if (h.hrv)            row.push(`HRV ${h.hrv}ms`);
+          if (h.activityScore)  row.push(`activity ${h.activityScore}`);
+        }
+        if (a?.entries?.length) row.push(`workout: ${a.entries.join(', ')}`);
+        if (row.length) parts.push(`  ${dName} ${d}: ${row.join(', ')}`);
+      }
     }
-    if (recentActivity.length) {
-      parts.push(`Recent activity: ${recentActivity.map(a => `${a.date}: ${a.entries.join(', ')}`).join(' | ')}`);
-    }
+
+    // ── Same day last year ─────────────────────────────────────────────────
     if (hasLastYear) {
-      parts.push(`\n## This Time Last Year`);
+      const lyRows = [];
       for (const [d, data] of Object.entries(lastYearData)) {
         if (!data || Object.keys(data).length === 0) continue;
-        if (data.notes) parts.push(`[${d}] Notes: ${typeof data.notes === 'string' ? data.notes.slice(0, 200) : ''}`);
+        const row = [];
         if (data.health) {
           const h = data.health;
-          parts.push(`[${d}] Health: Sleep ${h.sleepScore || '?'}, Readiness ${h.readinessScore || '?'}, HRV ${h.hrv || '?'}ms`);
+          if (h.sleepScore)     row.push(`sleep ${h.sleepScore}`);
+          if (h.readinessScore) row.push(`readiness ${h.readinessScore}`);
+          if (h.hrv)            row.push(`HRV ${h.hrv}ms`);
         }
-        if (data.activity && Array.isArray(data.activity)) {
+        if (data.activity?.length) {
           const acts = data.activity.filter(r => r.text?.trim()).map(r => r.text);
-          if (acts.length) parts.push(`[${d}] Activity: ${acts.join(', ')}`);
+          if (acts.length) row.push(`workout: ${acts.join(', ')}`);
         }
+        if (data.notes && typeof data.notes === 'string' && data.notes.trim()) {
+          row.push(`notes: "${data.notes.slice(0, 150)}"`);
+        }
+        if (row.length) lyRows.push(`  ${d}: ${row.join(', ')}`);
+      }
+      if (lyRows.length) {
+        parts.push('\nThis time last year:');
+        parts.push(...lyRows);
       }
     }
 
@@ -206,15 +242,15 @@ Rules: 1-3 sentences max. Be specific, reference actual numbers when available. 
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 160,
-        system: `You are a direct, no-BS wellness coach. Your job is to tell the person the one or two things that actually matter today — not to summarize their data back at them.
+        system: `You are a direct, no-BS wellness coach giving a daily briefing. Your job is to say the one or two things that are genuinely specific to THIS day — not generic advice that could apply to any day.
 
 Rules:
-- Lead with what it means, not what the numbers are. "Your body is under-recovered" not "Your HRV is 86ms."
-- Tell them why it matters for TODAY specifically — what should they do differently, protect, or lean into?
-- Only mention a specific number if it makes the insight more concrete. Never list multiple metrics in a row.
-- If there's an interesting trend or "this time last year" angle, use it only if it adds genuine meaning.
-- 2-3 sentences max. Plain English. No jargon, no bullet points, no preamble.
-- Sound like a smart friend, not a fitness report.`,
+- Before writing anything, ask yourself: "Could this exact sentence apply to yesterday, or any other day?" If yes, rewrite it until it couldn't.
+- Look for direction and change: is something improving, declining, or breaking a pattern? That's the story.
+- If there's a "this time last year" data point, use it — but only if the comparison is actually interesting.
+- Lead with what it means for TODAY: what to protect, push, or adjust RIGHT NOW. One specific number is fine if it earns its place.
+- 2-3 sentences max. Plain English. Sound like a smart friend who actually looked at the data.
+- Never start with "Your" followed by a metric name. Never list metrics.`,
         messages: [{ role: 'user', content: context }],
       }),
     });
@@ -225,7 +261,7 @@ Rules:
 
     // Cache
     await supabase.from('entries').upsert(
-      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 2 }, user_id: user.id, updated_at: new Date().toISOString() },
+      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 3 }, user_id: user.id, updated_at: new Date().toISOString() },
       { onConflict: 'date,type,user_id' }
     );
 

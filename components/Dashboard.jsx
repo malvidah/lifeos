@@ -1436,7 +1436,7 @@ function InsightsCard({date, token, userId, healthKey}) {
     // If cached as a welcome message but we now have health data, regenerate
     if (cached?.isWelcome && healthKey) return true;
     // Stale prompt version — regenerate with new prompt
-    if (cached?.v !== 2) return true;
+    if (cached?.v !== 3) return true;
     return false;
   }
 
