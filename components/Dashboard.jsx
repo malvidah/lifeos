@@ -1507,13 +1507,13 @@ function InsightsCard({date, token, userId, healthKey}) {
     if (loaded.current) generate(true);
   }, [healthKey]); // eslint-disable-line
 
-  // Placeholder sentences to blur on free tier
-  const PLACEHOLDER = "Your sleep efficiency was high and HRV looks strong today.\n\nReadiness trend over the last week shows consistent recovery.";
+  // Placeholder text — enough lines to fill the card and hide real content
+  const PLACEHOLDER = "Your sleep efficiency was strong and your HRV is trending upward this week.\n\nReadiness looks solid at 84 — your nervous system has recovered well from recent training load.\n\nThis time last year your sleep scores were lower; the consistency you've built since then is paying off.";
 
   return (
     <Widget label="Insights" color={C.muted} dragProps={{}}>
       <div style={{ minHeight: 56, position: "relative" }}>
-        {busy && !text && !isFree && (
+        {busy && !isFree && (
           <div style={{ padding: "4px 0" }}>
             <Shimmer width="90%" height={11} />
             <div style={{ height: 7 }} />
@@ -1525,33 +1525,34 @@ function InsightsCard({date, token, userId, healthKey}) {
         {error && (
           <div style={{ fontFamily: mono, fontSize: 11, color: C.red, lineHeight: 1.5 }}>{error}</div>
         )}
-        {isFree && (
+        {isFree ? (
+          /* Free tier — blur the whole card, overlay upgrade CTA */
           <div style={{ position: "relative" }}>
             <div style={{
               fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line",
-              filter: "blur(4px)", userSelect: "none", pointerEvents: "none",
+              filter: "blur(5px)", userSelect: "none", pointerEvents: "none",
+              WebkitFilter: "blur(5px)",
             }}>{PLACEHOLDER}</div>
             <div style={{
               position: "absolute", inset: 0,
               display: "flex", alignItems: "center", justifyContent: "center",
             }}>
-              <button style={{
-                background: C.accent, border: "none", borderRadius: 8,
-                color: "#fff", fontFamily: mono, fontSize: 9, letterSpacing: "0.12em",
-                textTransform: "uppercase", padding: "8px 16px", cursor: "pointer",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.25)",
-              }}>✦ Upgrade for AI Insights</button>
+              <button
+                onClick={() => window.location.href = "/upgrade"}
+                style={{
+                  background: C.accent, border: "none", borderRadius: 8,
+                  color: "#fff", fontFamily: mono, fontSize: 9, letterSpacing: "0.12em",
+                  textTransform: "uppercase", padding: "8px 16px", cursor: "pointer",
+                  boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
+                }}>✦ Upgrade for AI Insights</button>
             </div>
           </div>
-        )}
-        {text && (
+        ) : text ? (
           <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
             {text}
+            {busy && <span style={{ marginTop: 8, display: "block" }}><Shimmer width="40%" height={10} /></span>}
           </div>
-        )}
-        {busy && text && (
-          <div style={{ marginTop: 8 }}><Shimmer width="40%" height={10} /></div>
-        )}
+        ) : null}
       </div>
     </Widget>
   );
