@@ -7,8 +7,8 @@ const THEMES = {
   dark: {
     // Neutral near-black — bg and topbar (surface) are same dark family
     // cards sit 1 step lighter so content areas are just barely visible
-    bg:"#060608",      surface:"#111113",   card:"#181819",
-    border:"#222224",  border2:"#2C2C30",
+    bg:"#0E0D14",      surface:"#16151F",   card:"#1E1C28",
+    border:"#26243A",  border2:"#302E44",
     text:"#E4DDD4",    muted:"#686460",     dim:"#2C2A28",
     // Orange-gold accent — warm, glowing
     accent:"#E8903A",
@@ -20,7 +20,7 @@ const THEMES = {
   },
   light: {
     // Warm paper — Substack tones, topbar (surface) and cards in same cream family
-    bg:"#CEC6BA",      surface:"#E5DED2",   card:"#E5DED2",
+    bg:"#C4BAB0",      surface:"#E5DED2",   card:"#EDE8E0",
     border:"#DAD2C2",  border2:"#C8C0B0",
     text:"#3D2F20",    muted:"#8C8074",     dim:"#C0B8AC",
     // Orange-gold accent — same family as dark, adjusted for light bg contrast
@@ -1047,7 +1047,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   }}>{DAY_NAMES[d.getDay()]}</div>
                   <div style={{
                     fontFamily:serif,
-                    fontSize: isCtr ? F.lg*1.4 : F.md,
+                    fontSize: isCtr ? F.md : F.sm,
                     fontWeight: isCtr ? "600" : "normal",
                     lineHeight:1,
                     color: isTdy ? C.accent : isCtr ? C.text : C.muted,
@@ -2255,9 +2255,9 @@ function ChatFloat({date, token, userId}) {
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
         width: "100%", maxWidth: 560,
-        background: C.card,
+        background: C.bg,
         borderRadius: 10,
-        border: `1px solid ${C.border2}`,
+        border: "none",
         padding: "8px 8px 8px 14px",
       }}>
         <input
@@ -2490,7 +2490,7 @@ export default function Dashboard() {
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        html,body{height:100%;overflow:hidden;background:${C.bg};}
+        html,body{height:100%;overflow:hidden;background:${C.bg} !important;}
         ::-webkit-scrollbar{display:none;}
         *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
