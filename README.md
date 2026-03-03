@@ -1,4 +1,4 @@
-# Life OS
+# Day Loop
 
 Personal dashboard — calendar, health, meals, tasks, notes.
 
