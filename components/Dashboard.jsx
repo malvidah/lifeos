@@ -733,59 +733,35 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         display:"flex", alignItems:"center",
         padding:"10px 16px 8px",
         borderBottom:`1px solid ${C.border}`,
-        flexShrink:0, gap:8,
+        flexShrink:0, position:'relative',
       }}>
-        {/* CALENDAR label */}
-        <div style={{width:3,height:14,borderRadius:2,background:C.blue,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",textTransform:"uppercase",color:C.muted}}>Calendar</span>
-        <div style={{flex:1}}/>
-        {/* Month nav — centered in available space */}
-        <div style={{display:"flex",alignItems:"center",gap:4}}>
-          {/* Double back — same day last year */}
-          <NavBtn onClick={()=>{
-            const d=new Date(selDate);
-            d.setFullYear(d.getFullYear()-1);
-            onSelect(toKey(d));
-          }} title="Back 1 year">«</NavBtn>
-          {/* Single back — same day last month */}
-          <NavBtn onClick={()=>{
-            const d=new Date(selDate);
-            const day=d.getDate();
-            d.setDate(1); d.setMonth(d.getMonth()-1);
-            const maxDay=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
-            d.setDate(Math.min(day,maxDay));
-            onSelect(toKey(d));
-          }} title="Back 1 month">‹</NavBtn>
-          <span style={{fontFamily:serif,fontSize:15,letterSpacing:"-0.01em",color:C.text,minWidth:110,textAlign:"center"}}>
-            {selMonth} {selYear}
-          </span>
-          {/* Single forward */}
-          <NavBtn onClick={()=>{
-            const d=new Date(selDate);
-            const day=d.getDate();
-            d.setDate(1); d.setMonth(d.getMonth()+1);
-            const maxDay=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
-            d.setDate(Math.min(day,maxDay));
-            onSelect(toKey(d));
-          }} title="Forward 1 month">›</NavBtn>
-          {/* Double forward — same day next year */}
-          <NavBtn onClick={()=>{
-            const d=new Date(selDate);
-            d.setFullYear(d.getFullYear()+1);
-            onSelect(toKey(d));
-          }} title="Forward 1 year">»</NavBtn>
+        {/* CALENDAR label — left */}
+        <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+          <div style={{width:3,height:14,borderRadius:2,background:C.blue,flexShrink:0}}/>
+          <span style={{fontFamily:mono,fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
         </div>
-        <NavBtn onClick={()=>onSelect(todayKey())} title="Go to today">
-          <span style={{fontFamily:mono,fontSize:11,letterSpacing:'0.1em',
-            border:`1px solid ${C.border2}`,borderRadius:5,padding:'4px 9px',
-            color:C.muted,display:'inline-block',transition:'all 0.15s'}}
-            onMouseEnter={e=>{e.style.color=C.text;e.style.borderColor=C.text;}}
-            onMouseLeave={e=>{e.style.color=C.muted;e.style.borderColor=C.border2;}}>
-            TODAY
-          </span>
-        </NavBtn>
-      </div>
 
+        {/* Month nav — absolutely centered */}
+        <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
+          display:'flex',alignItems:'center',gap:2}}>
+          <NavBtn onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()-1);onSelect(toKey(d));}} title="Back 1 year">«</NavBtn>
+          <NavBtn onClick={()=>{const d=new Date(selDate);const day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()-1);const max=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,max));onSelect(toKey(d));}} title="Back 1 month">‹</NavBtn>
+          <span style={{fontFamily:serif,fontSize:14,letterSpacing:'-0.01em',color:C.text,
+            minWidth:108,textAlign:'center',userSelect:'none'}}>{selMonth} {selYear}</span>
+          <NavBtn onClick={()=>{const d=new Date(selDate);const day=d.getDate();d.setDate(1);d.setMonth(d.getMonth()+1);const max=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(day,max));onSelect(toKey(d));}} title="Forward 1 month">›</NavBtn>
+          <NavBtn onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()+1);onSelect(toKey(d));}} title="Forward 1 year">»</NavBtn>
+        </div>
+
+        {/* TODAY — right */}
+        <button onClick={()=>onSelect(todayKey())} style={{
+          marginLeft:'auto',flexShrink:0,
+          background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
+          color:C.muted,fontFamily:mono,fontSize:11,letterSpacing:'0.1em',
+          textTransform:'uppercase',padding:'4px 9px',transition:'all 0.15s'}}
+          onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
+          TODAY
+        </button>
       {/* ── Day columns with events ──────────────────────────────────────── */}
       <div style={{
         overflow:"hidden", position:"relative",
@@ -917,17 +893,17 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
   const mobile = useIsMobile();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const [active,   setActive]  = useState(null);  // null = closed, {} = new, ev = existing
+  const [active,   setActive]  = useState(null);
   const [form,     setForm]    = useState({title:'',startTime:'',endTime:'',allDay:false});
   const [saving,   setSaving]  = useState(false);
   const [deleting, setDeleting]= useState(false);
   const [saveErr,  setSaveErr] = useState('');
   const [dirty,    setDirty]   = useState(false);
 
-  const isNew = active && !active.id;
+  const isNew = active !== null && !active.id;
   const color = active?.color || C.accent;
 
-  const toHHMM = (t) => {
+  const toHHMM = t => {
     if (!t || t === 'all day') return '';
     try { return new Date('2000-01-01 ' + t).toTimeString().slice(0,5); } catch { return ''; }
   };
@@ -951,7 +927,6 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
   }
 
   function closePanel() { setActive(null); setSaveErr(''); setDirty(false); }
-
   function updateForm(patch) { setForm(f => ({...f,...patch})); setDirty(true); }
 
   async function save() {
@@ -961,29 +936,29 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
       if (isNew) {
         const res = await fetch('/api/calendar-create', {
           method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-          body: JSON.stringify({title:form.title.trim(), date:selected,
-            startTime:form.allDay?'':form.startTime, endTime:form.allDay?'':form.endTime,
-            allDay:form.allDay, tz}),
+          body: JSON.stringify({title:form.title.trim(),date:selected,
+            startTime:form.allDay?'':form.startTime,endTime:form.allDay?'':form.endTime,
+            allDay:form.allDay,tz}),
         });
         const data = await res.json();
         if (!res.ok||data.error){ setSaveErr(data.error||'Failed'); setSaving(false); return; }
-        const newEv = {id:data.eventId, title:form.title.trim(),
-          time: form.allDay?'all day':(form.startTime||'all day'),
-          endTime: form.allDay?null:form.endTime, allDay:form.allDay, color:'#B8A882'};
-        setEvents(prev=>({...prev,[selected]:[...(prev[selected]||[]),newEv]}));
+        setEvents(prev=>({...prev,[selected]:[...(prev[selected]||[]),
+          {id:data.eventId,title:form.title.trim(),
+           time:form.allDay?'all day':(form.startTime||'all day'),
+           endTime:form.allDay?null:form.endTime,allDay:form.allDay,color:'#B8A882'}]}));
         closePanel();
       } else {
         const res = await fetch('/api/calendar-update', {
           method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-          body: JSON.stringify({eventId:active.id, title:form.title.trim(), date:selected,
-            startTime:form.allDay?'':form.startTime, endTime:form.allDay?'':form.endTime,
-            allDay:form.allDay, tz}),
+          body: JSON.stringify({eventId:active.id,title:form.title.trim(),date:selected,
+            startTime:form.allDay?'':form.startTime,endTime:form.allDay?'':form.endTime,
+            allDay:form.allDay,tz}),
         });
         const data = await res.json();
         if (!res.ok||data.error){ setSaveErr(data.error||'Failed'); setSaving(false); return; }
-        const updated = {...active, title:form.title.trim(),
-          time: form.allDay?'all day':(form.startTime||'all day'),
-          endTime: form.allDay?null:form.endTime, allDay:form.allDay};
+        const updated = {...active,title:form.title.trim(),
+          time:form.allDay?'all day':(form.startTime||'all day'),
+          endTime:form.allDay?null:form.endTime,allDay:form.allDay};
         setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).map(e=>e.id===active.id?updated:e)}));
         setActive(updated); setDirty(false);
       }
@@ -992,7 +967,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
   }
 
   async function deleteEvent() {
-    if (!active?.id || deleting) return;
+    if (!active?.id||deleting) return;
     setDeleting(true);
     try {
       const res = await fetch('/api/calendar-delete', {
@@ -1009,144 +984,138 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
   const prevSelected = useRef(selected);
   useEffect(()=>{
     if(prevSelected.current!==selected){ prevSelected.current=selected; closePanel(); }
-  },[selected]);
+  },[selected]); // eslint-disable-line
 
-  // Shared input style — looks static, reveals focus state
-  const inputStyle = (size=17) => ({
+  const inputBase = {
     background:'transparent', border:'none', outline:'none',
-    fontFamily: size > 13 ? serif : mono,
-    fontSize:size, color:C.text,
-    padding:0, margin:0, width:'100%',
-    borderBottom:'1px solid transparent',
-    transition:'border-color 0.15s',
-  });
-  const timeInputStyle = {
-    background:'transparent', border:'none', outline:'none',
-    fontFamily:mono, fontSize:12, color:C.muted,
-    padding:0, cursor:'text',
-    borderBottom:'1px solid transparent',
-    transition:'border-color 0.15s',
+    padding:0, margin:0, color:C.text,
   };
-
-  // Small action button style (ALL DAY, trash, ×)
-  const actionBtn = (active=false, danger=false) => ({
-    background:'none',
-    border:`1px solid ${active ? C.text : C.border2}`,
-    borderRadius:5, cursor:'pointer',
-    color: danger ? '#A05050' : active ? C.text : C.muted,
-    fontFamily:mono, fontSize:11,
-    letterSpacing:'0.1em', textTransform:'uppercase',
-    padding:'5px 10px', transition:'all 0.15s',
-  });
 
   return (
     <Card>
       <MobileCalPicker
-        selected={selected}
-        onSelect={s=>{onSelect(s);}}
-        events={events}
-        healthDots={healthDots}
-        desktop={!mobile}
-        onEventClick={openEvent}
-        onAddClick={openAdd}
+        selected={selected} onSelect={onSelect}
+        events={events} healthDots={healthDots} desktop={!mobile}
+        onEventClick={openEvent} onAddClick={openAdd}
       />
 
       {/* ── Event panel ── */}
       {active !== null && (
-        <div style={{borderTop:`1px solid ${C.border}`, padding:'14px 16px'}}>
-          {/* Color bar + title + times */}
-          <div style={{display:'flex', gap:10, alignItems:'flex-start', marginBottom:12}}>
-            <div style={{width:3, borderRadius:2, background:color, flexShrink:0, alignSelf:'stretch', minHeight:36}}/>
-            <div style={{flex:1, minWidth:0}}>
+        <div style={{borderTop:`1px solid ${C.border}`,padding:'12px 16px'}}>
+
+          {/* Main row: color bar | info | delete | × */}
+          <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
+
+            {/* Color bar */}
+            <div style={{width:3,borderRadius:2,background:color,
+              flexShrink:0,alignSelf:'stretch',minHeight:34,marginTop:2}}/>
+
+            {/* Info: title + time row */}
+            <div style={{flex:1,minWidth:0}}>
               {/* Title */}
               <input
                 autoFocus
                 value={form.title}
                 onChange={e=>updateForm({title:e.target.value})}
-                onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape')closePanel(); }}
-                onBlur={()=>{ if(!isNew && dirty && form.title.trim()) save(); }}
-                onFocus={e=>e.target.style.borderBottomColor=C.border2}
+                onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();save();}if(e.key==='Escape')closePanel();}}
+                onBlur={()=>{if(!isNew&&dirty&&form.title.trim())save();}}
                 placeholder='Event title'
-                style={{...inputStyle(17), display:'block', marginBottom:6,
-                  '&::placeholder':{color:C.muted}}}
+                style={{...inputBase,fontFamily:serif,fontSize:16,width:'100%',
+                  display:'block',marginBottom:5}}
               />
-              {/* Times */}
-              {!form.allDay ? (
-                <div style={{display:'flex', alignItems:'center', gap:6}}>
+
+              {/* Time row: times + All Day inline */}
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                {/* Time inputs — hidden when allDay */}
+                <div style={{
+                  display:'flex',alignItems:'center',gap:5,
+                  maxWidth:form.allDay?0:200,
+                  overflow:'hidden',
+                  opacity:form.allDay?0:1,
+                  transition:'max-width 0.25s ease, opacity 0.2s ease',
+                }}>
                   <input type='time' value={form.startTime}
                     onChange={e=>updateForm({startTime:e.target.value})}
-                    onBlur={()=>{ if(!isNew && dirty) save(); }}
-                    onFocus={e=>e.target.style.borderBottomColor=C.border2}
-                    style={timeInputStyle}
+                    onBlur={()=>{if(!isNew&&dirty)save();}}
+                    style={{...inputBase,fontFamily:mono,fontSize:12,color:C.muted,
+                      width:70,cursor:'text'}}
                   />
-                  <span style={{fontFamily:mono,fontSize:11,color:C.muted,opacity:0.5}}>–</span>
+                  <span style={{fontFamily:mono,fontSize:11,color:C.muted,opacity:0.4}}>–</span>
                   <input type='time' value={form.endTime}
                     onChange={e=>updateForm({endTime:e.target.value})}
-                    onBlur={()=>{ if(!isNew && dirty) save(); }}
-                    onFocus={e=>e.target.style.borderBottomColor=C.border2}
-                    style={timeInputStyle}
+                    onBlur={()=>{if(!isNew&&dirty)save();}}
+                    style={{...inputBase,fontFamily:mono,fontSize:12,color:C.muted,
+                      width:70,cursor:'text'}}
                   />
-                  {saving && <span style={{fontFamily:mono,fontSize:10,color:C.muted,opacity:0.5,marginLeft:4}}>saving…</span>}
                 </div>
-              ) : (
-                <span style={{fontFamily:mono,fontSize:12,color:C.muted}}>All day</span>
+
+                {/* All Day toggle */}
+                <button onClick={()=>updateForm({allDay:!form.allDay})} style={{
+                  background:'none',border:'none',cursor:'pointer',padding:0,
+                  fontFamily:mono,fontSize:11,letterSpacing:'0.08em',textTransform:'uppercase',
+                  color:form.allDay?C.accent:C.muted,
+                  transition:'color 0.2s',
+                }}
+                onMouseEnter={e=>{if(!form.allDay)e.currentTarget.style.color=C.text;}}
+                onMouseLeave={e=>{if(!form.allDay)e.currentTarget.style.color=C.muted;}}>
+                  all day
+                </button>
+
+                {saving && <span style={{fontFamily:mono,fontSize:10,color:C.muted,opacity:0.5}}>saving…</span>}
+              </div>
+
+              {/* Save button for new events */}
+              {isNew && form.title.trim() && (
+                <button onClick={save} disabled={saving} style={{
+                  marginTop:8,background:C.blue,border:'none',borderRadius:5,
+                  padding:'5px 14px',color:'#fff',fontFamily:mono,fontSize:11,
+                  letterSpacing:'0.1em',textTransform:'uppercase',
+                  cursor:saving?'not-allowed':'pointer',opacity:saving?0.5:1,
+                  transition:'opacity 0.15s',
+                }}>
+                  {saving?'saving…':'save'}
+                </button>
               )}
+
               {active.zoomUrl && (
                 <a href={active.zoomUrl} target='_blank' rel='noopener noreferrer'
                   style={{display:'inline-block',marginTop:6,fontFamily:mono,fontSize:11,
                     letterSpacing:'0.1em',textTransform:'uppercase',color:C.blue,textDecoration:'none'}}>
-                  Join meeting ↗
+                  Join ↗
                 </a>
               )}
             </div>
+
+            {/* Right side: delete (existing only) + × close */}
+            <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:8,flexShrink:0}}>
+              {/* × close — no border */}
+              <button onClick={closePanel} style={{
+                background:'none',border:'none',cursor:'pointer',
+                color:C.muted,fontSize:16,lineHeight:1,padding:'0 2px',
+                transition:'color 0.1s',
+              }}
+              onMouseEnter={e=>e.currentTarget.style.color=C.text}
+              onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+                ×
+              </button>
+
+              {/* Trash — existing events only */}
+              {!isNew && active.id && (
+                <button onClick={deleteEvent} disabled={deleting} style={{
+                  background:'none',border:'none',cursor:'pointer',
+                  color:deleting?C.muted:'#A05050',fontSize:13,lineHeight:1,padding:'0 2px',
+                  opacity:deleting?0.4:1,transition:'color 0.1s, opacity 0.1s',
+                }}
+                onMouseEnter={e=>{if(!deleting)e.currentTarget.style.opacity='0.7';}}
+                onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
+                  🗑
+                </button>
+              )}
+            </div>
+
           </div>
 
-          {saveErr && <div style={{fontFamily:mono,fontSize:11,color:'#A05050',marginBottom:8}}>{saveErr}</div>}
-
-          {/* Action buttons: ALL DAY | trash | cancel */}
-          <div style={{display:'flex', gap:8, alignItems:'center'}}>
-            {/* ALL DAY toggle */}
-            <button
-              onClick={()=>updateForm({allDay:!form.allDay})}
-              style={actionBtn(form.allDay)}
-              onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-              onMouseLeave={e=>{e.currentTarget.style.color=form.allDay?C.text:C.muted;e.currentTarget.style.borderColor=form.allDay?C.text:C.border2;}}>
-              All day
-            </button>
-
-            {/* Save button — only for new events (edits auto-save on blur) */}
-            {isNew && (
-              <button onClick={save} disabled={saving||!form.title.trim()} style={{
-                ...actionBtn(false),
-                background: form.title.trim() ? C.blue : 'none',
-                color: form.title.trim() ? '#fff' : C.muted,
-                border: form.title.trim() ? 'none' : `1px solid ${C.border2}`,
-                opacity: saving ? 0.5 : 1,
-                cursor: saving||!form.title.trim() ? 'not-allowed':'pointer',
-              }}>
-                {saving ? 'saving…' : 'save'}
-              </button>
-            )}
-
-            <div style={{flex:1}}/>
-
-            {/* Trash — only for existing events */}
-            {!isNew && active.id && (
-              <button onClick={deleteEvent} disabled={deleting}
-                style={actionBtn(false, true)}
-                onMouseEnter={e=>{e.currentTarget.style.background='#A0505015';e.currentTarget.style.borderColor='#A05050';}}
-                onMouseLeave={e=>{e.currentTarget.style.background='none';e.currentTarget.style.borderColor=C.border2;}}>
-                {deleting ? '…' : '🗑'}
-              </button>
-            )}
-
-            {/* Cancel */}
-            <button onClick={closePanel} style={actionBtn()}
-              onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-              onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
-              ×
-            </button>
-          </div>
+          {saveErr && <div style={{fontFamily:mono,fontSize:11,color:'#A05050',marginTop:8}}>{saveErr}</div>}
         </div>
       )}
     </Card>
