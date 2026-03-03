@@ -300,7 +300,6 @@ function Widget({label,color,dragProps,children}) {
 function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
-  const [anthropicKey,setAnthropicKey]=useState("");
   const [stravaClientId,setStravaClientId]=useState("");
   const [stravaClientSecret,setStravaClientSecret]=useState("");
   const [stravaConnected,setStravaConnected]=useState(false);
@@ -318,7 +317,6 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     dbLoad("global","settings",token).then(d=>{
       if(d===null){setLoadErr(true);return;}
       if(d?.ouraToken)setOuraKey(d.ouraToken);
-      if(d?.anthropicKey)setAnthropicKey(d.anthropicKey);
       if(d?.stravaClientId)setStravaClientId(d.stravaClientId);
       if(d?.stravaClientSecret)setStravaClientSecret(d.stravaClientSecret);
       // Check if strava token exists
@@ -339,7 +337,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
       const r = await fetch("/api/entries",{
         method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey,anthropicKey,stravaClientId,stravaClientSecret}}),
+        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey,stravaClientId,stravaClientSecret}}),
       });
       const result = await r.json();
       if(!r.ok) throw new Error(result.error||r.status);
@@ -371,7 +369,6 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           <div style={{height:1,background:C.border}}/>
           {[
             {label:"Oura API Key",value:ouraKey,set:setOuraKey,ph:"paste token here"},
-            {label:"Anthropic API Key",value:anthropicKey,set:setAnthropicKey,ph:"sk-ant-…"},
           ].map(({label,value,set,ph})=>(
             <div key={label}>
               <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,marginBottom:5}}>{label}</div>
@@ -1458,22 +1455,21 @@ function LoginScreen() {
 }
 
 // ─── InsightsCard ─────────────────────────────────────────────────────────────
-// Auto-generates AI insight based on sleep/readiness data.
-// Re-generates when health data changes (Oura sync). No manual refresh button.
 function InsightsCard({date, token, userId, healthKey}) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [isFree, setIsFree] = useState(false);
   const prevDate = useRef(date);
   const prevHealthKey = useRef(healthKey);
   const loaded = useRef(false);
 
-  const BAD_VALUES = ["No data available", "No insights generated", "Anthropic API error"];
+  const BAD_VALUES = ["No data available", "No insights generated", "AI error"];
   function isBadCache(t) { return !t || BAD_VALUES.some(b => t.includes(b)); }
 
   async function generate(force = false) {
     if (!token || !userId) return;
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setIsFree(false);
     try {
       if (!force) {
         const cached = await dbLoad(date, "insights", token);
@@ -1488,16 +1484,16 @@ function InsightsCard({date, token, userId, healthKey}) {
         body: JSON.stringify({ date }),
       });
       const data = await res.json();
-      if (data.insight) setText(data.insight);
+      if (data.tier === "free") { setIsFree(true); }
+      else if (data.insight) setText(data.insight);
       else if (data.error) setError(data.error);
     } catch (e) { setError(e.message); }
     setBusy(false);
   }
 
-  // Load on date change
   useEffect(() => {
     if (prevDate.current !== date) {
-      setText(""); setError(""); loaded.current = false;
+      setText(""); setError(""); setIsFree(false); loaded.current = false;
       prevDate.current = date;
     }
     if (loaded.current) return;
@@ -1505,17 +1501,19 @@ function InsightsCard({date, token, userId, healthKey}) {
     generate();
   }, [date, token, userId]); // eslint-disable-line
 
-  // Re-generate when health data changes for this date (Oura sync came in)
   useEffect(() => {
     if (!healthKey || prevHealthKey.current === healthKey) return;
     prevHealthKey.current = healthKey;
-    if (loaded.current) generate(true); // force-refresh since health data updated
+    if (loaded.current) generate(true);
   }, [healthKey]); // eslint-disable-line
+
+  // Placeholder sentences to blur on free tier
+  const PLACEHOLDER = "Your sleep efficiency was high and HRV looks strong today.\n\nReadiness trend over the last week shows consistent recovery.";
 
   return (
     <Widget label="Insights" color={C.muted} dragProps={{}}>
-      <div style={{ minHeight: 56 }}>
-        {busy && !text && (
+      <div style={{ minHeight: 56, position: "relative" }}>
+        {busy && !text && !isFree && (
           <div style={{ padding: "4px 0" }}>
             <Shimmer width="90%" height={11} />
             <div style={{ height: 7 }} />
@@ -1526,6 +1524,25 @@ function InsightsCard({date, token, userId, healthKey}) {
         )}
         {error && (
           <div style={{ fontFamily: mono, fontSize: 11, color: C.red, lineHeight: 1.5 }}>{error}</div>
+        )}
+        {isFree && (
+          <div style={{ position: "relative" }}>
+            <div style={{
+              fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line",
+              filter: "blur(4px)", userSelect: "none", pointerEvents: "none",
+            }}>{PLACEHOLDER}</div>
+            <div style={{
+              position: "absolute", inset: 0,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>
+              <button style={{
+                background: C.accent, border: "none", borderRadius: 8,
+                color: "#fff", fontFamily: mono, fontSize: 9, letterSpacing: "0.12em",
+                textTransform: "uppercase", padding: "8px 16px", cursor: "pointer",
+                boxShadow: "0 2px 12px rgba(0,0,0,0.25)",
+              }}>✦ Upgrade for AI Insights</button>
+            </div>
+          </div>
         )}
         {text && (
           <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
@@ -1620,8 +1637,13 @@ function ChatFloat({date, token, userId}) {
           body: JSON.stringify({ date, messages: convHistory }),
         });
         const insightData = await insightRes.json();
-        if (insightData.insight) setMessages(prev => [...prev, { role: "assistant", content: insightData.insight }]);
-        else if (insightData.error) setMessages(prev => [...prev, { role: "assistant", content: insightData.error, type: "error" }]);
+        if (insightData.tier === "free" && insightData.limit) {
+          setMessages(prev => [...prev, { role: "assistant", content: "You've used your free chat for today. Upgrade to Day Loop Premium for unlimited conversations.", type: "upgrade" }]);
+        } else if (insightData.insight) {
+          setMessages(prev => [...prev, { role: "assistant", content: insightData.insight }]);
+        } else if (insightData.error) {
+          setMessages(prev => [...prev, { role: "assistant", content: insightData.error, type: "error" }]);
+        }
       }
     } catch (e) {
       setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong: " + e.message, type: "error" }]);
@@ -1693,7 +1715,7 @@ function ChatFloat({date, token, userId}) {
                     fontFamily: m.role === "user" ? mono : serif,
                     fontSize: m.role === "user" ? 12 : 13,
                     lineHeight: 1.65,
-                    color: m.type === "error" ? C.red : m.role === "user" ? C.muted : C.text,
+                    color: m.type === "error" ? C.red : m.type === "upgrade" ? C.accent : m.role === "user" ? C.muted : C.text,
                     whiteSpace: "pre-line",
                   }}>{m.content}</div>
                 </div>
@@ -1760,11 +1782,11 @@ function ChatFloat({date, token, userId}) {
             </button>
           )}
 
-          {/* Send or Voice */}
+          {/* Send or Voice/Mic */}
           {input.trim() ? (
             <button onClick={send} disabled={busy} style={{
               background: C.accent, border: "none", borderRadius: "50%",
-              width: 36, height: 36, cursor: busy ? "default" : "pointer",
+              width: 34, height: 34, cursor: busy ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
             }}>
@@ -1774,22 +1796,29 @@ function ChatFloat({date, token, userId}) {
               </svg>
             </button>
           ) : hasMic ? (
-            <button onClick={toggleMic} style={{
-              background: listening ? C.red : `${C.text}10`,
-              border: "none", borderRadius: 20, height: 36, padding: "0 14px",
-              cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-              flexShrink: 0, transition: "all 0.2s",
+            <button onClick={toggleMic} title={listening ? "Stop recording" : "Voice input"} style={{
+              background: `${C.text}12`,
+              border: "none", borderRadius: "50%",
+              width: 34, height: 34,
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0, position: "relative", transition: "background 0.2s",
             }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={listening ? "#fff" : C.muted} strokeWidth="2" strokeLinecap="round">
-                <line x1="4" y1="8" x2="4" y2="16"/>
-                <line x1="8" y1="5" x2="8" y2="19"/>
-                <line x1="12" y1="3" x2="12" y2="21"/>
-                <line x1="16" y1="5" x2="16" y2="19"/>
-                <line x1="20" y1="8" x2="20" y2="16"/>
-              </svg>
-              <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.05em", color: listening ? "#fff" : C.muted }}>
-                {listening ? "Listening…" : "Voice"}
-              </span>
+              {listening ? (
+                /* Red recording dot */
+                <div style={{
+                  width: 10, height: 10, borderRadius: "50%",
+                  background: C.red,
+                  boxShadow: `0 0 0 3px ${C.red}30`,
+                  animation: "pulse 1.2s ease-in-out infinite",
+                }}/>
+              ) : (
+                /* Clean mic icon — Google/SF style */
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={C.muted}>
+                  <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z"/>
+                  <path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V19H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.08A7 7 0 0 0 19 10z"/>
+                </svg>
+              )}
             </button>
           ) : null}
         </div>
@@ -1957,6 +1986,7 @@ export default function Dashboard() {
         a{text-decoration:none;}
         input,textarea,select{font-size:16px;}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
       `}</style>
 
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>
