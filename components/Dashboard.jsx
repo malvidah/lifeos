@@ -414,6 +414,37 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             </button>
           </div>
           <div style={{height:1,background:C.border}}/>
+
+          {/* Desktop app */}
+          <div>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Mac App</span>
+              <span style={{fontFamily:mono,fontSize:11,color:C.dim}}>v1.0.0</span>
+            </div>
+            <a
+              href="https://github.com/malvidah/lifeos/releases/latest/download/Day.Loop-1.0.0-universal.dmg"
+              style={{
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                width:"100%",padding:"8px",boxSizing:"border-box",
+                background:C.surface,border:`1px solid ${C.border2}`,
+                borderRadius:6,cursor:"pointer",textDecoration:"none",
+                color:C.text,fontFamily:mono,fontSize:12,
+                letterSpacing:"0.12em",textTransform:"uppercase",
+                transition:"border-color 0.15s",
+              }}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
+              onMouseLeave={e=>e.currentTarget.style.borderColor=C.border2}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Download for Mac
+            </a>
+          </div>
+
+          <div style={{height:1,background:C.border}}/>
           <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
             style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer",
               color:C.muted,fontFamily:mono,fontSize:13,letterSpacing:"0.12em",textTransform:"uppercase"}}>
