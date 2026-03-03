@@ -665,6 +665,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         overflow:"hidden", position:"relative",
         touchAction:"none", cursor: desktop ? "grab" : "default",
         padding:"8px 0 12px",
+        height: desktop ? 292 : 240,
+        flexShrink: 0,
       }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
@@ -676,7 +678,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       >
         {/* Scrolling row */}
         <div style={{
-          display:"flex", alignItems:"stretch",
+          display:"flex", alignItems:"flex-start",
           marginLeft:`calc(50% - ${(N + 0.5) * DAY_W}px)`,
           transform:`translateX(${-fracSlot * DAY_W}px)`,
           willChange:"transform",
@@ -702,10 +704,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   borderRight: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
                   background: isCtr ? `${C.accent}08` : "transparent",
                   borderRadius: 6,
-                  minHeight: 100,
+                  height: desktop ? 272 : 220,
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
                 }}>
                 {/* Date header */}
-                <div style={{textAlign:"center", marginBottom:6, paddingTop:2}}>
+                <div style={{textAlign:"center", marginBottom:6, paddingTop:2, flexShrink:0}}>
                   <div style={{
                     fontFamily:mono, fontSize:12, letterSpacing:"0.07em",
                     color: isCtr ? C.accent : C.muted,
@@ -728,7 +733,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 </div>
 
                 {/* Event cards */}
-                <div style={{display:"flex",flexDirection:"column",gap:2}}>
+                <div style={{display:"flex",flexDirection:"column",gap:2,overflow:"hidden",flex:1,minHeight:0}}>
                   {dayEvents.slice(0, MAX_EVENTS).map((ev,j) => (
                     <div key={j} style={{
                       padding:"2px 4px", borderRadius:3,
@@ -1963,7 +1968,7 @@ export default function Dashboard() {
           <InsightsCard date={selected} token={token} userId={userId} healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
           {/* Widgets stacked */}
           {[leftWidget,...rightWidgets].map(w=>(
-            <div key={w.id} style={{minHeight:220}}>
+            <div key={w.id} style={{height:260,flexShrink:0}}>
               <Widget label={w.label} color={w.color()}>
                 <w.Comp date={selected} token={token} userId={userId}/>
               </Widget>
@@ -1991,7 +1996,7 @@ export default function Dashboard() {
           <InsightsCard date={selected} token={token} userId={userId} healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
 
           {/* Widgets — notes on left (wider), tasks+meals+activity on right */}
-          <div style={{display:"flex",gap:8,alignItems:"stretch",minHeight:480}}>
+          <div style={{display:"flex",gap:8,alignItems:"stretch",height:480,flexShrink:0}}>
             <div style={{flex:"2 1 0",minWidth:0}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}>
                 <leftWidget.Comp date={selected} token={token} userId={userId}/>
@@ -1999,7 +2004,7 @@ export default function Dashboard() {
             </div>
             <div style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
               {rightWidgets.map(w=>(
-                <div key={w.id} style={{flex:"1 1 0",minHeight:140}}>
+                <div key={w.id} style={{flex:"1 1 0",minHeight:0,overflow:"hidden"}}>
                   <Widget label={w.label} color={w.color()}>
                     <w.Comp date={selected} token={token} userId={userId}/>
                   </Widget>
