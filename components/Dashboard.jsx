@@ -512,14 +512,9 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
         <span style={{fontFamily:mono,fontSize:13}}>●</span>
         <div style={{width:70}}/>
       </div>
-      {/* Date — centered on desktop, natural flow on mobile */}
-      <div style={{display:"flex",alignItems:"baseline",gap:7,
-        position:"absolute",left:"50%",transform:"translateX(-50%)",
-        // on small screens fall back to normal flow
-      }}>
-        <span style={{fontFamily:serif,fontSize:16,color:C.text,letterSpacing:"-0.01em"}}>{dateLabel}</span>
-        {isToday && <span style={{fontFamily:mono,fontSize:12,color:C.accent,letterSpacing:"0.12em",
-          textTransform:"uppercase",opacity:0.9}}>today</span>}
+      {/* Day Loop — centered */}
+      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
+        <span style={{fontFamily:serif,fontSize:17,color:C.text,letterSpacing:"-0.02em"}}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
@@ -580,6 +575,19 @@ function offsetToDate(n) {
 
 // Mobile date picker — horizontal day strip with physics momentum
 // Month and year are static labels (snap discretely). Only the day ribbon moves.
+function NavBtn({onClick,title,children}) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      background:'none',border:'none',cursor:'pointer',
+      color:C.muted,fontFamily:mono,fontSize:15,lineHeight:1,
+      padding:'3px 5px',borderRadius:4,transition:'color 0.1s',
+    }}
+    onMouseEnter={e=>e.currentTarget.style.color=C.text}
+    onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+      {children}
+    </button>
+  );
+}
 function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false, onEventClick, onAddClick}) {
   const today = todayKey();
   const DAY_W = 175;
@@ -723,26 +731,51 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       {/* ── Static month + year header ────────────────────────────────────── */}
       <div style={{
         display:"flex", alignItems:"center",
-        padding:"8px 16px 6px",
+        padding:"10px 16px 8px",
         borderBottom:`1px solid ${C.border}`,
-        flexShrink:0,
+        flexShrink:0, gap:8,
       }}>
-        <span style={{
-          fontFamily:serif, fontSize:22, letterSpacing:"-0.02em",
-          color:C.text, lineHeight:1, marginRight:8,
-        }}>{selMonth}</span>
-        <span style={{
-          fontFamily:mono, fontSize:13, letterSpacing:"0.12em",
-          color:C.muted, lineHeight:1,
-        }}>{selYear}</span>
+        {/* CALENDAR label */}
+        <div style={{width:3,height:14,borderRadius:2,background:C.blue,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",textTransform:"uppercase",color:C.muted}}>Calendar</span>
         <div style={{flex:1}}/>
-        <button onClick={() => onSelect(todayKey())} style={{
-          background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
-          color:C.muted,fontFamily:mono,fontSize:11,letterSpacing:'0.1em',padding:'4px 10px',
-          transition:'all 0.15s'}}
-          onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
-          TODAY</button>
+        {/* Month nav — centered in available space */}
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          {/* Double back — same day last year */}
+          <NavBtn onClick={()=>{
+            const d=new Date(selDate);
+            d.setFullYear(d.getFullYear()-1);
+            onSelect(toKey(d));
+          }} title="Back 1 year">«</NavBtn>
+          {/* Single back — same day last month */}
+          <NavBtn onClick={()=>{
+            const d=new Date(selDate);
+            const day=d.getDate();
+            d.setDate(1); d.setMonth(d.getMonth()-1);
+            const maxDay=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+            d.setDate(Math.min(day,maxDay));
+            onSelect(toKey(d));
+          }} title="Back 1 month">‹</NavBtn>
+          <span style={{fontFamily:serif,fontSize:15,letterSpacing:"-0.01em",color:C.text,minWidth:110,textAlign:"center"}}>
+            {selMonth} {selYear}
+          </span>
+          {/* Single forward */}
+          <NavBtn onClick={()=>{
+            const d=new Date(selDate);
+            const day=d.getDate();
+            d.setDate(1); d.setMonth(d.getMonth()+1);
+            const maxDay=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+            d.setDate(Math.min(day,maxDay));
+            onSelect(toKey(d));
+          }} title="Forward 1 month">›</NavBtn>
+          {/* Double forward — same day next year */}
+          <NavBtn onClick={()=>{
+            const d=new Date(selDate);
+            d.setFullYear(d.getFullYear()+1);
+            onSelect(toKey(d));
+          }} title="Forward 1 year">»</NavBtn>
+        </div>
+        <div style={{flex:1}}/>
       </div>
 
       {/* ── Day columns with events ──────────────────────────────────────── */}
@@ -817,13 +850,15 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   </div>
                 </div>
 
-                {/* Event cards */}
-                <div style={{display:"flex",flexDirection:"column",gap:2,overflow:"hidden",flex:1,minHeight:0}}>
-                  {dayEvents.slice(0, MAX_EVENTS).map((ev,j) => (
+                {/* Event cards — scrollable, no truncation */}
+                <div style={{display:"flex",flexDirection:"column",gap:2,
+                  overflowY:isCtr?"auto":"hidden",flex:1,minHeight:0,
+                  scrollbarWidth:"none",msOverflowStyle:"none"}}>
+                  {dayEvents.map((ev,j) => (
                     <div key={j}
                       onClick={isCtr && onEventClick ? (e)=>{e.stopPropagation();onEventClick(ev);} : undefined}
                       style={{
-                        padding:"2px 4px", borderRadius:3,
+                        padding:"2px 4px", borderRadius:3, flexShrink:0,
                         borderLeft:`2px solid ${ev.color||C.accent}`,
                         background:`${ev.color||C.accent}10`,
                         cursor: isCtr && onEventClick ? 'pointer' : 'default',
@@ -832,7 +867,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}25`;}:undefined}
                       onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}10`;}:undefined}
                     >
-                      <div style={{fontFamily:mono, fontSize:13, color:C.muted, lineHeight:1.3}}>
+                      <div style={{fontFamily:mono, fontSize:11, color:C.muted, lineHeight:1.3}}>
                         {ev.time !== "all day" ? ev.time : ""}
                       </div>
                       <div style={{fontFamily:serif, fontSize:12, color: isCtr ? C.text : C.muted,
@@ -841,22 +876,20 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       </div>
                     </div>
                   ))}
-                  {dayEvents.length > MAX_EVENTS && (
-                    <span style={{fontFamily:mono, fontSize:13, color:C.muted, textAlign:"center", padding:"2px 0"}}>
-                      +{dayEvents.length - MAX_EVENTS} more
-                    </span>
-                  )}
-                  {/* + Add button at bottom of selected day */}
+                  {/* + Add button — centered, outlined, only on selected day */}
                   {isCtr && onAddClick && (
                     <button onClick={e=>{e.stopPropagation();onAddClick();}} style={{
-                      marginTop:'auto', background:'none', border:'none', cursor:'pointer',
-                      color:C.muted, fontFamily:mono, fontSize:16, lineHeight:1,
-                      padding:'4px 2px', textAlign:'left', opacity:0.5,
-                      transition:'opacity 0.15s',
+                      marginTop:4, flexShrink:0,
+                      background:'none', border:`1px solid ${C.border2}`,
+                      borderRadius:5, cursor:'pointer',
+                      color:C.muted, fontFamily:mono, fontSize:12,
+                      letterSpacing:'0.1em', padding:'4px 0',
+                      width:'100%', textAlign:'center',
+                      transition:'all 0.15s',
                     }}
-                    onMouseEnter={e=>e.currentTarget.style.opacity='1'}
-                    onMouseLeave={e=>e.currentTarget.style.opacity='0.5'}
-                    title="Add event">+</button>
+                    onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+                    onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}
+                    title="Add event">+ ADD</button>
                   )}
                 </div>
               </div>
