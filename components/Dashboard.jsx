@@ -768,6 +768,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             Today
           </button>
         </div>
+      </div>
+
       {/* ── Day columns with events ──────────────────────────────────────── */}
       <div style={{
         overflow:"hidden", position:"relative",
