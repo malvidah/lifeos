@@ -1665,7 +1665,7 @@ function ChatFloat({date, token, userId}) {
       {/* Floating container */}
       <div style={{
         position: "fixed",
-        bottom: 16,
+        bottom: "max(16px, env(safe-area-inset-bottom, 16px))",
         left: "50%",
         transform: "translateX(-50%)",
         width: "min(calc(100vw - 32px), 600px)",
@@ -1693,23 +1693,29 @@ function ChatFloat({date, token, userId}) {
           }}>
             {messages.map((m, i) => (
               <div key={i} style={{
-                marginBottom: 10, display: "flex", flexDirection: "column",
+                marginBottom: 4,
+                display: "flex",
+                flexDirection: "column",
                 alignItems: m.role === "user" ? "flex-end" : "flex-start",
               }}>
                 <div style={{
-                  maxWidth: "88%",
-                  padding: m.role === "user" ? "7px 13px" : "0",
-                  borderRadius: m.role === "user" ? 14 : 0,
-                  background: m.role === "user" ? `${C.accent}20` : "transparent",
+                  maxWidth: "80%",
+                  padding: "9px 14px",
+                  borderRadius: m.role === "user"
+                    ? "18px 18px 4px 18px"
+                    : "18px 18px 18px 4px",
+                  background: m.role === "user"
+                    ? C.accent
+                    : C.bg === "#0A0A0A" ? "rgba(44,44,48,0.9)" : "rgba(229,229,234,0.9)",
                 }}>
                   {m.type === "action" && (
-                    <div style={{ fontFamily: mono, fontSize: 8, letterSpacing: "0.1em", color: C.green, textTransform: "uppercase", marginBottom: 3 }}>✓ updated</div>
+                    <div style={{ fontFamily: mono, fontSize: 8, letterSpacing: "0.1em", color: m.role === "user" ? "rgba(255,255,255,0.7)" : C.green, textTransform: "uppercase", marginBottom: 3 }}>✓ updated</div>
                   )}
                   <div style={{
                     fontFamily: m.role === "user" ? serif : mono,
-                    fontSize: m.role === "user" ? 14 : 11,
-                    lineHeight: m.role === "user" ? 1.55 : 1.75,
-                    color: m.type === "error" ? C.red : m.type === "upgrade" ? C.accent : m.role === "user" ? C.text : C.muted,
+                    fontSize: m.role === "user" ? 15 : 11,
+                    lineHeight: m.role === "user" ? 1.45 : 1.7,
+                    color: m.type === "error" ? C.red : m.type === "upgrade" ? C.accent : m.role === "user" ? "#fff" : C.muted,
                     whiteSpace: "pre-line",
                   }}>{m.content}</div>
                 </div>
@@ -1736,16 +1742,15 @@ function ChatFloat({date, token, userId}) {
 
         {/* The pill itself */}
         <div style={{
-          display: "flex", alignItems: "center",
+          display: "flex", alignItems: "flex-end", gap: 8,
           background: glassBg,
           backdropFilter: "blur(24px) saturate(180%)",
           WebkitBackdropFilter: "blur(24px) saturate(180%)",
-          borderRadius: 32,
+          borderRadius: 26,
           border: `1px solid ${C.border}`,
           boxShadow: "0 4px 24px rgba(0,0,0,0.22), 0 1px 0 rgba(255,255,255,0.04) inset",
-          padding: "6px 6px 6px 18px",
+          padding: "10px 10px 10px 16px",
           pointerEvents: "auto",
-          transition: "box-shadow 0.2s",
         }}>
           <input
             ref={inputRef}
@@ -1757,8 +1762,9 @@ function ChatFloat({date, token, userId}) {
             disabled={busy}
             style={{
               flex: 1, background: "transparent", border: "none", outline: "none",
-              fontFamily: serif, fontSize: 15, color: C.text,
-              padding: "7px 0", opacity: busy ? 0.5 : 1,
+              fontFamily: serif, fontSize: 16, color: C.text,
+              padding: "3px 0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
+              minHeight: 24,
             }}
           />
 
@@ -1766,26 +1772,27 @@ function ChatFloat({date, token, userId}) {
           {input.trim() ? (
             <button onClick={send} disabled={busy} style={{
               background: C.accent, border: "none", borderRadius: "50%",
-              width: 34, height: 34, cursor: busy ? "default" : "pointer",
+              width: 32, height: 32, cursor: busy ? "default" : "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
               flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
+              marginBottom: 1,
             }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <line x1="12" y1="19" x2="12" y2="5"/>
                 <polyline points="5 12 12 5 19 12"/>
               </svg>
             </button>
           ) : hasMic ? (
             <button onClick={toggleMic} title={listening ? "Stop recording" : "Voice input"} style={{
-              background: `${C.text}12`,
+              background: listening ? `${C.red}22` : `${C.text}10`,
               border: "none", borderRadius: "50%",
-              width: 34, height: 34,
+              width: 32, height: 32,
               cursor: "pointer",
               display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, position: "relative", transition: "background 0.2s",
+              flexShrink: 0, transition: "background 0.2s",
+              marginBottom: 1,
             }}>
               {listening ? (
-                /* Red recording dot */
                 <div style={{
                   width: 10, height: 10, borderRadius: "50%",
                   background: C.red,
@@ -1793,8 +1800,7 @@ function ChatFloat({date, token, userId}) {
                   animation: "pulse 1.2s ease-in-out infinite",
                 }}/>
               ) : (
-                /* Clean mic icon — Google/SF style */
-                <svg width="16" height="16" viewBox="0 0 24 24" fill={C.muted}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted}>
                   <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z"/>
                   <path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V19H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.08A7 7 0 0 0 19 10z"/>
                 </svg>
