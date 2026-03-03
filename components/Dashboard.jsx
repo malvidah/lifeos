@@ -9,7 +9,7 @@ const THEMES = {
     // Direction: bg is medium-dark, surface is lighter, well is darkest
     bg:"#141412",      surface:"#232220",   card:"#232220",
     well:"#0C0B0A",    border:"#2C2A28",    border2:"#383532",
-    text:"#E2D8CE",    muted:"#706860",     dim:"#383330",
+    text:"#D8CEC2",    muted:"#6E6860",     dim:"#363230",
     accent:"#D08828",
     green:"#4A9A68",   blue:"#4878A8",
     purple:"#8860B8",  red:"#B04840",       orange:"#D08828",
@@ -22,7 +22,7 @@ const THEMES = {
     // Direction: bg slightly darker taupe, surface is the main cream, well is darkest
     bg:"#D4CCB8",      surface:"#EAE3D6",   card:"#EAE3D6",
     well:"#C4BCAA",    border:"#D4CCBE",    border2:"#BEB6A8",
-    text:"#362A1C",    muted:"#887870",     dim:"#ACA49A",
+    text:"#4A3C2E",    muted:"#887870",     dim:"#ACA49A",
     accent:"#B87018",
     green:"#38684A",   blue:"#386088",
     purple:"#604888",  red:"#843830",       orange:"#B87018",
@@ -698,7 +698,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
         <span style={{
           fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
-          fontWeight:"700",color:C.text,
+          color:C.text,
         }}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
@@ -1950,7 +1950,7 @@ function LoginScreen() {
         <div style={{
           display:"inline-block",
           fontFamily:serif,fontSize:F.lg,letterSpacing:"-0.02em",
-          fontWeight:"700",color:C.text,marginBottom:24,
+          color:C.text,marginBottom:24,
         }}>Day Loop</div>
         <div style={{fontFamily:mono,fontSize:F.sm,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
