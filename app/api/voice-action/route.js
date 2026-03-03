@@ -73,8 +73,8 @@ If the request is clearly asking to add, log, edit, or remove data, return:
 If it is a question, is vague, references unsupported sources, or you genuinely can't determine what to add, return:
 {"ok": false, "message": "Short sentence explaining why (max 10 words)"}
 
-Supported types: meals, tasks, notes, activity
-NOT supported: strava, oura, health metrics, calendar events
+Supported types: meals, tasks, notes, activity, calendar
+NOT supported: strava, oura, health metrics
 
 Action formats:
 {"type":"meals","entries":["salmon 400kcal","green salad"]}
@@ -83,6 +83,16 @@ Action formats:
 {"type":"activity","entries":["30 min run"]}
 {"type":"meals","edit":{"find":"salmon","replace":"salmon tacos"}}
 {"type":"tasks","delete":"call dentist"}
+{"type":"calendar","events":[{"title":"Lunch with Sarah","startTime":"12:00","endTime":"13:00","allDay":false}]}
+{"type":"calendar","events":[{"title":"Team offsite","allDay":true}]}
+
+For calendar events:
+- Parse natural language times: "noon" → "12:00", "3pm" → "15:00", "9:30" → "09:30"
+- If no end time given, default to 1 hour after start
+- If no time at all, set allDay: true
+- The date context is: ${date}
+- If user says "tomorrow" or a weekday name, still use date ${date} (front-end handles date routing)
+- Keep event titles clean and concise
 
 For bulk adds ("add 3 tasks from today's insight"), generate multiple entries.
 Keep summary short and conversational: "Added breakfast" not "Successfully added meal entry".

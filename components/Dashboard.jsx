@@ -2204,6 +2204,18 @@ export default function Dashboard() {
 
   // Fetch calendar events — server handles token refresh automatically
   const calRefreshRef = useRef(null);
+  const fetchCalRef = useRef(null);
+
+  // Re-fetch calendar when AI entry adds an event
+  useEffect(()=>{
+    const handler = (e) => {
+      if (e.detail?.types?.includes('calendar') && fetchCalRef.current) {
+        fetchCalRef.current();
+      }
+    };
+    window.addEventListener('lifeos:refresh', handler);
+    return ()=>window.removeEventListener('lifeos:refresh', handler);
+  }, []);
   useEffect(()=>{
     if(!token)return;
     startSync("cal");
@@ -2221,6 +2233,8 @@ export default function Dashboard() {
       })
       .catch(()=>{})
       .finally(()=>endSync("cal"));
+
+    fetchCalRef.current = fetchCal;
 
     // On fresh login, save the provider token first, then fetch
     if(sessionGoogleToken){
