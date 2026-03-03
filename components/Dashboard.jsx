@@ -320,16 +320,31 @@ function ChevronBtn({collapsed, onToggle, style={}}) {
 
 // ─── Ring ─────────────────────────────────────────────────────────────────────
 function Ring({score,color,size=48}) {
-  const r=(size-7)/2,circ=2*Math.PI*r,val=parseFloat(score)||0,pct=Math.min(val/100,1),elite=val>=90;
+  const r=(size-7)/2, circ=2*Math.PI*r;
+  const val=parseFloat(score)||0;
+  const pct=Math.min(val/100,1);
+  // Bubble grows from r×0.5 at score 0 → r×1 at score 85, then stays full
+  const bubbleR = score ? r * Math.min(0.5 + 0.5*(val/85), 1.0) : 0;
   return (
-    <svg width={size} height={size} style={{transform:"rotate(-90deg)",flexShrink:0}}>
-      <circle cx={size/2} cy={size/2} r={r} fill={elite?color+"18":"none"} stroke={C.dim} strokeWidth={3}/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color}
-        strokeWidth={elite?4:2.5} strokeLinecap="round" strokeDasharray={`${pct*circ} ${circ}`}
-        style={{transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
+    <svg width={size} height={size} style={{flexShrink:0}}>
+      {/* Pastel fill bubble — scales with score */}
+      <circle cx={size/2} cy={size/2} r={bubbleR}
+        fill={color+"28"}
+        style={{transition:"r 0.5s cubic-bezier(.4,0,.2,1)"}}/>
+      {/* Track ring */}
+      <circle cx={size/2} cy={size/2} r={r} fill="none"
+        stroke={color+"30"} strokeWidth={2.5}
+        style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%"}}/>
+      {/* Progress arc */}
+      <circle cx={size/2} cy={size/2} r={r} fill="none"
+        stroke={color} strokeWidth={2.5} strokeLinecap="round"
+        strokeDasharray={`${pct*circ} ${circ}`}
+        style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%",
+          transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
+      {/* Score label — color-tinted, not plain text */}
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:score?C.text:C.muted,fontSize:F.sm,fontFamily:serif,
-          transform:"rotate(90deg)",transformOrigin:`${size/2}px ${size/2}px`}}>
+        style={{fill:score?color:C.dim,fontSize:F.sm,fontFamily:sys,fontWeight:"600",
+          letterSpacing:"-0.02em"}}>
         {score||"—"}
       </text>
     </svg>
