@@ -1065,19 +1065,19 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     <div key={j}
                       onClick={isCtr && onEventClick ? (e)=>{e.stopPropagation();onEventClick(ev);} : undefined}
                       style={{
-                        padding:"2px 4px", borderRadius:3, flexShrink:0,
-                        borderLeft:`2px solid ${ev.color||C.accent}`,
-                        background:`${ev.color||C.accent}10`,
+                        padding:"2px 5px", borderRadius:4, flexShrink:0,
+                        background:`${ev.color||C.accent}22`,
                         cursor: isCtr && onEventClick ? 'pointer' : 'default',
                         transition:'background 0.1s',
+                        opacity: isCtr ? 1 : 0.65,
                       }}
-                      onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}25`;}:undefined}
-                      onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}10`;}:undefined}
+                      onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}38`;}:undefined}
+                      onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}22`;}:undefined}
                     >
-                      <div style={{fontFamily:mono, fontSize:F.sm, color:C.muted, lineHeight:1.3}}>
+                      <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||C.accent}`, lineHeight:1.3, opacity:0.7}}>
                         {ev.time !== "all day" ? ev.time : ""}
                       </div>
-                      <div style={{fontFamily:serif, fontSize:F.sm, color: isCtr ? C.text : C.muted,
+                      <div style={{fontFamily:serif, fontSize:F.sm, color:`${ev.color||C.accent}`,
                         lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
                         {ev.title}
                       </div>
