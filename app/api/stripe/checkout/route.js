@@ -16,7 +16,7 @@ export async function POST(request) {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-    const { plan } = await request.json(); // 'monthly' | 'yearly'
+    const { plan } = await request.json();
     const priceId = plan === 'yearly'
       ? process.env.STRIPE_PRICE_ID_YEARLY
       : process.env.STRIPE_PRICE_ID_MONTHLY;
@@ -26,18 +26,19 @@ export async function POST(request) {
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     const origin = request.headers.get('origin') || 'https://dayloop.me';
 
+    // Embedded mode — stays on dayloop.me, no redirect to stripe.com
     const session = await stripe.checkout.sessions.create({
+      ui_mode: 'embedded',
       mode: 'subscription',
       allow_promotion_codes: true,
       client_reference_id: user.id,
       customer_email: user.email,
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/upgrade?success=true`,
-      cancel_url: `${origin}/upgrade`,
+      return_url: `${origin}/upgrade?success=true&session_id={CHECKOUT_SESSION_ID}`,
       metadata: { userId: user.id, plan },
     });
 
-    return Response.json({ url: session.url });
+    return Response.json({ clientSecret: session.client_secret });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }

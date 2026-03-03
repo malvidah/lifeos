@@ -1,7 +1,8 @@
 'use client';
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '../../lib/supabase.js';
+import { loadStripe } from '@stripe/stripe-js';
 
 const mono = "'SF Mono', 'Monaco', 'Inconsolata', monospace";
 const serif = "Georgia, 'Times New Roman', serif";
@@ -21,24 +22,22 @@ const FEATURES = [
   { label: 'Oura + Strava sync', premium: false },
 ];
 
-function UpgradeContent() {
+function SuccessView({ session }) {
   const params = useSearchParams();
-  const success = params.get('success') === 'true';
-  const [plan, setPlan] = useState('yearly');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [session, setSession] = useState(null);
-  const [checking, setChecking] = useState(success);
-  const [isPremium, setIsPremium] = useState(false);
+  const sessionId = params.get('session_id');
+  const [state, setState] = useState('activating'); // activating | active | slow
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-  }, []);
+    if (!session || !sessionId) { setState('slow'); return; }
 
-  // Poll for premium activation after payment
-  useEffect(() => {
-    if (!success || !session) return;
+    // Try fallback grant first (ensures premium is set even if webhook was slow)
+    fetch('/api/stripe/grant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ sessionId }),
+    }).catch(() => {});
+
+    // Poll DB until premium row appears
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
@@ -46,12 +45,57 @@ function UpgradeContent() {
         const supabase = createClient();
         const { data } = await supabase.from('entries').select('data')
           .eq('type', 'premium').eq('date', 'global').eq('user_id', session.user.id).maybeSingle();
-        if (data?.data?.active) { setIsPremium(true); setChecking(false); clearInterval(poll); }
+        if (data?.data?.active) { setState('active'); clearInterval(poll); }
       } catch {}
-      if (attempts >= 12) { setChecking(false); clearInterval(poll); }
-    }, 1500);
+      if (attempts >= 10) { setState('slow'); clearInterval(poll); }
+    }, 1200);
     return () => clearInterval(poll);
-  }, [success, session]);
+  }, [session, sessionId]);
+
+  return (
+    <div style={{ textAlign: 'center', padding: '80px 24px', maxWidth: 480, margin: '0 auto' }}>
+      {state === 'activating' && (
+        <>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', border: `1.5px solid ${border}`, borderTopColor: accent, margin: '0 auto 24px', animation: 'spin 1s linear infinite' }}/>
+          <p style={{ fontFamily: mono, fontSize: 10, color: muted, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Activating your account…</p>
+        </>
+      )}
+      {state === 'active' && (
+        <>
+          <div style={{ fontFamily: serif, fontSize: 42, color: accent, marginBottom: 20 }}>✦</div>
+          <h1 style={{ fontFamily: serif, fontSize: 32, color: text, fontWeight: 400, margin: '0 0 14px', letterSpacing: '-0.02em' }}>You're all set</h1>
+          <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: '0 0 48px' }}>
+            AI insights and unlimited chat are now unlocked.
+          </p>
+          <a href="/" style={{
+            display: 'inline-block', fontFamily: mono, fontSize: 10, letterSpacing: '0.15em',
+            textTransform: 'uppercase', color: bg, textDecoration: 'none',
+            background: accent, padding: '13px 32px', borderRadius: 8,
+          }}>Go to Dashboard →</a>
+        </>
+      )}
+      {state === 'slow' && (
+        <>
+          <div style={{ fontFamily: serif, fontSize: 42, color: accent, marginBottom: 20 }}>✦</div>
+          <h1 style={{ fontFamily: serif, fontSize: 28, color: text, fontWeight: 400, margin: '0 0 12px' }}>Payment received</h1>
+          <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: '0 0 40px' }}>
+            Your account is being activated — it may take a minute to reflect.<br/>
+            Refresh the dashboard and your insights should be unlocked.
+          </p>
+          <a href="/" style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: accent, textDecoration: 'none', border: `1px solid ${accent}40`, padding: '10px 24px', borderRadius: 8 }}>
+            Go to Dashboard →
+          </a>
+        </>
+      )}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+}
+
+function PricingView({ session, onStartCheckout }) {
+  const [plan, setPlan] = useState('yearly');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   async function handleUpgrade() {
     if (!session) { window.location.href = '/'; return; }
@@ -63,56 +107,21 @@ function UpgradeContent() {
         body: JSON.stringify({ plan }),
       });
       const data = await res.json();
-      if (data.url) window.location.href = data.url;
-      else setError(data.error || 'Something went wrong');
-    } catch (e) { setError(e.message); }
-    setLoading(false);
+      if (data.clientSecret) {
+        onStartCheckout(data.clientSecret);
+      } else {
+        setError(data.error || 'Something went wrong');
+        setLoading(false);
+      }
+    } catch (e) {
+      setError(e.message);
+      setLoading(false);
+    }
   }
-
-  if (success) {
-    return (
-      <div style={{ textAlign: 'center', padding: '80px 24px', maxWidth: 480, margin: '0 auto' }}>
-        {checking ? (
-          <>
-            <div style={{ width: 40, height: 40, borderRadius: '50%', border: `1px solid ${border}`, borderTopColor: accent, margin: '0 auto 24px', animation: 'spin 1s linear infinite' }}/>
-            <p style={{ fontFamily: mono, fontSize: 10, color: muted, letterSpacing: '0.12em', textTransform: 'uppercase' }}>Activating your account…</p>
-          </>
-        ) : isPremium ? (
-          <>
-            <div style={{ fontSize: 28, marginBottom: 20, color: accent }}>✦</div>
-            <h1 style={{ fontFamily: serif, fontSize: 30, color: text, fontWeight: 400, margin: '0 0 12px', letterSpacing: '-0.02em' }}>You're all set</h1>
-            <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: '0 0 48px' }}>
-              AI insights and unlimited chat are now unlocked.<br/>Head back to your dashboard to see them in action.
-            </p>
-            <a href="/" style={{
-              display: 'inline-block', fontFamily: mono, fontSize: 10, letterSpacing: '0.15em',
-              textTransform: 'uppercase', color: bg, textDecoration: 'none',
-              background: accent, padding: '12px 28px', borderRadius: 8,
-            }}>Go to Dashboard →</a>
-          </>
-        ) : (
-          <>
-            <h1 style={{ fontFamily: serif, fontSize: 28, color: text, fontWeight: 400, margin: '0 0 12px' }}>Payment received</h1>
-            <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: '0 0 40px' }}>
-              Your account will be upgraded within a minute.<br/>Refresh the dashboard if insights are still locked.
-            </p>
-            <a href="/" style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: accent, textDecoration: 'none' }}>Back to Dashboard →</a>
-          </>
-        )}
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
-  const monthlyPrice = '$4.99';
-  const yearlyPrice = '$39.99';
-  const yearlyMonthly = '$3.33';
-  const savings = 'Save 33%';
 
   return (
-    <div style={{ padding: '60px 24px 80px', maxWidth: 480, margin: '0 auto' }}>
-      {/* Header */}
-      <div style={{ textAlign: 'center', marginBottom: 48 }}>
+    <div style={{ padding: '60px 24px 80px', maxWidth: 440, margin: '0 auto' }}>
+      <div style={{ textAlign: 'center', marginBottom: 44 }}>
         <a href="/" style={{ fontFamily: mono, fontSize: 9, color: muted, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none' }}>Day Loop</a>
         <h1 style={{ fontFamily: serif, fontSize: 38, color: text, margin: '16px 0 10px', letterSpacing: '-0.02em', fontWeight: 400 }}>Premium</h1>
         <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: 0 }}>
@@ -121,84 +130,61 @@ function UpgradeContent() {
       </div>
 
       {/* Plan toggle */}
-      <div style={{
-        display: 'flex', background: surface, borderRadius: 10,
-        border: `1px solid ${border}`, padding: 4, marginBottom: 28, position: 'relative',
-      }}>
+      <div style={{ display: 'flex', background: surface, borderRadius: 10, border: `1px solid ${border}`, padding: 4, marginBottom: 28 }}>
         {['monthly', 'yearly'].map(p => (
           <button key={p} onClick={() => setPlan(p)} style={{
             flex: 1, padding: '10px 0', border: 'none', borderRadius: 7, cursor: 'pointer',
             fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase',
             background: plan === p ? accent : 'transparent',
             color: plan === p ? bg : muted,
-            transition: 'all 0.2s', position: 'relative',
+            transition: 'all 0.18s', position: 'relative',
           }}>
             {p}
             {p === 'yearly' && (
               <span style={{
-                position: 'absolute', top: -9, right: 10,
-                background: '#3a7a4a', color: '#a8e6b8',
-                fontFamily: mono, fontSize: 7, letterSpacing: '0.1em',
+                position: 'absolute', top: -9, right: 8,
+                background: '#2a4a35', color: '#7dba94',
+                fontFamily: mono, fontSize: 7, letterSpacing: '0.08em',
                 padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase',
-              }}>{savings}</span>
+              }}>Save 33%</span>
             )}
           </button>
         ))}
       </div>
 
-      {/* Price display */}
+      {/* Price */}
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 2 }}>
-          <span style={{ fontFamily: mono, fontSize: 16, color: muted, marginTop: 10 }}>$</span>
-          <span style={{ fontFamily: serif, fontSize: 56, color: text, lineHeight: 1, letterSpacing: '-0.03em' }}>
+          <span style={{ fontFamily: mono, fontSize: 15, color: muted, marginTop: 12 }}>$</span>
+          <span style={{ fontFamily: serif, fontSize: 60, color: text, lineHeight: 1, letterSpacing: '-0.03em' }}>
             {plan === 'yearly' ? '39' : '4'}
           </span>
-          <span style={{ fontFamily: mono, fontSize: 16, color: muted, marginTop: 10 }}>
-            {plan === 'yearly' ? '.99' : '.99'}
-          </span>
+          <span style={{ fontFamily: mono, fontSize: 15, color: muted, marginTop: 12 }}>.99</span>
         </div>
-        <div style={{ fontFamily: mono, fontSize: 10, color: muted, marginTop: 6, letterSpacing: '0.08em' }}>
-          {plan === 'yearly' ? `per year — ${yearlyMonthly}/mo` : 'per month'}
+        <div style={{ fontFamily: mono, fontSize: 10, color: muted, marginTop: 6, letterSpacing: '0.06em' }}>
+          {plan === 'yearly' ? 'per year · $3.33/mo' : 'per month'}
         </div>
       </div>
 
       {/* Features */}
-      <div style={{
-        background: surface, borderRadius: 12, border: `1px solid ${border}`,
-        padding: '20px 24px', marginBottom: 28,
-      }}>
+      <div style={{ background: surface, borderRadius: 12, border: `1px solid ${border}`, padding: '4px 24px', marginBottom: 28 }}>
         {FEATURES.map((f, i) => (
-          <div key={i} style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            padding: '8px 0',
-            borderBottom: i < FEATURES.length - 1 ? `1px solid ${border}` : 'none',
-          }}>
-            <span style={{ fontSize: 11, color: f.premium ? accent : '#3a7a4a', flexShrink: 0 }}>
-              {f.premium ? '✦' : '✓'}
-            </span>
-            <span style={{ fontFamily: mono, fontSize: 10, color: f.premium ? text : muted, letterSpacing: '0.04em', lineHeight: 1.5 }}>
-              {f.label}
-            </span>
-            {!f.premium && (
-              <span style={{ fontFamily: mono, fontSize: 8, color: muted, letterSpacing: '0.1em', textTransform: 'uppercase', marginLeft: 'auto', flexShrink: 0 }}>free</span>
-            )}
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: i < FEATURES.length - 1 ? `1px solid ${border}` : 'none' }}>
+            <span style={{ fontSize: 11, color: f.premium ? accent : '#5a9a6a', flexShrink: 0 }}>{f.premium ? '✦' : '✓'}</span>
+            <span style={{ fontFamily: mono, fontSize: 10, color: f.premium ? text : muted, letterSpacing: '0.04em' }}>{f.label}</span>
+            {!f.premium && <span style={{ fontFamily: mono, fontSize: 8, color: muted, letterSpacing: '0.1em', textTransform: 'uppercase', marginLeft: 'auto', flexShrink: 0 }}>free</span>}
           </div>
         ))}
       </div>
 
-      {/* CTA */}
-      <button
-        onClick={handleUpgrade}
-        disabled={loading}
-        style={{
-          width: '100%', background: accent, border: 'none', borderRadius: 10,
-          color: bg, fontFamily: mono, fontSize: 11, letterSpacing: '0.15em',
-          textTransform: 'uppercase', padding: '16px 0',
-          cursor: loading ? 'not-allowed' : 'pointer',
-          opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s',
-          marginBottom: 12,
-        }}>
-        {loading ? 'Redirecting…' : `Get Premium — ${plan === 'yearly' ? yearlyPrice + '/yr' : monthlyPrice + '/mo'}`}
+      <button onClick={handleUpgrade} disabled={loading} style={{
+        width: '100%', background: accent, border: 'none', borderRadius: 10,
+        color: bg, fontFamily: mono, fontSize: 11, letterSpacing: '0.15em',
+        textTransform: 'uppercase', padding: '16px 0',
+        cursor: loading ? 'not-allowed' : 'pointer',
+        opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s', marginBottom: 12,
+      }}>
+        {loading ? 'Loading…' : `Get Premium — ${plan === 'yearly' ? '$39.99/yr' : '$4.99/mo'}`}
       </button>
 
       <p style={{ fontFamily: mono, fontSize: 9, color: muted, textAlign: 'center', margin: '0 0 4px', letterSpacing: '0.05em' }}>
@@ -207,7 +193,6 @@ function UpgradeContent() {
       <p style={{ fontFamily: mono, fontSize: 9, color: muted, textAlign: 'center', margin: 0, letterSpacing: '0.05em' }}>
         Cancel anytime. Powered by Stripe.
       </p>
-
       {error && <p style={{ fontFamily: mono, fontSize: 10, color: '#e06c6c', textAlign: 'center', marginTop: 16 }}>{error}</p>}
 
       <div style={{ textAlign: 'center', marginTop: 40 }}>
@@ -215,6 +200,60 @@ function UpgradeContent() {
       </div>
     </div>
   );
+}
+
+function CheckoutView({ clientSecret, onCancel }) {
+  const containerRef = useRef(null);
+  const checkoutRef = useRef(null);
+
+  useEffect(() => {
+    if (!clientSecret || !containerRef.current) return;
+    let mounted = true;
+
+    loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).then(stripe => {
+      if (!mounted || !stripe) return;
+      stripe.initEmbeddedCheckout({ clientSecret }).then(checkout => {
+        if (!mounted) { checkout.destroy(); return; }
+        checkoutRef.current = checkout;
+        checkout.mount(containerRef.current);
+      });
+    });
+
+    return () => {
+      mounted = false;
+      checkoutRef.current?.destroy();
+    };
+  }, [clientSecret]);
+
+  return (
+    <div style={{ maxWidth: 540, margin: '0 auto', padding: '40px 24px 80px' }}>
+      <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        <a href="/" style={{ fontFamily: mono, fontSize: 9, color: muted, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none' }}>Day Loop</a>
+        <h1 style={{ fontFamily: serif, fontSize: 28, color: text, margin: '14px 0 0', letterSpacing: '-0.02em', fontWeight: 400 }}>Complete your order</h1>
+      </div>
+      {/* Stripe embedded checkout mounts here */}
+      <div ref={containerRef} style={{ borderRadius: 12, overflow: 'hidden' }} />
+      <div style={{ textAlign: 'center', marginTop: 20 }}>
+        <button onClick={onCancel} style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: muted, background: 'none', border: 'none', cursor: 'pointer' }}>← Back</button>
+      </div>
+    </div>
+  );
+}
+
+function UpgradeContent() {
+  const params = useSearchParams();
+  const success = params.get('success') === 'true';
+  const [session, setSession] = useState(null);
+  const [checkoutSecret, setCheckoutSecret] = useState(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+  }, []);
+
+  if (success) return <SuccessView session={session} />;
+  if (checkoutSecret) return <CheckoutView clientSecret={checkoutSecret} onCancel={() => setCheckoutSecret(null)} />;
+  return <PricingView session={session} onStartCheckout={setCheckoutSecret} />;
 }
 
 export default function UpgradePage() {
