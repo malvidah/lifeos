@@ -34,6 +34,21 @@ export async function POST(request) {
     const { date, healthKey } = await request.json();
     if (!date) return Response.json({ error: 'date required' }, { status: 400 });
 
+    // Today's data (all entry types)
+    const { data: todayEntries } = await supabase.from('entries')
+      .select('type, data').eq('date', date).eq('user_id', user.id);
+    const today = {};
+    for (const row of todayEntries || []) today[row.type] = row.data;
+
+    // If health isn't in DB yet (insight generated before Oura data saved),
+    // use the scores the client sent in healthKey as a fallback
+    if (!today.health && healthKey) {
+      const [, sleep, readiness] = healthKey.split(':');
+      if (+sleep > 0 || +readiness > 0) {
+        today.health = { sleepScore: +sleep || '', readinessScore: +readiness || '' };
+      }
+    }
+
     // Rate limit: 30 requests per user per hour
     const rl = rateLimit(`insights:${user.id}`, { max: 30, windowMs: 60 * 60 * 1000 });
     if (!rl.ok) return Response.json({ error: `Too many requests. Try again in ${rl.retryAfter}s.` }, { status: 429 });
@@ -42,13 +57,7 @@ export async function POST(request) {
     if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
 
     // ── Insight generation ────────────────────────────────────────────────────
-    // ── Initial insight generation — available to all users ──────────────────
-
-    // Today's data (all entry types)
-    const { data: todayEntries } = await supabase.from('entries')
-      .select('type, data').eq('date', date).eq('user_id', user.id);
-    const today = {};
-    for (const row of todayEntries || []) today[row.type] = row.data;
+    // ── Insight generation ──────────────────────────────────────────────────
 
     // Last 7 days — fetch all entry types in one query per day
     const recentDays = []; // [{date, health, workouts, activity, notes, meals, tasks}]
@@ -213,13 +222,11 @@ export async function POST(request) {
 
     const context = parts.join('\n');
 
-    // Detect empty state — only the date header, no actual data
-    const hasData = parts.length > 1 || recentDays.length > 0;
-    if (!hasData) {
-      // Get user's name for welcome message
+    // Only show the welcome message if there's truly nothing — no today data AND no history
+    const hasAnything = parts.length > 1 || recentDays.length > 0;
+    if (!hasAnything) {
       const userName = user.user_metadata?.name?.split(' ')[0] || user.email?.split('@')[0] || 'there';
-      const welcome = `Welcome to Day Loop, ${userName}. Connect your Oura ring to start seeing AI insights based on your sleep, readiness, and HRV — then use the chat bar below to ask questions or log your day. The more data you add, the sharper the insights get.`;
-      // Cache the welcome so it doesn't re-generate every load
+      const welcome = `Welcome to Day Loop, ${userName}. Connect your Oura ring to start seeing AI insights based on your sleep, readiness, and HRV — then log meals, notes, and tasks to make them richer. The more you add, the sharper the insights get.`;
       await supabase.from('entries').upsert(
         { date, type: 'insights', data: { text: welcome, generatedAt: new Date().toISOString(), isWelcome: true }, user_id: user.id, updated_at: new Date().toISOString() },
         { onConflict: 'date,type,user_id' }
@@ -233,22 +240,24 @@ export async function POST(request) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 160,
-        system: `You are a sharp, observant friend who has access to someone's daily life data — health scores, workouts, meals, notes, and tasks. Your job is to give one genuinely useful observation about today, grounded in everything you can see.
+        system: `You are a sharp, observant friend who has access to someone's daily life data — health scores, workouts, meals, notes, and tasks. Your job is to give one genuinely useful observation, grounded in everything you can see.
 
-TODAY'S DATA IS PRIMARY. Recent history is context for making today more meaningful.
+TODAY'S DATA IS PRIMARY when it exists. Recent history is context for making today more meaningful — or the main story when today hasn't loaded yet.
 
-What to look for (pick the most interesting angle — don't always default to health):
+What to look for (pick the most interesting angle):
 - Themes across notes: are they reading more, reflecting, stressed, excited about something?
 - Patterns connecting life and body: late nights correlating with low HRV, hard workouts followed by recovery dips
 - Wins worth naming: a streak, something they finished, a personal best
-- A gentle flag if something looks off — but only if it's real, not manufactured drama
+- A gentle flag if something looks off — but only if it's real
 - A recommendation if something obvious fits: a book, a rest day, a walk
+
+If today's data is sparse or not synced yet: lean on the recent history to say something meaningful about trends, patterns, or what to expect today. Never say "check back later" or "no data yet" — there's always something worth saying if there's history.
 
 Rules:
 - 2 sentences max. Plain English. Sound like a smart friend, not a report.
 - If health looks fine and notes are more interesting — talk about the notes.
 - No markdown. Don't start with the date, "Your", or a metric name.
-- Never invent or assume data not present. If notes are empty, don't mention them.`,
+- Never invent data not present. If notes are empty across all days, don't mention them.`,
         messages: [{ role: 'user', content: context }],
       }),
     });
@@ -259,7 +268,7 @@ Rules:
 
     // Cache
     await supabase.from('entries').upsert(
-      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 5, healthKey: healthKey || '' }, user_id: user.id, updated_at: new Date().toISOString() },
+      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 6, healthKey: healthKey || '' }, user_id: user.id, updated_at: new Date().toISOString() },
       { onConflict: 'date,type,user_id' }
     );
 
