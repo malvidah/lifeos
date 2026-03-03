@@ -274,6 +274,41 @@ function useDbSave(date, type, empty, token, userId) {
   return { value, setValue, loaded };
 }
 
+// ─── useCollapse — localStorage-backed collapse state ────────────────────────
+function useCollapse(key, defaultCollapsed=false) {
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === "undefined") return defaultCollapsed;
+    const stored = localStorage.getItem(`collapse:${key}`);
+    return stored !== null ? stored === "1" : defaultCollapsed;
+  });
+  const toggle = () => setCollapsed(v => {
+    const next = !v;
+    localStorage.setItem(`collapse:${key}`, next ? "1" : "0");
+    return next;
+  });
+  return [collapsed, toggle];
+}
+
+// ─── ChevronBtn — small collapse toggle ──────────────────────────────────────
+function ChevronBtn({collapsed, onToggle, style={}}) {
+  return (
+    <button onClick={onToggle} style={{
+      background:"none",border:"none",cursor:"pointer",padding:"2px 4px",
+      color:C.dim,display:"flex",alignItems:"center",justifyContent:"center",
+      flexShrink:0,transition:"color 0.15s",...style,
+    }}
+      onMouseEnter={e=>e.currentTarget.style.color=C.muted}
+      onMouseLeave={e=>e.currentTarget.style.color=C.dim}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+        {collapsed
+          ? <polyline points="6 9 12 15 18 9"/>
+          : <polyline points="18 15 12 9 6 15"/>}
+      </svg>
+    </button>
+  );
+}
+
 // ─── Ring ─────────────────────────────────────────────────────────────────────
 function Ring({score,color,size=48}) {
   const r=(size-7)/2,circ=2*Math.PI*r,val=parseFloat(score)||0,pct=Math.min(val/100,1),elite=val>=90;
@@ -308,19 +343,23 @@ function Card({children,style={}}) {
 
 
 // ─── Widget card ─────────────────────────────────────────────────────────────
-function Widget({label,color,children,slim}) {
+function Widget({label,color,children,slim,collapsed,onToggle}) {
   return (
     <div style={slim ? {} : {height:"100%",display:"flex",flexDirection:"column"}}>
-      <Card>
+      <Card style={collapsed ? {height:"auto"} : {}}>
         <div style={{
           display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
-          borderBottom:`1px solid ${C.border}`,flexShrink:0,
-        }}>
+          borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
+          cursor:onToggle?"pointer":"default",
+        }} onClick={onToggle}>
           <div style={{width:3,height:14,borderRadius:2,background:color,flexShrink:0}}/>
           <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",
-            textTransform:"uppercase",color:C.muted}}>{label}</span>
+            textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
+          {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
         </div>
-        <div style={slim ? {padding:"14px 16px"} : {flex:1,overflow:"auto",padding:16,minHeight:0}}>{children}</div>
+        {!collapsed&&(
+          <div style={slim ? {padding:"14px 16px"} : {flex:1,overflow:"auto",padding:16,minHeight:0}}>{children}</div>
+        )}
       </Card>
     </div>
   );
@@ -713,7 +752,7 @@ function NavBtn({onClick,title,children}) {
     </button>
   );
 }
-function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false, onEventClick, onAddClick}) {
+function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false, onEventClick, onAddClick, collapsed, onToggle}) {
   const today = todayKey();
   const DAY_W = 175;
 
@@ -853,37 +892,58 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
   return (
     <div style={{userSelect:"none", display:"flex", flexDirection:"column"}}>
 
-      {/* ── Static month + year header ────────────────────────────────────── */}
+      {/* ── Header bar — collapses/expands calendar ─────────────────────── */}
       <div style={{
         display:"flex", alignItems:"center",
         padding:"10px 16px 8px",
         borderBottom:`1px solid ${C.border}`,
         flexShrink:0, position:'relative',
-      }}>
+        cursor: onToggle ? 'pointer' : 'default',
+      }} onClick={onToggle}>
         {/* CALENDAR label — left */}
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           <div style={{width:3,height:14,borderRadius:2,background:C.blue,flexShrink:0}}/>
           <span style={{fontFamily:mono,fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
         </div>
 
-        {/* Date — absolutely centered, no arrows */}
-        <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
-          pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
-          <span style={{fontFamily:serif,fontSize:17,letterSpacing:'-0.02em',color:C.text}}>
-            {selMonth} {selDate.getDate()}, {selYear}
-          </span>
-        </div>
+        {collapsed ? (
+          /* ── Collapsed: prev ← date → next centered ── */
+          <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
+            display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
+            <button onClick={e=>{e.stopPropagation();const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()-1);onSelect(toKey(d));}} style={{
+              background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+              fontFamily:mono,fontSize:14,lineHeight:1,transition:'color 0.15s'}}
+              onMouseEnter={e=>e.currentTarget.style.color=C.text}
+              onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
+            <span style={{fontFamily:serif,fontSize:16,letterSpacing:'-0.02em',color:C.text}}>
+              {selMonth} {selDate.getDate()}, {selYear}
+            </span>
+            <button onClick={e=>{e.stopPropagation();const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()+1);onSelect(toKey(d));}} style={{
+              background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+              fontFamily:mono,fontSize:14,lineHeight:1,transition:'color 0.15s'}}
+              onMouseEnter={e=>e.currentTarget.style.color=C.text}
+              onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
+          </div>
+        ) : (
+          /* ── Expanded: date centered, no arrows ── */
+          <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
+            pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
+            <span style={{fontFamily:serif,fontSize:17,letterSpacing:'-0.02em',color:C.text}}>
+              {selMonth} {selDate.getDate()}, {selYear}
+            </span>
+          </div>
+        )}
 
-        {/* RIGHT: LAST YEAR + TODAY */}
-        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6}}>
-          <button onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()-1);onSelect(toKey(d));}} style={{
+        {/* RIGHT: Today + chevron */}
+        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
+          {!collapsed&&<button onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()-1);onSelect(toKey(d));}} style={{
             background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
             color:C.muted,fontFamily:mono,fontSize:11,letterSpacing:'0.1em',
             textTransform:'uppercase',padding:'4px 9px',transition:'all 0.15s'}}
             onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
             onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
             Last year
-          </button>
+          </button>}
           <button onClick={()=>onSelect(todayKey())} style={{
             background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
             color:C.muted,fontFamily:mono,fontSize:11,letterSpacing:'0.1em',
@@ -892,11 +952,12 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
             Today
           </button>
+          {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
         </div>
       </div>
 
       {/* ── Day columns with events ──────────────────────────────────────── */}
-      <div style={{
+      {!collapsed&&<div style={{
         overflow:"hidden", position:"relative",
         touchAction:"none", cursor:"grab",
         padding:"8px 0 12px",
@@ -1019,13 +1080,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             );
           })}
         </div>
-      </div>
+      </div>}
 
 
     </div>
   );
 }
-function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
+function CalStrip({selected, onSelect, events, setEvents, healthDots, token, collapsed, onToggle}) {
   const mobile = useIsMobile();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -1161,6 +1222,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
         selected={selected} onSelect={onSelect}
         events={events} healthDots={healthDots} desktop={!mobile}
         onEventClick={openEvent} onAddClick={openAdd}
+        collapsed={collapsed} onToggle={onToggle}
       />
 
       {/* ── Event panel ── */}
@@ -1337,7 +1399,7 @@ function fmtMinsField(val) {
 }
 
 
-function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd}) {
+function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,collapsed,onToggle}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
 
   // Reset to empty immediately on date change — never show stale previous-day data
@@ -1393,15 +1455,18 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd}) {
 
 
   return (
-    <Card>
+    <Card style={collapsed?{height:"auto"}:{}}>
       {/* Card header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
-        borderBottom:`1px solid ${C.border}`,flexShrink:0}}>        <div style={{width:3,height:13,borderRadius:2,background:C.green,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:13,letterSpacing:"0.2em",
-          textTransform:"uppercase",color:C.muted}}>Health</span>
+        borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
+        cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
+        <div style={{width:3,height:13,borderRadius:2,background:C.green,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",
+          textTransform:"uppercase",color:C.muted,flex:1}}>Health</span>
+        {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
       </div>
       {/* Metrics row */}
-      <div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
+      {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
         {metrics.map((m,mi)=>(
             <div key={m.key}
               style={{flex:"1 0 auto",minWidth:130,display:"flex",alignItems:"center",gap:12,
@@ -1426,7 +1491,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd}) {
               </div>
             </div>
         ))}
-      </div>
+      </div>}
     </Card>
   );
 }
@@ -1878,7 +1943,7 @@ function LoginScreen() {
 }
 
 // ─── InsightsCard ─────────────────────────────────────────────────────────────
-function InsightsCard({date, token, userId, healthKey}) {
+function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -1964,7 +2029,7 @@ function InsightsCard({date, token, userId, healthKey}) {
   }, [date, token, userId, healthKey]); // eslint-disable-line
 
   return (
-    <Widget label="Insights" color={C.muted} slim>
+    <Widget label="Insights" color={C.muted} slim collapsed={collapsed} onToggle={onToggle}>
       {/* Fixed responsive height — content scrolls inside, no scrollbar visible */}
       <div style={{ height: "clamp(80px, 10vh, 120px)", overflowY: "auto", scrollbarWidth: "none" }}>
         <div style={{ opacity: busy && !text ? 0 : 1, transition: "opacity 0.3s ease" }}>
@@ -2262,6 +2327,17 @@ export default function Dashboard() {
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
 
+  // ── Collapse state ─────────────────────────────────────────────────────
+  const [calCollapsed,    toggleCal]      = useCollapse("cal",     false);
+  const [healthCollapsed, toggleHealth]   = useCollapse("health",  true);
+  const [insightCollapsed,toggleInsight]  = useCollapse("insights",true);
+  const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
+  const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
+  const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
+  const [actCollapsed,    toggleAct]      = useCollapse("activity",false);
+  const collapseMap = {notes:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,activity:actCollapsed};
+  const toggleMap   = {notes:toggleNotes,  tasks:toggleTasks,  meals:toggleMeals,  activity:toggleAct};
+
   // ── Global undo/redo keyboard shortcut ──────────────────────────────────
   useEffect(() => {
     const handler = async (e) => {
@@ -2413,36 +2489,41 @@ export default function Dashboard() {
           ))}
         </div>
       ) : (
-        /* ── DESKTOP: scrollable content, no sidebar ────────────────────── */
-        <div style={{flex:1,overflowY:"auto",padding:10,paddingBottom:88,display:"flex",flexDirection:"column",gap:8}}>
+        /* ── DESKTOP: flex column, widgets fill remaining space ─────────── */
+        <div style={{flex:1,overflow:"hidden",padding:10,paddingBottom:10,display:"flex",flexDirection:"column",gap:8}}>
 
           {/* Calendar — full width */}
           <div style={{flexShrink:0}}>
             <CalStrip selected={selected} onSelect={setSelected}
               events={events} setEvents={setEvents} healthDots={healthDots}
-              token={token}/>
+              token={token} collapsed={calCollapsed} onToggle={toggleCal}/>
           </div>
 
           {/* Health strip — full width */}
           <div style={{flexShrink:0}}>
             <HealthStrip date={selected} token={token} userId={userId}
-              onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}/>
+              onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+              collapsed={healthCollapsed} onToggle={toggleHealth}/>
           </div>
 
           {/* Insights card — below health */}
-          <InsightsCard date={selected} token={token} userId={userId} healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
+          <InsightsCard date={selected} token={token} userId={userId}
+            healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
+            collapsed={insightCollapsed} onToggle={toggleInsight}/>
 
-          {/* Widgets — notes on left (wider), tasks+meals+activity on right */}
-          <div style={{display:"flex",gap:8,alignItems:"stretch",height:480,flexShrink:0}}>
-            <div style={{flex:"2 1 0",minWidth:0}}>
-              <Widget label={leftWidget.label} color={leftWidget.color()}>
+          {/* Widgets — notes on left (wider), tasks+meals+activity on right, grow to fill */}
+          <div style={{display:"flex",gap:8,alignItems:"stretch",flex:"1 1 0",minHeight:200}}>
+            <div style={{flex:"2 1 0",minWidth:0,display:"flex",flexDirection:"column"}}>
+              <Widget label={leftWidget.label} color={leftWidget.color()}
+                collapsed={collapseMap[leftWidget.id]} onToggle={toggleMap[leftWidget.id]}>
                 <leftWidget.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
             <div style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
               {rightWidgets.map(w=>(
-                <div key={w.id} style={{flex:"1 1 0",minHeight:0,overflow:"hidden"}}>
-                  <Widget label={w.label} color={w.color()}>
+                <div key={w.id} style={{flex:collapseMap[w.id]?"0 0 auto":"1 1 0",minHeight:0,overflow:"hidden"}}>
+                  <Widget label={w.label} color={w.color()}
+                    collapsed={collapseMap[w.id]} onToggle={toggleMap[w.id]}>
                     <w.Comp date={selected} token={token} userId={userId}/>
                   </Widget>
                 </div>
