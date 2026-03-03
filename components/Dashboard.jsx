@@ -329,11 +329,21 @@ function Widget({label,color,children,slim}) {
 // ─── UserMenu ─────────────────────────────────────────────────────────────────
 function InfoTip({text}) {
   const [show,setShow]=useState(false);
+  const [above,setAbove]=useState(false);
+  const btnRef=useRef(null);
+  function handleShow(){
+    if(btnRef.current){
+      const rect=btnRef.current.getBoundingClientRect();
+      setAbove(rect.top>160);
+    }
+    setShow(true);
+  }
   return (
     <span style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
       <button
-        onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)}
-        onFocus={()=>setShow(true)} onBlur={()=>setShow(false)}
+        ref={btnRef}
+        onMouseEnter={handleShow} onMouseLeave={()=>setShow(false)}
+        onFocus={handleShow} onBlur={()=>setShow(false)}
         style={{
           width:14,height:14,borderRadius:"50%",border:`1px solid ${C.border2}`,
           background:"none",cursor:"pointer",padding:0,
@@ -344,9 +354,13 @@ function InfoTip({text}) {
       >i</button>
       {show&&(
         <div style={{
-          position:"absolute",bottom:"calc(100% + 6px)",right:"-4px",
+          position:"absolute",
+          ...(above
+            ? {bottom:"calc(100% + 6px)"}
+            : {top:"calc(100% + 6px)"}),
+          right:"-4px",
           background:C.card,border:`1px solid ${C.border2}`,borderRadius:6,
-          padding:"8px 10px",width:200,
+          padding:"8px 10px",width:190,
           fontFamily:mono,fontSize:11,color:C.muted,lineHeight:1.5,
           zIndex:500,boxShadow:C.shadow,pointerEvents:"none",
           whiteSpace:"normal",
@@ -445,6 +459,10 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           <div style={row}>
             <SectionLabel info="Syncs your sleep score, HRV, readiness, and recovery data into your daily view. Requires a personal access token from your Oura account.">
               Oura Ring {ouraConnected&&<span style={{color:C.green}}>✓</span>}
+              {" "}<a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
+                style={{color:C.dim,textDecoration:"none",fontSize:10,fontFamily:mono,letterSpacing:"0.02em"}}>
+                (Get token →)
+              </a>
             </SectionLabel>
             <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
               <input
@@ -464,11 +482,6 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 {saved?"✓":saving?"…":"Save"}
               </button>
             </div>
-            <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
-              style={{display:"inline-block",marginTop:5,fontFamily:mono,fontSize:10,
-                color:C.dim,textDecoration:"none"}}>
-              Get token →
-            </a>
           </div>
 
           {divider}
