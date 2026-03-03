@@ -1,14 +1,5 @@
-const FILE_URL = 'https://github.com/malvidah/lifeos/releases/latest/download/Day.Loop-1.0.0-arm64.zip';
+const FILE_URL = 'https://github.com/malvidah/lifeos/releases/download/v1.0.0/Day.Loop.1.0.0.zip';
 
 export async function GET() {
-  const upstream = await fetch(FILE_URL, { redirect: 'follow' });
-  if (!upstream.ok) return new Response('Download unavailable', { status: 502 });
-  return new Response(upstream.body, {
-    headers: {
-      'Content-Type': 'application/zip',
-      'Content-Disposition': 'attachment; filename="Day Loop.zip"',
-      'Content-Length': upstream.headers.get('content-length') || '',
-      'Cache-Control': 'no-store',
-    },
-  });
+  return Response.redirect(FILE_URL, 302);
 }
