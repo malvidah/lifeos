@@ -5,32 +5,34 @@ import { createClient } from "../lib/supabase.js";
 
 const THEMES = {
   dark: {
-    bg:"#0A0A0A", surface:"#16171A", card:"#1C1D21",
-    border:"#26272C", border2:"#2E2F35",
-    text:"#E8E4DC", muted:"#6B6870", dim:"#3A3840",
-    accent:"#C4A882", green:"#4E9268", blue:"#4A82B0",
-    yellow:"#B08A3E", red:"#A05050",
-    shadow:"0 1px 2px rgba(0,0,0,0.5),0 4px 16px rgba(0,0,0,0.25)",
-    shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
+    // Deep cool purple-slate — calm, focused, midnight
+    bg:"#0D0C14",      surface:"#13121C",   card:"#191826",
+    border:"#231F32",  border2:"#2D2840",
+    text:"#E6E0F0",    muted:"#6A6480",     dim:"#302C42",
+    // Functional data colors — saturated enough to read as chips
+    accent:"#C4A882",  green:"#3E9E6A",     blue:"#5490C8",
+    purple:"#9B6FD4",  red:"#C05858",       orange:"#C47840",
+    yellow:"#B89040",
+    shadow:"0 1px 3px rgba(0,0,0,0.6),0 4px 20px rgba(0,0,0,0.35)",
+    shadowSm:"0 1px 3px rgba(0,0,0,0.5)",
+    // Sunset gradient for logo + emphasis
+    grad:"linear-gradient(115deg, #E8843A 0%, #C4547A 55%, #8B60C4 100%)",
+    gradGlow:"0 0 18px rgba(196,84,122,0.35), 0 0 6px rgba(232,132,58,0.25)",
   },
   light: {
-    // Warm editorial — Substack palette, soft amber ink on cream
-    // bg and surface are warm-tinted so there's no harsh white anywhere
-    bg:"#F2EDE6",       // warm parchment page
-    surface:"#EAE4DB",  // slightly richer for inputs/inset areas
-    card:"#F8F5F0",     // cream card, just barely off the bg
-    border:"#E0D9CF",   // soft warm tan
-    border2:"#CFC8BC",  // slightly darker for focus rings
-    text:"#2C2418",     // deep warm ink (not pure black)
-    muted:"#9A8C7E",    // warm mid-tone
-    dim:"#C4BBB0",      // light warm placeholder
-    accent:"#C4A882",   // same warm gold as dark mode — top-bar consistent
-    green:"#3D7355",    // muted sage green
-    blue:"#3A6490",     // muted slate blue
-    yellow:"#9A7A2A",   // warm amber
-    red:"#8C4040",      // muted terracotta
-    shadow:"0 1px 2px rgba(44,36,24,0.06),0 3px 8px rgba(44,36,24,0.04)",
-    shadowSm:"0 1px 2px rgba(44,36,24,0.05)",
+    // Warm paper — Substack editorial, all tones in the same warm family
+    bg:"#F0EBE1",      surface:"#E7E0D4",   card:"#FAF7F2",
+    border:"#DDD6C8",  border2:"#CBC3B4",
+    text:"#26201A",    muted:"#8C8074",     dim:"#BEB5A8",
+    // Functional data colors — muted enough for light bg, still distinct
+    accent:"#A07840",  green:"#3A7050",     blue:"#3A6898",
+    purple:"#7050A8",  red:"#985040",       orange:"#A06030",
+    yellow:"#8A7020",
+    shadow:"0 1px 2px rgba(44,32,16,0.07),0 3px 10px rgba(44,32,16,0.05)",
+    shadowSm:"0 1px 2px rgba(44,32,16,0.06)",
+    // Sunrise gradient for logo + emphasis
+    grad:"linear-gradient(115deg, #E8A030 0%, #D4602A 55%, #A83860 100%)",
+    gradGlow:"0 0 16px rgba(212,96,42,0.2), 0 0 5px rgba(232,160,48,0.2)",
   },
 };
 // C is set at render time via setTheme — default dark
@@ -357,14 +359,13 @@ function Widget({label,color,children,slim,collapsed,onToggle}) {
     <div style={slim ? {} : {height:"100%",display:"flex",flexDirection:"column"}}>
       <Card style={collapsed ? {height:"auto"} : {}}>
         <div style={{
-          display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
+          display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
           borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
           cursor:onToggle?"pointer":"default",
         }} onClick={onToggle}>
-          <div style={{width:3,height:14,borderRadius:2,background:color,flexShrink:0}}/>
-          <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",
-            textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
+          <span style={{fontFamily:mono,fontSize:11,letterSpacing:"0.16em",
+            textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
         </div>
         {!collapsed&&(
           <div style={slim ? {padding:"14px 16px"} : {flex:1,overflow:"auto",padding:16,minHeight:0}}>{children}</div>
@@ -683,7 +684,12 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       </div>
       {/* Day Loop — centered */}
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
-        <span style={{fontFamily:serif,fontSize:17,color:C.accent,letterSpacing:"-0.02em"}}>Day Loop</span>
+        <span style={{
+          fontFamily:serif,fontSize:17,letterSpacing:"-0.02em",
+          background:C.grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
+          backgroundClip:"text",
+          filter:`drop-shadow(${C.gradGlow})`,
+        }}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
@@ -907,8 +913,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       }} onClick={onToggle}>
         {/* CALENDAR label — left */}
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
-          <div style={{width:3,height:14,borderRadius:2,background:C.blue,flexShrink:0}}/>
-          <span style={{fontFamily:mono,fontSize:12,letterSpacing:'0.18em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
+          {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
+          <span style={{fontFamily:mono,fontSize:11,letterSpacing:'0.16em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
         </div>
 
         {collapsed ? (
@@ -957,8 +963,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
             Today
           </button>
-          {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-        </div>
+                  </div>
       </div>
 
       {/* ── Day columns with events ──────────────────────────────────────── */}
@@ -1462,13 +1467,12 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
   return (
     <Card style={collapsed?{height:"auto"}:{}}>
       {/* Card header */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+      <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
         borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
         cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
-        <div style={{width:3,height:13,borderRadius:2,background:C.green,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",
-          textTransform:"uppercase",color:C.muted,flex:1}}>Health</span>
         {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
+        <span style={{fontFamily:mono,fontSize:11,letterSpacing:"0.16em",
+          textTransform:"uppercase",color:C.muted,flex:1}}>Health</span>
       </div>
       {/* Metrics row */}
       {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
@@ -1693,9 +1697,11 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
     </div>
   );
 
-  const rowStyle = {display:"flex", alignItems:"baseline", gap:8, padding:"2px 0", minHeight:28};
-  const kcalStyle = {fontFamily:mono, fontSize:12, color, flexShrink:0, minWidth:38, textAlign:"right", opacity:0.85};
-  const proteinStyle = {fontFamily:mono, fontSize:12, color:C.blue, flexShrink:0, minWidth:30, textAlign:"right", opacity:0.85};
+  const rowStyle = {display:"flex", alignItems:"center", gap:6, padding:"3px 0", minHeight:28};
+  const chipBase = {fontFamily:mono, fontSize:11, letterSpacing:"0.04em", flexShrink:0,
+    borderRadius:4, padding:"2px 6px", whiteSpace:"nowrap"};
+  const kcalStyle = {...chipBase, background:C.orange+"22", color:C.orange};
+  const proteinStyle = {...chipBase, background:C.blue+"22", color:C.blue};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -1725,11 +1731,11 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
             <span style={{flex:1}}/>
             {showProtein && (
               <span style={proteinStyle}>
-                {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g protein` : ""}
+                {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g protein` : null}
               </span>
             )}
             <span style={kcalStyle}>
-              {estimating.current.has(row.id) ? "…" : row.kcal ? `${prefix}${row.kcal} kcal` : ""}
+              {estimating.current.has(row.id) ? "…" : row.kcal ? `${row.kcal} kcal` : null}
             </span>
           </div>
         ))}
@@ -1742,14 +1748,16 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
               placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+ add more" : ""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:16}}/>
-            {showProtein && (
+            {showProtein && row.protein && (
               <span style={proteinStyle}>
-                {row.estimating ? "…" : row.protein ? `${row.protein}g protein` : ""}
+                {row.estimating ? "…" : `${row.protein}g protein`}
               </span>
             )}
-            <span style={kcalStyle}>
-              {row.estimating ? "…" : row.kcal ? `${prefix}${row.kcal} kcal` : ""}
-            </span>
+            {row.kcal && (
+              <span style={kcalStyle}>
+                {row.estimating ? "…" : `${row.kcal} kcal`}
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -1757,10 +1765,10 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:12,borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
           {showProtein && totalProtein > 0 && (
-            <span style={{fontFamily:mono,fontSize:13,color:C.blue,opacity:0.9}}>{totalProtein}g protein</span>
+            <span style={{...chipBase,background:C.blue+"22",color:C.blue,fontSize:12}}>{totalProtein}g protein</span>
           )}
           {totalKcal > 0 && (
-            <span style={{fontFamily:mono,fontSize:13,color,opacity:0.9}}>{prefix}{totalKcal} kcal</span>
+            <span style={{...chipBase,background:C.orange+"22",color:C.orange,fontSize:12}}>{totalKcal} kcal</span>
           )}
         </div>
       )}
@@ -1919,7 +1927,11 @@ function LoginScreen() {
   return (
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",position:"relative"}}>
       <div style={{textAlign:"center"}}>
-        <div style={{fontFamily:serif,fontSize:32,color:C.text,marginBottom:6,letterSpacing:"-0.02em"}}>Day Loop</div>
+        <div style={{
+          fontFamily:serif,fontSize:32,marginBottom:6,letterSpacing:"-0.02em",
+          background:C.grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
+          backgroundClip:"text",
+        }}>Day Loop</div>
         <div style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
           setLoading(true);
