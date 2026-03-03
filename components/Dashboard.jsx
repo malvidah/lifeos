@@ -5,10 +5,10 @@ import { createClient } from "../lib/supabase.js";
 
 const THEMES = {
   dark: {
-    // Warm dark — topbar is the reference tone, bg slightly lighter, cards darker
-    bg:"#1C1814",      surface:"#231E18",   card:"#2A2420",
-    border:"#38302A",  border2:"#46403A",
-    text:"#E8DDD0",    muted:"#7A6E64",     dim:"#3A332E",
+    // Cool-warm grey — surface is the anchor (topbar/bottombar/cards all same)
+    bg:"#171717",      surface:"#222220",   card:"#222220",
+    border:"#302E2C",  border2:"#3E3C38",
+    text:"#E6DDD4",    muted:"#746E68",     dim:"#323028",
     accent:"#D4882A",
     green:"#4A9E6A",   blue:"#4A80B0",
     purple:"#906AC0",  red:"#B85040",       orange:"#D4882A",
@@ -17,8 +17,8 @@ const THEMES = {
     shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
   },
   light: {
-    // Warm paper — bg is darker taupe, surface/topbar mid, cards lightest cream
-    bg:"#C8BEB4",      surface:"#E2D9CE",   card:"#EDE6DC",
+    // Warm paper — surface is anchor (topbar/bottombar/cards same), bg slightly darker
+    bg:"#CEC6BA",      surface:"#E8E1D6",   card:"#E8E1D6",
     border:"#D4CAC0",  border2:"#BEB5AA",
     text:"#3A2E22",    muted:"#8A7E72",     dim:"#B8B0A6",
     accent:"#C07818",
