@@ -501,11 +501,22 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
   const isElectron = typeof window !== "undefined" && !!window.dayloopNative;
   return (
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,
-      padding:`0 16px 0 ${isElectron ? "88px" : "16px"}`,
+      padding:"0 16px",
       height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,
       position:"sticky",top:0,zIndex:100,
       WebkitAppRegion:"drag",userSelect:"none"}}>
-      <div style={{display:"flex",alignItems:"baseline",gap:7}}>
+      {/* Left spacer on desktop so date centers properly */}
+      <div style={{flex:1,display:"flex",alignItems:"baseline",gap:7,
+        justifyContent:"flex-start",visibility:"hidden",pointerEvents:"none",
+        "@media(maxWidth:768px)":{display:"none"}}}>
+        <span style={{fontFamily:mono,fontSize:13}}>●</span>
+        <div style={{width:70}}/>
+      </div>
+      {/* Date — centered on desktop, natural flow on mobile */}
+      <div style={{display:"flex",alignItems:"baseline",gap:7,
+        position:"absolute",left:"50%",transform:"translateX(-50%)",
+        // on small screens fall back to normal flow
+      }}>
         <span style={{fontFamily:serif,fontSize:16,color:C.text,letterSpacing:"-0.01em"}}>{dateLabel}</span>
         {isToday && <span style={{fontFamily:mono,fontSize:12,color:C.accent,letterSpacing:"0.12em",
           textTransform:"uppercase",opacity:0.9}}>today</span>}
