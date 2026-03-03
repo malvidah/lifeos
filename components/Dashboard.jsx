@@ -1,14 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "../lib/supabase.js";
-import {
-  DndContext, closestCenter, PointerSensor, useSensor, useSensors,
-  DragOverlay,
-} from "@dnd-kit/core";
-import {
-  SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+
 
 const THEMES = {
   dark: {
@@ -240,7 +233,7 @@ function Ring({score,color,size=48}) {
         strokeWidth={elite?4:2.5} strokeLinecap="round" strokeDasharray={`${pct*circ} ${circ}`}
         style={{transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:score?C.text:C.muted,fontSize:11,fontFamily:serif,
+        style={{fill:score?C.text:C.muted,fontSize:13,fontFamily:serif,
           transform:"rotate(90deg)",transformOrigin:`${size/2}px ${size/2}px`}}>
         {score||"—"}
       </text>
@@ -261,36 +254,22 @@ function Card({children,style={}}) {
   );
 }
 
-// ─── Sortable wrapper ─────────────────────────────────────────────────────────
-function SortableCard({id,children}) {
-  const {attributes,listeners,setNodeRef,transform,transition,isDragging} = useSortable({id});
-  return (
-    <div ref={setNodeRef} style={{
-      transform:CSS.Transform.toString(transform),
-      transition:transition||"transform 200ms cubic-bezier(.4,0,.2,1)",
-      opacity:isDragging?0:1,
-    }}>
-      {children({dragProps:{...attributes,...listeners}})}
-    </div>
-  );
-}
+
 
 // ─── Widget card ─────────────────────────────────────────────────────────────
-function Widget({label,color,dragProps,children,slim}) {
+function Widget({label,color,children,slim}) {
   return (
     <div style={slim ? {} : {height:"100%",display:"flex",flexDirection:"column"}}>
       <Card>
         <div style={{
-          display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+          display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
           borderBottom:`1px solid ${C.border}`,flexShrink:0,
         }}>
-          <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,
-            lineHeight:1,touchAction:"none",userSelect:"none"}}>⠿</div>
-          <div style={{width:3,height:13,borderRadius:2,background:color,flexShrink:0}}/>
-          <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
+          <div style={{width:3,height:14,borderRadius:2,background:color,flexShrink:0}}/>
+          <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",
             textTransform:"uppercase",color:C.muted}}>{label}</span>
         </div>
-        <div style={slim ? {padding:"12px 14px"} : {flex:1,overflow:"auto",padding:14,minHeight:0}}>{children}</div>
+        <div style={slim ? {padding:"14px 16px"} : {flex:1,overflow:"auto",padding:16,minHeight:0}}>{children}</div>
       </Card>
     </div>
   );
@@ -345,7 +324,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
         border:`1.5px solid ${C.border2}`,background:avatar?"transparent":C.surface,
         overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
         {avatar?<img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
-          :<span style={{fontFamily:mono,fontSize:10,color:C.muted}}>{initials}</span>}
+          :<span style={{fontFamily:mono,fontSize:12,color:C.muted}}>{initials}</span>}
       </button>
       {open&&(
         <div style={{position:"absolute",top:40,right:0,width:280,zIndex:300,
@@ -354,31 +333,31 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           boxShadow:C.shadow}}>
           <div>
             <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
-            <div style={{fontFamily:mono,fontSize:9,color:C.muted,marginTop:3}}>{user?.email}</div>
+            <div style={{fontFamily:mono,fontSize:13,color:C.muted,marginTop:3}}>{user?.email}</div>
           </div>
           <div style={{height:1,background:C.border}}/>
 
           {/* Oura */}
           <div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Oura Ring</span>
-              {ouraConnected&&<span style={{fontFamily:mono,fontSize:8,color:C.green,letterSpacing:"0.08em"}}>✓ connected</span>}
+              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Oura Ring</span>
+              {ouraConnected&&<span style={{fontFamily:mono,fontSize:12,color:C.green,letterSpacing:"0.08em"}}>✓ connected</span>}
             </div>
             <input
               type="password" value={ouraKey}
               onChange={e=>{setOuraKey(e.target.value);setOuraConnected(false);setSaved(false);}}
               placeholder="Paste personal access token…"
               style={{width:"100%",background:C.surface,border:`1px solid ${ouraConnected?C.green:C.border2}`,
-                borderRadius:6,outline:"none",color:C.text,fontFamily:mono,fontSize:10,
+                borderRadius:6,outline:"none",color:C.text,fontFamily:mono,fontSize:12,
                 padding:"7px 10px",boxSizing:"border-box"}}/>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:6}}>
               <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
-                style={{fontFamily:mono,fontSize:8,color:C.accent,letterSpacing:"0.06em",textDecoration:"none"}}>
+                style={{fontFamily:mono,fontSize:12,color:C.accent,letterSpacing:"0.06em",textDecoration:"none"}}>
                 Get your token →
               </a>
               <button onClick={saveOura} disabled={saving||!ouraKey.trim()} style={{
                 background:saved?C.green+"22":"none",border:`1px solid ${saved?C.green:C.border2}`,
-                borderRadius:5,color:saved?C.green:C.text,fontFamily:mono,fontSize:8,
+                borderRadius:5,color:saved?C.green:C.text,fontFamily:mono,fontSize:12,
                 letterSpacing:"0.1em",textTransform:"uppercase",padding:"4px 10px",cursor:"pointer"}}>
                 {saved?"saved ✓":saving?"saving…":"save"}
               </button>
@@ -390,8 +369,8 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Strava */}
           <div>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</span>
-              {stravaConnected&&<span style={{fontFamily:mono,fontSize:8,color:C.green,letterSpacing:"0.08em"}}>✓ connected</span>}
+              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</span>
+              {stravaConnected&&<span style={{fontFamily:mono,fontSize:12,color:C.green,letterSpacing:"0.08em"}}>✓ connected</span>}
             </div>
             <button
               onClick={()=>window.location.href="/api/strava-connect"}
@@ -399,7 +378,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 width:"100%",background:stravaConnected?"transparent":"#FC4C0211",
                 border:`1px solid ${stravaConnected?C.green:"#FC4C02"}`,
                 borderRadius:6,color:stravaConnected?C.green:"#FC4C02",
-                fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase",
+                fontFamily:mono,fontSize:13,letterSpacing:"0.12em",textTransform:"uppercase",
                 padding:"8px",cursor:"pointer",transition:"all 0.2s"}}>
               {stravaConnected?"✓ strava connected":"connect strava"}
             </button>
@@ -407,7 +386,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           <div style={{height:1,background:C.border}}/>
           {/* Light / Dark toggle */}
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:mono,fontSize:8,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted}}>
+            <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted}}>
               {theme==="dark"?"Dark mode":"Light mode"}
             </span>
             <button onClick={()=>onThemeChange(t=>t==="dark"?"light":"dark")}
@@ -426,7 +405,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           <div style={{height:1,background:C.border}}/>
           <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
             style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer",
-              color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.12em",textTransform:"uppercase"}}>
+              color:C.muted,fontFamily:mono,fontSize:13,letterSpacing:"0.12em",textTransform:"uppercase"}}>
             sign out →
           </button>
         </div>
@@ -455,7 +434,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       position:"sticky",top:0,zIndex:100}}>
       <div style={{display:"flex",alignItems:"baseline",gap:7}}>
         <span style={{fontFamily:serif,fontSize:16,color:C.text,letterSpacing:"-0.01em"}}>{dateLabel}</span>
-        {isToday && <span style={{fontFamily:mono,fontSize:8,color:C.accent,letterSpacing:"0.12em",
+        {isToday && <span style={{fontFamily:mono,fontSize:12,color:C.accent,letterSpacing:"0.12em",
           textTransform:"uppercase",opacity:0.9}}>today</span>}
       </div>
       <div style={{flex:1}}/>
@@ -464,7 +443,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
           background:syncStatus.syncing?C.yellow:C.green,
           boxShadow:syncStatus.syncing?`0 0 6px ${C.yellow}`:`0 0 6px ${C.green}`,
           transition:"background 0.3s"}}/>
-        <span style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.06em"}}>
+        <span style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.06em"}}>
           {syncStatus.syncing?"syncing":syncStatus.lastSync||"synced"}
         </span>
       </div>
@@ -526,7 +505,7 @@ function offsetToDate(n) {
 // Month and year are static labels (snap discretely). Only the day ribbon moves.
 function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false}) {
   const today = todayKey();
-  const DAY_W = desktop ? 148 : 110;
+  const DAY_W = desktop ? 175 : 120;
 
   // Single source of truth: fractional day offset from epoch
   const liveOff    = useRef(dayOffset(selected));
@@ -635,7 +614,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
   const selYear  = selDate.getFullYear();
 
   // Build day items: enough to fill screen
-  const N = desktop ? 8 : 6;
+  const N = desktop ? 6 : 5;
   const dayItems = [];
   for (let i = -N; i <= N; i++) {
     dayItems.push({ d: offsetToDate(selInt + i), i });
@@ -659,7 +638,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     animateTo(targetOffset);
   };
 
-  const MAX_EVENTS = desktop ? 6 : 4;
+  const MAX_EVENTS = desktop ? 5 : 3;
 
   return (
     <div style={{userSelect:"none", display:"flex", flexDirection:"column"}}>
@@ -672,11 +651,11 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         flexShrink:0,
       }}>
         <span style={{
-          fontFamily:serif, fontSize:18, letterSpacing:"-0.02em",
+          fontFamily:serif, fontSize:22, letterSpacing:"-0.02em",
           color:C.text, lineHeight:1,
         }}>{selMonth}</span>
         <span style={{
-          fontFamily:mono, fontSize:10, letterSpacing:"0.12em",
+          fontFamily:mono, fontSize:13, letterSpacing:"0.12em",
           color:C.muted, lineHeight:1,
         }}>{selYear}</span>
       </div>
@@ -728,13 +707,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 {/* Date header */}
                 <div style={{textAlign:"center", marginBottom:6, paddingTop:2}}>
                   <div style={{
-                    fontFamily:mono, fontSize:8, letterSpacing:"0.07em",
+                    fontFamily:mono, fontSize:12, letterSpacing:"0.07em",
                     color: isCtr ? C.accent : C.muted,
                     marginBottom:3,
                   }}>{DAY_NAMES[d.getDay()]}</div>
                   <div style={{
                     fontFamily:serif,
-                    fontSize: isCtr ? 20 : 15,
+                    fontSize: isCtr ? 26 : 18,
                     fontWeight: isCtr ? "600" : "normal",
                     lineHeight:1,
                     color: isTdy ? C.accent : isCtr ? C.text : C.muted,
@@ -756,17 +735,17 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       borderLeft:`2px solid ${ev.color||C.accent}`,
                       background:`${ev.color||C.accent}10`,
                     }}>
-                      <div style={{fontFamily:mono, fontSize:7, color:C.muted, lineHeight:1.2}}>
+                      <div style={{fontFamily:mono, fontSize:13, color:C.muted, lineHeight:1.3}}>
                         {ev.time !== "all day" ? ev.time : ""}
                       </div>
-                      <div style={{fontFamily:serif, fontSize:10, color: isCtr ? C.text : C.muted,
+                      <div style={{fontFamily:serif, fontSize:12, color: isCtr ? C.text : C.muted,
                         lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
                         {ev.title}
                       </div>
                     </div>
                   ))}
                   {dayEvents.length > MAX_EVENTS && (
-                    <span style={{fontFamily:mono, fontSize:7, color:C.muted, textAlign:"center", padding:"1px 0"}}>
+                    <span style={{fontFamily:mono, fontSize:13, color:C.muted, textAlign:"center", padding:"2px 0"}}>
                       +{dayEvents.length - MAX_EVENTS} more
                     </span>
                   )}
@@ -779,7 +758,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     </div>
   );
 }
-function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps, token}) {
+function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
   const mobile = useIsMobile();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({title:"", startTime:"", endTime:"", allDay:false});
@@ -815,25 +794,22 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
   return (
     <Card>
       {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
         borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,
-          touchAction:"none",userSelect:"none"}}>⠿</div>
-        <div style={{width:3,height:13,borderRadius:2,background:C.blue,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
+        <div style={{width:3,height:14,borderRadius:2,background:C.blue,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",
           textTransform:"uppercase",color:C.muted}}>Calendar</span>
         <div style={{flex:1}}/>
-
         <button onClick={() => onSelect(todayKey())} style={{
           background:"none",border:`1px solid ${C.border2}`,borderRadius:5,cursor:"pointer",
-          color:C.muted,fontFamily:mono,fontSize:8,letterSpacing:"0.08em",padding:"4px 8px",
+          color:C.muted,fontFamily:mono,fontSize:12,letterSpacing:"0.08em",padding:"5px 10px",
           transition:"all 0.15s"}}
           onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
           onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
           TODAY</button>
         <button onClick={openAdd} style={{
           background:"none",border:`1px solid ${C.border2}`,borderRadius:5,cursor:"pointer",
-          color:C.muted,fontFamily:mono,fontSize:13,lineHeight:1,padding:"2px 7px",
+          color:C.muted,fontFamily:mono,fontSize:15,lineHeight:1,padding:"2px 8px",
           transition:"all 0.15s"}}
           onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
           onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}
@@ -843,7 +819,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
       {/* Quick-add form */}
       {adding && (
         <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,background:`${C.blue}08`}}>
-          <div style={{fontFamily:mono,fontSize:8,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>
+          <div style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>
             New event · {new Date(selected+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}
           </div>
           <input autoFocus value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}
@@ -854,36 +830,36 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, dragProps,
             <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
               <input type="checkbox" checked={form.allDay} onChange={e=>setForm(f=>({...f,allDay:e.target.checked}))}
                 style={{accentColor:C.blue,width:12,height:12}}/>
-              <span style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.08em"}}>All day</span>
+              <span style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.08em"}}>All day</span>
             </label>
             {!form.allDay && (
               <>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontFamily:mono,fontSize:9,color:C.muted}}>Start</span>
+                  <span style={{fontFamily:mono,fontSize:13,color:C.muted}}>Start</span>
                   <input type="time" value={form.startTime} onChange={e=>setForm(f=>({...f,startTime:e.target.value}))}
                     style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:4,
-                      outline:"none",padding:"3px 6px",fontFamily:mono,fontSize:10,color:C.text}}/>
+                      outline:"none",padding:"3px 6px",fontFamily:mono,fontSize:12,color:C.text}}/>
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontFamily:mono,fontSize:9,color:C.muted}}>End</span>
+                  <span style={{fontFamily:mono,fontSize:13,color:C.muted}}>End</span>
                   <input type="time" value={form.endTime} onChange={e=>setForm(f=>({...f,endTime:e.target.value}))}
                     style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:4,
-                      outline:"none",padding:"3px 6px",fontFamily:mono,fontSize:10,color:C.text}}/>
+                      outline:"none",padding:"3px 6px",fontFamily:mono,fontSize:12,color:C.text}}/>
                 </div>
               </>
             )}
           </div>
-          {saveErr && <div style={{fontFamily:mono,fontSize:9,color:"#A05050",marginBottom:8}}>{saveErr}</div>}
+          {saveErr && <div style={{fontFamily:mono,fontSize:13,color:"#A05050",marginBottom:8}}>{saveErr}</div>}
           <div style={{display:"flex",gap:8}}>
             <button onClick={submitEvent} disabled={saving||!form.title.trim()} style={{
               background:C.blue,border:"none",borderRadius:5,padding:"6px 14px",
-              color:"#fff",fontFamily:mono,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",
+              color:"#fff",fontFamily:mono,fontSize:13,letterSpacing:"0.1em",textTransform:"uppercase",
               cursor:saving||!form.title.trim()?"not-allowed":"pointer",opacity:saving||!form.title.trim()?0.5:1}}>
               {saving?"saving…":"add to google cal"}
             </button>
             <button onClick={closeAdd} style={{
               background:"none",border:`1px solid ${C.border2}`,borderRadius:5,padding:"6px 14px",
-              color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",cursor:"pointer"}}>
+              color:C.muted,fontFamily:mono,fontSize:13,letterSpacing:"0.1em",textTransform:"uppercase",cursor:"pointer"}}>
               cancel
             </button>
           </div>
@@ -940,7 +916,7 @@ function fmtMinsField(val) {
 }
 
 
-function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dragProps}) {
+function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
 
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
@@ -987,11 +963,8 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
     <Card>
       {/* Card header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",
-        borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-        <div {...dragProps} style={{cursor:"grab",color:C.dim,fontSize:15,lineHeight:1,
-          touchAction:"none",userSelect:"none"}}>⠿</div>
-        <div style={{width:3,height:13,borderRadius:2,background:C.green,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:9,letterSpacing:"0.2em",
+        borderBottom:`1px solid ${C.border}`,flexShrink:0}}>        <div style={{width:3,height:13,borderRadius:2,background:C.green,flexShrink:0}}/>
+        <span style={{fontFamily:mono,fontSize:13,letterSpacing:"0.2em",
           textTransform:"uppercase",color:C.muted}}>Health</span>
       </div>
       {/* Metrics row */}
@@ -1005,14 +978,14 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,dra
                 <Ring score={m.score} color={m.color} size={48}/>
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontFamily:mono,fontSize:9,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:6}}>{m.label}</div>
+                <div style={{fontFamily:mono,fontSize:13,letterSpacing:"0.15em",textTransform:"uppercase",color:m.color,marginBottom:6}}>{m.label}</div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
                     <div key={f.label}>
-                      <div style={{fontFamily:mono,fontSize:8,textTransform:"uppercase",color:C.muted,marginBottom:2,letterSpacing:"0.08em"}}>{f.label}</div>
+                      <div style={{fontFamily:mono,fontSize:12,textTransform:"uppercase",color:C.muted,marginBottom:2,letterSpacing:"0.08em"}}>{f.label}</div>
                       <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                         <span style={{fontFamily:serif,fontSize:17,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
-                        {f.unit&&<span style={{fontFamily:mono,fontSize:9,color:C.muted}}>{f.unit}</span>}
+                        {f.unit&&<span style={{fontFamily:mono,fontSize:13,color:C.muted}}>{f.unit}</span>}
                       </div>
                     </div>
                   ))}
@@ -1218,8 +1191,8 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   );
 
   const rowStyle = {display:"flex", alignItems:"baseline", gap:8, padding:"2px 0", minHeight:28};
-  const kcalStyle = {fontFamily:mono, fontSize:10, color, flexShrink:0, minWidth:38, textAlign:"right", opacity:0.85};
-  const proteinStyle = {fontFamily:mono, fontSize:10, color:C.blue, flexShrink:0, minWidth:30, textAlign:"right", opacity:0.85};
+  const kcalStyle = {fontFamily:mono, fontSize:12, color, flexShrink:0, minWidth:38, textAlign:"right", opacity:0.85};
+  const proteinStyle = {fontFamily:mono, fontSize:12, color:C.blue, flexShrink:0, minWidth:30, textAlign:"right", opacity:0.85};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -1238,8 +1211,8 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
                   const unit = match ? match[2] : "";
                   return (
                     <span key={i} style={{whiteSpace:"nowrap"}}>
-                      <span style={{fontFamily:mono,fontSize:11,color:C.text,opacity:0.7}}>{val}</span>
-                      {unit && <span style={{fontFamily:mono,fontSize:8,color:C.muted,marginLeft:1}}>{unit}</span>}
+                      <span style={{fontFamily:mono,fontSize:13,color:C.text,opacity:0.7}}>{val}</span>
+                      {unit && <span style={{fontFamily:mono,fontSize:12,color:C.muted,marginLeft:1}}>{unit}</span>}
                     </span>
                   );
                 })}
@@ -1281,10 +1254,10 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:12,borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
           {showProtein && totalProtein > 0 && (
-            <span style={{fontFamily:mono,fontSize:11,color:C.blue,opacity:0.9}}>{totalProtein}g protein</span>
+            <span style={{fontFamily:mono,fontSize:13,color:C.blue,opacity:0.9}}>{totalProtein}g protein</span>
           )}
           {totalKcal > 0 && (
-            <span style={{fontFamily:mono,fontSize:11,color,opacity:0.9}}>{prefix}{totalKcal} kcal</span>
+            <span style={{fontFamily:mono,fontSize:13,color,opacity:0.9}}>{prefix}{totalKcal} kcal</span>
           )}
         </div>
       )}
@@ -1401,7 +1374,7 @@ function Tasks({date,token,userId}) {
             style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",
               border:`1.5px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
               display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
-            {row.done&&<span style={{fontSize:8,color:C.bg,lineHeight:1}}>✓</span>}
+            {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
           </button>
           <input ref={el=>refs.current[row.id]=el} value={row.text}
             onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
@@ -1422,7 +1395,7 @@ function LoginScreen() {
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontFamily:serif,fontSize:32,color:C.text,marginBottom:6,letterSpacing:"-0.02em"}}>Day Loop</div>
-        <div style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
+        <div style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
           setLoading(true);
           const supabase=createClient();
@@ -1432,7 +1405,7 @@ function LoginScreen() {
             queryParams:{access_type:"offline",prompt:"consent"},
           }});
         }} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:8,
-          color:loading?C.muted:C.text,fontFamily:mono,fontSize:10,letterSpacing:"0.15em",
+          color:loading?C.muted:C.text,fontFamily:mono,fontSize:12,letterSpacing:"0.15em",
           textTransform:"uppercase",padding:"13px 32px",cursor:loading?"not-allowed":"pointer"}}>
           {loading?"redirecting…":"sign in with google"}
         </button>
@@ -1504,7 +1477,7 @@ function InsightsCard({date, token, userId, healthKey}) {
   const PLACEHOLDER = "Your sleep efficiency was strong and your HRV is trending upward this week.\n\nReadiness looks solid at 84 — your nervous system has recovered well from recent training load.\n\nThis time last year your sleep scores were lower; the consistency you've built since then is paying off.";
 
   return (
-    <Widget label="Insights" color={C.muted} dragProps={{}} slim>
+    <Widget label="Insights" color={C.muted} slim>
       <div style={{ position: "relative" }}>
         {busy && !isFree && (
           <div style={{ padding: "4px 0" }}>
@@ -1516,26 +1489,26 @@ function InsightsCard({date, token, userId, healthKey}) {
           </div>
         )}
         {error && (
-          <div style={{ fontFamily: mono, fontSize: 11, color: C.red, lineHeight: 1.5 }}>{error}</div>
+          <div style={{ fontFamily: mono, fontSize:13, color: C.red, lineHeight: 1.5 }}>{error}</div>
         )}
         {isFree ? (
           /* Free tier — show real insight, nudge to upgrade for chat */
           <div>
-            {text && <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line", marginBottom: 10 }}>{text}</div>}
+            {text && <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line", marginBottom: 10 }}>{text}</div>}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <div style={{ width: 3, height: 3, borderRadius: "50%", background: C.accent, flexShrink: 0 }}/>
-              <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, letterSpacing: "0.06em" }}>
+              <span style={{ fontFamily: mono, fontSize:11, color: C.dim, letterSpacing: "0.06em" }}>
                 Chat with your data —
               </span>
               <button onClick={() => window.location.href = "/upgrade"} style={{
                 background: "none", border: "none", padding: 0, cursor: "pointer",
-                fontFamily: mono, fontSize: 9, color: C.accent, letterSpacing: "0.06em",
+                fontFamily: mono, fontSize:11, color: C.accent, letterSpacing: "0.06em",
                 textDecoration: "underline", textUnderlineOffset: 3,
               }}>upgrade to Premium</button>
             </div>
           </div>
         ) : text ? (
-          <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
+          <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
             {text}
             {busy && <span style={{ marginTop: 8, display: "block" }}><Shimmer width="40%" height={10} /></span>}
           </div>
@@ -1709,11 +1682,11 @@ function ChatFloat({date, token, userId}) {
                     : C.bg === "#0A0A0A" ? "rgba(44,44,48,0.9)" : "rgba(229,229,234,0.9)",
                 }}>
                   {m.type === "action" && (
-                    <div style={{ fontFamily: mono, fontSize: 8, letterSpacing: "0.1em", color: m.role === "user" ? "rgba(255,255,255,0.7)" : C.green, textTransform: "uppercase", marginBottom: 3 }}>✓ updated</div>
+                    <div style={{ fontFamily: mono, fontSize:10, letterSpacing: "0.1em", color: m.role === "user" ? "rgba(255,255,255,0.7)" : C.green, textTransform: "uppercase", marginBottom: 3 }}>✓ updated</div>
                   )}
                   <div style={{
                     fontFamily: m.role === "user" ? serif : mono,
-                    fontSize: m.role === "user" ? 15 : 11,
+                    fontSize: m.role === "user" ? 15 : 13,
                     lineHeight: m.role === "user" ? 1.45 : 1.7,
                     color: m.type === "error" ? C.red : m.type === "upgrade" ? C.accent : m.role === "user" ? "#fff" : C.muted,
                     whiteSpace: "pre-line",
@@ -1841,9 +1814,6 @@ export default function Dashboard() {
   const [lastSync,  setLastSync]  = useState(null);
   const [googleToken,setGoogleToken] = useState(null);
 
-  const [fullOrder, setFullOrder] = useState(FULL_IDS);
-
-  const sensors = useSensors(useSensor(PointerSensor,{activationConstraint:{distance:8}}));
 
   useEffect(()=>{
     localStorage.setItem("theme", theme);
@@ -1942,17 +1912,9 @@ export default function Dashboard() {
   },[token,userId]); // eslint-disable-line
 
   const mobile = useIsMobile();
-  const [activeId,setActiveId]=useState(null);
-  function handleDragStart({active}){setActiveId(active.id);}
-  function handleDragEnd({active,over}){
-    setActiveId(null);
-    if(!over||active.id===over.id)return;
-    setFullOrder(o=>arrayMove(o,o.indexOf(active.id),o.indexOf(over.id)));
-  }
-
   if(!authReady) return (
     <div style={{background:C.bg,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <span style={{fontFamily:mono,fontSize:9,color:C.muted,letterSpacing:"0.2em"}}>loading…</span>
+      <span style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.2em"}}>loading…</span>
     </div>
   );
   if(!session) return <LoginScreen/>;
@@ -1980,43 +1942,20 @@ export default function Dashboard() {
       {mobile ? (
         /* ── MOBILE: single scrollable column ──────────────────────────── */
         <div style={{flex:1,overflowY:"auto",padding:8,paddingBottom:88,display:"flex",flexDirection:"column",gap:8}}>
-          {/* Cal + Health sortable */}
-          <DndContext sensors={sensors} collisionDetection={closestCenter}
-            onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <SortableContext items={fullOrder} strategy={verticalListSortingStrategy}>
-              {fullOrder.map(id=>(
-                <div key={id}>
-                  <SortableCard id={id}>
-                    {({dragProps})=>
-                      id==="cal"
-                        ? <div>
-                            <CalStrip selected={selected} onSelect={setSelected}
-                              events={events} setEvents={setEvents} healthDots={healthDots}
-                              token={token} dragProps={dragProps}/>
-                          </div>
-                        : <HealthStrip date={selected} token={token} userId={userId}
-                            onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-                            dragProps={dragProps}/>
-                    }
-                  </SortableCard>
-                </div>
-              ))}
-            </SortableContext>
-            <DragOverlay>
-              {activeId&&(
-                <div style={{background:C.card,border:`1px solid ${C.accent}`,borderRadius:R,
-                  padding:"12px 18px",fontFamily:mono,fontSize:10,color:C.accent}}>
-                  {activeId==="cal"?"Calendar":"Health"}
-                </div>
-              )}
-            </DragOverlay>
-          </DndContext>
+          {/* Cal + Health */}
+          <div>
+            <CalStrip selected={selected} onSelect={setSelected}
+              events={events} setEvents={setEvents} healthDots={healthDots}
+              token={token}/>
+          </div>
+          <HealthStrip date={selected} token={token} userId={userId}
+            onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}/>
           {/* Insights card — below health strip */}
           <InsightsCard date={selected} token={token} userId={userId} healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
           {/* Widgets stacked */}
           {[leftWidget,...rightWidgets].map(w=>(
             <div key={w.id} style={{minHeight:220}}>
-              <Widget label={w.label} color={w.color()} dragProps={{}}>
+              <Widget label={w.label} color={w.color()}>
                 <w.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
@@ -2030,14 +1969,13 @@ export default function Dashboard() {
           <div style={{flexShrink:0}}>
             <CalStrip selected={selected} onSelect={setSelected}
               events={events} setEvents={setEvents} healthDots={healthDots}
-              token={token} dragProps={{}}/>
+              token={token}/>
           </div>
 
           {/* Health strip — full width */}
           <div style={{flexShrink:0}}>
             <HealthStrip date={selected} token={token} userId={userId}
-              onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-              dragProps={{}}/>
+              onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}/>
           </div>
 
           {/* Insights card — below health */}
@@ -2046,14 +1984,14 @@ export default function Dashboard() {
           {/* Widgets — notes on left (wider), tasks+meals+activity on right */}
           <div style={{display:"flex",gap:8,alignItems:"stretch",minHeight:480}}>
             <div style={{flex:"2 1 0",minWidth:0}}>
-              <Widget label={leftWidget.label} color={leftWidget.color()} dragProps={{}}>
+              <Widget label={leftWidget.label} color={leftWidget.color()}>
                 <leftWidget.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
             <div style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
               {rightWidgets.map(w=>(
                 <div key={w.id} style={{flex:"1 1 0",minHeight:140}}>
-                  <Widget label={w.label} color={w.color()} dragProps={{}}>
+                  <Widget label={w.label} color={w.color()}>
                     <w.Comp date={selected} token={token} userId={userId}/>
                   </Widget>
                 </div>
