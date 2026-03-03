@@ -1,10 +1,16 @@
-// Shared tier helper — used by all AI routes.
-// Premium user IDs live in PREMIUM_USER_IDS env var (comma-separated Supabase UUIDs).
-// To grant premium: add UUID to Vercel env var and redeploy.
-
-export function isPremium(userId) {
-  const list = process.env.PREMIUM_USER_IDS || '';
-  return list.split(',').map(s => s.trim()).filter(Boolean).includes(userId);
-}
+// Tier helper — checks premium status from DB, not env var.
+// Premium is granted by Stripe webhook writing to the entries table.
 
 export const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY;
+
+// Pass an authenticated supabase client + userId.
+// Returns true if user has an active premium row in entries.
+export async function isPremium(supabase, userId) {
+  try {
+    const { data } = await supabase.from('entries').select('data')
+      .eq('type', 'premium').eq('date', 'global').eq('user_id', userId).maybeSingle();
+    return data?.data?.active === true;
+  } catch {
+    return false;
+  }
+}

@@ -36,7 +36,7 @@ export async function POST(request) {
     const apiKey = ANTHROPIC_KEY();
     if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
 
-    const premium = isPremium(user.id);
+    const premium = await isPremium(supabase, user.id);
 
     // ── Follow-up chat ──────────────────────────────────────────────────────
     if (messages?.length) {

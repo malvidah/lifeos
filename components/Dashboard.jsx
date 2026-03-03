@@ -1713,10 +1713,10 @@ function ChatFloat({date, token, userId}) {
                     <div style={{ fontFamily: mono, fontSize: 8, letterSpacing: "0.1em", color: C.green, textTransform: "uppercase", marginBottom: 3 }}>✓ updated</div>
                   )}
                   <div style={{
-                    fontFamily: m.role === "user" ? mono : serif,
-                    fontSize: m.role === "user" ? 12 : 13,
-                    lineHeight: 1.65,
-                    color: m.type === "error" ? C.red : m.type === "upgrade" ? C.accent : m.role === "user" ? C.muted : C.text,
+                    fontFamily: m.role === "user" ? serif : mono,
+                    fontSize: m.role === "user" ? 14 : 11,
+                    lineHeight: m.role === "user" ? 1.55 : 1.75,
+                    color: m.type === "error" ? C.red : m.type === "upgrade" ? C.accent : m.role === "user" ? C.text : C.muted,
                     whiteSpace: "pre-line",
                   }}>{m.content}</div>
                 </div>
@@ -1768,20 +1768,6 @@ function ChatFloat({date, token, userId}) {
               padding: "7px 0", opacity: busy ? 0.5 : 1,
             }}
           />
-
-          {/* Dismiss button when conversation is open */}
-          {open && messages.length > 0 && !input.trim() && (
-            <button onClick={() => setOpen(false)} style={{
-              background: `${C.text}10`, border: "none", borderRadius: "50%",
-              width: 32, height: 32, cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, color: C.muted, marginRight: 4,
-            }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <polyline points="18 15 12 9 6 15"/>
-              </svg>
-            </button>
-          )}
 
           {/* Send or Voice/Mic */}
           {input.trim() ? (
