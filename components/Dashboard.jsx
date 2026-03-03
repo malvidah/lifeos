@@ -1465,7 +1465,13 @@ function InsightsCard({date, token, userId, healthKey}) {
   const loaded = useRef(false);
 
   const BAD_VALUES = ["No data available", "No insights generated", "AI error"];
-  function isBadCache(t) { return !t || BAD_VALUES.some(b => t.includes(b)); }
+  function isBadCache(t, cached) {
+    if (!t) return true;
+    if (BAD_VALUES.some(b => t.includes(b))) return true;
+    // If cached as a welcome message but we now have health data, regenerate
+    if (cached?.isWelcome && healthKey) return true;
+    return false;
+  }
 
   async function generate(force = false) {
     if (!token || !userId) return;
@@ -1474,7 +1480,7 @@ function InsightsCard({date, token, userId, healthKey}) {
       if (!force) {
         const cached = await dbLoad(date, "insights", token);
         const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
-        if (cached?.text && !isBadCache(cached.text) && age < 4 * 60 * 60 * 1000) {
+        if (cached?.text && !isBadCache(cached.text, cached) && age < 4 * 60 * 60 * 1000) {
           setText(cached.text); setBusy(false); return;
         }
       }

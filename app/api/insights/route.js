@@ -60,13 +60,45 @@ export async function POST(request) {
         );
       }
 
+      // Build today's data context for chat so Claude doesn't ask for data it already has
+      const { data: chatEntries } = await supabase.from('entries')
+        .select('type, data').eq('date', date).eq('user_id', user.id);
+      const chatToday = {};
+      for (const row of chatEntries || []) chatToday[row.type] = row.data;
+
+      const chatCtxParts = [];
+      if (chatToday.health) {
+        const h = chatToday.health;
+        chatCtxParts.push(`Sleep ${h.sleepScore || '?'} (${h.sleepHrs || '?'}h, ${h.sleepEff || '?'}% eff), Readiness ${h.readinessScore || '?'}, HRV ${h.hrv || '?'}ms, RHR ${h.rhr || '?'}bpm, Activity ${h.activityScore || '?'} (${h.activeCalories || '?'} cal burned)`);
+      }
+      if (chatToday.notes) chatCtxParts.push(`Notes: ${String(chatToday.notes).slice(0, 400)}`);
+      if (chatToday.meals?.length) {
+        const m = chatToday.meals.filter(r => r.text?.trim()).map(r => r.text);
+        if (m.length) chatCtxParts.push(`Meals: ${m.join(', ')}`);
+      }
+      if (chatToday.activity?.length) {
+        const a = chatToday.activity.filter(r => r.text?.trim()).map(r => r.text);
+        if (a.length) chatCtxParts.push(`Activity: ${a.join(', ')}`);
+      }
+      if (chatToday.tasks?.length) {
+        const t = chatToday.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
+        if (t.length) chatCtxParts.push(`Tasks: ${t.join(', ')}`);
+      }
+      const chatContext = chatCtxParts.length
+        ? `Today's data (${date}):\n${chatCtxParts.join('\n')}`
+        : `No health or activity data logged yet for ${date}.`;
+
       const res = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 600,
-          system: `You are a thoughtful personal wellness coach embedded in someone's Day Loop dashboard. Be warm, observant, and concise. Use specific data points when relevant. Keep responses to 2-3 sentences unless asked for more detail.`,
+          max_tokens: 300,
+          system: `You are a warm, observant wellness coach inside someone's Day Loop dashboard. You have access to their data — never ask them to provide it.
+
+${chatContext}
+
+Rules: 1-3 sentences max. Be specific, reference actual numbers when available. No bullet points. No headers. If they ask what you can tell them, give a direct observation from the data above.`,
           messages,
         }),
       });
@@ -167,17 +199,29 @@ export async function POST(request) {
 
     const context = parts.join('\n');
 
+    // Detect empty state — only the date header, no actual data
+    const hasData = parts.length > 1 || recentHealth.length > 0 || recentActivity.length > 0;
+    if (!hasData) {
+      // Get user's name for welcome message
+      const userName = user.user_metadata?.name?.split(' ')[0] || user.email?.split('@')[0] || 'there';
+      const welcome = `Welcome to Day Loop, ${userName}. Connect your Oura ring to start seeing AI insights based on your sleep, readiness, and HRV — then use the chat bar below to ask questions or log your day. The more data you add, the sharper the insights get.`;
+      // Cache the welcome so it doesn't re-generate every load
+      await supabase.from('entries').upsert(
+        { date, type: 'insights', data: { text: welcome, generatedAt: new Date().toISOString(), isWelcome: true }, user_id: user.id, updated_at: new Date().toISOString() },
+        { onConflict: 'date,type,user_id' }
+      );
+      return Response.json({ insight: welcome });
+    }
+
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 400,
-        system: `You are a thoughtful personal wellness coach embedded in someone's Day Loop dashboard. Generate 2-3 brief, specific insights based on their data. Be warm and observant, not preachy. Reference specific numbers and patterns.
+        max_tokens: 200,
+        system: `You are a warm, observant wellness coach inside someone's Day Loop dashboard. Write 1-3 sentences of specific insight based on their data. Reference actual numbers. No bullet points, no headers, no preamble — just the insight.
 
-If there's data from last year, include a "this time last year" reflection — be specific. If trends show improvement or decline, mention it with actual numbers.
-
-Format: Natural conversational tone. No headers or bullet points. Separate insights with line breaks. Under 100 words total.`,
+If there's data from last year, weave in a brief "this time last year" comparison. Keep it under 60 words total.`,
         messages: [{ role: 'user', content: context }],
       }),
     });
