@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { rateLimit } from '../_lib/rateLimit.js';
 
 function getUserClient(req) {
   const auth = req.headers.get('authorization') || '';
@@ -37,6 +38,13 @@ export async function POST(request) {
 
     const { text, date, tz, history } = await request.json();
     if (!text?.trim() || !date) return Response.json({ error: 'text and date required' }, { status: 400 });
+
+    // Cap input length to prevent prompt injection via giant strings
+    if (text.length > 2000) return Response.json({ error: 'Input too long' }, { status: 400 });
+
+    // Rate limit: 60 actions per user per hour
+    const rl = rateLimit(`voice:${user.id}`, { max: 60, windowMs: 60 * 60 * 1000 });
+    if (!rl.ok) return Response.json({ error: `Too many requests. Try again in ${rl.retryAfter}s.` }, { status: 429 });
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });

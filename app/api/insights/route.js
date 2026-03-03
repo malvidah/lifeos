@@ -3,6 +3,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { isPremium, ANTHROPIC_KEY } from '../_lib/tier.js';
+import { rateLimit } from '../_lib/rateLimit.js';
 
 function getUserClient(req) {
   const auth = req.headers.get('authorization') || '';
@@ -32,6 +33,10 @@ export async function POST(request) {
 
     const { date, messages } = await request.json();
     if (!date) return Response.json({ error: 'date required' }, { status: 400 });
+
+    // Rate limit: 30 requests per user per hour
+    const rl = rateLimit(`insights:${user.id}`, { max: 30, windowMs: 60 * 60 * 1000 });
+    if (!rl.ok) return Response.json({ error: `Too many requests. Try again in ${rl.retryAfter}s.` }, { status: 429 });
 
     const apiKey = ANTHROPIC_KEY();
     if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });

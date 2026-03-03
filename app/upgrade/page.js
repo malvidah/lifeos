@@ -226,14 +226,14 @@ function CheckoutView({ clientSecret, onCancel }) {
   }, [clientSecret]);
 
   return (
-    <div style={{ maxWidth: 540, margin: '0 auto', padding: '40px 24px 80px' }}>
+    <div style={{ maxWidth: 680, margin: '0 auto', padding: '40px 24px 80px' }}>
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
         <a href="/" style={{ fontFamily: mono, fontSize: 9, color: muted, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none' }}>Day Loop</a>
         <h1 style={{ fontFamily: serif, fontSize: 28, color: text, margin: '14px 0 0', letterSpacing: '-0.02em', fontWeight: 400 }}>Complete your order</h1>
       </div>
-      {/* Stripe embedded checkout mounts here */}
-      <div ref={containerRef} style={{ borderRadius: 12, overflow: 'hidden' }} />
-      <div style={{ textAlign: 'center', marginTop: 20 }}>
+      {/* Stripe embedded checkout mounts here — Stripe controls internal width */}
+      <div ref={containerRef} />
+      <div style={{ textAlign: 'center', marginTop: 24 }}>
         <button onClick={onCancel} style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: muted, background: 'none', border: 'none', cursor: 'pointer' }}>← Back</button>
       </div>
     </div>
