@@ -114,7 +114,7 @@ export async function POST(request) {
       const h = today.health;
       parts.push(`Health: Sleep ${h.sleepScore || '?'} (${h.sleepHrs || '?'}h, ${h.sleepEff || '?'}% eff), Readiness ${h.readinessScore || '?'} (HRV ${h.hrv || '?'}ms, RHR ${h.rhr || '?'}bpm), Activity ${h.activityScore || '?'} (${h.activeCalories || '?'} cal burned, ${h.activeMinutes || '?'} active min), Recovery ${h.resilienceScore || '?'} (stress ${h.stressMins || '?'}min, recovery ${h.recoveryMins || '?'}min)`);
     }
-    if (today.notes) parts.push(`Notes: ${typeof today.notes === 'string' ? today.notes : JSON.stringify(today.notes)}`);
+    if (today.notes) { const n = typeof today.notes === 'string' ? today.notes : JSON.stringify(today.notes); parts.push(`Notes: ${n.slice(0, 500)}`); }
     if (today.meals && Array.isArray(today.meals)) {
       const meals = today.meals.filter(r => r.text?.trim()).map(r => `${r.text}${r.protein ? ` (${r.protein}g protein, ${r.kcal} kcal)` : r.kcal ? ` (${r.kcal} kcal)` : ''}`);
       if (meals.length) parts.push(`Meals: ${meals.join(', ')}`);
