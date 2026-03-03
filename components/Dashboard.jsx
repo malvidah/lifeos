@@ -5,34 +5,34 @@ import { createClient } from "../lib/supabase.js";
 
 const THEMES = {
   dark: {
-    // Deep cool purple-slate — calm, focused, midnight
-    bg:"#0D0C14",      surface:"#13121C",   card:"#191826",
-    border:"#231F32",  border2:"#2D2840",
-    text:"#E6E0F0",    muted:"#6A6480",     dim:"#302C42",
-    // Functional data colors — saturated enough to read as chips
-    accent:"#C4A882",  green:"#3E9E6A",     blue:"#5490C8",
-    purple:"#9B6FD4",  red:"#C05858",       orange:"#C47840",
-    yellow:"#B89040",
-    shadow:"0 1px 3px rgba(0,0,0,0.6),0 4px 20px rgba(0,0,0,0.35)",
+    // Deep neutral dark — near-black, cards match topbar, no purple
+    bg:"#0B0B0C",      surface:"#111213",   card:"#161718",
+    border:"#202224",  border2:"#2A2C2F",
+    text:"#E4DDD4",    muted:"#666260",     dim:"#2A2826",
+    // Orange-gold accent — glowing, warm
+    accent:"#E8903A",
+    green:"#3E9E6A",   blue:"#5490C8",
+    purple:"#9B6FD4",  red:"#C05858",       orange:"#E8903A",
+    yellow:"#D4A030",
+    shadow:"0 1px 3px rgba(0,0,0,0.7),0 4px 20px rgba(0,0,0,0.4)",
     shadowSm:"0 1px 3px rgba(0,0,0,0.5)",
-    // Sunset gradient for logo + emphasis
-    grad:"linear-gradient(115deg, #E8843A 0%, #C4547A 55%, #8B60C4 100%)",
-    gradGlow:"0 0 18px rgba(196,84,122,0.35), 0 0 6px rgba(232,132,58,0.25)",
+    // Glow for logo — no gradient, just glowing orange-gold
+    gradGlow:"0 0 20px rgba(232,144,58,0.5), 0 0 8px rgba(232,144,58,0.3)",
   },
   light: {
-    // Warm paper — Substack editorial, all tones in the same warm family
-    bg:"#F0EBE1",      surface:"#E7E0D4",   card:"#FAF7F2",
-    border:"#DDD6C8",  border2:"#CBC3B4",
-    text:"#26201A",    muted:"#8C8074",     dim:"#BEB5A8",
-    // Functional data colors — muted enough for light bg, still distinct
-    accent:"#A07840",  green:"#3A7050",     blue:"#3A6898",
-    purple:"#7050A8",  red:"#985040",       orange:"#A06030",
-    yellow:"#8A7020",
+    // Warm paper — cards and topbar are close in tone, no stark whites
+    bg:"#EFE9DF",      surface:"#E8E1D6",   card:"#F5F0E8",
+    border:"#DDD5C6",  border2:"#CCC4B4",
+    text:"#26201A",    muted:"#8C8074",     dim:"#C4BAB0",
+    // Orange-gold accent — same warmth as dark mode
+    accent:"#D4781C",
+    green:"#3A7050",   blue:"#3A6898",
+    purple:"#7050A8",  red:"#985040",       orange:"#D4781C",
+    yellow:"#9A7820",
     shadow:"0 1px 2px rgba(44,32,16,0.07),0 3px 10px rgba(44,32,16,0.05)",
     shadowSm:"0 1px 2px rgba(44,32,16,0.06)",
-    // Sunrise gradient for logo + emphasis
-    grad:"linear-gradient(115deg, #E8A030 0%, #D4602A 55%, #A83860 100%)",
-    gradGlow:"0 0 16px rgba(212,96,42,0.2), 0 0 5px rgba(232,160,48,0.2)",
+    // Glow for logo
+    gradGlow:"0 0 16px rgba(212,120,28,0.3), 0 0 5px rgba(212,120,28,0.2)",
   },
 };
 // C is set at render time via setTheme — default dark
@@ -686,9 +686,8 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
         <span style={{
           fontFamily:serif,fontSize:17,letterSpacing:"-0.02em",
-          background:C.grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
-          backgroundClip:"text",
-          filter:`drop-shadow(${C.gradGlow})`,
+          color:C.accent,
+          textShadow:C.gradGlow,
         }}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
@@ -1929,8 +1928,7 @@ function LoginScreen() {
       <div style={{textAlign:"center"}}>
         <div style={{
           fontFamily:serif,fontSize:32,marginBottom:6,letterSpacing:"-0.02em",
-          background:C.grad,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",
-          backgroundClip:"text",
+          color:C.accent,textShadow:C.gradGlow,
         }}>Day Loop</div>
         <div style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
