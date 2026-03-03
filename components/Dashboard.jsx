@@ -2181,35 +2181,33 @@ function ChatFloat({date, token, userId}) {
   }
 
   const hasMic = !!recognitionRef.current;
-  const glassBg = C.bg === "#0A0A0A"
-    ? "rgba(22, 23, 26, 0.82)"
-    : "rgba(239, 235, 228, 0.82)";
 
   return (
     <div style={{
       position: "fixed",
-      bottom: "max(16px, env(safe-area-inset-bottom, 16px))",
-      left: "50%",
-      transform: "translateX(-50%)",
-      width: "min(calc(100vw - 32px), 560px)",
+      bottom: 0,
+      left: 0,
+      right: 0,
       zIndex: 98,
       display: "flex",
       flexDirection: "column",
+      alignItems: "center",
+      background: C.surface,
+      borderTop: `1px solid ${C.border}`,
+      padding: "8px 16px",
+      paddingBottom: "max(8px, env(safe-area-inset-bottom, 8px))",
       gap: 6,
-      pointerEvents: "none",
     }}>
 
       {/* Status notification */}
       {status && (
         <div style={{
-          padding: "9px 16px",
-          borderRadius: 12,
+          padding: "7px 14px",
+          borderRadius: 8,
           background: status.ok ? `${C.green}18` : `${C.red}15`,
           border: `1px solid ${status.ok ? C.green : C.red}40`,
-          backdropFilter: "blur(20px)",
-          WebkitBackdropFilter: "blur(20px)",
-          pointerEvents: "none",
           animation: "fadeInUp 0.18s ease",
+          width: "100%", maxWidth: 560, boxSizing: "border-box",
         }}>
           <span style={{
             fontFamily: mono, fontSize: 12,
@@ -2221,17 +2219,14 @@ function ChatFloat({date, token, userId}) {
         </div>
       )}
 
-      {/* Pill */}
+      {/* Input row */}
       <div style={{
         display: "flex", alignItems: "center", gap: 8,
-        background: glassBg,
-        backdropFilter: "blur(24px) saturate(180%)",
-        WebkitBackdropFilter: "blur(24px) saturate(180%)",
-        borderRadius: 26,
-        border: `1px solid ${C.border}`,
-        boxShadow: "0 4px 24px rgba(0,0,0,0.22), 0 1px 0 rgba(255,255,255,0.04) inset",
-        padding: "10px 10px 10px 18px",
-        pointerEvents: "auto",
+        width: "100%", maxWidth: 560,
+        background: C.card,
+        borderRadius: 10,
+        border: `1px solid ${C.border2}`,
+        padding: "8px 8px 8px 14px",
       }}>
         <input
           ref={inputRef}
@@ -2479,7 +2474,7 @@ export default function Dashboard() {
 
       {mobile ? (
         /* ── MOBILE: single scrollable column ──────────────────────────── */
-        <div style={{flex:1,overflowY:"auto",padding:8,paddingBottom:88,display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{flex:1,overflowY:"auto",padding:8,paddingBottom:80,display:"flex",flexDirection:"column",gap:8}}>
           {/* Cal + Health */}
           <div>
             <CalStrip selected={selected} onSelect={setSelected}
@@ -2501,7 +2496,7 @@ export default function Dashboard() {
         </div>
       ) : (
         /* ── DESKTOP: flex column, widgets fill remaining space ─────────── */
-        <div style={{flex:1,overflow:"hidden",padding:10,paddingBottom:10,display:"flex",flexDirection:"column",gap:8}}>
+        <div style={{flex:1,overflow:"hidden",padding:10,paddingBottom:72,display:"flex",flexDirection:"column",gap:8}}>
 
           {/* Calendar — full width */}
           <div style={{flexShrink:0}}>
