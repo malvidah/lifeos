@@ -5,34 +5,33 @@ import { createClient } from "../lib/supabase.js";
 
 const THEMES = {
   dark: {
-    // Deep neutral dark — near-black, cards match topbar, no purple
-    bg:"#0B0B0C",      surface:"#111213",   card:"#161718",
-    border:"#202224",  border2:"#2A2C2F",
-    text:"#E4DDD4",    muted:"#666260",     dim:"#2A2826",
-    // Orange-gold accent — glowing, warm
+    // Neutral near-black — bg and topbar (surface) are same dark family
+    // cards sit 1 step lighter so content areas are just barely visible
+    bg:"#0C0C0D",      surface:"#111113",   card:"#181819",
+    border:"#222224",  border2:"#2C2C30",
+    text:"#E4DDD4",    muted:"#686460",     dim:"#2C2A28",
+    // Orange-gold accent — warm, glowing
     accent:"#E8903A",
     green:"#3E9E6A",   blue:"#5490C8",
     purple:"#9B6FD4",  red:"#C05858",       orange:"#E8903A",
     yellow:"#D4A030",
     shadow:"0 1px 3px rgba(0,0,0,0.7),0 4px 20px rgba(0,0,0,0.4)",
     shadowSm:"0 1px 3px rgba(0,0,0,0.5)",
-    // Glow for logo — no gradient, just glowing orange-gold
-    gradGlow:"0 0 20px rgba(232,144,58,0.5), 0 0 8px rgba(232,144,58,0.3)",
+    gradGlow:"0 0 18px rgba(232,144,58,0.55), 0 0 6px rgba(232,144,58,0.3)",
   },
   light: {
-    // Warm paper — cards and topbar are close in tone, no stark whites
-    bg:"#EFE9DF",      surface:"#E8E1D6",   card:"#F5F0E8",
-    border:"#DDD5C6",  border2:"#CCC4B4",
-    text:"#26201A",    muted:"#8C8074",     dim:"#C4BAB0",
-    // Orange-gold accent — same warmth as dark mode
-    accent:"#D4781C",
+    // Warm paper — Substack tones, topbar (surface) and cards in same cream family
+    bg:"#EDE7DC",      surface:"#E5DED2",   card:"#F4F0E8",
+    border:"#DAD2C2",  border2:"#C8C0B0",
+    text:"#26201A",    muted:"#8C8074",     dim:"#C0B8AC",
+    // Orange-gold accent — same family as dark, adjusted for light bg contrast
+    accent:"#C87818",
     green:"#3A7050",   blue:"#3A6898",
-    purple:"#7050A8",  red:"#985040",       orange:"#D4781C",
-    yellow:"#9A7820",
-    shadow:"0 1px 2px rgba(44,32,16,0.07),0 3px 10px rgba(44,32,16,0.05)",
+    purple:"#6850A0",  red:"#904038",       orange:"#C87818",
+    yellow:"#907018",
+    shadow:"0 1px 2px rgba(44,32,16,0.08),0 3px 10px rgba(44,32,16,0.05)",
     shadowSm:"0 1px 2px rgba(44,32,16,0.06)",
-    // Glow for logo
-    gradGlow:"0 0 16px rgba(212,120,28,0.3), 0 0 5px rgba(212,120,28,0.2)",
+    gradGlow:"0 0 12px rgba(200,120,24,0.25), 0 0 4px rgba(200,120,24,0.15)",
   },
 };
 // C is set at render time via setTheme — default dark
