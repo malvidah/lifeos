@@ -41,14 +41,11 @@ export async function POST(request) {
     const { text, date, tz } = await request.json();
     if (!text?.trim() || !date) return Response.json({ error: 'text and date required' }, { status: 400 });
 
-    // Get API key: env var or user settings
-    let apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      const { data: settingsRow } = await supabase.from('entries').select('data')
-        .eq('type', 'settings').eq('date', 'global').eq('user_id', user.id).maybeSingle();
-      apiKey = settingsRow?.data?.anthropicKey;
-    }
-    if (!apiKey) return Response.json({ error: 'No API key configured' }, { status: 402 });
+    // Get API key from user settings
+    const { data: settingsRow } = await supabase.from('entries').select('data')
+      .eq('type', 'settings').eq('date', 'global').eq('user_id', user.id).maybeSingle();
+    const apiKey = settingsRow?.data?.anthropicKey;
+    if (!apiKey) return Response.json({ error: 'No API key configured. Add your Anthropic key in settings.' }, { status: 402 });
 
     // 1. Call Claude to parse the input
     const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
