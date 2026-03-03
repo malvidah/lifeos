@@ -1,7 +1,7 @@
 {
   "name": "dayloop",
   "version": "1.0.0",
-  "description": "Day Loop — your AI dashboard",
+  "description": "Day Lab — your AI dashboard",
   "main": "src/main.js",
   "author": "Marvin",
   "private": true,
@@ -17,8 +17,8 @@
   },
   "build": {
     "appId": "com.dayloop.app",
-    "productName": "Day Loop",
-    "copyright": "Copyright © 2026 Day Loop",
+    "productName": "Day Lab",
+    "copyright": "Copyright © 2026 Day Lab",
     "directories": {
       "output": "dist"
     },
@@ -45,7 +45,7 @@
       }
     },
     "dmg": {
-      "title": "Day Loop",
+      "title": "Day Lab",
       "background": "assets/dmg-background.png",
       "window": { "width": 540, "height": 380 },
       "contents": [
@@ -55,7 +55,7 @@
     },
     "protocols": [
       {
-        "name": "Day Loop",
+        "name": "Day Lab",
         "schemes": ["dayloop"]
       }
     ],

@@ -2,9 +2,12 @@ export const metadata = {
   title: "Day Loop",
   description: "Your personal health and life dashboard.",
   icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
+    icon: [
+      { url: "/favicon.ico", sizes: "32x32", type: "image/x-icon" },
+      { url: "/favicon.png", sizes: "1024x1024", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
   verification: { google: "PASTE_YOUR_VERIFICATION_CODE_HERE" },
 };

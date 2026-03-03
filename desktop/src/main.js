@@ -1,7 +1,7 @@
 const { app, BrowserWindow, shell, session } = require('electron');
 const path = require('path');
 
-const APP_URL  = 'https://dayloop.me';
+const APP_URL  = 'https://daylab.me';
 const PROTOCOL = 'dayloop';
 
 app.setAsDefaultProtocolClient(PROTOCOL);
@@ -51,7 +51,7 @@ app.on('open-url', (event, url) => {
 
 app.whenReady().then(() => {
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-    callback({ requestHeaders: { ...details.requestHeaders, 'User-Agent': 'DayLoop/1.0 Electron' } });
+    callback({ requestHeaders: { ...details.requestHeaders, 'User-Agent': 'DayLab/1.0 Electron' } });
   });
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
