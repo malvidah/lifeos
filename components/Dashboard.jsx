@@ -1458,19 +1458,18 @@ function LoginScreen() {
 }
 
 // ─── InsightsCard ─────────────────────────────────────────────────────────────
-// Auto-generates AI insight for the day. Lives in the main scroll flow.
-function InsightsCard({date, token, userId}) {
+// Auto-generates AI insight based on sleep/readiness data.
+// Re-generates when health data changes (Oura sync). No manual refresh button.
+function InsightsCard({date, token, userId, healthKey}) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const prevDate = useRef(date);
+  const prevHealthKey = useRef(healthKey);
   const loaded = useRef(false);
 
   const BAD_VALUES = ["No data available", "No insights generated", "Anthropic API error"];
-
-  function isBadCache(t) {
-    return !t || BAD_VALUES.some(b => t.includes(b));
-  }
+  function isBadCache(t) { return !t || BAD_VALUES.some(b => t.includes(b)); }
 
   async function generate(force = false) {
     if (!token || !userId) return;
@@ -1495,6 +1494,7 @@ function InsightsCard({date, token, userId}) {
     setBusy(false);
   }
 
+  // Load on date change
   useEffect(() => {
     if (prevDate.current !== date) {
       setText(""); setError(""); loaded.current = false;
@@ -1505,47 +1505,35 @@ function InsightsCard({date, token, userId}) {
     generate();
   }, [date, token, userId]); // eslint-disable-line
 
-  const accentColor = C.accent;
+  // Re-generate when health data changes for this date (Oura sync came in)
+  useEffect(() => {
+    if (!healthKey || prevHealthKey.current === healthKey) return;
+    prevHealthKey.current = healthKey;
+    if (loaded.current) generate(true); // force-refresh since health data updated
+  }, [healthKey]); // eslint-disable-line
 
   return (
-    <Widget label="Insights" color={accentColor} dragProps={{}}>
-      <div style={{ minHeight: 64, position: "relative" }}>
+    <Widget label="Insights" color={C.muted} dragProps={{}}>
+      <div style={{ minHeight: 56 }}>
         {busy && !text && (
           <div style={{ padding: "4px 0" }}>
-            <Shimmer width="90%" height={12} />
+            <Shimmer width="90%" height={11} />
             <div style={{ height: 7 }} />
-            <Shimmer width="75%" height={12} />
+            <Shimmer width="72%" height={11} />
             <div style={{ height: 7 }} />
-            <Shimmer width="60%" height={12} />
+            <Shimmer width="55%" height={11} />
           </div>
         )}
         {error && (
           <div style={{ fontFamily: mono, fontSize: 11, color: C.red, lineHeight: 1.5 }}>{error}</div>
         )}
         {text && (
-          <div style={{ fontFamily: serif, fontSize: 13, color: C.text, lineHeight: 1.7, whiteSpace: "pre-line" }}>
+          <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
             {text}
           </div>
         )}
-        {/* Refresh button */}
-        {!busy && (
-          <button onClick={() => generate(true)} style={{
-            position: "absolute", top: 0, right: 0,
-            background: "none", border: "none", cursor: "pointer",
-            color: C.muted, padding: 2, opacity: 0.5,
-            transition: "opacity 0.15s",
-          }}
-          onMouseEnter={e => e.currentTarget.style.opacity = 1}
-          onMouseLeave={e => e.currentTarget.style.opacity = 0.5}
-          title="Regenerate insight">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="23 4 23 10 17 10"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-          </button>
-        )}
         {busy && text && (
-          <div style={{ marginTop: 8 }}><Shimmer width="50%" height={10} /></div>
+          <div style={{ marginTop: 8 }}><Shimmer width="40%" height={10} /></div>
         )}
       </div>
     </Widget>
@@ -2008,7 +1996,7 @@ export default function Dashboard() {
             </DragOverlay>
           </DndContext>
           {/* Insights card — below health strip */}
-          <InsightsCard date={selected} token={token} userId={userId}/>
+          <InsightsCard date={selected} token={token} userId={userId} healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
           {/* Widgets stacked */}
           {[leftWidget,...rightWidgets].map(w=>(
             <div key={w.id} style={{minHeight:220}}>
@@ -2037,7 +2025,7 @@ export default function Dashboard() {
           </div>
 
           {/* Insights card — below health */}
-          <InsightsCard date={selected} token={token} userId={userId}/>
+          <InsightsCard date={selected} token={token} userId={userId} healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
 
           {/* Widgets — notes on left (wider), tasks+meals+activity on right */}
           <div style={{display:"flex",gap:8,alignItems:"stretch",minHeight:480}}>
