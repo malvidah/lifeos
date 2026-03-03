@@ -128,6 +128,7 @@ function clearCacheForUser(newUserId) {
 function useDbSave(date, type, empty, token, userId) {
   // Include userId in cache key so different users never share cache entries
   const cacheKey = `${userId||"anon"}:${date}:${type}`;
+  const prevCacheKey = useRef(cacheKey);
   const [value, _set] = useState(() => MEM[cacheKey] ?? empty);
   const [loaded, setLoaded] = useState(cacheKey in MEM);
   const [rev, setRev] = useState(0);
@@ -135,6 +136,16 @@ function useDbSave(date, type, empty, token, userId) {
   const dateRef = useRef(date);
   const timerRef = useRef(null);
   live.current = value;
+
+  // When date changes the cacheKey changes — immediately show empty/cached value
+  // so the previous date's data is never visible on the new date
+  if (prevCacheKey.current !== cacheKey) {
+    prevCacheKey.current = cacheKey;
+    const next = MEM[cacheKey] ?? empty;
+    live.current = next;
+    _set(next);
+    setLoaded(cacheKey in MEM);
+  }
 
   // Listen for external refresh events (e.g. from voice input)
   useEffect(() => {
@@ -1684,7 +1695,7 @@ function ChatFloat({date, token, userId}) {
           value={input}
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => { if (e.key === "Enter") send(); }}
-          placeholder={busy ? "Adding…" : "Add a meal, task, note, or activity…"}
+          placeholder={busy ? "Adding…" : "Add a note, task, meal, or activity…"}
           disabled={busy}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
