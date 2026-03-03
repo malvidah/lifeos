@@ -1512,7 +1512,7 @@ function InsightsCard({date, token, userId, healthKey}) {
 
   return (
     <Widget label="Insights" color={C.muted} dragProps={{}}>
-      <div style={{ minHeight: 56, position: "relative" }}>
+      <div style={{ position: "relative" }}>
         {busy && !isFree && (
           <div style={{ padding: "4px 0" }}>
             <Shimmer width="90%" height={11} />
@@ -1615,21 +1615,27 @@ function ChatFloat({date, token, userId}) {
 
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Pass conversation history so Claude can resolve follow-up edits like "change that to salmon tacos"
+      const history = messages.map(m => ({ role: m.role, content: m.content }));
+
       const actionRes = await fetch("/api/voice-action", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: userText, date, tz }),
+        body: JSON.stringify({ text: userText, date, tz, history }),
       });
       const actionData = await actionRes.json();
 
-      if (actionData.ok && actionData.results?.length > 0) {
+      if (actionData.error) {
+        // Hard server error
+        setMessages(prev => [...prev, { role: "assistant", content: actionData.error, type: "error" }]);
+      } else if (actionData.ok && actionData.results?.length > 0) {
+        // Data was written — refresh widgets
         window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: actionData.results.map(r => r.type) } }));
         setMessages(prev => [...prev, { role: "assistant", content: actionData.summary, type: "action" }]);
-      } else if (actionData.error) {
-        setMessages(prev => [...prev, { role: "assistant", content: actionData.error, type: "error" }]);
       } else {
+        // isQuestion, or no actions matched — route to conversational AI
         const convHistory = [
-          ...messages.map(m => ({ role: m.role, content: m.content })),
+          ...history,
           { role: "user", content: userText },
         ];
         const insightRes = await fetch("/api/insights", {
