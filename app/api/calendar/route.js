@@ -128,9 +128,13 @@ export async function POST(request) {
       if (!key) continue;
       if (!byDay[key]) byDay[key] = [];
       byDay[key].push({
+        id: ev.id,
         title: ev.summary || "(no title)",
         time: ev.start?.date ? "all day" : fmtTime(ev.start?.dateTime, tz),
         endTime: ev.end?.date ? null : fmtTime(ev.end?.dateTime, tz),
+        startDateTime: ev.start?.dateTime || null,
+        endDateTime: ev.end?.dateTime || null,
+        startDate: ev.start?.date || null,
         color: eventColor(ev.summary),
         zoomUrl: zoomUrl(ev),
         allDay: !!ev.start?.date,

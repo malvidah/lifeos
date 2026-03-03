@@ -842,113 +842,250 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
 }
 function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
   const mobile = useIsMobile();
-  const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({title:"", startTime:"", endTime:"", allDay:false});
-  const [saving, setSaving] = useState(false);
-  const [saveErr, setSaveErr] = useState("");
 
-  function openAdd() { setForm({title:"",startTime:"",endTime:"",allDay:false}); setSaveErr(""); setAdding(true); }
-  function closeAdd() { setAdding(false); }
+  // ── form state (shared for add + edit) ──────────────────────────────────
+  const [mode,    setMode]    = useState(null);   // null | 'add' | 'edit'
+  const [editing, setEditing] = useState(null);   // event object being edited
+  const [form,    setForm]    = useState({title:'', startTime:'', endTime:'', allDay:false});
+  const [saving,  setSaving]  = useState(false);
+  const [saveErr, setSaveErr] = useState('');
+  const [deleting,setDeleting]= useState(null);   // id of event being deleted
+  const [hoverId, setHoverId] = useState(null);
 
-  async function submitEvent(e) {
-    e.preventDefault();
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+  function openAdd() {
+    setForm({title:'',startTime:'09:00',endTime:'10:00',allDay:false});
+    setSaveErr(''); setEditing(null); setMode('add');
+  }
+  function openEdit(ev) {
+    // Parse times from stored display strings back to HH:MM
+    const toHHMM = (t) => {
+      if (!t || t === 'all day') return '';
+      try {
+        const d = new Date('2000-01-01 ' + t);
+        return d.toTimeString().slice(0,5);
+      } catch { return ''; }
+    };
+    setForm({
+      title: ev.title,
+      startTime: ev.allDay ? '' : toHHMM(ev.time),
+      endTime:   ev.allDay ? '' : toHHMM(ev.endTime),
+      allDay:    ev.allDay || ev.time === 'all day',
+    });
+    setSaveErr(''); setEditing(ev); setMode('edit');
+  }
+  function closeForm() { setMode(null); setEditing(null); }
+
+  async function submitAdd() {
     if (!form.title.trim()) return;
-    setSaving(true); setSaveErr("");
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setSaving(true); setSaveErr('');
     try {
-      const res = await fetch("/api/calendar-create", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ title: form.title.trim(), date: selected, startTime: form.allDay?"":form.startTime, endTime: form.allDay?"":form.endTime, allDay: form.allDay, tz }),
+      const res = await fetch('/api/calendar-create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: form.title.trim(), date: selected, startTime: form.allDay?'':form.startTime, endTime: form.allDay?'':form.endTime, allDay: form.allDay, tz }),
       });
       const data = await res.json();
-      if (!res.ok || data.error) { setSaveErr(data.error || "Failed to create event"); setSaving(false); return; }
-      const newEv = {
-        title: form.title.trim(),
-        time: form.allDay ? "all day" : (form.startTime ? form.startTime : "all day"),
-        color: "#B8A882",
-      };
-      setEvents(prev => ({ ...prev, [selected]: [...(prev[selected]||[]), newEv] }));
-      setSaving(false); setAdding(false);
+      if (!res.ok || data.error) { setSaveErr(data.error || 'Failed to create event'); setSaving(false); return; }
+      setEvents(prev => ({
+        ...prev,
+        [selected]: [...(prev[selected]||[]), {
+          id: data.eventId,
+          title: form.title.trim(),
+          time: form.allDay ? 'all day' : (form.startTime || 'all day'),
+          endTime: form.allDay ? null : form.endTime,
+          allDay: form.allDay,
+          color: '#B8A882',
+        }]
+      }));
+      setSaving(false); closeForm();
     } catch(err) { setSaveErr(err.message); setSaving(false); }
   }
 
+  async function submitEdit() {
+    if (!form.title.trim() || !editing?.id) return;
+    setSaving(true); setSaveErr('');
+    try {
+      const res = await fetch('/api/calendar-update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ eventId: editing.id, title: form.title.trim(), date: selected, startTime: form.allDay?'':form.startTime, endTime: form.allDay?'':form.endTime, allDay: form.allDay, tz }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { setSaveErr(data.error || 'Failed to update event'); setSaving(false); return; }
+      setEvents(prev => ({
+        ...prev,
+        [selected]: (prev[selected]||[]).map(ev => ev.id === editing.id ? {
+          ...ev, title: form.title.trim(),
+          time: form.allDay ? 'all day' : (form.startTime || 'all day'),
+          endTime: form.allDay ? null : form.endTime,
+          allDay: form.allDay,
+        } : ev)
+      }));
+      setSaving(false); closeForm();
+    } catch(err) { setSaveErr(err.message); setSaving(false); }
+  }
+
+  async function deleteEvent(ev) {
+    if (!ev.id) return;
+    setDeleting(ev.id);
+    try {
+      const res = await fetch('/api/calendar-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ eventId: ev.id }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { setDeleting(null); return; }
+      setEvents(prev => ({
+        ...prev,
+        [selected]: (prev[selected]||[]).filter(e => e.id !== ev.id)
+      }));
+    } catch { } finally { setDeleting(null); }
+  }
+
+  const dayEvents = events[selected] || [];
+  const isAdding  = mode === 'add';
+  const isEditing = mode === 'edit';
+
   return (
     <Card>
-      {/* Header */}
-      <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 16px",
+      {/* ── Header ── */}
+      <div style={{display:'flex',alignItems:'center',gap:10,padding:'12px 16px',
         borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
         <div style={{width:3,height:14,borderRadius:2,background:C.blue,flexShrink:0}}/>
-        <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.18em",
-          textTransform:"uppercase",color:C.muted}}>Calendar</span>
+        <span style={{fontFamily:mono,fontSize:12,letterSpacing:'0.18em',
+          textTransform:'uppercase',color:C.muted}}>Calendar</span>
         <div style={{flex:1}}/>
         <button onClick={() => onSelect(todayKey())} style={{
-          background:"none",border:`1px solid ${C.border2}`,borderRadius:5,cursor:"pointer",
-          color:C.muted,fontFamily:mono,fontSize:12,letterSpacing:"0.08em",padding:"5px 10px",
-          transition:"all 0.15s"}}
+          background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
+          color:C.muted,fontFamily:mono,fontSize:12,letterSpacing:'0.08em',padding:'5px 10px',
+          transition:'all 0.15s'}}
           onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
           onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
           TODAY</button>
-        <button onClick={openAdd} style={{
-          background:"none",border:`1px solid ${C.border2}`,borderRadius:5,cursor:"pointer",
-          color:C.muted,fontFamily:mono,fontSize:15,lineHeight:1,padding:"2px 8px",
-          transition:"all 0.15s"}}
+        <button onClick={isAdding ? closeForm : openAdd} style={{
+          background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
+          color: isAdding ? C.text : C.muted,fontFamily:mono,fontSize:15,lineHeight:1,padding:'2px 8px',
+          transition:'all 0.15s'}}
           onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}
-          title="Add event">+</button>
+          onMouseLeave={e=>{e.currentTarget.style.color=isAdding?C.text:C.muted;e.currentTarget.style.borderColor=isAdding?C.text:C.border2;}}
+          title={isAdding ? 'Cancel' : 'Add event'}>{isAdding ? '×' : '+'}</button>
       </div>
 
-      {/* Quick-add form */}
-      {adding && (
-        <div style={{padding:"12px 16px",borderBottom:`1px solid ${C.border}`,background:`${C.blue}08`}}>
-          <div style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted,marginBottom:10}}>
-            New event · {new Date(selected+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric"})}
+      {/* ── Add / Edit form ── */}
+      {(isAdding || isEditing) && (
+        <div style={{padding:'12px 16px',borderBottom:`1px solid ${C.border}`,background:`${C.blue}08`}}>
+          <div style={{fontFamily:mono,fontSize:11,letterSpacing:'0.15em',textTransform:'uppercase',
+            color:C.muted,marginBottom:10}}>
+            {isEditing ? 'Edit event' : 'New event'} · {new Date(selected+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
           </div>
           <input autoFocus value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}
-            placeholder="Event title"
-            style={{width:"100%",background:"transparent",border:"none",borderBottom:`1px solid ${C.border2}`,
-              outline:"none",padding:"4px 0",fontFamily:serif,fontSize:16,color:C.text,marginBottom:10}} />
-          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:8}}>
-            <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer"}}>
-              <input type="checkbox" checked={form.allDay} onChange={e=>setForm(f=>({...f,allDay:e.target.checked}))}
+            onKeyDown={e=>{ if(e.key==='Enter') isEditing?submitEdit():submitAdd(); if(e.key==='Escape') closeForm(); }}
+            placeholder='Event title'
+            style={{width:'100%',background:'transparent',border:'none',
+              borderBottom:`1px solid ${C.border2}`,outline:'none',
+              padding:'4px 0',fontFamily:serif,fontSize:16,color:C.text,marginBottom:10,
+              boxSizing:'border-box'}} />
+          <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:10,flexWrap:'wrap'}}>
+            <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer'}}>
+              <input type='checkbox' checked={form.allDay} onChange={e=>setForm(f=>({...f,allDay:e.target.checked}))}
                 style={{accentColor:C.blue,width:12,height:12}}/>
-              <span style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.08em"}}>All day</span>
+              <span style={{fontFamily:mono,fontSize:12,color:C.muted,letterSpacing:'0.08em'}}>All day</span>
             </label>
-            {!form.allDay && (
-              <>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontFamily:mono,fontSize:13,color:C.muted}}>Start</span>
-                  <input type="time" value={form.startTime} onChange={e=>setForm(f=>({...f,startTime:e.target.value}))}
-                    style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:4,
-                      outline:"none",padding:"3px 6px",fontFamily:mono,fontSize:12,color:C.text}}/>
-                </div>
-                <div style={{display:"flex",alignItems:"center",gap:6}}>
-                  <span style={{fontFamily:mono,fontSize:13,color:C.muted}}>End</span>
-                  <input type="time" value={form.endTime} onChange={e=>setForm(f=>({...f,endTime:e.target.value}))}
-                    style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:4,
-                      outline:"none",padding:"3px 6px",fontFamily:mono,fontSize:12,color:C.text}}/>
-                </div>
-              </>
-            )}
+            {!form.allDay && (<>
+              <div style={{display:'flex',alignItems:'center',gap:5}}>
+                <span style={{fontFamily:mono,fontSize:12,color:C.muted}}>Start</span>
+                <input type='time' value={form.startTime} onChange={e=>setForm(f=>({...f,startTime:e.target.value}))}
+                  style={{background:'transparent',border:`1px solid ${C.border2}`,borderRadius:4,
+                    outline:'none',padding:'3px 6px',fontFamily:mono,fontSize:12,color:C.text}}/>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:5}}>
+                <span style={{fontFamily:mono,fontSize:12,color:C.muted}}>End</span>
+                <input type='time' value={form.endTime} onChange={e=>setForm(f=>({...f,endTime:e.target.value}))}
+                  style={{background:'transparent',border:`1px solid ${C.border2}`,borderRadius:4,
+                    outline:'none',padding:'3px 6px',fontFamily:mono,fontSize:12,color:C.text}}/>
+              </div>
+            </>)}
           </div>
-          {saveErr && <div style={{fontFamily:mono,fontSize:13,color:"#A05050",marginBottom:8}}>{saveErr}</div>}
-          <div style={{display:"flex",gap:8}}>
-            <button onClick={submitEvent} disabled={saving||!form.title.trim()} style={{
-              background:C.blue,border:"none",borderRadius:5,padding:"6px 14px",
-              color:"#fff",fontFamily:mono,fontSize:13,letterSpacing:"0.1em",textTransform:"uppercase",
-              cursor:saving||!form.title.trim()?"not-allowed":"pointer",opacity:saving||!form.title.trim()?0.5:1}}>
-              {saving?"saving…":"add to google cal"}
+          {saveErr && <div style={{fontFamily:mono,fontSize:12,color:'#A05050',marginBottom:8}}>{saveErr}</div>}
+          <div style={{display:'flex',gap:8}}>
+            <button onClick={isEditing ? submitEdit : submitAdd}
+              disabled={saving||!form.title.trim()} style={{
+              background:C.blue,border:'none',borderRadius:5,padding:'7px 16px',
+              color:'#fff',fontFamily:mono,fontSize:12,letterSpacing:'0.1em',textTransform:'uppercase',
+              cursor:saving||!form.title.trim()?'not-allowed':'pointer',
+              opacity:saving||!form.title.trim()?0.5:1}}>
+              {saving ? 'saving…' : isEditing ? 'save changes' : 'add event'}
             </button>
-            <button onClick={closeAdd} style={{
-              background:"none",border:`1px solid ${C.border2}`,borderRadius:5,padding:"6px 14px",
-              color:C.muted,fontFamily:mono,fontSize:13,letterSpacing:"0.1em",textTransform:"uppercase",cursor:"pointer"}}>
+            <button onClick={closeForm} style={{
+              background:'none',border:`1px solid ${C.border2}`,borderRadius:5,padding:'7px 14px',
+              color:C.muted,fontFamily:mono,fontSize:12,letterSpacing:'0.1em',textTransform:'uppercase',cursor:'pointer'}}>
               cancel
             </button>
           </div>
         </div>
       )}
 
-      <MobileCalPicker selected={selected} onSelect={onSelect} events={events} healthDots={healthDots} desktop={!mobile}/>
+      {/* ── Calendar grid ── */}
+      <MobileCalPicker selected={selected} onSelect={s=>{onSelect(s);closeForm();}} events={events} healthDots={healthDots} desktop={!mobile}/>
+
+      {/* ── Selected day event list ── */}
+      {dayEvents.length > 0 && (
+        <div style={{borderTop:`1px solid ${C.border}`,padding:'8px 0'}}>
+          {dayEvents.map((ev,i) => (
+            <div key={ev.id||i}
+              onMouseEnter={()=>setHoverId(ev.id||i)}
+              onMouseLeave={()=>setHoverId(null)}
+              style={{
+                display:'flex',alignItems:'center',gap:10,
+                padding:'8px 16px',
+                background: hoverId===(ev.id||i) ? `${C.border}60` : 'transparent',
+                transition:'background 0.1s',
+              }}>
+              <div style={{width:3,height:32,borderRadius:2,background:ev.color||C.muted,flexShrink:0}}/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontFamily:serif,fontSize:14,color:C.text,
+                  overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{ev.title}</div>
+                <div style={{fontFamily:mono,fontSize:11,color:C.muted,marginTop:1}}>
+                  {ev.allDay || ev.time==='all day' ? 'all day' :
+                    (ev.endTime ? `${ev.time} – ${ev.endTime}` : ev.time)}
+                  {ev.zoomUrl && (
+                    <a href={ev.zoomUrl} target='_blank' rel='noopener noreferrer'
+                      style={{marginLeft:8,color:C.blue,textDecoration:'none',letterSpacing:'0.08em'}}>
+                      join ↗
+                    </a>
+                  )}
+                </div>
+              </div>
+              {/* Edit / delete — only show for events with IDs */}
+              {ev.id && (
+                <div style={{display:'flex',gap:4,opacity: hoverId===(ev.id||i)?1:0,transition:'opacity 0.15s'}}>
+                  <button onClick={()=>openEdit(ev)} title='Edit' style={{
+                    background:'none',border:'none',cursor:'pointer',padding:'4px 6px',
+                    color:C.muted,fontFamily:mono,fontSize:12,borderRadius:4,
+                    transition:'color 0.1s'}}
+                    onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                    onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+                    ✎
+                  </button>
+                  <button onClick={()=>deleteEvent(ev)} title='Delete'
+                    disabled={deleting===ev.id} style={{
+                    background:'none',border:'none',cursor:'pointer',padding:'4px 6px',
+                    color:C.muted,fontFamily:mono,fontSize:13,borderRadius:4,
+                    opacity: deleting===ev.id ? 0.4 : 1,
+                    transition:'color 0.1s'}}
+                    onMouseEnter={e=>e.currentTarget.style.color='#A05050'}
+                    onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+                    ×
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 }
