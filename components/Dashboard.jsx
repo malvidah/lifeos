@@ -699,7 +699,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       >
         {/* Scrolling row */}
         <div style={{
-          display:"flex", alignItems:"flex-start",
+          display:"flex", alignItems:"stretch",
           marginLeft:`calc(50% - ${(N + 0.5) * DAY_W}px)`,
           transform:`translateX(${-fracSlot * DAY_W}px)`,
           willChange:"transform",
