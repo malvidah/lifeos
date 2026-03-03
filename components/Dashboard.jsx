@@ -1720,8 +1720,10 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   const rowStyle = {display:"flex", alignItems:"center", gap:6, padding:"3px 0", minHeight:28};
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
     borderRadius:4, padding:"2px 6px", whiteSpace:"nowrap"};
-  const kcalStyle = {...chipBase, background:C.orange+"22", color:C.orange};
-  const proteinStyle = {...chipBase, background:C.blue+"22", color:C.blue};
+  const kcalStyle = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
+    whiteSpace:"nowrap", color:C.orange};
+  const proteinStyle = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
+    whiteSpace:"nowrap", color:C.blue};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
