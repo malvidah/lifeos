@@ -941,7 +941,6 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
               color:C.accent,
               background:C.accent+"1A",
-              border:`1px solid ${C.accent}38`,
               borderRadius:6,padding:"4px 10px",
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
@@ -960,7 +959,6 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
               color:C.accent,
               background:C.accent+"1A",
-              border:`1px solid ${C.accent}38`,
               borderRadius:6,padding:"4px 10px",
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
