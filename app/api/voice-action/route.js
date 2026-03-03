@@ -84,6 +84,9 @@ Rules:
       }),
     });
     const parseData = await parseRes.json();
+    if (parseData.error) {
+      return Response.json({ error: `AI error: ${parseData.error?.message || JSON.stringify(parseData.error)}` }, { status: 500 });
+    }
     const rawText = parseData.content?.find(b => b.type === 'text')?.text || '{}';
     let parsed;
     try {
