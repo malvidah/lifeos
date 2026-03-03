@@ -115,6 +115,21 @@ const MEM = {};
 const DIRTY = {};
 let CURRENT_USER_ID = null;
 
+// ─── Global undo/redo history ────────────────────────────────────────────────
+// Each entry: { label, undo: fn, redo: fn }
+const HISTORY = { stack: [], cursor: -1 };
+function pushHistory(entry) {
+  // Drop any redo tail
+  HISTORY.stack = HISTORY.stack.slice(0, HISTORY.cursor + 1);
+  HISTORY.stack.push(entry);
+  if (HISTORY.stack.length > 60) HISTORY.stack.shift();
+  HISTORY.cursor = HISTORY.stack.length - 1;
+}
+function canUndo() { return HISTORY.cursor >= 0; }
+function canRedo() { return HISTORY.cursor < HISTORY.stack.length - 1; }
+async function doUndo() { if (canUndo()) { await HISTORY.stack[HISTORY.cursor].undo(); HISTORY.cursor--; } }
+async function doRedo() { if (canRedo()) { HISTORY.cursor++; await HISTORY.stack[HISTORY.cursor].redo(); } }
+
 // Call this when auth state changes — wipes cache for previous user
 function clearCacheForUser(newUserId) {
   if (CURRENT_USER_ID && CURRENT_USER_ID !== newUserId) {
@@ -158,7 +173,15 @@ function useDbSave(date, type, empty, token, userId) {
       }
     };
     window.addEventListener('lifeos:refresh', handler);
-    return () => window.removeEventListener('lifeos:refresh', handler);
+    // Restore snapshot (from undo of AI entry)
+    const restoreHandler = (e) => {
+      if (e.detail?.keys?.includes(cacheKey)) {
+        const restored = MEM[cacheKey];
+        if (restored !== undefined) { live.current = restored; _set(restored); }
+      }
+    };
+    window.addEventListener('lifeos:snapshot-restore', restoreHandler);
+    return () => { window.removeEventListener('lifeos:refresh', handler); window.removeEventListener('lifeos:snapshot-restore', restoreHandler); };
   }, [type, cacheKey]);
 
   // Fetch from DB whenever date/type/token/userId changes, or rev bumps (poll/visibility)
@@ -218,7 +241,8 @@ function useDbSave(date, type, empty, token, userId) {
     };
   }, [type, token, cacheKey]); // eslint-disable-line
 
-  const setValue = useCallback(u => {
+  const setValue = useCallback((u, {undoLabel, skipHistory} = {}) => {
+    const prev = live.current;
     const next = typeof u === "function" ? u(live.current) : u;
     live.current = next;
     MEM[cacheKey] = next;
@@ -229,6 +253,22 @@ function useDbSave(date, type, empty, token, userId) {
       dbSave(dateRef.current, type, live.current, token);
       DIRTY[cacheKey] = false;
     }, 200);
+    // Push undo entry for meaningful edits (not AI calorie estimates, not loading)
+    if (!skipHistory && undoLabel) {
+      pushHistory({
+        label: undoLabel,
+        undo: () => {
+          live.current = prev; MEM[cacheKey] = prev; DIRTY[cacheKey] = true; _set(prev);
+          clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => { dbSave(dateRef.current, type, prev, token); DIRTY[cacheKey] = false; }, 200);
+        },
+        redo: () => {
+          live.current = next; MEM[cacheKey] = next; DIRTY[cacheKey] = true; _set(next);
+          clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(() => { dbSave(dateRef.current, type, next, token); DIRTY[cacheKey] = false; }, 200);
+        },
+      });
+    }
   }, [type, token, cacheKey]); // eslint-disable-line
 
   return { value, setValue, loaded };
@@ -514,7 +554,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       </div>
       {/* Day Loop — centered */}
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
-        <span style={{fontFamily:serif,fontSize:17,color:C.text,letterSpacing:"-0.02em"}}>Day Loop</span>
+        <span style={{fontFamily:serif,fontSize:17,color:C.dim,letterSpacing:"-0.02em",opacity:0.5}}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
@@ -980,6 +1020,8 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
   async function deleteEvent() {
     if (!active?.id||deleting) return;
     setDeleting(true);
+    const snapshot = {...active}; // capture before deletion
+    const dateSnap = selected;
     try {
       const res = await fetch('/api/calendar-delete', {
         method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
@@ -988,6 +1030,32 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
       if (res.ok) {
         setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).filter(e=>e.id!==active.id)}));
         closePanel();
+        // Push undo entry — re-create the event
+        pushHistory({
+          label: `Delete "${snapshot.title}"`,
+          undo: async () => {
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+            const r = await fetch('/api/calendar-create', {
+              method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+              body: JSON.stringify({title:snapshot.title, date:dateSnap,
+                startTime: snapshot.allDay?'':toHHMM(snapshot.time),
+                endTime: snapshot.allDay?'':toHHMM(snapshot.endTime),
+                allDay:snapshot.allDay||snapshot.time==='all day', tz}),
+            });
+            const d = await r.json();
+            if (r.ok && d.eventId) {
+              const restored = {...snapshot, id:d.eventId};
+              setEvents(prev=>({...prev,[dateSnap]:[...(prev[dateSnap]||[]).filter(e=>e.id!==snapshot.id&&e.id!==d.eventId), restored]}));
+            }
+          },
+          redo: async () => {
+            await fetch('/api/calendar-delete', {
+              method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+              body: JSON.stringify({eventId:snapshot.id}),
+            });
+            setEvents(prev=>({...prev,[dateSnap]:(prev[dateSnap]||[]).filter(e=>e.id!==snapshot.id)}));
+          },
+        });
       }
     } catch{} finally{ setDeleting(false); }
   }
@@ -1112,14 +1180,20 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
 
               {/* Trash — existing events only */}
               {!isNew && active.id && (
-                <button onClick={deleteEvent} disabled={deleting} style={{
-                  background:'none',border:'none',cursor:'pointer',
-                  color:deleting?C.muted:'#A05050',fontSize:13,lineHeight:1,padding:'0 2px',
-                  opacity:deleting?0.4:1,transition:'color 0.1s, opacity 0.1s',
+                <button onClick={deleteEvent} disabled={deleting} title="Delete event" style={{
+                  background:'none',border:'none',cursor:deleting?'default':'pointer',
+                  color:deleting?C.muted:C.muted,lineHeight:1,padding:'2px',
+                  opacity:deleting?0.3:0.5,transition:'opacity 0.15s',
+                  display:'flex',alignItems:'center',
                 }}
-                onMouseEnter={e=>{if(!deleting)e.currentTarget.style.opacity='0.7';}}
-                onMouseLeave={e=>e.currentTarget.style.opacity='1'}>
-                  🗑
+                onMouseEnter={e=>{if(!deleting){e.currentTarget.style.opacity='1';e.currentTarget.style.color='#B06060';}}}
+                onMouseLeave={e=>{e.currentTarget.style.opacity='0.5';e.currentTarget.style.color=C.muted;}}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    <path d="M10 11v6M14 11v6"/>
+                    <path d="M9 6V4h6v2"/>
+                  </svg>
                 </button>
               )}
             </div>
@@ -1353,8 +1427,8 @@ function Notes({date,userId,token}) {
       <textarea
         ref={taRef}
         value={value}
-        onChange={e => setValue(e.target.value)}
-        onBlur={() => setEditing(false)}
+        onChange={e => setValue(e.target.value, {skipHistory:true})}
+        onBlur={() => { setValue(v => v, {undoLabel:'Edit notes'}); setEditing(false); }}
         onKeyDown={handleKeyDown}
         style={textareaStyle}
       />
@@ -1657,7 +1731,16 @@ function Tasks({date,token,userId}) {
       {[...open,...done].map((row,idx)=>(
         <div key={row.id} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0",minHeight:28,
           opacity:row.done?0.35:1,transition:"opacity 0.2s"}}>
-          <button onClick={()=>setRows(safe.map(r=>r.id===row.id?{...r,done:!r.done}:r))}
+          <button onClick={()=>{
+              const wasDone = row.done;
+              const newRows = safe.map(r=>r.id===row.id?{...r,done:!r.done}:r);
+              setRows(newRows);
+              pushHistory({
+                label: wasDone ? `Uncomplete "${row.text}"` : `Complete "${row.text}"`,
+                undo: ()=>setRows(safe.map(r=>r.id===row.id?{...r,done:wasDone}:r)),
+                redo: ()=>setRows(safe.map(r=>r.id===row.id?{...r,done:!wasDone}:r)),
+              });
+            }}
             style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",
               border:`1.5px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
               display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
@@ -1897,8 +1980,31 @@ function ChatFloat({date, token, userId}) {
       });
       const data = await res.json();
       if (data.ok && data.results?.length > 0) {
-        window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: data.results.map(r => r.type) } }));
+        // Snapshot current state of affected types before refresh wipes cache
+        const affectedTypes = data.results.map(r => r.type);
+        const snapshots = {};
+        affectedTypes.forEach(t => {
+          const key = `${userId}:${date}:${t}`;
+          if (MEM[key] !== undefined) snapshots[key] = JSON.parse(JSON.stringify(MEM[key]));
+        });
+        window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: affectedTypes } }));
         showStatus(data.summary || "Done", true);
+        // Register undo: restore snapshots directly into MEM + re-render
+        if (Object.keys(snapshots).length > 0) {
+          pushHistory({
+            label: `AI: ${data.summary || 'entry'}`,
+            undo: () => {
+              Object.entries(snapshots).forEach(([k, v]) => {
+                MEM[k] = v; DIRTY[k] = true;
+              });
+              window.dispatchEvent(new CustomEvent("lifeos:snapshot-restore", { detail: { keys: Object.keys(snapshots) } }));
+            },
+            redo: () => {
+              Object.keys(snapshots).forEach(k => { delete MEM[k]; delete DIRTY[k]; });
+              window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: affectedTypes } }));
+            },
+          });
+        }
       } else if (data.message) {
         // Declined gracefully — couldn't parse or unsupported
         showStatus(data.message, false);
@@ -2070,6 +2176,22 @@ export default function Dashboard() {
 
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
+
+  // ── Global undo/redo keyboard shortcut ──────────────────────────────────
+  useEffect(() => {
+    const handler = async (e) => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod || e.key !== 'z') return;
+      // Don't fire when typing inside an input/textarea
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      e.preventDefault();
+      if (e.shiftKey) { await doRedo(); }
+      else            { await doUndo(); }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
   const sessionGoogleToken=session?.provider_token; // only present right after login
   const sessionRefreshToken=session?.provider_refresh_token; // only present right after login
   const startSync=useCallback(k=>setSyncing(s=>new Set([...s,k])),[]);
