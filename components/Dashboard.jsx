@@ -924,27 +924,39 @@ function fmtMinsField(val) {
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
 
+  // Reset to empty immediately on date change — never show stale previous-day data
+  const prevHealthDate = useRef(date);
+  useEffect(()=>{
+    if(prevHealthDate.current !== date){
+      prevHealthDate.current = date;
+      setH(H_EMPTY);
+    }
+  },[date]); // eslint-disable-line
+
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
+
   useEffect(()=>{
     if(!loaded||!token)return;
     onSyncStart("oura");
     cachedOuraFetch(date, token, userId).then(data=>{
-        if(data.error)return;
+        if(data.error){ onSyncEnd("oura"); return; }
+        // Nullish coalescing: only set a field if Oura returned a real value.
+        // Never fall back to p.x — if Oura has no data for this date, leave it blank.
         setH(p=>({...p,
-          sleepScore:data.sleepScore||p.sleepScore||"",
-          sleepHrs:data.sleepHrs||p.sleepHrs||"",
-          sleepEff:data.sleepQuality||p.sleepEff||"",
-          readinessScore:data.readinessScore||p.readinessScore||"",
-          hrv:data.hrv||p.hrv||"",
-          rhr:data.rhr||p.rhr||"",
-          activityScore:data.activityScore||p.activityScore||"",
-          activeCalories:data.activeCalories||p.activeCalories||"",
-          totalCalories:data.totalCalories||p.totalCalories||"",
-          steps:data.steps||p.steps||"",
-          activeMinutes:data.activeMinutes||p.activeMinutes||"",
-          resilienceScore:data.resilienceScore||p.resilienceScore||"",
-          stressMins:data.stressMins||p.stressMins||"",
-          recoveryMins:data.recoveryMins||p.recoveryMins||"",
+          sleepScore:     data.sleepScore      ?? "",
+          sleepHrs:       data.sleepHrs        ?? "",
+          sleepEff:       data.sleepQuality    ?? "",
+          readinessScore: data.readinessScore  ?? "",
+          hrv:            data.hrv             ?? "",
+          rhr:            data.rhr             ?? "",
+          activityScore:  data.activityScore   ?? "",
+          activeCalories: data.activeCalories  ?? "",
+          totalCalories:  data.totalCalories   ?? "",
+          steps:          data.steps           ?? "",
+          activeMinutes:  data.activeMinutes   ?? "",
+          resilienceScore:data.resilienceScore ?? "",
+          stressMins:     data.stressMins      ?? "",
+          recoveryMins:   data.recoveryMins    ?? "",
         }));
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
@@ -1434,7 +1446,7 @@ function InsightsCard({date, token, userId, healthKey}) {
     if (!t) return true;
     if (BAD_VALUES.some(b => t.includes(b))) return true;
     if (cached?.isWelcome && healthKey) return true;
-    if (cached?.v !== 3) return true;
+    if (cached?.v !== 4) return true;
     return false;
   }
 
@@ -1456,7 +1468,14 @@ function InsightsCard({date, token, userId, healthKey}) {
       });
       const data = await res.json();
       if (data.tier === "free") { setIsFree(true); }
-      else if (data.insight) setText(data.insight);
+      else if (data.insight) setText(
+        data.insight
+          .replace(/\*\*(.+?)\*\*/g, '$1')   // **bold**
+          .replace(/\*(.+?)\*/g, '$1')        // *italic*
+          .replace(/^#{1,3}\s+/gm, '')        // ## headers
+          .replace(/^[A-Za-z]+,\s+\w+ \d+\n+/,'') // "Tuesday, March 3\n" date prefix
+          .trim()
+      );
       else if (data.error) setError(data.error);
     } catch (e) { setError(e.message); }
     setBusy(false);

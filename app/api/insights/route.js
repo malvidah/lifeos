@@ -196,7 +196,9 @@ Rules:
 - If there's a "this time last year" data point, use it — but only if the comparison is actually interesting.
 - Lead with what it means for TODAY: what to protect, push, or adjust RIGHT NOW. One specific number is fine if it earns its place.
 - 2-3 sentences max. Plain English. Sound like a smart friend who actually looked at the data.
-- Never start with "Your" followed by a metric name. Never list metrics.`,
+- Never start with "Your" followed by a metric name. Never list metrics.
+- NEVER use markdown: no **bold**, no *italic*, no ## headers.
+- NEVER start with the date or day name. Jump straight into the insight.`,
         messages: [{ role: 'user', content: context }],
       }),
     });
@@ -207,7 +209,7 @@ Rules:
 
     // Cache
     await supabase.from('entries').upsert(
-      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 3 }, user_id: user.id, updated_at: new Date().toISOString() },
+      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 4 }, user_id: user.id, updated_at: new Date().toISOString() },
       { onConflict: 'date,type,user_id' }
     );
 
