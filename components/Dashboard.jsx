@@ -1513,6 +1513,7 @@ function InsightBar({date, token, userId}) {
         body: JSON.stringify({ date }),
       }).then(r => r.json()).then(data => {
         if (data.insight) setMessages([{ role: "assistant", content: data.insight, type: "insight" }]);
+        else if (data.error) setMessages([{ role: "assistant", content: data.error, type: "error" }]);
       }).catch(() => {}).finally(() => setBusy(false));
     });
   }, [date, token, userId]); // eslint-disable-line
@@ -1551,10 +1552,12 @@ function InsightBar({date, token, userId}) {
         const types = actionData.results.map(r => r.type);
         window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types } }));
         setMessages(prev => [...prev, { role: "assistant", content: actionData.summary, type: "action" }]);
+      } else if (actionData.error) {
+        // API route returned an error (key missing, auth, etc.)
+        setMessages(prev => [...prev, { role: "assistant", content: actionData.error, type: "error" }]);
       } else {
         // No actions detected — treat as a question about data
-        // Build conversation history for insights follow-up
-        const existingMsgs = messages.filter(m => m.role === "user" || (m.role === "assistant"));
+        const existingMsgs = messages.filter(m => m.role === "user" || m.role === "assistant");
         const convHistory = [
           ...existingMsgs.map(m => ({ role: m.role, content: m.content })),
           { role: "user", content: userText },
@@ -1567,10 +1570,12 @@ function InsightBar({date, token, userId}) {
         const insightData = await insightRes.json();
         if (insightData.insight) {
           setMessages(prev => [...prev, { role: "assistant", content: insightData.insight }]);
+        } else if (insightData.error) {
+          setMessages(prev => [...prev, { role: "assistant", content: insightData.error, type: "error" }]);
         }
       }
     } catch (e) {
-      setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong. Check your API key in settings.", type: "error" }]);
+      setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong: " + e.message, type: "error" }]);
     }
     setBusy(false);
     setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }), 100);
