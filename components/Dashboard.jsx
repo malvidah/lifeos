@@ -342,7 +342,7 @@ function Ring({score,color,size=48}) {
           transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
       {/* Score label — color-tinted, not plain text */}
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:score?color:C.dim,fontSize:F.sm,fontFamily:mono,fontWeight:"600",
+        style={{fill:score?color:C.dim,fontSize:F.sm,fontFamily:mono,
           letterSpacing:"-0.02em"}}>
         {score||"—"}
       </text>
