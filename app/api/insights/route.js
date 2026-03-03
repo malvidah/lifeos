@@ -50,29 +50,16 @@ export async function POST(request) {
     const today = {};
     for (const row of todayEntries || []) today[row.type] = row.data;
 
-    // Last 7 days of health + activity
-    const recentHealth = [], recentActivity = [];
+    // Last 7 days — fetch all entry types in one query per day
+    const recentDays = []; // [{date, health, workouts, activity, notes, meals, tasks}]
     for (let i = 1; i <= 7; i++) {
       const d = dateOffset(date, -i);
-      const { data: hRow } = await supabase.from('entries')
-        .select('data').eq('date', d).eq('type', 'health').eq('user_id', user.id).maybeSingle();
-      if (hRow?.data) recentHealth.push({ date: d, ...hRow.data });
-      // Pull both manual activity entries and synced workouts (Strava/Oura)
-      const { data: aRow } = await supabase.from('entries')
-        .select('data').eq('date', d).eq('type', 'activity').eq('user_id', user.id).maybeSingle();
-      const { data: wRow } = await supabase.from('entries')
-        .select('data').eq('date', d).eq('type', 'workouts').eq('user_id', user.id).maybeSingle();
-      const manualEntries = Array.isArray(aRow?.data) ? aRow.data.filter(r => r.text?.trim()).map(r => r.text) : [];
-      const syncedWorkouts = Array.isArray(wRow?.data) ? wRow.data.map(w => {
-        const parts = [w.name || w.sport];
-        if (w.durationMins) parts.push(`${w.durationMins}min`);
-        if (w.distance) parts.push(`${(w.distance * 0.621371).toFixed(1)}mi`);
-        if (w.calories) parts.push(`${w.calories}cal`);
-        if (w.avgHr) parts.push(`avg ${w.avgHr}bpm`);
-        return parts.join(' ');
-      }) : [];
-      const allEntries = [...syncedWorkouts, ...manualEntries];
-      if (allEntries.length) recentActivity.push({ date: d, entries: allEntries });
+      const { data: rows } = await supabase.from('entries')
+        .select('type, data').eq('date', d).eq('user_id', user.id);
+      if (!rows?.length) continue;
+      const day = { date: d };
+      for (const row of rows) day[row.type] = row.data;
+      recentDays.push(day);
     }
 
     // Last year today (±1 day window)
@@ -140,24 +127,60 @@ export async function POST(request) {
       parts.push(`Today's workouts: ${ws.join('; ')}`);
     }
 
-    // ── Per-day history — clearly labeled as background context ───────────
-    if (recentHealth.length || recentActivity.length) {
-      parts.push('\n--- Recent history (for context only, NOT today) ---');
-      for (let i = 1; i <= 7; i++) {
-        const d = dateOffset(date, -i);
-        const h = recentHealth.find(r => r.date === d);
-        const a = recentActivity.find(r => r.date === d);
-        const dObj = new Date(d + 'T12:00:00');
+    // ── Per-day history — all context so model can spot life themes ───────
+    if (recentDays.length) {
+      parts.push('\n--- Recent days (context only, NOT today) ---');
+      for (const day of recentDays) {
+        const dObj = new Date(day.date + 'T12:00:00');
         const dName = DAY_NAMES_FULL[dObj.getDay()].slice(0,3);
         const row = [];
+
+        // Health scores
+        const h = day.health;
         if (h) {
           if (h.sleepScore)     row.push(`sleep ${h.sleepScore}`);
           if (h.readinessScore) row.push(`readiness ${h.readinessScore}`);
           if (h.hrv)            row.push(`HRV ${h.hrv}ms`);
           if (h.activityScore)  row.push(`activity ${h.activityScore}`);
         }
-        if (a?.entries?.length) row.push(`workout: ${a.entries.join(', ')}`);
-        if (row.length) parts.push(`  ${dName} ${d}: ${row.join(', ')}`);
+
+        // Synced workouts (Strava/Oura)
+        if (Array.isArray(day.workouts) && day.workouts.length) {
+          const ws = day.workouts.map(w => {
+            const p = [w.name || w.sport];
+            if (w.durationMins) p.push(`${w.durationMins}min`);
+            if (w.distance) p.push(`${(w.distance * 0.621371).toFixed(1)}mi`);
+            if (w.avgHr) p.push(`${w.avgHr}bpm avg`);
+            return p.join(' ');
+          });
+          row.push(`workout: ${ws.join(', ')}`);
+        }
+
+        // Manual activity entries
+        if (Array.isArray(day.activity)) {
+          const acts = day.activity.filter(r => r.text?.trim()).map(r => r.text);
+          if (acts.length) row.push(`activity: ${acts.join(', ')}`);
+        }
+
+        // Notes — the most human signal, include in full (truncated)
+        if (day.notes) {
+          const n = typeof day.notes === 'string' ? day.notes.trim() : '';
+          if (n) row.push(`notes: "${n.slice(0, 200)}${n.length > 200 ? '…' : ''}"`);
+        }
+
+        // Meals summary
+        if (Array.isArray(day.meals)) {
+          const ms = day.meals.filter(r => r.text?.trim()).map(r => r.text);
+          if (ms.length) row.push(`meals: ${ms.join(', ')}`);
+        }
+
+        // Tasks completed
+        if (Array.isArray(day.tasks)) {
+          const done = day.tasks.filter(r => r.done && r.text?.trim()).map(r => r.text);
+          if (done.length) row.push(`did: ${done.join(', ')}`);
+        }
+
+        if (row.length) parts.push(`  ${dName} ${day.date}: ${row.join(' | ')}`);
       }
     }
 
@@ -191,7 +214,7 @@ export async function POST(request) {
     const context = parts.join('\n');
 
     // Detect empty state — only the date header, no actual data
-    const hasData = parts.length > 1 || recentHealth.length > 0 || recentActivity.length > 0;
+    const hasData = parts.length > 1 || recentDays.length > 0;
     if (!hasData) {
       // Get user's name for welcome message
       const userName = user.user_metadata?.name?.split(' ')[0] || user.email?.split('@')[0] || 'there';
@@ -210,18 +233,22 @@ export async function POST(request) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 160,
-        system: `You are a concise, balanced wellness coach. Give one sharp insight about TODAY — grounded strictly in today's numbers, not the historical trend unless it makes today more meaningful.
+        system: `You are a sharp, observant friend who has access to someone's daily life data — health scores, workouts, meals, notes, and tasks. Your job is to give one genuinely useful observation about today, grounded in everything you can see.
 
-TODAY'S DATA IS THE TRUTH. The recent history is only context.
+TODAY'S DATA IS PRIMARY. Recent history is context for making today more meaningful.
+
+What to look for (pick the most interesting angle — don't always default to health):
+- Themes across notes: are they reading more, reflecting, stressed, excited about something?
+- Patterns connecting life and body: late nights correlating with low HRV, hard workouts followed by recovery dips
+- Wins worth naming: a streak, something they finished, a personal best
+- A gentle flag if something looks off — but only if it's real, not manufactured drama
+- A recommendation if something obvious fits: a book, a rest day, a walk
 
 Rules:
-- Start from today's actual scores. If sleep is 89 today, that IS the story — not last week's dip.
-- If things look good today: say so plainly and say what's driving it or what to protect.
-- If something needs attention: say what and what to do about it specifically today.
-- Use history only to add meaning: "bounced back from 68 two days ago" or "best HRV in a week."
-- Mix of positive and cautionary is good. Don't hunt for problems when the numbers are solid.
-- 2 sentences max. Plain English. One number maximum — only if it earns its place.
-- No markdown. Don't start with the date, "Your", or a metric name.`,
+- 2 sentences max. Plain English. Sound like a smart friend, not a report.
+- If health looks fine and notes are more interesting — talk about the notes.
+- No markdown. Don't start with the date, "Your", or a metric name.
+- Never invent or assume data not present. If notes are empty, don't mention them.`,
         messages: [{ role: 'user', content: context }],
       }),
     });
