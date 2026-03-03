@@ -520,7 +520,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               </button>
             </div>
             <a
-              href="https://claude.ai/settings/connectors"
+              href="https://claude.ai/customize"
               target="_blank" rel="noreferrer"
               style={{
                 display:"flex",alignItems:"center",justifyContent:"center",gap:6,
