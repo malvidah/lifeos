@@ -1538,28 +1538,18 @@ function InsightsCard({date, token, userId, healthKey}) {
   );
 }
 
-// ─── ChatFloat ────────────────────────────────────────────────────────────────
-// Liquid-glass floating chat pill, always visible at the bottom of the screen.
-// Expands upward to show conversation history. Handles both entry commands
-// (voice-action API) and conversational questions (insights API).
+// ─── QuickAdd ─────────────────────────────────────────────────────────────────
+// Floating entry bar. Type a command, hit enter. Shows a brief status
+// notification (green = success, red = fail) that fades out automatically.
+// No conversation history — pure data entry.
 function ChatFloat({date, token, userId}) {
-  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState(null); // {text, ok} | null
   const [listening, setListening] = useState(false);
-  const [open, setOpen] = useState(false);
   const recognitionRef = useRef(null);
-  const scrollRef = useRef(null);
   const inputRef = useRef(null);
-  const prevDate = useRef(date);
-
-  // Reset conversation on date change
-  useEffect(() => {
-    if (prevDate.current !== date) {
-      setMessages([]); setOpen(false);
-      prevDate.current = date;
-    }
-  }, [date]);
+  const statusTimer = useRef(null);
 
   // Speech recognition
   useEffect(() => {
@@ -1575,234 +1565,147 @@ function ChatFloat({date, token, userId}) {
     return () => recognitionRef.current?.abort();
   }, []);
 
-  // Auto-scroll on new messages
-  useEffect(() => {
-    setTimeout(() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" }), 80);
-  }, [messages, busy]);
+  function showStatus(text, ok) {
+    clearTimeout(statusTimer.current);
+    setStatus({ text, ok });
+    statusTimer.current = setTimeout(() => setStatus(null), ok ? 3000 : 5000);
+  }
 
   function toggleMic() {
     if (listening) { recognitionRef.current?.stop(); setListening(false); }
-    else { setOpen(true); recognitionRef.current?.start(); setListening(true); }
+    else { recognitionRef.current?.start(); setListening(true); }
   }
 
   async function send() {
     if (!input.trim() || busy) return;
     const userText = input.trim();
     setInput("");
-    setOpen(true);
-    setMessages(prev => [...prev, { role: "user", content: userText }]);
     setBusy(true);
-
+    setStatus(null);
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      // Pass conversation history so Claude can resolve follow-up edits like "change that to salmon tacos"
-      const history = messages.map(m => ({ role: m.role, content: m.content }));
-
-      const actionRes = await fetch("/api/voice-action", {
+      const res = await fetch("/api/voice-action", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: userText, date, tz, history }),
+        body: JSON.stringify({ text: userText, date, tz }),
       });
-      const actionData = await actionRes.json();
-
-      if (actionData.error) {
-        // Hard server error
-        setMessages(prev => [...prev, { role: "assistant", content: actionData.error, type: "error" }]);
-      } else if (actionData.ok && actionData.results?.length > 0) {
-        // Data was written — refresh widgets
-        window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: actionData.results.map(r => r.type) } }));
-        setMessages(prev => [...prev, { role: "assistant", content: actionData.summary, type: "action" }]);
+      const data = await res.json();
+      if (data.ok && data.results?.length > 0) {
+        window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: data.results.map(r => r.type) } }));
+        showStatus(data.summary || "Done", true);
+      } else if (data.message) {
+        // Declined gracefully — couldn't parse or unsupported
+        showStatus(data.message, false);
+      } else if (data.error) {
+        showStatus(data.error, false);
       } else {
-        // isQuestion, or no actions matched — route to conversational AI
-        const convHistory = [
-          ...history,
-          { role: "user", content: userText },
-        ];
-        const insightRes = await fetch("/api/insights", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ date, messages: convHistory }),
-        });
-        const insightData = await insightRes.json();
-        if (insightData.tier === "free" && insightData.limit) {
-          setMessages(prev => [...prev, { role: "assistant", content: "You've used your free chat for today. Upgrade to Day Loop Premium for unlimited conversations.", type: "upgrade" }]);
-        } else if (insightData.insight) {
-          setMessages(prev => [...prev, { role: "assistant", content: insightData.insight }]);
-        } else if (insightData.error) {
-          setMessages(prev => [...prev, { role: "assistant", content: insightData.error, type: "error" }]);
-        }
+        showStatus("Not sure what to add — try being more specific", false);
       }
     } catch (e) {
-      setMessages(prev => [...prev, { role: "assistant", content: "Something went wrong: " + e.message, type: "error" }]);
+      showStatus("Something went wrong", false);
     }
     setBusy(false);
   }
 
   const hasMic = !!recognitionRef.current;
-  const isGlass = true; // liquid glass style
-
-  // Glass background values
   const glassBg = C.bg === "#0A0A0A"
-    ? "rgba(22, 23, 26, 0.72)"   // dark
-    : "rgba(239, 235, 228, 0.72)"; // light
+    ? "rgba(22, 23, 26, 0.82)"
+    : "rgba(239, 235, 228, 0.82)";
 
   return (
-    <>
-      {/* Backdrop when open */}
-      {open && messages.length > 0 && (
-        <div onClick={() => setOpen(false)} style={{
-          position: "fixed", inset: 0, zIndex: 97,
-        }} />
+    <div style={{
+      position: "fixed",
+      bottom: "max(16px, env(safe-area-inset-bottom, 16px))",
+      left: "50%",
+      transform: "translateX(-50%)",
+      width: "min(calc(100vw - 32px), 560px)",
+      zIndex: 98,
+      display: "flex",
+      flexDirection: "column",
+      gap: 6,
+      pointerEvents: "none",
+    }}>
+
+      {/* Status notification */}
+      {status && (
+        <div style={{
+          padding: "9px 16px",
+          borderRadius: 12,
+          background: status.ok ? `${C.green}18` : `${C.red}15`,
+          border: `1px solid ${status.ok ? C.green : C.red}40`,
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          pointerEvents: "none",
+          animation: "fadeInUp 0.18s ease",
+        }}>
+          <span style={{
+            fontFamily: mono, fontSize: 12,
+            color: status.ok ? C.green : C.red,
+            lineHeight: 1.5,
+          }}>
+            {status.ok ? "✓ " : ""}{status.text}
+          </span>
+        </div>
       )}
 
-      {/* Floating container */}
+      {/* Pill */}
       <div style={{
-        position: "fixed",
-        bottom: "max(16px, env(safe-area-inset-bottom, 16px))",
-        left: "50%",
-        transform: "translateX(-50%)",
-        width: "min(calc(100vw - 32px), 600px)",
-        zIndex: 98,
-        display: "flex",
-        flexDirection: "column",
-        gap: 0,
-        pointerEvents: "none",
+        display: "flex", alignItems: "center", gap: 8,
+        background: glassBg,
+        backdropFilter: "blur(24px) saturate(180%)",
+        WebkitBackdropFilter: "blur(24px) saturate(180%)",
+        borderRadius: 26,
+        border: `1px solid ${C.border}`,
+        boxShadow: "0 4px 24px rgba(0,0,0,0.22), 0 1px 0 rgba(255,255,255,0.04) inset",
+        padding: "10px 10px 10px 18px",
+        pointerEvents: "auto",
       }}>
+        <input
+          ref={inputRef}
+          value={input}
+          onChange={e => setInput(e.target.value)}
+          onKeyDown={e => { if (e.key === "Enter") send(); }}
+          placeholder={busy ? "Adding…" : "Add a meal, task, note, or activity…"}
+          disabled={busy}
+          style={{
+            flex: 1, background: "transparent", border: "none", outline: "none",
+            fontFamily: serif, fontSize: 16, color: C.text,
+            padding: "2px 0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
+          }}
+        />
 
-        {/* Conversation history — slides up above pill */}
-        {open && messages.length > 0 && (
-          <div ref={scrollRef} style={{
-            maxHeight: "45vh",
-            overflowY: "auto",
-            marginBottom: 8,
-            padding: "12px 16px",
-            borderRadius: 20,
-            background: glassBg,
-            backdropFilter: "blur(24px) saturate(180%)",
-            WebkitBackdropFilter: "blur(24px) saturate(180%)",
-            border: `1px solid ${C.border}`,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
-            pointerEvents: "auto",
+        {input.trim() ? (
+          <button onClick={send} disabled={busy} style={{
+            background: C.accent, border: "none", borderRadius: "50%",
+            width: 32, height: 32, cursor: busy ? "default" : "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
           }}>
-            {messages.map((m, i) => (
-              <div key={i} style={{
-                marginBottom: 4,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: m.role === "user" ? "flex-end" : "flex-start",
-              }}>
-                <div style={{
-                  maxWidth: "80%",
-                  padding: "9px 14px",
-                  borderRadius: m.role === "user"
-                    ? "18px 18px 4px 18px"
-                    : "18px 18px 18px 4px",
-                  background: m.role === "user"
-                    ? C.accent
-                    : C.bg === "#0A0A0A" ? "rgba(44,44,48,0.9)" : "rgba(229,229,234,0.9)",
-                }}>
-                  {m.type === "action" && (
-                    <div style={{ fontFamily: mono, fontSize:10, letterSpacing: "0.1em", color: m.role === "user" ? "rgba(255,255,255,0.7)" : C.green, textTransform: "uppercase", marginBottom: 3 }}>✓ updated</div>
-                  )}
-                  <div style={{
-                    fontFamily: m.role === "user" ? serif : mono,
-                    fontSize: m.role === "user" ? 15 : 13,
-                    lineHeight: m.role === "user" ? 1.45 : 1.7,
-                    color: m.type === "error" ? C.red : m.type === "upgrade" ? C.accent : m.role === "user" ? "#fff" : C.muted,
-                    whiteSpace: "pre-line",
-                  }}>{m.content}</div>
-                </div>
-              </div>
-            ))}
-            {busy && <div style={{ paddingTop: 4 }}><Shimmer width="50%" height={11} /></div>}
-          </div>
-        )}
-
-        {/* Thinking indicator above pill when no messages yet */}
-        {busy && messages.length === 0 && (
-          <div style={{
-            marginBottom: 8, padding: "10px 16px",
-            borderRadius: 16,
-            background: glassBg,
-            backdropFilter: "blur(24px) saturate(180%)",
-            WebkitBackdropFilter: "blur(24px) saturate(180%)",
-            border: `1px solid ${C.border}`,
-            pointerEvents: "auto",
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="19" x2="12" y2="5"/>
+              <polyline points="5 12 12 5 19 12"/>
+            </svg>
+          </button>
+        ) : hasMic ? (
+          <button onClick={toggleMic} style={{
+            background: listening ? `${C.red}22` : `${C.text}10`,
+            border: "none", borderRadius: "50%",
+            width: 32, height: 32, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, transition: "background 0.2s",
           }}>
-            <Shimmer width="60%" height={11} />
-          </div>
-        )}
-
-        {/* The pill itself */}
-        <div style={{
-          display: "flex", alignItems: "flex-end", gap: 8,
-          background: glassBg,
-          backdropFilter: "blur(24px) saturate(180%)",
-          WebkitBackdropFilter: "blur(24px) saturate(180%)",
-          borderRadius: 26,
-          border: `1px solid ${C.border}`,
-          boxShadow: "0 4px 24px rgba(0,0,0,0.22), 0 1px 0 rgba(255,255,255,0.04) inset",
-          padding: "10px 10px 10px 16px",
-          pointerEvents: "auto",
-        }}>
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") send(); }}
-            onFocus={() => { if (messages.length > 0) setOpen(true); }}
-            placeholder={busy ? "Thinking…" : "Add an entry or ask about your day…"}
-            disabled={busy}
-            style={{
-              flex: 1, background: "transparent", border: "none", outline: "none",
-              fontFamily: serif, fontSize: 16, color: C.text,
-              padding: "3px 0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
-              minHeight: 24,
-            }}
-          />
-
-          {/* Send or Voice/Mic */}
-          {input.trim() ? (
-            <button onClick={send} disabled={busy} style={{
-              background: C.accent, border: "none", borderRadius: "50%",
-              width: 32, height: 32, cursor: busy ? "default" : "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
-              marginBottom: 1,
-            }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="19" x2="12" y2="5"/>
-                <polyline points="5 12 12 5 19 12"/>
+            {listening ? (
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.red, boxShadow: `0 0 0 3px ${C.red}30`, animation: "pulse 1.2s ease-in-out infinite" }}/>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted}>
+                <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z"/>
+                <path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V19H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.08A7 7 0 0 0 19 10z"/>
               </svg>
-            </button>
-          ) : hasMic ? (
-            <button onClick={toggleMic} title={listening ? "Stop recording" : "Voice input"} style={{
-              background: listening ? `${C.red}22` : `${C.text}10`,
-              border: "none", borderRadius: "50%",
-              width: 32, height: 32,
-              cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0, transition: "background 0.2s",
-              marginBottom: 1,
-            }}>
-              {listening ? (
-                <div style={{
-                  width: 10, height: 10, borderRadius: "50%",
-                  background: C.red,
-                  boxShadow: `0 0 0 3px ${C.red}30`,
-                  animation: "pulse 1.2s ease-in-out infinite",
-                }}/>
-              ) : (
-                <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted}>
-                  <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z"/>
-                  <path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V19H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.08A7 7 0 0 0 19 10z"/>
-                </svg>
-              )}
-            </button>
-          ) : null}
-        </div>
+            )}
+          </button>
+        ) : null}
       </div>
-    </>
+    </div>
   );
 }
 
@@ -1955,6 +1858,7 @@ export default function Dashboard() {
         input,textarea,select{font-size:16px;}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+        @keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>

@@ -41,61 +41,7 @@ export async function POST(request) {
     const apiKey = ANTHROPIC_KEY();
     if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
 
-    const premium = await isPremium(supabase, user.id);
-
-    // ── Follow-up chat ──────────────────────────────────────────────────────
-    if (messages?.length) {
-      // Chat is premium only
-      if (!premium) return Response.json({ tier: 'free', limit: true });
-
-      // Build today's data context for chat so Claude doesn't ask for data it already has
-      const { data: chatEntries } = await supabase.from('entries')
-        .select('type, data').eq('date', date).eq('user_id', user.id);
-      const chatToday = {};
-      for (const row of chatEntries || []) chatToday[row.type] = row.data;
-
-      const chatCtxParts = [];
-      if (chatToday.health) {
-        const h = chatToday.health;
-        chatCtxParts.push(`Sleep ${h.sleepScore || '?'} (${h.sleepHrs || '?'}h, ${h.sleepEff || '?'}% eff), Readiness ${h.readinessScore || '?'}, HRV ${h.hrv || '?'}ms, RHR ${h.rhr || '?'}bpm, Activity ${h.activityScore || '?'} (${h.activeCalories || '?'} cal burned)`);
-      }
-      if (chatToday.notes) chatCtxParts.push(`Notes: ${String(chatToday.notes).slice(0, 400)}`);
-      if (chatToday.meals?.length) {
-        const m = chatToday.meals.filter(r => r.text?.trim()).map(r => r.text);
-        if (m.length) chatCtxParts.push(`Meals: ${m.join(', ')}`);
-      }
-      if (chatToday.activity?.length) {
-        const a = chatToday.activity.filter(r => r.text?.trim()).map(r => r.text);
-        if (a.length) chatCtxParts.push(`Activity: ${a.join(', ')}`);
-      }
-      if (chatToday.tasks?.length) {
-        const t = chatToday.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
-        if (t.length) chatCtxParts.push(`Tasks: ${t.join(', ')}`);
-      }
-      const chatContext = chatCtxParts.length
-        ? `Today's data (${date}):\n${chatCtxParts.join('\n')}`
-        : `No health or activity data logged yet for ${date}.`;
-
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 300,
-          system: `You are a warm, observant wellness coach inside someone's Day Loop dashboard. You have access to their data — never ask them to provide it.
-
-${chatContext}
-
-Rules: 1-3 sentences max. Be specific, reference actual numbers when available. No bullet points. No headers. If they ask what you can tell them, give a direct observation from the data above.`,
-          messages,
-        }),
-      });
-      const data = await res.json();
-      if (data.error) return Response.json({ error: `AI error: ${data.error.message}` }, { status: 500 });
-      const text = data.content?.find(b => b.type === 'text')?.text || '';
-      return Response.json({ insight: text });
-    }
-
+    // ── Insight generation ────────────────────────────────────────────────────
     // ── Initial insight generation — available to all users ──────────────────
 
     // Today's data (all entry types)

@@ -36,7 +36,7 @@ export async function POST(request) {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-    const { text, date, tz, history } = await request.json();
+    const { text, date, tz } = await request.json();
     if (!text?.trim() || !date) return Response.json({ error: 'text and date required' }, { status: 400 });
 
     // Cap input length to prevent prompt injection via giant strings
@@ -61,53 +61,37 @@ export async function POST(request) {
     if (today.activity?.length) snapshot.push(`Current activity: ${today.activity.filter(r=>r.text?.trim()).map(r=>r.text).join(', ')}`);
     if (today.notes) snapshot.push(`Current notes: ${String(today.notes).slice(0, 300)}`);
 
-    // Build conversation context for follow-up edits
-    const recentHistory = (history || []).slice(-6)
-      .map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`)
-      .join('\n');
+    const contextSnippet = snapshot.length ? snapshot.join('\n') : 'No data logged yet today.';
 
-    const systemPrompt = `You classify and parse natural language input for a personal life dashboard.
+    const systemPrompt = `You are a data entry assistant for a personal wellness dashboard. Your only job is to parse add/log/update/delete commands and write structured actions.
 
-FIRST decide the intent:
-- "action": the user is recording data or explicitly asking to add/edit/remove something
-- "question": the user is asking a question, seeking insights, analysis, or conversational response
+Respond ONLY with valid JSON — no explanation, no markdown.
 
-Return ONLY valid JSON. Format:
-{
-  "intent": "action" | "question",
-  "actions": [...],
-  "summary": "brief description of what was done"
-}
+If the request is clearly asking to add, log, edit, or remove data, return:
+{"ok": true, "actions": [...], "summary": "Added X to Y"}
 
-If intent is "question", return {"intent":"question","actions":[],"summary":""} — nothing else.
+If it is a question, is vague, references unsupported sources, or you genuinely can't determine what to add, return:
+{"ok": false, "message": "Short sentence explaining why (max 10 words)"}
 
-ACTION TYPES:
-- Add entries:
-  {"type":"meals","entries":["salmon tacos","green salad"]}
-  {"type":"notes","append":"Went for a walk in the park"}
-  {"type":"tasks","entries":[{"text":"call dentist","done":false}]}
-  {"type":"activity","entries":["45 min run"]}
-  {"type":"calendar","events":[{"title":"Doctor appointment","startTime":"14:00","endTime":"15:00","allDay":false}]}
+Supported types: meals, tasks, notes, activity
+NOT supported: strava, oura, health metrics, calendar events
 
-- Edit existing entries (use when user wants to change something already added):
-  {"type":"meals","edit":{"find":"salmon","replace":"salmon tacos"}}
-  {"type":"tasks","edit":{"find":"call dentist","replace":"call dentist tomorrow"}}
-  {"type":"activity","edit":{"find":"run","replace":"45 min run"}}
+Action formats:
+{"type":"meals","entries":["salmon 400kcal","green salad"]}
+{"type":"tasks","entries":[{"text":"call dentist","done":false}]}
+{"type":"notes","append":"felt good today"}
+{"type":"activity","entries":["30 min run"]}
+{"type":"meals","edit":{"find":"salmon","replace":"salmon tacos"}}
+{"type":"tasks","delete":"call dentist"}
 
-- Delete entries:
-  {"type":"meals","delete":"salmon"}
-  {"type":"tasks","delete":"call dentist"}
+For bulk adds ("add 3 tasks from today's insight"), generate multiple entries.
+Keep summary short and conversational: "Added breakfast" not "Successfully added meal entry".
 
-RULES:
-- Questions like "what can you tell me?", "how did I sleep?", "what's my HRV?", "analyze my week" → intent: "question"
-- Conversational follow-ups ("actually", "instead", "change X to Y", "remove that") → use edit/delete with context from history
-- Only include action types clearly present in the input
-- For ambiguous input that could be a question OR an action, prefer "question"
-- notes: reflections, journal entries, things that happened — NOT questions or requests`;
+Today's existing data:
+${contextSnippet}`;
 
     const userMessage = [
       snapshot.length ? `Today's data:\n${snapshot.join('\n')}` : '',
-      recentHistory ? `Recent conversation:\n${recentHistory}` : '',
       `New message: "${text}"`,
     ].filter(Boolean).join('\n\n');
 
@@ -138,9 +122,9 @@ RULES:
       return Response.json({ error: 'Failed to parse AI response' }, { status: 500 });
     }
 
-    // If it's a question, signal the frontend to route to the chat/insights API
-    if (parsed.intent === 'question') {
-      return Response.json({ ok: false, isQuestion: true });
+    // If AI declined (question, vague, unsupported) — return message to show in status bar
+    if (!parsed.ok || parsed.ok === false) {
+      return Response.json({ ok: false, message: parsed.message || "I can only add data — try 'add a meal' or 'add a task'" });
     }
 
     const actions = parsed.actions || [];
