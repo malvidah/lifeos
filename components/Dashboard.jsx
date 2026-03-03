@@ -968,14 +968,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
 
         {/* RIGHT: Today + chevron */}
         <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
-          {!collapsed&&<button onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()-1);onSelect(toKey(d));}} style={{
-            background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
-            color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',
-            textTransform:'uppercase',padding:'4px 8px',transition:'all 0.15s'}}
-            onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-            onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
-            Last year
-          </button>}
+
           <button onClick={()=>onSelect(todayKey())} style={{
             background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
             color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',
@@ -1134,7 +1127,23 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
 
   const toHHMM = t => {
     if (!t || t === 'all day') return '';
-    try { return new Date('2000-01-01 ' + t).toTimeString().slice(0,5); } catch { return ''; }
+    try {
+      // Handle "HH:MM" already
+      if (/^\d{1,2}:\d{2}$/.test(t.trim())) {
+        const [h,m] = t.trim().split(':').map(Number);
+        return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      }
+      // Handle "H:MM AM/PM"
+      const pm = /pm/i.test(t), am = /am/i.test(t);
+      const match = t.match(/(\d{1,2}):(\d{2})/);
+      if (match) {
+        let h = parseInt(match[1]), m = parseInt(match[2]);
+        if (pm && h < 12) h += 12;
+        if (am && h === 12) h = 0;
+        return String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+      }
+      return '';
+    } catch { return ''; }
   };
 
   function openAdd() {
@@ -1304,14 +1313,12 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                 }}>
                   <input type='time' value={form.startTime}
                     onChange={e=>updateForm({startTime:e.target.value})}
-                    onBlur={()=>{if(!isNew&&dirty)save();}}
                     style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:C.muted,
                       width:70,cursor:'text'}}
                   />
                   <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,opacity:0.4}}>–</span>
                   <input type='time' value={form.endTime}
                     onChange={e=>updateForm({endTime:e.target.value})}
-                    onBlur={()=>{if(!isNew&&dirty)save();}}
                     style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:C.muted,
                       width:70,cursor:'text'}}
                   />
