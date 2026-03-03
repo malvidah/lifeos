@@ -904,101 +904,127 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
   const mobile = useIsMobile();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  // mode: null | 'add' | 'detail' | 'edit'
-  const [mode,    setMode]    = useState(null);
-  const [active,  setActive]  = useState(null);   // event being viewed/edited
-  const [form,    setForm]    = useState({title:'', startTime:'', endTime:'', allDay:false});
-  const [saving,  setSaving]  = useState(false);
-  const [saveErr, setSaveErr] = useState('');
-  const [deleting,setDeleting]= useState(false);
+  const [active,   setActive]  = useState(null);  // null = closed, {} = new, ev = existing
+  const [form,     setForm]    = useState({title:'',startTime:'',endTime:'',allDay:false});
+  const [saving,   setSaving]  = useState(false);
+  const [deleting, setDeleting]= useState(false);
+  const [saveErr,  setSaveErr] = useState('');
+  const [dirty,    setDirty]   = useState(false);
 
-  function closePanel() { setMode(null); setActive(null); setSaveErr(''); }
+  const isNew = active && !active.id;
+  const color = active?.color || C.accent;
 
-  function handleEventClick(ev) {
-    if(active?.id && active.id===ev.id && mode==='detail'){ closePanel(); return; }
-    setActive(ev); setMode('detail'); setSaveErr('');
+  const toHHMM = (t) => {
+    if (!t || t === 'all day') return '';
+    try { return new Date('2000-01-01 ' + t).toTimeString().slice(0,5); } catch { return ''; }
+  };
+
+  function openAdd() {
+    setActive({});
+    setForm({title:'', startTime:'09:00', endTime:'10:00', allDay:false});
+    setSaveErr(''); setDirty(false);
   }
 
-  function handleAddClick() {
-    setForm({title:'',startTime:'09:00',endTime:'10:00',allDay:false});
-    setSaveErr(''); setActive(null); setMode('add');
-  }
-
-  function startEdit() {
-    const toHHMM = (t) => {
-      if (!t || t==='all day') return '';
-      try { const d=new Date('2000-01-01 '+t); return d.toTimeString().slice(0,5); }
-      catch { return ''; }
-    };
+  function openEvent(ev) {
+    if (active?.id === ev.id) { closePanel(); return; }
+    setActive(ev);
     setForm({
-      title: active.title,
-      startTime: active.allDay ? '' : toHHMM(active.time),
-      endTime:   active.allDay ? '' : toHHMM(active.endTime),
-      allDay:    active.allDay || active.time==='all day',
+      title: ev.title || '',
+      startTime: ev.allDay ? '' : toHHMM(ev.time),
+      endTime:   ev.allDay ? '' : toHHMM(ev.endTime),
+      allDay:    ev.allDay || ev.time === 'all day',
     });
-    setSaveErr(''); setMode('edit');
+    setSaveErr(''); setDirty(false);
   }
 
-  async function submitAdd() {
-    if (!form.title.trim()) return;
-    setSaving(true); setSaveErr('');
-    try {
-      const res = await fetch('/api/calendar-create', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json', Authorization:`Bearer ${token}`},
-        body: JSON.stringify({title:form.title.trim(), date:selected, startTime:form.allDay?'':form.startTime, endTime:form.allDay?'':form.endTime, allDay:form.allDay, tz}),
-      });
-      const data = await res.json();
-      if (!res.ok||data.error){ setSaveErr(data.error||'Failed to create event'); setSaving(false); return; }
-      const newEv = {id:data.eventId, title:form.title.trim(),
-        time: form.allDay?'all day':(form.startTime||'all day'),
-        endTime: form.allDay?null:form.endTime,
-        allDay: form.allDay, color:'#B8A882'};
-      setEvents(prev=>({...prev,[selected]:[...(prev[selected]||[]),newEv]}));
-      setSaving(false); closePanel();
-    } catch(err){ setSaveErr(err.message); setSaving(false); }
-  }
+  function closePanel() { setActive(null); setSaveErr(''); setDirty(false); }
 
-  async function submitEdit() {
-    if (!form.title.trim()||!active?.id) return;
+  function updateForm(patch) { setForm(f => ({...f,...patch})); setDirty(true); }
+
+  async function save() {
+    if (!form.title.trim() || saving) return;
     setSaving(true); setSaveErr('');
     try {
-      const res = await fetch('/api/calendar-update', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json', Authorization:`Bearer ${token}`},
-        body: JSON.stringify({eventId:active.id, title:form.title.trim(), date:selected, startTime:form.allDay?'':form.startTime, endTime:form.allDay?'':form.endTime, allDay:form.allDay, tz}),
-      });
-      const data = await res.json();
-      if (!res.ok||data.error){ setSaveErr(data.error||'Failed to update event'); setSaving(false); return; }
-      const updated = {...active, title:form.title.trim(),
-        time: form.allDay?'all day':(form.startTime||'all day'),
-        endTime: form.allDay?null:form.endTime, allDay:form.allDay};
-      setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).map(e=>e.id===active.id?updated:e)}));
-      setActive(updated); setSaving(false); setMode('detail');
-    } catch(err){ setSaveErr(err.message); setSaving(false); }
+      if (isNew) {
+        const res = await fetch('/api/calendar-create', {
+          method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+          body: JSON.stringify({title:form.title.trim(), date:selected,
+            startTime:form.allDay?'':form.startTime, endTime:form.allDay?'':form.endTime,
+            allDay:form.allDay, tz}),
+        });
+        const data = await res.json();
+        if (!res.ok||data.error){ setSaveErr(data.error||'Failed'); setSaving(false); return; }
+        const newEv = {id:data.eventId, title:form.title.trim(),
+          time: form.allDay?'all day':(form.startTime||'all day'),
+          endTime: form.allDay?null:form.endTime, allDay:form.allDay, color:'#B8A882'};
+        setEvents(prev=>({...prev,[selected]:[...(prev[selected]||[]),newEv]}));
+        closePanel();
+      } else {
+        const res = await fetch('/api/calendar-update', {
+          method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+          body: JSON.stringify({eventId:active.id, title:form.title.trim(), date:selected,
+            startTime:form.allDay?'':form.startTime, endTime:form.allDay?'':form.endTime,
+            allDay:form.allDay, tz}),
+        });
+        const data = await res.json();
+        if (!res.ok||data.error){ setSaveErr(data.error||'Failed'); setSaving(false); return; }
+        const updated = {...active, title:form.title.trim(),
+          time: form.allDay?'all day':(form.startTime||'all day'),
+          endTime: form.allDay?null:form.endTime, allDay:form.allDay};
+        setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).map(e=>e.id===active.id?updated:e)}));
+        setActive(updated); setDirty(false);
+      }
+    } catch(err){ setSaveErr(err.message); }
+    setSaving(false);
   }
 
   async function deleteEvent() {
-    if (!active?.id) return;
+    if (!active?.id || deleting) return;
     setDeleting(true);
     try {
       const res = await fetch('/api/calendar-delete', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json', Authorization:`Bearer ${token}`},
+        method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
         body: JSON.stringify({eventId:active.id}),
       });
-      const data = await res.json();
-      if (!res.ok||data.error){ setDeleting(false); return; }
-      setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).filter(e=>e.id!==active.id)}));
-      closePanel();
-    } catch{ } finally{ setDeleting(false); }
+      if (res.ok) {
+        setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).filter(e=>e.id!==active.id)}));
+        closePanel();
+      }
+    } catch{} finally{ setDeleting(false); }
   }
 
-  // Close panel when date changes
   const prevSelected = useRef(selected);
-  useEffect(()=>{ if(prevSelected.current!==selected){ prevSelected.current=selected; closePanel(); }}, [selected]);
+  useEffect(()=>{
+    if(prevSelected.current!==selected){ prevSelected.current=selected; closePanel(); }
+  },[selected]);
 
-  const panelOpen = mode !== null;
+  // Shared input style — looks static, reveals focus state
+  const inputStyle = (size=17) => ({
+    background:'transparent', border:'none', outline:'none',
+    fontFamily: size > 13 ? serif : mono,
+    fontSize:size, color:C.text,
+    padding:0, margin:0, width:'100%',
+    borderBottom:'1px solid transparent',
+    transition:'border-color 0.15s',
+  });
+  const timeInputStyle = {
+    background:'transparent', border:'none', outline:'none',
+    fontFamily:mono, fontSize:12, color:C.muted,
+    padding:0, cursor:'text',
+    borderBottom:'1px solid transparent',
+    transition:'border-color 0.15s',
+  };
+
+  // Small action button style (ALL DAY, trash, ×)
+  const actionBtn = (active=false, danger=false) => ({
+    background:'none',
+    border:`1px solid ${active ? C.text : C.border2}`,
+    borderRadius:5, cursor:'pointer',
+    color: danger ? '#A05050' : active ? C.text : C.muted,
+    fontFamily:mono, fontSize:11,
+    letterSpacing:'0.1em', textTransform:'uppercase',
+    padding:'5px 10px', transition:'all 0.15s',
+  });
 
   return (
     <Card>
@@ -1008,118 +1034,106 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token}) {
         events={events}
         healthDots={healthDots}
         desktop={!mobile}
-        onEventClick={handleEventClick}
-        onAddClick={handleAddClick}
+        onEventClick={openEvent}
+        onAddClick={openAdd}
       />
 
-      {/* ── Bottom panel: detail / add / edit ── */}
-      {panelOpen && (
-        <div style={{borderTop:`1px solid ${C.border}`,padding:'14px 16px',background:`${C.blue}06`}}>
-
-          {/* Detail view */}
-          {mode==='detail' && active && (
-            <div>
-              <div style={{display:'flex',alignItems:'flex-start',gap:10}}>
-                <div style={{width:3,alignSelf:'stretch',borderRadius:2,background:active.color||C.muted,flexShrink:0,marginTop:2}}/>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{fontFamily:serif,fontSize:18,color:C.text,lineHeight:1.3,marginBottom:4}}>{active.title}</div>
-                  <div style={{fontFamily:mono,fontSize:12,color:C.muted}}>
-                    {active.allDay||active.time==='all day' ? 'All day' :
-                      (active.endTime?`${active.time} – ${active.endTime}`:active.time)}
-                  </div>
-                  {active.zoomUrl && (
-                    <a href={active.zoomUrl} target='_blank' rel='noopener noreferrer'
-                      style={{display:'inline-block',marginTop:8,fontFamily:mono,fontSize:11,
-                        letterSpacing:'0.1em',textTransform:'uppercase',color:C.blue,textDecoration:'none'}}>
-                      Join meeting ↗
-                    </a>
-                  )}
+      {/* ── Event panel ── */}
+      {active !== null && (
+        <div style={{borderTop:`1px solid ${C.border}`, padding:'14px 16px'}}>
+          {/* Color bar + title + times */}
+          <div style={{display:'flex', gap:10, alignItems:'flex-start', marginBottom:12}}>
+            <div style={{width:3, borderRadius:2, background:color, flexShrink:0, alignSelf:'stretch', minHeight:36}}/>
+            <div style={{flex:1, minWidth:0}}>
+              {/* Title */}
+              <input
+                autoFocus
+                value={form.title}
+                onChange={e=>updateForm({title:e.target.value})}
+                onKeyDown={e=>{ if(e.key==='Enter'){e.preventDefault();save();} if(e.key==='Escape')closePanel(); }}
+                onBlur={()=>{ if(!isNew && dirty && form.title.trim()) save(); }}
+                onFocus={e=>e.target.style.borderBottomColor=C.border2}
+                placeholder='Event title'
+                style={{...inputStyle(17), display:'block', marginBottom:6,
+                  '&::placeholder':{color:C.muted}}}
+              />
+              {/* Times */}
+              {!form.allDay ? (
+                <div style={{display:'flex', alignItems:'center', gap:6}}>
+                  <input type='time' value={form.startTime}
+                    onChange={e=>updateForm({startTime:e.target.value})}
+                    onBlur={()=>{ if(!isNew && dirty) save(); }}
+                    onFocus={e=>e.target.style.borderBottomColor=C.border2}
+                    style={timeInputStyle}
+                  />
+                  <span style={{fontFamily:mono,fontSize:11,color:C.muted,opacity:0.5}}>–</span>
+                  <input type='time' value={form.endTime}
+                    onChange={e=>updateForm({endTime:e.target.value})}
+                    onBlur={()=>{ if(!isNew && dirty) save(); }}
+                    onFocus={e=>e.target.style.borderBottomColor=C.border2}
+                    style={timeInputStyle}
+                  />
+                  {saving && <span style={{fontFamily:mono,fontSize:10,color:C.muted,opacity:0.5,marginLeft:4}}>saving…</span>}
                 </div>
-                <button onClick={closePanel} style={{background:'none',border:'none',cursor:'pointer',
-                  color:C.muted,fontFamily:mono,fontSize:18,padding:'0 4px',lineHeight:1}}>×</button>
-              </div>
-              {active.id && (
-                <div style={{display:'flex',gap:8,marginTop:14}}>
-                  <button onClick={startEdit} style={{
-                    background:'none',border:`1px solid ${C.border2}`,borderRadius:5,
-                    padding:'6px 14px',color:C.muted,fontFamily:mono,fontSize:12,
-                    letterSpacing:'0.1em',textTransform:'uppercase',cursor:'pointer',
-                    transition:'all 0.15s'}}
-                    onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-                    onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
-                    edit
-                  </button>
-                  <button onClick={deleteEvent} disabled={deleting} style={{
-                    background:'none',border:`1px solid ${C.border2}`,borderRadius:5,
-                    padding:'6px 14px',color:'#A05050',fontFamily:mono,fontSize:12,
-                    letterSpacing:'0.1em',textTransform:'uppercase',cursor:'pointer',
-                    opacity:deleting?0.4:1,transition:'all 0.15s'}}
-                    onMouseEnter={e=>{if(!deleting){e.currentTarget.style.background='#A0505015';e.currentTarget.style.borderColor='#A05050';}}}
-                    onMouseLeave={e=>{e.currentTarget.style.background='none';e.currentTarget.style.borderColor=C.border2;}}>
-                    {deleting?'deleting…':'delete'}
-                  </button>
-                </div>
+              ) : (
+                <span style={{fontFamily:mono,fontSize:12,color:C.muted}}>All day</span>
+              )}
+              {active.zoomUrl && (
+                <a href={active.zoomUrl} target='_blank' rel='noopener noreferrer'
+                  style={{display:'inline-block',marginTop:6,fontFamily:mono,fontSize:11,
+                    letterSpacing:'0.1em',textTransform:'uppercase',color:C.blue,textDecoration:'none'}}>
+                  Join meeting ↗
+                </a>
               )}
             </div>
-          )}
+          </div>
 
-          {/* Add / Edit form */}
-          {(mode==='add'||mode==='edit') && (
-            <div>
-              <div style={{display:'flex',alignItems:'center',marginBottom:12}}>
-                <span style={{fontFamily:mono,fontSize:11,letterSpacing:'0.15em',textTransform:'uppercase',color:C.muted}}>
-                  {mode==='edit'?'Edit event':'New event'} · {new Date(selected+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'})}
-                </span>
-                <div style={{flex:1}}/>
-                <button onClick={closePanel} style={{background:'none',border:'none',cursor:'pointer',
-                  color:C.muted,fontFamily:mono,fontSize:18,padding:'0 4px',lineHeight:1}}>×</button>
-              </div>
-              <input autoFocus value={form.title} onChange={e=>setForm(f=>({...f,title:e.target.value}))}
-                onKeyDown={e=>{if(e.key==='Enter')mode==='edit'?submitEdit():submitAdd();if(e.key==='Escape')closePanel();}}
-                placeholder='Event title'
-                style={{width:'100%',background:'transparent',border:'none',
-                  borderBottom:`1px solid ${C.border2}`,outline:'none',
-                  padding:'4px 0',fontFamily:serif,fontSize:17,color:C.text,
-                  marginBottom:12,boxSizing:'border-box'}}/>
-              <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:12,flexWrap:'wrap'}}>
-                <label style={{display:'flex',alignItems:'center',gap:6,cursor:'pointer'}}>
-                  <input type='checkbox' checked={form.allDay} onChange={e=>setForm(f=>({...f,allDay:e.target.checked}))}
-                    style={{accentColor:C.blue,width:12,height:12}}/>
-                  <span style={{fontFamily:mono,fontSize:12,color:C.muted,letterSpacing:'0.08em'}}>All day</span>
-                </label>
-                {!form.allDay && (<>
-                  <div style={{display:'flex',alignItems:'center',gap:5}}>
-                    <span style={{fontFamily:mono,fontSize:12,color:C.muted}}>Start</span>
-                    <input type='time' value={form.startTime} onChange={e=>setForm(f=>({...f,startTime:e.target.value}))}
-                      style={{background:'transparent',border:`1px solid ${C.border2}`,borderRadius:4,
-                        outline:'none',padding:'3px 6px',fontFamily:mono,fontSize:12,color:C.text}}/>
-                  </div>
-                  <div style={{display:'flex',alignItems:'center',gap:5}}>
-                    <span style={{fontFamily:mono,fontSize:12,color:C.muted}}>End</span>
-                    <input type='time' value={form.endTime} onChange={e=>setForm(f=>({...f,endTime:e.target.value}))}
-                      style={{background:'transparent',border:`1px solid ${C.border2}`,borderRadius:4,
-                        outline:'none',padding:'3px 6px',fontFamily:mono,fontSize:12,color:C.text}}/>
-                  </div>
-                </>)}
-              </div>
-              {saveErr && <div style={{fontFamily:mono,fontSize:12,color:'#A05050',marginBottom:8}}>{saveErr}</div>}
-              <div style={{display:'flex',gap:8}}>
-                <button onClick={mode==='edit'?submitEdit:submitAdd}
-                  disabled={saving||!form.title.trim()} style={{
-                  background:C.blue,border:'none',borderRadius:5,padding:'7px 16px',
-                  color:'#fff',fontFamily:mono,fontSize:12,letterSpacing:'0.1em',textTransform:'uppercase',
-                  cursor:saving||!form.title.trim()?'not-allowed':'pointer',
-                  opacity:saving||!form.title.trim()?0.5:1}}>
-                  {saving?'saving…':mode==='edit'?'save changes':'add event'}
-                </button>
-                <button onClick={closePanel} style={{
-                  background:'none',border:`1px solid ${C.border2}`,borderRadius:5,padding:'7px 14px',
-                  color:C.muted,fontFamily:mono,fontSize:12,letterSpacing:'0.1em',textTransform:'uppercase',cursor:'pointer'}}>
-                  cancel
-                </button>
-              </div>
-            </div>
-          )}
+          {saveErr && <div style={{fontFamily:mono,fontSize:11,color:'#A05050',marginBottom:8}}>{saveErr}</div>}
+
+          {/* Action buttons: ALL DAY | trash | cancel */}
+          <div style={{display:'flex', gap:8, alignItems:'center'}}>
+            {/* ALL DAY toggle */}
+            <button
+              onClick={()=>updateForm({allDay:!form.allDay})}
+              style={actionBtn(form.allDay)}
+              onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+              onMouseLeave={e=>{e.currentTarget.style.color=form.allDay?C.text:C.muted;e.currentTarget.style.borderColor=form.allDay?C.text:C.border2;}}>
+              All day
+            </button>
+
+            {/* Save button — only for new events (edits auto-save on blur) */}
+            {isNew && (
+              <button onClick={save} disabled={saving||!form.title.trim()} style={{
+                ...actionBtn(false),
+                background: form.title.trim() ? C.blue : 'none',
+                color: form.title.trim() ? '#fff' : C.muted,
+                border: form.title.trim() ? 'none' : `1px solid ${C.border2}`,
+                opacity: saving ? 0.5 : 1,
+                cursor: saving||!form.title.trim() ? 'not-allowed':'pointer',
+              }}>
+                {saving ? 'saving…' : 'save'}
+              </button>
+            )}
+
+            <div style={{flex:1}}/>
+
+            {/* Trash — only for existing events */}
+            {!isNew && active.id && (
+              <button onClick={deleteEvent} disabled={deleting}
+                style={actionBtn(false, true)}
+                onMouseEnter={e=>{e.currentTarget.style.background='#A0505015';e.currentTarget.style.borderColor='#A05050';}}
+                onMouseLeave={e=>{e.currentTarget.style.background='none';e.currentTarget.style.borderColor=C.border2;}}>
+                {deleting ? '…' : '🗑'}
+              </button>
+            )}
+
+            {/* Cancel */}
+            <button onClick={closePanel} style={actionBtn()}
+              onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+              onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
+              ×
+            </button>
+          </div>
         </div>
       )}
     </Card>
