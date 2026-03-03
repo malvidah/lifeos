@@ -1526,26 +1526,21 @@ function InsightsCard({date, token, userId, healthKey}) {
           <div style={{ fontFamily: mono, fontSize: 11, color: C.red, lineHeight: 1.5 }}>{error}</div>
         )}
         {isFree ? (
-          /* Free tier — blur the whole card, overlay upgrade CTA */
-          <div style={{ position: "relative" }}>
+          /* Free tier — single compact row with upgrade button */
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "2px 0" }}>
             <div style={{
-              fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line",
-              filter: "blur(5px)", userSelect: "none", pointerEvents: "none",
-              WebkitFilter: "blur(5px)",
-            }}>{PLACEHOLDER}</div>
-            <div style={{
-              position: "absolute", inset: 0,
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <button
-                onClick={() => window.location.href = "/upgrade"}
-                style={{
-                  background: C.accent, border: "none", borderRadius: 8,
-                  color: "#fff", fontFamily: mono, fontSize: 9, letterSpacing: "0.12em",
-                  textTransform: "uppercase", padding: "8px 16px", cursor: "pointer",
-                  boxShadow: "0 2px 12px rgba(0,0,0,0.3)",
-                }}>✦ Upgrade for AI Insights</button>
-            </div>
+              fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.5,
+              filter: "blur(4px)", userSelect: "none", pointerEvents: "none",
+              WebkitFilter: "blur(4px)", flex: 1, overflow: "hidden", whiteSpace: "nowrap",
+            }}>Your sleep efficiency is strong and HRV is trending upward this week.</div>
+            <button
+              onClick={() => window.location.href = "/upgrade"}
+              style={{
+                background: C.accent, border: "none", borderRadius: 6, flexShrink: 0,
+                color: "#fff", fontFamily: mono, fontSize: 8, letterSpacing: "0.1em",
+                textTransform: "uppercase", padding: "6px 12px", cursor: "pointer",
+                whiteSpace: "nowrap",
+              }}>✦ Upgrade</button>
           </div>
         ) : text ? (
           <div style={{ fontFamily: mono, fontSize: 11, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
