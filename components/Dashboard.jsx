@@ -143,6 +143,20 @@ function useDbSave(date, type, empty, token, userId) {
   const timerRef = useRef(null);
   live.current = value;
 
+  // Listen for external refresh events (e.g. from voice input)
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.detail?.types || e.detail.types.includes(type)) {
+        // Clear cache so we get fresh DB data
+        delete MEM[cacheKey];
+        delete DIRTY[cacheKey];
+        setRev(r => r + 1);
+      }
+    };
+    window.addEventListener('lifeos:refresh', handler);
+    return () => window.removeEventListener('lifeos:refresh', handler);
+  }, [type, cacheKey]);
+
   // Fetch from DB whenever date/type/token/userId changes, or rev bumps (poll/visibility)
   useEffect(() => {
     if (!token || !userId) return;
@@ -1443,12 +1457,289 @@ function LoginScreen() {
   );
 }
 
+// ─── Insights ────────────────────────────────────────────────────────────────
+function Insights({date, token, userId}) {
+  const [insight, setInsight] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [messages, setMessages] = useState([]); // follow-up conversation
+  const [input, setInput] = useState("");
+  const [replying, setReplying] = useState(false);
+  const [context, setContext] = useState(null); // raw data context for follow-ups
+  const scrollRef = useRef(null);
+  const prevDate = useRef(date);
+
+  // Load cached insight or generate
+  useEffect(() => {
+    if (!token || !userId) return;
+    // Reset on date change
+    if (prevDate.current !== date) {
+      setInsight(null); setMessages([]); setContext(null);
+      prevDate.current = date;
+    }
+    // Try loading cached insight from DB
+    dbLoad(date, "insights", token).then(cached => {
+      if (cached?.text) {
+        setInsight(cached.text);
+        // Only regenerate if older than 4 hours
+        const age = Date.now() - new Date(cached.generatedAt || 0).getTime();
+        if (age < 4 * 60 * 60 * 1000) return;
+      }
+      generateInsight();
+    });
+  }, [date, token, userId]); // eslint-disable-line
+
+  async function generateInsight() {
+    setLoading(true);
+    try {
+      const r = await fetch("/api/insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ date }),
+      });
+      const data = await r.json();
+      if (data.insight) {
+        setInsight(data.insight);
+        if (data.context) setContext(data.context);
+      }
+    } catch {}
+    setLoading(false);
+  }
+
+  async function sendFollowUp() {
+    if (!input.trim() || replying) return;
+    const userMsg = input.trim();
+    setInput("");
+    const newMessages = [...messages,
+      ...(messages.length === 0 && context ? [{ role: "user", content: `Here's my data for today:\n${context}` }, { role: "assistant", content: insight }] : []),
+      { role: "user", content: userMsg }
+    ];
+    setMessages(prev => [...prev, { role: "user", content: userMsg }]);
+    setReplying(true);
+    try {
+      const r = await fetch("/api/insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ date, messages: newMessages }),
+      });
+      const data = await r.json();
+      if (data.insight) {
+        setMessages(prev => [...prev, { role: "assistant", content: data.insight }]);
+      }
+    } catch {}
+    setReplying(false);
+    setTimeout(() => scrollRef.current?.scrollTo({top: scrollRef.current.scrollHeight, behavior: "smooth"}), 100);
+  }
+
+  return (
+    <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
+      <div ref={scrollRef} style={{flex:1,overflowY:"auto",minHeight:0}}>
+        {loading && !insight && (
+          <div style={{padding:"8px 0"}}>
+            <Shimmer width="90%" height={13}/>
+            <div style={{height:6}}/>
+            <Shimmer width="75%" height={13}/>
+            <div style={{height:6}}/>
+            <Shimmer width="60%" height={13}/>
+          </div>
+        )}
+        {insight && (
+          <div style={{fontFamily:serif,fontSize:15,lineHeight:1.7,color:C.text,whiteSpace:"pre-line"}}>
+            {insight}
+          </div>
+        )}
+        {/* Follow-up messages */}
+        {messages.map((m, i) => (
+          <div key={i} style={{
+            marginTop:10,
+            padding:"8px 10px",
+            borderRadius:8,
+            background: m.role === "user" ? `${C.accent}12` : "transparent",
+            borderLeft: m.role === "assistant" ? `2px solid ${C.accent}30` : "none",
+          }}>
+            <div style={{
+              fontFamily: m.role === "user" ? mono : serif,
+              fontSize: m.role === "user" ? 12 : 15,
+              lineHeight:1.6,
+              color: m.role === "user" ? C.muted : C.text,
+              whiteSpace:"pre-line",
+            }}>{m.content}</div>
+          </div>
+        ))}
+        {replying && <div style={{marginTop:8,padding:"4px 0"}}><Shimmer width="70%" height={13}/></div>}
+      </div>
+
+      {/* Follow-up input */}
+      <div style={{
+        flexShrink:0, display:"flex", gap:8, alignItems:"center",
+        paddingTop:8, marginTop:4, borderTop:`1px solid ${C.border}`,
+      }}>
+        <input value={input}
+          onChange={e=>setInput(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter") sendFollowUp(); }}
+          placeholder="Ask a follow-up…"
+          style={{
+            flex:1, background:"transparent", border:`1px solid ${C.border2}`,
+            borderRadius:6, padding:"6px 10px", outline:"none",
+            fontFamily:serif, fontSize:14, color:C.text,
+          }}/>
+        <button onClick={generateInsight} disabled={loading}
+          title="Regenerate"
+          style={{
+            background:"none", border:`1px solid ${C.border2}`, borderRadius:6,
+            padding:"5px 8px", cursor:loading?"not-allowed":"pointer",
+            color:C.muted, fontFamily:mono, fontSize:10, lineHeight:1,
+            opacity:loading?0.4:1,
+          }}>↻</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── VoiceBar ────────────────────────────────────────────────────────────────
+function VoiceBar({date, token}) {
+  const [text, setText] = useState("");
+  const [processing, setProcessing] = useState(false);
+  const [response, setResponse] = useState(null); // {summary, fadeTimer}
+  const [listening, setListening] = useState(false);
+  const recognitionRef = useRef(null);
+
+  // Set up speech recognition
+  useEffect(() => {
+    const SR = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (SR) {
+      const r = new SR();
+      r.continuous = false;
+      r.interimResults = true;
+      r.lang = "en-US";
+      r.onresult = (e) => {
+        const transcript = Array.from(e.results).map(r => r[0].transcript).join("");
+        setText(transcript);
+      };
+      r.onend = () => setListening(false);
+      r.onerror = () => setListening(false);
+      recognitionRef.current = r;
+    }
+    return () => { recognitionRef.current?.abort(); };
+  }, []);
+
+  function toggleMic() {
+    if (listening) {
+      recognitionRef.current?.stop();
+      setListening(false);
+    } else {
+      recognitionRef.current?.start();
+      setListening(true);
+    }
+  }
+
+  async function submit() {
+    if (!text.trim() || processing) return;
+    const input = text.trim();
+    setText("");
+    setProcessing(true);
+    setResponse(null);
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const r = await fetch("/api/voice-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: input, date, tz }),
+      });
+      const data = await r.json();
+      if (data.ok) {
+        // Trigger widget refreshes
+        const types = (data.results || []).map(r => r.type);
+        window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types } }));
+        setResponse({ summary: data.summary, ok: true });
+      } else {
+        setResponse({ summary: data.error || "Something went wrong", ok: false });
+      }
+    } catch (e) {
+      setResponse({ summary: e.message, ok: false });
+    }
+    setProcessing(false);
+    // Auto-fade response after 8 seconds
+    setTimeout(() => setResponse(null), 8000);
+  }
+
+  const hasMic = !!recognitionRef.current;
+
+  return (
+    <div style={{
+      flexShrink:0,
+      borderTop:`1px solid ${C.border}`,
+      background:C.card,
+      padding:"8px 12px",
+    }}>
+      {/* Response toast */}
+      {response && (
+        <div style={{
+          marginBottom:6, padding:"6px 10px", borderRadius:6,
+          background: response.ok ? `${C.green}15` : `${C.red}15`,
+          borderLeft: `2px solid ${response.ok ? C.green : C.red}`,
+          fontFamily:serif, fontSize:13, lineHeight:1.5,
+          color: response.ok ? C.text : C.red,
+        }}>
+          {response.summary}
+        </div>
+      )}
+
+      <div style={{display:"flex", gap:8, alignItems:"center"}}>
+        {/* Mic button */}
+        {hasMic && (
+          <button onClick={toggleMic}
+            style={{
+              background: listening ? C.red : "transparent",
+              border: `1px solid ${listening ? C.red : C.border2}`,
+              borderRadius: "50%", width:34, height:34, cursor:"pointer",
+              display:"flex", alignItems:"center", justifyContent:"center",
+              flexShrink:0, transition:"all 0.2s",
+            }}>
+            <span style={{
+              fontSize:15, lineHeight:1,
+              color: listening ? "#fff" : C.muted,
+            }}>🎤</span>
+          </button>
+        )}
+
+        {/* Text input */}
+        <input value={text}
+          onChange={e=>setText(e.target.value)}
+          onKeyDown={e=>{ if(e.key==="Enter") submit(); }}
+          placeholder={processing ? "Processing…" : "Tell me what happened…"}
+          disabled={processing}
+          style={{
+            flex:1, background:C.surface, border:`1px solid ${C.border}`,
+            borderRadius:8, padding:"8px 12px", outline:"none",
+            fontFamily:serif, fontSize:15, color:C.text,
+            opacity: processing ? 0.5 : 1,
+          }}/>
+
+        {/* Send button */}
+        <button onClick={submit} disabled={!text.trim() || processing}
+          style={{
+            background: text.trim() ? C.accent : "transparent",
+            border: `1px solid ${text.trim() ? C.accent : C.border2}`,
+            borderRadius:8, padding:"8px 14px", cursor: text.trim() && !processing ? "pointer" : "default",
+            fontFamily:mono, fontSize:9, letterSpacing:"0.1em", textTransform:"uppercase",
+            color: text.trim() ? "#fff" : C.muted,
+            opacity: processing ? 0.5 : 1,
+            flexShrink:0, transition:"all 0.15s",
+          }}>
+          {processing ? "…" : "→"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Widget definitions ───────────────────────────────────────────────────────
 const WIDGETS = [
   {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
   {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals},
   {id:"activity", label:"Activity", color:()=>C.green,  Comp:Activity},
+  {id:"insights", label:"Insights", color:()=>"#8B6BB5", Comp:Insights},
 ];
 const FULL_IDS = ["cal","health"];
 
@@ -1587,7 +1878,8 @@ export default function Dashboard() {
   if(!session) return <LoginScreen/>;
 
   const syncStatus={syncing:syncing.size>0,lastSync};
-  const [leftWidget,...rightWidgets] = WIDGETS;
+  const [leftWidget,...rightWidgets] = WIDGETS.filter(w => w.id !== "insights");
+  const insightsWidget = WIDGETS.find(w => w.id === "insights");
 
   return (
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
@@ -1647,6 +1939,12 @@ export default function Dashboard() {
               </Widget>
             </div>
           ))}
+          {/* Insights */}
+          <div style={{minHeight:180}}>
+            <Widget label={insightsWidget.label} color={insightsWidget.color()} dragProps={{}}>
+              <insightsWidget.Comp date={selected} token={token} userId={userId}/>
+            </Widget>
+          </div>
         </div>
       ) : (
         /* ── DESKTOP: stacked layout — cal, health, then 2-col widgets ─── */
@@ -1685,8 +1983,18 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+
+          {/* Insights — full width */}
+          <div style={{flexShrink:0,minHeight:180}}>
+            <Widget label={insightsWidget.label} color={insightsWidget.color()} dragProps={{}}>
+              <insightsWidget.Comp date={selected} token={token} userId={userId}/>
+            </Widget>
+          </div>
         </div>
       )}
+
+      {/* Voice bar — always at bottom */}
+      <VoiceBar date={selected} token={token}/>
     </div>
   );
 }
