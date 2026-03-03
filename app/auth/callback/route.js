@@ -24,5 +24,7 @@ export async function GET(request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
+  const next = searchParams.get('next');
+  if (next) return NextResponse.redirect(origin + next);
   return NextResponse.redirect(origin);
 }

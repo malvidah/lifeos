@@ -19,18 +19,51 @@ const SERVICE = () => createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
+const RESOURCE_URL = 'https://dayloop.me';
+const METADATA_URL = `${RESOURCE_URL}/.well-known/oauth-protected-resource`;
+
+function unauthorizedResponse(msg = 'Authentication required') {
+  return new Response(JSON.stringify({ error: 'unauthorized', message: msg }), {
+    status: 401,
+    headers: {
+      'Content-Type': 'application/json',
+      // RFC9728 §5.1 — tell client where to discover auth server
+      'WWW-Authenticate': `Bearer realm="${RESOURCE_URL}", resource_metadata="${METADATA_URL}"`,
+      'MCP-Protocol-Version': PROTOCOL_VERSION,
+    }
+  });
+}
+
 async function resolveUser(request) {
   const auth = request.headers.get('authorization') || '';
   const token = auth.replace(/^Bearer\s+/i, '').trim();
-  if (!token.startsWith('dl_')) return null;
-  const { data } = await SERVICE()
-    .from('entries')
-    .select('user_id')
-    .eq('type', 'agent_token')
-    .eq('date', 'global')
-    .eq('data->>token', token)
-    .maybeSingle();
-  return data?.user_id || null;
+  if (!token) return null;
+  const svc = SERVICE();
+
+  // OAuth 2.1 access token (dla_...)
+  if (token.startsWith('dla_')) {
+    const { data } = await svc.from('entries')
+      .select('data, user_id')
+      .eq('date', `oauth_token:${token}`)
+      .eq('type', 'oauth_token')
+      .maybeSingle();
+    if (!data) return null;
+    if (new Date(data.data.access_expires_at) < new Date()) return null;
+    return data.user_id;
+  }
+
+  // Legacy personal token (dl_...)
+  if (token.startsWith('dl_')) {
+    const { data } = await svc.from('entries')
+      .select('user_id')
+      .eq('type', 'agent_token')
+      .eq('date', 'global')
+      .eq('data->>token', token)
+      .maybeSingle();
+    return data?.user_id || null;
+  }
+
+  return null;
 }
 
 // ── Tool definitions ───────────────────────────────────────────────────────────
@@ -300,7 +333,6 @@ async function handleRPC(body, userId) {
   return { jsonrpc: '2.0', id, error: { code: -32601, message: `Method not found: ${method}` } };
 }
 
-// ── Route handlers ─────────────────────────────────────────────────────────────
 export async function HEAD() {
   return new Response(null, {
     status: 200,
@@ -309,7 +341,6 @@ export async function HEAD() {
 }
 
 export async function POST(request) {
-  // Auth — initialize is allowed without token, tool calls require it
   let userId = null;
   try { userId = await resolveUser(request); } catch {}
 
@@ -318,18 +349,19 @@ export async function POST(request) {
     return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400 });
   }
 
-  // Handle batch requests
+  // If no auth and it's not an initialize/notifications call, return 401 so Claude starts OAuth
+  const methods = Array.isArray(body) ? body.map(b => b.method) : [body.method];
+  const needsAuth = methods.some(m => m && m !== 'initialize' && m !== 'notifications/initialized');
+  if (!userId && needsAuth) return unauthorizedResponse();
+
+  const mcpHeaders = { 'Content-Type': 'application/json', 'MCP-Protocol-Version': PROTOCOL_VERSION };
+
   if (Array.isArray(body)) {
     const results = await Promise.all(body.map(b => handleRPC(b, userId)));
-    return Response.json(results.filter(Boolean), {
-      headers: { 'Content-Type': 'application/json', 'MCP-Protocol-Version': PROTOCOL_VERSION }
-    });
+    return Response.json(results.filter(Boolean), { headers: mcpHeaders });
   }
 
   const result = await handleRPC(body, userId);
   if (result === null) return new Response(null, { status: 202 });
-
-  return Response.json(result, {
-    headers: { 'Content-Type': 'application/json', 'MCP-Protocol-Version': PROTOCOL_VERSION }
-  });
+  return Response.json(result, { headers: mcpHeaders });
 }

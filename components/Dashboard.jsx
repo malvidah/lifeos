@@ -334,10 +334,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [stravaConnected,setStravaConnected]=useState(false);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
-  const [agentToken,setAgentToken]=useState(null);   // {masked, createdAt} or null
-  const [agentLoading,setAgentLoading]=useState(false);
-  const [agentCopied,setAgentCopied]=useState(false);
-  const [agentFull,setAgentFull]=useState(null);     // shown once after generate
+  
   const ref=useRef(null);
   const user=session?.user;
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
@@ -350,9 +347,6 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     }).catch(()=>{});
     fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
-    // Load agent token status
-    fetch("/api/agent",{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(d=>{if(d.exists)setAgentToken(d);}).catch(()=>{});
   },[token,open]); // eslint-disable-line
   useEffect(()=>{
     if(!open)return;
@@ -360,19 +354,6 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     document.addEventListener("mousedown",fn);
     return ()=>document.removeEventListener("mousedown",fn);
   },[open]);
-
-  async function generateAgentToken(){
-    setAgentLoading(true);
-    try {
-      const r=await fetch("/api/agent",{method:"PUT",headers:{Authorization:`Bearer ${token}`}});
-      const d=await r.json();
-      if(d.ok){
-        setAgentFull(d.token);
-        setAgentToken({exists:true, masked:d.token.slice(0,7)+'••••••••••••••••'+d.token.slice(-4)});
-      }
-    } catch(e){alert("Failed: "+e.message);}
-    setAgentLoading(false);
-  }
 
   async function saveOura(){
     if(!ouraKey.trim())return;
@@ -457,115 +438,37 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           <div style={{height:1,background:C.border}}/>
           {/* Connect to Claude */}
           <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
               <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Connect to Claude</span>
-              {agentToken?.exists && <span style={{fontFamily:mono,fontSize:11,color:C.green,letterSpacing:"0.06em"}}>✓ token ready</span>}
             </div>
-
-            {/* Step 1 — generate token */}
-            <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:10}}>
-              <div style={{
-                width:18,height:18,borderRadius:"50%",flexShrink:0,marginTop:1,
-                background: agentToken?.exists ? C.green+"33" : C.accent+"22",
-                border:`1px solid ${agentToken?.exists ? C.green : C.accent}`,
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontFamily:mono,fontSize:10,color:agentToken?.exists?C.green:C.accent,
-              }}>1</div>
-              <div style={{flex:1}}>
-                <div style={{fontFamily:mono,fontSize:11,color:C.text,marginBottom:4}}>Generate your token</div>
-                {agentFull ? (
-                  <div>
-                    <div style={{
-                      fontFamily:mono,fontSize:10,color:C.accent,
-                      background:C.surface,border:`1px solid ${C.border2}`,
-                      borderRadius:4,padding:"5px 7px",wordBreak:"break-all",
-                      marginBottom:5,userSelect:"all",cursor:"text",lineHeight:1.4,
-                    }}>{agentFull}</div>
-                    <div style={{display:"flex",gap:5}}>
-                      <button onClick={()=>{navigator.clipboard.writeText(agentFull);setAgentCopied(true);setTimeout(()=>setAgentCopied(false),2000);}}
-                        style={{flex:1,background:agentCopied?C.green+"22":"none",border:`1px solid ${agentCopied?C.green:C.border2}`,
-                          borderRadius:4,color:agentCopied?C.green:C.text,fontFamily:mono,fontSize:10,
-                          letterSpacing:"0.1em",textTransform:"uppercase",padding:"4px 0",cursor:"pointer"}}>
-                        {agentCopied?"copied ✓":"copy token"}
-                      </button>
-                      <button onClick={()=>setAgentFull(null)}
-                        style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:4,
-                          color:C.muted,fontFamily:mono,fontSize:10,padding:"4px 7px",cursor:"pointer"}}>
-                        hide
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={generateAgentToken} disabled={agentLoading}
-                    style={{width:"100%",background:agentToken?.exists?"none":C.accent+"15",
-                      border:`1px solid ${agentToken?.exists?C.border2:C.accent}`,
-                      borderRadius:4,color:agentToken?.exists?C.muted:C.accent,fontFamily:mono,fontSize:10,
-                      letterSpacing:"0.1em",textTransform:"uppercase",padding:"5px 0",
-                      cursor:agentLoading?"default":"pointer",opacity:agentLoading?0.5:1}}>
-                    {agentLoading?"generating…":agentToken?.exists?"show / regenerate":"generate token →"}
-                  </button>
-                )}
-              </div>
+            <div style={{fontFamily:mono,fontSize:11,color:C.dim,lineHeight:1.6,marginBottom:12}}>
+              Let Claude read and write your Day Loop directly from any conversation.
             </div>
-
-            {/* Step 2 — open Claude settings */}
-            <div style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:10}}>
-              <div style={{
-                width:18,height:18,borderRadius:"50%",flexShrink:0,marginTop:1,
-                background:C.surface,border:`1px solid ${C.border2}`,
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontFamily:mono,fontSize:10,color:C.muted,
-              }}>2</div>
-              <div style={{flex:1}}>
-                <div style={{fontFamily:mono,fontSize:11,color:C.text,marginBottom:4}}>Add connector in Claude</div>
-                <div style={{fontFamily:mono,fontSize:10,color:C.dim,marginBottom:5,lineHeight:1.5}}>
-                  Settings → Connectors → Add custom connector
-                </div>
-                <a href="https://claude.ai/settings/integrations" target="_blank" rel="noreferrer"
-                  style={{
-                    display:"flex",alignItems:"center",justifyContent:"center",gap:6,
-                    width:"100%",padding:"5px 0",boxSizing:"border-box",
-                    background:"none",border:`1px solid ${C.border2}`,
-                    borderRadius:4,textDecoration:"none",
-                    color:C.text,fontFamily:mono,fontSize:10,
-                    letterSpacing:"0.1em",textTransform:"uppercase",
-                    transition:"border-color 0.15s",
-                  }}
-                  onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
-                  onMouseLeave={e=>e.currentTarget.style.borderColor=C.border2}
-                >
-                  open claude settings →
-                </a>
-              </div>
-            </div>
-
-            {/* Step 3 — paste URL */}
-            <div style={{display:"flex",alignItems:"flex-start",gap:8}}>
-              <div style={{
-                width:18,height:18,borderRadius:"50%",flexShrink:0,marginTop:1,
-                background:C.surface,border:`1px solid ${C.border2}`,
-                display:"flex",alignItems:"center",justifyContent:"center",
-                fontFamily:mono,fontSize:10,color:C.muted,
-              }}>3</div>
-              <div style={{flex:1}}>
-                <div style={{fontFamily:mono,fontSize:11,color:C.text,marginBottom:4}}>Paste the server URL</div>
-                <div style={{
-                  fontFamily:mono,fontSize:10,color:C.accent,
-                  background:C.surface,border:`1px solid ${C.border2}`,
-                  borderRadius:4,padding:"5px 7px",userSelect:"all",cursor:"text",
-                  display:"flex",alignItems:"center",justifyContent:"space-between",gap:6,
-                }}>
-                  <span>dayloop.me/mcp</span>
-                  <button onClick={()=>navigator.clipboard.writeText('https://dayloop.me/mcp')}
-                    style={{background:"none",border:"none",cursor:"pointer",color:C.muted,fontFamily:mono,fontSize:9,
-                      letterSpacing:"0.08em",textTransform:"uppercase",padding:0,flexShrink:0}}>
-                    copy
-                  </button>
-                </div>
-                <div style={{fontFamily:mono,fontSize:10,color:C.dim,marginTop:4,lineHeight:1.5}}>
-                  In Advanced settings, paste your token.
-                </div>
-              </div>
+            <a
+              href={`https://claude.ai/settings/connectors?mcp_url=${encodeURIComponent('https://dayloop.me/mcp')}`}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+                width:"100%",padding:"9px 0",boxSizing:"border-box",
+                background:C.accent+"18",
+                border:`1px solid ${C.accent}`,
+                borderRadius:6,textDecoration:"none",
+                color:C.accent,fontFamily:mono,fontSize:11,
+                letterSpacing:"0.1em",textTransform:"uppercase",
+                transition:"background 0.15s",
+              }}
+              onMouseEnter={e=>e.currentTarget.style.background=C.accent+"28"}
+              onMouseLeave={e=>e.currentTarget.style.background=C.accent+"18"}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              </svg>
+              Connect to Claude
+            </a>
+            <div style={{fontFamily:mono,fontSize:10,color:C.dim,marginTop:8,textAlign:"center",lineHeight:1.5}}>
+              Opens Claude settings → sign in → done
             </div>
           </div>
           <div style={{height:1,background:C.border}}/>
