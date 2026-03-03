@@ -5,10 +5,10 @@ import { createClient } from "../lib/supabase.js";
 
 const THEMES = {
   dark: {
-    // Cool-warm grey — surface is the anchor (topbar/bottombar/cards all same)
-    bg:"#171717",      surface:"#222220",   card:"#222220",
-    border:"#302E2C",  border2:"#3E3C38",
-    text:"#E6DDD4",    muted:"#746E68",     dim:"#323028",
+    // Neutral dark grey, barely warm — surface anchors topbar/bottombar/cards
+    bg:"#181818",      surface:"#242422",   card:"#242422",
+    border:"#2E2D2B",  border2:"#3A3936",
+    text:"#E2DAD2",    muted:"#706A64",     dim:"#2E2C2A",
     accent:"#D4882A",
     green:"#4A9E6A",   blue:"#4A80B0",
     purple:"#906AC0",  red:"#B85040",       orange:"#D4882A",
@@ -17,9 +17,9 @@ const THEMES = {
     shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
   },
   light: {
-    // Warm paper — surface is anchor (topbar/bottombar/cards same), bg slightly darker
-    bg:"#CEC6BA",      surface:"#E8E1D6",   card:"#E8E1D6",
-    border:"#D4CAC0",  border2:"#BEB5AA",
+    // Warm cream — surface anchors topbar/bottombar/cards, bg one step darker same family
+    bg:"#D4CCC0",      surface:"#E8E2D8",   card:"#E8E2D8",
+    border:"#D6CECC",  border2:"#C4BCB8",
     text:"#3A2E22",    muted:"#8A7E72",     dim:"#B8B0A6",
     accent:"#C07818",
     green:"#3A7050",   blue:"#3A6490",
