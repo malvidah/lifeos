@@ -1349,11 +1349,11 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
               {!isNew && active.id && (
                 <button onClick={deleteEvent} disabled={deleting} title="Delete" style={{
                   background:'none',border:'none',cursor:deleting?'default':'pointer',
-                  color:C.muted,padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
-                  opacity:deleting?0.3:1,transition:'color 0.15s',
+                  color:C.red,padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
+                  opacity:deleting?0.3:0.6,transition:'color 0.15s, opacity 0.15s',
                 }}
-                onMouseEnter={e=>{if(!deleting)e.currentTarget.style.color='#B06060';}}
-                onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+                onMouseEnter={e=>{if(!deleting){e.currentTarget.style.opacity='1';e.currentTarget.style.color=C.red;}}}
+                onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.color=C.red;}}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                     <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
@@ -1364,22 +1364,22 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
               <button onClick={closePanel} title="Cancel" style={{
                 background:'none',border:'none',cursor:'pointer',
                 color:C.muted,padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
-                transition:'color 0.15s',
+                opacity:0.6,transition:'color 0.15s, opacity 0.15s',
               }}
-              onMouseEnter={e=>e.currentTarget.style.color=C.text}
-              onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+              onMouseEnter={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color=C.text;}}
+              onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.color=C.muted;}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
               </button>
               {/* Save ✓ */}
-              <button onClick={()=>{if(form.title.trim())save();}} disabled={saving||!form.title.trim()} title="Save" style={{
+              <button onClick={async()=>{if(form.title.trim()){await save();closePanel();}}} disabled={saving||!form.title.trim()} title="Save" style={{
                 background:'none',border:'none',cursor:(saving||!form.title.trim())?'default':'pointer',
-                color:form.title.trim()?C.accent:C.muted,padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
-                opacity:saving?0.4:1,transition:'color 0.15s',
+                color:C.muted,padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
+                opacity:(saving||!form.title.trim())?0.3:0.6,transition:'color 0.15s, opacity 0.15s',
               }}
-              onMouseEnter={e=>{if(!saving&&form.title.trim())e.currentTarget.style.color=C.green;}}
-              onMouseLeave={e=>e.currentTarget.style.color=form.title.trim()?C.accent:C.muted}>
+              onMouseEnter={e=>{if(!saving&&form.title.trim()){e.currentTarget.style.opacity='1';e.currentTarget.style.color=C.green;}}}
+              onMouseLeave={e=>{e.currentTarget.style.opacity=(saving||!form.title.trim())?'0.3':'0.6';e.currentTarget.style.color=C.muted;}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>
