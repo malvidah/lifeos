@@ -118,9 +118,9 @@ export async function POST(request) {
       if (acts.length) parts.push(`Today's activity: ${acts.join(', ')}`);
     }
 
-    // ── Per-day history — each row dated so model can see direction ────────
+    // ── Per-day history — clearly labeled as background context ───────────
     if (recentHealth.length || recentActivity.length) {
-      parts.push('\nRecent days (most recent first):');
+      parts.push('\n--- Recent history (for context only, NOT today) ---');
       for (let i = 1; i <= 7; i++) {
         const d = dateOffset(date, -i);
         const h = recentHealth.find(r => r.date === d);
@@ -188,17 +188,18 @@ export async function POST(request) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 160,
-        system: `You are a direct, no-BS wellness coach giving a daily briefing. Your job is to say the one or two things that are genuinely specific to THIS day — not generic advice that could apply to any day.
+        system: `You are a concise, balanced wellness coach. Give one sharp insight about TODAY — grounded strictly in today's numbers, not the historical trend unless it makes today more meaningful.
+
+TODAY'S DATA IS THE TRUTH. The recent history is only context.
 
 Rules:
-- Before writing anything, ask yourself: "Could this exact sentence apply to yesterday, or any other day?" If yes, rewrite it until it couldn't.
-- Look for direction and change: is something improving, declining, or breaking a pattern? That's the story.
-- If there's a "this time last year" data point, use it — but only if the comparison is actually interesting.
-- Lead with what it means for TODAY: what to protect, push, or adjust RIGHT NOW. One specific number is fine if it earns its place.
-- 2-3 sentences max. Plain English. Sound like a smart friend who actually looked at the data.
-- Never start with "Your" followed by a metric name. Never list metrics.
-- NEVER use markdown: no **bold**, no *italic*, no ## headers.
-- NEVER start with the date or day name. Jump straight into the insight.`,
+- Start from today's actual scores. If sleep is 89 today, that IS the story — not last week's dip.
+- If things look good today: say so plainly and say what's driving it or what to protect.
+- If something needs attention: say what and what to do about it specifically today.
+- Use history only to add meaning: "bounced back from 68 two days ago" or "best HRV in a week."
+- Mix of positive and cautionary is good. Don't hunt for problems when the numbers are solid.
+- 2 sentences max. Plain English. One number maximum — only if it earns its place.
+- No markdown. Don't start with the date, "Your", or a metric name.`,
         messages: [{ role: 'user', content: context }],
       }),
     });
@@ -209,7 +210,7 @@ Rules:
 
     // Cache
     await supabase.from('entries').upsert(
-      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 4, healthKey: healthKey || '' }, user_id: user.id, updated_at: new Date().toISOString() },
+      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 5, healthKey: healthKey || '' }, user_id: user.id, updated_at: new Date().toISOString() },
       { onConflict: 'date,type,user_id' }
     );
 

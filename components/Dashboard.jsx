@@ -1467,7 +1467,7 @@ function InsightsCard({date, token, userId, healthKey}) {
     if (!t) return true;
     if (BAD_VALUES.some(b => t.includes(b))) return true;
     if (cached?.isWelcome && currentHealthKey) return true;
-    if (cached?.v !== 4) return true;
+    if (cached?.v !== 5) return true;
     // If the insight was generated with different health data than what we have now, it's stale.
     // e.g. generated with yesterday's bleeding data, or generated before Oura loaded.
     if (cached?.healthKey !== undefined && cached.healthKey !== currentHealthKey) return true;
