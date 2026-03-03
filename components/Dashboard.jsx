@@ -1346,13 +1346,12 @@ function Activity({date,token,userId}) {
   useEffect(()=>{
     if(!token||!userId)return;
     setSyncedRows([]);
-    // Use cached Oura response if HealthStrip already fetched it; Strava fetched fresh
     Promise.all([
       cachedOuraFetch(date, token, userId),
       fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({})),
     ]).then(([ouraData, stravaData])=>{
       const merged = mergeWorkouts(ouraData.workouts||[], stravaData.activities||[]);
-      setSyncedRows(merged.map(w=>({
+      const rows = merged.map(w=>({
         id: String(w.id || `${w.source}-${w.sport}-${w.durationMins}`),
         source: w.source,
         kcal: w.calories||null,
@@ -1362,7 +1361,21 @@ function Activity({date,token,userId}) {
           w.distance ? `${(w.distance * 0.621371).toFixed(1)}mi` : null,
           w.avgHr ? `${w.avgHr}bpm` : null,
         ].filter(Boolean),
-      })));
+      }));
+      setSyncedRows(rows);
+      // Persist to DB so insights API can read workout history across days
+      if (rows.length && token) {
+        const summary = merged.map(w => ({
+          name: w.name, sport: w.sport, source: w.source,
+          durationMins: w.durationMins||null, distance: w.distance||null,
+          calories: w.calories||null, avgHr: w.avgHr||null,
+        }));
+        fetch('/api/entries', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ date, type: 'workouts', data: summary }),
+        }).catch(()=>{});
+      }
     });
   },[date,token,userId]); // eslint-disable-line
 

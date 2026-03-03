@@ -57,12 +57,22 @@ export async function POST(request) {
       const { data: hRow } = await supabase.from('entries')
         .select('data').eq('date', d).eq('type', 'health').eq('user_id', user.id).maybeSingle();
       if (hRow?.data) recentHealth.push({ date: d, ...hRow.data });
+      // Pull both manual activity entries and synced workouts (Strava/Oura)
       const { data: aRow } = await supabase.from('entries')
         .select('data').eq('date', d).eq('type', 'activity').eq('user_id', user.id).maybeSingle();
-      if (aRow?.data && Array.isArray(aRow.data)) {
-        const entries = aRow.data.filter(r => r.text?.trim()).map(r => r.text);
-        if (entries.length) recentActivity.push({ date: d, entries });
-      }
+      const { data: wRow } = await supabase.from('entries')
+        .select('data').eq('date', d).eq('type', 'workouts').eq('user_id', user.id).maybeSingle();
+      const manualEntries = Array.isArray(aRow?.data) ? aRow.data.filter(r => r.text?.trim()).map(r => r.text) : [];
+      const syncedWorkouts = Array.isArray(wRow?.data) ? wRow.data.map(w => {
+        const parts = [w.name || w.sport];
+        if (w.durationMins) parts.push(`${w.durationMins}min`);
+        if (w.distance) parts.push(`${(w.distance * 0.621371).toFixed(1)}mi`);
+        if (w.calories) parts.push(`${w.calories}cal`);
+        if (w.avgHr) parts.push(`avg ${w.avgHr}bpm`);
+        return parts.join(' ');
+      }) : [];
+      const allEntries = [...syncedWorkouts, ...manualEntries];
+      if (allEntries.length) recentActivity.push({ date: d, entries: allEntries });
     }
 
     // Last year today (±1 day window)
@@ -116,6 +126,18 @@ export async function POST(request) {
     if (today.activity?.length) {
       const acts = today.activity.filter(r => r.text?.trim()).map(r => r.text);
       if (acts.length) parts.push(`Today's activity: ${acts.join(', ')}`);
+    }
+    // Today's synced workouts from Strava/Oura
+    if (today.workouts?.length) {
+      const ws = today.workouts.map(w => {
+        const p = [w.name || w.sport];
+        if (w.durationMins) p.push(`${w.durationMins}min`);
+        if (w.distance) p.push(`${(w.distance * 0.621371).toFixed(1)}mi`);
+        if (w.calories) p.push(`${w.calories}cal`);
+        if (w.avgHr) p.push(`avg ${w.avgHr}bpm`);
+        return p.join(' ');
+      });
+      parts.push(`Today's workouts: ${ws.join('; ')}`);
     }
 
     // ── Per-day history — clearly labeled as background context ───────────
