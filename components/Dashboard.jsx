@@ -1508,7 +1508,7 @@ function Tasks({date,token,userId}) {
 function LoginScreen() {
   const [loading,setLoading]=useState(false);
   return (
-    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",position:"relative"}}>
       <div style={{textAlign:"center"}}>
         <div style={{fontFamily:serif,fontSize:32,color:C.text,marginBottom:6,letterSpacing:"-0.02em"}}>Day Loop</div>
         <div style={{fontFamily:mono,fontSize:13,color:C.muted,letterSpacing:"0.2em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
@@ -1529,6 +1529,10 @@ function LoginScreen() {
   <a href='/privacy' style={{fontFamily:mono,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,textDecoration:'none',opacity:0.6}}>Privacy</a>
   <a href='/terms' style={{fontFamily:mono,fontSize:10,letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,textDecoration:'none',opacity:0.6}}>Terms</a>
 </div>
+      </div>
+      <div style={{position:"absolute",bottom:24,left:0,right:0,display:"flex",justifyContent:"center",gap:24}}>
+        <a href="/privacy" style={{fontFamily:mono,fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,textDecoration:"none",opacity:0.6}}>Privacy</a>
+        <a href="/terms" style={{fontFamily:mono,fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted,textDecoration:"none",opacity:0.6}}>Terms</a>
       </div>
     </div>
   );

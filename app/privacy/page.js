@@ -93,7 +93,7 @@ export default function PrivacyPage() {
           <p>Day Loop is not intended for users under 13.</p>
           <div className="contact-block">
             <h2 style={{marginTop:0}}>Contact</h2>
-            <p>Questions? <a href="mailto:hi@dayloop.me">hi@dayloop.me</a></p>
+            <p>Questions? <a href="mailto:marvin.liyanage@gmail.com">marvin.liyanage@gmail.com</a></p>
           </div>
           <footer>© 2026 Day Loop. All rights reserved.</footer>
         </div>

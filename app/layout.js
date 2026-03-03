@@ -1,4 +1,4 @@
-export const metadata = { title: "Day Loop", description: "Your AI dashboard" };
+export const metadata = { title: "Day Loop", description: "Your AI dashboard", verification: { google: "PASTE_YOUR_VERIFICATION_CODE_HERE" } };
 export const viewport = { width: "device-width", initialScale: 1, maximumScale: 1, userScalable: false };
 
 // This script runs synchronously before any paint — zero flash possible.
