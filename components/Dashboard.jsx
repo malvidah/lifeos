@@ -698,11 +698,8 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       {/* Day Loop — centered */}
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
         <span style={{
-          fontFamily:mono,fontSize:F.sm,letterSpacing:"0.18em",textTransform:"uppercase",
-          color:C.accent,
-          background:C.accent+"1A",
-          border:`1px solid ${C.accent}40`,
-          borderRadius:6,padding:"4px 10px",
+          fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
+          color:C.text,
         }}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
@@ -894,7 +891,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     dayItems.push({ d: offsetToDate(selInt + i), i });
   }
 
-  const DAY_NAMES = ["Su","Mo","Tu","We","Th","Fr","Sa"];
+  const DAY_NAMES = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
 
   function timeToMins(t) {
     if (!t || t === "all day") return -1;
@@ -940,7 +937,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
               onMouseEnter={e=>e.currentTarget.style.color=C.text}
               onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
-            <span style={{fontFamily:serif,fontSize:F.md,letterSpacing:'-0.02em',color:C.text}}>
+            <span style={{
+              fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
+              color:C.accent,
+              background:C.accent+"1A",
+              border:`1px solid ${C.accent}38`,
+              borderRadius:6,padding:"4px 10px",
+            }}>
               {selMonth} {selDate.getDate()}, {selYear}
             </span>
             <button onClick={e=>{e.stopPropagation();const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()+1);onSelect(toKey(d));}} style={{
@@ -953,7 +956,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           /* ── Expanded: date centered, no arrows ── */
           <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
             pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
-            <span style={{fontFamily:serif,fontSize:F.lg,letterSpacing:'-0.02em',color:C.text}}>
+            <span style={{
+              fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
+              color:C.accent,
+              background:C.accent+"1A",
+              border:`1px solid ${C.accent}38`,
+              borderRadius:6,padding:"4px 10px",
+            }}>
               {selMonth} {selDate.getDate()}, {selYear}
             </span>
           </div>
