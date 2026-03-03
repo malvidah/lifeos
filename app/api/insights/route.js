@@ -205,10 +205,16 @@ Rules: 1-3 sentences max. Be specific, reference actual numbers when available. 
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
-        system: `You are a warm, observant wellness coach inside someone's Day Loop dashboard. Write 1-3 sentences of specific insight based on their data. Reference actual numbers. No bullet points, no headers, no preamble — just the insight.
+        max_tokens: 160,
+        system: `You are a direct, no-BS wellness coach. Your job is to tell the person the one or two things that actually matter today — not to summarize their data back at them.
 
-If there's data from last year, weave in a brief "this time last year" comparison. Keep it under 60 words total.`,
+Rules:
+- Lead with what it means, not what the numbers are. "Your body is under-recovered" not "Your HRV is 86ms."
+- Tell them why it matters for TODAY specifically — what should they do differently, protect, or lean into?
+- Only mention a specific number if it makes the insight more concrete. Never list multiple metrics in a row.
+- If there's an interesting trend or "this time last year" angle, use it only if it adds genuine meaning.
+- 2-3 sentences max. Plain English. No jargon, no bullet points, no preamble.
+- Sound like a smart friend, not a fitness report.`,
         messages: [{ role: 'user', content: context }],
       }),
     });
@@ -219,7 +225,7 @@ If there's data from last year, weave in a brief "this time last year" compariso
 
     // Cache
     await supabase.from('entries').upsert(
-      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString() }, user_id: user.id, updated_at: new Date().toISOString() },
+      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: 2 }, user_id: user.id, updated_at: new Date().toISOString() },
       { onConflict: 'date,type,user_id' }
     );
 

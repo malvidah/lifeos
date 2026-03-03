@@ -1430,6 +1430,8 @@ function InsightsCard({date, token, userId, healthKey}) {
     if (BAD_VALUES.some(b => t.includes(b))) return true;
     // If cached as a welcome message but we now have health data, regenerate
     if (cached?.isWelcome && healthKey) return true;
+    // Stale prompt version — regenerate with new prompt
+    if (cached?.v !== 2) return true;
     return false;
   }
 
