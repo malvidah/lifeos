@@ -775,7 +775,15 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             onSelect(toKey(d));
           }} title="Forward 1 year">»</NavBtn>
         </div>
-        <div style={{flex:1}}/>
+        <NavBtn onClick={()=>onSelect(todayKey())} title="Go to today">
+          <span style={{fontFamily:mono,fontSize:11,letterSpacing:'0.1em',
+            border:`1px solid ${C.border2}`,borderRadius:5,padding:'4px 9px',
+            color:C.muted,display:'inline-block',transition:'all 0.15s'}}
+            onMouseEnter={e=>{e.style.color=C.text;e.style.borderColor=C.text;}}
+            onMouseLeave={e=>{e.style.color=C.muted;e.style.borderColor=C.border2;}}>
+            TODAY
+          </span>
+        </NavBtn>
       </div>
 
       {/* ── Day columns with events ──────────────────────────────────────── */}
@@ -876,27 +884,32 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       </div>
                     </div>
                   ))}
-                  {/* + Add button — centered, outlined, only on selected day */}
-                  {isCtr && onAddClick && (
-                    <button onClick={e=>{e.stopPropagation();onAddClick();}} style={{
-                      marginTop:4, flexShrink:0,
-                      background:'none', border:`1px solid ${C.border2}`,
-                      borderRadius:5, cursor:'pointer',
-                      color:C.muted, fontFamily:mono, fontSize:12,
-                      letterSpacing:'0.1em', padding:'4px 0',
-                      width:'100%', textAlign:'center',
-                      transition:'all 0.15s',
-                    }}
-                    onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-                    onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}
-                    title="Add event">+ ADD</button>
-                  )}
+
                 </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* ── Fixed + ADD bar ── */}
+      {onAddClick && (
+        <div style={{borderTop:`1px solid ${C.border}`,padding:'8px 16px',flexShrink:0}}>
+          <button onClick={onAddClick} style={{
+            width:'100%',background:'none',
+            border:`1px solid ${C.border2}`,
+            borderRadius:5,cursor:'pointer',
+            color:C.muted,fontFamily:mono,fontSize:11,
+            letterSpacing:'0.12em',textTransform:'uppercase',
+            padding:'7px 0',textAlign:'center',
+            transition:'all 0.15s',
+          }}
+          onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
+          onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
+            + Add Event
+          </button>
+        </div>
+      )}
     </div>
   );
 }
