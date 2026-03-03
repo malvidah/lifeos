@@ -2,11 +2,7 @@ const FILE_URL = 'https://github.com/malvidah/lifeos/releases/latest/download/Da
 
 export async function GET() {
   const upstream = await fetch(FILE_URL, { redirect: 'follow' });
-
-  if (!upstream.ok) {
-    return new Response('Download unavailable', { status: 502 });
-  }
-
+  if (!upstream.ok) return new Response('Download unavailable', { status: 502 });
   return new Response(upstream.body, {
     headers: {
       'Content-Type': 'application/zip',

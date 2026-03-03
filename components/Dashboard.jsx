@@ -422,7 +422,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               <span style={{fontFamily:mono,fontSize:11,color:C.dim}}>v1.0.0</span>
             </div>
             <a
-              href="/api/download/mac"
+              href="/download/mac"
               style={{
                 display:"flex",alignItems:"center",justifyContent:"center",gap:8,
                 width:"100%",padding:"8px",boxSizing:"border-box",
@@ -451,7 +451,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               <span style={{fontFamily:mono,fontSize:11,color:C.dim}}>TestFlight</span>
             </div>
             <a
-              href="https://testflight.apple.com/join/PLACEHOLDER"
+              href="/download/ios"
               style={{
                 display:"flex",alignItems:"center",justifyContent:"center",gap:8,
                 width:"100%",padding:"8px",boxSizing:"border-box",
