@@ -35,7 +35,7 @@ const THEMES = {
 // C is set at render time via setTheme — default dark
 let C = THEMES.dark;
 const serif = "Georgia, 'Times New Roman', serif";
-const sys   = "system-ui, -apple-system, BlinkMacSystemFont, sans-serif";
+const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 const F     = { lg:18, md:15, sm:12 }; // 3 sizes only
 
 // ─── Responsive hook ──────────────────────────────────────────────────────────
@@ -343,7 +343,7 @@ function Ring({score,color,size=48}) {
           transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
       {/* Score label — color-tinted, not plain text */}
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:score?color:C.dim,fontSize:F.sm,fontFamily:sys,fontWeight:"600",
+        style={{fill:score?color:C.dim,fontSize:F.sm,fontFamily:mono,fontWeight:"600",
           letterSpacing:"-0.02em"}}>
         {score||"—"}
       </text>
@@ -377,7 +377,7 @@ function Widget({label,color,children,slim,collapsed,onToggle}) {
           cursor:onToggle?"pointer":"default",
         }} onClick={onToggle}>
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-          <span style={{fontFamily:sys,fontSize:F.sm,letterSpacing:"0.06em",
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
             textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
         </div>
         {!collapsed&&(
@@ -410,7 +410,7 @@ function InfoTip({text}) {
           width:14,height:14,borderRadius:"50%",border:`1px solid ${C.border2}`,
           background:"none",cursor:"pointer",padding:0,
           display:"flex",alignItems:"center",justifyContent:"center",
-          color:C.dim,fontFamily:sys,fontSize:F.sm,lineHeight:1,flexShrink:0,
+          color:C.dim,fontFamily:mono,fontSize:F.sm,lineHeight:1,flexShrink:0,
         }}
         aria-label="More info"
       >i</button>
@@ -423,7 +423,7 @@ function InfoTip({text}) {
           right:"-4px",
           background:C.card,border:`1px solid ${C.border2}`,borderRadius:6,
           padding:"8px 10px",width:190,
-          fontFamily:sys,fontSize:F.sm,color:C.muted,lineHeight:1.5,
+          fontFamily:mono,fontSize:F.sm,color:C.muted,lineHeight:1.5,
           zIndex:500,boxShadow:C.shadow,pointerEvents:"none",
           whiteSpace:"normal",
         }}>
@@ -437,7 +437,7 @@ function InfoTip({text}) {
 function SectionLabel({children,info}) {
   return (
     <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}>
-      <span style={{fontFamily:sys,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flex:1}}>
+      <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flex:1}}>
         {children}
       </span>
       {info&&<InfoTip text={info}/>}
@@ -498,7 +498,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
         border:`1.5px solid ${C.border2}`,background:avatar?"transparent":C.surface,
         overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
         {avatar?<img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
-          :<span style={{fontFamily:sys,fontSize:F.sm,color:C.muted}}>{initials}</span>}
+          :<span style={{fontFamily:mono,fontSize:F.sm,color:C.muted}}>{initials}</span>}
       </button>
 
       {open&&(
@@ -512,7 +512,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Identity */}
           <div style={{...row,paddingBottom:2}}>
             <div style={{fontFamily:serif,fontSize:F.md,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
-            <div style={{fontFamily:sys,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
+            <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
           </div>
 
           {divider}
@@ -522,7 +522,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             <SectionLabel info="Syncs your sleep score, HRV, readiness, and recovery data into your daily view. Requires a personal access token from your Oura account.">
               Oura {ouraConnected&&<span style={{color:C.green}}>✓</span>}
               {" "}<a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
-                style={{color:C.dim,textDecoration:"none",fontSize:F.sm,fontFamily:sys,letterSpacing:"0"}}>
+                style={{color:C.dim,textDecoration:"none",fontSize:F.sm,fontFamily:mono,letterSpacing:"0"}}>
                 (Get token →)
               </a>
             </SectionLabel>
@@ -533,12 +533,12 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 placeholder="Personal access token…"
                 style={{flex:1,minWidth:0,background:C.surface,
                   border:`1px solid ${ouraConnected?C.green:C.border2}`,
-                  borderRadius:5,outline:"none",color:C.text,fontFamily:sys,fontSize:F.sm,
+                  borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
                   padding:"6px 8px",boxSizing:"border-box"}}/>
               <button onClick={saveOura} disabled={saving||!ouraKey.trim()} style={{
                 background:saved?C.green+"22":"none",
                 border:`1px solid ${saved?C.green:C.border2}`,
-                borderRadius:5,color:saved?C.green:C.muted,fontFamily:sys,fontSize:F.sm,
+                borderRadius:5,color:saved?C.green:C.muted,fontFamily:mono,fontSize:F.sm,
                 letterSpacing:"0.04em",textTransform:"uppercase",
                 padding:"0 10px",cursor:"pointer",flexShrink:0}}>
                 {saved?"✓":saving?"…":"Save"}
@@ -560,7 +560,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 background:stravaConnected?"none":"#FC4C0210",
                 border:`1px solid ${stravaConnected?C.green:"#FC4C02"}`,
                 borderRadius:5,color:stravaConnected?C.green:"#FC4C02",
-                fontFamily:sys,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
+                fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
                 padding:"7px",cursor:"pointer"}}>
               {stravaConnected?"✓ Connected":"Connect Strava"}
             </button>
@@ -578,7 +578,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               background:C.surface,border:`1px solid ${C.border2}`,
               borderRadius:5,padding:"6px 8px",marginBottom:7,
             }}>
-              <span style={{flex:1,fontFamily:sys,fontSize:F.sm,color:C.accent,
+              <span style={{flex:1,fontFamily:mono,fontSize:F.sm,color:C.accent,
                 userSelect:"all",letterSpacing:"0.02em",overflow:"hidden",
                 textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                 https://dayloop.me/mcp
@@ -589,7 +589,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                   setUrlCopied(true);setTimeout(()=>setUrlCopied(false),2000);
                 }}
                 style={{background:"none",border:"none",cursor:"pointer",
-                  color:urlCopied?C.green:C.dim,fontFamily:sys,fontSize:F.sm,
+                  color:urlCopied?C.green:C.dim,fontFamily:mono,fontSize:F.sm,
                   letterSpacing:"0.04em",textTransform:"uppercase",padding:0,flexShrink:0}}>
                 {urlCopied?"✓":"Copy"}
               </button>
@@ -602,7 +602,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 width:"100%",padding:"7px 0",boxSizing:"border-box",
                 background:C.accent+"18",border:`1px solid ${C.accent+"66"}`,
                 borderRadius:5,textDecoration:"none",
-                color:C.accent,fontFamily:sys,fontSize:F.sm,
+                color:C.accent,fontFamily:mono,fontSize:F.sm,
                 letterSpacing:"0.04em",textTransform:"uppercase",
               }}>
               Connect to Claude →
@@ -613,7 +613,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Theme */}
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <span style={{fontFamily:sys,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:C.muted}}>
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:C.muted}}>
               {theme==="dark"?"Dark":"Light"} Mode
             </span>
             <button onClick={()=>onThemeChange(t=>t==="dark"?"light":"dark")}
@@ -632,7 +632,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
               padding:"6px 0",background:C.surface,
               border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
-              color:C.muted,fontFamily:sys,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+              color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -643,7 +643,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
               padding:"6px 0",background:C.surface,
               border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
-              color:C.muted,fontFamily:sys,fontSize:F.sm,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+              color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.08em",textTransform:"uppercase"}}>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/>
               </svg>
@@ -656,7 +656,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           <div style={row}>
             <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                color:C.dim,fontFamily:sys,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
               Sign out →
             </button>
           </div>
@@ -692,14 +692,17 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       <div style={{flex:1,display:"flex",alignItems:"baseline",gap:7,
         justifyContent:"flex-start",visibility:"hidden",pointerEvents:"none",
         "@media(maxWidth:768px)":{display:"none"}}}>
-        <span style={{fontFamily:sys,fontSize:F.md}}>●</span>
+        <span style={{fontFamily:mono,fontSize:F.md}}>●</span>
         <div style={{width:70}}/>
       </div>
       {/* Day Loop — centered */}
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
         <span style={{
-          fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
+          fontFamily:mono,fontSize:F.sm,letterSpacing:"0.18em",textTransform:"uppercase",
           color:C.accent,
+          background:C.accent+"1A",
+          border:`1px solid ${C.accent}40`,
+          borderRadius:6,padding:"4px 10px",
         }}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
@@ -765,7 +768,7 @@ function NavBtn({onClick,title,children}) {
   return (
     <button onClick={onClick} title={title} style={{
       background:'none',border:'none',cursor:'pointer',
-      color:C.muted,fontFamily:sys,fontSize:F.md,lineHeight:1,
+      color:C.muted,fontFamily:mono,fontSize:F.md,lineHeight:1,
       padding:'3px 5px',borderRadius:4,transition:'color 0.1s',
     }}
     onMouseEnter={e=>e.currentTarget.style.color=C.text}
@@ -925,7 +928,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         {/* CALENDAR label — left */}
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-          <span style={{fontFamily:sys,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
         </div>
 
         {collapsed ? (
@@ -934,7 +937,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
             <button onClick={e=>{e.stopPropagation();const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()-1);onSelect(toKey(d));}} style={{
               background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
-              fontFamily:sys,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
+              fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
               onMouseEnter={e=>e.currentTarget.style.color=C.text}
               onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
             <span style={{fontFamily:serif,fontSize:F.md,letterSpacing:'-0.02em',color:C.text}}>
@@ -942,7 +945,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             </span>
             <button onClick={e=>{e.stopPropagation();const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()+1);onSelect(toKey(d));}} style={{
               background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
-              fontFamily:sys,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
+              fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
               onMouseEnter={e=>e.currentTarget.style.color=C.text}
               onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
           </div>
@@ -960,7 +963,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
           {!collapsed&&<button onClick={()=>{const d=new Date(selDate);d.setFullYear(d.getFullYear()-1);onSelect(toKey(d));}} style={{
             background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
-            color:C.muted,fontFamily:sys,fontSize:F.sm,letterSpacing:'0.04em',
+            color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',
             textTransform:'uppercase',padding:'4px 8px',transition:'all 0.15s'}}
             onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
             onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
@@ -968,7 +971,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           </button>}
           <button onClick={()=>onSelect(todayKey())} style={{
             background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
-            color:C.muted,fontFamily:sys,fontSize:F.sm,letterSpacing:'0.04em',
+            color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',
             textTransform:'uppercase',padding:'4px 9px',transition:'all 0.15s'}}
             onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
             onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
@@ -1029,7 +1032,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 {/* Date header */}
                 <div style={{textAlign:"center", marginBottom:6, paddingTop:2, flexShrink:0}}>
                   <div style={{
-                    fontFamily:sys, fontSize:F.sm, letterSpacing:"0.04em",
+                    fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em",
                     color: isCtr ? C.accent : C.muted,
                     marginBottom:3,
                   }}>{DAY_NAMES[d.getDay()]}</div>
@@ -1067,7 +1070,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}25`;}:undefined}
                       onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}10`;}:undefined}
                     >
-                      <div style={{fontFamily:sys, fontSize:F.sm, color:C.muted, lineHeight:1.3}}>
+                      <div style={{fontFamily:mono, fontSize:F.sm, color:C.muted, lineHeight:1.3}}>
                         {ev.time !== "all day" ? ev.time : ""}
                       </div>
                       <div style={{fontFamily:serif, fontSize:F.sm, color: isCtr ? C.text : C.muted,
@@ -1087,7 +1090,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       background:'none',
                       border:`1px solid ${C.border2}`,
                       borderRadius:5,cursor:'pointer',
-                      color:C.muted,fontFamily:sys,fontSize:F.sm,
+                      color:C.muted,fontFamily:mono,fontSize:F.sm,
                       letterSpacing:'0.04em',textTransform:'uppercase',
                       padding:'5px 0',width:'100%',textAlign:'center',
                       transition:'all 0.15s',
@@ -1284,14 +1287,14 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                   <input type='time' value={form.startTime}
                     onChange={e=>updateForm({startTime:e.target.value})}
                     onBlur={()=>{if(!isNew&&dirty)save();}}
-                    style={{...inputBase,fontFamily:sys,fontSize:F.sm,color:C.muted,
+                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:C.muted,
                       width:70,cursor:'text'}}
                   />
-                  <span style={{fontFamily:sys,fontSize:F.sm,color:C.muted,opacity:0.4}}>–</span>
+                  <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,opacity:0.4}}>–</span>
                   <input type='time' value={form.endTime}
                     onChange={e=>updateForm({endTime:e.target.value})}
                     onBlur={()=>{if(!isNew&&dirty)save();}}
-                    style={{...inputBase,fontFamily:sys,fontSize:F.sm,color:C.muted,
+                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:C.muted,
                       width:70,cursor:'text'}}
                   />
                 </div>
@@ -1299,7 +1302,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                 {/* All Day toggle */}
                 <button onClick={()=>updateForm({allDay:!form.allDay})} style={{
                   background:'none',border:'none',cursor:'pointer',padding:0,
-                  fontFamily:sys,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',
+                  fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',
                   color:form.allDay?C.accent:C.muted,
                   transition:'color 0.2s',
                 }}
@@ -1308,14 +1311,14 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                   all day
                 </button>
 
-                {saving && <span style={{fontFamily:sys,fontSize:F.sm,color:C.muted,opacity:0.5}}>saving…</span>}
+                {saving && <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,opacity:0.5}}>saving…</span>}
               </div>
 
               {/* Save button for new events */}
               {isNew && form.title.trim() && (
                 <button onClick={save} disabled={saving} style={{
                   marginTop:8,background:C.blue,border:'none',borderRadius:5,
-                  padding:'5px 14px',color:'#fff',fontFamily:sys,fontSize:F.sm,
+                  padding:'5px 14px',color:'#fff',fontFamily:mono,fontSize:F.sm,
                   letterSpacing:'0.1em',textTransform:'uppercase',
                   cursor:saving?'not-allowed':'pointer',opacity:saving?0.5:1,
                   transition:'opacity 0.15s',
@@ -1326,7 +1329,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
 
               {active.zoomUrl && (
                 <a href={active.zoomUrl} target='_blank' rel='noopener noreferrer'
-                  style={{display:'inline-block',marginTop:6,fontFamily:sys,fontSize:F.sm,
+                  style={{display:'inline-block',marginTop:6,fontFamily:mono,fontSize:F.sm,
                     letterSpacing:'0.1em',textTransform:'uppercase',color:C.blue,textDecoration:'none'}}>
                   Join ↗
                 </a>
@@ -1368,7 +1371,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
 
           </div>
 
-          {saveErr && <div style={{fontFamily:sys,fontSize:F.sm,color:'#A05050',marginTop:8}}>{saveErr}</div>}
+          {saveErr && <div style={{fontFamily:mono,fontSize:F.sm,color:'#A05050',marginTop:8}}>{saveErr}</div>}
         </div>
       )}
     </Card>
@@ -1482,7 +1485,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
         borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
         cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
         {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-        <span style={{fontFamily:sys,fontSize:F.sm,letterSpacing:"0.06em",
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
           textTransform:"uppercase",color:C.muted,flex:1}}>Health</span>
       </div>
       {/* Metrics row */}
@@ -1496,14 +1499,14 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
                 <Ring score={m.score} color={m.color} size={48}/>
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontFamily:sys,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color,marginBottom:4}}>{m.label}</div>
+                <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color,marginBottom:4}}>{m.label}</div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
                     <div key={f.label}>
-                      <div style={{fontFamily:sys,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
+                      <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
                       <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                         <span style={{fontFamily:serif,fontSize:F.md,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
-                        {f.unit&&<span style={{fontFamily:sys,fontSize:F.sm,color:C.muted}}>{f.unit}</span>}
+                        {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:C.muted}}>{f.unit}</span>}
                       </div>
                     </div>
                   ))}
@@ -1709,7 +1712,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   );
 
   const rowStyle = {display:"flex", alignItems:"center", gap:6, padding:"3px 0", minHeight:28};
-  const chipBase = {fontFamily:sys, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
+  const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
     borderRadius:4, padding:"2px 6px", whiteSpace:"nowrap"};
   const kcalStyle = {...chipBase, background:C.orange+"22", color:C.orange};
   const proteinStyle = {...chipBase, background:C.blue+"22", color:C.blue};
@@ -1731,8 +1734,8 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
                   const unit = match ? match[2] : "";
                   return (
                     <span key={i} style={{whiteSpace:"nowrap"}}>
-                      <span style={{fontFamily:sys,fontSize:F.sm,color:C.text,opacity:0.7}}>{val}</span>
-                      {unit && <span style={{fontFamily:sys,fontSize:F.sm,color:C.muted,marginLeft:1}}>{unit}</span>}
+                      <span style={{fontFamily:mono,fontSize:F.sm,color:C.text,opacity:0.7}}>{val}</span>
+                      {unit && <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,marginLeft:1}}>{unit}</span>}
                     </span>
                   );
                 })}
@@ -1792,7 +1795,7 @@ function SourceBadge({source}) {
   const isStrava = source === "strava";
   return (
     <span style={{
-      fontFamily:sys, fontSize:F.sm, letterSpacing:"0.04em", textTransform:"uppercase",
+      fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", textTransform:"uppercase",
       color: isStrava ? "#FC4C02" : "#B8A882",
       border: `1px solid ${isStrava ? "#FC4C02" : "#B8A882"}`,
       borderRadius:3, padding:"1px 4px", flexShrink:0, opacity:0.8,
@@ -1939,10 +1942,14 @@ function LoginScreen() {
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",position:"relative",position:"relative"}}>
       <div style={{textAlign:"center"}}>
         <div style={{
-          fontFamily:serif,fontSize:F.lg*2,marginBottom:6,letterSpacing:"-0.02em",
+          display:"inline-block",
+          fontFamily:mono,fontSize:F.md,letterSpacing:"0.18em",textTransform:"uppercase",
           color:C.accent,
+          background:C.accent+"1A",
+          border:`1px solid ${C.accent}40`,
+          borderRadius:8,padding:"7px 18px",marginBottom:24,
         }}>Day Loop</div>
-        <div style={{fontFamily:sys,fontSize:F.sm,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
+        <div style={{fontFamily:mono,fontSize:F.sm,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
           setLoading(true);
           const supabase=createClient();
@@ -1952,18 +1959,18 @@ function LoginScreen() {
             queryParams:{access_type:"offline",prompt:"consent"},
           }});
         }} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:8,
-          color:loading?C.muted:C.text,fontFamily:sys,fontSize:F.sm,letterSpacing:"0.06em",
+          color:loading?C.muted:C.text,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
           textTransform:"uppercase",padding:"13px 32px",cursor:loading?"not-allowed":"pointer"}}>
           {loading?"redirecting…":"sign in with google"}
         </button>
         <div style={{position:'absolute',bottom:24,left:0,right:0,display:'flex',justifyContent:'center',gap:24}}>
-  <a href='/privacy' style={{fontFamily:sys,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:C.muted,textDecoration:'none',opacity:0.6}}>Privacy</a>
-  <a href='/terms' style={{fontFamily:sys,fontSize:F.sm,letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,textDecoration:'none',opacity:0.6}}>Terms</a>
+  <a href='/privacy' style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:C.muted,textDecoration:'none',opacity:0.6}}>Privacy</a>
+  <a href='/terms' style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,textDecoration:'none',opacity:0.6}}>Terms</a>
 </div>
       </div>
       <div style={{position:"absolute",bottom:24,left:0,right:0,display:"flex",justifyContent:"center",gap:24}}>
-        <a href="/privacy" style={{fontFamily:sys,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,textDecoration:"none",opacity:0.6}}>Privacy</a>
-        <a href="/terms" style={{fontFamily:sys,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,textDecoration:"none",opacity:0.6}}>Terms</a>
+        <a href="/privacy" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,textDecoration:"none",opacity:0.6}}>Privacy</a>
+        <a href="/terms" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,textDecoration:"none",opacity:0.6}}>Terms</a>
       </div>
     </div>
   );
@@ -2061,11 +2068,11 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
       <div style={{ height: "clamp(80px, 10vh, 120px)", overflowY: "auto", scrollbarWidth: "none" }}>
         <div style={{ opacity: busy && !text ? 0 : 1, transition: "opacity 0.3s ease" }}>
           {error && (
-            <div style={{ fontFamily: sys, fontSize:F.md, color: C.red, lineHeight: 1.6 }}>{error}</div>
+            <div style={{ fontFamily: mono, fontSize:F.md, color: C.red, lineHeight: 1.6 }}>{error}</div>
           )}
           {isFree ? (
             <div>
-              {text && <div style={{ fontFamily: sys, fontSize:F.md, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line", marginBottom: 10 }}>{text}</div>}
+              {text && <div style={{ fontFamily: mono, fontSize:F.md, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line", marginBottom: 10 }}>{text}</div>}
               {!text && busy && (
                 <div>
                   <Shimmer width="90%" height={13} />
@@ -2075,18 +2082,18 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
               )}
               {text && <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
                 <div style={{ width: 3, height: 3, borderRadius: "50%", background: C.accent, flexShrink: 0 }}/>
-                <span style={{ fontFamily: sys, fontSize: F.sm, color: C.dim, letterSpacing: "0.06em" }}>
+                <span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim, letterSpacing: "0.06em" }}>
                   Chat with your data —
                 </span>
                 <button onClick={() => window.location.href = "/upgrade"} style={{
                   background: "none", border: "none", padding: 0, cursor: "pointer",
-                  fontFamily: sys, fontSize: F.sm, color: C.accent, letterSpacing: "0.06em",
+                  fontFamily: mono, fontSize: F.sm, color: C.accent, letterSpacing: "0.06em",
                   textDecoration: "underline", textUnderlineOffset: 3,
                 }}>upgrade to Premium</button>
               </div>}
             </div>
           ) : text ? (
-            <div style={{ fontFamily: sys, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
+            <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
               {text}
             </div>
           ) : busy ? (
@@ -2226,7 +2233,7 @@ function ChatFloat({date, token, userId}) {
           width: "100%", maxWidth: 560, boxSizing: "border-box",
         }}>
           <span style={{
-            fontFamily: sys, fontSize: F.sm,
+            fontFamily: mono, fontSize: F.sm,
             color: status.ok ? C.green : C.red,
             lineHeight: 1.5,
           }}>
@@ -2462,7 +2469,7 @@ export default function Dashboard() {
   const mobile = useIsMobile();
   if(!authReady) return (
     <div style={{background:C.bg,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <span style={{fontFamily:sys,fontSize:F.sm,color:C.muted,letterSpacing:"0.2em"}}>loading…</span>
+      <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,letterSpacing:"0.2em"}}>loading…</span>
     </div>
   );
   if(!session) return <LoginScreen/>;
