@@ -1127,6 +1127,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
   const [deleting, setDeleting]= useState(false);
   const [saveErr,  setSaveErr] = useState('');
   const [dirty,    setDirty]   = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
 
   const isNew = active !== null && !active.id;
   const color = active?.color || C.accent;
@@ -1139,7 +1140,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
   function openAdd() {
     setActive({});
     setForm({title:'', startTime:'09:00', endTime:'10:00', allDay:false});
-    setSaveErr(''); setDirty(false);
+    setSaveErr(''); setDirty(false); setEditingTitle(true);
   }
 
   function openEvent(ev) {
@@ -1151,7 +1152,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
       endTime:   ev.allDay ? '' : toHHMM(ev.endTime),
       allDay:    ev.allDay || ev.time === 'all day',
     });
-    setSaveErr(''); setDirty(false);
+    setSaveErr(''); setDirty(false); setEditingTitle(false);
   }
 
   function closePanel() { setActive(null); setSaveErr(''); setDirty(false); }
@@ -1270,16 +1271,26 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
             {/* Info: title + time row */}
             <div style={{flex:1,minWidth:0}}>
               {/* Title */}
-              <input
-                autoFocus
-                value={form.title}
-                onChange={e=>updateForm({title:e.target.value})}
-                onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();save();}if(e.key==='Escape')closePanel();}}
-                onBlur={()=>{if(!isNew&&dirty&&form.title.trim())save();}}
-                placeholder='Event title'
-                style={{...inputBase,fontFamily:serif,fontSize:F.md,width:'100%',
-                  display:'block',marginBottom:5}}
-              />
+              {editingTitle ? (
+                <input
+                  autoFocus
+                  value={form.title}
+                  onChange={e=>updateForm({title:e.target.value})}
+                  onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();save();setEditingTitle(false);}if(e.key==='Escape')closePanel();}}
+                  onBlur={()=>{setEditingTitle(false);if(!isNew&&dirty&&form.title.trim())save();}}
+                  placeholder='Event title'
+                  style={{...inputBase,fontFamily:serif,fontSize:F.md,width:'100%',
+                    display:'block',marginBottom:5}}
+                />
+              ) : (
+                <div
+                  onClick={()=>setEditingTitle(true)}
+                  style={{fontFamily:serif,fontSize:F.md,color:form.title?C.text:C.muted,
+                    marginBottom:5,cursor:'text',minHeight:'1.4em'}}
+                >
+                  {form.title || 'Event title'}
+                </div>
+              )}
 
               {/* Time row: times + All Day inline */}
               <div style={{display:'flex',alignItems:'center',gap:8}}>
