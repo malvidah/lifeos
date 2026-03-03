@@ -327,6 +327,48 @@ function Widget({label,color,children,slim}) {
 }
 
 // ─── UserMenu ─────────────────────────────────────────────────────────────────
+function InfoTip({text}) {
+  const [show,setShow]=useState(false);
+  return (
+    <span style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
+      <button
+        onMouseEnter={()=>setShow(true)} onMouseLeave={()=>setShow(false)}
+        onFocus={()=>setShow(true)} onBlur={()=>setShow(false)}
+        style={{
+          width:14,height:14,borderRadius:"50%",border:`1px solid ${C.border2}`,
+          background:"none",cursor:"pointer",padding:0,
+          display:"flex",alignItems:"center",justifyContent:"center",
+          color:C.dim,fontFamily:mono,fontSize:9,lineHeight:1,flexShrink:0,
+        }}
+        aria-label="More info"
+      >i</button>
+      {show&&(
+        <div style={{
+          position:"absolute",bottom:"calc(100% + 6px)",right:"-4px",
+          background:C.card,border:`1px solid ${C.border2}`,borderRadius:6,
+          padding:"8px 10px",width:200,
+          fontFamily:mono,fontSize:11,color:C.muted,lineHeight:1.5,
+          zIndex:500,boxShadow:C.shadow,pointerEvents:"none",
+          whiteSpace:"normal",
+        }}>
+          {text}
+        </div>
+      )}
+    </span>
+  );
+}
+
+function SectionLabel({children,info}) {
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}>
+      <span style={{fontFamily:mono,fontSize:10,letterSpacing:"0.14em",textTransform:"uppercase",color:C.muted,flex:1}}>
+        {children}
+      </span>
+      {info&&<InfoTip text={info}/>}
+    </div>
+  );
+}
+
 function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
@@ -334,7 +376,8 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [stravaConnected,setStravaConnected]=useState(false);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
-  
+  const [urlCopied,setUrlCopied]=useState(false);
+
   const ref=useRef(null);
   const user=session?.user;
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
@@ -369,6 +412,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     setSaving(false);
   }
 
+  const row={padding:"0 16px"};
+  const divider=<div style={{height:1,background:C.border,margin:"10px 0"}}/>;
+
   return (
     <div ref={ref} style={{position:"relative"}}>
       <button onClick={()=>setOpen(o=>!o)} style={{
@@ -378,214 +424,172 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
         {avatar?<img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
           :<span style={{fontFamily:mono,fontSize:12,color:C.muted}}>{initials}</span>}
       </button>
+
       {open&&(
-        <div style={{position:"absolute",top:40,right:0,width:280,zIndex:300,
+        <div style={{
+          position:"absolute",top:40,right:0,width:272,zIndex:300,
           background:C.card,border:`1px solid ${C.border2}`,borderRadius:R,
-          padding:16,display:"flex",flexDirection:"column",gap:12,
-          boxShadow:C.shadow}}>
-          <div>
+          padding:"14px 0",display:"flex",flexDirection:"column",
+          boxShadow:C.shadow,overflowY:"auto",maxHeight:"85vh",
+        }}>
+
+          {/* Identity */}
+          <div style={{...row,paddingBottom:2}}>
             <div style={{fontFamily:serif,fontSize:14,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
-            <div style={{fontFamily:mono,fontSize:13,color:C.muted,marginTop:3}}>{user?.email}</div>
+            <div style={{fontFamily:mono,fontSize:11,color:C.dim,marginTop:2}}>{user?.email}</div>
           </div>
-          <div style={{height:1,background:C.border}}/>
+
+          {divider}
 
           {/* Oura */}
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Oura Ring</span>
-              {ouraConnected&&<span style={{fontFamily:mono,fontSize:12,color:C.green,letterSpacing:"0.08em"}}>✓ connected</span>}
-            </div>
-            <input
-              type="password" value={ouraKey}
-              onChange={e=>{setOuraKey(e.target.value);setOuraConnected(false);setSaved(false);}}
-              placeholder="Paste personal access token…"
-              style={{width:"100%",background:C.surface,border:`1px solid ${ouraConnected?C.green:C.border2}`,
-                borderRadius:6,outline:"none",color:C.text,fontFamily:mono,fontSize:12,
-                padding:"7px 10px",boxSizing:"border-box"}}/>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginTop:6}}>
-              <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
-                style={{fontFamily:mono,fontSize:12,color:C.accent,letterSpacing:"0.06em",textDecoration:"none"}}>
-                Get your token →
-              </a>
+          <div style={row}>
+            <SectionLabel info="Syncs your sleep score, HRV, readiness, and recovery data into your daily view. Requires a personal access token from your Oura account.">
+              Oura Ring {ouraConnected&&<span style={{color:C.green}}>✓</span>}
+            </SectionLabel>
+            <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
+              <input
+                type="password" value={ouraKey}
+                onChange={e=>{setOuraKey(e.target.value);setOuraConnected(false);setSaved(false);}}
+                placeholder="Personal access token…"
+                style={{flex:1,minWidth:0,background:C.surface,
+                  border:`1px solid ${ouraConnected?C.green:C.border2}`,
+                  borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:11,
+                  padding:"6px 8px",boxSizing:"border-box"}}/>
               <button onClick={saveOura} disabled={saving||!ouraKey.trim()} style={{
-                background:saved?C.green+"22":"none",border:`1px solid ${saved?C.green:C.border2}`,
-                borderRadius:5,color:saved?C.green:C.text,fontFamily:mono,fontSize:12,
-                letterSpacing:"0.1em",textTransform:"uppercase",padding:"4px 10px",cursor:"pointer"}}>
-                {saved?"saved ✓":saving?"saving…":"save"}
+                background:saved?C.green+"22":"none",
+                border:`1px solid ${saved?C.green:C.border2}`,
+                borderRadius:5,color:saved?C.green:C.muted,fontFamily:mono,fontSize:10,
+                letterSpacing:"0.08em",textTransform:"uppercase",
+                padding:"0 10px",cursor:"pointer",flexShrink:0}}>
+                {saved?"✓":saving?"…":"Save"}
               </button>
             </div>
+            <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
+              style={{display:"inline-block",marginTop:5,fontFamily:mono,fontSize:10,
+                color:C.dim,textDecoration:"none"}}>
+              Get token →
+            </a>
           </div>
 
-          <div style={{height:1,background:C.border}}/>
+          {divider}
 
           {/* Strava */}
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Strava</span>
-              {stravaConnected&&<span style={{fontFamily:mono,fontSize:12,color:C.green,letterSpacing:"0.08em"}}>✓ connected</span>}
-            </div>
+          <div style={row}>
+            <SectionLabel info="Syncs your runs, rides, and workouts automatically. Click to authorize Day Loop to read your Strava activity data.">
+              Strava {stravaConnected&&<span style={{color:C.green}}>✓</span>}
+            </SectionLabel>
             <button
               onClick={()=>window.location.href="/api/strava-connect"}
               style={{
-                width:"100%",background:stravaConnected?"transparent":"#FC4C0211",
+                width:"100%",
+                background:stravaConnected?"none":"#FC4C0210",
                 border:`1px solid ${stravaConnected?C.green:"#FC4C02"}`,
-                borderRadius:6,color:stravaConnected?C.green:"#FC4C02",
-                fontFamily:mono,fontSize:13,letterSpacing:"0.12em",textTransform:"uppercase",
-                padding:"8px",cursor:"pointer",transition:"all 0.2s"}}>
-              {stravaConnected?"✓ strava connected":"connect strava"}
+                borderRadius:5,color:stravaConnected?C.green:"#FC4C02",
+                fontFamily:mono,fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",
+                padding:"7px",cursor:"pointer"}}>
+              {stravaConnected?"✓ Connected":"Connect Strava"}
             </button>
           </div>
-          <div style={{height:1,background:C.border}}/>
-          {/* Connect to Claude */}
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Connect to Claude</span>
-            </div>
-            <div style={{fontFamily:mono,fontSize:11,color:C.dim,lineHeight:1.6,marginBottom:12}}>
-              Let Claude read and write your Day Loop directly from any conversation.
-            </div>
 
-            {/* MCP URL — copy first, then open settings */}
-            <div style={{marginBottom:8}}>
-              <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>
-                1. Copy your server URL
-              </div>
-              <div style={{
-                display:"flex",alignItems:"center",gap:6,
-                background:C.surface,border:`1px solid ${C.border2}`,
-                borderRadius:5,padding:"6px 8px",
-              }}>
-                <span style={{flex:1,fontFamily:mono,fontSize:11,color:C.accent,userSelect:"all"}}>
-                  https://dayloop.me/mcp
-                </span>
-                <button
-                  onClick={()=>{
-                    navigator.clipboard.writeText('https://dayloop.me/mcp');
-                    // brief visual feedback via DOM
-                    const el=document.getElementById('dl-copy-btn');
-                    if(el){el.textContent='copied ✓';el.style.color=C.green;setTimeout(()=>{el.textContent='copy';el.style.color=C.muted;},2000);}
-                  }}
-                  id="dl-copy-btn"
-                  style={{background:"none",border:"none",cursor:"pointer",color:C.muted,
-                    fontFamily:mono,fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase",
-                    padding:0,flexShrink:0,transition:"color 0.15s"}}
-                >copy</button>
-              </div>
-            </div>
+          {divider}
 
-            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>
-              2. Add as custom connector
+          {/* Claude */}
+          <div style={row}>
+            <SectionLabel info="Adds Day Loop as an MCP connector in Claude. Once connected, you can say things like 'add a task' or 'what's on my calendar' directly in any Claude conversation.">
+              Connect to Claude
+            </SectionLabel>
+            <div style={{
+              display:"flex",alignItems:"center",gap:6,
+              background:C.surface,border:`1px solid ${C.border2}`,
+              borderRadius:5,padding:"6px 8px",marginBottom:7,
+            }}>
+              <span style={{flex:1,fontFamily:mono,fontSize:10,color:C.accent,
+                userSelect:"all",letterSpacing:"0.02em",overflow:"hidden",
+                textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                https://dayloop.me/mcp
+              </span>
+              <button
+                onClick={()=>{
+                  navigator.clipboard.writeText("https://dayloop.me/mcp");
+                  setUrlCopied(true);setTimeout(()=>setUrlCopied(false),2000);
+                }}
+                style={{background:"none",border:"none",cursor:"pointer",
+                  color:urlCopied?C.green:C.dim,fontFamily:mono,fontSize:9,
+                  letterSpacing:"0.08em",textTransform:"uppercase",padding:0,flexShrink:0}}>
+                {urlCopied?"✓":"Copy"}
+              </button>
             </div>
             <a
               href="https://claude.ai/settings/connectors"
-              target="_blank"
-              rel="noreferrer"
+              target="_blank" rel="noreferrer"
               style={{
-                display:"flex",alignItems:"center",justifyContent:"center",gap:7,
-                width:"100%",padding:"8px 0",boxSizing:"border-box",
-                background:C.accent+"15",border:`1px solid ${C.accent}`,
+                display:"flex",alignItems:"center",justifyContent:"center",gap:6,
+                width:"100%",padding:"7px 0",boxSizing:"border-box",
+                background:C.accent+"12",border:`1px solid ${C.accent+"55"}`,
                 borderRadius:5,textDecoration:"none",
-                color:C.accent,fontFamily:mono,fontSize:11,
-                letterSpacing:"0.08em",textTransform:"uppercase",
-                transition:"background 0.15s",
-              }}
-              onMouseEnter={e=>e.currentTarget.style.background=C.accent+"28"}
-              onMouseLeave={e=>e.currentTarget.style.background=C.accent+"15"}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                color:C.accent,fontFamily:mono,fontSize:10,
+                letterSpacing:"0.1em",textTransform:"uppercase",
+              }}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                 <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
               </svg>
-              Open Claude Settings →
+              Open Claude Settings
             </a>
-            <div style={{fontFamily:mono,fontSize:10,color:C.dim,marginTop:6,lineHeight:1.5,textAlign:"center"}}>
-              Settings → Connectors → Add custom connector → paste URL
-            </div>
           </div>
-          <div style={{height:1,background:C.border}}/>
-          {/* Light / Dark toggle */}
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted}}>
-              {theme==="dark"?"Dark mode":"Light mode"}
+
+          {divider}
+
+          {/* Theme */}
+          <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <span style={{fontFamily:mono,fontSize:10,letterSpacing:"0.12em",textTransform:"uppercase",color:C.muted}}>
+              {theme==="dark"?"Dark":"Light"} Mode
             </span>
             <button onClick={()=>onThemeChange(t=>t==="dark"?"light":"dark")}
               style={{
                 background:theme==="dark"?"rgba(196,168,130,0.15)":"rgba(155,107,58,0.12)",
                 border:`1px solid ${C.border2}`,borderRadius:20,cursor:"pointer",
-                padding:3,display:"flex",alignItems:"center",width:44,height:24,
-                justifyContent:theme==="dark"?"flex-end":"flex-start",
-                transition:"all 0.25s"}}>
-              <div style={{width:16,height:16,borderRadius:"50%",
-                background:C.accent,
-                boxShadow:C.shadowSm,
-                transition:"all 0.25s"}}/>
+                padding:3,display:"flex",alignItems:"center",width:40,height:22,
+                justifyContent:theme==="dark"?"flex-end":"flex-start"}}>
+              <div style={{width:14,height:14,borderRadius:"50%",background:C.accent,transition:"all 0.2s"}}/>
             </button>
           </div>
-          <div style={{height:1,background:C.border}}/>
 
-          {/* Desktop app */}
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>Mac App</span>
-              <span style={{fontFamily:mono,fontSize:11,color:C.dim}}>v1.0.0</span>
-            </div>
-            <a
-              href="/download/mac"
-              style={{
-                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-                width:"100%",padding:"8px",boxSizing:"border-box",
-                background:C.surface,border:`1px solid ${C.border2}`,
-                borderRadius:6,cursor:"pointer",textDecoration:"none",
-                color:C.text,fontFamily:mono,fontSize:12,
-                letterSpacing:"0.12em",textTransform:"uppercase",
-                transition:"border-color 0.15s",
-              }}
-              onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
-              onMouseLeave={e=>e.currentTarget.style.borderColor=C.border2}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {/* Apps side by side */}
+          <div style={{...row,display:"flex",gap:6,marginBottom:2}}>
+            <a href="/download/mac" style={{
+              flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+              padding:"6px 0",background:C.surface,
+              border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
+              color:C.muted,fontFamily:mono,fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              Download for Mac
+              Mac
+            </a>
+            <a href="/download/ios" style={{
+              flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+              padding:"6px 0",background:C.surface,
+              border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
+              color:C.muted,fontFamily:mono,fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/>
+              </svg>
+              iOS Beta
             </a>
           </div>
 
-          {/* iOS app */}
-          <div>
-            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-              <span style={{fontFamily:mono,fontSize:12,letterSpacing:"0.15em",textTransform:"uppercase",color:C.muted}}>iPhone App</span>
-              <span style={{fontFamily:mono,fontSize:11,color:C.dim}}>TestFlight</span>
-            </div>
-            <a
-              href="/download/ios"
-              style={{
-                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-                width:"100%",padding:"8px",boxSizing:"border-box",
-                background:C.surface,border:`1px solid ${C.border2}`,
-                borderRadius:6,cursor:"pointer",textDecoration:"none",
-                color:C.text,fontFamily:mono,fontSize:12,
-                letterSpacing:"0.12em",textTransform:"uppercase",
-                transition:"border-color 0.15s",
-              }}
-              onMouseEnter={e=>e.currentTarget.style.borderColor=C.accent}
-              onMouseLeave={e=>e.currentTarget.style.borderColor=C.border2}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/>
-                <line x1="12" y1="18" x2="12" y2="18"/>
-              </svg>
-              Join iOS Beta
-            </a>
+          {divider}
+
+          <div style={row}>
+            <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
+              style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                color:C.dim,fontFamily:mono,fontSize:10,letterSpacing:"0.1em",textTransform:"uppercase"}}>
+              Sign out →
+            </button>
           </div>
 
-          <div style={{height:1,background:C.border}}/>
-          <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
-            style={{background:"none",border:"none",padding:0,textAlign:"left",cursor:"pointer",
-              color:C.muted,fontFamily:mono,fontSize:13,letterSpacing:"0.12em",textTransform:"uppercase"}}>
-            sign out →
-          </button>
         </div>
       )}
     </div>
