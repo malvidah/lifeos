@@ -1478,41 +1478,48 @@ function InsightsCard({date, token, userId, healthKey}) {
 
   return (
     <Widget label="Insights" color={C.muted} slim>
-      <div style={{ position: "relative" }}>
-        {busy && !isFree && (
-          <div style={{ padding: "4px 0" }}>
-            <Shimmer width="90%" height={11} />
-            <div style={{ height: 7 }} />
-            <Shimmer width="72%" height={11} />
-            <div style={{ height: 7 }} />
-            <Shimmer width="55%" height={11} />
-          </div>
-        )}
-        {error && (
-          <div style={{ fontFamily: mono, fontSize:13, color: C.red, lineHeight: 1.5 }}>{error}</div>
-        )}
-        {isFree ? (
-          /* Free tier — show real insight, nudge to upgrade for chat */
-          <div>
-            {text && <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line", marginBottom: 10 }}>{text}</div>}
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 3, height: 3, borderRadius: "50%", background: C.accent, flexShrink: 0 }}/>
-              <span style={{ fontFamily: mono, fontSize:11, color: C.dim, letterSpacing: "0.06em" }}>
-                Chat with your data —
-              </span>
-              <button onClick={() => window.location.href = "/upgrade"} style={{
-                background: "none", border: "none", padding: 0, cursor: "pointer",
-                fontFamily: mono, fontSize:11, color: C.accent, letterSpacing: "0.06em",
-                textDecoration: "underline", textUnderlineOffset: 3,
-              }}>upgrade to Premium</button>
+      {/* Fixed min-height prevents layout reflow while content loads */}
+      <div style={{ minHeight: 68, display: "flex", alignItems: "flex-start" }}>
+        <div style={{ width: "100%", opacity: busy && !text ? 0 : 1, transition: "opacity 0.25s ease" }}>
+          {error && (
+            <div style={{ fontFamily: mono, fontSize:13, color: C.red, lineHeight: 1.6 }}>{error}</div>
+          )}
+          {isFree ? (
+            <div>
+              {text && <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line", marginBottom: 10 }}>{text}</div>}
+              {!text && busy && (
+                <div>
+                  <Shimmer width="90%" height={11} />
+                  <div style={{ height: 8 }} />
+                  <Shimmer width="65%" height={11} />
+                </div>
+              )}
+              {text && <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 3, height: 3, borderRadius: "50%", background: C.accent, flexShrink: 0 }}/>
+                <span style={{ fontFamily: mono, fontSize:11, color: C.dim, letterSpacing: "0.06em" }}>
+                  Chat with your data —
+                </span>
+                <button onClick={() => window.location.href = "/upgrade"} style={{
+                  background: "none", border: "none", padding: 0, cursor: "pointer",
+                  fontFamily: mono, fontSize:11, color: C.accent, letterSpacing: "0.06em",
+                  textDecoration: "underline", textUnderlineOffset: 3,
+                }}>upgrade to Premium</button>
+              </div>}
             </div>
-          </div>
-        ) : text ? (
-          <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
-            {text}
-            {busy && <span style={{ marginTop: 8, display: "block" }}><Shimmer width="40%" height={10} /></span>}
-          </div>
-        ) : null}
+          ) : text ? (
+            <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
+              {text}
+            </div>
+          ) : busy ? (
+            <div>
+              <Shimmer width="90%" height={11} />
+              <div style={{ height: 8 }} />
+              <Shimmer width="72%" height={11} />
+              <div style={{ height: 8 }} />
+              <Shimmer width="50%" height={11} />
+            </div>
+          ) : null}
+        </div>
       </div>
     </Widget>
   );

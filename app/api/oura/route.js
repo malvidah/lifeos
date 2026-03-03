@@ -63,9 +63,10 @@ export async function GET(request) {
     const readinessRecords = readinessData.data ?? [];
     const readiness = readinessRecords.find(d => d.day === date) ?? null;
     const sessions   = sessionData.data ?? [];
+    // Filter to sessions whose `day` matches the requested date before picking longest
     const mainSession = sessions
-      .filter(s => s.type === "long_sleep")
-      .sort((a, b) => (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0))[0];
+      .filter(s => s.type === "long_sleep" && s.day === date)
+      .sort((a, b) => (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0))[0] ?? null;
 
     const result = {};
     if (daily) {
