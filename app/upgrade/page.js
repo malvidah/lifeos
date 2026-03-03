@@ -146,7 +146,7 @@ function PricingView({ session, onStartCheckout }) {
                 background: '#2a4a35', color: '#7dba94',
                 fontFamily: mono, fontSize: 7, letterSpacing: '0.08em',
                 padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase',
-              }}>Save 33%</span>
+              }}>Save 20%</span>
             )}
           </button>
         ))}
@@ -157,12 +157,12 @@ function PricingView({ session, onStartCheckout }) {
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 2 }}>
           <span style={{ fontFamily: mono, fontSize: 15, color: muted, marginTop: 12 }}>$</span>
           <span style={{ fontFamily: serif, fontSize: 60, color: text, lineHeight: 1, letterSpacing: '-0.03em' }}>
-            {plan === 'yearly' ? '39' : '4'}
+            {plan === 'yearly' ? '48' : '5'}
           </span>
-          <span style={{ fontFamily: mono, fontSize: 15, color: muted, marginTop: 12 }}>.99</span>
+          <span style={{ fontFamily: mono, fontSize: 15, color: muted, marginTop: 12 }}>{plan === 'yearly' ? '' : ''}</span>
         </div>
         <div style={{ fontFamily: mono, fontSize: 10, color: muted, marginTop: 6, letterSpacing: '0.06em' }}>
-          {plan === 'yearly' ? 'per year · $3.33/mo' : 'per month'}
+          {plan === 'yearly' ? 'per year · $4/mo' : 'per month'}
         </div>
       </div>
 
@@ -184,7 +184,7 @@ function PricingView({ session, onStartCheckout }) {
         cursor: loading ? 'not-allowed' : 'pointer',
         opacity: loading ? 0.6 : 1, transition: 'opacity 0.15s', marginBottom: 12,
       }}>
-        {loading ? 'Loading…' : `Get Premium — ${plan === 'yearly' ? '$39.99/yr' : '$4.99/mo'}`}
+        {loading ? 'Loading…' : `Get Premium — ${plan === 'yearly' ? '$48/yr' : '$5/mo'}`}
       </button>
 
       <p style={{ fontFamily: mono, fontSize: 9, color: muted, textAlign: 'center', margin: '0 0 4px', letterSpacing: '0.05em' }}>
