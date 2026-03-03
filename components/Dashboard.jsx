@@ -1277,7 +1277,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                   value={form.title}
                   onChange={e=>updateForm({title:e.target.value})}
                   onKeyDown={e=>{if(e.key==='Enter'){e.preventDefault();save();setEditingTitle(false);}if(e.key==='Escape')closePanel();}}
-                  onBlur={()=>{setEditingTitle(false);if(!isNew&&dirty&&form.title.trim())save();}}
+                  onBlur={()=>setEditingTitle(false)}
                   placeholder='Event title'
                   style={{...inputBase,fontFamily:serif,fontSize:F.md,width:'100%',
                     display:'block',marginBottom:5}}
@@ -1332,18 +1332,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                 {saving && <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,opacity:0.5}}>saving…</span>}
               </div>
 
-              {/* Save button for new events */}
-              {isNew && form.title.trim() && (
-                <button onClick={save} disabled={saving} style={{
-                  marginTop:8,background:C.blue,border:'none',borderRadius:5,
-                  padding:'5px 14px',color:'#fff',fontFamily:mono,fontSize:F.sm,
-                  letterSpacing:'0.1em',textTransform:'uppercase',
-                  cursor:saving?'not-allowed':'pointer',opacity:saving?0.5:1,
-                  transition:'opacity 0.15s',
-                }}>
-                  {saving?'saving…':'save'}
-                </button>
-              )}
+
 
               {active.zoomUrl && (
                 <a href={active.zoomUrl} target='_blank' rel='noopener noreferrer'
@@ -1354,37 +1343,47 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
               )}
             </div>
 
-            {/* Right side: delete (existing only) + × close */}
-            <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:8,flexShrink:0}}>
-              {/* × close — no border */}
-              <button onClick={closePanel} style={{
-                background:'none',border:'none',cursor:'pointer',
-                color:C.muted,fontSize:16,lineHeight:1,padding:'0 2px',
-                transition:'color 0.1s',
-              }}
-              onMouseEnter={e=>e.currentTarget.style.color=C.text}
-              onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
-                ×
-              </button>
-
+            {/* Right side: trash | cancel | save — horizontal row */}
+            <div style={{display:'flex',alignItems:'center',gap:2,flexShrink:0}}>
               {/* Trash — existing events only */}
               {!isNew && active.id && (
-                <button onClick={deleteEvent} disabled={deleting} title="Delete event" style={{
+                <button onClick={deleteEvent} disabled={deleting} title="Delete" style={{
                   background:'none',border:'none',cursor:deleting?'default':'pointer',
-                  color:deleting?C.muted:C.muted,lineHeight:1,padding:'2px',
-                  opacity:deleting?0.3:0.5,transition:'opacity 0.15s',
-                  display:'flex',alignItems:'center',
+                  color:C.muted,padding:5,lineHeight:1,display:'flex',alignItems:'center',
+                  opacity:deleting?0.3:1,transition:'color 0.15s',
                 }}
-                onMouseEnter={e=>{if(!deleting){e.currentTarget.style.opacity='1';e.currentTarget.style.color='#B06060';}}}
-                onMouseLeave={e=>{e.currentTarget.style.opacity='0.5';e.currentTarget.style.color=C.muted;}}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                    <path d="M10 11v6M14 11v6"/>
-                    <path d="M9 6V4h6v2"/>
+                onMouseEnter={e=>{if(!deleting)e.currentTarget.style.color='#B06060';}}
+                onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                    <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
                   </svg>
                 </button>
               )}
+              {/* Cancel × */}
+              <button onClick={closePanel} title="Cancel" style={{
+                background:'none',border:'none',cursor:'pointer',
+                color:C.muted,padding:5,lineHeight:1,display:'flex',alignItems:'center',
+                transition:'color 0.15s',
+              }}
+              onMouseEnter={e=>e.currentTarget.style.color=C.text}
+              onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+              {/* Save ✓ */}
+              <button onClick={()=>{if(form.title.trim())save();}} disabled={saving||!form.title.trim()} title="Save" style={{
+                background:'none',border:'none',cursor:(saving||!form.title.trim())?'default':'pointer',
+                color:form.title.trim()?C.accent:C.muted,padding:5,lineHeight:1,display:'flex',alignItems:'center',
+                opacity:saving?0.4:1,transition:'color 0.15s',
+              }}
+              onMouseEnter={e=>{if(!saving&&form.title.trim())e.currentTarget.style.color=C.green;}}
+              onMouseLeave={e=>e.currentTarget.style.color=form.title.trim()?C.accent:C.muted}>
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </button>
             </div>
 
           </div>
