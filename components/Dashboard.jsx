@@ -1426,9 +1426,8 @@ function InsightsCard({date, token, userId, healthKey}) {
   const [error, setError] = useState("");
   const [isFree, setIsFree] = useState(false);
   const prevDate = useRef(date);
-  const prevHealthKey = useRef(null); // null = never seen a real healthKey yet
-  const loaded = useRef(false);
-  const regenTimer = useRef(null); // debounce healthKey regeneration
+  const generated = useRef(false);   // has this date been generated yet?
+  const waitTimer = useRef(null);    // fallback timer for days with no Oura
 
   const BAD_VALUES = ["No data available", "No insights generated", "AI error"];
   function isBadCache(t, cached) {
@@ -1439,16 +1438,16 @@ function InsightsCard({date, token, userId, healthKey}) {
     return false;
   }
 
-  async function generate(force = false) {
-    if (!token || !userId) return;
+  async function generate() {
+    if (!token || !userId || generated.current) return;
+    generated.current = true;
+    clearTimeout(waitTimer.current);
     setBusy(true); setError(""); setIsFree(false);
     try {
-      if (!force) {
-        const cached = await dbLoad(date, "insights", token);
-        const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
-        if (cached?.text && !isBadCache(cached.text, cached) && age < 4 * 60 * 60 * 1000) {
-          setText(cached.text); setBusy(false); return;
-        }
+      const cached = await dbLoad(date, "insights", token);
+      const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
+      if (cached?.text && !isBadCache(cached.text, cached) && age < 4 * 60 * 60 * 1000) {
+        setText(cached.text); setBusy(false); return;
       }
       const res = await fetch("/api/insights", {
         method: "POST",
@@ -1463,37 +1462,32 @@ function InsightsCard({date, token, userId, healthKey}) {
     setBusy(false);
   }
 
-  // Initial load / date change
+  // Reset on date change
   useEffect(() => {
-    if (prevDate.current !== date) {
-      setText(""); setError(""); setIsFree(false); loaded.current = false;
-      prevDate.current = date;
-      prevHealthKey.current = null;
-      clearTimeout(regenTimer.current);
-    }
-    if (loaded.current) return;
-    loaded.current = true;
-    generate();
-  }, [date, token, userId]); // eslint-disable-line
+    if (prevDate.current === date) return;
+    prevDate.current = date;
+    generated.current = false;
+    clearTimeout(waitTimer.current);
+    setText(""); setError(""); setIsFree(false);
+  }, [date]); // eslint-disable-line
 
-  // Regenerate when Oura data arrives — but debounce so rapid partial updates
-  // (sleep loads, then readiness, then HRV) don't fire 3 separate API calls
+  // Wait for Oura data before generating — generate exactly once per date.
+  // If real health data arrives: generate immediately.
+  // If 3s passes with no Oura data: generate anyway (no ring / future date).
   useEffect(() => {
-    if (!healthKey) return;
-    // Only act on a key that has real scores (non-zero sleep or readiness)
-    const [, sleep, readiness] = healthKey.split(":");
+    if (!token || !userId || generated.current) return;
+    const [, sleep, readiness] = (healthKey || "::").split(":");
     const hasRealData = (+sleep > 0) || (+readiness > 0);
-    if (!hasRealData) return;
-    // Skip if this key is the same as what we already generated for
-    if (prevHealthKey.current === healthKey) return;
-    prevHealthKey.current = healthKey;
-    // Debounce: wait 1.5s for all Oura fields to settle before regenerating
-    clearTimeout(regenTimer.current);
-    regenTimer.current = setTimeout(() => {
-      if (loaded.current) generate(true);
-    }, 1500);
-    return () => clearTimeout(regenTimer.current);
-  }, [healthKey]); // eslint-disable-line
+    if (hasRealData) {
+      // Oura has loaded — generate now with complete data
+      generate();
+    } else {
+      // Start/restart the fallback timer
+      clearTimeout(waitTimer.current);
+      waitTimer.current = setTimeout(generate, 3000);
+    }
+    return () => clearTimeout(waitTimer.current);
+  }, [date, token, userId, healthKey]); // eslint-disable-line
 
   return (
     <Widget label="Insights" color={C.muted} slim>
