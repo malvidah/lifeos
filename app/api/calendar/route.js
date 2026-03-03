@@ -1,5 +1,20 @@
-// Fetches Google Calendar events server-side using a stored OAuth token.
-// The client POSTs { token, start, end } — we call GCal and return shaped events.
+// Fetches Google Calendar events server-side.
+// Reads Google token from DB, auto-refreshes if expired, no client token needed.
+
+import { createClient } from '@supabase/supabase-js';
+
+function getUserClient(req) {
+  const auth = req.headers.get('authorization') || '';
+  const token = auth.replace('Bearer ', '').trim();
+  if (!token) return { supabase: null };
+  return {
+    supabase: createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      { global: { headers: { Authorization: `Bearer ${token}` } } }
+    )
+  };
+}
 
 function fmtTime(dateTime, tz) {
   if (!dateTime) return "all day";
@@ -11,9 +26,8 @@ function fmtTime(dateTime, tz) {
 
 function localDateKey(dateTimeOrDate, timeZone) {
   if (!dateTimeOrDate) return null;
-  // All-day events have just a date string
   if (/^\d{4}-\d{2}-\d{2}$/.test(dateTimeOrDate)) return dateTimeOrDate;
-  return new Date(dateTimeOrDate).toLocaleDateString("en-CA", { timeZone: timeZone || "UTC" }); // en-CA = YYYY-MM-DD
+  return new Date(dateTimeOrDate).toLocaleDateString("en-CA", { timeZone: timeZone || "UTC" });
 }
 
 function eventColor(title = "") {
@@ -32,36 +46,79 @@ function zoomUrl(event) {
   return match ? match[0].split('"')[0].split("'")[0] : null;
 }
 
+async function refreshGoogleToken(refreshToken) {
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token',
+    }),
+  });
+  const data = await r.json();
+  if (!r.ok || !data.access_token) return null;
+  return data.access_token;
+}
+
+async function fetchGCalEvents(accessToken, start, end) {
+  const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
+  url.searchParams.set("timeMin", `${start}T00:00:00Z`);
+  url.searchParams.set("timeMax", `${end}T23:59:59Z`);
+  url.searchParams.set("singleEvents", "true");
+  url.searchParams.set("orderBy", "startTime");
+  url.searchParams.set("maxResults", "250");
+
+  const r = await fetch(url.toString(), {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  return { ok: r.ok, status: r.status, data: r.ok ? await r.json() : null };
+}
+
 export async function POST(request) {
   try {
-    const { token, start, end, tz } = await request.json();
+    const { supabase } = getUserClient(request);
+    if (!supabase) return Response.json({ error: "unauthorized" }, { status: 401 });
+    const { data: { user }, error: authErr } = await supabase.auth.getUser();
+    if (authErr || !user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
-    // Use env var as fallback if no token passed
-    const accessToken = token || process.env.GOOGLE_CALENDAR_TOKEN;
-    if (!accessToken) {
-      return Response.json({ error: "No Google Calendar token" }, { status: 401 });
+    const { start, end, tz, token: clientToken } = await request.json();
+
+    // 1. Get stored tokens from DB
+    const { data: stored } = await supabase.from('entries').select('data')
+      .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', user.id)
+      .maybeSingle();
+
+    let accessToken = clientToken || stored?.data?.token;
+    const refreshToken = stored?.data?.refreshToken;
+
+    if (!accessToken && !refreshToken) {
+      return Response.json({ error: "No Google Calendar connection" }, { status: 401 });
     }
 
-    const url = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
-    // RFC3339 with Z (UTC bounds) — we fetch a wide window and bucket by local tz
-    // Pad by 1 day each side to ensure local-midnight events aren't missed
-    url.searchParams.set("timeMin", `${start}T00:00:00Z`);
-    url.searchParams.set("timeMax", `${end}T23:59:59Z`);
-    url.searchParams.set("singleEvents", "true");
-    url.searchParams.set("orderBy", "startTime");
-    url.searchParams.set("maxResults", "250");
+    // 2. Try fetching events
+    let result = accessToken ? await fetchGCalEvents(accessToken, start, end) : { ok: false, status: 401 };
 
-    const r = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-
-    if (!r.ok) {
-      const err = await r.text();
-      return Response.json({ error: err }, { status: r.status });
+    // 3. If token expired, refresh and retry
+    if (!result.ok && refreshToken) {
+      const newToken = await refreshGoogleToken(refreshToken);
+      if (newToken) {
+        // Save refreshed token to DB
+        await supabase.from('entries').upsert(
+          { date: '0000-00-00', type: 'google_token', data: { token: newToken, refreshToken }, user_id: user.id, updated_at: new Date().toISOString() },
+          { onConflict: 'date,type,user_id' }
+        );
+        accessToken = newToken;
+        result = await fetchGCalEvents(newToken, start, end);
+      }
     }
 
-    const data = await r.json();
-    const items = data.items || [];
+    if (!result.ok) {
+      return Response.json({ error: "Calendar fetch failed" }, { status: result.status || 500 });
+    }
+
+    const items = result.data?.items || [];
 
     // Group by local date
     const byDay = {};
@@ -73,13 +130,14 @@ export async function POST(request) {
       byDay[key].push({
         title: ev.summary || "(no title)",
         time: ev.start?.date ? "all day" : fmtTime(ev.start?.dateTime, tz),
+        endTime: ev.end?.date ? null : fmtTime(ev.end?.dateTime, tz),
         color: eventColor(ev.summary),
         zoomUrl: zoomUrl(ev),
         allDay: !!ev.start?.date,
       });
     }
 
-    return Response.json({ events: byDay });
+    return Response.json({ events: byDay, googleToken: accessToken });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }

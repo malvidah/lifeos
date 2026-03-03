@@ -66,14 +66,14 @@ async function estimateNutrition(prompt, token) {
     const r = await fetch("/api/ai",{method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
       body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:80,
-        system:"You are a nutrition calculator. Return ONLY a JSON object with integer fields: kcal and protein (grams). No explanation, no markdown, no backticks. Example: {\"kcal\":450,\"protein\":35}",
+        system:"Return ONLY a valid JSON object with the requested integer fields. No explanation, no markdown, no backticks.",
         messages:[{role:"user",content:prompt}]})});
     const d = await r.json();
     if (d.error) return null;
     const text = d.content?.find(b=>b.type==="text")?.text||"{}";
     const parsed = JSON.parse(text.match(/\{[\s\S]*\}/)[0]);
     if (!parsed.kcal) return null;
-    return { kcal: parsed.kcal, protein: parsed.protein || null };
+    return parsed; // {kcal, protein} for meals, {kcal} for activities
   } catch { return null; }
 }
 
@@ -1516,7 +1516,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   );
 }
 
-function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate calories and protein grams for: "${t}"`} prefix="" color={C.accent} showProtein/>;}
+function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={C.accent} showProtein/>;}
 function SourceBadge({source}) {
   const isStrava = source === "strava";
   return (
@@ -1730,16 +1730,9 @@ export default function Dashboard() {
     setLastSync(new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}));
   },[]);
 
-  // When we get a fresh provider_token from Google (right after login), save it to DB
-  useEffect(()=>{
-    if(!sessionGoogleToken||!token)return;
-    fetch("/api/google-token",{method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-      body:JSON.stringify({googleToken:sessionGoogleToken,refreshToken:sessionRefreshToken})})
-      .catch(()=>{});
-  },[sessionGoogleToken,token]);
+  // sessionGoogleToken/refreshToken only used by calendar fetch now
 
-  // Fetch calendar events — auto-refresh token if expired
+  // Fetch calendar events — server handles token refresh automatically
   const calRefreshRef = useRef(null);
   useEffect(()=>{
     if(!token)return;
@@ -1748,68 +1741,29 @@ export default function Dashboard() {
     const start=toKey(shift(new Date(),-30));
     const end=toKey(shift(new Date(),60));
 
-    const doFetch=(gToken)=>fetch("/api/calendar",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({token:gToken,start,end,tz})}).then(r=>{
-        if(!r.ok) return r.json().then(d=>({...d,_httpError:true}));
-        return r.json();
-      });
+    const fetchCal=()=>fetch("/api/calendar",{method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+      body:JSON.stringify({start,end,tz})})
+      .then(r=>r.ok?r.json():null)
+      .then(d=>{
+        if(d?.events) setEvents(prev=>({...prev,...d.events}));
+        if(d?.googleToken) setGoogleToken(d.googleToken);
+      })
+      .catch(()=>{})
+      .finally(()=>endSync("cal"));
 
-    const tryRefresh=(refreshToken)=>
-      fetch("/api/google-refresh",{method:"POST",headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-        body:JSON.stringify({refreshToken})}).then(r=>r.json());
+    // On fresh login, save the provider token first, then fetch
+    if(sessionGoogleToken){
+      fetch("/api/google-token",{method:"POST",
+        headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+        body:JSON.stringify({googleToken:sessionGoogleToken,refreshToken:sessionRefreshToken})})
+        .then(()=>fetchCal()).catch(()=>fetchCal());
+    } else {
+      fetchCal();
+    }
 
-    const fetchCal=(gToken, refreshToken, isRetry=false)=>{
-      setGoogleToken(gToken);
-      doFetch(gToken).then(async d=>{
-        if(d.events && !d._httpError){
-          // Success — even empty events {} is valid (just means no events in range)
-          setEvents(prev => ({...prev, ...d.events}));
-        } else if(!isRetry && refreshToken){
-          // Token expired or error — try to refresh silently
-          const r=await tryRefresh(refreshToken).catch(()=>({}));
-          if(r.googleToken){
-            setGoogleToken(r.googleToken);
-            fetchCal(r.googleToken, refreshToken, true);
-            return;
-          }
-        }
-      }).catch(()=>{}).finally(()=>endSync("cal"));
-    };
-
-    const startFetch = () => {
-      if(sessionGoogleToken){
-        fetchCal(sessionGoogleToken, sessionRefreshToken);
-      } else {
-        fetch("/api/google-token",{headers:{"Authorization":`Bearer ${token}`}})
-          .then(r=>r.json())
-          .then(d=>{
-            if(d.googleToken) fetchCal(d.googleToken, d.refreshToken);
-            else endSync("cal");
-          })
-          .catch(()=>endSync("cal"));
-      }
-    };
-
-    startFetch();
-
-    // Proactively refresh every 45 min to prevent stale tokens
-    calRefreshRef.current = setInterval(()=>{
-      fetch("/api/google-token",{headers:{"Authorization":`Bearer ${token}`}})
-        .then(r=>r.json())
-        .then(d=>{
-          if(d.refreshToken){
-            tryRefresh(d.refreshToken).then(r=>{
-              if(r.googleToken){
-                setGoogleToken(r.googleToken);
-                doFetch(r.googleToken).then(d2=>{
-                  if(d2.events&&!d2._httpError) setEvents(prev=>({...prev,...d2.events}));
-                }).catch(()=>{});
-              }
-            }).catch(()=>{});
-          }
-        }).catch(()=>{});
-    }, 45*60*1000);
-
+    // Re-fetch every 45 min to keep events fresh
+    calRefreshRef.current = setInterval(fetchCal, 45*60*1000);
     return ()=>{ if(calRefreshRef.current) clearInterval(calRefreshRef.current); };
   },[token]); // eslint-disable-line
 
