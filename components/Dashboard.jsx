@@ -444,31 +444,62 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             <div style={{fontFamily:mono,fontSize:11,color:C.dim,lineHeight:1.6,marginBottom:12}}>
               Let Claude read and write your Day Loop directly from any conversation.
             </div>
+
+            {/* MCP URL — copy first, then open settings */}
+            <div style={{marginBottom:8}}>
+              <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:4}}>
+                1. Copy your server URL
+              </div>
+              <div style={{
+                display:"flex",alignItems:"center",gap:6,
+                background:C.surface,border:`1px solid ${C.border2}`,
+                borderRadius:5,padding:"6px 8px",
+              }}>
+                <span style={{flex:1,fontFamily:mono,fontSize:11,color:C.accent,userSelect:"all"}}>
+                  https://dayloop.me/mcp
+                </span>
+                <button
+                  onClick={()=>{
+                    navigator.clipboard.writeText('https://dayloop.me/mcp');
+                    // brief visual feedback via DOM
+                    const el=document.getElementById('dl-copy-btn');
+                    if(el){el.textContent='copied ✓';el.style.color=C.green;setTimeout(()=>{el.textContent='copy';el.style.color=C.muted;},2000);}
+                  }}
+                  id="dl-copy-btn"
+                  style={{background:"none",border:"none",cursor:"pointer",color:C.muted,
+                    fontFamily:mono,fontSize:10,letterSpacing:"0.08em",textTransform:"uppercase",
+                    padding:0,flexShrink:0,transition:"color 0.15s"}}
+                >copy</button>
+              </div>
+            </div>
+
+            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>
+              2. Add as custom connector
+            </div>
             <a
-              href={`https://claude.ai/settings/connectors?mcp_url=${encodeURIComponent('https://dayloop.me/mcp')}`}
+              href="https://claude.ai/settings/connectors"
               target="_blank"
               rel="noreferrer"
               style={{
-                display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-                width:"100%",padding:"9px 0",boxSizing:"border-box",
-                background:C.accent+"18",
-                border:`1px solid ${C.accent}`,
-                borderRadius:6,textDecoration:"none",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:7,
+                width:"100%",padding:"8px 0",boxSizing:"border-box",
+                background:C.accent+"15",border:`1px solid ${C.accent}`,
+                borderRadius:5,textDecoration:"none",
                 color:C.accent,fontFamily:mono,fontSize:11,
-                letterSpacing:"0.1em",textTransform:"uppercase",
+                letterSpacing:"0.08em",textTransform:"uppercase",
                 transition:"background 0.15s",
               }}
               onMouseEnter={e=>e.currentTarget.style.background=C.accent+"28"}
-              onMouseLeave={e=>e.currentTarget.style.background=C.accent+"18"}
+              onMouseLeave={e=>e.currentTarget.style.background=C.accent+"15"}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
-                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
               </svg>
-              Connect to Claude
+              Open Claude Settings →
             </a>
-            <div style={{fontFamily:mono,fontSize:10,color:C.dim,marginTop:8,textAlign:"center",lineHeight:1.5}}>
-              Opens Claude settings → sign in → done
+            <div style={{fontFamily:mono,fontSize:10,color:C.dim,marginTop:6,lineHeight:1.5,textAlign:"center"}}>
+              Settings → Connectors → Add custom connector → paste URL
             </div>
           </div>
           <div style={{height:1,background:C.border}}/>
