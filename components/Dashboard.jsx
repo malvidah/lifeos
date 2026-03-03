@@ -5,10 +5,10 @@ import { createClient } from "../lib/supabase.js";
 
 const THEMES = {
   dark: {
-    // Neutral dark grey, barely warm — surface anchors topbar/bottombar/cards
-    bg:"#181818",      surface:"#242422",   card:"#242422",
+    // All surfaces unified — bg=surface=card, one warm-grey tone
+    bg:"#222220",      surface:"#222220",   card:"#222220",
     border:"#2E2D2B",  border2:"#3A3936",
-    text:"#E2DAD2",    muted:"#706A64",     dim:"#2E2C2A",
+    text:"#E4DAD0",    muted:"#726C66",     dim:"#302E2C",
     accent:"#D4882A",
     green:"#4A9E6A",   blue:"#4A80B0",
     purple:"#906AC0",  red:"#B85040",       orange:"#D4882A",
@@ -17,8 +17,8 @@ const THEMES = {
     shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
   },
   light: {
-    // Warm cream — surface anchors topbar/bottombar/cards, bg one step darker same family
-    bg:"#D4CCC0",      surface:"#E8E2D8",   card:"#E8E2D8",
+    // All surfaces unified — bg=surface=card, one warm cream tone
+    bg:"#E6DFD4",      surface:"#E6DFD4",   card:"#E6DFD4",
     border:"#D6CECC",  border2:"#C4BCB8",
     text:"#3A2E22",    muted:"#8A7E72",     dim:"#B8B0A6",
     accent:"#C07818",
@@ -696,7 +696,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
         <span style={{
           fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
-          color:C.text,
+          fontWeight:"700",color:C.text,
         }}>Day Loop</span>
       </div>
       <div style={{flex:1}}/>
@@ -1947,11 +1947,8 @@ function LoginScreen() {
       <div style={{textAlign:"center"}}>
         <div style={{
           display:"inline-block",
-          fontFamily:mono,fontSize:F.md,letterSpacing:"0.18em",textTransform:"uppercase",
-          color:C.accent,
-          background:C.accent+"1A",
-          border:`1px solid ${C.accent}40`,
-          borderRadius:8,padding:"7px 18px",marginBottom:24,
+          fontFamily:serif,fontSize:F.lg,letterSpacing:"-0.02em",
+          fontWeight:"700",color:C.text,marginBottom:24,
         }}>Day Loop</div>
         <div style={{fontFamily:mono,fontSize:F.sm,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
