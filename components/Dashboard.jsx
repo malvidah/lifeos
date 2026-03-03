@@ -366,7 +366,7 @@ function Card({children,style={}}) {
 
 
 // ─── Widget card ─────────────────────────────────────────────────────────────
-function Widget({label,color,children,slim,collapsed,onToggle}) {
+function Widget({label,color,children,slim,collapsed,onToggle,headerRight}) {
   return (
     <div style={slim ? {} : {height:"100%",display:"flex",flexDirection:"column"}}>
       <Card style={collapsed ? {height:"auto"} : {}}>
@@ -378,6 +378,7 @@ function Widget({label,color,children,slim,collapsed,onToggle}) {
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
             textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
+          {headerRight}
         </div>
         {!collapsed&&(
           <div style={slim ? {padding:"14px 16px"} : {flex:1,overflow:"auto",padding:16,minHeight:0}}>{children}</div>
@@ -1729,14 +1730,6 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
-      {/* Column headers */}
-      {showProtein && (
-        <div style={{...rowStyle, paddingBottom:4, borderBottom:`1px solid ${C.border}`, marginBottom:2}}>
-          <div style={{flex:1}}/>
-          <div style={{...hdrCol, width:28}}>prot</div>
-          <div style={{...hdrCol, width:34}}>kcal</div>
-        </div>
-      )}
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
         {merged.map(row => (
           <div key={row.id} style={rowStyle}>
@@ -2299,10 +2292,11 @@ function ChatFloat({date, token, userId}) {
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
+const MEALS_HDR = <span style={{display:"flex",gap:8}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:28,textAlign:"right"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:34,textAlign:"right"}}>kcal</span></span>;
 const WIDGETS = [
   {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
-  {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals},
+  {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals,    headerRight:()=>MEALS_HDR},
   {id:"activity", label:"Activity", color:()=>C.green,  Comp:Activity},
 ];
 const FULL_IDS = ["cal","health"];
@@ -2508,7 +2502,7 @@ export default function Dashboard() {
           {/* Widgets stacked */}
           {[leftWidget,...rightWidgets].map(w=>(
             <div key={w.id} style={{height:260,flexShrink:0}}>
-              <Widget label={w.label} color={w.color()}>
+              <Widget label={w.label} color={w.color()} headerRight={w.headerRight?.()}>
                 <w.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
@@ -2541,7 +2535,8 @@ export default function Dashboard() {
           <div style={{display:"flex",gap:8,alignItems:"stretch",flex:"1 1 0",minHeight:200}}>
             <div style={{flex:"2 1 0",minWidth:0,display:"flex",flexDirection:"column"}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
-                collapsed={collapseMap[leftWidget.id]} onToggle={toggleMap[leftWidget.id]}>
+                collapsed={collapseMap[leftWidget.id]} onToggle={toggleMap[leftWidget.id]}
+                headerRight={leftWidget.headerRight?.()}>
                 <leftWidget.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
@@ -2549,7 +2544,8 @@ export default function Dashboard() {
               {rightWidgets.map(w=>(
                 <div key={w.id} style={{flex:collapseMap[w.id]?"0 0 auto":"1 1 0",minHeight:0,overflow:"hidden"}}>
                   <Widget label={w.label} color={w.color()}
-                    collapsed={collapseMap[w.id]} onToggle={toggleMap[w.id]}>
+                    collapsed={collapseMap[w.id]} onToggle={toggleMap[w.id]}
+                    headerRight={w.headerRight?.()}>
                     <w.Comp date={selected} token={token} userId={userId}/>
                   </Widget>
                 </div>
