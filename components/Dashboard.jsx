@@ -505,7 +505,7 @@ function offsetToDate(n) {
 // Month and year are static labels (snap discretely). Only the day ribbon moves.
 function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false}) {
   const today = todayKey();
-  const DAY_W = desktop ? 175 : 120;
+  const DAY_W = 175;
 
   // Single source of truth: fractional day offset from epoch
   const liveOff    = useRef(dayOffset(selected));
@@ -614,7 +614,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
   const selYear  = selDate.getFullYear();
 
   // Build day items: enough to fill screen
-  const N = desktop ? 6 : 5;
+  const N = 6;
   const dayItems = [];
   for (let i = -N; i <= N; i++) {
     dayItems.push({ d: offsetToDate(selInt + i), i });
@@ -638,7 +638,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     animateTo(targetOffset);
   };
 
-  const MAX_EVENTS = desktop ? 5 : 3;
+  const MAX_EVENTS = 5;
 
   return (
     <div style={{userSelect:"none", display:"flex", flexDirection:"column"}}>
@@ -663,18 +663,18 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       {/* ── Day columns with events ──────────────────────────────────────── */}
       <div style={{
         overflow:"hidden", position:"relative",
-        touchAction:"none", cursor: desktop ? "grab" : "default",
+        touchAction:"none", cursor:"grab",
         padding:"8px 0 12px",
-        height: desktop ? 292 : 240,
+        height: 292,
         flexShrink: 0,
       }}
         onTouchStart={onTouchStart}
         onTouchMove={onTouchMove}
         onTouchEnd={onTouchEnd}
-        onMouseDown={desktop ? e => { onTouchStart({touches:[{clientX:e.clientX}]}); } : undefined}
-        onMouseMove={desktop ? e => { if(e.buttons!==1)return; onTouchMove({preventDefault:()=>{},touches:[{clientX:e.clientX}]}); } : undefined}
-        onMouseUp={desktop ? () => { onTouchEnd(); } : undefined}
-        onMouseLeave={desktop ? e => { if(e.buttons===1) onTouchEnd(); } : undefined}
+        onMouseDown={e => { onTouchStart({touches:[{clientX:e.clientX}]}); }}
+        onMouseMove={e => { if(e.buttons!==1)return; onTouchMove({preventDefault:()=>{},touches:[{clientX:e.clientX}]}); }}
+        onMouseUp={() => { onTouchEnd(); }}
+        onMouseLeave={e => { if(e.buttons===1) onTouchEnd(); }}
       >
         {/* Scrolling row */}
         <div style={{
@@ -704,7 +704,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   borderRight: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
                   background: isCtr ? `${C.accent}08` : "transparent",
                   borderRadius: 6,
-                  height: desktop ? 272 : 220,
+                  height: 272,
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
@@ -1492,7 +1492,7 @@ function InsightsCard({date, token, userId, healthKey}) {
   return (
     <Widget label="Insights" color={C.muted} slim>
       {/* Fixed responsive height — content scrolls inside, no scrollbar visible */}
-      <div style={{ height: "14vh", minHeight: 80, maxHeight: 160, overflowY: "auto", scrollbarWidth: "none" }}>
+      <div style={{ height: "clamp(80px, 10vh, 120px)", overflowY: "auto", scrollbarWidth: "none" }}>
         <div style={{ opacity: busy && !text ? 0 : 1, transition: "opacity 0.3s ease" }}>
           {error && (
             <div style={{ fontFamily: mono, fontSize:13, color: C.red, lineHeight: 1.6 }}>{error}</div>
