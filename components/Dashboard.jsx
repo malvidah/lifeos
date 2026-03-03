@@ -5,31 +5,28 @@ import { createClient } from "../lib/supabase.js";
 
 const THEMES = {
   dark: {
-    // Neutral near-black — bg and topbar (surface) are same dark family
-    // cards sit 1 step lighter so content areas are just barely visible
-    bg:"#0E0D14",      surface:"#16151F",   card:"#1E1C28",
-    border:"#26243A",  border2:"#302E44",
-    text:"#E4DDD4",    muted:"#686460",     dim:"#2C2A28",
-    // Orange-gold accent — warm, glowing
-    accent:"#E8903A",
-    green:"#3E9E6A",   blue:"#5490C8",
-    purple:"#9B6FD4",  red:"#C05858",       orange:"#E8903A",
-    yellow:"#D4A030",
-    shadow:"0 1px 3px rgba(0,0,0,0.7),0 4px 20px rgba(0,0,0,0.4)",
-    shadowSm:"0 1px 3px rgba(0,0,0,0.5)",
+    // Warm dark — topbar is the reference tone, bg slightly lighter, cards darker
+    bg:"#1C1814",      surface:"#231E18",   card:"#2A2420",
+    border:"#38302A",  border2:"#46403A",
+    text:"#E8DDD0",    muted:"#7A6E64",     dim:"#3A332E",
+    accent:"#D4882A",
+    green:"#4A9E6A",   blue:"#4A80B0",
+    purple:"#906AC0",  red:"#B85040",       orange:"#D4882A",
+    yellow:"#C09030",
+    shadow:"0 1px 3px rgba(0,0,0,0.6),0 4px 16px rgba(0,0,0,0.35)",
+    shadowSm:"0 1px 3px rgba(0,0,0,0.4)",
   },
   light: {
-    // Warm paper — Substack tones, topbar (surface) and cards in same cream family
-    bg:"#C4BAB0",      surface:"#E5DED2",   card:"#EDE8E0",
-    border:"#DAD2C2",  border2:"#C8C0B0",
-    text:"#3D2F20",    muted:"#8C8074",     dim:"#C0B8AC",
-    // Orange-gold accent — same family as dark, adjusted for light bg contrast
-    accent:"#C87818",
-    green:"#3A7050",   blue:"#3A6898",
-    purple:"#6850A0",  red:"#904038",       orange:"#C87818",
-    yellow:"#907018",
-    shadow:"0 1px 2px rgba(44,32,16,0.08),0 3px 10px rgba(44,32,16,0.05)",
-    shadowSm:"0 1px 2px rgba(44,32,16,0.06)",
+    // Warm paper — bg is darker taupe, surface/topbar mid, cards lightest cream
+    bg:"#C8BEB4",      surface:"#E2D9CE",   card:"#EDE6DC",
+    border:"#D4CAC0",  border2:"#BEB5AA",
+    text:"#3A2E22",    muted:"#8A7E72",     dim:"#B8B0A6",
+    accent:"#C07818",
+    green:"#3A7050",   blue:"#3A6490",
+    purple:"#68509A",  red:"#8A3C36",       orange:"#C07818",
+    yellow:"#8A6C18",
+    shadow:"0 1px 2px rgba(40,28,16,0.08),0 3px 10px rgba(40,28,16,0.05)",
+    shadowSm:"0 1px 2px rgba(40,28,16,0.06)",
   },
 };
 // C is set at render time via setTheme — default dark
