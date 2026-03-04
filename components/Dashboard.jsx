@@ -1960,7 +1960,24 @@ function Activity({date,token,userId}) {
     return { dist, pace };
   }
   function onKey(e,id,idx) {
-    if(e.key==="Enter"){e.preventDefault();const row=mkRow();const i=safe.findIndex(r=>r.id===id);setManualRows([...safe.slice(0,i+1),row,...safe.slice(i+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
+    if(e.key==="Enter"){
+      e.preventDefault();
+      // Parse and save dist/pace for current row before moving on
+      const cur=safe.find(r=>r.id===id);
+      if(cur?.text){
+        const {dist,pace}=parseActivityText(cur.text);
+        const updated=safe.map(r=>r.id===id?{...r,dist:dist||r.dist,pace:pace||r.pace}:r);
+        const newRow=mkRow();
+        const i=updated.findIndex(r=>r.id===id);
+        setManualRows([...updated.slice(0,i+1),newRow,...updated.slice(i+1)]);
+        if(cur.kcal===null&&!cur.estimating) runEstimate(id,cur.text);
+        setTimeout(()=>refs.current[newRow.id]?.focus(),30);
+      } else {
+        const row=mkRow();const i=safe.findIndex(r=>r.id===id);
+        setManualRows([...safe.slice(0,i+1),row,...safe.slice(i+1)]);
+        setTimeout(()=>refs.current[row.id]?.focus(),30);
+      }
+    }
     if(e.key==="Backspace"&&safe[idx]?.text===""&&safe.length>1){e.preventDefault();setManualRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
     if(e.key==="ArrowUp"&&idx>0){e.preventDefault();refs.current[safe[idx-1].id]?.focus();}
     if(e.key==="ArrowDown"&&idx<safe.length-1){e.preventDefault();refs.current[safe[idx+1].id]?.focus();}
@@ -2032,7 +2049,7 @@ function Activity({date,token,userId}) {
                 }
               }}
               onKeyDown={e=>onKey(e,row.id,idx)}
-              placeholder={idx===0&&mergedSynced.length===0?"What did you do?":idx===0?"+":""}
+              placeholder={idx===0&&mergedSynced.length===0?"What did you do?":""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
             <span style={row.dist ? colDist : colMuted(DCOL)}>{!row.text ? "" : row.dist||"—"}</span>
