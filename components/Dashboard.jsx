@@ -369,7 +369,7 @@ function Card({children,style={}}) {
 // ─── Widget card ─────────────────────────────────────────────────────────────
 function Widget({label,color,children,slim,collapsed,onToggle,headerRight}) {
   return (
-    <div style={slim ? {} : {height:"100%",display:"flex",flexDirection:"column"}}>
+    <div style={slim ? {} : {height:collapsed?"auto":"100%",display:"flex",flexDirection:"column"}}>
       <Card style={collapsed ? {height:"auto"} : {}}>
         <div style={{
           display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
@@ -1669,7 +1669,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   const refs = useRef({});
   const [tick, setTick] = useState(0);
 
-  const safe = Array.isArray(rows) && rows.length ? rows : [mkRow()];
+  const safe = (Array.isArray(rows) && rows.length ? rows : [mkRow()]).map(r => r.estimating ? {...r, estimating:false} : r);
   const estMap = (estimatesLoaded && savedEstimates && typeof savedEstimates === "object") ? savedEstimates : {};
 
   // Merge saved AI estimates into synced rows
@@ -1798,11 +1798,11 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
             {showProtein && (
               <span style={row.protein ? colProtein : colMutedProt}>
-                {row.estimating ? "…" : row.protein ? `${row.protein}g` : "—"}
+                {!row.text ? "" : row.estimating ? "…" : row.protein ? `${row.protein}g` : "—"}
               </span>
             )}
             <span style={row.kcal ? colKcal : colMutedEnrg}>
-              {row.estimating ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
+              {!row.text ? "" : row.estimating ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
             </span>
           </div>
         ))}
@@ -1952,7 +1952,7 @@ function Activity({date,token,userId}) {
     setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
   }
 
-  const KCOL=72, DCOL=60, PCOL=90;
+  const KCOL=72, DCOL=60, PCOL=100;
   const colDist  = {fontFamily:mono, fontSize:F.sm, color:C.blue,   flexShrink:0, width:DCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colPace  = {fontFamily:mono, fontSize:F.sm, color:C.green,  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal  = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
@@ -2500,7 +2500,7 @@ function ChatFloat({date, token, userId}) {
 const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>energy</span></span>;
 const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:60,textAlign:"center"}}>dist</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:90,textAlign:"center"}}>pace</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:100,textAlign:"center"}}>pace</span>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
@@ -2745,7 +2745,7 @@ export default function Dashboard() {
                 <div key={w.id} style={{
                   flex: mobile?"0 0 auto": collapseMap[w.id]?"0 0 auto":"1 1 0",
                   height: mobile?260:undefined,
-                  minHeight: mobile?0:160, overflow:"hidden", flexShrink:0}}>
+                  minHeight: mobile?0: collapseMap[w.id]?0:160, overflow:"hidden"}}>
                   <Widget label={w.label} color={w.color()}
                     collapsed={mobile?false:collapseMap[w.id]}
                     onToggle={mobile?undefined:toggleMap[w.id]}
