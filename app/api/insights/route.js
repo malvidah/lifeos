@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { isPremium, ANTHROPIC_KEY } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
 
-const CACHE_VERSION = 7;
+const CACHE_VERSION = 8;
 const DAY_NAMES     = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 function getUserClient(req) {
@@ -129,6 +129,11 @@ export async function POST(request) {
     const todayLine = formatDay(date, today);
     if (todayLine) lines.push(`Today: ${todayLine}`);
 
+    // Explicitly flag missing health/sleep data so AI doesn't infer from previous days
+    const hasTodayHealth = !!(today.health && (today.health.sleepScore || today.health.sleepHrs || today.health.readinessScore));
+    if (!hasTodayHealth) {
+      lines.push(`Today: no Oura data for last night (ring not worn or not yet synced) — do not infer or assume last night's sleep from previous nights`);\n    }
+
     if (recentDays.length) {
       lines.push('');
       for (const day of recentDays) {
@@ -166,7 +171,7 @@ export async function POST(request) {
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 160,
-        system: `You are a perceptive friend reading someone's daily log. Say the one thing most worth saying — it might be a health pattern, something from their notes, a connection between their body and what they've been doing, or just a small thing you noticed. Use everything: scores, workouts, meals, notes, tasks, last year. If today is light on data, speak to the week's shape. 2 sentences max. No markdown, no "Your [metric]" openers.`,
+        system: `You are a perceptive friend reading someone's daily log. Say the one thing most worth saying — it might be a health pattern, something from their notes, a connection between their body and what they've been doing, or just a small thing you noticed. Use everything: scores, workouts, meals, notes, tasks, last year. If today is light on data, speak to the week's shape. CRITICAL: sleep data is labeled by day — only reference "last night" sleep if today's entry explicitly contains sleep data. If today has no Oura/sleep data, acknowledge that and speak to trends or other data instead — never assume last night's sleep matches a previous night. 2 sentences max. No markdown, no "Your [metric]" openers.`,
         messages: [{ role: 'user', content: context }],
       }),
     });
