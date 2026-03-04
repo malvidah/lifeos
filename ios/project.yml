@@ -25,10 +25,37 @@ targets:
       - Assets.xcassets
     settings:
       base:
-        INFOPLIST_FILE: Sources/DayLab/Info.plist
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_BUNDLE_IDENTIFIER: me.daylab.app
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
         GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Sources/DayLab/Info.plist
         DEVELOPMENT_TEAM: AZ65YJVYKM
         CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1,2"
+    info:
+      path: Sources/DayLab/Info.plist
+      properties:
+        CFBundleIconName: AppIcon
+        CFBundleDisplayName: Day Lab
+        CFBundleName: Day Lab
+        CFBundleIdentifier: me.daylab.app
+        CFBundleVersion: "1"
+        CFBundleShortVersionString: "1.0.0"
+        CFBundlePackageType: APPL
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: false
+        UIUserInterfaceStyle: Dark
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        CFBundleURLTypes:
+          - CFBundleURLName: me.daylab.app
+            CFBundleURLSchemes:
+              - daylab
