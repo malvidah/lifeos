@@ -1,6 +1,6 @@
 {
   "name": "daylab",
-  "version": "1.0.2",
+  "version": "1.0.0",
   "description": "Day Lab — your AI dashboard",
   "main": "src/main.js",
   "author": "Marvin",
