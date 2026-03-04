@@ -1984,7 +1984,7 @@ function Activity({date,token,userId}) {
             <span style={row.dist ? colDist : colMuted(DCOL)}>{row.dist||"—"}</span>
             <span style={row.pace ? colPace : colMuted(PCOL)}>{row.pace?`${row.pace}/mi`:"—"}</span>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
-              {estimating.current.has(row.id)?"…":row.kcal||"—"}
+              {estimating.current.has(row.id)?"…":row.kcal?`-${row.kcal}`:"—"}
             </span>
           </div>
         ))}
@@ -2003,7 +2003,7 @@ function Activity({date,token,userId}) {
             <input value={row.pace||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,pace:e.target.value||null}:r))}
               placeholder="—" style={editCol(PCOL, row.pace?C.green:C.muted)}/>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
-              {row.estimating?"…":row.kcal||"—"}
+              {row.estimating?"…":row.kcal?`-${row.kcal}`:"—"}
             </span>
           </div>
         ))}
@@ -2018,7 +2018,7 @@ function Activity({date,token,userId}) {
             {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:C.green}}>{avgPaceFmt}/mi</span>}
           </div>
           <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
-            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>}
+            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>-{totalKcal}</span>}
           </div>
         </div>
       )}
