@@ -1748,14 +1748,20 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
 
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
     borderRadius:4, padding:"2px 8px", whiteSpace:"nowrap"};
-  const COL_W = 44;
+  const PROT_W = 44, ENRG_W = 60;
   const colProtein = {fontFamily:mono, fontSize:F.sm, color:C.blue, flexShrink:0,
-    width:COL_W, textAlign:"center", whiteSpace:"nowrap"};
+    width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0,
-    width:COL_W, textAlign:"center", whiteSpace:"nowrap"};
+    width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
+  const colMutedProt = {fontFamily:mono, fontSize:F.sm, color:C.muted, flexShrink:0,
+    width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
+  const colMutedEnrg = {fontFamily:mono, fontSize:F.sm, color:C.muted, flexShrink:0,
+    width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
   const rowStyle = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
-  const hdrCol = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
-    color:C.muted, flexShrink:0, textAlign:"center", width:COL_W};
+  const hdrColProt = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
+    color:C.muted, flexShrink:0, textAlign:"center", width:PROT_W};
+  const hdrColEnrg = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
+    color:C.muted, flexShrink:0, textAlign:"center", width:ENRG_W};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -1768,12 +1774,12 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
             </span>
             <SourceBadge source={row.source}/>
             {showProtein && (
-              <span style={colProtein}>
-                {estimating.current.has(row.id) ? "…" : row.protein || ""}
+              <span style={row.protein ? colProtein : colMutedProt}>
+                {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g` : "—"}
               </span>
             )}
-            <span style={colKcal}>
-              {estimating.current.has(row.id) ? "…" : row.kcal || ""}
+            <span style={row.kcal ? colKcal : colMutedEnrg}>
+              {estimating.current.has(row.id) ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
             </span>
           </div>
         ))}
@@ -1787,12 +1793,12 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
             {showProtein && (
-              <span style={colProtein}>
-                {row.estimating ? "…" : row.protein || ""}
+              <span style={row.protein ? colProtein : colMutedProt}>
+                {row.estimating ? "…" : row.protein ? `${row.protein}g` : "—"}
               </span>
             )}
-            <span style={colKcal}>
-              {row.estimating ? "…" : row.kcal || ""}
+            <span style={row.kcal ? colKcal : colMutedEnrg}>
+              {row.estimating ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
             </span>
           </div>
         ))}
@@ -1801,12 +1807,12 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:0,borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
           {showProtein && (
-            <div style={{width:44,display:"flex",justifyContent:"center"}}>
-              {totalProtein > 0 && <span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalProtein}</span>}
+            <div style={{width:PROT_W,display:"flex",justifyContent:"center"}}>
+              {totalProtein > 0 && <span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalProtein}g</span>}
             </div>
           )}
-          <div style={{width:44,display:"flex",justifyContent:"center"}}>
-            {totalKcal > 0 && <span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>}
+          <div style={{width:ENRG_W,display:"flex",justifyContent:"center"}}>
+            {totalKcal > 0 && <span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}kcal</span>}
           </div>
         </div>
       )}
@@ -1942,7 +1948,7 @@ function Activity({date,token,userId}) {
     setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
   }
 
-  const KCOL=48, DCOL=56, PCOL=84;
+  const KCOL=60, DCOL=56, PCOL=84;
   const colDist  = {fontFamily:mono, fontSize:F.sm, color:C.blue,   flexShrink:0, width:DCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colPace  = {fontFamily:mono, fontSize:F.sm, color:C.green,  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal  = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
@@ -1984,7 +1990,7 @@ function Activity({date,token,userId}) {
             <span style={row.dist ? colDist : colMuted(DCOL)}>{row.dist||"—"}</span>
             <span style={row.pace ? colPace : colMuted(PCOL)}>{row.pace?`${row.pace}/mi`:"—"}</span>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
-              {estimating.current.has(row.id)?"…":row.kcal?`-${row.kcal}`:"—"}
+              {estimating.current.has(row.id)?"…":row.kcal?`-${row.kcal}kcal`:"—"}
             </span>
           </div>
         ))}
@@ -2003,7 +2009,7 @@ function Activity({date,token,userId}) {
             <input value={row.pace||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,pace:e.target.value||null}:r))}
               placeholder="—" style={editCol(PCOL, row.pace?C.green:C.muted)}/>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
-              {row.estimating?"…":row.kcal?`-${row.kcal}`:"—"}
+              {row.estimating?"…":row.kcal?`-${row.kcal}kcal`:"—"}
             </span>
           </div>
         ))}
@@ -2018,7 +2024,7 @@ function Activity({date,token,userId}) {
             {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:C.green}}>{avgPaceFmt}/mi</span>}
           </div>
           <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
-            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>-{totalKcal}</span>}
+            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>-{totalKcal}kcal</span>}
           </div>
         </div>
       )}
@@ -2487,11 +2493,11 @@ function ChatFloat({date, token, userId}) {
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
-const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:48,textAlign:"center"}}>kcal</span></span>;
+const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:60,textAlign:"center"}}>energy</span></span>;
 const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:56,textAlign:"center"}}>dist</span>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:84,textAlign:"center"}}>pace</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:60,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
   {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
