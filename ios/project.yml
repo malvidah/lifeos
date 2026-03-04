@@ -16,7 +16,7 @@ settings:
     TARGETED_DEVICE_FAMILY: "1,2"  # iPhone + iPad
 
 targets:
-  DayLoop:
+  DayLab:
     type: application
     platform: iOS
     sources:
