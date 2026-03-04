@@ -1838,7 +1838,7 @@ function mergeWorkouts(ouraWorkouts, stravaActivities) {
     merged.push({ source:"strava", name:act.name, sport:act.sport||act.type,
       durationMins:act.duration?Math.round(act.duration/60):null,
       distance:act.distance, calories:act.calories,
-      avgHr:act.avgHr, startTime:act.startTime, id:act.id });
+      avgHr:act.avgHr, avgSpeed:act.avgSpeed, startTime:act.startTime, id:act.id });
   }
 
   // Add Oura workouts not already covered by a Strava entry
@@ -1879,6 +1879,16 @@ function Activity({date,token,userId}) {
         details: [
           w.durationMins ? fmtMins(w.durationMins) : null,
           w.distance ? `${(w.distance * 0.621371).toFixed(1)}mi` : null,
+          (w.distance && (w.sport||w.type||"").toLowerCase().includes("run"))
+            ? (()=>{
+                const mps = w.avgSpeed || (w.durationMins ? (w.distance*1000)/(w.durationMins*60) : null);
+                if (!mps) return null;
+                const secsPerMile = 1609.34 / mps;
+                const m = Math.floor(secsPerMile/60);
+                const s = Math.round(secsPerMile%60);
+                return `${m}:${String(s).padStart(2,"0")}/mi`;
+              })()
+            : null,
           w.avgHr ? `${w.avgHr}bpm` : null,
         ].filter(Boolean),
       }));
@@ -2144,6 +2154,7 @@ function ChatFloat({date, token, userId}) {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const useMobileRecorder = useRef(false);
+  const recordingCancelledRef = useRef(false);
   const [transcribing, setTranscribing] = useState(false);
   const inputRef = useRef(null);
   const statusTimer = useRef(null);
@@ -2204,13 +2215,14 @@ function ChatFloat({date, token, userId}) {
                 body: JSON.stringify({ audio: base64, mimeType }),
               });
               const data = await resp.json();
-              if (data.text) setInput(prev => prev ? prev + " " + data.text : data.text);
+              if (data.text && !recordingCancelledRef.current) setInput(prev => prev ? prev + " " + data.text : data.text);
               else showStatus(data.error || "Could not transcribe", false);
             } catch (e) {
               showStatus("Transcription failed", false);
             }
             setTranscribing(false);
           };
+          recordingCancelledRef.current = false;
           mediaRecorderRef.current = recorder;
           recorder.start();
           setListening(true);
@@ -2228,6 +2240,11 @@ function ChatFloat({date, token, userId}) {
     if (!input.trim() || busy) return;
     const userText = input.trim();
     setInput("");
+    if (mediaRecorderRef.current?.state === "recording") {
+      recordingCancelledRef.current = true;
+      mediaRecorderRef.current.stop();
+      setListening(false);
+    }
     setBusy(true);
     setStatus(null);
     try {
@@ -2380,11 +2397,12 @@ function ChatFloat({date, token, userId}) {
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
 const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span></span>;
+const ACT_HDR = <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span>;
 const WIDGETS = [
   {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
   {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals,    headerRight:()=>MEALS_HDR},
-  {id:"activity", label:"Activity", color:()=>C.green,  Comp:Activity},
+  {id:"activity", label:"Activity", color:()=>C.green,  Comp:Activity, headerRight:()=>ACT_HDR},
 ];
 const FULL_IDS = ["cal","health"];
 

@@ -95,6 +95,7 @@ export async function GET(request) {
       calories: a.calories || null,
       elevGain: a.total_elevation_gain ? Math.round(a.total_elevation_gain) : null,
       avgHr: a.average_heartrate ? Math.round(a.average_heartrate) : null,
+      avgSpeed: a.average_speed || null,   // m/s
       maxHr: a.max_heartrate ? Math.round(a.max_heartrate) : null,
       kudos: a.kudos_count,
       startTime: a.start_date_local,
