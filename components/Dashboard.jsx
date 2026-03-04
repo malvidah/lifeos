@@ -42,8 +42,8 @@ function useIsMobile() {
   const [mobile, setMobile] = useState(false); // always false on SSR
   useEffect(() => {
     let t;
-    const fn = () => { clearTimeout(t); t = setTimeout(() => setMobile(window.innerWidth < 900), 150); };
-    setMobile(window.innerWidth < 900); // immediate on mount, no debounce
+    const fn = () => { clearTimeout(t); t = setTimeout(() => setMobile(window.innerWidth < 1100), 150); };
+    setMobile(window.innerWidth < 1100); // immediate on mount, no debounce
     window.addEventListener("resize", fn);
     return () => { window.removeEventListener("resize", fn); clearTimeout(t); };
   }, []);
@@ -2678,7 +2678,7 @@ export default function Dashboard() {
         button{border-radius:0;}
         input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
         a{text-decoration:none;}
-        @media(max-width:900px){input,textarea,select{font-size:16px;}}
+        @media(max-width:1100px){input,textarea,select{font-size:16px;}}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
         @keyframes spin{to{transform:rotate(360deg)}}
@@ -2687,71 +2687,57 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>
 
-      {mobile ? (
-        /* ── MOBILE: single scrollable column ──────────────────────────── */
-        <div style={{flex:1,overflowY:"auto",padding:8,paddingBottom:80,display:"flex",flexDirection:"column",gap:8}}>
-          {/* Cal + Health */}
-          <div>
-            <CalStrip selected={selected} onSelect={setSelected}
-              events={events} setEvents={setEvents} healthDots={healthDots}
-              token={token}/>
-          </div>
-          <HealthStrip date={selected} token={token} userId={userId}
-            onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}/>
-          {/* Insights card — below health strip */}
-          <InsightsCard date={selected} token={token} userId={userId} healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
-          {/* Widgets stacked */}
-          {[leftWidget,...rightWidgets].map(w=>(
-            <div key={w.id} style={{height:260,flexShrink:0}}>
-              <Widget label={w.label} color={w.color()} headerRight={w.headerRight?.()}>
-                <w.Comp date={selected} token={token} userId={userId}/>
-              </Widget>
-            </div>
-          ))}
-        </div>
-      ) : (
-        /* ── DESKTOP: flex column, widgets fill remaining space ─────────── */
-        <div style={{flex:1,overflow:"hidden",padding:10,paddingBottom:72,display:"flex",flexDirection:"column",gap:8}}>
+      {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
+        <div style={{flex:1, overflow: mobile?"auto":"hidden", padding:mobile?8:10,
+          paddingBottom:72, display:"flex", flexDirection:"column", gap:8}}>
 
-          {/* Calendar — full width */}
+          {/* Calendar */}
           <div style={{flexShrink:0}}>
             <CalStrip selected={selected} onSelect={setSelected}
               events={events} setEvents={setEvents} healthDots={healthDots}
-              token={token} collapsed={calCollapsed} onToggle={toggleCal}/>
+              token={token} collapsed={mobile?false:calCollapsed} onToggle={mobile?undefined:toggleCal}/>
           </div>
 
-          {/* Health strip — full width */}
+          {/* Health */}
           <div style={{flexShrink:0}}>
             <HealthStrip date={selected} token={token} userId={userId}
               onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
-              collapsed={healthCollapsed} onToggle={toggleHealth}/>
+              collapsed={mobile?false:healthCollapsed} onToggle={mobile?undefined:toggleHealth}/>
           </div>
 
-          {/* Insights card — below health */}
+          {/* Insights */}
           <InsightsCard date={selected} token={token} userId={userId}
             healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
-            collapsed={insightCollapsed} onToggle={toggleInsight}/>
+            collapsed={mobile?false:insightCollapsed} onToggle={mobile?undefined:toggleInsight}/>
 
-          {/* Widgets — 2-col on wide desktop, single col when narrow */}
-          <div style={{display:"flex",gap:8,alignItems:"stretch",flex:"1 1 0",minHeight:200,
-            flexDirection: mobile ? "column" : "row", overflowY: mobile ? "auto" : "hidden"}}>
-            <div style={{flex: mobile ? "0 0 auto" : "2 1 0", minWidth:0, display:"flex", flexDirection:"column",
-              ...(mobile ? {height:260} : {})}}>
+          {/* Widgets — row on wide, column on narrow */}
+          <div style={{display:"flex", gap:8, flex: mobile?"0 0 auto":"1 1 0",
+            flexDirection: mobile?"column":"row",
+            alignItems:"stretch", minHeight: mobile?0:200}}>
+
+            {/* Notes — left on desktop, full-width on mobile */}
+            <div style={{flex: mobile?"0 0 auto":"2 1 0", minWidth:0,
+              display:"flex", flexDirection:"column",
+              height: mobile?260:undefined}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
-                collapsed={collapseMap[leftWidget.id]} onToggle={toggleMap[leftWidget.id]}
+                collapsed={mobile?false:collapseMap[leftWidget.id]}
+                onToggle={mobile?undefined:toggleMap[leftWidget.id]}
                 headerRight={leftWidget.headerRight?.()}>
                 <leftWidget.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
-            <div style={{flex: mobile ? "0 0 auto" : "1 1 0", minWidth:0, display:"flex",
-              flexDirection:"column", gap:8, ...(mobile ? {} : {})}}>
+
+            {/* Right widgets — column always */}
+            <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
+              display:"flex", flexDirection:"column", gap:8}}>
               {rightWidgets.map(w=>(
                 <div key={w.id} style={{
-                  flex: mobile ? "0 0 auto" : collapseMap[w.id] ? "0 0 auto" : "1 1 0",
-                  height: mobile ? 260 : undefined,
+                  flex: mobile?"0 0 auto": collapseMap[w.id]?"0 0 auto":"1 1 0",
+                  height: mobile?260:undefined,
                   minHeight:0, overflow:"hidden"}}>
                   <Widget label={w.label} color={w.color()}
-                    collapsed={collapseMap[w.id]} onToggle={toggleMap[w.id]}
+                    collapsed={mobile?false:collapseMap[w.id]}
+                    onToggle={mobile?undefined:toggleMap[w.id]}
                     headerRight={w.headerRight?.()}>
                     <w.Comp date={selected} token={token} userId={userId}/>
                   </Widget>
@@ -2760,7 +2746,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      )}
 
       {/* Floating chat pill — always visible, both mobile + desktop */}
       <ChatFloat date={selected} token={token} userId={userId}/>
