@@ -2775,27 +2775,32 @@ export default function Dashboard() {
               collapsed={mobile?false:healthCollapsed} onToggle={mobile?undefined:toggleHealth}/>
           </div>
 
-          {/* Insights */}
-          <InsightsCard date={selected} token={token} userId={userId}
-            healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
-            collapsed={mobile?false:insightCollapsed} onToggle={mobile?undefined:toggleInsight}/>
-
           {/* Widgets — row on wide, column on narrow */}
           <div style={{display:"flex", gap:8, flex: mobile?"0 0 auto":"1 1 0",
             flexDirection: mobile?"column":"row",
-            alignItems:"stretch", minHeight: mobile?0:200, overflow:mobile?"visible":"hidden"}}>
+            alignItems:"stretch", minHeight: mobile?0:200, overflow:"visible"}}>
 
-            {/* Notes — left on desktop, full-width on mobile */}
+            {/* Left column: Insights + Notes */}
             <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
-              display:"flex", flexDirection:"column",
-              height: mobile?260:undefined, minHeight: mobile?0:undefined,
-              paddingBottom: mobile?0:80}}>
-              <Widget label={leftWidget.label} color={leftWidget.color()}
-                collapsed={mobile?false:collapseMap[leftWidget.id]}
-                onToggle={mobile?undefined:toggleMap[leftWidget.id]}
-                headerRight={leftWidget.headerRight?.()}>
-                <leftWidget.Comp date={selected} token={token} userId={userId}/>
-              </Widget>
+              display:"flex", flexDirection:"column", gap:8,
+              height: mobile?undefined:"100%", paddingBottom: mobile?0:80}}>
+              {/* Insights */}
+              <div style={{flexShrink:0}}>
+                <InsightsCard date={selected} token={token} userId={userId}
+                  healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
+                  collapsed={mobile?false:insightCollapsed} onToggle={mobile?undefined:toggleInsight}/>
+              </div>
+              {/* Notes */}
+              <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
+                display:"flex", flexDirection:"column",
+                height: mobile?260:undefined, minHeight: mobile?0:undefined}}>
+                <Widget label={leftWidget.label} color={leftWidget.color()}
+                  collapsed={mobile?false:collapseMap[leftWidget.id]}
+                  onToggle={mobile?undefined:toggleMap[leftWidget.id]}
+                  headerRight={leftWidget.headerRight?.()}>
+                  <leftWidget.Comp date={selected} token={token} userId={userId}/>
+                </Widget>
+              </div>
             </div>
 
             {/* Right widgets — column always */}
