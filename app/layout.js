@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Day Loop",
+  title: "Day Lab",
   description: "Your personal health and life dashboard.",
   icons: {
     icon: [

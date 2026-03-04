@@ -19,8 +19,8 @@ const SERVICE = () => createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const RESOURCE_URL = 'https://dayloop.me';
-const METADATA_URL = `${RESOURCE_URL}/.well-known/oauth-protected-resource`;
+const getResourceUrl = (req) => `https://${req.headers.get('host') || 'dayloop.me'}`;
+// `${getResourceUrl(request)}/.well-known/oauth-protected-resource` derived per-request
 
 function unauthorizedResponse(msg = 'Authentication required') {
   return new Response(JSON.stringify({ error: 'unauthorized', message: msg }), {
@@ -28,7 +28,7 @@ function unauthorizedResponse(msg = 'Authentication required') {
     headers: {
       'Content-Type': 'application/json',
       // RFC9728 §5.1 — tell client where to discover auth server
-      'WWW-Authenticate': `Bearer realm="${RESOURCE_URL}", resource_metadata="${METADATA_URL}"`,
+      'WWW-Authenticate': `Bearer realm="${getResourceUrl(request)}", resource_metadata="${`${getResourceUrl(request)}/.well-known/oauth-protected-resource`}"`,
       'MCP-Protocol-Version': PROTOCOL_VERSION,
     }
   });

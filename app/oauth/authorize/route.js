@@ -87,7 +87,7 @@ export async function GET(request) {
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Connect Day Loop to ${client.client_name}</title>
+  <title>Connect Day Lab to ${client.client_name}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     body{background:#0E0E0F;color:#E8E0D4;font-family:'Georgia',serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
@@ -122,14 +122,14 @@ export async function GET(request) {
 </head>
 <body>
 <div class="card">
-  <div class="logo">Day Loop</div>
+  <div class="logo">Day Lab</div>
   <div class="arrow">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3"/><polyline points="13 8 18 12 13 16"/><line x1="18" y1="12" x2="6" y2="12"/></svg>
     <div class="client-name">${client.client_name}</div>
   </div>
 
   ${user ? `
-  <h1>Allow access to your Day Loop?</h1>
+  <h1>Allow access to your Day Lab?</h1>
   <p class="sub">Signed in as <span style="color:#C4A882">${user.email}</span></p>
 
   <div class="perms">
@@ -160,8 +160,8 @@ export async function GET(request) {
   </form>
   <div class="switch-link">Not you? <a href="/oauth/authorize?${searchParams.toString()}&logout=1">Sign in with a different account</a></div>
   ` : `
-  <h1>Sign in to connect Day Loop</h1>
-  <p class="sub" style="margin-bottom:20px">${client.client_name} is requesting access to your Day Loop</p>
+  <h1>Sign in to connect Day Lab</h1>
+  <p class="sub" style="margin-bottom:20px">${client.client_name} is requesting access to your Day Lab</p>
   <div class="login-label">Sign in to continue</div>
   <div id="auth-area">
     <a href="#" id="google-btn" class="btn-google">

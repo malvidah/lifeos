@@ -1,7 +1,7 @@
 // RFC9728 — OAuth 2.0 Protected Resource Metadata
 // Claude fetches this first to discover the authorization server
-export async function GET() {
-  const base = 'https://dayloop.me';
+export async function GET(request) {
+  const base = `https://${request.headers.get('host') || 'dayloop.me'}`;
   return Response.json({
     resource: `${base}/mcp`,
     authorization_servers: [`${base}`],

@@ -550,7 +550,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Strava */}
           <div style={row}>
-            <SectionLabel info="Syncs your runs, rides, and workouts automatically. Click to authorize Day Loop to read your Strava activity data.">
+            <SectionLabel info="Syncs your runs, rides, and workouts automatically. Click to authorize Day Lab to read your Strava activity data.">
               Strava {stravaConnected&&<span style={{color:C.green}}>✓</span>}
             </SectionLabel>
             <button
@@ -570,7 +570,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Claude */}
           <div style={row}>
-            <SectionLabel info="Adds Day Loop as an MCP connector in Claude. Once connected, you can say things like 'add a task' or 'what's on my calendar' directly in any Claude conversation.">
+            <SectionLabel info="Adds Day Lab as an MCP connector in Claude. Once connected, you can say things like 'add a task' or 'what's on my calendar' directly in any Claude conversation.">
               Claude
             </SectionLabel>
             <div style={{
@@ -581,11 +581,11 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               <span style={{flex:1,fontFamily:mono,fontSize:F.sm,color:C.accent,
                 userSelect:"all",letterSpacing:"0.02em",overflow:"hidden",
                 textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                https://dayloop.me/mcp
+                {window.location.origin}/mcp
               </span>
               <button
                 onClick={()=>{
-                  navigator.clipboard.writeText("https://dayloop.me/mcp");
+                  navigator.clipboard.writeText(window.location.origin + "/mcp");
                   setUrlCopied(true);setTimeout(()=>setUrlCopied(false),2000);
                 }}
                 style={{background:"none",border:"none",cursor:"pointer",
@@ -700,7 +700,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
         <span style={{
           fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
           color:C.text,
-        }}>Day Loop</span>
+        }}>Day Lab</span>
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
@@ -1968,7 +1968,7 @@ function LoginScreen() {
           display:"inline-block",
           fontFamily:serif,fontSize:F.lg,letterSpacing:"-0.02em",
           color:C.text,marginBottom:24,
-        }}>Day Loop</div>
+        }}>Day Lab</div>
         <div style={{fontFamily:mono,fontSize:F.sm,color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
           setLoading(true);

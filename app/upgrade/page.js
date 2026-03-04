@@ -122,7 +122,7 @@ function PricingView({ session, onStartCheckout }) {
   return (
     <div style={{ padding: '60px 24px 80px', maxWidth: 440, margin: '0 auto' }}>
       <div style={{ textAlign: 'center', marginBottom: 44 }}>
-        <a href="/" style={{ fontFamily: mono, fontSize: 9, color: muted, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none' }}>Day Loop</a>
+        <a href="/" style={{ fontFamily: mono, fontSize: 9, color: muted, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none' }}>Day Lab</a>
         <h1 style={{ fontFamily: serif, fontSize: 38, color: text, margin: '16px 0 10px', letterSpacing: '-0.02em', fontWeight: 400 }}>Premium</h1>
         <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: 0 }}>
           AI that knows your body,<br/>your patterns, and your day.
@@ -228,7 +228,7 @@ function CheckoutView({ clientSecret, onCancel }) {
   return (
     <div style={{ maxWidth: 480, margin: '0 auto', padding: '40px 24px 80px' }}>
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
-        <a href="/" style={{ fontFamily: mono, fontSize: 9, color: muted, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none' }}>Day Loop</a>
+        <a href="/" style={{ fontFamily: mono, fontSize: 9, color: muted, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none' }}>Day Lab</a>
         <h1 style={{ fontFamily: serif, fontSize: 28, color: text, margin: '14px 0 0', letterSpacing: '-0.02em', fontWeight: 400 }}>Complete your order</h1>
       </div>
       <div ref={containerRef} style={{ borderRadius: 12, overflow: 'hidden' }} />

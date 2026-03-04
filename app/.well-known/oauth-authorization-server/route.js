@@ -1,7 +1,7 @@
 // RFC8414 — OAuth 2.0 Authorization Server Metadata
 // Claude reads this to know where to register, authorize, and get tokens
-export async function GET() {
-  const base = 'https://dayloop.me';
+export async function GET(request) {
+  const base = `https://${request.headers.get('host') || 'dayloop.me'}`;
   return Response.json({
     issuer: base,
     authorization_endpoint: `${base}/oauth/authorize`,
