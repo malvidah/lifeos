@@ -1623,7 +1623,7 @@ function Notes({date,userId,token}) {
   );
 
   const textareaStyle = {
-    fontFamily:serif, fontSize:16, lineHeight:"1.7",
+    fontFamily:serif, fontSize:F.md, lineHeight:"1.7",
     padding:0, margin:0, border:"none", outline:"none",
     width:"100%", height:"100%", resize:"none",
     background:"transparent", color:C.text, caretColor:C.accent,
@@ -2678,7 +2678,7 @@ export default function Dashboard() {
         button{border-radius:0;}
         input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
         a{text-decoration:none;}
-        input,textarea,select{font-size:16px;}
+        @media(max-width:900px){input,textarea,select{font-size:16px;}}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
         @keyframes spin{to{transform:rotate(360deg)}}
