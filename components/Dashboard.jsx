@@ -42,8 +42,8 @@ function useIsMobile() {
   const [mobile, setMobile] = useState(false); // always false on SSR
   useEffect(() => {
     let t;
-    const fn = () => { clearTimeout(t); t = setTimeout(() => setMobile(window.innerWidth < 1200), 150); };
-    setMobile(window.innerWidth < 1200); // immediate on mount, no debounce
+    const fn = () => { clearTimeout(t); t = setTimeout(() => setMobile(window.innerWidth < 768), 150); };
+    setMobile(window.innerWidth < 768); // immediate on mount, no debounce
     window.addEventListener("resize", fn);
     return () => { window.removeEventListener("resize", fn); clearTimeout(t); };
   }, []);
@@ -2684,7 +2684,7 @@ export default function Dashboard() {
         button{border-radius:0;}
         input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
         a{text-decoration:none;}
-        @media(max-width:1200px){input,textarea,select{font-size:16px;}}
+        @media(max-width:768px){input,textarea,select{font-size:16px;}}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
         @keyframes spin{to{transform:rotate(360deg)}}
@@ -2694,8 +2694,8 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, overflow: mobile?"auto":"hidden", padding:mobile?8:10,
-          paddingBottom:72, display:"flex", flexDirection:"column", gap:8}}>
+        <div style={{flex:1, overflowY:"auto", padding:mobile?8:10,
+          paddingBottom:80, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
@@ -2717,14 +2717,14 @@ export default function Dashboard() {
             collapsed={mobile?false:insightCollapsed} onToggle={mobile?undefined:toggleInsight}/>
 
           {/* Widgets — row on wide, column on narrow */}
-          <div style={{display:"flex", gap:8, flex: mobile?"0 0 auto":"1 1 0",
+          <div style={{display:"flex", gap:8, flex:"0 0 auto",
             flexDirection: mobile?"column":"row",
-            alignItems:"stretch", minHeight: mobile?0:200}}>
+            alignItems:"stretch"}}>
 
             {/* Notes — left on desktop, full-width on mobile */}
             <div style={{flex: mobile?"0 0 auto":"2 1 0", minWidth:0,
               display:"flex", flexDirection:"column",
-              height: mobile?260:undefined}}>
+              minHeight: mobile?260:380}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
                 collapsed={mobile?false:collapseMap[leftWidget.id]}
                 onToggle={mobile?undefined:toggleMap[leftWidget.id]}
@@ -2735,13 +2735,12 @@ export default function Dashboard() {
 
             {/* Right widgets — column always */}
             <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
-              display:"flex", flexDirection:"column", gap:8,
-              overflowY: mobile?"visible":"auto", paddingBottom: mobile?0:8}}>
+              display:"flex", flexDirection:"column", gap:8}}>
               {rightWidgets.map(w=>(
                 <div key={w.id} style={{
-                  flex: mobile?"0 0 auto": collapseMap[w.id]?"0 0 auto":"1 1 0",
-                  height: mobile?260:undefined,
-                  minHeight: mobile?0:180, overflow:"hidden", flexShrink:0}}>
+                  flex:"0 0 auto",
+                  height: mobile?260:220,
+                  overflow:"hidden"}}>
                   <Widget label={w.label} color={w.color()}
                     collapsed={mobile?false:collapseMap[w.id]}
                     onToggle={mobile?undefined:toggleMap[w.id]}
