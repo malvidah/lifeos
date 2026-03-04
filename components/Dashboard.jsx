@@ -41,10 +41,11 @@ const F     = { lg:18, md:15, sm:12 }; // 3 sizes only
 function useIsMobile() {
   const [mobile, setMobile] = useState(false); // always false on SSR
   useEffect(() => {
-    const fn = () => setMobile(window.innerWidth < 900);
-    fn(); // set correct value immediately on mount
+    let t;
+    const fn = () => { clearTimeout(t); t = setTimeout(() => setMobile(window.innerWidth < 900), 150); };
+    setMobile(window.innerWidth < 900); // immediate on mount, no debounce
     window.addEventListener("resize", fn);
-    return () => window.removeEventListener("resize", fn);
+    return () => { window.removeEventListener("resize", fn); clearTimeout(t); };
   }, []);
   return mobile;
 }
@@ -2731,18 +2732,24 @@ export default function Dashboard() {
             healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
             collapsed={insightCollapsed} onToggle={toggleInsight}/>
 
-          {/* Widgets — notes on left (wider), tasks+meals+activity on right, grow to fill */}
-          <div style={{display:"flex",gap:8,alignItems:"stretch",flex:"1 1 0",minHeight:200}}>
-            <div style={{flex:"2 1 0",minWidth:0,display:"flex",flexDirection:"column"}}>
+          {/* Widgets — 2-col on wide desktop, single col when narrow */}
+          <div style={{display:"flex",gap:8,alignItems:"stretch",flex:"1 1 0",minHeight:200,
+            flexDirection: mobile ? "column" : "row", overflowY: mobile ? "auto" : "hidden"}}>
+            <div style={{flex: mobile ? "0 0 auto" : "2 1 0", minWidth:0, display:"flex", flexDirection:"column",
+              ...(mobile ? {height:260} : {})}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
                 collapsed={collapseMap[leftWidget.id]} onToggle={toggleMap[leftWidget.id]}
                 headerRight={leftWidget.headerRight?.()}>
                 <leftWidget.Comp date={selected} token={token} userId={userId}/>
               </Widget>
             </div>
-            <div style={{flex:"1 1 0",minWidth:0,display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{flex: mobile ? "0 0 auto" : "1 1 0", minWidth:0, display:"flex",
+              flexDirection:"column", gap:8, ...(mobile ? {} : {})}}>
               {rightWidgets.map(w=>(
-                <div key={w.id} style={{flex:collapseMap[w.id]?"0 0 auto":"1 1 0",minHeight:0,overflow:"hidden"}}>
+                <div key={w.id} style={{
+                  flex: mobile ? "0 0 auto" : collapseMap[w.id] ? "0 0 auto" : "1 1 0",
+                  height: mobile ? 260 : undefined,
+                  minHeight:0, overflow:"hidden"}}>
                   <Widget label={w.label} color={w.color()}
                     collapsed={collapseMap[w.id]} onToggle={toggleMap[w.id]}
                     headerRight={w.headerRight?.()}>
