@@ -42,8 +42,8 @@ function useIsMobile() {
   const [mobile, setMobile] = useState(false); // always false on SSR
   useEffect(() => {
     let t;
-    const fn = () => { clearTimeout(t); t = setTimeout(() => setMobile(window.innerWidth < 1100), 150); };
-    setMobile(window.innerWidth < 1100); // immediate on mount, no debounce
+    const fn = () => { clearTimeout(t); t = setTimeout(() => setMobile(window.innerWidth < 1200), 150); };
+    setMobile(window.innerWidth < 1200); // immediate on mount, no debounce
     window.addEventListener("resize", fn);
     return () => { window.removeEventListener("resize", fn); clearTimeout(t); };
   }, []);
@@ -1748,7 +1748,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
 
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
     borderRadius:4, padding:"2px 8px", whiteSpace:"nowrap"};
-  const PROT_W = 44, ENRG_W = 60;
+  const PROT_W = 50, ENRG_W = 72;
   const colProtein = {fontFamily:mono, fontSize:F.sm, color:C.blue, flexShrink:0,
     width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0,
@@ -1789,7 +1789,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
               onChange={e => setRows(safe.map(r => r.id===row.id ? {...r,text:e.target.value,kcal:null,protein:null} : r))}
               onBlur={e => { const r=safe.find(r=>r.id===row.id); if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating) runEstimate(row.id,e.target.value); }}
               onKeyDown={e => onKey(e,row.id,idx)}
-              placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+ add more" : ""}
+              placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+" : ""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
             {showProtein && (
@@ -1948,7 +1948,7 @@ function Activity({date,token,userId}) {
     setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
   }
 
-  const KCOL=60, DCOL=56, PCOL=84;
+  const KCOL=72, DCOL=60, PCOL=90;
   const colDist  = {fontFamily:mono, fontSize:F.sm, color:C.blue,   flexShrink:0, width:DCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colPace  = {fontFamily:mono, fontSize:F.sm, color:C.green,  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal  = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
@@ -2000,7 +2000,7 @@ function Activity({date,token,userId}) {
               onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
               onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
               onKeyDown={e=>onKey(e,row.id,idx)}
-              placeholder={idx===0&&mergedSynced.length===0?"What did you do?":idx===0?"+ add more":""}
+              placeholder={idx===0&&mergedSynced.length===0?"What did you do?":idx===0?"+":""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
             <span style={{width:4}}/>
@@ -2493,11 +2493,11 @@ function ChatFloat({date, token, userId}) {
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
-const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:60,textAlign:"center"}}>energy</span></span>;
+const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>energy</span></span>;
 const ACT_HDR = <span style={{display:"flex",gap:0}}>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:56,textAlign:"center"}}>dist</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:84,textAlign:"center"}}>pace</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:60,textAlign:"center"}}>energy</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:60,textAlign:"center"}}>dist</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:90,textAlign:"center"}}>pace</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
   {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
@@ -2684,7 +2684,7 @@ export default function Dashboard() {
         button{border-radius:0;}
         input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
         a{text-decoration:none;}
-        @media(max-width:1100px){input,textarea,select{font-size:16px;}}
+        @media(max-width:1200px){input,textarea,select{font-size:16px;}}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
         @keyframes spin{to{transform:rotate(360deg)}}
@@ -2735,12 +2735,13 @@ export default function Dashboard() {
 
             {/* Right widgets — column always */}
             <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
-              display:"flex", flexDirection:"column", gap:8}}>
+              display:"flex", flexDirection:"column", gap:8,
+              overflowY: mobile?"visible":"auto", paddingBottom: mobile?0:8}}>
               {rightWidgets.map(w=>(
                 <div key={w.id} style={{
                   flex: mobile?"0 0 auto": collapseMap[w.id]?"0 0 auto":"1 1 0",
                   height: mobile?260:undefined,
-                  minHeight:0, overflow:"hidden"}}>
+                  minHeight: mobile?0:180, overflow:"hidden", flexShrink:0}}>
                   <Widget label={w.label} color={w.color()}
                     collapsed={mobile?false:collapseMap[w.id]}
                     onToggle={mobile?undefined:toggleMap[w.id]}
