@@ -41,7 +41,7 @@ const F     = { lg:18, md:15, sm:12 }; // 3 sizes only
 function useIsMobile() {
   const [mobile, setMobile] = useState(false); // always false on SSR
   useEffect(() => {
-    const fn = () => setMobile(window.innerWidth < 768);
+    const fn = () => setMobile(window.innerWidth < 900);
     fn(); // set correct value immediately on mount
     window.addEventListener("resize", fn);
     return () => window.removeEventListener("resize", fn);
@@ -2006,17 +2006,10 @@ function Activity({date,token,userId}) {
         ))}
       </div>
       {showTotals && (
-        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:0,borderTop:`1px solid ${C.border}`}}>
-          <div style={{flex:1}}/>
-          <div style={{width:DCOL,display:"flex",justifyContent:"center"}}>
-            {totalDistMi>0&&<span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalDistMi.toFixed(1)}mi</span>}
-          </div>
-          <div style={{width:PCOL,display:"flex",justifyContent:"center"}}>
-            {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:C.green}}>{avgPaceFmt}/mi</span>}
-          </div>
-          <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
-            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>}
-          </div>
+        <div style={{flexShrink:0,paddingTop:6,paddingBottom:2,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:6,borderTop:`1px solid ${C.border}`}}>
+          {totalDistMi>0&&<span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalDistMi.toFixed(1)}mi</span>}
+          {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:C.green}}>{avgPaceFmt}/mi</span>}
+          {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>}
         </div>
       )}
     </div>
