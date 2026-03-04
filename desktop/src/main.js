@@ -2,7 +2,7 @@ const { app, BrowserWindow, shell, session } = require('electron');
 const path = require('path');
 
 const APP_URL  = 'https://daylab.me';
-const PROTOCOL = 'dayloop';
+const PROTOCOL = 'daylab';
 
 app.setAsDefaultProtocolClient(PROTOCOL);
 

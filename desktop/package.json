@@ -1,5 +1,5 @@
 {
-  "name": "dayloop",
+  "name": "daylab",
   "version": "1.0.0",
   "description": "Day Lab — your AI dashboard",
   "main": "src/main.js",
@@ -16,7 +16,7 @@
     "electron-builder": "^24.0.0"
   },
   "build": {
-    "appId": "com.dayloop.app",
+    "appId": "com.daylab.app",
     "productName": "Day Lab",
     "copyright": "Copyright © 2026 Day Lab",
     "directories": {
@@ -38,8 +38,8 @@
       "extendInfo": {
         "CFBundleURLTypes": [
           {
-            "CFBundleURLName": "com.dayloop.app",
-            "CFBundleURLSchemes": ["dayloop"]
+            "CFBundleURLName": "com.daylab.app",
+            "CFBundleURLSchemes": ["daylab"]
           }
         ]
       }
@@ -56,7 +56,7 @@
     "protocols": [
       {
         "name": "Day Lab",
-        "schemes": ["dayloop"]
+        "schemes": ["daylab"]
       }
     ],
     "publish": [

@@ -1,6 +1,6 @@
-# Day Loop — Mac Desktop App
+# Day Lab — Mac Desktop App
 
-Electron wrapper that loads the live Day Loop web app in a native Mac window.
+Electron wrapper that loads the live Day Lab web app in a native Mac window.
 Vibrancy, hidden title bar, native traffic lights. Always up to date — no re-downloads needed for web changes.
 
 ## Local development
@@ -20,7 +20,7 @@ npm install
 npm run build          # universal (arm64 + x64)
 npm run build:arm      # Apple Silicon only
 npm run build:intel    # Intel only
-# Output: desktop/dist/Day Loop-1.0.0-arm64.dmg etc
+# Output: desktop/dist/Day Lab-1.0.0-arm64.dmg etc
 ```
 
 ## Release a new version
@@ -36,10 +36,10 @@ npm run build:intel    # Intel only
 
 ## OAuth / deep linking
 
-The app registers the `dayloop://` URL scheme. When Supabase redirects after Google sign-in,
-it sends the user to `dayloop://auth/callback?code=...` which the app intercepts and translates
+The app registers the `daylab://` URL scheme. When Supabase redirects after Google sign-in,
+it sends the user to `daylab://auth/callback?code=...` which the app intercepts and translates
 back into a page load inside the window. No extra Supabase config needed beyond adding
-`dayloop://` as an allowed redirect URL in your project.
+`daylab://` as an allowed redirect URL in your project.
 
 ## Code signing (optional)
 
