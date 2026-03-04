@@ -6,15 +6,6 @@ options:
   xcodeVersion: "15"
   createIntermediateGroups: true
 
-settings:
-  base:
-    PRODUCT_NAME: "Day Lab"
-    MARKETING_VERSION: "1.0.0"
-    CURRENT_PROJECT_VERSION: "1"
-    SWIFT_VERSION: "5.9"
-    ENABLE_BITCODE: NO
-    TARGETED_DEVICE_FAMILY: "1,2"
-
 targets:
   DayLab:
     type: application
@@ -25,37 +16,23 @@ targets:
       - Assets.xcassets
     settings:
       base:
+        PRODUCT_NAME: "Day Lab"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.9"
+        ENABLE_BITCODE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
         PRODUCT_BUNDLE_IDENTIFIER: me.daylab.app
-        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
-        GENERATE_INFOPLIST_FILE: NO
-        INFOPLIST_FILE: Sources/DayLab/Info.plist
         DEVELOPMENT_TEAM: AZ65YJVYKM
         CODE_SIGN_STYLE: Automatic
-        TARGETED_DEVICE_FAMILY: "1,2"
-    info:
-      path: Sources/DayLab/Info.plist
-      properties:
-        CFBundleIconName: AppIcon
-        CFBundleDisplayName: Day Lab
-        CFBundleName: Day Lab
-        CFBundleIdentifier: me.daylab.app
-        CFBundleVersion: "1"
-        CFBundleShortVersionString: "1.0.0"
-        CFBundlePackageType: APPL
-        LSRequiresIPhoneOS: true
-        UILaunchScreen: {}
-        UIStatusBarStyle: UIStatusBarStyleLightContent
-        UIViewControllerBasedStatusBarAppearance: false
-        UIUserInterfaceStyle: Dark
-        UISupportedInterfaceOrientations:
-          - UIInterfaceOrientationPortrait
-        UISupportedInterfaceOrientations~ipad:
-          - UIInterfaceOrientationPortrait
-          - UIInterfaceOrientationPortraitUpsideDown
-          - UIInterfaceOrientationLandscapeLeft
-          - UIInterfaceOrientationLandscapeRight
-        CFBundleURLTypes:
-          - CFBundleURLName: me.daylab.app
-            CFBundleURLSchemes:
-              - daylab
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_FILE_OUTPUT_FORMAT: binary
+        INFOPLIST_KEY_CFBundleDisplayName: "Day Lab"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIStatusBarStyle: UIStatusBarStyleLightContent
+        INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance: NO
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+        INFOPLIST_OTHER: "$(SRCROOT)/Sources/DayLab/Info-additions.plist"
