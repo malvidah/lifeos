@@ -2310,20 +2310,10 @@ function ChatFloat({date, token, userId}) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null); // {text, ok} | null
   const [listening, setListening] = useState(false);
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-  const useMobileRecorder = useRef(false);
-  const recordingCancelledRef = useRef(false);
   const [transcribing, setTranscribing] = useState(false);
+  const recognizerRef = useRef(null);
   const inputRef = useRef(null);
   const statusTimer = useRef(null);
-
-  // Speech recognition — MediaRecorder everywhere (Web Speech API has unreliable network deps)
-  useEffect(() => {
-    if (typeof navigator !== "undefined" && navigator.mediaDevices) {
-      useMobileRecorder.current = true;
-    }
-  }, []);
 
   function showStatus(text, ok) {
     clearTimeout(statusTimer.current);
@@ -2331,52 +2321,33 @@ function ChatFloat({date, token, userId}) {
     statusTimer.current = setTimeout(() => setStatus(null), ok ? 3000 : 5000);
   }
 
-  async function toggleMic() {
-    if (useMobileRecorder.current) {
-      if (listening) {
-        mediaRecorderRef.current?.stop();
-        setListening(false);
-      } else {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-            : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-            : 'audio/mp4';
-          const recorder = new MediaRecorder(stream, { mimeType });
-          audioChunksRef.current = [];
-          recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
-          recorder.onstop = async () => {
-            stream.getTracks().forEach(t => t.stop());
-            const blob = new Blob(audioChunksRef.current, { type: mimeType });
-            setTranscribing(true);
-            try {
-              const base64 = await new Promise((res) => {
-                const reader = new FileReader();
-                reader.onload = () => res(reader.result.split(",")[1]);
-                reader.readAsDataURL(blob);
-              });
-              const resp = await fetch("/api/transcribe", {
-                method: "POST",
-                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-                body: JSON.stringify({ audio: base64, mimeType }),
-              });
-              const data = await resp.json();
-              if (data.text && !recordingCancelledRef.current) setInput(prev => prev ? prev + " " + data.text : data.text);
-              else showStatus(data.error || "Could not transcribe", false);
-            } catch (e) {
-              showStatus("Transcription failed", false);
-            }
-            setTranscribing(false);
-          };
-          recordingCancelledRef.current = false;
-          mediaRecorderRef.current = recorder;
-          recorder.start();
-          setListening(true);
-        } catch (e) {
-          showStatus("Microphone access denied", false);
-        }
-      }
+  function toggleMic() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { showStatus("Speech recognition not supported in this browser", false); return; }
+
+    if (listening) {
+      recognizerRef.current?.stop();
+      setListening(false);
+      return;
     }
+
+    const rec = new SR();
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.lang = "en-US";
+    recognizerRef.current = rec;
+
+    rec.onstart = () => { setListening(true); };
+    rec.onresult = (e) => {
+      const transcript = Array.from(e.results).map(r => r[0].transcript).join(" ").trim();
+      if (transcript) setInput(prev => prev ? prev + " " + transcript : transcript);
+    };
+    rec.onerror = (e) => {
+      if (e.error !== "no-speech" && e.error !== "aborted") showStatus("Could not transcribe", false);
+      setListening(false);
+    };
+    rec.onend = () => { setListening(false); };
+    rec.start();
   }
 
   async function send() {
@@ -2438,7 +2409,7 @@ function ChatFloat({date, token, userId}) {
     setBusy(false);
   }
 
-  const hasMic = !!(useMobileRecorder.current);
+  const hasMic = !!(window?.SpeechRecognition || window?.webkitSpeechRecognition);
 
   return (
     <div style={{
