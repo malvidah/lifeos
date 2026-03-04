@@ -1860,8 +1860,22 @@ function mergeWorkouts(ouraWorkouts, stravaActivities) {
   return merged;
 }
 
+function calcPace(w) {
+  const mps = w.avgSpeed || (w.durationMins && w.distance ? (w.distance*1000)/(w.durationMins*60) : null);
+  if (!mps) return null;
+  const secsPerMile = 1609.34 / mps;
+  const m = Math.floor(secsPerMile/60);
+  const s = Math.round(secsPerMile%60);
+  return `${m}:${String(s).padStart(2,"0")}`;
+}
+function isRun(w) { return (w.sport||w.type||w.name||"").toLowerCase().match(/run|jog/); }
+
 function Activity({date,token,userId}) {
   const [syncedRows, setSyncedRows] = useState([]);
+  const mkRow = () => ({id:Date.now(), text:"", dist:null, pace:null, kcal:null});
+  const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "activity", [mkRow()], token, userId);
+  const safe = Array.isArray(manualRows)&&manualRows.length ? manualRows : [mkRow()];
+  const refs = useRef({});
 
   useEffect(()=>{
     if(!token||!userId)return;
@@ -1874,47 +1888,85 @@ function Activity({date,token,userId}) {
       const rows = merged.map(w=>({
         id: String(w.id || `${w.source}-${w.sport}-${w.durationMins}`),
         source: w.source,
-        kcal: w.calories||null,
         text: w.name,
-        details: [
-          w.durationMins ? fmtMins(w.durationMins) : null,
-          w.distance ? `${(w.distance * 0.621371).toFixed(1)}mi` : null,
-          (w.distance && (w.sport||w.type||"").toLowerCase().includes("run"))
-            ? (()=>{
-                const mps = w.avgSpeed || (w.durationMins ? (w.distance*1000)/(w.durationMins*60) : null);
-                if (!mps) return null;
-                const secsPerMile = 1609.34 / mps;
-                const m = Math.floor(secsPerMile/60);
-                const s = Math.round(secsPerMile%60);
-                return `${m}:${String(s).padStart(2,"0")}/mi`;
-              })()
-            : null,
-          w.avgHr ? `${w.avgHr}bpm` : null,
-        ].filter(Boolean),
+        dist: w.distance ? `${(w.distance*0.621371).toFixed(2)}mi` : null,
+        pace: isRun(w) ? calcPace(w) : null,
+        kcal: w.calories||null,
       }));
       setSyncedRows(rows);
-      // Persist to DB so insights API can read workout history across days
       if (rows.length && token) {
-        const summary = merged.map(w => ({
-          name: w.name, sport: w.sport, source: w.source,
-          durationMins: w.durationMins||null, distance: w.distance||null,
-          calories: w.calories||null, avgHr: w.avgHr||null,
+        const summary = merged.map(w=>({
+          name:w.name, sport:w.sport, source:w.source,
+          durationMins:w.durationMins||null, distance:w.distance||null,
+          calories:w.calories||null, avgHr:w.avgHr||null,
         }));
-        fetch('/api/entries', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ date, type: 'workouts', data: summary }),
-        }).catch(()=>{});
+        fetch('/api/entries',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
+          body:JSON.stringify({date,type:'workouts',data:summary})}).catch(()=>{});
       }
     });
   },[date,token,userId]); // eslint-disable-line
 
+  function onKey(e,id,idx) {
+    if(e.key==="Enter"){e.preventDefault();const row=mkRow();const i=safe.findIndex(r=>r.id===id);setManualRows([...safe.slice(0,i+1),row,...safe.slice(i+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
+    if(e.key==="Backspace"&&safe[idx]?.text===""&&safe.length>1){e.preventDefault();setManualRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
+  }
+
+  const DCOL = 52, PCOL = 62, KCOL = 44;
+  const colStyle = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0,width:w,textAlign:"center",whiteSpace:"nowrap"});
+  const editColStyle = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.text,flexShrink:0,width:w,textAlign:"center",
+    background:"transparent",border:"none",outline:"none",padding:0});
+  const rowS = {display:"flex",alignItems:"center",gap:0,padding:"3px 0",minHeight:28};
+  const chipBase = {fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",flexShrink:0,borderRadius:4,padding:"2px 8px",whiteSpace:"nowrap"};
+
+  const totalKcal = [...syncedRows,...safe].reduce((s,r)=>s+(r.kcal||0),0);
+
+  if(!loaded) return (<div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
+    <Shimmer width="75%" height={13}/><Shimmer width="55%" height={13}/>
+  </div>);
+
   return (
-    <RowList date={date} type="activity" token={token} userId={userId}
-      syncedRows={syncedRows}
-      placeholder="What did you do?"
-      promptFn={t=>`Calories burned for activity: "${t}" for a typical adult. Include duration and distance hints if present in the text. Return JSON: {"kcal":300}`}
-      prefix="−" color={C.green}/>
+    <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
+      <div style={{flex:1,overflowY:"auto",minHeight:0}}>
+        {syncedRows.map(row=>(
+          <div key={row.id} style={rowS}>
+            <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,
+              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>
+              {row.text}
+            </span>
+            <SourceBadge source={row.source}/>
+            <span style={colStyle(DCOL)}>{row.dist||"—"}</span>
+            <span style={{...colStyle(PCOL),color:row.pace?C.text:C.muted}}>{row.pace?`${row.pace}/mi`:"—"}</span>
+            <span style={{...colStyle(KCOL),color:row.kcal?C.orange:C.muted}}>{row.kcal||"—"}</span>
+          </div>
+        ))}
+        {safe.map((row,idx)=>(
+          <div key={row.id} style={rowS}>
+            <input ref={el=>refs.current[row.id]=el} value={row.text}
+              onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
+              onKeyDown={e=>onKey(e,row.id,idx)}
+              placeholder={idx===0&&syncedRows.length===0?"What did you do?":idx===0?"+ add more":""}
+              style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
+                lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
+            <span style={{width:4}}/>
+            <input value={row.dist||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,dist:e.target.value||null}:r))}
+              placeholder="—" style={{...editColStyle(DCOL),color:row.dist?C.text:C.muted,fontSize:"11px"}}/>
+            <input value={row.pace||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,pace:e.target.value||null}:r))}
+              placeholder="—" style={{...editColStyle(PCOL),color:row.pace?C.text:C.muted,fontSize:"11px"}}/>
+            <input value={row.kcal||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,kcal:+e.target.value||null}:r))}
+              placeholder="—" style={{...editColStyle(KCOL),color:row.kcal?C.orange:C.muted,fontSize:"11px"}}/>
+          </div>
+        ))}
+      </div>
+      {totalKcal > 0 && (
+        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",borderTop:`1px solid ${C.border}`}}>
+          <div style={{flex:1}}/>
+          <div style={{width:DCOL+PCOL,display:"flex",justifyContent:"center"}}/>
+          <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
+            <span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2150,7 +2202,6 @@ function ChatFloat({date, token, userId}) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(null); // {text, ok} | null
   const [listening, setListening] = useState(false);
-  const recognitionRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const useMobileRecorder = useRef(false);
@@ -2159,24 +2210,11 @@ function ChatFloat({date, token, userId}) {
   const inputRef = useRef(null);
   const statusTimer = useRef(null);
 
-  // Speech recognition — Web Speech API on desktop, MediaRecorder on iOS/mobile
+  // Speech recognition — MediaRecorder everywhere (Web Speech API has unreliable network deps)
   useEffect(() => {
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-    const isMobile = isIOS || /Android/i.test(navigator.userAgent);
-    const SR = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
-
-    if (SR && !isMobile) {
-      const r = new SR();
-      r.continuous = false; r.interimResults = true; r.lang = "en-US";
-      r.onresult = (e) => setInput(Array.from(e.results).map(r => r[0].transcript).join(""));
-      r.onend = () => setListening(false);
-      r.onerror = (e) => { setListening(false); showStatus("Mic error: " + (e.error || "unknown"), false); };
-      recognitionRef.current = r;
-    } else if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+    if (typeof navigator !== "undefined" && navigator.mediaDevices) {
       useMobileRecorder.current = true;
     }
-    return () => recognitionRef.current?.abort();
   }, []);
 
   function showStatus(text, ok) {
@@ -2230,9 +2268,6 @@ function ChatFloat({date, token, userId}) {
           showStatus("Microphone access denied", false);
         }
       }
-    } else {
-      if (listening) { recognitionRef.current?.stop(); setListening(false); }
-      else { try { recognitionRef.current?.start(); setListening(true); } catch(e) { showStatus("Could not start mic", false); } }
     }
   }
 
@@ -2295,7 +2330,7 @@ function ChatFloat({date, token, userId}) {
     setBusy(false);
   }
 
-  const hasMic = !!(recognitionRef.current || useMobileRecorder.current);
+  const hasMic = !!(useMobileRecorder.current);
 
   return (
     <div style={{
@@ -2397,7 +2432,11 @@ function ChatFloat({date, token, userId}) {
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
 const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span></span>;
-const ACT_HDR = <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span>;
+const ACT_HDR = <span style={{display:"flex",gap:0}}>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:52,textAlign:"center"}}>dist</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:62,textAlign:"center"}}>pace</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span>
+</span>;
 const WIDGETS = [
   {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
