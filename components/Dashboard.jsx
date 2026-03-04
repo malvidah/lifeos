@@ -1941,7 +1941,7 @@ function Activity({date,token,userId}) {
     setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
   }
 
-  const KCOL=44, DCOL=52, PCOL=72;
+  const KCOL=48, DCOL=56, PCOL=84;
   const colDist  = {fontFamily:mono, fontSize:F.sm, color:C.blue,   flexShrink:0, width:DCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colPace  = {fontFamily:mono, fontSize:F.sm, color:C.green,  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal  = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
@@ -1973,11 +1973,13 @@ function Activity({date,token,userId}) {
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
         {mergedSynced.map(row=>(
           <div key={row.id} style={rowS}>
-            <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,
-              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>
-              {row.text}
+            <span style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0,overflow:"hidden"}}>
+              <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,
+                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                {row.text}
+              </span>
+              <SourceBadge source={row.source}/>
             </span>
-            <SourceBadge source={row.source}/>
             <span style={row.dist ? colDist : colMuted(DCOL)}>{row.dist||"—"}</span>
             <span style={row.pace ? colPace : colMuted(PCOL)}>{row.pace?`${row.pace}/mi`:"—"}</span>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
@@ -2006,10 +2008,17 @@ function Activity({date,token,userId}) {
         ))}
       </div>
       {showTotals && (
-        <div style={{flexShrink:0,paddingTop:6,paddingBottom:2,display:"flex",alignItems:"center",justifyContent:"flex-end",gap:6,borderTop:`1px solid ${C.border}`}}>
-          {totalDistMi>0&&<span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalDistMi.toFixed(1)}mi</span>}
-          {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:C.green}}>{avgPaceFmt}/mi</span>}
-          {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>}
+        <div style={{flexShrink:0,paddingTop:6,paddingBottom:2,display:"flex",alignItems:"center",borderTop:`1px solid ${C.border}`}}>
+          <div style={{flex:1}}/>
+          <div style={{width:DCOL,display:"flex",justifyContent:"center"}}>
+            {totalDistMi>0&&<span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalDistMi.toFixed(1)}mi</span>}
+          </div>
+          <div style={{width:PCOL,display:"flex",justifyContent:"center"}}>
+            {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:C.green}}>{avgPaceFmt}/mi</span>}
+          </div>
+          <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
+            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>}
+          </div>
         </div>
       )}
     </div>
@@ -2477,10 +2486,10 @@ function ChatFloat({date, token, userId}) {
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
-const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span></span>;
+const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:48,textAlign:"center"}}>kcal</span></span>;
 const ACT_HDR = <span style={{display:"flex",gap:0}}>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:52,textAlign:"center"}}>dist</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>pace</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:56,textAlign:"center"}}>dist</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:84,textAlign:"center"}}>pace</span>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span>
 </span>;
 const WIDGETS = [
