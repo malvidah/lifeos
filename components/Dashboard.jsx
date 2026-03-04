@@ -2337,13 +2337,18 @@ function ChatFloat({date, token, userId}) {
     rec.lang = "en-US";
     recognizerRef.current = rec;
 
+    let gotResult = false;
     rec.onstart = () => { setListening(true); };
     rec.onresult = (e) => {
+      gotResult = true;
       const transcript = Array.from(e.results).map(r => r[0].transcript).join(" ").trim();
       if (transcript) setInput(prev => prev ? prev + " " + transcript : transcript);
     };
     rec.onerror = (e) => {
-      if (e.error !== "no-speech" && e.error !== "aborted") showStatus("Could not transcribe", false);
+      console.error("SpeechRecognition error:", e.error);
+      if (e.error === "not-allowed") showStatus("Microphone access denied", false);
+      else if (e.error === "network") showStatus("Network error — try again", false);
+      else if (e.error !== "no-speech" && e.error !== "aborted") showStatus(`Mic error: ${e.error}`, false);
       setListening(false);
     };
     rec.onend = () => { setListening(false); };
