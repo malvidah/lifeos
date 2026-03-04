@@ -132,7 +132,8 @@ export async function POST(request) {
     // Explicitly flag missing health/sleep data so AI doesn't infer from previous days
     const hasTodayHealth = !!(today.health && (today.health.sleepScore || today.health.sleepHrs || today.health.readinessScore));
     if (!hasTodayHealth) {
-      lines.push(`Today: no Oura data for last night (ring not worn or not yet synced) — do not infer or assume last night's sleep from previous nights`);\n    }
+      lines.push(`Today: no Oura data for last night (ring not worn or not yet synced) — do not infer or assume last night's sleep from previous nights`);
+    }
 
     if (recentDays.length) {
       lines.push('');
