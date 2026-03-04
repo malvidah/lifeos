@@ -1,7 +1,7 @@
 import UIKit
 import WebKit
 
-private let appURL = URL(string: "https://dayloop.me")!
+private let appURL = URL(string: "https://www.daylab.me")!
 
 class WebViewController: UIViewController {
 
@@ -26,7 +26,7 @@ class WebViewController: UIViewController {
 
         // Inject JS to tell the web app it's running in a native wrapper
         let script = WKUserScript(
-            source: "window.dayloopNative = { platform: 'ios', version: '1.0.0' };",
+            source: "window.daylabNative = { platform: 'ios', version: '1.0.0' };",
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false
         )
@@ -125,13 +125,13 @@ class WebViewController: UIViewController {
         refreshControl.endRefreshing()
     }
 
-    // MARK: - Deep link (dayloop:// OAuth callback)
+    // MARK: - Deep link (daylab:// OAuth callback)
 
     func handleDeepLink(_ url: URL) {
-        // Translate dayloop://auth/callback?code=... → https://dayloop.me/auth/callback?code=...
+        // Translate daylab://auth/callback?code=... → https://www.daylab.me/auth/callback?code=...
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.scheme = "https"
-        components?.host = "dayloop.me"
+        components?.host = "daylab.me"
         if let translated = components?.url {
             webView.load(URLRequest(url: translated))
         }
@@ -166,8 +166,8 @@ extension WebViewController: WKNavigationDelegate {
         guard let url = navigationAction.request.url else { decisionHandler(.allow); return }
 
         let host = url.host ?? ""
-        let isInternal = host.contains("dayloop.me") || host.contains("supabase.co")
-        let isOAuthReturn = url.scheme == "dayloop"
+        let isInternal = host.contains("daylab.me") || host.contains("supabase.co")
+        let isOAuthReturn = url.scheme == "daylab"
 
         if isOAuthReturn {
             handleDeepLink(url)

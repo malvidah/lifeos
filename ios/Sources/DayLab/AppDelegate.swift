@@ -15,13 +15,13 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         return true
     }
 
-    // Handle dayloop:// OAuth callback deep link
+    // Handle daylab:// OAuth callback deep link
     func application(
         _ app: UIApplication,
         open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]
     ) -> Bool {
-        guard url.scheme == "dayloop",
+        guard url.scheme == "daylab",
               let webVC = window?.rootViewController as? WebViewController
         else { return false }
         webVC.handleDeepLink(url)

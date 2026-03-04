@@ -1,6 +1,6 @@
-name: DayLoop
+name: DayLab
 options:
-  bundleIdPrefix: me.dayloop
+  bundleIdPrefix: me.daylab
   deploymentTarget:
     iOS: "16.0"
   xcodeVersion: "15"
@@ -8,7 +8,7 @@ options:
 
 settings:
   base:
-    PRODUCT_NAME: "Day Loop"
+    PRODUCT_NAME: "Day Lab"
     MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.9"
@@ -20,11 +20,11 @@ targets:
     type: application
     platform: iOS
     sources:
-      - Sources/DayLoop
+      - Sources/DayLab
     resources:
       - Assets.xcassets
     settings:
       base:
-        INFOPLIST_FILE: Sources/DayLoop/Info.plist
+        INFOPLIST_FILE: Sources/DayLab/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        PRODUCT_BUNDLE_IDENTIFIER: me.dayloop.app
+        PRODUCT_BUNDLE_IDENTIFIER: me.daylab.app

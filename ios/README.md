@@ -1,6 +1,6 @@
-# Day Loop — iOS App
+# Day Lab — iOS App
 
-WKWebView wrapper loading `dayloop.me`. Native feel, always up to date.
+WKWebView wrapper loading `daylab.me`. Native feel, always up to date.
 
 ## Requirements
 - Xcode 15+
@@ -22,14 +22,14 @@ Hit ▶ to run in Simulator or on a connected device.
 1. Open `DayLoop.xcodeproj`
 2. Select the `DayLoop` target → Signing & Capabilities
 3. Set your Team (Apple Developer account)
-4. Bundle ID is `me.dayloop.app` — change if needed
+4. Bundle ID is `me.daylab.app` — change if needed
 5. Add an AppIcon (1024×1024 PNG) to `Assets.xcassets/AppIcon.appiconset`
 
 ## OAuth deep linking
 
-The app registers the `dayloop://` URL scheme. Add it as an allowed redirect URL in Supabase:
+The app registers the `daylab://` URL scheme. Add it as an allowed redirect URL in Supabase:
 - Dashboard → Authentication → URL Configuration → Redirect URLs
-- Add: `dayloop://auth/callback`
+- Add: `daylab://auth/callback`
 
 ## Release to TestFlight
 

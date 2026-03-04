@@ -3,11 +3,11 @@
 <plist version="1.0">
 <dict>
   <key>CFBundleName</key>
-  <string>Day Loop</string>
+  <string>Day Lab</string>
   <key>CFBundleDisplayName</key>
-  <string>Day Loop</string>
+  <string>Day Lab</string>
   <key>CFBundleIdentifier</key>
-  <string>me.dayloop.app</string>
+  <string>me.daylab.app</string>
   <key>CFBundleVersion</key>
   <string>1</string>
   <key>CFBundleShortVersionString</key>
@@ -43,15 +43,15 @@
   <key>UIUserInterfaceStyle</key>
   <string>Dark</string>
 
-  <!-- dayloop:// URL scheme for OAuth callbacks -->
+  <!-- daylab:// URL scheme for OAuth callbacks -->
   <key>CFBundleURLTypes</key>
   <array>
     <dict>
       <key>CFBundleURLName</key>
-      <string>me.dayloop.app</string>
+      <string>me.daylab.app</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>dayloop</string>
+        <string>daylab</string>
       </array>
     </dict>
   </array>
