@@ -69,7 +69,9 @@ class WebViewController: UIViewController {
         btn.layer.borderColor = UIColor(white: 0.25, alpha: 1).cgColor
         btn.layer.borderWidth = 1
         btn.layer.cornerRadius = 6
-        btn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 16, bottom: 8, right: 16)
+        var config = UIButton.Configuration.plain()
+        config.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
+        btn.configuration = config
         btn.addTarget(self, action: #selector(reload), for: .touchUpInside)
 
         [icon, msg, btn].forEach { stack.addArrangedSubview($0) }
