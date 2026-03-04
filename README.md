@@ -1,4 +1,4 @@
-# Day Loop
+# Day Lab
 
 Personal dashboard — calendar, health, meals, tasks, notes.
 
