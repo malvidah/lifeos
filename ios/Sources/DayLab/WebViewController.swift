@@ -1,5 +1,6 @@
 import UIKit
 import WebKit
+import SafariServices
 
 private let appURL = URL(string: "https://www.daylab.me")!
 
@@ -130,10 +131,14 @@ class WebViewController: UIViewController {
     // MARK: - Deep link (daylab:// OAuth callback)
 
     func handleDeepLink(_ url: URL) {
+        // Dismiss SFSafariViewController if open (OAuth callback)
+        if let presented = presentedViewController {
+            presented.dismiss(animated: true)
+        }
         // Translate daylab://auth/callback?code=... → https://www.daylab.me/auth/callback?code=...
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.scheme = "https"
-        components?.host = "daylab.me"
+        components?.host = "www.daylab.me"
         if let translated = components?.url {
             webView.load(URLRequest(url: translated))
         }
@@ -176,8 +181,10 @@ extension WebViewController: WKNavigationDelegate {
             handleDeepLink(url)
             decisionHandler(.cancel)
         } else if isGoogleAuth {
-            // Google blocks OAuth in WKWebView — open in Safari instead
-            UIApplication.shared.open(url)
+            // Use SFSafariViewController so the daylab:// callback returns to the app
+            let safari = SFSafariViewController(url: url)
+            safari.modalPresentationStyle = .pageSheet
+            present(safari, animated: true)
             decisionHandler(.cancel)
         } else if !isInternal && navigationAction.navigationType == .linkActivated {
             UIApplication.shared.open(url)
