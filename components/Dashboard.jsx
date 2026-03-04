@@ -1740,6 +1740,8 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
       const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
       setTimeout(() => refs.current[t]?.focus(), 30);
     }
+    if (e.key==="ArrowUp" && idx > 0) { e.preventDefault(); refs.current[safe[idx-1].id]?.focus(); }
+    if (e.key==="ArrowDown" && idx < safe.length-1) { e.preventDefault(); refs.current[safe[idx+1].id]?.focus(); }
   }
 
   if (!loaded) return (
@@ -1888,7 +1890,7 @@ function Activity({date,token,userId}) {
   const {value:savedEstimates, setValue:setSavedEstimates, loaded:estLoaded} = useDbSave(date, "activity_kcal", {}, token, userId);
   const estimating = useRef(new Set());
   const [tick, setTick] = useState(0);
-  const safe = Array.isArray(manualRows)&&manualRows.length ? manualRows : [mkRow()];
+  const safe = (Array.isArray(manualRows)&&manualRows.length ? manualRows : [mkRow()]).map(r => r.estimating ? {...r, estimating:false} : r);
   const refs = useRef({});
   const estMap = (estLoaded && savedEstimates && typeof savedEstimates==="object") ? savedEstimates : {};
 
@@ -1941,9 +1943,27 @@ function Activity({date,token,userId}) {
     });
   },[syncedRows,loaded,estLoaded,token]); // eslint-disable-line
 
+  function parseActivityText(text) {
+    const t = text.toLowerCase();
+    // Distance: "5 mi", "5.2mi", "5 miles", "8 km", "8km"
+    const distMi = t.match(/(\d+\.?\d*)\s*mi(?:les?)?/);
+    const distKm  = t.match(/(\d+\.?\d*)\s*km/);
+    let dist = null;
+    if (distMi) dist = `${parseFloat(distMi[1]).toFixed(2)}mi`;
+    else if (distKm) dist = `${(parseFloat(distKm[1])*0.621371).toFixed(2)}mi`;
+    // Pace: "8 min pace", "8:30 pace", "8:30/mi", "7 min/mi"
+    const paceColon = t.match(/(\d+):(\d{2})\s*(?:\/mi|pace|per)/);
+    const paceMin   = t.match(/(\d+\.?\d*)\s*min(?:ute)?\s*(?:\/mi|pace|per)/);
+    let pace = null;
+    if (paceColon) pace = `${paceColon[1]}:${paceColon[2]}`;
+    else if (paceMin) { const tot=parseFloat(paceMin[1])*60; pace=`${Math.floor(tot/60)}:${String(Math.round(tot%60)).padStart(2,'0')}`; }
+    return { dist, pace };
+  }
   function onKey(e,id,idx) {
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();const i=safe.findIndex(r=>r.id===id);setManualRows([...safe.slice(0,i+1),row,...safe.slice(i+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx]?.text===""&&safe.length>1){e.preventDefault();setManualRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
+    if(e.key==="ArrowUp"&&idx>0){e.preventDefault();refs.current[safe[idx-1].id]?.focus();}
+    if(e.key==="ArrowDown"&&idx<safe.length-1){e.preventDefault();refs.current[safe[idx+1].id]?.focus();}
   }
 
   async function runEstimate(id, text) {
@@ -1991,10 +2011,10 @@ function Activity({date,token,userId}) {
               </span>
               <SourceBadge source={row.source}/>
             </span>
-            <span style={row.dist ? colDist : colMuted(DCOL)}>{row.dist||"—"}</span>
-            <span style={row.pace ? colPace : colMuted(PCOL)}>{row.pace?`${row.pace}/mi`:"—"}</span>
+            <span style={row.dist ? colDist : colMuted(DCOL)}>{row.dist||""}</span>
+            <span style={row.pace ? colPace : colMuted(PCOL)}>{row.pace?`${row.pace}/mi`:""}</span>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
-              {estimating.current.has(row.id)?"…":row.kcal?`-${row.kcal}kcal`:"—"}
+              {estimating.current.has(row.id)?"…":row.kcal?`-${row.kcal}kcal`:""}
             </span>
           </div>
         ))}
@@ -2002,18 +2022,23 @@ function Activity({date,token,userId}) {
           <div key={row.id} style={rowS}>
             <input ref={el=>refs.current[row.id]=el} value={row.text}
               onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
-              onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
+              onBlur={e=>{
+                const r=safe.find(r=>r.id===row.id);
+                const text=e.target.value.trim();
+                if(text){
+                  const {dist,pace}=parseActivityText(text);
+                  setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(x=>x.id===row.id?{...x,dist:dist||x.dist,pace:pace||x.pace}:x));
+                  if(r?.kcal===null&&!r?.estimating) runEstimate(row.id,text);
+                }
+              }}
               onKeyDown={e=>onKey(e,row.id,idx)}
               placeholder={idx===0&&mergedSynced.length===0?"What did you do?":idx===0?"+":""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
-            <span style={{width:4}}/>
-            <input value={row.dist||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,dist:e.target.value||null}:r))}
-              placeholder="—" style={editCol(DCOL, row.dist?C.blue:C.muted)}/>
-            <input value={row.pace||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,pace:e.target.value||null}:r))}
-              placeholder="—" style={editCol(PCOL, row.pace?C.green:C.muted)}/>
+            <span style={row.dist ? colDist : colMuted(DCOL)}>{!row.text ? "" : row.dist||"—"}</span>
+            <span style={row.pace ? colPace : colMuted(PCOL)}>{!row.text ? "" : row.pace?`${row.pace}/mi`:"—"}</span>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
-              {row.estimating?"…":row.kcal?`-${row.kcal}kcal`:"—"}
+              {!row.text ? "" : row.estimating?"…":row.kcal?`-${row.kcal}kcal`:"—"}
             </span>
           </div>
         ))}
@@ -2728,7 +2753,8 @@ export default function Dashboard() {
             {/* Notes — left on desktop, full-width on mobile */}
             <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
               display:"flex", flexDirection:"column",
-              height: mobile?260:undefined, minHeight: mobile?0:undefined}}>
+              height: mobile?260:undefined, minHeight: mobile?0:undefined,
+              paddingBottom: mobile?0:80}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
                 collapsed={mobile?false:collapseMap[leftWidget.id]}
                 onToggle={mobile?undefined:toggleMap[leftWidget.id]}
