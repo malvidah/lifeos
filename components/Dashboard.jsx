@@ -2141,19 +2141,29 @@ function ChatFloat({date, token, userId}) {
   const [status, setStatus] = useState(null); // {text, ok} | null
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const useMobileRecorder = useRef(false);
+  const [transcribing, setTranscribing] = useState(false);
   const inputRef = useRef(null);
   const statusTimer = useRef(null);
 
-  // Speech recognition
+  // Speech recognition — Web Speech API on desktop, MediaRecorder on iOS/mobile
   useEffect(() => {
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isMobile = isIOS || /Android/i.test(navigator.userAgent);
     const SR = typeof window !== "undefined" && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (SR) {
+
+    if (SR && !isMobile) {
       const r = new SR();
       r.continuous = false; r.interimResults = true; r.lang = "en-US";
       r.onresult = (e) => setInput(Array.from(e.results).map(r => r[0].transcript).join(""));
       r.onend = () => setListening(false);
-      r.onerror = () => setListening(false);
+      r.onerror = (e) => { setListening(false); showStatus("Mic error: " + (e.error || "unknown"), false); };
       recognitionRef.current = r;
+    } else if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+      useMobileRecorder.current = true;
     }
     return () => recognitionRef.current?.abort();
   }, []);
@@ -2164,9 +2174,54 @@ function ChatFloat({date, token, userId}) {
     statusTimer.current = setTimeout(() => setStatus(null), ok ? 3000 : 5000);
   }
 
-  function toggleMic() {
-    if (listening) { recognitionRef.current?.stop(); setListening(false); }
-    else { recognitionRef.current?.start(); setListening(true); }
+  async function toggleMic() {
+    if (useMobileRecorder.current) {
+      if (listening) {
+        mediaRecorderRef.current?.stop();
+        setListening(false);
+      } else {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+            : 'audio/mp4';
+          const recorder = new MediaRecorder(stream, { mimeType });
+          audioChunksRef.current = [];
+          recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+          recorder.onstop = async () => {
+            stream.getTracks().forEach(t => t.stop());
+            const blob = new Blob(audioChunksRef.current, { type: mimeType });
+            setTranscribing(true);
+            try {
+              const base64 = await new Promise((res) => {
+                const reader = new FileReader();
+                reader.onload = () => res(reader.result.split(",")[1]);
+                reader.readAsDataURL(blob);
+              });
+              const resp = await fetch("/api/transcribe", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ audio: base64, mimeType }),
+              });
+              const data = await resp.json();
+              if (data.text) setInput(prev => prev ? prev + " " + data.text : data.text);
+              else showStatus(data.error || "Could not transcribe", false);
+            } catch (e) {
+              showStatus("Transcription failed", false);
+            }
+            setTranscribing(false);
+          };
+          mediaRecorderRef.current = recorder;
+          recorder.start();
+          setListening(true);
+        } catch (e) {
+          showStatus("Microphone access denied", false);
+        }
+      }
+    } else {
+      if (listening) { recognitionRef.current?.stop(); setListening(false); }
+      else { try { recognitionRef.current?.start(); setListening(true); } catch(e) { showStatus("Could not start mic", false); } }
+    }
   }
 
   async function send() {
@@ -2223,7 +2278,7 @@ function ChatFloat({date, token, userId}) {
     setBusy(false);
   }
 
-  const hasMic = !!recognitionRef.current;
+  const hasMic = !!(recognitionRef.current || useMobileRecorder.current);
 
   return (
     <div style={{
@@ -2298,14 +2353,16 @@ function ChatFloat({date, token, userId}) {
             </svg>
           </button>
         ) : hasMic ? (
-          <button onClick={toggleMic} style={{
-            background: listening ? `${C.red}22` : `${C.text}10`,
+          <button onClick={transcribing ? undefined : toggleMic} style={{
+            background: transcribing ? `${C.accent}22` : listening ? `${C.red}22` : `${C.text}10`,
             border: "none", borderRadius: "50%",
-            width: 32, height: 32, cursor: "pointer",
+            width: 32, height: 32, cursor: transcribing ? "default" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0, transition: "background 0.2s",
           }}>
-            {listening ? (
+            {transcribing ? (
+              <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${C.accent}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/>
+            ) : listening ? (
               <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.red, boxShadow: `0 0 0 3px ${C.red}30`, animation: "pulse 1.2s ease-in-out infinite" }}/>
             ) : (
               <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted}>
@@ -2511,6 +2568,7 @@ export default function Dashboard() {
         input,textarea,select{font-size:16px;}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+        @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
