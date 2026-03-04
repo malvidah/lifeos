@@ -2312,6 +2312,8 @@ function ChatFloat({date, token, userId}) {
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const recognizerRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
   const inputRef = useRef(null);
   const statusTimer = useRef(null);
 
@@ -2321,15 +2323,57 @@ function ChatFloat({date, token, userId}) {
     statusTimer.current = setTimeout(() => setStatus(null), ok ? 3000 : 5000);
   }
 
-  function toggleMic() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { showStatus("Speech recognition not supported in this browser", false); return; }
+  async function recordAndTranscribe() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const recorder = new MediaRecorder(stream, { mimeType });
+      audioChunksRef.current = [];
+      recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setListening(false);
+        setTranscribing(true);
+        try {
+          const blob = new Blob(audioChunksRef.current, { type: mimeType });
+          const base64 = await new Promise((res) => {
+            const reader = new FileReader();
+            reader.onload = () => res(reader.result.split(",")[1]);
+            reader.readAsDataURL(blob);
+          });
+          const resp = await fetch("/api/transcribe", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ audio: base64, mimeType }),
+          });
+          const data = await resp.json();
+          if (data.text) setInput(prev => prev ? prev + " " + data.text : data.text);
+          else showStatus(data.error || "Could not transcribe", false);
+        } catch (e) { showStatus("Transcription failed", false); }
+        setTranscribing(false);
+      };
+      mediaRecorderRef.current = recorder;
+      recorder.start();
+      setListening(true);
+    } catch (e) { showStatus("Microphone access denied", false); }
+  }
 
-    if (listening) {
-      recognizerRef.current?.stop();
+  function toggleMic() {
+    // If already recording via MediaRecorder, stop it
+    if (mediaRecorderRef.current?.state === "recording") {
+      mediaRecorderRef.current.stop();
+      return;
+    }
+    // If already using SpeechRecognition, stop it
+    if (recognizerRef.current && listening) {
+      recognizerRef.current.stop();
       setListening(false);
       return;
     }
+
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { recordAndTranscribe(); return; }
 
     const rec = new SR();
     rec.continuous = false;
@@ -2337,19 +2381,17 @@ function ChatFloat({date, token, userId}) {
     rec.lang = "en-US";
     recognizerRef.current = rec;
 
-    let gotResult = false;
     rec.onstart = () => { setListening(true); };
     rec.onresult = (e) => {
-      gotResult = true;
       const transcript = Array.from(e.results).map(r => r[0].transcript).join(" ").trim();
       if (transcript) setInput(prev => prev ? prev + " " + transcript : transcript);
     };
     rec.onerror = (e) => {
       console.error("SpeechRecognition error:", e.error);
-      if (e.error === "not-allowed") showStatus("Microphone access denied", false);
-      else if (e.error === "network") showStatus("Network error — try again", false);
-      else if (e.error !== "no-speech" && e.error !== "aborted") showStatus(`Mic error: ${e.error}`, false);
-      setListening(false);
+      if (e.error === "not-allowed") { showStatus("Microphone access denied", false); setListening(false); }
+      else if (e.error === "network") { setListening(false); recordAndTranscribe(); } // silent fallback to Whisper
+      else if (e.error !== "no-speech" && e.error !== "aborted") { showStatus(`Mic error: ${e.error}`, false); setListening(false); }
+      else { setListening(false); }
     };
     rec.onend = () => { setListening(false); };
     rec.start();

@@ -1,5 +1,4 @@
 import { createClient } from '@supabase/supabase-js';
-import { ANTHROPIC_KEY } from '../_lib/tier.js';
 
 export async function POST(request) {
   try {
@@ -17,51 +16,29 @@ export async function POST(request) {
     const { audio, mimeType } = await request.json();
     if (!audio) return Response.json({ error: 'no audio' }, { status: 400 });
 
-    const apiKey = ANTHROPIC_KEY();
-    if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) return Response.json({ error: 'Transcription not configured' }, { status: 503 });
 
-    // Normalise mime type for Anthropic (only accepts audio/mp4, audio/mpeg, audio/webm, audio/wav, audio/ogg)
-    const safeMime = mimeType?.startsWith('audio/webm') ? 'audio/webm'
-      : mimeType?.startsWith('audio/mp4') ? 'audio/mp4'
-      : mimeType?.startsWith('audio/ogg') ? 'audio/ogg'
-      : mimeType?.startsWith('audio/wav') ? 'audio/wav'
-      : 'audio/mp4';
+    // Convert base64 back to binary and build a File for Whisper
+    const binary = Buffer.from(audio, 'base64');
+    const ext = mimeType?.includes('mp4') ? 'mp4' : mimeType?.includes('ogg') ? 'ogg' : 'webm';
+    const file = new File([binary], `audio.${ext}`, { type: mimeType || 'audio/webm' });
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('model', 'whisper-1');
+    form.append('language', 'en');
+
+    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        messages: [{
-          role: 'user',
-          content: [
-            {
-              type: 'audio',
-              source: {
-                type: 'base64',
-                media_type: safeMime,
-                data: audio,
-              },
-            },
-            {
-              type: 'text',
-              text: 'Transcribe this audio exactly as spoken. Return only the transcription text, nothing else.',
-            },
-          ],
-        }],
-      }),
+      headers: { Authorization: `Bearer ${apiKey}` },
+      body: form,
     });
 
     const data = await res.json();
     if (data.error) return Response.json({ error: data.error.message }, { status: 500 });
 
-    const text = (data.content?.find(b => b.type === 'text')?.text || '').trim();
-    return Response.json({ text });
+    return Response.json({ text: (data.text || '').trim() });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }
