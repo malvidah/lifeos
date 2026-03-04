@@ -1941,12 +1941,15 @@ function Activity({date,token,userId}) {
     setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
   }
 
-  const DCOL=56, PCOL=66, KCOL=44;
-  const colStyle = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0,width:w,textAlign:"center",whiteSpace:"nowrap"});
-  const editColStyle = (w) => ({fontFamily:mono,fontSize:F.sm,flexShrink:0,width:w,textAlign:"center",
-    background:"transparent",border:"none",outline:"none",padding:0});
-  const rowS = {display:"flex",alignItems:"center",gap:0,padding:"3px 0",minHeight:28};
-  const chipBase = {fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",flexShrink:0,borderRadius:4,padding:"2px 8px",whiteSpace:"nowrap"};
+  const KCOL=44, DCOL=52, PCOL=72;
+  const colDist  = {fontFamily:mono, fontSize:F.sm, color:C.blue,   flexShrink:0, width:DCOL, textAlign:"center", whiteSpace:"nowrap"};
+  const colPace  = {fontFamily:mono, fontSize:F.sm, color:C.green,  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
+  const colKcal  = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
+  const colMuted = (w) => ({fontFamily:mono, fontSize:F.sm, color:C.muted, flexShrink:0, width:w, textAlign:"center", whiteSpace:"nowrap"});
+  const editCol  = (w, clr) => ({fontFamily:mono, fontSize:F.sm, color:clr, flexShrink:0, width:w, textAlign:"center",
+    background:"transparent", border:"none", outline:"none", padding:0});
+  const rowS = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
+  const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0, borderRadius:4, padding:"2px 8px", whiteSpace:"nowrap"};
 
   const allRows = [...mergedSynced, ...safe];
   const totalKcal = allRows.reduce((s,r)=>s+(r.kcal||0),0);
@@ -1975,9 +1978,9 @@ function Activity({date,token,userId}) {
               {row.text}
             </span>
             <SourceBadge source={row.source}/>
-            <span style={{...colStyle(DCOL),color:row.dist?C.text:C.muted}}>{row.dist||"—"}</span>
-            <span style={{...colStyle(PCOL),color:row.pace?C.text:C.muted}}>{row.pace?`${row.pace}/mi`:"—"}</span>
-            <span style={{...colStyle(KCOL),color:row.kcal?C.orange:C.muted}}>
+            <span style={row.dist ? colDist : colMuted(DCOL)}>{row.dist||"—"}</span>
+            <span style={row.pace ? colPace : colMuted(PCOL)}>{row.pace?`${row.pace}/mi`:"—"}</span>
+            <span style={row.kcal ? colKcal : colMuted(KCOL)}>
               {estimating.current.has(row.id)?"…":row.kcal||"—"}
             </span>
           </div>
@@ -1993,10 +1996,10 @@ function Activity({date,token,userId}) {
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
             <span style={{width:4}}/>
             <input value={row.dist||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,dist:e.target.value||null}:r))}
-              placeholder="—" style={{...editColStyle(DCOL),color:row.dist?C.text:C.muted,fontSize:"11px"}}/>
+              placeholder="—" style={editCol(DCOL, row.dist?C.blue:C.muted)}/>
             <input value={row.pace||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,pace:e.target.value||null}:r))}
-              placeholder="—" style={{...editColStyle(PCOL),color:row.pace?C.text:C.muted,fontSize:"11px"}}/>
-            <span style={{...colStyle(KCOL),color:row.kcal?C.orange:C.muted}}>
+              placeholder="—" style={editCol(PCOL, row.pace?C.green:C.muted)}/>
+            <span style={row.kcal ? colKcal : colMuted(KCOL)}>
               {row.estimating?"…":row.kcal||"—"}
             </span>
           </div>
@@ -2483,8 +2486,8 @@ function ChatFloat({date, token, userId}) {
 // ─── Widget definitions ───────────────────────────────────────────────────────
 const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span></span>;
 const ACT_HDR = <span style={{display:"flex",gap:0}}>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:56,textAlign:"center"}}>dist</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:66,textAlign:"center"}}>pace</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:52,textAlign:"center"}}>dist</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>pace</span>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span>
 </span>;
 const WIDGETS = [
