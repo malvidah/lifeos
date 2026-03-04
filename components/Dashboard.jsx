@@ -1718,8 +1718,12 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
 
   async function runEstimate(id, text) {
     setRows(safe.map(r => r.id===id ? {...r, estimating:true} : r));
-    const result = await estimateNutrition(promptFn(text), token);
-    setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null, estimating:false} : r));
+    try {
+      const result = await estimateNutrition(promptFn(text), token);
+      setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null, estimating:false} : r));
+    } catch(_) {
+      setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, estimating:false} : r));
+    }
   }
 
   function onKey(e, id, idx) {
@@ -2694,8 +2698,8 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, overflowY:"auto", padding:mobile?8:10,
-          paddingBottom:80, display:"flex", flexDirection:"column", gap:8}}>
+        <div style={{flex:1, overflow:"hidden", padding:mobile?8:10,
+          paddingBottom:mobile?80:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
@@ -2717,14 +2721,14 @@ export default function Dashboard() {
             collapsed={mobile?false:insightCollapsed} onToggle={mobile?undefined:toggleInsight}/>
 
           {/* Widgets — row on wide, column on narrow */}
-          <div style={{display:"flex", gap:8, flex:"0 0 auto",
+          <div style={{display:"flex", gap:8, flex: mobile?"0 0 auto":"1 1 0",
             flexDirection: mobile?"column":"row",
-            alignItems:"stretch"}}>
+            alignItems:"stretch", minHeight: mobile?0:200, overflow:mobile?"visible":"hidden"}}>
 
             {/* Notes — left on desktop, full-width on mobile */}
-            <div style={{flex: mobile?"0 0 auto":"2 1 0", minWidth:0,
+            <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
               display:"flex", flexDirection:"column",
-              minHeight: mobile?260:380}}>
+              height: mobile?260:undefined, minHeight: mobile?0:undefined}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
                 collapsed={mobile?false:collapseMap[leftWidget.id]}
                 onToggle={mobile?undefined:toggleMap[leftWidget.id]}
@@ -2735,12 +2739,13 @@ export default function Dashboard() {
 
             {/* Right widgets — column always */}
             <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
-              display:"flex", flexDirection:"column", gap:8}}>
+              display:"flex", flexDirection:"column", gap:8,
+              overflowY: mobile?"visible":"auto", paddingBottom: mobile?0:80}}>
               {rightWidgets.map(w=>(
                 <div key={w.id} style={{
-                  flex:"0 0 auto",
-                  height: mobile?260:220,
-                  overflow:"hidden"}}>
+                  flex: mobile?"0 0 auto": collapseMap[w.id]?"0 0 auto":"1 1 0",
+                  height: mobile?260:undefined,
+                  minHeight: mobile?0:160, overflow:"hidden", flexShrink:0}}>
                   <Widget label={w.label} color={w.color()}
                     collapsed={mobile?false:collapseMap[w.id]}
                     onToggle={mobile?undefined:toggleMap[w.id]}
