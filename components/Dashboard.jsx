@@ -1874,8 +1874,18 @@ function Activity({date,token,userId}) {
   const [syncedRows, setSyncedRows] = useState([]);
   const mkRow = () => ({id:Date.now(), text:"", dist:null, pace:null, kcal:null});
   const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "activity", [mkRow()], token, userId);
+  const {value:savedEstimates, setValue:setSavedEstimates, loaded:estLoaded} = useDbSave(date, "activity_kcal", {}, token, userId);
+  const estimating = useRef(new Set());
+  const [tick, setTick] = useState(0);
   const safe = Array.isArray(manualRows)&&manualRows.length ? manualRows : [mkRow()];
   const refs = useRef({});
+  const estMap = (estLoaded && savedEstimates && typeof savedEstimates==="object") ? savedEstimates : {};
+
+  // Merge saved kcal estimates into synced rows
+  const mergedSynced = syncedRows.map(r => ({
+    ...r,
+    kcal: r.kcal || (typeof estMap[r.id]==="object" ? estMap[r.id]?.kcal : estMap[r.id]) || null,
+  }));
 
   useEffect(()=>{
     if(!token||!userId)return;
@@ -1906,19 +1916,50 @@ function Activity({date,token,userId}) {
     });
   },[date,token,userId]); // eslint-disable-line
 
+  // AI kcal estimation for synced rows without native calories
+  useEffect(()=>{
+    if(!token||!loaded||!estLoaded)return;
+    mergedSynced.filter(r=>!r.kcal&&r.text&&!estimating.current.has(r.id)).forEach(row=>{
+      estimating.current.add(row.id);
+      setTick(t=>t+1);
+      estimateNutrition(`Calories burned for: "${row.text}"${row.dist?` (${row.dist})`:""} for a typical adult. Return JSON: {"kcal":300}`, token).then(result=>{
+        estimating.current.delete(row.id);
+        if(result?.kcal) setSavedEstimates(prev=>({...(typeof prev==="object"&&prev?prev:{}), [row.id]:result}));
+        else setTick(t=>t+1);
+      });
+    });
+  },[syncedRows,loaded,estLoaded,token]); // eslint-disable-line
+
   function onKey(e,id,idx) {
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();const i=safe.findIndex(r=>r.id===id);setManualRows([...safe.slice(0,i+1),row,...safe.slice(i+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx]?.text===""&&safe.length>1){e.preventDefault();setManualRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
   }
 
-  const DCOL = 52, PCOL = 62, KCOL = 44;
+  async function runEstimate(id, text) {
+    setManualRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
+    const result = await estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token);
+    setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
+  }
+
+  const DCOL=56, PCOL=66, KCOL=44;
   const colStyle = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0,width:w,textAlign:"center",whiteSpace:"nowrap"});
-  const editColStyle = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.text,flexShrink:0,width:w,textAlign:"center",
+  const editColStyle = (w) => ({fontFamily:mono,fontSize:F.sm,flexShrink:0,width:w,textAlign:"center",
     background:"transparent",border:"none",outline:"none",padding:0});
   const rowS = {display:"flex",alignItems:"center",gap:0,padding:"3px 0",minHeight:28};
   const chipBase = {fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",flexShrink:0,borderRadius:4,padding:"2px 8px",whiteSpace:"nowrap"};
 
-  const totalKcal = [...syncedRows,...safe].reduce((s,r)=>s+(r.kcal||0),0);
+  const allRows = [...mergedSynced, ...safe];
+  const totalKcal = allRows.reduce((s,r)=>s+(r.kcal||0),0);
+
+  // Parse distances like "3.50mi" → number
+  function parseDist(d){ const m=String(d||"").match(/[\d.]+/); return m?+m[0]:null; }
+  function parsePaceSecs(p){ const m=String(p||"").match(/^(\d+):(\d+)/); return m?+m[1]*60+ +m[2]:null; }
+  const distVals = allRows.map(r=>parseDist(r.dist)).filter(Boolean);
+  const paceVals = allRows.map(r=>parsePaceSecs(r.pace)).filter(Boolean);
+  const totalDistMi = distVals.length ? distVals.reduce((a,b)=>a+b,0) : 0;
+  const avgPaceSecs = paceVals.length ? paceVals.reduce((a,b)=>a+b,0)/paceVals.length : 0;
+  const avgPaceFmt = avgPaceSecs ? `${Math.floor(avgPaceSecs/60)}:${String(Math.round(avgPaceSecs%60)).padStart(2,"0")}` : null;
+  const showTotals = totalKcal>0||totalDistMi>0||avgPaceFmt;
 
   if(!loaded) return (<div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
     <Shimmer width="75%" height={13}/><Shimmer width="55%" height={13}/>
@@ -1927,24 +1968,27 @@ function Activity({date,token,userId}) {
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
-        {syncedRows.map(row=>(
+        {mergedSynced.map(row=>(
           <div key={row.id} style={rowS}>
             <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,
               overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>
               {row.text}
             </span>
             <SourceBadge source={row.source}/>
-            <span style={colStyle(DCOL)}>{row.dist||"—"}</span>
+            <span style={{...colStyle(DCOL),color:row.dist?C.text:C.muted}}>{row.dist||"—"}</span>
             <span style={{...colStyle(PCOL),color:row.pace?C.text:C.muted}}>{row.pace?`${row.pace}/mi`:"—"}</span>
-            <span style={{...colStyle(KCOL),color:row.kcal?C.orange:C.muted}}>{row.kcal||"—"}</span>
+            <span style={{...colStyle(KCOL),color:row.kcal?C.orange:C.muted}}>
+              {estimating.current.has(row.id)?"…":row.kcal||"—"}
+            </span>
           </div>
         ))}
         {safe.map((row,idx)=>(
           <div key={row.id} style={rowS}>
             <input ref={el=>refs.current[row.id]=el} value={row.text}
-              onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
+              onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
+              onBlur={e=>{const r=safe.find(r=>r.id===row.id);if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating)runEstimate(row.id,e.target.value);}}
               onKeyDown={e=>onKey(e,row.id,idx)}
-              placeholder={idx===0&&syncedRows.length===0?"What did you do?":idx===0?"+ add more":""}
+              placeholder={idx===0&&mergedSynced.length===0?"What did you do?":idx===0?"+ add more":""}
               style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
                 lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
             <span style={{width:4}}/>
@@ -1952,17 +1996,23 @@ function Activity({date,token,userId}) {
               placeholder="—" style={{...editColStyle(DCOL),color:row.dist?C.text:C.muted,fontSize:"11px"}}/>
             <input value={row.pace||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,pace:e.target.value||null}:r))}
               placeholder="—" style={{...editColStyle(PCOL),color:row.pace?C.text:C.muted,fontSize:"11px"}}/>
-            <input value={row.kcal||""} onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,kcal:+e.target.value||null}:r))}
-              placeholder="—" style={{...editColStyle(KCOL),color:row.kcal?C.orange:C.muted,fontSize:"11px"}}/>
+            <span style={{...colStyle(KCOL),color:row.kcal?C.orange:C.muted}}>
+              {row.estimating?"…":row.kcal||"—"}
+            </span>
           </div>
         ))}
       </div>
-      {totalKcal > 0 && (
-        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",borderTop:`1px solid ${C.border}`}}>
+      {showTotals && (
+        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:0,borderTop:`1px solid ${C.border}`}}>
           <div style={{flex:1}}/>
-          <div style={{width:DCOL+PCOL,display:"flex",justifyContent:"center"}}/>
+          <div style={{width:DCOL,display:"flex",justifyContent:"center"}}>
+            {totalDistMi>0&&<span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalDistMi.toFixed(1)}mi</span>}
+          </div>
+          <div style={{width:PCOL,display:"flex",justifyContent:"center"}}>
+            {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:C.green}}>{avgPaceFmt}/mi</span>}
+          </div>
           <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
-            <span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>
+            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}</span>}
           </div>
         </div>
       )}
@@ -2433,8 +2483,8 @@ function ChatFloat({date, token, userId}) {
 // ─── Widget definitions ───────────────────────────────────────────────────────
 const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span></span>;
 const ACT_HDR = <span style={{display:"flex",gap:0}}>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:52,textAlign:"center"}}>dist</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:62,textAlign:"center"}}>pace</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:56,textAlign:"center"}}>dist</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:66,textAlign:"center"}}>pace</span>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:44,textAlign:"center"}}>kcal</span>
 </span>;
 const WIDGETS = [
