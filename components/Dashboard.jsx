@@ -2153,10 +2153,7 @@ function LoginScreen() {
           textTransform:"uppercase",padding:"13px 32px",cursor:loading?"not-allowed":"pointer"}}>
           {loading?"redirecting…":"sign in with google"}
         </button>
-        <div style={{position:'absolute',bottom:24,left:0,right:0,display:'flex',justifyContent:'center',gap:24}}>
-  <a href='/privacy' style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:C.muted,textDecoration:'none',opacity:0.6}}>Privacy</a>
-  <a href='/terms' style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.12em',textTransform:'uppercase',color:C.muted,textDecoration:'none',opacity:0.6}}>Terms</a>
-</div>
+
       </div>
       <div style={{position:"absolute",bottom:24,left:0,right:0,display:"flex",justifyContent:"center",gap:24}}>
         <a href="/privacy" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,textDecoration:"none",opacity:0.6}}>Privacy</a>

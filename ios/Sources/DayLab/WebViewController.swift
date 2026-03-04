@@ -168,11 +168,16 @@ extension WebViewController: WKNavigationDelegate {
         guard let url = navigationAction.request.url else { decisionHandler(.allow); return }
 
         let host = url.host ?? ""
-        let isInternal = host.contains("daylab.me") || host.contains("supabase.co")
         let isOAuthReturn = url.scheme == "daylab"
+        let isGoogleAuth = host.contains("accounts.google.com") || host.contains("google.com/o/oauth")
+        let isInternal = host.contains("daylab.me") || host.contains("supabase.co")
 
         if isOAuthReturn {
             handleDeepLink(url)
+            decisionHandler(.cancel)
+        } else if isGoogleAuth {
+            // Google blocks OAuth in WKWebView — open in Safari instead
+            UIApplication.shared.open(url)
             decisionHandler(.cancel)
         } else if !isInternal && navigationAction.navigationType == .linkActivated {
             UIApplication.shared.open(url)
