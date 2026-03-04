@@ -2564,7 +2564,7 @@ const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
-  {id:"notes",    label:"Notes",    color:()=>C.accent, Comp:Notes},
+  {id:"notes",    label:"Journal",  color:()=>C.accent, Comp:Notes},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
   {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals,    headerRight:()=>MEALS_HDR},
   {id:"activity", label:"Activity", color:()=>C.green,  Comp:Activity, headerRight:()=>ACT_HDR},
