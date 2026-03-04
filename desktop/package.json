@@ -1,6 +1,6 @@
 {
   "name": "daylab",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Day Lab — your AI dashboard",
   "main": "src/main.js",
   "author": "Marvin",
@@ -35,6 +35,9 @@
       "gatekeeperAssess": false,
       "entitlements": "assets/entitlements.mac.plist",
       "entitlementsInherit": "assets/entitlements.mac.plist",
+      "notarize": {
+        "teamId": "AZ65YJVYKM"
+      },
       "extendInfo": {
         "CFBundleURLTypes": [
           {
