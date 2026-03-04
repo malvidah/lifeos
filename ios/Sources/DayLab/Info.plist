@@ -23,25 +23,24 @@
   <key>UILaunchScreen</key>
   <dict/>
 
-  <!-- Lock to portrait on iPhone, allow all on iPad -->
+  <!-- Lock to portrait on iPhone -->
   <key>UISupportedInterfaceOrientations</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>
   </array>
+  <!-- iPad requires all 4 orientations for multitasking -->
   <key>UISupportedInterfaceOrientations~ipad</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
     <string>UIInterfaceOrientationLandscapeLeft</string>
     <string>UIInterfaceOrientationLandscapeRight</string>
   </array>
 
-  <!-- Status bar matches dark theme -->
   <key>UIStatusBarStyle</key>
   <string>UIStatusBarStyleLightContent</string>
   <key>UIViewControllerBasedStatusBarAppearance</key>
   <false/>
-
-  <!-- Dark mode only — matches the app aesthetic -->
   <key>UIUserInterfaceStyle</key>
   <string>Dark</string>
 
