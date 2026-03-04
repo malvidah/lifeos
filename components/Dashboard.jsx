@@ -1593,7 +1593,7 @@ function Notes({date,userId,token}) {
       }
       // Empty line
       if (!line.trim()) {
-        return <div key={i} style={{height:"1.8em"}}>&nbsp;</div>;
+        return <div key={i} style={{height:"1.7em"}}>&nbsp;</div>;
       }
       // Normal
       return <div key={i} style={{color:C.text,fontFamily:serif,fontSize:F.md,lineHeight:"1.7"}}>{renderInline(line)}</div>;
