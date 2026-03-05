@@ -2503,7 +2503,7 @@ function ChatFloat({date, token, userId}) {
         display: "flex", alignItems: "center", gap: 8,
         width: "100%", maxWidth: 560,
         background: C.well,
-        borderRadius: mobile ? 24 : 12,
+        borderRadius: mobile ? 24 : 20,
         border: "none",
         padding: mobile ? "10px 10px 10px 18px" : "8px 8px 8px 14px",
       }}>
@@ -2524,7 +2524,7 @@ function ChatFloat({date, token, userId}) {
         {input.trim() ? (
           <button onClick={send} disabled={busy} style={{
             background: C.accent, border: "none", borderRadius: "50%",
-            width: mobile ? 36 : 32, height: mobile ? 36 : 32, cursor: busy ? "default" : "pointer",
+            width: 36, height: 36, cursor: busy ? "default" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
           }}>
@@ -2537,7 +2537,7 @@ function ChatFloat({date, token, userId}) {
           <button onClick={transcribing ? undefined : toggleMic} style={{
             background: transcribing ? `${C.accent}22` : listening ? `${C.red}22` : `${C.text}10`,
             border: "none", borderRadius: "50%",
-            width: mobile ? 36 : 32, height: mobile ? 36 : 32, cursor: transcribing ? "default" : "pointer",
+            width: 36, height: 36, cursor: transcribing ? "default" : "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             flexShrink: 0, transition: "background 0.2s",
           }}>
