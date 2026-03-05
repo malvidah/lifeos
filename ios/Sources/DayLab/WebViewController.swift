@@ -17,7 +17,8 @@ class WebViewController: UIViewController {
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.navigationDelegate = self
         wv.uiDelegate = self
-        wv.scrollView.contentInsetAdjustmentBehavior = .automatic
+        wv.scrollView.contentInsetAdjustmentBehavior = .never
+        wv.scrollView.insetsLayoutMarginsFromSafeArea = false
         wv.isOpaque = false
         wv.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
         wv.scrollView.backgroundColor = wv.backgroundColor
