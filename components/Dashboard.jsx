@@ -682,7 +682,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       weekday: "long", month: "long", day: "numeric"
     }));
   }, [selected]);
-  const isElectron = typeof window !== "undefined" && !!window.dayloopNative;
+  const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   return (
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,
       padding:"0 16px",
