@@ -153,6 +153,11 @@ class WebViewController: UIViewController {
 
     func handleDeepLink(_ url: URL) {
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        // Debug: show what URL we received
+        let alert = UIAlertController(title: "Callback URL", message: url.absoluteString, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default))
+        present(alert, animated: true)
+        
         components?.scheme = "https"
         components?.host = "www.daylab.me"
         if let translated = components?.url {
