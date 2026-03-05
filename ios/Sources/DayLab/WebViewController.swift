@@ -17,7 +17,7 @@ class WebViewController: UIViewController {
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.navigationDelegate = self
         wv.uiDelegate = self
-        wv.scrollView.contentInsetAdjustmentBehavior = .never
+        wv.scrollView.contentInsetAdjustmentBehavior = .automatic
         wv.isOpaque = false
         wv.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
         wv.scrollView.backgroundColor = wv.backgroundColor
@@ -107,7 +107,7 @@ class WebViewController: UIViewController {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
             NSLayoutConstraint.activate([
-                $0.topAnchor.constraint(equalTo: view.topAnchor),
+                $0.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
                 $0.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 $0.trailingAnchor.constraint(equalTo: view.trailingAnchor),
                 $0.bottomAnchor.constraint(equalTo: view.bottomAnchor),
