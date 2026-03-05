@@ -1,6 +1,7 @@
 import UIKit
 import WebKit
 import AuthenticationServices
+import AVFoundation
 
 private let appURL = URL(string: "https://www.daylab.me")!
 
@@ -13,7 +14,6 @@ class WebViewController: UIViewController {
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.websiteDataStore = .default()
-        config.allowsInlineMediaPlayback = true
 
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.navigationDelegate = self
@@ -98,6 +98,8 @@ class WebViewController: UIViewController {
         view.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
         setupLayout()
         loadApp()
+        // Pre-request microphone permission so WKWebView can use it
+        AVAudioApplication.requestRecordPermission { _ in }
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
