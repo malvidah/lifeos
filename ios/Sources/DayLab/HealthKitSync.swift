@@ -19,48 +19,33 @@ class HealthKitSync {
         return types
     }()
 
-    // Get the current authorization status
-    var authStatus: String {
-        guard HKHealthStore.isHealthDataAvailable(),
-              let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return "unavailable" }
-        switch store.authorizationStatus(for: stepsType) {
-        case .notDetermined:     return "not_determined"
-        case .sharingDenied:     return "denied"
-        case .sharingAuthorized: return "authorized"
-        @unknown default:        return "unknown"
-        }
-    }
-
-    // Check if already authorized (steps as representative type)
-    var isAuthorized: Bool {
-        guard HKHealthStore.isHealthDataAvailable(),
-              let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return false }
-        return store.authorizationStatus(for: stepsType) == .sharingAuthorized
-    }
-
     // Check auth status and notify the web view — called on every page load
+    // NOTE: Apple hides read permission status for privacy. We probe by attempting a real
+    // query — if we get data back, we're authorized. If not, we're not_determined or denied.
     func checkStatusAndNotify(webView: WKWebView) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-
-        // Check auth status of one representative type (steps)
+        // Probe with a real query — Apple hides read status so we must try reading
         guard let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
-        let status = store.authorizationStatus(for: stepsType)
-
-        let statusStr: String
-        switch status {
-        case .notDetermined: statusStr = "not_determined"
-        case .sharingDenied:  statusStr = "denied"
-        case .sharingAuthorized: statusStr = "authorized"
-        @unknown default:    statusStr = "unknown"
+        let now = Date()
+        let start = Calendar.current.startOfDay(for: now)
+        let pred = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
+        let q = HKStatisticsQuery(quantityType: stepsType, quantitySamplePredicate: pred, options: .cumulativeSum) { _, stats, error in
+            let statusStr: String
+            if error != nil {
+                statusStr = "not_determined"
+            } else {
+                // Any response (even nil stats) means we have read access
+                statusStr = "authorized"
+            }
+            DispatchQueue.main.async {
+                webView.evaluateJavaScript("""
+                    window.dispatchEvent(new CustomEvent('daylabHealthKit', {
+                        detail: { status: '\(statusStr)' }
+                    }));
+                """, completionHandler: nil)
+            }
         }
-
-        DispatchQueue.main.async {
-            webView.evaluateJavaScript("""
-                window.dispatchEvent(new CustomEvent('daylabHealthKit', {
-                    detail: { status: '\(statusStr)' }
-                }));
-            """, completionHandler: nil)
-        }
+        store.execute(q)
     }
 
     // Request permission only — callback with granted bool

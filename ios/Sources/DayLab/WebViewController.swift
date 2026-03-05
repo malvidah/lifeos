@@ -147,41 +147,28 @@ class WebViewController: UIViewController {
     }
 
     private func syncHealthKit() {
-        // First notify the web of current HealthKit auth status
-        HealthKitSync.shared.checkStatusAndNotify(webView: webView)
-
-        // Then sync if already authorized (no permission prompt)
-        guard HealthKitSync.shared.isAuthorized else { return }
+        // Notify web of status (via data probe) and sync in one shot
+        // The probe in checkStatusAndNotify already queries HealthKit — if it succeeds
+        // we have access; the sync will simply return no data if we don't
         webView.evaluateJavaScript("localStorage.getItem('daylab:token')") { result, _ in
-            guard let token = result as? String, !token.isEmpty else { return }
+            guard let token = result as? String, !token.isEmpty else {
+                // Still notify status even without token
+                HealthKitSync.shared.checkStatusAndNotify(webView: self.webView)
+                return
+            }
+            HealthKitSync.shared.checkStatusAndNotify(webView: self.webView)
             HealthKitSync.shared.syncHealthKit(token: token, date: Date(), webView: self.webView)
         }
     }
 
     // Called when web sends daylabRequestHealthKit — user tapped "Connect"
     private func requestHealthKitPermission(tokenHint: String? = nil) {
-        let status = HealthKitSync.shared.authStatus
-
-        // If previously denied, iOS won't show the sheet again — send user to Settings
-        if status == "denied" || status == "authorized" {
-            // For denied: user needs to grant in Settings > Privacy > Health
-            // For authorized: shouldn't happen but handle gracefully
-            let settingsUrl = URL(string: UIApplication.openSettingsURLString)!
-            UIApplication.shared.open(settingsUrl, options: [:]) { success in
-                if !success {
-                    // Fallback: try the Privacy settings URL directly
-                    if let privacyUrl = URL(string: "app-settings:") {
-                        UIApplication.shared.open(privacyUrl, options: [:], completionHandler: nil)
-                    }
-                }
-            }
-            return
-        }
-
-        // Request permission — shows system sheet if not_determined, no-ops if already authorized
+        // NOTE: We do NOT check authorizationStatus here.
+        // Apple intentionally returns .sharingDenied for read-only apps to protect privacy.
+        // The only correct approach is to always call requestAuthorization — iOS shows the
+        // sheet on first request, silently succeeds if already granted.
         HealthKitSync.shared.requestPermission { [weak self] granted in
             guard let self = self else { return }
-            // Notify web of updated status
             let statusStr = granted ? "authorized" : "denied"
             DispatchQueue.main.async {
                 self.webView.evaluateJavaScript("""
@@ -191,7 +178,6 @@ class WebViewController: UIViewController {
                 """, completionHandler: nil)
             }
             guard granted else { return }
-            // Sync — use token passed from web, fall back to localStorage
             if let t = tokenHint, !t.isEmpty {
                 HealthKitSync.shared.syncHealthKit(token: t, date: Date(), webView: self.webView)
             } else {
