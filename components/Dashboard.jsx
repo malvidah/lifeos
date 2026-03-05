@@ -454,6 +454,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [appleHealthConnected,setAppleHealthConnected]=useState(false);
   const [appleHealthHasData,setAppleHealthHasData]=useState(false);
   const [claudeConnected,setClaudeConnected]=useState(false);
+  const [ouraEditing,setOuraEditing]=useState(false);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
   const [urlCopied,setUrlCopied]=useState(false);
@@ -482,24 +483,18 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     }).catch(()=>{});
     fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
-    // Check if any Apple Health data exists
-    fetch("/api/entries?date=0000-00-00&type=health_apple_check",{headers:{Authorization:`Bearer ${token}`}})
-      .catch(()=>{});
-    // Check if Claude MCP is connected (oauth_token or agent_token exists)
-    import("@supabase/supabase-js").then(({createClient:sbCreate3})=>{
-      const sb3 = sbCreate3(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        {global:{headers:{Authorization:`Bearer ${token}`}}});
-      Promise.all([
-        sb3.from("entries").select("date").eq("type","oauth_token").limit(1),
-        sb3.from("entries").select("date").eq("type","agent_token").eq("date","global").limit(1),
-      ]).then(([oauth, agent])=>{
-        if(oauth.data?.length || agent.data?.length) setClaudeConnected(true);
-      });
-    }).catch(()=>{});
-      const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    // Check Apple Health data + Claude MCP connection
+    import("@supabase/supabase-js").then(({createClient:sbCreate})=>{
+      const sb = sbCreate(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
         {global:{headers:{Authorization:`Bearer ${token}`}}});
       sb.from("entries").select("date").eq("type","health_apple").limit(1)
         .then(({data})=>{ if(data?.length) setAppleHealthHasData(true); });
+      Promise.all([
+        sb.from("entries").select("date").eq("type","oauth_token").limit(1),
+        sb.from("entries").select("date").eq("type","agent_token").eq("date","global").limit(1),
+      ]).then(([oauth, agent])=>{
+        if(oauth.data?.length || agent.data?.length) setClaudeConnected(true);
+      });
     }).catch(()=>{});
   },[token,open]); // eslint-disable-line
   useEffect(()=>{
@@ -592,30 +587,48 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Oura */}
           <div style={row}>
             <SectionLabel info="Syncs your sleep score, HRV, readiness, and recovery data into your daily view. Requires a personal access token from your Oura account.">
-              Oura {ouraConnected&&<span style={{color:C.green}}>✓</span>}
-              {" "}<a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
+              Oura {ouraConnected&&!ouraEditing&&<span style={{color:C.green}}>✓</span>}
+              {" "}{(!ouraConnected||ouraEditing)&&<a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
                 style={{color:C.dim,textDecoration:"none",fontSize:F.sm,fontFamily:mono,letterSpacing:"0"}}>
                 (Get token →)
-              </a>
+              </a>}
             </SectionLabel>
-            <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
-              <input
-                type="password" value={ouraKey}
-                onChange={e=>{setOuraKey(e.target.value);setOuraConnected(false);setSaved(false);}}
-                placeholder="Personal access token…"
-                style={{flex:1,minWidth:0,background:C.surface,
-                  border:`1px solid ${ouraConnected?C.green:C.border2}`,
-                  borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
-                  padding:"6px 8px",boxSizing:"border-box"}}/>
-              <button onClick={saveOura} disabled={saving||!ouraKey.trim()} style={{
-                background:saved?C.green+"22":"none",
-                border:`1px solid ${saved?C.green:C.border2}`,
-                borderRadius:5,color:saved?C.green:C.muted,fontFamily:mono,fontSize:F.sm,
-                letterSpacing:"0.04em",textTransform:"uppercase",
-                padding:"0 10px",cursor:"pointer",flexShrink:0}}>
-                {saved?"✓":saving?"…":"Save"}
-              </button>
-            </div>
+            {ouraConnected&&!ouraEditing ? (
+              <div style={{display:"flex",gap:6}}>
+                <div style={{flex:1,padding:"7px",textAlign:"center",
+                  background:"none",border:`1px solid ${C.green}`,
+                  borderRadius:5,color:C.green,fontFamily:mono,fontSize:F.sm,
+                  letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                  ✓ Connected
+                </div>
+                <button onClick={()=>setOuraEditing(true)} style={{
+                  background:"none",border:`1px solid ${C.border2}`,
+                  borderRadius:5,color:C.muted,fontFamily:mono,fontSize:F.sm,
+                  letterSpacing:"0.04em",textTransform:"uppercase",
+                  padding:"0 10px",cursor:"pointer",flexShrink:0}}>
+                  Edit
+                </button>
+              </div>
+            ) : (
+              <div style={{display:"flex",gap:6,alignItems:"stretch"}}> 
+                <input
+                  type="password" value={ouraKey}
+                  onChange={e=>{setOuraKey(e.target.value);setSaved(false);}}
+                  placeholder="Personal access token…"
+                  style={{flex:1,minWidth:0,background:C.surface,
+                    border:`1px solid ${C.border2}`,
+                    borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                    padding:"6px 8px",boxSizing:"border-box"}}/>
+                <button onClick={async()=>{await saveOura();setOuraEditing(false);}} disabled={saving||!ouraKey.trim()} style={{
+                  background:saved?C.green+"22":"none",
+                  border:`1px solid ${saved?C.green:C.border2}`,
+                  borderRadius:5,color:saved?C.green:C.muted,fontFamily:mono,fontSize:F.sm,
+                  letterSpacing:"0.04em",textTransform:"uppercase",
+                  padding:"0 10px",cursor:"pointer",flexShrink:0}}>
+                  {saved?"✓":saving?"…":"Save"}
+                </button>
+              </div>
+            )}
           </div>
 
           {divider}
