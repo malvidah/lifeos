@@ -44,7 +44,30 @@ class HealthKitSync {
         }
     }
 
-    // Request permission then sync — called when user taps "Connect Apple Health"
+    // Request permission only — callback with granted bool
+    func requestPermission(completion: @escaping (Bool) -> Void) {
+        guard HKHealthStore.isHealthDataAvailable() else { completion(false); return }
+        store.requestAuthorization(toShare: nil, read: readTypes) { granted, _ in
+            DispatchQueue.main.async { completion(granted) }
+        }
+    }
+
+    // Sync a specific date — called after permission is granted
+    func syncHealthKit(token: String, date: Date, webView: WKWebView? = nil) {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+        if let wv = webView {
+            DispatchQueue.main.async {
+                wv.evaluateJavaScript("""
+                    window.dispatchEvent(new CustomEvent('daylabHealthKit', {
+                        detail: { status: 'authorized' }
+                    }));
+                """, completionHandler: nil)
+            }
+        }
+        self.syncDate(token: token, date: date)
+    }
+
+    // Request permission then sync — legacy path
     func requestPermissionAndSync(token: String, date: Date, webView: WKWebView? = nil) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         store.requestAuthorization(toShare: nil, read: readTypes) { granted, _ in

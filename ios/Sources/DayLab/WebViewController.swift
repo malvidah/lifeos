@@ -180,24 +180,38 @@ class WebViewController: UIViewController {
         }
     }
 
-    // Called when web sends daylabRequestHealthKit — user tapped "Connect Apple Health"
+    // Called when web sends daylabRequestHealthKit — user tapped "Connect"
     private func requestHealthKitPermission() {
-        webView.evaluateJavaScript("""
-            (function() {
-                try {
-                    const keys = Object.keys(localStorage);
-                    for (const k of keys) {
-                        if (k.startsWith('sb-')) {
-                            const parsed = JSON.parse(localStorage.getItem(k) || '{}');
-                            if (parsed.access_token) return parsed.access_token;
+        // Request permission immediately — never gate on token
+        HealthKitSync.shared.requestPermission { [weak self] granted in
+            guard granted, let self = self else { return }
+            self.webView.evaluateJavaScript("""
+                (function() {
+                    try {
+                        const keys = Object.keys(localStorage);
+                        for (const k of keys) {
+                            try {
+                                const parsed = JSON.parse(localStorage.getItem(k) || '{}');
+                                if (parsed.access_token) return parsed.access_token;
+                                if (parsed.data && parsed.data.session && parsed.data.session.access_token)
+                                    return parsed.data.session.access_token;
+                            } catch(e) {}
                         }
-                    }
-                } catch(e) {}
-                return null;
-            })()
-        """) { result, _ in
-            guard let token = result as? String, !token.isEmpty else { return }
-            HealthKitSync.shared.requestPermissionAndSync(token: token, date: Date(), webView: self.webView)
+                        const skeys = Object.keys(sessionStorage || {});
+                        for (const k of skeys) {
+                            try {
+                                const parsed = JSON.parse(sessionStorage.getItem(k) || '{}');
+                                if (parsed.access_token) return parsed.access_token;
+                            } catch(e) {}
+                        }
+                    } catch(e) {}
+                    return null;
+                })()
+            """) { result, _ in
+                if let token = result as? String, !token.isEmpty {
+                    HealthKitSync.shared.syncHealthKit(token: token, date: Date(), webView: self.webView)
+                }
+            }
         }
     }
 

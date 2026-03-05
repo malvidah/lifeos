@@ -563,7 +563,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                   fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",
                   padding:"7px",cursor:"pointer"
                 }}>
-                {(appleHealthConnected||appleHealthHasData)?"✓ Connected":"Connect Apple Health"}
+                {(appleHealthConnected||appleHealthHasData)?"✓ Connected":"Connect"}
               </button>
             ) : (
               <div style={{fontFamily:mono,fontSize:F.sm,
@@ -1728,7 +1728,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
           <button onClick={connectAppleHealth}
             style={{fontFamily:mono,fontSize:F.sm,color:C.blue,background:"none",border:`1px solid ${C.blue}`,
               borderRadius:6,cursor:"pointer",padding:"5px 12px",letterSpacing:"0.03em",opacity:0.9}}>
-            Connect Apple Health
+            Connect
           </button>
         </div>
       )}
