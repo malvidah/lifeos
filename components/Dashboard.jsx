@@ -686,8 +686,8 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
   return (
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,
       padding:"0 16px",
-      paddingTop: isElectron ? "env(safe-area-inset-top)" : 0,
-      height: isElectron ? "calc(44px + env(safe-area-inset-top))" : 44,
+      paddingTop: "env(safe-area-inset-top, 0px)",
+      height: "calc(44px + env(safe-area-inset-top, 0px))",
       display:"flex",alignItems:"flex-end",gap:12,flexShrink:0,
       paddingBottom: 6,
       position:"sticky",top:0,zIndex:100,
