@@ -152,10 +152,16 @@ class WebViewController: UIViewController {
     // MARK: - Deep link (daylab:// OAuth callback)
 
     func handleDeepLink(_ url: URL) {
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.scheme = "https"
-        components?.host = "www.daylab.me"
-        if let translated = components?.url {
+        // daylab://auth/callback?code=xxx
+        // In this URL, "auth" is the host and "/callback" is the path
+        // We need to translate to https://www.daylab.me/auth/callback?code=xxx
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else { return }
+        let originalHost = components.host ?? "" // "auth"
+        let originalPath = components.path       // "/callback"
+        components.scheme = "https"
+        components.host = "www.daylab.me"
+        components.path = "/\(originalHost)\(originalPath)" // "/auth/callback"
+        if let translated = components.url {
             webView.load(URLRequest(url: translated))
         }
     }
