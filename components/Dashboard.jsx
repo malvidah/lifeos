@@ -1682,7 +1682,15 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
 
   useEffect(()=>{
     if(!token) return;
-    fetch(`/api/scores?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
+    // Pass today's in-memory h data as params — avoids race with 200ms debounce save
+    const p = new URLSearchParams({ date });
+    if(h.sleepHrs)       p.set('sleepHrs',      h.sleepHrs);
+    if(h.sleepEff)       p.set('sleepEff',       h.sleepEff);
+    if(h.hrv)            p.set('hrv',            h.hrv);
+    if(h.rhr)            p.set('rhr',            h.rhr);
+    if(h.steps)          p.set('steps',          h.steps);
+    if(h.activeMinutes)  p.set('activeMinutes',  h.activeMinutes);
+    fetch(`/api/scores?${p}`,{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(d=>{ if(!d.error) setScores(d); }).catch(()=>{});
   },[date,token,h]); // re-run when h updates (new health data synced)
 
@@ -1721,7 +1729,9 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
       fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Active",value:h.activeMinutes,unit:"min"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
-      fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}],
+      fields: (h.recoveryMins || h.stressMins)
+        ? [{label:"CALM",value:h.recoveryMins,unit:"min"},{label:"STRESS",value:h.stressMins,unit:"min"}]
+        : [{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}],
       sparkline:scores?.recovery?.sparkline},
   ];
 

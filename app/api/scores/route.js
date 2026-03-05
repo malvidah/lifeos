@@ -309,6 +309,13 @@ export async function GET(request) {
 
   const dates = Object.keys(byDate).sort();
   const todayData = byDate[date] || {};
+  // Merge in any params passed directly from client (avoids debounce race condition)
+  const overrides = {};
+  ['sleepHrs','sleepEff','hrv','rhr','steps','activeMinutes'].forEach(k => {
+    const v = searchParams.get(k);
+    if (v != null && v !== '') overrides[k] = v;
+  });
+  const todayMerged = { ...todayData, ...overrides };
   const calibrationDays = dates.length;
   const calibrated = calibrationDays >= CALIBRATION_DAYS;
 
@@ -327,10 +334,10 @@ export async function GET(request) {
   const history7d  = last7Dates.map(d => byDate[d]);
 
   // Compute scores
-  const sleep    = calcSleepScore(todayData, history);
-  const readiness= calcReadinessScore(todayData, history, calibrated);
-  const activity = calcActivityScore(todayData, history7d);
-  const recovery = calcRecoveryScore(todayData, history, calibrated);
+  const sleep    = calcSleepScore(todayMerged, history);
+  const readiness= calcReadinessScore(todayMerged, history, calibrated);
+  const activity = calcActivityScore(todayMerged, history7d);
+  const recovery = calcRecoveryScore(todayMerged, history, calibrated);
 
   // Build sparkline data for all scores (last 7 days of raw values)
   const spark7 = last7Dates.map(d => ({
