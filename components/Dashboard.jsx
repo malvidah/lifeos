@@ -463,7 +463,8 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const user=session?.user;
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
   const avatar=user?.user_metadata?.avatar_url;
-  const isIOS = typeof window !== "undefined" && !!window.daylabNative;
+  const [isIOS, setIsIOS] = useState(false);
+  useEffect(()=>{ setIsIOS(!!window.daylabNative); },[]);
 
   // Listen for HealthKit status events from iOS
   useEffect(()=>{
@@ -578,11 +579,12 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 {(appleHealthConnected||appleHealthHasData)?"✓ Connected":"Connect"}
               </button>
             ) : (
-              <div style={{fontFamily:mono,fontSize:F.sm,
+              <div onClick={()=>alert(`DEBUG: isIOS=${isIOS} daylabNative=${!!window.daylabNative} webkit=${!!window.webkit}`)}
+                style={{fontFamily:mono,fontSize:F.sm,
                 background:"none",
                 border:`1px solid ${appleHealthHasData?C.green:C.border2}`,
                 borderRadius:5,color:appleHealthHasData?C.green:C.dim,
-                padding:"7px",textAlign:"center",
+                padding:"7px",textAlign:"center",cursor:"pointer",
                 letterSpacing:"0.06em",textTransform:"uppercase"}}>
                 {appleHealthHasData?"✓ Connected":"iOS App Required"}
               </div>
