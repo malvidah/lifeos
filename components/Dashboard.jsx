@@ -2365,6 +2365,11 @@ function ChatFloat({date, token, userId}) {
   }
 
   function toggleMic() {
+    // Debug: show exactly what's available
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    const hasMD = !!(navigator.mediaDevices?.getUserMedia);
+    showStatus(`SR:${!!SR} MD:${hasMD} native:${!!window.daylabNative}`, true);
+
     // If already recording via MediaRecorder, stop it
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
@@ -2377,7 +2382,6 @@ function ChatFloat({date, token, userId}) {
       return;
     }
 
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) {
       if (window.daylabNative) { showStatus("Voice not supported in this browser", false); return; }
       recordAndTranscribe();
@@ -2390,16 +2394,17 @@ function ChatFloat({date, token, userId}) {
     rec.lang = "en-US";
     recognizerRef.current = rec;
 
-    rec.onstart = () => { setListening(true); };
+    rec.onstart = () => { setListening(true); showStatus("Listening...", true); };
     rec.onresult = (e) => {
       const transcript = Array.from(e.results).map(r => r[0].transcript).join(" ").trim();
       if (transcript) setInput(prev => prev ? prev + " " + transcript : transcript);
     };
     rec.onerror = (e) => {
       console.error("SpeechRecognition error:", e.error);
-      if (e.error === "not-allowed") { showStatus("Microphone access denied", false); setListening(false); }
-      else if (e.error === "network") { setListening(false); if (!window.daylabNative) recordAndTranscribe(); } // fallback to Whisper on web only
-      else if (e.error !== "no-speech" && e.error !== "aborted") { showStatus(`Mic error: ${e.error}`, false); setListening(false); }
+      showStatus(`SR error: ${e.error}`, false);
+      if (e.error === "not-allowed") { setListening(false); }
+      else if (e.error === "network") { setListening(false); if (!window.daylabNative) recordAndTranscribe(); }
+      else if (e.error !== "no-speech" && e.error !== "aborted") { setListening(false); }
       else { setListening(false); }
     };
     rec.onend = () => { setListening(false); };
