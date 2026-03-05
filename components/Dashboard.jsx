@@ -1574,14 +1574,18 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
 
   // ── Sparkline SVG ─────────────────────────────────────────────────────────
   function Sparkline({data, color, width=52, height=20}) {
-    const pts = (data||[]).filter(v=>v!=null);
+    const raw = data || [];
+    // Keep only non-null entries with their original index (preserves time position)
+    const pts = raw.map((v,i) => v!=null ? {v,i} : null).filter(Boolean);
     if(pts.length < 2) return <div style={{width,height}}/>;
-    const mn = Math.min(...pts), mx = Math.max(...pts);
+    const vals = pts.map(p=>p.v);
+    const mn = Math.min(...vals), mx = Math.max(...vals);
     const range = mx - mn || 1;
-    const xs = pts.map((_,i) => (i/(pts.length-1))*(width-2)+1);
-    const ys = pts.map(v => height-1 - ((v-mn)/range)*(height-2));
+    const total = raw.length - 1 || 1;
+    const xs = pts.map(p => (p.i/total)*(width-2)+1);
+    const ys = pts.map(p => height-1 - ((p.v-mn)/range)*(height-2));
     return (
-      <svg width={width} height={height} style={{display:'block',overflow:'visible'}}>
+      <svg width={width} height={height} style={{display:'block',overflow:'visible',marginLeft:8}}>
         <polyline points={xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ')}
           fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
         <circle cx={xs[xs.length-1].toFixed(1)} cy={ys[ys.length-1].toFixed(1)} r="2" fill={color}/>
