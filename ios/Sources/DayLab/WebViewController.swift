@@ -160,14 +160,32 @@ class WebViewController: UIViewController {
 
     // Called when web sends daylabRequestHealthKit — user tapped "Connect"
     private func requestHealthKitPermission(tokenHint: String? = nil) {
-        // DEBUG: confirm native handler was called
-        DispatchQueue.main.async {
-            self.webView.evaluateJavaScript("alert('DEBUG native: requestHealthKitPermission called, tokenHint=\(tokenHint != nil ? "yes" : "nil")')", completionHandler: nil)
+        let status = HealthKitSync.shared.authStatus
+
+        // If previously denied, open Settings — iOS won't show the sheet again
+        if status == "denied" {
+            DispatchQueue.main.async {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            return
         }
-        // Request permission immediately — never gate on token
+
+        // Request permission — shows system sheet if not_determined, no-ops if already authorized
         HealthKitSync.shared.requestPermission { [weak self] granted in
-            guard granted, let self = self else { return }
-            // If web passed token directly, use it — otherwise fall back to localStorage
+            guard let self = self else { return }
+            // Notify web of updated status
+            let statusStr = granted ? "authorized" : "denied"
+            DispatchQueue.main.async {
+                self.webView.evaluateJavaScript("""
+                    window.dispatchEvent(new CustomEvent('daylabHealthKit', {
+                        detail: { status: '\(statusStr)' }
+                    }));
+                """, completionHandler: nil)
+            }
+            guard granted else { return }
+            // Sync — use token passed from web, fall back to localStorage
             if let t = tokenHint, !t.isEmpty {
                 HealthKitSync.shared.syncHealthKit(token: t, date: Date(), webView: self.webView)
             } else {

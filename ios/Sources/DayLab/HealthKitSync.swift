@@ -19,6 +19,18 @@ class HealthKitSync {
         return types
     }()
 
+    // Get the current authorization status
+    var authStatus: String {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return "unavailable" }
+        switch store.authorizationStatus(for: stepsType) {
+        case .notDetermined:     return "not_determined"
+        case .sharingDenied:     return "denied"
+        case .sharingAuthorized: return "authorized"
+        @unknown default:        return "unknown"
+        }
+    }
+
     // Check if already authorized (steps as representative type)
     var isAuthorized: Bool {
         guard HKHealthStore.isHealthDataAvailable(),

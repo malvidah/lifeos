@@ -471,7 +471,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     if(!isIOS) return;
     const handler = e => {
       const status = e.detail?.status;
-      setAppleHealthConnected(status === "authorized");
+      setAppleHealthConnected(status); // store full status: 'authorized' | 'denied' | 'not_determined'
     };
     window.addEventListener("daylabHealthKit", handler);
     return () => window.removeEventListener("daylabHealthKit", handler);
@@ -555,41 +555,32 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             </SectionLabel>
             {isIOS ? (
               <button
-                onClick={()=>{
-                  const tok = token||localStorage.getItem('daylab:token')||'';
-                  const hasWebkit = !!(window.webkit);
-                  const hasHandlers = !!(window.webkit?.messageHandlers);
-                  const hasHK = !!(window.webkit?.messageHandlers?.daylabRequestHealthKit);
-                  if(!hasWebkit) { alert('DEBUG: window.webkit missing'); return; }
-                  if(!hasHandlers) { alert('DEBUG: messageHandlers missing'); return; }
-                  if(!hasHK) { alert('DEBUG: daylabRequestHealthKit handler missing'); return; }
-                  if(!tok) { alert('DEBUG: no token available'); }
-                  window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: tok});
-                }}
                 onTouchEnd={(e)=>{
                   e.preventDefault();
                   const tok = token||localStorage.getItem('daylab:token')||'';
                   if(window.webkit?.messageHandlers?.daylabRequestHealthKit){
                     window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: tok});
-                  } else {
-                    alert('DEBUG onTouchEnd: handler not found. webkit='+!!(window.webkit));
+                  }
+                }}
+                onClick={()=>{
+                  const tok = token||localStorage.getItem('daylab:token')||'';
+                  if(window.webkit?.messageHandlers?.daylabRequestHealthKit){
+                    window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: tok});
                   }
                 }}
                 style={{
                   width:"100%",
-                  background:(appleHealthConnected||appleHealthHasData)?"none":"rgba(255,255,255,0.04)",
-                  border:`1px solid ${(appleHealthConnected||appleHealthHasData)?C.green:C.border2}`,
+                  background:(appleHealthConnected==="authorized"||appleHealthHasData)?"none":"rgba(255,255,255,0.04)",
+                  border:`1px solid ${(appleHealthConnected==="authorized"||appleHealthHasData)?C.green:C.border2}`,
                   borderRadius:5,
-                  color:(appleHealthConnected||appleHealthHasData)?C.green:C.text,
+                  color:(appleHealthConnected==="authorized"||appleHealthHasData)?C.green:C.text,
                   fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",
                   padding:"7px",cursor:"pointer"
                 }}>
-                {(appleHealthConnected||appleHealthHasData)?"✓ Connected":"Connect"}
+                {(appleHealthConnected==="authorized"||appleHealthHasData)?"✓ Connected":appleHealthConnected==="denied"?"Open Settings →":"Connect"}
               </button>
             ) : (
-              <div onClick={()=>alert(`DEBUG: isIOS=${isIOS} daylabNative=${!!window.daylabNative} webkit=${!!window.webkit}`)}
-                onTouchEnd={(e)=>{e.preventDefault();alert(`DEBUG touch: isIOS=${isIOS} daylabNative=${!!window.daylabNative} webkit=${!!window.webkit}`);}}
-                style={{fontFamily:mono,fontSize:F.sm,
+              <div style={{fontFamily:mono,fontSize:F.sm,
                 background:"none",
                 border:`1px solid ${appleHealthHasData?C.green:C.border2}`,
                 borderRadius:5,color:appleHealthHasData?C.green:C.dim,
