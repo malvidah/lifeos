@@ -2857,7 +2857,7 @@ export default function Dashboard() {
   useEffect(()=>{
     if(!token||!userId)return;
     const dates=[];
-    for(let i=-14;i<=1;i++) dates.push(toKey(shift(new Date(),i)));
+    for(let i=-14;i<=0;i++) dates.push(toKey(shift(new Date(),i)));
     dates.forEach((d,i)=>{
       setTimeout(()=>{
         fetch(`/api/oura?date=${d}`,{headers:{Authorization:`Bearer ${token}`}})

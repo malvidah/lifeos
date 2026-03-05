@@ -257,7 +257,10 @@ function calcRecoveryScore(today, history, calibrated) {
 // ─── Route ────────────────────────────────────────────────────────────────────
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
-  const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
+  // Always use local date from client — toISOString() would give UTC which is wrong after 4pm PST
+  const now = new Date();
+  const localToday = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
+  const date = searchParams.get('date') || localToday;
 
   const authHeader = request.headers.get('authorization') || '';
   const jwt = authHeader.replace('Bearer ', '').trim();
