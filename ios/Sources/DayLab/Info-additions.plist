@@ -13,5 +13,7 @@
       </array>
     </dict>
   </array>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Day Lab uses the microphone to let you add notes, tasks, and activities by voice.</string>
 </dict>
 </plist>

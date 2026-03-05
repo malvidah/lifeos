@@ -13,6 +13,7 @@ class WebViewController: UIViewController {
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
         config.websiteDataStore = .default()
+        config.allowsInlineMediaPlayback = true
 
         let wv = WKWebView(frame: .zero, configuration: config)
         wv.navigationDelegate = self
@@ -247,5 +248,13 @@ extension WebViewController: WKUIDelegate {
             UIApplication.shared.open(url)
         }
         return nil
+    }
+
+    func webView(_ webView: WKWebView,
+                 requestMediaCapturePermissionFor origin: WKSecurityOrigin,
+                 initiatedByFrame frame: WKFrameInfo,
+                 type: WKMediaCaptureType,
+                 decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+        decisionHandler(.grant)
     }
 }

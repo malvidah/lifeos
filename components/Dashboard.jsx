@@ -692,6 +692,8 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       paddingBottom: 6,
       position:"sticky",top:0,zIndex:100,
       WebkitAppRegion:"drag",userSelect:"none"}}>
+      {/* Extend topbar color behind pull-down overscroll area */}
+      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.surface,zIndex:99}}/>
       {/* Left spacer on desktop so date centers properly */}
       <div style={{flex:1,display:"flex",alignItems:"baseline",gap:7,
         justifyContent:"flex-start",visibility:"hidden",pointerEvents:"none",
