@@ -2378,7 +2378,11 @@ function ChatFloat({date, token, userId}) {
     }
 
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { recordAndTranscribe(); return; }
+    if (!SR) {
+      if (window.daylabNative) { showStatus("Voice not supported in this browser", false); return; }
+      recordAndTranscribe();
+      return;
+    }
 
     const rec = new SR();
     rec.continuous = false;
@@ -2394,7 +2398,7 @@ function ChatFloat({date, token, userId}) {
     rec.onerror = (e) => {
       console.error("SpeechRecognition error:", e.error);
       if (e.error === "not-allowed") { showStatus("Microphone access denied", false); setListening(false); }
-      else if (e.error === "network") { setListening(false); recordAndTranscribe(); } // silent fallback to Whisper
+      else if (e.error === "network") { setListening(false); if (!window.daylabNative) recordAndTranscribe(); } // fallback to Whisper on web only
       else if (e.error !== "no-speech" && e.error !== "aborted") { showStatus(`Mic error: ${e.error}`, false); setListening(false); }
       else { setListening(false); }
     };
