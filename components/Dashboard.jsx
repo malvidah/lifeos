@@ -2145,7 +2145,7 @@ function LoginScreen() {
           const supabase=createClient();
           await supabase.auth.signInWithOAuth({provider:"google",options:{
             scopes:"https://www.googleapis.com/auth/calendar",
-            redirectTo:`${window.location.origin}/auth/callback`,
+            redirectTo: window.daylabNative ? `daylab://auth/callback` : `${window.location.origin}/auth/callback`,
             queryParams:{access_type:"offline",prompt:"consent"},
           }});
         }} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:8,
