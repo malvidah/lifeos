@@ -162,11 +162,17 @@ class WebViewController: UIViewController {
     private func requestHealthKitPermission(tokenHint: String? = nil) {
         let status = HealthKitSync.shared.authStatus
 
-        // If previously denied, open Settings — iOS won't show the sheet again
-        if status == "denied" {
-            DispatchQueue.main.async {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
+        // If previously denied, iOS won't show the sheet again — send user to Settings
+        if status == "denied" || status == "authorized" {
+            // For denied: user needs to grant in Settings > Privacy > Health
+            // For authorized: shouldn't happen but handle gracefully
+            let settingsUrl = URL(string: UIApplication.openSettingsURLString)!
+            UIApplication.shared.open(settingsUrl, options: [:]) { success in
+                if !success {
+                    // Fallback: try the Privacy settings URL directly
+                    if let privacyUrl = URL(string: "app-settings:") {
+                        UIApplication.shared.open(privacyUrl, options: [:], completionHandler: nil)
+                    }
                 }
             }
             return
