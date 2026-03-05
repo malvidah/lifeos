@@ -3,6 +3,7 @@ import WebKit
 import AuthenticationServices
 import AVFoundation
 import Speech
+import HealthKit
 
 private let appURL = URL(string: "https://www.daylab.me")!
 
@@ -150,16 +151,10 @@ class WebViewController: UIViewController {
         HealthKitSync.shared.checkStatusAndNotify(webView: webView)
 
         // Then sync if already authorized (no permission prompt)
-        webView.evaluateJavaScript("""
-            localStorage.getItem('daylab:token')
-        """) { result, _ in
+        guard HealthKitSync.shared.isAuthorized else { return }
+        webView.evaluateJavaScript("localStorage.getItem('daylab:token')") { result, _ in
             guard let token = result as? String, !token.isEmpty else { return }
-            // Only auto-sync if already authorized — don't prompt unprompted
-            guard let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
-            let status = HKHealthStore().authorizationStatus(for: stepsType)
-            if status == .sharingAuthorized {
-                HealthKitSync.shared.requestPermissionAndSync(token: token, date: Date(), webView: self.webView)
-            }
+            HealthKitSync.shared.syncHealthKit(token: token, date: Date(), webView: self.webView)
         }
     }
 

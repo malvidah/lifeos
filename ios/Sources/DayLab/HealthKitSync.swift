@@ -19,6 +19,13 @@ class HealthKitSync {
         return types
     }()
 
+    // Check if already authorized (steps as representative type)
+    var isAuthorized: Bool {
+        guard HKHealthStore.isHealthDataAvailable(),
+              let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return false }
+        return store.authorizationStatus(for: stepsType) == .sharingAuthorized
+    }
+
     // Check auth status and notify the web view — called on every page load
     func checkStatusAndNotify(webView: WKWebView) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
