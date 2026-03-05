@@ -23,6 +23,13 @@ class WebViewController: UIViewController {
         wv.scrollView.backgroundColor = wv.backgroundColor
         wv.allowsBackForwardNavigationGestures = true
 
+        // Add DayLab to user agent so JS can detect native app reliably
+        wv.evaluateJavaScript("navigator.userAgent") { result, _ in
+            if let ua = result as? String {
+                wv.customUserAgent = ua + " DayLab/1.0"
+            }
+        }
+
         let script = WKUserScript(
             source: "window.daylabNative = { platform: 'ios', version: '1.0.0' };",
             injectionTime: .atDocumentStart,
@@ -130,14 +137,12 @@ class WebViewController: UIViewController {
     // MARK: - Google OAuth via ASWebAuthenticationSession
 
     private func startOAuth(url: URL) {
-        // Use https callback — intercept it when it comes back
         let session = ASWebAuthenticationSession(
             url: url,
-            callbackURLScheme: "https"
+            callbackURLScheme: "daylab"
         ) { [weak self] callbackURL, error in
             guard let self = self, let callbackURL = callbackURL else { return }
-            // Load the callback URL directly in the webview
-            self.webView.load(URLRequest(url: callbackURL))
+            self.handleDeepLink(callbackURL)
         }
         session.presentationContextProvider = self
         session.prefersEphemeralWebBrowserSession = false

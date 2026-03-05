@@ -2143,9 +2143,11 @@ function LoginScreen() {
         <button disabled={loading} onClick={async()=>{
           setLoading(true);
           const supabase=createClient();
+          const isNative = /DayLab/i.test(navigator.userAgent) || !!(window.daylabNative || window.dayloopNative);
+          const redirectTo = isNative ? `daylab://auth/callback` : `${window.location.origin}/auth/callback`;
           await supabase.auth.signInWithOAuth({provider:"google",options:{
             scopes:"https://www.googleapis.com/auth/calendar",
-            redirectTo: `${window.location.origin}/auth/callback`,
+            redirectTo,
             queryParams:{access_type:"offline",prompt:"consent"},
           }});
         }} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:8,
