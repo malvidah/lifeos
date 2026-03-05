@@ -566,12 +566,13 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 {(appleHealthConnected||appleHealthHasData)?"✓ Connected":"Connect Apple Health"}
               </button>
             ) : (
-              <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,
-                background:C.surface,border:`1px solid ${C.border}`,
-                borderRadius:5,padding:"7px 10px",
-                display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <span>{appleHealthHasData?"✓ Syncing via iOS app":"Available on iOS app"}</span>
-                {appleHealthHasData&&<span style={{color:C.green}}>✓</span>}
+              <div style={{fontFamily:mono,fontSize:F.sm,
+                background:"none",
+                border:`1px solid ${appleHealthHasData?C.green:C.border2}`,
+                borderRadius:5,color:appleHealthHasData?C.green:C.dim,
+                padding:"7px",textAlign:"center",
+                letterSpacing:"0.06em",textTransform:"uppercase"}}>
+                {appleHealthHasData?"✓ Connected":"iOS App Required"}
               </div>
             )}
           </div>
@@ -1099,7 +1100,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 <div style={{textAlign:"center", marginBottom:6, paddingTop:2, flexShrink:0}}>
                   <div style={{
                     fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em",
-                    color: isCtr ? C.accent : C.muted,
+                    color: C.accent,
                     marginBottom:3,
                   }}>{DAY_NAMES[d.getDay()]}</div>
                   <div style={{
@@ -1107,7 +1108,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     fontSize: isCtr ? F.md : F.sm,
                     fontWeight: isCtr ? "600" : "normal",
                     lineHeight:1,
-                    color: isTdy ? C.accent : isCtr ? C.text : C.muted,
+                    color: isTdy && isCtr ? C.text : C.accent,
                   }}>{d.getDate()}</div>
                   {/* Health dots */}
                   <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
@@ -1131,16 +1132,16 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                         background:`${ev.color||C.accent}22`,
                         cursor: isCtr && onEventClick ? 'pointer' : 'default',
                         transition:'background 0.1s',
-                        opacity: isCtr ? 1 : 0.65,
+                        opacity: isCtr ? 1 : 0.85,
                       }}
                       onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}38`;}:undefined}
                       onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}22`;}:undefined}
                     >
-                      <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||C.accent}`, lineHeight:1.3, opacity:0.7}}>
+                      <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||C.accent}`, lineHeight:1.3, opacity: isCtr ? 0.7 : 0.85}}>
                         {ev.time !== "all day" ? ev.time : ""}
                       </div>
                       <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||C.accent}`,
-                        lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap"}}>
+                        lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", opacity: isCtr ? 1 : 0.85}}>
                         {ev.title}
                       </div>
                     </div>
