@@ -160,6 +160,10 @@ class WebViewController: UIViewController {
 
     // Called when web sends daylabRequestHealthKit — user tapped "Connect"
     private func requestHealthKitPermission(tokenHint: String? = nil) {
+        // DEBUG: confirm native handler was called
+        DispatchQueue.main.async {
+            self.webView.evaluateJavaScript("alert('DEBUG native: requestHealthKitPermission called, tokenHint=\(tokenHint != nil ? "yes" : "nil")')", completionHandler: nil)
+        }
         // Request permission immediately — never gate on token
         HealthKitSync.shared.requestPermission { [weak self] granted in
             guard granted, let self = self else { return }

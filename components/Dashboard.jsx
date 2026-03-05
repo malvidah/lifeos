@@ -555,9 +555,16 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             {isIOS ? (
               <button
                 onClick={()=>{
-                  if(window.webkit?.messageHandlers?.daylabRequestHealthKit){
-                    window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: token||localStorage.getItem('daylab:token')||''});
-                  }
+                  // DEBUG: trace each step
+                  const hasWebkit = !!(window.webkit);
+                  const hasHandlers = !!(window.webkit?.messageHandlers);
+                  const hasHK = !!(window.webkit?.messageHandlers?.daylabRequestHealthKit);
+                  const tok = token||localStorage.getItem('daylab:token')||'';
+                  if(!hasWebkit) { alert('DEBUG: window.webkit missing'); return; }
+                  if(!hasHandlers) { alert('DEBUG: messageHandlers missing'); return; }
+                  if(!hasHK) { alert('DEBUG: daylabRequestHealthKit handler missing'); return; }
+                  if(!tok) { alert('DEBUG: no token available'); }
+                  window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: tok});
                 }}
                 style={{
                   width:"100%",
