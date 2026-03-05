@@ -151,24 +151,7 @@ class WebViewController: UIViewController {
 
         // Then sync if already authorized (no permission prompt)
         webView.evaluateJavaScript("""
-            (function() {
-                try {
-                    const keys = Object.keys(localStorage);
-                    for (const k of keys) {
-                        if (k.includes('auth-token') || k.includes('access_token')) {
-                            const val = localStorage.getItem(k);
-                            if (val) return val;
-                        }
-                    }
-                    for (const k of keys) {
-                        if (k.startsWith('sb-')) {
-                            const parsed = JSON.parse(localStorage.getItem(k) || '{}');
-                            if (parsed.access_token) return parsed.access_token;
-                        }
-                    }
-                } catch(e) {}
-                return null;
-            })()
+            localStorage.getItem('daylab:token')
         """) { result, _ in
             guard let token = result as? String, !token.isEmpty else { return }
             // Only auto-sync if already authorized — don't prompt unprompted
@@ -187,24 +170,9 @@ class WebViewController: UIViewController {
             guard granted, let self = self else { return }
             self.webView.evaluateJavaScript("""
                 (function() {
-                    try {
-                        const keys = Object.keys(localStorage);
-                        for (const k of keys) {
-                            try {
-                                const parsed = JSON.parse(localStorage.getItem(k) || '{}');
-                                if (parsed.access_token) return parsed.access_token;
-                                if (parsed.data && parsed.data.session && parsed.data.session.access_token)
-                                    return parsed.data.session.access_token;
-                            } catch(e) {}
-                        }
-                        const skeys = Object.keys(sessionStorage || {});
-                        for (const k of skeys) {
-                            try {
-                                const parsed = JSON.parse(sessionStorage.getItem(k) || '{}');
-                                if (parsed.access_token) return parsed.access_token;
-                            } catch(e) {}
-                        }
-                    } catch(e) {}
+                    // Bridge key written by React whenever session changes
+                    const direct = localStorage.getItem('daylab:token');
+                    if (direct) return direct;
                     return null;
                 })()
             """) { result, _ in

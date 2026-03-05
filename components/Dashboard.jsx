@@ -2895,6 +2895,13 @@ export default function Dashboard() {
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
 
+  // Expose token to native iOS layer (Swift reads this for HealthKit sync)
+  // @supabase/ssr uses cookies not localStorage, so we bridge it manually
+  useEffect(()=>{
+    if(token) localStorage.setItem('daylab:token', token);
+    else localStorage.removeItem('daylab:token');
+  },[token]);
+
   // ── Pull-to-refresh from native iOS app ────────────────────────────────
   useEffect(() => {
     const handler = () => {

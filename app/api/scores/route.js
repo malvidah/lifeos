@@ -262,6 +262,11 @@ export async function GET(request) {
   const localToday = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
   const date = searchParams.get('date') || localToday;
 
+  // Refuse to compute or store scores for future dates
+  if (date > localToday) {
+    return Response.json({ error: 'future_date', message: 'Scores unavailable for future dates' }, { status: 400 });
+  }
+
   const authHeader = request.headers.get('authorization') || '';
   const jwt = authHeader.replace('Bearer ', '').trim();
   if (!jwt) return Response.json({ error: 'unauthorized' }, { status: 401 });

@@ -1,14 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
-export async function POST(request) {
-  const authHeader = request.headers.get('authorization') || '';
-  const jwt = authHeader.replace('Bearer ', '').trim();
-  if (!jwt) return Response.json({ error: 'unauthorized' }, { status: 401 });
-
-  const supabase = createClient(
+export async function POST() {
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { global: { headers: { Authorization: `Bearer ${jwt}` } } }
+    { cookies: { getAll: () => cookieStore.getAll() } }
   );
 
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
@@ -25,5 +23,5 @@ export async function POST(request) {
     .gt('date', today);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ ok: true, today, message: 'Deleted all future health/score rows' });
+  return Response.json({ ok: true, today });
 }
