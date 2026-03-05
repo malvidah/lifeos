@@ -2143,12 +2143,9 @@ function LoginScreen() {
         <button disabled={loading} onClick={async()=>{
           setLoading(true);
           const supabase=createClient();
-          const isNative = !!(window.daylabNative || window.dayloopNative);
-          const redirectTo = isNative ? `daylab://auth/callback` : `${window.location.origin}/auth/callback`;
-          console.log('[Auth] isNative:', isNative, 'redirectTo:', redirectTo);
           await supabase.auth.signInWithOAuth({provider:"google",options:{
             scopes:"https://www.googleapis.com/auth/calendar",
-            redirectTo,
+            redirectTo: `${window.location.origin}/auth/callback`,
             queryParams:{access_type:"offline",prompt:"consent"},
           }});
         }} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:8,

@@ -130,14 +130,14 @@ class WebViewController: UIViewController {
     // MARK: - Google OAuth via ASWebAuthenticationSession
 
     private func startOAuth(url: URL) {
+        // Use https callback — intercept it when it comes back
         let session = ASWebAuthenticationSession(
             url: url,
-            callbackURLScheme: "daylab"
+            callbackURLScheme: "https"
         ) { [weak self] callbackURL, error in
-            guard let self = self else { return }
-            if let callbackURL = callbackURL {
-                self.handleDeepLink(callbackURL)
-            }
+            guard let self = self, let callbackURL = callbackURL else { return }
+            // Load the callback URL directly in the webview
+            self.webView.load(URLRequest(url: callbackURL))
         }
         session.presentationContextProvider = self
         session.prefersEphemeralWebBrowserSession = false
