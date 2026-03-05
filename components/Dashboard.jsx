@@ -1109,7 +1109,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     fontSize: isCtr ? F.md : F.sm,
                     fontWeight: isCtr ? "600" : "normal",
                     lineHeight:1,
-                    color: (isCtr && isTdy) ? C.text : (isCtr || isTdy) ? C.accent : C.muted,
+                    color: isCtr ? C.text : isTdy ? C.accent : C.muted,
                   }}>{d.getDate()}</div>
                   {/* Health dots */}
                   <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
