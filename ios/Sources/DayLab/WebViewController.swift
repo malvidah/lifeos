@@ -137,8 +137,38 @@ class WebViewController: UIViewController {
             // Post message to web app to trigger data sync
             webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('daylabRefresh'))") { _, _ in }
         }
+        // Sync HealthKit data
+        syncHealthKit()
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
             self.refreshControl.endRefreshing()
+        }
+    }
+
+    private func syncHealthKit() {
+        // Get auth token from web session, then sync
+        webView.evaluateJavaScript("""
+            (function() {
+                try {
+                    const keys = Object.keys(localStorage);
+                    for (const k of keys) {
+                        if (k.includes('auth-token') || k.includes('access_token')) {
+                            const val = localStorage.getItem(k);
+                            if (val) return val;
+                        }
+                    }
+                    // Try supabase session
+                    for (const k of keys) {
+                        if (k.startsWith('sb-')) {
+                            const parsed = JSON.parse(localStorage.getItem(k) || '{}');
+                            if (parsed.access_token) return parsed.access_token;
+                        }
+                    }
+                } catch(e) {}
+                return null;
+            })()
+        """) { result, _ in
+            guard let token = result as? String, !token.isEmpty else { return }
+            HealthKitSync.shared.requestPermissionAndSync(token: token, date: Date())
         }
     }
 
@@ -191,6 +221,10 @@ extension WebViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         refreshControl.endRefreshing()
         offlineView.isHidden = true
+        // Delay slightly to let JS session initialize
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+            self.syncHealthKit()
+        }
     }
 
     func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {

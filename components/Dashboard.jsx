@@ -1511,7 +1511,29 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
   useEffect(()=>{
     if(!loaded||!token)return;
     onSyncStart("oura");
-    cachedOuraFetch(date, token, userId).then(data=>{
+    cachedOuraFetch(date, token, userId).then(async data=>{
+        if(data.error==="no_token") {
+          // No Oura — fall back to Apple Health data synced from iOS app
+          const {createClient:sbCreate} = await import("@supabase/supabase-js");
+          const sb = sbCreate(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+            {global:{headers:{Authorization:`Bearer ${token}`}}});
+          const {data:row} = await sb.from("entries").select("data")
+            .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
+          if(row?.data) {
+            const d = row.data;
+            setH(p=>({...p,
+              sleepHrs:       d.sleepHrs       ?? "",
+              sleepEff:       d.sleepEff       ?? "",
+              hrv:            d.hrv            ?? "",
+              rhr:            d.rhr            ?? "",
+              activeCalories: d.activeCalories ?? "",
+              totalCalories:  d.totalCalories  ?? "",
+              steps:          d.steps          ?? "",
+              activeMinutes:  d.activeMinutes  ?? "",
+            }));
+          }
+          onSyncEnd("oura"); return;
+        }
         if(data.error){ onSyncEnd("oura"); return; }
         // Nullish coalescing: only set a field if Oura returned a real value.
         // Never fall back to p.x — if Oura has no data for this date, leave it blank.

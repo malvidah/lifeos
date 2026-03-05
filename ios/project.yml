@@ -34,5 +34,11 @@ targets:
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
         INFOPLIST_KEY_NSMicrophoneUsageDescription: "Day Lab uses the microphone to let you add notes, tasks, and activities by voice."
         INFOPLIST_KEY_NSSpeechRecognitionUsageDescription: "Day Lab uses speech recognition to transcribe your voice into notes and tasks."
+        INFOPLIST_KEY_NSHealthShareUsageDescription: "Day Lab reads your health data to show sleep, activity, and heart rate on your dashboard."
+        INFOPLIST_KEY_NSHealthUpdateUsageDescription: "Day Lab writes health data to Apple Health."
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: YES
+    entitlements:
+      path: Sources/DayLab/DayLab.entitlements
+    capabilities:
+      - type: healthKit
