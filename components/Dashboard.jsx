@@ -550,7 +550,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Apple Health */}
           <div style={row}>
             <SectionLabel info="Syncs steps, sleep, heart rate, HRV, and calories from Apple Health into your daily view. Works with Apple Watch, Oura Ring, Whoop, Garmin, and any other app that writes to Apple Health. Requires the iOS app.">
-              Apple Health {(appleHealthConnected||appleHealthHasData)&&<span style={{color:C.green}}>✓</span>}
+              Apple Health
             </SectionLabel>
             {isIOS ? (
               <button
@@ -587,7 +587,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Oura */}
           <div style={row}>
             <SectionLabel info="Syncs your sleep score, HRV, readiness, and recovery data into your daily view. Requires a personal access token from your Oura account.">
-              Oura {ouraConnected&&!ouraEditing&&<span style={{color:C.green}}>✓</span>}
+              Oura
               {" "}{ouraConnected&&!ouraEditing
                 ? <span onClick={()=>setOuraEditing(true)} style={{color:C.dim,cursor:"pointer",fontSize:F.sm,fontFamily:mono,letterSpacing:"0"}}>(Edit Token)</span>
                 : <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
@@ -629,7 +629,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Strava */}
           <div style={row}>
             <SectionLabel info="Syncs your runs, rides, and workouts automatically. Click to authorize Day Lab to read your Strava activity data.">
-              Strava {stravaConnected&&<span style={{color:C.green}}>✓</span>}
+              Strava
             </SectionLabel>
             <button
               onClick={()=>window.location.href="/api/strava-connect"}
@@ -649,7 +649,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Claude */}
           <div style={row}>
             <SectionLabel info="Adds Day Lab as an MCP connector in Claude. Once connected, you can say things like 'add a task' or 'what's on my calendar' directly in any Claude conversation.">
-              Claude {claudeConnected&&<span style={{color:C.green}}>✓</span>}
+              Claude
             </SectionLabel>
             <div style={{
               display:"flex",alignItems:"center",gap:6,
