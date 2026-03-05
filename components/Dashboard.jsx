@@ -1037,11 +1037,12 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
 
           <button onClick={()=>onSelect(todayKey())} style={{
-            background:'none',border:`1px solid ${C.border2}`,borderRadius:5,cursor:'pointer',
-            color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',
+            background: selInt===0 ? C.accent+"22" : 'none',
+            border:`1px solid ${selInt===0 ? C.accent : C.border2}`,borderRadius:5,cursor:'pointer',
+            color: selInt===0 ? C.accent : C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',
             textTransform:'uppercase',padding:'4px 9px',transition:'all 0.15s'}}
             onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-            onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}>
+            onMouseLeave={e=>{e.currentTarget.style.color=selInt===0?C.accent:C.muted;e.currentTarget.style.borderColor=selInt===0?C.accent:C.border2;}}>
             Today
           </button>
                   </div>
@@ -1100,7 +1101,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 <div style={{textAlign:"center", marginBottom:6, paddingTop:2, flexShrink:0}}>
                   <div style={{
                     fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em",
-                    color: isCtr ? C.accent : isTdy ? C.text : C.muted,
+                    color: isCtr || isTdy ? C.accent : C.muted,
                     marginBottom:3,
                   }}>{DAY_NAMES[d.getDay()]}</div>
                   <div style={{
@@ -1108,7 +1109,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     fontSize: isCtr ? F.md : F.sm,
                     fontWeight: isCtr ? "600" : "normal",
                     lineHeight:1,
-                    color: isTdy ? C.text : isCtr ? C.accent : C.muted,
+                    color: isCtr ? C.text : isTdy ? C.accent : C.muted,
                   }}>{d.getDate()}</div>
                   {/* Health dots */}
                   <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
