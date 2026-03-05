@@ -99,7 +99,7 @@ class WebViewController: UIViewController {
         setupLayout()
         loadApp()
         // Pre-request microphone permission so WKWebView can use it
-        AVAudioApplication.requestRecordPermission { _ in }
+        AVAudioSession.sharedInstance().requestRecordPermission { _ in }
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
