@@ -687,9 +687,9 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,
       padding:"0 16px",
       paddingTop: isElectron ? "env(safe-area-inset-top)" : 0,
-      height: isElectron ? "calc(48px + env(safe-area-inset-top))" : 48,
+      height: isElectron ? "calc(44px + env(safe-area-inset-top))" : 44,
       display:"flex",alignItems:"flex-end",gap:12,flexShrink:0,
-      paddingBottom: isElectron ? 8 : 0,
+      paddingBottom: 6,
       position:"sticky",top:0,zIndex:100,
       WebkitAppRegion:"drag",userSelect:"none"}}>
       {/* Left spacer on desktop so date centers properly */}
@@ -2619,6 +2619,15 @@ export default function Dashboard() {
 
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
+
+  // ── Pull-to-refresh from native iOS app ────────────────────────────────
+  useEffect(() => {
+    const handler = () => {
+      window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: {} }));
+    };
+    window.addEventListener('daylabRefresh', handler);
+    return () => window.removeEventListener('daylabRefresh', handler);
+  }, []);
 
   // ── Collapse state ─────────────────────────────────────────────────────
   const [calCollapsed,    toggleCal]      = useCollapse("cal",     false);
