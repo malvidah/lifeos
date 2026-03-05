@@ -38,6 +38,7 @@ class WebViewController: UIViewController {
             forMainFrameOnly: false
         )
         wv.configuration.userContentController.addUserScript(script)
+        wv.configuration.userContentController.add(self, name: "daylabRequestHealthKit")
 
         return wv
     }()
@@ -145,7 +146,10 @@ class WebViewController: UIViewController {
     }
 
     private func syncHealthKit() {
-        // Get auth token from web session, then sync
+        // First notify the web of current HealthKit auth status
+        HealthKitSync.shared.checkStatusAndNotify(webView: webView)
+
+        // Then sync if already authorized (no permission prompt)
         webView.evaluateJavaScript("""
             (function() {
                 try {
@@ -156,7 +160,6 @@ class WebViewController: UIViewController {
                             if (val) return val;
                         }
                     }
-                    // Try supabase session
                     for (const k of keys) {
                         if (k.startsWith('sb-')) {
                             const parsed = JSON.parse(localStorage.getItem(k) || '{}');
@@ -168,7 +171,33 @@ class WebViewController: UIViewController {
             })()
         """) { result, _ in
             guard let token = result as? String, !token.isEmpty else { return }
-            HealthKitSync.shared.requestPermissionAndSync(token: token, date: Date())
+            // Only auto-sync if already authorized — don't prompt unprompted
+            guard let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+            let status = HKHealthStore().authorizationStatus(for: stepsType)
+            if status == .sharingAuthorized {
+                HealthKitSync.shared.requestPermissionAndSync(token: token, date: Date(), webView: self.webView)
+            }
+        }
+    }
+
+    // Called when web sends daylabRequestHealthKit — user tapped "Connect Apple Health"
+    private func requestHealthKitPermission() {
+        webView.evaluateJavaScript("""
+            (function() {
+                try {
+                    const keys = Object.keys(localStorage);
+                    for (const k of keys) {
+                        if (k.startsWith('sb-')) {
+                            const parsed = JSON.parse(localStorage.getItem(k) || '{}');
+                            if (parsed.access_token) return parsed.access_token;
+                        }
+                    }
+                } catch(e) {}
+                return null;
+            })()
+        """) { result, _ in
+            guard let token = result as? String, !token.isEmpty else { return }
+            HealthKitSync.shared.requestPermissionAndSync(token: token, date: Date(), webView: self.webView)
         }
     }
 
@@ -294,5 +323,16 @@ extension WebViewController: WKUIDelegate {
                  type: WKMediaCaptureType,
                  decisionHandler: @escaping (WKPermissionDecision) -> Void) {
         decisionHandler(.grant)
+    }
+}
+
+// MARK: - WKScriptMessageHandler
+
+extension WebViewController: WKScriptMessageHandler {
+    func userContentController(_ userContentController: WKUserContentController,
+                                didReceive message: WKScriptMessage) {
+        if message.name == "daylabRequestHealthKit" {
+            requestHealthKitPermission()
+        }
     }
 }

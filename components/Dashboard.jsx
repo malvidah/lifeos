@@ -1566,6 +1566,22 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
     if(prevScoreDate.current !== date){ prevScoreDate.current = date; setScores(null); }
   },[date]);
 
+  // ── Apple Health connect prompt (iOS only) ────────────────────────────────
+  const [hkStatus, setHkStatus] = useState(null); // null | 'not_determined' | 'authorized' | 'denied'
+  useEffect(()=>{
+    if(typeof window === 'undefined') return;
+    const handler = e => setHkStatus(e.detail?.status ?? null);
+    window.addEventListener('daylabHealthKit', handler);
+    return () => window.removeEventListener('daylabHealthKit', handler);
+  },[]);
+
+  const connectAppleHealth = () => {
+    // Send message to iOS native layer
+    if(window.webkit?.messageHandlers?.daylabRequestHealthKit) {
+      window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({});
+    }
+  };
+
   useEffect(()=>{
     if(!token) return;
     fetch(`/api/scores?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
@@ -1629,6 +1645,21 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
           </span>
         )}
       </div>
+      {/* Apple Health connect prompt — iOS only, shown when not yet authorized */}
+      {hkStatus==="not_determined"&&!collapsed&&(
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
+          padding:"8px 14px",borderBottom:`1px solid ${C.border}`,
+          background:"rgba(255,255,255,0.03)"}}>
+          <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted}}>
+            Connect Apple Health for health scores
+          </span>
+          <button onClick={connectAppleHealth}
+            style={{fontFamily:mono,fontSize:F.sm,color:C.blue,background:"none",border:"none",
+              cursor:"pointer",padding:"2px 0",letterSpacing:"0.03em"}}>
+            Connect →
+          </button>
+        </div>
+      )}
       {/* Metrics row */}
       {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
         {metrics.map((m,mi)=>(

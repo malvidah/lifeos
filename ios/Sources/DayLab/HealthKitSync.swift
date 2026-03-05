@@ -1,5 +1,6 @@
 import Foundation
 import HealthKit
+import WebKit
 
 class HealthKitSync {
     static let shared = HealthKitSync()
@@ -18,9 +19,46 @@ class HealthKitSync {
         return types
     }()
 
-    func requestPermissionAndSync(token: String, date: Date) {
+    // Check auth status and notify the web view — called on every page load
+    func checkStatusAndNotify(webView: WKWebView) {
+        guard HKHealthStore.isHealthDataAvailable() else { return }
+
+        // Check auth status of one representative type (steps)
+        guard let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+        let status = store.authorizationStatus(for: stepsType)
+
+        let statusStr: String
+        switch status {
+        case .notDetermined: statusStr = "not_determined"
+        case .sharingDenied:  statusStr = "denied"
+        case .sharingAuthorized: statusStr = "authorized"
+        @unknown default:    statusStr = "unknown"
+        }
+
+        DispatchQueue.main.async {
+            webView.evaluateJavaScript("""
+                window.dispatchEvent(new CustomEvent('daylabHealthKit', {
+                    detail: { status: '\(statusStr)' }
+                }));
+            """, completionHandler: nil)
+        }
+    }
+
+    // Request permission then sync — called when user taps "Connect Apple Health"
+    func requestPermissionAndSync(token: String, date: Date, webView: WKWebView? = nil) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
         store.requestAuthorization(toShare: nil, read: readTypes) { granted, _ in
+            // Notify web view of updated status
+            if let wv = webView {
+                DispatchQueue.main.async {
+                    let statusStr = granted ? "authorized" : "denied"
+                    wv.evaluateJavaScript("""
+                        window.dispatchEvent(new CustomEvent('daylabHealthKit', {
+                            detail: { status: '\(statusStr)' }
+                        }));
+                    """, completionHandler: nil)
+                }
+            }
             guard granted else { return }
             self.syncDate(token: token, date: date)
         }
