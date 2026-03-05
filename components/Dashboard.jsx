@@ -757,6 +757,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
               Sign out →
             </button>
+            {isIOS&&<span style={{fontFamily:mono,fontSize:"9px",color:C.muted,opacity:0.5,marginLeft:"auto"}}>
+              {window.daylabNative?.version||"?"}
+            </span>}
           </div>
 
         </div>

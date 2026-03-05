@@ -30,7 +30,7 @@ class WebViewController: UIViewController {
         let script = WKUserScript(
             source: """
                 Object.defineProperty(window, 'daylabNative', {
-                    value: { platform: 'ios', version: '1.0.0' },
+                    value: { platform: 'ios', version: '1.0.1-hk' },
                     writable: false,
                     configurable: false
                 });
