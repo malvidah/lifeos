@@ -2540,13 +2540,13 @@ function ChatFloat({date, token, userId}) {
           value={input}
           onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={busy ? "Adding…" : "Add a note, task, meal, or activity…"}
+          placeholder={busy ? "Adding…" : "Add anything…"}
           disabled={busy}
           rows={1}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
             fontFamily: serif, fontSize: F.md, color: C.text,
-            padding: "2px 0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
+            padding: "0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
             resize: "none", overflow: "auto", maxHeight: "120px",
           }}
         />
