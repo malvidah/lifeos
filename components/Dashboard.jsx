@@ -2738,10 +2738,11 @@ export default function Dashboard() {
   const [leftWidget,...rightWidgets] = WIDGETS;
 
   return (
-    <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    <div style={{background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
         html,body{height:100%;overflow:hidden;background:${C.bg} !important;}
+        @media(max-width:768px){html,body{overflow:auto;height:auto;}}
         ::-webkit-scrollbar{display:none;}
         *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
@@ -2757,7 +2758,7 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, overflow:"hidden", padding:mobile?8:10,
+        <div style={{flex:1, overflow:mobile?"visible":"hidden", padding:mobile?8:10,
           paddingBottom:mobile?80:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
