@@ -29,8 +29,15 @@ class HealthKitSync {
     // Request permission — note: 'granted' means "request completed", NOT "user allowed"
     // The only real signal is whether subsequent HealthKit queries return data.
     func requestPermission(completion: @escaping (Bool) -> Void) {
-        guard HKHealthStore.isHealthDataAvailable() else { completion(false); return }
-        store.requestAuthorization(toShare: nil, read: readTypes) { _, _ in
+        guard HKHealthStore.isHealthDataAvailable() else {
+            print("DAYLAB-HK: isHealthDataAvailable = FALSE")
+            completion(false)
+            return
+        }
+        print("DAYLAB-HK: isHealthDataAvailable = TRUE, calling requestAuthorization...")
+        print("DAYLAB-HK: readTypes count = \(readTypes.count)")
+        store.requestAuthorization(toShare: nil, read: readTypes) { _, error in
+            print("DAYLAB-HK: requestAuthorization completed, error = \(String(describing: error))")
             // Always treat as success here — the sync will return empty if denied
             // Web will show "connected" only if Supabase health_apple data appears
             DispatchQueue.main.async { completion(true) }

@@ -163,11 +163,9 @@ class WebViewController: UIViewController {
 
     // Called when web sends daylabRequestHealthKit — user tapped "Connect"
     private func requestHealthKitPermission(tokenHint: String? = nil) {
-        // NOTE: We do NOT check authorizationStatus here.
-        // Apple intentionally returns .sharingDenied for read-only apps to protect privacy.
-        // The only correct approach is to always call requestAuthorization — iOS shows the
-        // sheet on first request, silently succeeds if already granted.
+        print("DAYLAB-HK: requestHealthKitPermission called, tokenHint=\(tokenHint?.isEmpty == false ? "yes" : "nil/empty")")
         HealthKitSync.shared.requestPermission { [weak self] granted in
+            print("DAYLAB-HK: requestPermission callback, granted=\(granted)")
             guard let self = self else { return }
             let statusStr = granted ? "authorized" : "denied"
             DispatchQueue.main.async {
@@ -321,6 +319,7 @@ extension WebViewController: WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController,
                                 didReceive message: WKScriptMessage) {
         if message.name == "daylabRequestHealthKit" {
+            print("DAYLAB-HK: message received from web, body=\(message.body)")
             // Extract token from message body if provided (most reliable path)
             let bodyToken: String?
             if let body = message.body as? [String: Any],
