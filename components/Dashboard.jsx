@@ -2473,8 +2473,8 @@ function ChatFloat({date, token, userId}) {
       alignItems: "center",
       background: C.surface,
       borderTop: `1px solid ${C.border}`,
-      padding: "8px 16px",
-      paddingBottom: "max(8px, env(safe-area-inset-bottom, 8px))",
+      padding: "6px 12px",
+      paddingBottom: "max(6px, env(safe-area-inset-bottom, 6px))",
       gap: 6,
     }}>
 
@@ -2763,7 +2763,7 @@ export default function Dashboard() {
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, overflow:mobile?"visible":"hidden", padding:mobile?8:10,
-          paddingBottom:mobile?80:0, display:"flex", flexDirection:"column", gap:8}}>
+          paddingBottom:mobile?120:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
