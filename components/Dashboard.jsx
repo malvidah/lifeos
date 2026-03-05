@@ -1558,16 +1558,53 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
 
 
   const purple = "#8B6BB5";
-  // All fields are read-only — data comes from Oura, no onChange handlers
+
+  // ── Computed scores from /api/scores ──────────────────────────────────────
+  const [scores, setScores] = useState(null);
+  const prevScoreDate = useRef(date);
+  useEffect(()=>{
+    if(prevScoreDate.current !== date){ prevScoreDate.current = date; setScores(null); }
+  },[date]);
+
+  useEffect(()=>{
+    if(!token) return;
+    fetch(`/api/scores?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
+      .then(r=>r.json()).then(d=>{ if(!d.error) setScores(d); }).catch(()=>{});
+  },[date,token,h]); // re-run when h updates (new health data synced)
+
+  // ── Sparkline SVG ─────────────────────────────────────────────────────────
+  function Sparkline({data, color, width=52, height=20}) {
+    const pts = (data||[]).filter(v=>v!=null);
+    if(pts.length < 2) return <div style={{width,height}}/>;
+    const mn = Math.min(...pts), mx = Math.max(...pts);
+    const range = mx - mn || 1;
+    const xs = pts.map((_,i) => (i/(pts.length-1))*(width-2)+1);
+    const ys = pts.map(v => height-1 - ((v-mn)/range)*(height-2));
+    return (
+      <svg width={width} height={height} style={{display:'block',overflow:'visible'}}>
+        <polyline points={xs.map((x,i)=>`${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ')}
+          fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" opacity="0.7"/>
+        <circle cx={xs[xs.length-1].toFixed(1)} cy={ys[ys.length-1].toFixed(1)} r="2" fill={color}/>
+      </svg>
+    );
+  }
+
+  const calibDays = scores?.calibrationDays ?? 0;
+  const showBadge = calibDays > 0 && calibDays < 14;
+
   const metrics=[
-    {key:"sleep",label:"Sleep",color:C.blue,score:h.sleepScore,
-      fields:[{label:"Hours",value:h.sleepHrs,unit:"h"},{label:"Effic.",value:h.sleepEff,unit:"%"}]},
-    {key:"readiness",label:"Readiness",color:C.green,score:h.readinessScore,
-      fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}]},
-    {key:"activity",label:"Activity",color:C.accent,score:h.activityScore,
-      fields:[{label:"Burn",value:h.totalCalories||h.activeCalories,unit:"kcal"},{label:"Active",value:h.activeMinutes,unit:"min"}]},
-    {key:"recovery",label:"Recovery",color:purple,score:h.resilienceScore,
-      fields:[{label:"Stress",...fmtMinsField(h.stressMins)},{label:"Recov.",...fmtMinsField(h.recoveryMins)}]},
+    {key:"sleep",    label:"Sleep",    color:C.blue,  score:scores?.sleep?.score,
+      fields:[{label:"Hours",value:h.sleepHrs,unit:"h"},{label:"Effic.",value:h.sleepEff,unit:"%"}],
+      sparkline:scores?.sleep?.sparkline},
+    {key:"readiness",label:"Readiness",color:C.green, score:scores?.readiness?.score,
+      fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}],
+      sparkline:scores?.readiness?.sparkline},
+    {key:"activity", label:"Activity", color:C.accent,score:scores?.activity?.score,
+      fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Active",value:h.activeMinutes,unit:"min"}],
+      sparkline:scores?.activity?.sparkline},
+    {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
+      fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}],
+      sparkline:scores?.recovery?.sparkline},
   ];
 
 
@@ -1580,6 +1617,13 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
         {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
           textTransform:"uppercase",color:C.muted,flex:1}}>Health</span>
+        {showBadge&&(
+          <span title={`Scores calibrating — ${calibDays}/14 days of data. Currently using health guidelines as reference.`}
+            style={{fontFamily:mono,fontSize:"10px",color:C.accent,border:`1px solid ${C.accent}`,
+              borderRadius:4,padding:"1px 5px",opacity:0.8,cursor:"default"}}>
+            ⚡ calibrating
+          </span>
+        )}
       </div>
       {/* Metrics row */}
       {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
@@ -1592,7 +1636,10 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
                 <Ring score={m.score} color={m.color} size={48}/>
               </div>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color,marginBottom:4}}>{m.label}</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                  <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
+                  {m.sparkline&&<Sparkline data={m.sparkline} color={m.color}/>}
+                </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
                     <div key={f.label}>
@@ -1613,6 +1660,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
 }
 
 // ─── Notes ────────────────────────────────────────────────────────────────────
+
 // Plain textarea with a transparent overlay that colorizes "# heading" lines.
 // Cmd+B / Cmd+I wrap selected text in ** / *.
 function Notes({date,userId,token}) {

@@ -25,15 +25,19 @@ function dateOffset(dateStr, days) {
 function formatDay(date, entries) {
   const parts = [];
   const h = entries.health;
+  const s = entries.scores; // computed scores
 
-  if (h) {
+  if (h || s) {
     const scores = [
-      h.sleepScore      && `sleep ${h.sleepScore}${h.sleepHrs ? ` (${h.sleepHrs}h ${h.sleepEff}% eff)` : ''}`,
-      h.readinessScore  && `readiness ${h.readinessScore}`,
-      h.hrv             && `HRV ${h.hrv}ms`,
-      h.rhr             && `RHR ${h.rhr}bpm`,
-      h.activityScore   && `activity ${h.activityScore}`,
-      h.resilienceScore && `recovery ${h.resilienceScore}`,
+      s?.sleepScore     && `sleep score ${s.sleepScore}${h?.sleepHrs ? ` (${h.sleepHrs}h${h.sleepEff ? ` ${h.sleepEff}% eff` : ''})` : ''}`,
+      s?.readinessScore && `readiness ${s.readinessScore}`,
+      h?.hrv            && `HRV ${h.hrv}ms`,
+      h?.rhr            && `RHR ${h.rhr}bpm`,
+      s?.activityScore  && `activity ${s.activityScore}${h?.steps ? ` (${Number(h.steps).toLocaleString()} steps)` : ''}`,
+      s?.recoveryScore  && `recovery ${s.recoveryScore}`,
+      !s && h?.sleepScore     && `sleep ${h.sleepScore}${h.sleepHrs ? ` (${h.sleepHrs}h)` : ''}`,
+      !s && h?.readinessScore && `readiness ${h.readinessScore}`,
+      !s && h?.activityScore  && `activity ${h.activityScore}`,
     ].filter(Boolean);
     if (scores.length) parts.push(scores.join(', '));
   }
