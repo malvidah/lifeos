@@ -19,39 +19,31 @@ class HealthKitSync {
         return types
     }()
 
-    // Check auth status and notify the web view — called on every page load
-    // NOTE: Apple hides read permission status for privacy. We probe by attempting a real
-    // query — if we get data back, we're authorized. If not, we're not_determined or denied.
+    // Persist granted state — the ONLY reliable source of truth for read-only HealthKit
+    private let grantedKey = "daylab.healthkit.granted"
+    var wasGranted: Bool {
+        get { UserDefaults.standard.bool(forKey: grantedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: grantedKey) }
+    }
+
+    // Notify web view of stored permission state
     func checkStatusAndNotify(webView: WKWebView) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        // Probe with a real query — Apple hides read status so we must try reading
-        guard let stepsType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
-        let now = Date()
-        let start = Calendar.current.startOfDay(for: now)
-        let pred = HKQuery.predicateForSamples(withStart: start, end: now, options: .strictStartDate)
-        let q = HKStatisticsQuery(quantityType: stepsType, quantitySamplePredicate: pred, options: .cumulativeSum) { _, stats, error in
-            let statusStr: String
-            if error != nil {
-                statusStr = "not_determined"
-            } else {
-                // Any response (even nil stats) means we have read access
-                statusStr = "authorized"
-            }
-            DispatchQueue.main.async {
-                webView.evaluateJavaScript("""
-                    window.dispatchEvent(new CustomEvent('daylabHealthKit', {
-                        detail: { status: '\(statusStr)' }
-                    }));
-                """, completionHandler: nil)
-            }
+        let statusStr = wasGranted ? "authorized" : "not_determined"
+        DispatchQueue.main.async {
+            webView.evaluateJavaScript("""
+                window.dispatchEvent(new CustomEvent('daylabHealthKit', {
+                    detail: { status: '\(statusStr)' }
+                }));
+            """, completionHandler: nil)
         }
-        store.execute(q)
     }
 
     // Request permission only — callback with granted bool
     func requestPermission(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else { completion(false); return }
-        store.requestAuthorization(toShare: nil, read: readTypes) { granted, _ in
+        store.requestAuthorization(toShare: nil, read: readTypes) { [weak self] granted, _ in
+            self?.wasGranted = granted  // persist — only reliable source of truth
             DispatchQueue.main.async { completion(granted) }
         }
     }
@@ -59,6 +51,7 @@ class HealthKitSync {
     // Sync a specific date — called after permission is granted
     func syncHealthKit(token: String, date: Date, webView: WKWebView? = nil) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
+        wasGranted = true  // if we're syncing, we have permission
         if let wv = webView {
             DispatchQueue.main.async {
                 wv.evaluateJavaScript("""
