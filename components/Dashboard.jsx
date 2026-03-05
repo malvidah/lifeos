@@ -686,7 +686,10 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
   return (
     <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,
       padding:"0 16px",
-      height:48,display:"flex",alignItems:"center",gap:12,flexShrink:0,
+      paddingTop: isElectron ? "env(safe-area-inset-top)" : 0,
+      height: isElectron ? "calc(48px + env(safe-area-inset-top))" : 48,
+      display:"flex",alignItems:"flex-end",gap:12,flexShrink:0,
+      paddingBottom: isElectron ? 8 : 0,
       position:"sticky",top:0,zIndex:100,
       WebkitAppRegion:"drag",userSelect:"none"}}>
       {/* Left spacer on desktop so date centers properly */}

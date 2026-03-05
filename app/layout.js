@@ -27,6 +27,7 @@ export const viewport = {
   maximumScale: 1,
   userScalable: false,
   themeColor: "#141412",
+  viewportFit: "cover",
 };
 
 // This script runs synchronously before any paint — zero flash possible.
