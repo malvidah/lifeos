@@ -1181,7 +1181,38 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
   }
 
   function closePanel() { setActive(null); setSaveErr(''); setDirty(false); }
-  function updateForm(patch) { setForm(f => ({...f,...patch})); setDirty(true); }
+  function updateForm(patch) {
+    setForm(f => {
+      const next = {...f, ...patch};
+      // When start time changes, adjust end time
+      if (patch.startTime && !patch.endTime) {
+        const [sh, sm] = patch.startTime.split(':').map(Number);
+        const [eh, em] = f.endTime.split(':').map(Number);
+        const startMins = sh * 60 + sm;
+        const endMins   = eh * 60 + em;
+        if (endMins <= startMins) {
+          // End is before or equal to start — default to 1 hour later (Google Calendar behavior)
+          const newEnd = startMins + 60;
+          const nh = Math.floor(newEnd / 60) % 24;
+          const nm = newEnd % 60;
+          next.endTime = `${String(nh).padStart(2,'0')}:${String(nm).padStart(2,'0')}`;
+        }
+      }
+      // When end time is manually set before start, bump end to 1h after start (like Google)
+      if (patch.endTime && !patch.startTime) {
+        const [sh, sm] = f.startTime.split(':').map(Number);
+        const [eh, em] = patch.endTime.split(':').map(Number);
+        if (!isNaN(sh) && (eh * 60 + em) <= (sh * 60 + sm)) {
+          const newEnd = sh * 60 + sm + 60;
+          const nh = Math.floor(newEnd / 60) % 24;
+          const nm = newEnd % 60;
+          next.endTime = `${String(nh).padStart(2,'0')}:${String(nm).padStart(2,'0')}`;
+        }
+      }
+      return next;
+    });
+    setDirty(true);
+  }
 
   async function save() {
     if (!form.title.trim() || saving) return;
