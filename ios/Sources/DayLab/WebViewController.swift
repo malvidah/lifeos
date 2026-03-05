@@ -107,7 +107,7 @@ class WebViewController: UIViewController {
             $0.translatesAutoresizingMaskIntoConstraints = false
             view.addSubview($0)
             NSLayoutConstraint.activate([
-                $0.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
+                $0.topAnchor.constraint(equalTo: view.topAnchor),
                 $0.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 $0.trailingAnchor.constraint(equalTo: view.trailingAnchor),
                 $0.bottomAnchor.constraint(equalTo: view.bottomAnchor),
@@ -128,9 +128,12 @@ class WebViewController: UIViewController {
         if webView.url == nil {
             loadApp()
         } else {
-            webView.reload()
+            // Post message to web app to trigger data sync
+            webView.evaluateJavaScript("window.dispatchEvent(new CustomEvent('daylabRefresh'))") { _, _ in }
         }
-        refreshControl.endRefreshing()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            self.refreshControl.endRefreshing()
+        }
     }
 
     // MARK: - Google OAuth via ASWebAuthenticationSession
