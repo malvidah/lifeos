@@ -588,29 +588,22 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           <div style={row}>
             <SectionLabel info="Syncs your sleep score, HRV, readiness, and recovery data into your daily view. Requires a personal access token from your Oura account.">
               Oura {ouraConnected&&!ouraEditing&&<span style={{color:C.green}}>✓</span>}
-              {" "}{(!ouraConnected||ouraEditing)&&<a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
-                style={{color:C.dim,textDecoration:"none",fontSize:F.sm,fontFamily:mono,letterSpacing:"0"}}>
-                (Get token →)
-              </a>}
+              {" "}{ouraConnected&&!ouraEditing
+                ? <span onClick={()=>setOuraEditing(true)} style={{color:C.dim,cursor:"pointer",fontSize:F.sm,fontFamily:mono,letterSpacing:"0"}}>(Edit Token)</span>
+                : <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
+                    style={{color:C.dim,textDecoration:"none",fontSize:F.sm,fontFamily:mono,letterSpacing:"0"}}>(Get Token →)</a>
+              }
             </SectionLabel>
             {ouraConnected&&!ouraEditing ? (
-              <div style={{display:"flex",gap:6}}>
-                <div style={{flex:1,padding:"7px",textAlign:"center",
-                  background:"none",border:`1px solid ${C.green}`,
-                  borderRadius:5,color:C.green,fontFamily:mono,fontSize:F.sm,
-                  letterSpacing:"0.04em",textTransform:"uppercase"}}>
-                  ✓ Connected
-                </div>
-                <button onClick={()=>setOuraEditing(true)} style={{
-                  background:"none",border:`1px solid ${C.border2}`,
-                  borderRadius:5,color:C.muted,fontFamily:mono,fontSize:F.sm,
-                  letterSpacing:"0.04em",textTransform:"uppercase",
-                  padding:"0 10px",cursor:"pointer",flexShrink:0}}>
-                  Edit
-                </button>
+              <div style={{
+                width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",
+                background:"none",border:`1px solid ${C.green}`,
+                borderRadius:5,color:C.green,fontFamily:mono,fontSize:F.sm,
+                letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                ✓ Connected
               </div>
             ) : (
-              <div style={{display:"flex",gap:6,alignItems:"stretch"}}> 
+              <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
                 <input
                   type="password" value={ouraKey}
                   onChange={e=>{setOuraKey(e.target.value);setSaved(false);}}
