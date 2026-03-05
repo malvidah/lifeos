@@ -99,13 +99,9 @@ class WebViewController: UIViewController {
         view.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
         setupLayout()
         loadApp()
-        // Configure audio session for microphone access via getUserMedia
+        // Configure audio session for microphone access
         try? AVAudioSession.sharedInstance().setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
         try? AVAudioSession.sharedInstance().setActive(true)
-        // Pre-request microphone permission so WKWebView can use it
-        AVAudioSession.sharedInstance().requestRecordPermission { _ in }
-        // Pre-request speech recognition permission for webkitSpeechRecognition
-        SFSpeechRecognizer.requestAuthorization { _ in }
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }

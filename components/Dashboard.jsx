@@ -2365,10 +2365,8 @@ function ChatFloat({date, token, userId}) {
   }
 
   function toggleMic() {
-    // Debug: show exactly what's available
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const hasMD = !!(navigator.mediaDevices?.getUserMedia);
-    showStatus(`SR:${!!SR} MD:${hasMD} native:${!!window.daylabNative}`, true);
 
     // If already recording via MediaRecorder, stop it
     if (mediaRecorderRef.current?.state === "recording") {
@@ -2389,22 +2387,30 @@ function ChatFloat({date, token, userId}) {
     }
 
     const rec = new SR();
-    rec.continuous = false;
-    rec.interimResults = false;
+    rec.continuous = true;
+    rec.interimResults = true;
     rec.lang = "en-US";
     recognizerRef.current = rec;
 
-    rec.onstart = () => { setListening(true); showStatus("Listening...", true); };
+    let finalTranscript = "";
+
+    rec.onstart = () => { setListening(true); };
     rec.onresult = (e) => {
-      const transcript = Array.from(e.results).map(r => r[0].transcript).join(" ").trim();
-      if (transcript) setInput(prev => prev ? prev + " " + transcript : transcript);
+      let interim = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        if (e.results[i].isFinal) {
+          finalTranscript += e.results[i][0].transcript;
+        } else {
+          interim += e.results[i][0].transcript;
+        }
+      }
+      // Show final + live interim in input
+      setInput(finalTranscript + (interim ? interim : ""));
     };
     rec.onerror = (e) => {
-      console.error("SpeechRecognition error:", e.error);
-      showStatus(`SR error: ${e.error}`, false);
-      if (e.error === "not-allowed") { setListening(false); }
+      if (e.error === "not-allowed") { showStatus("Microphone access denied", false); setListening(false); }
       else if (e.error === "network") { setListening(false); if (!window.daylabNative) recordAndTranscribe(); }
-      else if (e.error !== "no-speech" && e.error !== "aborted") { setListening(false); }
+      else if (e.error !== "no-speech" && e.error !== "aborted") { showStatus(`Mic error: ${e.error}`, false); setListening(false); }
       else { setListening(false); }
     };
     rec.onend = () => { setListening(false); };
