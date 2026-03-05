@@ -164,20 +164,18 @@ class WebViewController: UIViewController {
     }
 
     // Called when web sends daylabRequestHealthKit — user tapped "Connect"
-    private func requestHealthKitPermission() {
+    private func requestHealthKitPermission(tokenHint: String? = nil) {
         // Request permission immediately — never gate on token
         HealthKitSync.shared.requestPermission { [weak self] granted in
             guard granted, let self = self else { return }
-            self.webView.evaluateJavaScript("""
-                (function() {
-                    // Bridge key written by React whenever session changes
-                    const direct = localStorage.getItem('daylab:token');
-                    if (direct) return direct;
-                    return null;
-                })()
-            """) { result, _ in
-                if let token = result as? String, !token.isEmpty {
-                    HealthKitSync.shared.syncHealthKit(token: token, date: Date(), webView: self.webView)
+            // If web passed token directly, use it — otherwise fall back to localStorage
+            if let t = tokenHint, !t.isEmpty {
+                HealthKitSync.shared.syncHealthKit(token: t, date: Date(), webView: self.webView)
+            } else {
+                self.webView.evaluateJavaScript("localStorage.getItem('daylab:token')") { result, _ in
+                    if let token = result as? String, !token.isEmpty {
+                        HealthKitSync.shared.syncHealthKit(token: token, date: Date(), webView: self.webView)
+                    }
                 }
             }
         }
@@ -314,7 +312,15 @@ extension WebViewController: WKScriptMessageHandler {
     func userContentController(_ userContentController: WKUserContentController,
                                 didReceive message: WKScriptMessage) {
         if message.name == "daylabRequestHealthKit" {
-            requestHealthKitPermission()
+            // Extract token from message body if provided (most reliable path)
+            let bodyToken: String?
+            if let body = message.body as? [String: Any],
+               let t = body["token"] as? String, !t.isEmpty {
+                bodyToken = t
+            } else {
+                bodyToken = nil
+            }
+            requestHealthKitPermission(tokenHint: bodyToken)
         }
     }
 }

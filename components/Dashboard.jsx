@@ -556,7 +556,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               <button
                 onClick={()=>{
                   if(window.webkit?.messageHandlers?.daylabRequestHealthKit){
-                    window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({});
+                    window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: token||localStorage.getItem('daylab:token')||''});
                   }
                 }}
                 style={{
@@ -1674,9 +1674,9 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
   },[]);
 
   const connectAppleHealth = () => {
-    // Send message to iOS native layer
+    // Send message to iOS native layer — include token so native doesn't need to re-fetch it
     if(window.webkit?.messageHandlers?.daylabRequestHealthKit) {
-      window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({});
+      window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: token||localStorage.getItem('daylab:token')||''});
     }
   };
 
