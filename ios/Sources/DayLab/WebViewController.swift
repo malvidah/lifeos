@@ -2,6 +2,7 @@ import UIKit
 import WebKit
 import AuthenticationServices
 import AVFoundation
+import Speech
 
 private let appURL = URL(string: "https://www.daylab.me")!
 
@@ -103,6 +104,8 @@ class WebViewController: UIViewController {
         try? AVAudioSession.sharedInstance().setActive(true)
         // Pre-request microphone permission so WKWebView can use it
         AVAudioSession.sharedInstance().requestRecordPermission { _ in }
+        // Pre-request speech recognition permission for webkitSpeechRecognition
+        SFSpeechRecognizer.requestAuthorization { _ in }
     }
 
     override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
