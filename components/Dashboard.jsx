@@ -471,7 +471,12 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     if(!isIOS) return;
     const handler = e => {
       const status = e.detail?.status;
-      setAppleHealthConnected(status); // store full status: 'authorized' | 'denied' | 'not_determined'
+      // Only update connected state from native events during active permission flow
+      // True "connected" = Supabase health_apple data exists (appleHealthHasData)
+      if (status === "authorized") setAppleHealthConnected("authorized");
+      else if (status === "denied") setAppleHealthConnected("denied");
+      // "not_determined" = reset to allow button to show
+      else setAppleHealthConnected(null);
     };
     window.addEventListener("daylabHealthKit", handler);
     return () => window.removeEventListener("daylabHealthKit", handler);
@@ -570,14 +575,14 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 }}
                 style={{
                   width:"100%",
-                  background:(appleHealthConnected==="authorized"||appleHealthHasData)?"none":"rgba(255,255,255,0.04)",
-                  border:`1px solid ${(appleHealthConnected==="authorized"||appleHealthHasData)?C.green:C.border2}`,
+                  background:appleHealthHasData?"none":"rgba(255,255,255,0.04)",
+                  border:`1px solid ${appleHealthHasData?C.green:C.border2}`,
                   borderRadius:5,
-                  color:(appleHealthConnected==="authorized"||appleHealthHasData)?C.green:C.text,
+                  color:appleHealthHasData?C.green:C.text,
                   fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",
                   padding:"7px",cursor:"pointer"
                 }}>
-                {(appleHealthConnected==="authorized"||appleHealthHasData)?"✓ Connected":appleHealthConnected==="denied"?"Open Settings →":"Connect"}
+                {appleHealthHasData?"✓ Connected":appleHealthConnected==="denied"?"Open Settings →":"Connect"}
               </button>
             ) : (
               <div style={{fontFamily:mono,fontSize:F.sm,

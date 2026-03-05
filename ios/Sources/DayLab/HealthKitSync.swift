@@ -19,39 +19,27 @@ class HealthKitSync {
         return types
     }()
 
-    // Persist granted state — the ONLY reliable source of truth for read-only HealthKit
-    private let grantedKey = "daylab.healthkit.granted"
-    var wasGranted: Bool {
-        get { UserDefaults.standard.bool(forKey: grantedKey) }
-        set { UserDefaults.standard.set(newValue, forKey: grantedKey) }
-    }
-
-    // Notify web view of stored permission state
+    // checkStatusAndNotify: we can't reliably detect read-only HealthKit auth status.
+    // The web uses Supabase health_apple data presence as the true "connected" signal.
+    // We only dispatch "authorized" after a successful sync posts data to Supabase.
     func checkStatusAndNotify(webView: WKWebView) {
-        guard HKHealthStore.isHealthDataAvailable() else { return }
-        let statusStr = wasGranted ? "authorized" : "not_determined"
-        DispatchQueue.main.async {
-            webView.evaluateJavaScript("""
-                window.dispatchEvent(new CustomEvent('daylabHealthKit', {
-                    detail: { status: '\(statusStr)' }
-                }));
-            """, completionHandler: nil)
-        }
+        // No-op: don't claim authorized — web checks Supabase for real data instead
     }
 
-    // Request permission only — callback with granted bool
+    // Request permission — note: 'granted' means "request completed", NOT "user allowed"
+    // The only real signal is whether subsequent HealthKit queries return data.
     func requestPermission(completion: @escaping (Bool) -> Void) {
         guard HKHealthStore.isHealthDataAvailable() else { completion(false); return }
-        store.requestAuthorization(toShare: nil, read: readTypes) { [weak self] granted, _ in
-            self?.wasGranted = granted  // persist — only reliable source of truth
-            DispatchQueue.main.async { completion(granted) }
+        store.requestAuthorization(toShare: nil, read: readTypes) { _, _ in
+            // Always treat as success here — the sync will return empty if denied
+            // Web will show "connected" only if Supabase health_apple data appears
+            DispatchQueue.main.async { completion(true) }
         }
     }
 
-    // Sync a specific date — called after permission is granted
+    // Sync a specific date — called after requestAuthorization
     func syncHealthKit(token: String, date: Date, webView: WKWebView? = nil) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        wasGranted = true  // if we're syncing, we have permission
         if let wv = webView {
             DispatchQueue.main.async {
                 wv.evaluateJavaScript("""
