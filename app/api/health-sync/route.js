@@ -18,6 +18,12 @@ export async function POST(request) {
   const { date, ...healthData } = body;
   if (!date) return Response.json({ error: "date required" }, { status: 400 });
 
+  // Don't write empty rows — require at least one real health field
+  const hasData = Object.keys(healthData).some(k =>
+    healthData[k] !== null && healthData[k] !== undefined && healthData[k] !== ""
+  );
+  if (!hasData) return Response.json({ ok: true, skipped: "no data" });
+
   const { error } = await supabase
     .from("entries")
     .upsert({

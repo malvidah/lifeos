@@ -47,15 +47,6 @@ class HealthKitSync {
     // Sync a specific date — called after requestAuthorization
     func syncHealthKit(token: String, date: Date, webView: WKWebView? = nil) {
         guard HKHealthStore.isHealthDataAvailable() else { return }
-        if let wv = webView {
-            DispatchQueue.main.async {
-                wv.evaluateJavaScript("""
-                    window.dispatchEvent(new CustomEvent('daylabHealthKit', {
-                        detail: { status: 'authorized' }
-                    }));
-                """, completionHandler: nil)
-            }
-        }
         self.syncDate(token: token, date: date)
     }
 

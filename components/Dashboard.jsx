@@ -493,8 +493,12 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     import("@supabase/supabase-js").then(({createClient:sbCreate})=>{
       const sb = sbCreate(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
         {global:{headers:{Authorization:`Bearer ${token}`}}});
-      sb.from("entries").select("date").eq("type","health_apple").limit(1)
-        .then(({data})=>{ if(data?.length) setAppleHealthHasData(true); });
+      sb.from("entries").select("data").eq("type","health_apple").limit(5)
+        .then(({data})=>{
+          // Only show connected if at least one row has real health fields
+          const hasReal = data?.some(r => r.data && Object.keys(r.data).some(k=>r.data[k]));
+          if(hasReal) setAppleHealthHasData(true);
+        });
       Promise.all([
         sb.from("entries").select("date").eq("type","oauth_token").limit(1),
         sb.from("entries").select("date").eq("type","agent_token").eq("date","global").limit(1),
@@ -562,9 +566,20 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               <button
                 onTouchEnd={(e)=>{
                   e.preventDefault();
+                  e.stopPropagation();
                   const tok = token||localStorage.getItem('daylab:token')||'';
-                  if(window.webkit?.messageHandlers?.daylabRequestHealthKit){
-                    window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: tok});
+                  const w = window.webkit;
+                  const mh = w?.messageHandlers;
+                  const hk = mh?.daylabRequestHealthKit;
+                  if(!w)   { alert('FAIL: window.webkit undefined'); return; }
+                  if(!mh)  { alert('FAIL: messageHandlers undefined'); return; }
+                  if(!hk)  { alert('FAIL: daylabRequestHealthKit handler missing'); return; }
+                  if(!tok) { alert('WARN: no token, proceeding anyway'); }
+                  try {
+                    hk.postMessage({token: tok});
+                    alert('OK: postMessage sent');
+                  } catch(err) {
+                    alert('ERROR: postMessage threw: ' + err.message);
                   }
                 }}
                 onClick={()=>{
