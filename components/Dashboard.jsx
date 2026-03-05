@@ -1101,7 +1101,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 <div style={{textAlign:"center", marginBottom:6, paddingTop:2, flexShrink:0}}>
                   <div style={{
                     fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em",
-                    color: isCtr ? C.accent : C.muted,
+                    color: (isCtr || isTdy) ? C.accent : C.muted,
                     marginBottom:3,
                   }}>{DAY_NAMES[d.getDay()]}</div>
                   <div style={{
@@ -1109,7 +1109,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     fontSize: isCtr ? F.md : F.sm,
                     fontWeight: isCtr ? "600" : "normal",
                     lineHeight:1,
-                    color: isCtr ? C.accent : C.muted,
+                    color: (isCtr && isTdy) ? C.text : (isCtr || isTdy) ? C.accent : C.muted,
                   }}>{d.getDate()}</div>
                   {/* Health dots */}
                   <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
