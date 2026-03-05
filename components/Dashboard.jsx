@@ -2327,7 +2327,9 @@ function ChatFloat({date, token, userId}) {
     const el = inputRef.current;
     if (!el) return;
     el.style.height = "auto";
-    el.style.height = Math.min(el.scrollHeight, 72) + "px";
+    el.style.height = Math.min(el.scrollHeight, 120) + "px";
+    // Scroll to bottom so latest dictation is always visible
+    el.scrollTop = el.scrollHeight;
   }, [input]);
 
   function showStatus(text, ok) {
@@ -2429,6 +2431,7 @@ function ChatFloat({date, token, userId}) {
     if (!input.trim() || busy) return;
     const userText = input.trim();
     setInput("");
+    if (inputRef.current) { inputRef.current.style.height = "auto"; }
     if (mediaRecorderRef.current?.state === "recording") {
       recordingCancelledRef.current = true;
       mediaRecorderRef.current.stop();
@@ -2535,7 +2538,7 @@ function ChatFloat({date, token, userId}) {
         <textarea
           ref={inputRef}
           value={input}
-          onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 72) + "px"; }}
+          onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           placeholder={busy ? "Adding…" : "Add a note, task, meal, or activity…"}
           disabled={busy}
@@ -2544,7 +2547,7 @@ function ChatFloat({date, token, userId}) {
             flex: 1, background: "transparent", border: "none", outline: "none",
             fontFamily: serif, fontSize: F.md, color: C.text,
             padding: "2px 0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
-            resize: "none", overflow: "hidden", maxHeight: "72px",
+            resize: "none", overflow: "auto", maxHeight: "120px",
           }}
         />
 
