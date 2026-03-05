@@ -23,15 +23,14 @@ class WebViewController: UIViewController {
         wv.scrollView.backgroundColor = wv.backgroundColor
         wv.allowsBackForwardNavigationGestures = true
 
-        // Add DayLab to user agent so JS can detect native app reliably
-        wv.evaluateJavaScript("navigator.userAgent") { result, _ in
-            if let ua = result as? String {
-                wv.customUserAgent = ua + " DayLab/1.0"
-            }
-        }
-
         let script = WKUserScript(
-            source: "window.daylabNative = { platform: 'ios', version: '1.0.0' };",
+            source: """
+                Object.defineProperty(window, 'daylabNative', {
+                    value: { platform: 'ios', version: '1.0.0' },
+                    writable: false,
+                    configurable: false
+                });
+            """,
             injectionTime: .atDocumentStart,
             forMainFrameOnly: false
         )

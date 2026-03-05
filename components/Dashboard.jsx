@@ -2143,7 +2143,7 @@ function LoginScreen() {
         <button disabled={loading} onClick={async()=>{
           setLoading(true);
           const supabase=createClient();
-          const isNative = /DayLab/i.test(navigator.userAgent) || !!(window.daylabNative || window.dayloopNative);
+          const isNative = !!(window.daylabNative);
           const redirectTo = isNative ? `daylab://auth/callback` : `${window.location.origin}/auth/callback`;
           await supabase.auth.signInWithOAuth({provider:"google",options:{
             scopes:"https://www.googleapis.com/auth/calendar",
