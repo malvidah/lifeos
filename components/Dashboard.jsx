@@ -451,6 +451,8 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [ouraKey,setOuraKey]=useState("");
   const [ouraConnected,setOuraConnected]=useState(false);
   const [stravaConnected,setStravaConnected]=useState(false);
+  const [appleHealthConnected,setAppleHealthConnected]=useState(false);
+  const [appleHealthHasData,setAppleHealthHasData]=useState(false);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
   const [urlCopied,setUrlCopied]=useState(false);
@@ -459,6 +461,18 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const user=session?.user;
   const initials=user?.user_metadata?.name?.split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase()||user?.email?.[0]?.toUpperCase()||"?";
   const avatar=user?.user_metadata?.avatar_url;
+  const isIOS = typeof window !== "undefined" && !!window.daylabNative;
+
+  // Listen for HealthKit status events from iOS
+  useEffect(()=>{
+    if(!isIOS) return;
+    const handler = e => {
+      const status = e.detail?.status;
+      setAppleHealthConnected(status === "authorized");
+    };
+    window.addEventListener("daylabHealthKit", handler);
+    return () => window.removeEventListener("daylabHealthKit", handler);
+  },[isIOS]);
 
   useEffect(()=>{
     if(!token||!open)return;
@@ -467,6 +481,16 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     }).catch(()=>{});
     fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
+    // Check if any Apple Health data exists
+    fetch("/api/entries?date=0000-00-00&type=health_apple_check",{headers:{Authorization:`Bearer ${token}`}})
+      .catch(()=>{});
+    // Query Supabase directly for any health_apple entries
+    import("@supabase/supabase-js").then(({createClient})=>{
+      const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        {global:{headers:{Authorization:`Bearer ${token}`}}});
+      sb.from("entries").select("date").eq("type","health_apple").limit(1)
+        .then(({data})=>{ if(data?.length) setAppleHealthHasData(true); });
+    }).catch(()=>{});
   },[token,open]); // eslint-disable-line
   useEffect(()=>{
     if(!open)return;
@@ -514,6 +538,42 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           <div style={{...row,paddingBottom:2}}>
             <div style={{fontFamily:serif,fontSize:F.md,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
             <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
+          </div>
+
+          {divider}
+
+          {/* Apple Health */}
+          <div style={row}>
+            <SectionLabel info="Syncs steps, sleep, heart rate, HRV, and calories from Apple Health into your daily view. Works with Apple Watch, Oura Ring, Whoop, Garmin, and any other app that writes to Apple Health. Requires the iOS app.">
+              Apple Health {(appleHealthConnected||appleHealthHasData)&&<span style={{color:C.green}}>✓</span>}
+            </SectionLabel>
+            {isIOS ? (
+              <button
+                onClick={()=>{
+                  if(window.webkit?.messageHandlers?.daylabRequestHealthKit){
+                    window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({});
+                  }
+                }}
+                style={{
+                  width:"100%",
+                  background:(appleHealthConnected||appleHealthHasData)?"none":"rgba(255,255,255,0.04)",
+                  border:`1px solid ${(appleHealthConnected||appleHealthHasData)?C.green:C.border2}`,
+                  borderRadius:5,
+                  color:(appleHealthConnected||appleHealthHasData)?C.green:C.text,
+                  fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",
+                  padding:"7px",cursor:"pointer"
+                }}>
+                {(appleHealthConnected||appleHealthHasData)?"✓ Connected":"Connect Apple Health"}
+              </button>
+            ) : (
+              <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,
+                background:C.surface,border:`1px solid ${C.border}`,
+                borderRadius:5,padding:"7px 10px",
+                display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <span>{appleHealthHasData?"✓ Syncing via iOS app":"Available on iOS app"}</span>
+                {appleHealthHasData&&<span style={{color:C.green}}>✓</span>}
+              </div>
+            )}
           </div>
 
           {divider}
@@ -1496,6 +1556,7 @@ function fmtMinsField(val) {
 
 function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,collapsed,onToggle}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
+  const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
   // Reset to empty immediately on date change — never show stale previous-day data
   const prevHealthDate = useRef(date);
@@ -1531,10 +1592,18 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
               steps:          d.steps          ?? "",
               activeMinutes:  d.activeMinutes  ?? "",
             }));
+            setDataSource("apple");
           }
           onSyncEnd("oura"); return;
         }
         if(data.error){ onSyncEnd("oura"); return; }
+        // Oura connected — also check if Apple Health has data for this date (could have both)
+        const {createClient:sbCreate2} = await import("@supabase/supabase-js");
+        const sb2 = sbCreate2(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+          {global:{headers:{Authorization:`Bearer ${token}`}}});
+        const {data:appleRow} = await sb2.from("entries").select("date")
+          .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
+        setDataSource(appleRow ? "both" : "oura");
         // Nullish coalescing: only set a field if Oura returned a real value.
         // Never fall back to p.x — if Oura has no data for this date, leave it blank.
         setH(p=>({...p,
@@ -1637,6 +1706,12 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
         {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
           textTransform:"uppercase",color:C.muted,flex:1}}>Health</span>
+        {dataSource&&(
+          <span style={{fontFamily:mono,fontSize:"10px",color:C.dim,
+            border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px"}}>
+            {dataSource==="both"?"Oura + Apple Health":dataSource==="apple"?"Apple Health":"Oura"}
+          </span>
+        )}
         {showBadge&&(
           <span title={`Scores calibrating — ${calibDays}/14 days of data. Currently using health guidelines as reference.`}
             style={{fontFamily:mono,fontSize:"10px",color:C.accent,border:`1px solid ${C.accent}`,
