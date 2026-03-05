@@ -453,6 +453,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [stravaConnected,setStravaConnected]=useState(false);
   const [appleHealthConnected,setAppleHealthConnected]=useState(false);
   const [appleHealthHasData,setAppleHealthHasData]=useState(false);
+  const [claudeConnected,setClaudeConnected]=useState(false);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
   const [urlCopied,setUrlCopied]=useState(false);
@@ -484,8 +485,17 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     // Check if any Apple Health data exists
     fetch("/api/entries?date=0000-00-00&type=health_apple_check",{headers:{Authorization:`Bearer ${token}`}})
       .catch(()=>{});
-    // Query Supabase directly for any health_apple entries
-    import("@supabase/supabase-js").then(({createClient})=>{
+    // Check if Claude MCP is connected (oauth_token or agent_token exists)
+    import("@supabase/supabase-js").then(({createClient:sbCreate3})=>{
+      const sb3 = sbCreate3(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+        {global:{headers:{Authorization:`Bearer ${token}`}}});
+      Promise.all([
+        sb3.from("entries").select("date").eq("type","oauth_token").limit(1),
+        sb3.from("entries").select("date").eq("type","agent_token").eq("date","global").limit(1),
+      ]).then(([oauth, agent])=>{
+        if(oauth.data?.length || agent.data?.length) setClaudeConnected(true);
+      });
+    }).catch(()=>{});
       const sb = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
         {global:{headers:{Authorization:`Bearer ${token}`}}});
       sb.from("entries").select("date").eq("type","health_apple").limit(1)
@@ -633,7 +643,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {/* Claude */}
           <div style={row}>
             <SectionLabel info="Adds Day Lab as an MCP connector in Claude. Once connected, you can say things like 'add a task' or 'what's on my calendar' directly in any Claude conversation.">
-              Claude
+              Claude {claudeConnected&&<span style={{color:C.green}}>✓</span>}
             </SectionLabel>
             <div style={{
               display:"flex",alignItems:"center",gap:6,
@@ -656,19 +666,30 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 {urlCopied?"✓":"Copy"}
               </button>
             </div>
-            <a
-              href="https://claude.ai/settings/connectors?modal=add-custom-connector"
-              target="_blank" rel="noreferrer"
-              style={{
-                display:"flex",alignItems:"center",justifyContent:"center",
-                width:"100%",padding:"7px 0",boxSizing:"border-box",
-                background:C.accent+"18",border:`1px solid ${C.accent+"66"}`,
-                borderRadius:5,textDecoration:"none",
-                color:C.accent,fontFamily:mono,fontSize:F.sm,
+            {claudeConnected ? (
+              <div style={{
+                width:"100%",padding:"7px 0",boxSizing:"border-box",textAlign:"center",
+                background:"none",border:`1px solid ${C.green}`,
+                borderRadius:5,color:C.green,fontFamily:mono,fontSize:F.sm,
                 letterSpacing:"0.04em",textTransform:"uppercase",
               }}>
-              Connect to Claude →
-            </a>
+                ✓ Connected
+              </div>
+            ) : (
+              <a
+                href="https://claude.ai/settings/connectors?modal=add-custom-connector"
+                target="_blank" rel="noreferrer"
+                style={{
+                  display:"flex",alignItems:"center",justifyContent:"center",
+                  width:"100%",padding:"7px 0",boxSizing:"border-box",
+                  background:C.accent+"18",border:`1px solid ${C.accent+"66"}`,
+                  borderRadius:5,textDecoration:"none",
+                  color:C.accent,fontFamily:mono,fontSize:F.sm,
+                  letterSpacing:"0.04em",textTransform:"uppercase",
+                }}>
+                Connect to Claude →
+              </a>
+            )}
           </div>
 
           {divider}
