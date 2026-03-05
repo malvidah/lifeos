@@ -556,16 +556,24 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             {isIOS ? (
               <button
                 onClick={()=>{
-                  // DEBUG: trace each step
+                  const tok = token||localStorage.getItem('daylab:token')||'';
                   const hasWebkit = !!(window.webkit);
                   const hasHandlers = !!(window.webkit?.messageHandlers);
                   const hasHK = !!(window.webkit?.messageHandlers?.daylabRequestHealthKit);
-                  const tok = token||localStorage.getItem('daylab:token')||'';
                   if(!hasWebkit) { alert('DEBUG: window.webkit missing'); return; }
                   if(!hasHandlers) { alert('DEBUG: messageHandlers missing'); return; }
                   if(!hasHK) { alert('DEBUG: daylabRequestHealthKit handler missing'); return; }
                   if(!tok) { alert('DEBUG: no token available'); }
                   window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: tok});
+                }}
+                onTouchEnd={(e)=>{
+                  e.preventDefault();
+                  const tok = token||localStorage.getItem('daylab:token')||'';
+                  if(window.webkit?.messageHandlers?.daylabRequestHealthKit){
+                    window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: tok});
+                  } else {
+                    alert('DEBUG onTouchEnd: handler not found. webkit='+!!(window.webkit));
+                  }
                 }}
                 style={{
                   width:"100%",
@@ -580,6 +588,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               </button>
             ) : (
               <div onClick={()=>alert(`DEBUG: isIOS=${isIOS} daylabNative=${!!window.daylabNative} webkit=${!!window.webkit}`)}
+                onTouchEnd={(e)=>{e.preventDefault();alert(`DEBUG touch: isIOS=${isIOS} daylabNative=${!!window.daylabNative} webkit=${!!window.webkit}`);}}
                 style={{fontFamily:mono,fontSize:F.sm,
                 background:"none",
                 border:`1px solid ${appleHealthHasData?C.green:C.border2}`,
@@ -2782,7 +2791,7 @@ function ChatFloat({date, token, userId}) {
 
       {/* Input row */}
       <div style={{
-        display: "flex", alignItems: "flex-end", gap: 8,
+        display: "flex", alignItems: "center", gap: 8,
         width: "100%", maxWidth: 560,
         background: C.well,
         borderRadius: mobile ? 24 : 20,
