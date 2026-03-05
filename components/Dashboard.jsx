@@ -1647,16 +1647,11 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
       </div>
       {/* Apple Health connect prompt — iOS only, shown when not yet authorized */}
       {hkStatus==="not_determined"&&!collapsed&&(
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",
-          padding:"8px 14px",borderBottom:`1px solid ${C.border}`,
-          background:"rgba(255,255,255,0.03)"}}>
-          <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted}}>
-            Connect Apple Health for health scores
-          </span>
+        <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`}}>
           <button onClick={connectAppleHealth}
-            style={{fontFamily:mono,fontSize:F.sm,color:C.blue,background:"none",border:"none",
-              cursor:"pointer",padding:"2px 0",letterSpacing:"0.03em"}}>
-            Connect →
+            style={{fontFamily:mono,fontSize:F.sm,color:C.blue,background:"none",border:`1px solid ${C.blue}`,
+              borderRadius:6,cursor:"pointer",padding:"5px 12px",letterSpacing:"0.03em",opacity:0.9}}>
+            Connect Apple Health
           </button>
         </div>
       )}
