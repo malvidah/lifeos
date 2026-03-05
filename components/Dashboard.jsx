@@ -2322,6 +2322,14 @@ function ChatFloat({date, token, userId}) {
   const inputRef = useRef(null);
   const statusTimer = useRef(null);
 
+  // Auto-resize textarea when input changes (e.g. via voice)
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 72) + "px";
+  }, [input]);
+
   function showStatus(text, ok) {
     clearTimeout(statusTimer.current);
     setStatus({ text, ok });
@@ -2517,24 +2525,26 @@ function ChatFloat({date, token, userId}) {
 
       {/* Input row */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 8,
+        display: "flex", alignItems: "flex-end", gap: 8,
         width: "100%", maxWidth: 560,
         background: C.well,
         borderRadius: mobile ? 24 : 20,
         border: "none",
         padding: mobile ? "10px 10px 10px 18px" : "8px 8px 8px 14px",
       }}>
-        <input
+        <textarea
           ref={inputRef}
           value={input}
-          onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === "Enter") send(); }}
+          onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 72) + "px"; }}
+          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
           placeholder={busy ? "Adding…" : "Add a note, task, meal, or activity…"}
           disabled={busy}
+          rows={1}
           style={{
             flex: 1, background: "transparent", border: "none", outline: "none",
             fontFamily: serif, fontSize: F.md, color: C.text,
             padding: "2px 0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
+            resize: "none", overflow: "hidden", maxHeight: "72px",
           }}
         />
 
