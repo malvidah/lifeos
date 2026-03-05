@@ -1,6 +1,6 @@
 import UIKit
 import WebKit
-import SafariServices
+import AuthenticationServices
 
 private let appURL = URL(string: "https://www.daylab.me")!
 
@@ -12,8 +12,6 @@ class WebViewController: UIViewController {
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
         config.mediaTypesRequiringUserActionForPlayback = []
-
-        // Share cookie/session storage with Safari so sign-in persists
         config.websiteDataStore = .default()
 
         let wv = WKWebView(frame: .zero, configuration: config)
@@ -21,11 +19,10 @@ class WebViewController: UIViewController {
         wv.uiDelegate = self
         wv.scrollView.contentInsetAdjustmentBehavior = .never
         wv.isOpaque = false
-        wv.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1) // matches C.bg
+        wv.backgroundColor = UIColor(red: 0.09, green: 0.09, blue: 0.10, alpha: 1)
         wv.scrollView.backgroundColor = wv.backgroundColor
         wv.allowsBackForwardNavigationGestures = true
 
-        // Inject JS to tell the web app it's running in a native wrapper
         let script = WKUserScript(
             source: "window.daylabNative = { platform: 'ios', version: '1.0.0' };",
             injectionTime: .atDocumentStart,
@@ -84,6 +81,8 @@ class WebViewController: UIViewController {
         return v
     }()
 
+    private var authSession: ASWebAuthenticationSession?
+
     // MARK: - Lifecycle
 
     override func viewDidLoad() {
@@ -128,20 +127,41 @@ class WebViewController: UIViewController {
         refreshControl.endRefreshing()
     }
 
+    // MARK: - Google OAuth via ASWebAuthenticationSession
+
+    private func startOAuth(url: URL) {
+        let session = ASWebAuthenticationSession(
+            url: url,
+            callbackURLScheme: "daylab"
+        ) { [weak self] callbackURL, error in
+            guard let self = self else { return }
+            if let callbackURL = callbackURL {
+                self.handleDeepLink(callbackURL)
+            }
+        }
+        session.presentationContextProvider = self
+        session.prefersEphemeralWebBrowserSession = false
+        self.authSession = session
+        session.start()
+    }
+
     // MARK: - Deep link (daylab:// OAuth callback)
 
     func handleDeepLink(_ url: URL) {
-        // Dismiss SFSafariViewController if open (OAuth callback)
-        if let presented = presentedViewController {
-            presented.dismiss(animated: true)
-        }
-        // Translate daylab://auth/callback?code=... → https://www.daylab.me/auth/callback?code=...
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.scheme = "https"
         components?.host = "www.daylab.me"
         if let translated = components?.url {
             webView.load(URLRequest(url: translated))
         }
+    }
+}
+
+// MARK: - ASWebAuthenticationPresentationContextProviding
+
+extension WebViewController: ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        return view.window!
     }
 }
 
@@ -164,7 +184,6 @@ extension WebViewController: WKNavigationDelegate {
         showOffline(error)
     }
 
-    // Open external links (Google OAuth, etc.) in Safari
     func webView(
         _ webView: WKWebView,
         decidePolicyFor navigationAction: WKNavigationAction,
@@ -174,17 +193,16 @@ extension WebViewController: WKNavigationDelegate {
 
         let host = url.host ?? ""
         let isOAuthReturn = url.scheme == "daylab"
-        let isGoogleAuth = host.contains("accounts.google.com") || host.contains("google.com/o/oauth")
+        let isGoogleAuth = host.contains("accounts.google.com")
+        let isSupabaseAuth = host.contains("supabase.co") && url.path.contains("/auth")
         let isInternal = host.contains("daylab.me") || host.contains("supabase.co")
 
         if isOAuthReturn {
             handleDeepLink(url)
             decisionHandler(.cancel)
-        } else if isGoogleAuth {
-            // Use SFSafariViewController so the daylab:// callback returns to the app
-            let safari = SFSafariViewController(url: url)
-            safari.modalPresentationStyle = .pageSheet
-            present(safari, animated: true)
+        } else if isGoogleAuth || isSupabaseAuth {
+            // Use ASWebAuthenticationSession for OAuth — handles daylab:// callback correctly
+            startOAuth(url: url)
             decisionHandler(.cancel)
         } else if !isInternal && navigationAction.navigationType == .linkActivated {
             UIApplication.shared.open(url)
@@ -196,14 +214,13 @@ extension WebViewController: WKNavigationDelegate {
 
     private func showOffline(_ error: Error) {
         let nsError = error as NSError
-        // Ignore "Frame load interrupted" — happens on OAuth redirects, not a real error
         if nsError.code == 102 { return }
         webView.isHidden = true
         offlineView.isHidden = false
     }
 }
 
-// MARK: - WKUIDelegate (allow target=_blank links)
+// MARK: - WKUIDelegate
 
 extension WebViewController: WKUIDelegate {
     func webView(
