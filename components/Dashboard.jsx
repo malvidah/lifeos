@@ -2795,7 +2795,7 @@ function Notes({date,userId,token}) {
         <div style={{...baseTextStyle, minHeight:minH}}>
           {value && value.trim()
             ? renderContent(value)
-            : <div style={{color:C.muted}}>What's on your mind?</div>
+            : <div style={{color:C.dim}}>What's on your mind?</div>
           }
         </div>
       )}
