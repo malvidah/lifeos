@@ -125,7 +125,7 @@ export async function GET(request) {
 
   const sleep     = calcSleepScore(todayMerged, history);
   const readiness = calcReadinessScore(todayMerged, history, calibrated);
-  const activity  = calcActivityScore(todayMerged, history7d, isToday);
+  const activity  = calcActivityScore(todayMerged, history7d);
   const recovery  = calcRecoveryScore(todayMerged, history, calibrated);
 
   const spark7 = last7Dates.map(d => ({
