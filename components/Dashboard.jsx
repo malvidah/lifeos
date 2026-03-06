@@ -676,21 +676,32 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 {syncing==="oura"?"Syncing history…":"✓ Connected"}
               </button>
             ) : (
-              <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
-                  <input type="password" value={ouraKey}
-                    onChange={e=>setOuraKey(e.target.value)}
-                    placeholder="Paste personal access token…"
-                    style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,padding:"6px 8px",boxSizing:"border-box"}}/>
-                  <button onClick={connectOura} disabled={!ouraKey.trim()||syncing==="oura"}
-                    style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",padding:"0 10px",cursor:"pointer",flexShrink:0}}>
+              <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
+                <input type="password" value={ouraKey}
+                  onChange={e=>setOuraKey(e.target.value)}
+                  placeholder="Paste token"
+                  className="oura-token-input"
+                  style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
+                    borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                    padding:"6px 8px",boxSizing:"border-box"}}/>
+                {ouraKey.trim() ? (
+                  <button onClick={connectOura} disabled={syncing==="oura"}
+                    style={{background:C.accent,border:"none",borderRadius:5,
+                      color:C.bg,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+                      textTransform:"uppercase",padding:"0 10px",cursor:"pointer",flexShrink:0,
+                      opacity:syncing==="oura"?0.5:1}}>
                     {syncing==="oura"?"…":"Connect"}
                   </button>
-                </div>
-                <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
-                  style={{fontFamily:mono,fontSize:"10px",color:C.dim,textDecoration:"none",letterSpacing:"0.02em"}}>
-                  Get token from Oura →
-                </a>
+                ) : (
+                  <button
+                    onClick={()=>window.open("https://cloud.ouraring.com/personal-access-tokens","_blank")}
+                    style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,
+                      color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+                      textTransform:"uppercase",padding:"0 10px",cursor:"pointer",flexShrink:0,
+                      whiteSpace:"nowrap"}}>
+                    Get Token
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -3975,6 +3986,7 @@ export default function Dashboard() {
         *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
         input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
+        .oura-token-input::placeholder{color:${C.dim};opacity:1;}
         a{text-decoration:none;}
         @media(max-width:768px){input,textarea,select{font-size:16px;}}
         @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
