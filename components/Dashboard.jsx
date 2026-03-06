@@ -2392,12 +2392,13 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
             <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
           </svg>
-          {/* Today dot — HTML div so it stays a perfect circle at any window width */}
+          {/* Today dot — HTML div so it stays a perfect circle at any window width.
+               x: percentage of last.i across 29 days. y: mapped from SVG coord to 80px height */}
           <div style={{
             position: 'absolute',
-            right: 0,
+            left: `${(last.i / 29) * 100}%`,
             top: `${(yOf(last.v) / H) * 80}px`,
-            transform: 'translate(50%, -50%)',
+            transform: 'translate(-50%, -50%)',
             width: 7, height: 7, borderRadius: '50%',
             background: color,
             pointerEvents: 'none',
