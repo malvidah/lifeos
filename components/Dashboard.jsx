@@ -2444,8 +2444,8 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     }
 
     // ── Scrubber state ────────────────────────────────────────────────────────
-    const [scrub, setScrub] = React.useState(null); // { i, v, dayKey } | null
-    const chartRef = React.useRef(null);
+    const [scrub, setScrub] = useState(null); // { i, v, dayKey } | null
+    const chartRef = useRef(null);
 
     function getScrubFromX(clientX) {
       const rect = chartRef.current?.getBoundingClientRect();
