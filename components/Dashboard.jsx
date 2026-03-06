@@ -855,7 +855,12 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   const [displayOff, setDisplayOff] = useState(initYear * 12 + initMonth);
 
   // Responsive sizing — derive CELL_H from available height so months pack tight
-  const vw        = typeof window !== 'undefined' ? window.innerWidth : 390;
+  const [vw, setVw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  useEffect(()=>{
+    const onResize = () => setVw(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return ()=>window.removeEventListener('resize', onResize);
+  },[]);
   const DAY_HDR_H_C = 20;
   const LABEL_H   = 18;
   const MONTH_H   = vw < 600 ? 340 : 400;
@@ -1208,7 +1213,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                 }}>{MONTH_NAMES[mo]}</div>
 
                 {/* 6-row grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, flex: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: CELL_H, gap: 2, flex: 1 }}>
                   {cells.map(({ day, dateKey, isOverflow }, idx) => {
                     // Overflow cells are invisible spacers — no content, no border
                     if (isOverflow) return <div key={`sp-${idx}`} style={{ height: CELL_H }} />;
@@ -1225,7 +1230,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                       <div key={dateKey}
                         onClick={e => { e.stopPropagation(); if (totalDrag.current < 6) onSelectDay(dateKey); }}
                         style={{
-                          height: CELL_H, borderRadius: 5, padding: '4px 4px 3px',
+                          height: CELL_H, overflow: 'hidden', borderRadius: 5, padding: '4px 4px 3px',
                           cursor: 'pointer', boxSizing: 'border-box',
                           background: isSelected ? C.accent+'1A' : isToday ? C.accent+'0D' : 'transparent',
                           border: `1px solid ${isSelected ? C.accent+'66' : isToday ? C.accent+'33' : C.border+'25'}`,
@@ -2149,9 +2154,9 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     cachedOuraFetch(date, token, userId).then(async data=>{
         if(data.error==="no_token") {
           // No Oura — fall back to Apple Health data synced from iOS app
-          const {createClient:sbCreate} = await import("@supabase/supabase-js");
-          const sb = sbCreate(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-            {global:{headers:{Authorization:`Bearer ${token}`}}});
+          const { createClient: _sbCreate } = await import("../lib/supabase.js");
+          const sb = _sbCreate();
+          sb.auth.setSession({access_token:token,refresh_token:''});
           const {data:row} = await sb.from("entries").select("data")
             .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
           if(row?.data) {
@@ -2172,9 +2177,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         }
         if(data.error){ onSyncEnd("oura"); return; }
         // Oura connected — also check if Apple Health has data for this date (could have both)
-        const {createClient:sbCreate2} = await import("@supabase/supabase-js");
-        const sb2 = sbCreate2(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-          {global:{headers:{Authorization:`Bearer ${token}`}}});
+        const sb2 = sb; // reuse same singleton client
         const {data:appleRow} = await sb2.from("entries").select("date")
           .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
         setDataSource(appleRow ? "both" : "oura");
