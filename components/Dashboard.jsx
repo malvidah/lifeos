@@ -510,12 +510,16 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const divider=<div style={{height:1,background:C.border,margin:"10px 0"}}/>;
   const FREE_LIMIT = 10;
   const planBadge = planInfo === null ? null : planInfo.isPremium ? (
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 16px",background:`${C.accent}12`,borderRadius:6,margin:"0 12px 10px"}}>
-      <div>
-        <div style={{fontFamily:mono,fontSize:F.sm,color:C.accent,letterSpacing:"0.06em",textTransform:"uppercase"}}>Premium</div>
-        <div style={{fontFamily:mono,fontSize:"10px",color:C.muted,marginTop:2}}>{planInfo.plan === 'yearly' ? 'Annual plan' : 'Monthly plan'}</div>
+    <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid ${C.accent}30`,overflow:"hidden"}}>
+      <div style={{padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontFamily:mono,fontSize:F.sm,color:C.accent,letterSpacing:"0.06em",textTransform:"uppercase"}}>Premium ✦</div>
+          <div style={{fontFamily:mono,fontSize:"10px",color:C.muted,marginTop:2}}>{planInfo.plan === 'yearly' ? 'Annual plan · $4/mo' : 'Monthly plan · $5/mo'}</div>
+        </div>
       </div>
-      <span style={{fontFamily:mono,fontSize:"10px",color:C.accent}}>✦</span>
+      <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"7px 12px",background:"none",borderTop:`1px solid ${C.accent}20`,border:"none",borderTop:`1px solid ${C.accent}20`,cursor:"pointer",fontFamily:mono,fontSize:"10px",color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",textAlign:"center"}}>
+        Manage Plan →
+      </button>
     </div>
   ) : (
     <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid ${C.border}`,overflow:"hidden"}}>

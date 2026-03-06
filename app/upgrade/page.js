@@ -12,38 +12,39 @@ const muted = '#666';
 const accent = '#c4a882';
 const border = '#2a2a2e';
 const surface = '#141416';
+const red = '#b04840';
+const green = '#4a9a68';
 
 const FEATURES = [
-  { label: 'Daily AI insights from your Oura data', premium: true },
-  { label: 'Unlimited conversational chat', premium: true },
-  { label: 'Year-over-year trend analysis', premium: true },
-  { label: 'Voice entry & smart data parsing', premium: false },
-  { label: 'Calorie & protein estimation', premium: false },
-  { label: 'Oura + Strava sync', premium: false },
+  { label: 'Unlimited AI insights from your health data', premium: true },
+  { label: 'Voice entry & smart data parsing',           premium: true },
+  { label: 'Conversational chat with your data',         premium: true },
+  { label: 'Year-over-year trend analysis',              premium: true },
+  { label: 'Oura + Strava + Apple Health sync',          premium: false },
+  { label: 'Calorie & protein estimation',               premium: false },
+  { label: 'Calendar, tasks, meals, journal',            premium: false },
 ];
 
+// ── Success view (post-checkout) ─────────────────────────────────────────────
 function SuccessView({ session }) {
   const params = useSearchParams();
   const sessionId = params.get('session_id');
-  const [state, setState] = useState('activating'); // activating | active | slow
+  const [state, setState] = useState('activating');
 
   useEffect(() => {
     if (!session || !sessionId) { setState('slow'); return; }
-
-    // Try fallback grant first (ensures premium is set even if webhook was slow)
     fetch('/api/stripe/grant', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ sessionId }),
     }).catch(() => {});
 
-    // Poll DB until premium row appears
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
       try {
-        const supabase = createClient();
-        const { data } = await supabase.from('entries').select('data')
+        const sb = createClient();
+        const { data } = await sb.from('entries').select('data')
           .eq('type', 'premium').eq('date', 'global').eq('user_id', session.user.id).maybeSingle();
         if (data?.data?.active) { setState('active'); clearInterval(poll); }
       } catch {}
@@ -62,29 +63,22 @@ function SuccessView({ session }) {
       )}
       {state === 'active' && (
         <>
-          <div style={{ fontFamily: serif, fontSize: 42, color: accent, marginBottom: 20 }}>✦</div>
+          <div style={{ fontFamily: serif, fontSize: 48, color: accent, marginBottom: 20 }}>✦</div>
           <h1 style={{ fontFamily: serif, fontSize: 32, color: text, fontWeight: 400, margin: '0 0 14px', letterSpacing: '-0.02em' }}>You're all set</h1>
           <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: '0 0 48px' }}>
-            AI insights and unlimited chat are now unlocked.
+            Unlimited AI insights, voice entry, and chat are now unlocked.
           </p>
-          <a href="/" style={{
-            display: 'inline-block', fontFamily: mono, fontSize: 10, letterSpacing: '0.15em',
-            textTransform: 'uppercase', color: bg, textDecoration: 'none',
-            background: accent, padding: '13px 32px', borderRadius: 8,
-          }}>Go to Dashboard →</a>
+          <a href="/" style={{ display: 'inline-block', fontFamily: mono, fontSize: 10, letterSpacing: '0.15em', textTransform: 'uppercase', color: bg, textDecoration: 'none', background: accent, padding: '13px 32px', borderRadius: 8 }}>Go to Dashboard →</a>
         </>
       )}
       {state === 'slow' && (
         <>
-          <div style={{ fontFamily: serif, fontSize: 42, color: accent, marginBottom: 20 }}>✦</div>
+          <div style={{ fontFamily: serif, fontSize: 48, color: accent, marginBottom: 20 }}>✦</div>
           <h1 style={{ fontFamily: serif, fontSize: 28, color: text, fontWeight: 400, margin: '0 0 12px' }}>Payment received</h1>
           <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: '0 0 40px' }}>
-            Your account is being activated — it may take a minute to reflect.<br/>
-            Refresh the dashboard and your insights should be unlocked.
+            Your account is being activated — it may take a minute.<br/>Refresh the dashboard and your features should be unlocked.
           </p>
-          <a href="/" style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: accent, textDecoration: 'none', border: `1px solid ${accent}40`, padding: '10px 24px', borderRadius: 8 }}>
-            Go to Dashboard →
-          </a>
+          <a href="/" style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.15em', textTransform: 'uppercase', color: accent, textDecoration: 'none', border: `1px solid ${accent}40`, padding: '10px 24px', borderRadius: 8 }}>Go to Dashboard →</a>
         </>
       )}
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -92,6 +86,113 @@ function SuccessView({ session }) {
   );
 }
 
+// ── Manage plan view (already premium) ───────────────────────────────────────
+function ManageView({ session, premiumData }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const params = useSearchParams();
+  const fromPortal = params.get('from') === 'portal';
+
+  const plan = premiumData?.plan;
+  const grantedAt = premiumData?.grantedAt ? new Date(premiumData.grantedAt) : null;
+
+  async function openPortal() {
+    setLoading(true); setError('');
+    try {
+      const res = await fetch('/api/stripe/portal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError(data.error || 'Could not open billing portal');
+        setLoading(false);
+      }
+    } catch (e) {
+      setError(e.message);
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div style={{ padding: '60px 24px 80px', maxWidth: 440, margin: '0 auto' }}>
+      <div style={{ textAlign: 'center', marginBottom: 44 }}>
+        <a href="/" style={{ fontFamily: mono, fontSize: 9, color: muted, letterSpacing: '0.18em', textTransform: 'uppercase', textDecoration: 'none' }}>Day Lab</a>
+        <div style={{ fontFamily: serif, fontSize: 40, color: accent, margin: '16px 0 8px' }}>✦</div>
+        <h1 style={{ fontFamily: serif, fontSize: 34, color: text, margin: '0 0 10px', letterSpacing: '-0.02em', fontWeight: 400 }}>Premium</h1>
+        <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: 0 }}>
+          Your account is active
+        </p>
+      </div>
+
+      {fromPortal && (
+        <div style={{ background: `${green}15`, border: `1px solid ${green}40`, borderRadius: 10, padding: '12px 16px', marginBottom: 24, fontFamily: mono, fontSize: 10, color: green, letterSpacing: '0.04em' }}>
+          ✓ Your billing changes have been saved.
+        </div>
+      )}
+
+      {/* Plan details */}
+      <div style={{ background: surface, borderRadius: 12, border: `1px solid ${border}`, padding: '20px 24px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontFamily: mono, fontSize: 11, color: text, letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>
+              {plan === 'yearly' ? 'Annual Plan' : 'Monthly Plan'}
+            </div>
+            <div style={{ fontFamily: mono, fontSize: 10, color: muted }}>
+              {plan === 'yearly' ? '$48 / year · $4/mo' : '$5 / month'}
+            </div>
+          </div>
+          <div style={{ background: `${accent}20`, border: `1px solid ${accent}40`, borderRadius: 6, padding: '4px 10px', fontFamily: mono, fontSize: 9, color: accent, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            Active
+          </div>
+        </div>
+        {grantedAt && (
+          <div style={{ fontFamily: mono, fontSize: 9, color: muted, borderTop: `1px solid ${border}`, paddingTop: 12, letterSpacing: '0.04em' }}>
+            Member since {grantedAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+          </div>
+        )}
+      </div>
+
+      {/* Features */}
+      <div style={{ background: surface, borderRadius: 12, border: `1px solid ${border}`, padding: '4px 24px', marginBottom: 28 }}>
+        {FEATURES.filter(f => f.premium).map((f, i, arr) => (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderBottom: i < arr.length - 1 ? `1px solid ${border}` : 'none' }}>
+            <span style={{ fontSize: 10, color: accent, flexShrink: 0 }}>✦</span>
+            <span style={{ fontFamily: mono, fontSize: 10, color: text, letterSpacing: '0.04em' }}>{f.label}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Manage button */}
+      <button onClick={openPortal} disabled={loading} style={{
+        width: '100%', background: 'none', border: `1px solid ${border}`, borderRadius: 10,
+        color: muted, fontFamily: mono, fontSize: 11, letterSpacing: '0.12em',
+        textTransform: 'uppercase', padding: '14px 0',
+        cursor: loading ? 'not-allowed' : 'pointer',
+        opacity: loading ? 0.5 : 1, transition: 'opacity 0.15s, border-color 0.15s',
+        marginBottom: 10,
+      }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = muted; e.currentTarget.style.color = text; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = border; e.currentTarget.style.color = muted; }}>
+        {loading ? 'Opening billing portal…' : 'Manage Billing & Plan'}
+      </button>
+
+      <p style={{ fontFamily: mono, fontSize: 9, color: muted, textAlign: 'center', margin: '0 0 4px', letterSpacing: '0.05em' }}>
+        Change plan, update payment method, or cancel anytime.
+      </p>
+
+      {error && <p style={{ fontFamily: mono, fontSize: 10, color: red, textAlign: 'center', marginTop: 14 }}>{error}</p>}
+
+      <div style={{ textAlign: 'center', marginTop: 40 }}>
+        <a href="/" style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: muted, textDecoration: 'none' }}>← Back to dashboard</a>
+      </div>
+    </div>
+  );
+}
+
+// ── Pricing / checkout view (free user) ──────────────────────────────────────
 function PricingView({ session, onStartCheckout }) {
   const [plan, setPlan] = useState('yearly');
   const [loading, setLoading] = useState(false);
@@ -141,12 +242,7 @@ function PricingView({ session, onStartCheckout }) {
           }}>
             {p}
             {p === 'yearly' && (
-              <span style={{
-                position: 'absolute', top: -9, right: 8,
-                background: '#2a4a35', color: '#7dba94',
-                fontFamily: mono, fontSize: 7, letterSpacing: '0.08em',
-                padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase',
-              }}>Save 20%</span>
+              <span style={{ position: 'absolute', top: -9, right: 8, background: '#2a4a35', color: '#7dba94', fontFamily: mono, fontSize: 7, letterSpacing: '0.08em', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase' }}>Save 20%</span>
             )}
           </button>
         ))}
@@ -159,7 +255,6 @@ function PricingView({ session, onStartCheckout }) {
           <span style={{ fontFamily: serif, fontSize: 60, color: text, lineHeight: 1, letterSpacing: '-0.03em' }}>
             {plan === 'yearly' ? '48' : '5'}
           </span>
-          <span style={{ fontFamily: mono, fontSize: 15, color: muted, marginTop: 12 }}>{plan === 'yearly' ? '' : ''}</span>
         </div>
         <div style={{ fontFamily: mono, fontSize: 10, color: muted, marginTop: 6, letterSpacing: '0.06em' }}>
           {plan === 'yearly' ? 'per year · $4/mo' : 'per month'}
@@ -170,7 +265,7 @@ function PricingView({ session, onStartCheckout }) {
       <div style={{ background: surface, borderRadius: 12, border: `1px solid ${border}`, padding: '4px 24px', marginBottom: 28 }}>
         {FEATURES.map((f, i) => (
           <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 0', borderBottom: i < FEATURES.length - 1 ? `1px solid ${border}` : 'none' }}>
-            <span style={{ fontSize: 11, color: f.premium ? accent : '#5a9a6a', flexShrink: 0 }}>{f.premium ? '✦' : '✓'}</span>
+            <span style={{ fontSize: 11, color: f.premium ? accent : green, flexShrink: 0 }}>{f.premium ? '✦' : '✓'}</span>
             <span style={{ fontFamily: mono, fontSize: 10, color: f.premium ? text : muted, letterSpacing: '0.04em' }}>{f.label}</span>
             {!f.premium && <span style={{ fontFamily: mono, fontSize: 8, color: muted, letterSpacing: '0.1em', textTransform: 'uppercase', marginLeft: 'auto', flexShrink: 0 }}>free</span>}
           </div>
@@ -193,7 +288,7 @@ function PricingView({ session, onStartCheckout }) {
       <p style={{ fontFamily: mono, fontSize: 9, color: muted, textAlign: 'center', margin: 0, letterSpacing: '0.05em' }}>
         Cancel anytime. Powered by Stripe.
       </p>
-      {error && <p style={{ fontFamily: mono, fontSize: 10, color: '#e06c6c', textAlign: 'center', marginTop: 16 }}>{error}</p>}
+      {error && <p style={{ fontFamily: mono, fontSize: 10, color: red, textAlign: 'center', marginTop: 16 }}>{error}</p>}
 
       <div style={{ textAlign: 'center', marginTop: 40 }}>
         <a href="/" style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase', color: muted, textDecoration: 'none' }}>← Back to dashboard</a>
@@ -202,6 +297,7 @@ function PricingView({ session, onStartCheckout }) {
   );
 }
 
+// ── Embedded Stripe checkout ──────────────────────────────────────────────────
 function CheckoutView({ clientSecret, onCancel }) {
   const containerRef = useRef(null);
   const checkoutRef = useRef(null);
@@ -209,7 +305,6 @@ function CheckoutView({ clientSecret, onCancel }) {
   useEffect(() => {
     if (!clientSecret || !containerRef.current) return;
     let mounted = true;
-
     loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY).then(stripe => {
       if (!mounted || !stripe) return;
       stripe.initEmbeddedCheckout({ clientSecret }).then(checkout => {
@@ -218,7 +313,6 @@ function CheckoutView({ clientSecret, onCancel }) {
         checkout.mount(containerRef.current);
       });
     });
-
     return () => {
       mounted = false;
       checkoutRef.current?.destroy();
@@ -239,18 +333,42 @@ function CheckoutView({ clientSecret, onCancel }) {
   );
 }
 
+// ── Root content (decides which view to show) ─────────────────────────────────
 function UpgradeContent() {
   const params = useSearchParams();
   const success = params.get('success') === 'true';
   const [session, setSession] = useState(null);
+  const [premiumData, setPremiumData] = useState(undefined); // undefined = loading
   const [checkoutSecret, setCheckoutSecret] = useState(null);
 
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
+    const sb = createClient();
+    sb.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      if (s?.user) {
+        sb.from('entries').select('data')
+          .eq('type', 'premium').eq('date', 'global').eq('user_id', s.user.id)
+          .maybeSingle()
+          .then(({ data }) => setPremiumData(data?.data?.active ? data.data : null))
+          .catch(() => setPremiumData(null));
+      } else {
+        setPremiumData(null);
+      }
+    });
   }, []);
 
+  // Still loading
+  if (premiumData === undefined && !success) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' }}>
+        <div style={{ width: 28, height: 28, borderRadius: '50%', border: `1.5px solid ${border}`, borderTopColor: accent, animation: 'spin 1s linear infinite' }}/>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
   if (success) return <SuccessView session={session} />;
+  if (premiumData?.active) return <ManageView session={session} premiumData={premiumData} />;
   if (checkoutSecret) return <CheckoutView clientSecret={checkoutSecret} onCancel={() => setCheckoutSecret(null)} />;
   return <PricingView session={session} onStartCheckout={setCheckoutSecret} />;
 }
