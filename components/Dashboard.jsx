@@ -2372,27 +2372,37 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
 
     return (
       <div style={{ padding: '0 0 4px' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, display: 'block', overflow: 'visible' }}
-          preserveAspectRatio="none">
-          <defs>
-            <linearGradient id={`tg-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.22"/>
-              <stop offset="100%" stopColor={color} stopOpacity="0"/>
-            </linearGradient>
-          </defs>
-          {/* gradient fill */}
-          <path d={fillPath} fill={`url(#tg-${metricKey})`} stroke="none"/>
-          {/* avg dotted grey line */}
-          <line x1="0" y1={avgY} x2={W} y2={avgY}
-            stroke="rgba(255,255,255,0.2)" strokeWidth="1"
-            strokeDasharray="4,4" vectorEffect="non-scaling-stroke"/>
-          {/* main line — non-scaling-stroke = same 1.5px at any window width */}
-          <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
-            strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
-          {/* today dot */}
-          <circle cx={xOf(last.i).toFixed(1)} cy={yOf(last.v).toFixed(1)} r="3" fill={color}
-            vectorEffect="non-scaling-stroke"/>
-        </svg>
+        {/* Wrapper: relative so the HTML dot can be absolutely positioned over the SVG */}
+        <div style={{ position: 'relative' }}>
+          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, display: 'block', overflow: 'visible' }}
+            preserveAspectRatio="none">
+            <defs>
+              <linearGradient id={`tg-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={color} stopOpacity="0.22"/>
+                <stop offset="100%" stopColor={color} stopOpacity="0"/>
+              </linearGradient>
+            </defs>
+            {/* gradient fill */}
+            <path d={fillPath} fill={`url(#tg-${metricKey})`} stroke="none"/>
+            {/* avg dotted grey line */}
+            <line x1="0" y1={avgY} x2={W} y2={avgY}
+              stroke="rgba(255,255,255,0.2)" strokeWidth="1"
+              strokeDasharray="4,4" vectorEffect="non-scaling-stroke"/>
+            {/* main line */}
+            <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
+              strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+          </svg>
+          {/* Today dot — HTML div so it stays a perfect circle at any window width */}
+          <div style={{
+            position: 'absolute',
+            right: 0,
+            top: `${(yOf(last.v) / H) * 80}px`,
+            transform: 'translate(50%, -50%)',
+            width: 7, height: 7, borderRadius: '50%',
+            background: color,
+            pointerEvents: 'none',
+          }}/>
+        </div>
         {/* month labels */}
         <div style={{ display: 'flex', position: 'relative', height: 14 }}>
           {ticks.map(t => (
