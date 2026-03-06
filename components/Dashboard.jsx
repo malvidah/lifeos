@@ -457,6 +457,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [ouraEditing,setOuraEditing]=useState(false);
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
+  const [syncing,setSyncing]=useState(null); // null | 'oura' | 'apple'
   const [urlCopied,setUrlCopied]=useState(false);
 
   const ref=useRef(null);
@@ -529,7 +530,56 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   }
 
   const row={padding:"0 16px"};
+  async function disconnectOura() {
+    if(!confirm("Disconnect Oura? Your synced health data will remain but live sync will stop.")) return;
+    // Clear token from settings
+    const sb = (await import("@supabase/supabase-js")).createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {global:{headers:{Authorization:`Bearer ${token}`}}});
+    const {data:s} = await sb.from("entries").select("data").eq("type","settings").eq("date","global").eq("user_id",userId).maybeSingle();
+    const updated = {...(s?.data||{})};
+    delete updated.ouraToken;
+    await sb.from("entries").upsert({user_id:userId,date:"global",type:"settings",data:updated,updated_at:new Date().toISOString()},{onConflict:"user_id,date,type"});
+    setOuraConnected(false); setOuraKey("");
+  }
+
+  async function connectOura() {
+    if(!ouraKey.trim()) return;
+    await saveOura();
+    // Backfill after connecting
+    setSyncing("oura");
+    try {
+      const res = await fetch("/api/oura-backfill",{method:"POST",
+        headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
+        body:JSON.stringify({})});
+      const d = await res.json();
+      if(!d.ok) console.warn("Backfill error:", d.error);
+    } catch(e) { console.warn("Backfill failed:", e); }
+    setSyncing(null);
+  }
+
+  async function disconnectAppleHealth() {
+    if(!confirm("Disconnect Apple Health? Your synced health data will remain but live sync will stop.")) return;
+    // Delete all health_apple entries
+    const sb = (await import("@supabase/supabase-js")).createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {global:{headers:{Authorization:`Bearer ${token}`}}});
+    await sb.from("entries").delete().eq("type","health_apple").eq("user_id",userId);
+    setAppleHealthHasData(false); setAppleHealthConnected(null);
+  }
+
+  async function disconnectStrava() {
+    if(!confirm("Disconnect Strava? Your synced activity data will remain but live sync will stop.")) return;
+    const sb = (await import("@supabase/supabase-js")).createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {global:{headers:{Authorization:`Bearer ${token}`}}});
+    await sb.from("entries").delete().eq("type","strava_token").eq("user_id",userId);
+    setStravaConnected(false);
+  }
+
   const divider=<div style={{height:1,background:C.border,margin:"10px 0"}}/>;
+  // Shared connected-button style
+  const connBtn = (color=C.green) => ({width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",background:"none",border:`1px solid ${color}`,borderRadius:5,color:color,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"});
 
   return (
     <div ref={ref} style={{position:"relative"}}>
@@ -559,53 +609,22 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Apple Health */}
           <div style={row}>
-            <SectionLabel info="Syncs steps, sleep, heart rate, HRV, and calories from Apple Health into your daily view. Works with Apple Watch, Oura Ring, Whoop, Garmin, and any other app that writes to Apple Health. Requires the iOS app.">
+            <SectionLabel info="Syncs steps, sleep, heart rate, HRV, and calories from Apple Health. Works with Apple Watch, Oura, Whoop, Garmin, and any app writing to Apple Health. Requires the iOS app.">
               Apple Health
             </SectionLabel>
             {isIOS ? (
-              <button
-                onTouchEnd={(e)=>{
-                  e.preventDefault();
-                  e.stopPropagation();
-                  const tok = token||localStorage.getItem('daylab:token')||'';
-                  const w = window.webkit;
-                  const mh = w?.messageHandlers;
-                  const hk = mh?.daylabRequestHealthKit;
-                  if(!w)   { alert('FAIL: window.webkit undefined'); return; }
-                  if(!mh)  { alert('FAIL: messageHandlers undefined'); return; }
-                  if(!hk)  { alert('FAIL: daylabRequestHealthKit handler missing'); return; }
-                  if(!tok) { alert('WARN: no token, proceeding anyway'); }
-                  try {
-                    hk.postMessage({token: tok});
-                    alert('OK: postMessage sent');
-                  } catch(err) {
-                    alert('ERROR: postMessage threw: ' + err.message);
-                  }
-                }}
-                onClick={()=>{
-                  const tok = token||localStorage.getItem('daylab:token')||'';
-                  if(window.webkit?.messageHandlers?.daylabRequestHealthKit){
-                    window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: tok});
-                  }
-                }}
-                style={{
-                  width:"100%",
-                  background:appleHealthHasData?"none":"rgba(255,255,255,0.04)",
-                  border:`1px solid ${appleHealthHasData?C.green:C.border2}`,
-                  borderRadius:5,
-                  color:appleHealthHasData?C.green:C.text,
-                  fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",
-                  padding:"7px",cursor:"pointer"
-                }}>
-                {appleHealthHasData?"✓ Connected":appleHealthConnected==="denied"?"Open Settings →":"Connect"}
-              </button>
+              appleHealthHasData ? (
+                <button onClick={disconnectAppleHealth} style={connBtn(C.green)}>✓ Connected</button>
+              ) : (
+                <button
+                  onTouchEnd={(e)=>{e.preventDefault();const tok=token||localStorage.getItem('daylab:token')||'';if(window.webkit?.messageHandlers?.daylabRequestHealthKit){window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token:tok});}}}
+                  onClick={()=>{const tok=token||localStorage.getItem('daylab:token')||'';if(window.webkit?.messageHandlers?.daylabRequestHealthKit){window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token:tok});}}}
+                  style={connBtn(C.border2)}>
+                  Connect
+                </button>
+              )
             ) : (
-              <div style={{fontFamily:mono,fontSize:F.sm,
-                background:"none",
-                border:`1px solid ${appleHealthHasData?C.green:C.border2}`,
-                borderRadius:5,color:appleHealthHasData?C.green:C.dim,
-                padding:"7px",textAlign:"center",cursor:"pointer",
-                letterSpacing:"0.06em",textTransform:"uppercase"}}>
+              <div style={{...connBtn(appleHealthHasData?C.green:C.border2),color:appleHealthHasData?C.green:C.muted}}>
                 {appleHealthHasData?"✓ Connected":"iOS App Required"}
               </div>
             )}
@@ -615,55 +634,29 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Oura */}
           <div style={row}>
-            <SectionLabel info="Syncs your sleep score, HRV, readiness, and recovery data into your daily view. Requires a personal access token from your Oura account.">
+            <SectionLabel info="Syncs sleep score, HRV, readiness, and recovery data. Requires a personal access token from your Oura account.">
               Oura
-              {" "}{ouraConnected&&!ouraEditing
-                ? <span onClick={()=>setOuraEditing(true)} style={{color:C.dim,cursor:"pointer",fontSize:F.sm,fontFamily:mono,letterSpacing:"0"}}>(Edit Token)</span>
-                : <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
-                    style={{color:C.dim,textDecoration:"none",fontSize:F.sm,fontFamily:mono,letterSpacing:"0"}}>(Get Token →)</a>
-              }
             </SectionLabel>
-            {ouraConnected&&!ouraEditing ? (
-              <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                <div style={{
-                  width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",
-                  background:"none",border:`1px solid ${C.green}`,
-                  borderRadius:5,color:C.green,fontFamily:mono,fontSize:F.sm,
-                  letterSpacing:"0.04em",textTransform:"uppercase"}}>
-                  ✓ Connected
-                </div>
-                <button onClick={async()=>{
-                  if(!confirm("This will fetch up to 2 years of Oura history into your dashboard. Takes ~30 seconds. Continue?")) return;
-                  const res = await fetch("/api/oura-backfill",{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({})});
-                  const d = await res.json();
-                  if(d.ok) alert(`Backfill complete: ${d.totalUpserted} days synced.`);
-                  else alert("Error: " + (d.error||"unknown"));
-                }} style={{
-                  width:"100%",padding:"5px",textAlign:"center",boxSizing:"border-box",
-                  background:"none",border:`1px solid ${C.border2}`,
-                  borderRadius:5,color:C.muted,fontFamily:mono,fontSize:"10px",
-                  letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"}}>
-                  Sync History →
-                </button>
-              </div>
+            {ouraConnected ? (
+              <button onClick={disconnectOura} style={connBtn(C.green)}>
+                {syncing==="oura" ? "Syncing history…" : "✓ Connected"}
+              </button>
             ) : (
-              <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
-                <input
-                  type="password" value={ouraKey}
-                  onChange={e=>{setOuraKey(e.target.value);setSaved(false);}}
-                  placeholder="Personal access token…"
-                  style={{flex:1,minWidth:0,background:C.surface,
-                    border:`1px solid ${C.border2}`,
-                    borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
-                    padding:"6px 8px",boxSizing:"border-box"}}/>
-                <button onClick={async()=>{await saveOura();setOuraEditing(false);}} disabled={saving||!ouraKey.trim()} style={{
-                  background:saved?C.green+"22":"none",
-                  border:`1px solid ${saved?C.green:C.border2}`,
-                  borderRadius:5,color:saved?C.green:C.muted,fontFamily:mono,fontSize:F.sm,
-                  letterSpacing:"0.04em",textTransform:"uppercase",
-                  padding:"0 10px",cursor:"pointer",flexShrink:0}}>
-                  {saved?"✓":saving?"…":"Save"}
-                </button>
+              <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
+                  <input
+                    type="password" value={ouraKey}
+                    onChange={e=>{setOuraKey(e.target.value);setSaved(false);}}
+                    placeholder="Paste personal access token…"
+                    style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,padding:"6px 8px",boxSizing:"border-box"}}/>
+                  <button onClick={connectOura} disabled={saving||!ouraKey.trim()} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",padding:"0 10px",cursor:"pointer",flexShrink:0}}>
+                    Connect
+                  </button>
+                </div>
+                <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
+                  style={{fontFamily:mono,fontSize:"10px",color:C.dim,textDecoration:"none",letterSpacing:"0.02em"}}>
+                  Get token from Oura →
+                </a>
               </div>
             )}
           </div>
@@ -672,26 +665,21 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Strava */}
           <div style={row}>
-            <SectionLabel info="Syncs your runs, rides, and workouts automatically. Click to authorize Day Lab to read your Strava activity data.">
+            <SectionLabel info="Syncs your runs, rides, and workouts automatically.">
               Strava
             </SectionLabel>
-            <button
-              onClick={()=>window.location.href="/api/strava-connect"}
-              style={{
-                width:"100%",
-                background:stravaConnected?"none":"#FC4C0210",
-                border:`1px solid ${stravaConnected?C.green:"#FC4C02"}`,
-                borderRadius:5,color:stravaConnected?C.green:"#FC4C02",
-                fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-                padding:"7px",cursor:"pointer"}}>
-              {stravaConnected?"✓ Connected":"Connect Strava"}
-            </button>
+            {stravaConnected ? (
+              <button onClick={disconnectStrava} style={connBtn(C.green)}>✓ Connected</button>
+            ) : (
+              <button onClick={()=>window.location.href="/api/strava-connect"} style={connBtn("#FC4C02")}>
+                Connect
+              </button>
+            )}
           </div>
 
           {divider}
 
-          {/* Claude */}
-          <div style={row}>
+          {/* Claude */}          <div style={row}>
             <SectionLabel info="Adds Day Lab as an MCP connector in Claude. Once connected, you can say things like 'add a task' or 'what's on my calendar' directly in any Claude conversation.">
               Claude
             </SectionLabel>
