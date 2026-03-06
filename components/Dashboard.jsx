@@ -2696,6 +2696,15 @@ function Notes({date,userId,token}) {
     if (editing) taRef.current?.focus();
   }, [editing]);
 
+  // Auto-size textarea to content so switching view↔edit doesn't shift layout
+  useEffect(() => {
+    if (editing && taRef.current) {
+      const ta = taRef.current;
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    }
+  }, [editing]);
+
   function wrapSelection(marker) {
     const ta = taRef.current;
     if (!ta) return;
@@ -2756,15 +2765,6 @@ function Notes({date,userId,token}) {
     fontFamily:serif, fontSize:F.md, lineHeight:"1.7",
     whiteSpace:"pre-wrap", wordBreak:"break-word",
   };
-
-  // Auto-size textarea to content so switching view↔edit doesn't shift layout
-  useEffect(() => {
-    if (editing && taRef.current) {
-      const ta = taRef.current;
-      ta.style.height = "auto";
-      ta.style.height = ta.scrollHeight + "px";
-    }
-  }, [editing]);
 
   function autoResize(e) {
     e.target.style.height = "auto";
