@@ -457,6 +457,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [syncing,setSyncing]=useState(null); // null | 'oura' | 'strava' | 'apple'
   const [resyncing, setResyncing]=useState(false); // local state for Score History resync
   const [urlCopied,setUrlCopied]=useState(false);
+  const [planInfo,setPlanInfo]=useState(null); // null | { isPremium, insightCount }
 
   const ref=useRef(null);
   const user=session?.user;
@@ -469,6 +470,18 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     if(!token||!open)return;
     dbLoad("global","settings",token).then(d=>{
       if(d?.ouraToken){setOuraKey(d.ouraToken);setOuraConnected(true);}
+    }).catch(()=>{});
+    // Fetch plan status
+    const _sbPlan = createClient();
+    Promise.all([
+      _sbPlan.from('entries').select('data').eq('type','premium').eq('date','global').eq('user_id',userId).maybeSingle(),
+      _sbPlan.from('entries').select('data').eq('type','insight_usage').eq('date','global').eq('user_id',userId).maybeSingle(),
+    ]).then(([premRow, usageRow]) => {
+      setPlanInfo({
+        isPremium: premRow.data?.data?.active === true,
+        insightCount: usageRow.data?.data?.count || 0,
+        plan: premRow.data?.data?.plan || null,
+      });
     }).catch(()=>{});
     fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
@@ -495,6 +508,36 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
   const row={padding:"0 16px"};
   const divider=<div style={{height:1,background:C.border,margin:"10px 0"}}/>;
+  const FREE_LIMIT = 10;
+  const planBadge = planInfo === null ? null : planInfo.isPremium ? (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"8px 16px",background:`${C.accent}12`,borderRadius:6,margin:"0 12px 10px"}}>
+      <div>
+        <div style={{fontFamily:mono,fontSize:F.sm,color:C.accent,letterSpacing:"0.06em",textTransform:"uppercase"}}>Premium</div>
+        <div style={{fontFamily:mono,fontSize:"10px",color:C.muted,marginTop:2}}>{planInfo.plan === 'yearly' ? 'Annual plan' : 'Monthly plan'}</div>
+      </div>
+      <span style={{fontFamily:mono,fontSize:"10px",color:C.accent}}>✦</span>
+    </div>
+  ) : (
+    <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+      <div style={{padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+        <div>
+          <div style={{fontFamily:mono,fontSize:F.sm,color:C.muted,letterSpacing:"0.06em",textTransform:"uppercase"}}>Free plan</div>
+          <div style={{fontFamily:mono,fontSize:"10px",color:C.dim,marginTop:2}}>{planInfo.insightCount}/{FREE_LIMIT} AI insights used</div>
+        </div>
+        <div style={{width:32,height:32,position:"relative"}}>
+          <svg viewBox="0 0 32 32" style={{width:32,height:32,transform:"rotate(-90deg)"}}>
+            <circle cx="16" cy="16" r="12" fill="none" stroke={C.border} strokeWidth="3"/>
+            <circle cx="16" cy="16" r="12" fill="none" stroke={C.accent} strokeWidth="3"
+              strokeDasharray={`${Math.min(planInfo.insightCount/FREE_LIMIT,1)*75.4} 75.4`}
+              strokeLinecap="round"/>
+          </svg>
+        </div>
+      </div>
+      <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"8px 12px",background:C.accent,border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:C.bg,letterSpacing:"0.1em",textTransform:"uppercase",textAlign:"center"}}>
+        Upgrade to Premium →
+      </button>
+    </div>
+  );
   const connBtn = (color=C.green) => ({width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",background:"none",border:`1px solid ${color}`,borderRadius:5,color:color,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"});
   // Use the module-level singleton — avoids spawning new GoTrueClient instances
 
@@ -593,6 +636,8 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             <div style={{fontFamily:serif,fontSize:F.md,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
             <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
           </div>
+          {divider}
+          {planBadge}
 
           {divider}
 
@@ -3276,6 +3321,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [isFree, setIsFree] = useState(false);
+  const [freeUsage, setFreeUsage] = useState(null); // { count, limit }
   const prevDate = useRef(date);
   const generatedWithKey = useRef(null); // healthKey used for last generation, null = not yet
   const waitTimer = useRef(null);
@@ -3320,7 +3366,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
         body: JSON.stringify({ date, healthKey: currentHealthKey }),
       });
       const data = await res.json();
-      if (data.tier === "free") { setIsFree(true); }
+      if (data.tier === "free") { setIsFree(true); setFreeUsage({ count: data.usageCount, limit: data.limit }); }
       else if (data.insight) setText(cleanInsight(data.insight));
       else if (data.error) setError(data.error);
     } catch (e) { setError(e.message); }
@@ -3333,7 +3379,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
     prevDate.current = date;
     generatedWithKey.current = null;
     clearTimeout(waitTimer.current);
-    setText(""); setError(""); setIsFree(false);
+    setText(""); setError(""); setIsFree(false); setFreeUsage(null);
   }, [date]); // eslint-disable-line
 
   // Trigger generation:
@@ -3366,25 +3412,17 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
           )}
           {isFree ? (
             <div>
-              {text && <div style={{ fontFamily: mono, fontSize:F.md, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line", marginBottom: 10 }}>{text}</div>}
-              {!text && busy && (
-                <div>
-                  <Shimmer width="90%" height={13} />
-                  <div style={{ height: 10 }} />
-                  <Shimmer width="65%" height={13} />
-                </div>
-              )}
-              {text && <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-                <div style={{ width: 3, height: 3, borderRadius: "50%", background: C.accent, flexShrink: 0 }}/>
-                <span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim, letterSpacing: "0.06em" }}>
-                  Chat with your data —
-                </span>
-                <button onClick={() => window.location.href = "/upgrade"} style={{
-                  background: "none", border: "none", padding: 0, cursor: "pointer",
-                  fontFamily: mono, fontSize: F.sm, color: C.accent, letterSpacing: "0.06em",
-                  textDecoration: "underline", textUnderlineOffset: 3,
-                }}>upgrade to Premium</button>
-              </div>}
+              <div style={{ fontFamily: mono, fontSize: 13, color: C.muted, lineHeight: 1.6, marginBottom: 12 }}>
+                You've used {freeUsage?.count ?? 10} of {freeUsage?.limit ?? 10} free AI insights.
+              </div>
+              <div style={{ fontFamily: mono, fontSize: 12, color: C.dim, lineHeight: 1.7, marginBottom: 14 }}>
+                Upgrade to Premium for unlimited insights, voice entry, and chat with your health data.
+              </div>
+              <button onClick={() => window.location.href = "/upgrade"} style={{
+                background: C.accent, border: "none", borderRadius: 6, padding: "8px 18px",
+                cursor: "pointer", fontFamily: mono, fontSize: F.sm, color: C.bg,
+                letterSpacing: "0.08em", textTransform: "uppercase",
+              }}>Upgrade to Premium →</button>
             </div>
           ) : text ? (
             <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
@@ -3573,6 +3611,8 @@ function ChatFloat({date, token, userId}) {
             },
           });
         }
+      } else if (data.tier === 'free') {
+        showStatus('Voice entry requires Premium — tap to upgrade', false, true);
       } else if (data.message) {
         // Declined gracefully — couldn't parse or unsupported
         showStatus(data.message, false);

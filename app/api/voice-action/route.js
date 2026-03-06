@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { isPremium } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
 
 function getUserClient(req) {
@@ -45,6 +46,12 @@ export async function POST(request) {
     // Rate limit: 60 actions per user per hour
     const rl = rateLimit(`voice:${user.id}`, { max: 60, windowMs: 60 * 60 * 1000 });
     if (!rl.ok) return Response.json({ error: `Too many requests. Try again in ${rl.retryAfter}s.` }, { status: 429 });
+
+    // Voice entry is a premium feature
+    const premium = await isPremium(supabase, user.id);
+    if (!premium) {
+      return Response.json({ tier: 'free', message: 'Voice entry requires a Premium account.' });
+    }
 
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });

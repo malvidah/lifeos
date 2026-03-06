@@ -3,6 +3,7 @@ import { isPremium, ANTHROPIC_KEY } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
 
 const CACHE_VERSION = 8;
+const FREE_LIMIT    = 10;   // free users get this many total insight generations
 const DAY_NAMES     = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 function getUserClient(req) {
@@ -21,11 +22,10 @@ function dateOffset(dateStr, days) {
   return d.toISOString().split('T')[0];
 }
 
-// Serialize one day's entries into a compact readable line
 function formatDay(date, entries) {
   const parts = [];
   const h = entries.health;
-  const s = entries.scores; // computed scores
+  const s = entries.scores;
 
   if (h || s) {
     const scores = [
@@ -74,6 +74,21 @@ function formatDay(date, entries) {
   return parts.length ? parts.join(' | ') : null;
 }
 
+async function getInsightCount(supabase, userId) {
+  const { data } = await supabase.from('entries').select('data')
+    .eq('type', 'insight_usage').eq('date', 'global').eq('user_id', userId).maybeSingle();
+  return data?.data?.count || 0;
+}
+
+async function incrementInsightCount(supabase, userId) {
+  const count = await getInsightCount(supabase, userId);
+  await supabase.from('entries').upsert(
+    { date: 'global', type: 'insight_usage', data: { count: count + 1, updatedAt: new Date().toISOString() }, user_id: userId, updated_at: new Date().toISOString() },
+    { onConflict: 'date,type,user_id' }
+  );
+  return count + 1;
+}
+
 export async function POST(request) {
   try {
     const supabase = getUserClient(request);
@@ -84,7 +99,7 @@ export async function POST(request) {
     const { date, healthKey } = await request.json();
     if (!date) return Response.json({ error: 'date required' }, { status: 400 });
 
-    // Return cached insights if they exist and are less than 6 hours old
+    // ── Cache check (free AND premium — no AI call if cache is fresh) ─────────
     const { data: cached } = await supabase.from('entries')
       .select('data, updated_at').eq('type', 'insights').eq('date', date)
       .eq('user_id', user.id).maybeSingle();
@@ -95,20 +110,27 @@ export async function POST(request) {
       }
     }
 
+    // ── Tier check — only for NEW generations ─────────────────────────────────
+    const premium = await isPremium(supabase, user.id);
+    if (!premium) {
+      const usageCount = await getInsightCount(supabase, user.id);
+      if (usageCount >= FREE_LIMIT) {
+        return Response.json({ tier: 'free', usageCount, limit: FREE_LIMIT });
+      }
+    }
+
     const rl = rateLimit(`insights:${user.id}`, { max: 100, windowMs: 60 * 60 * 1000 });
     if (!rl.ok) return Response.json({ error: `Rate limited. Retry in ${rl.retryAfter}s.` }, { status: 429 });
 
     const apiKey = ANTHROPIC_KEY();
     if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
 
-    // ── Fetch ───────────────────────────────────────────────────────────────
-
+    // ── Fetch context ──────────────────────────────────────────────────────────
     const { data: todayRows } = await supabase.from('entries')
       .select('type, data').eq('date', date).eq('user_id', user.id);
     const today = {};
     for (const row of todayRows || []) today[row.type] = row.data;
 
-    // Client already has Oura scores before they save to DB — use them
     if (!today.health && healthKey) {
       const [, sleep, readiness] = healthKey.split(':');
       if (+sleep > 0 || +readiness > 0)
@@ -136,15 +158,12 @@ export async function POST(request) {
       lastYearDays.push(day);
     }
 
-    // ── Build context ───────────────────────────────────────────────────────
-
     const dObj = new Date(date + 'T12:00:00');
     const lines = [`${DAY_NAMES[dObj.getDay()]} ${date}`];
 
     const todayLine = formatDay(date, today);
     if (todayLine) lines.push(`Today: ${todayLine}`);
 
-    // Explicitly flag missing health/sleep data so AI doesn't infer from previous days
     const hasTodayHealth = !!(today.health && (today.health.sleepScore || today.health.sleepHrs || today.health.readinessScore));
     if (!hasTodayHealth) {
       lines.push(`Today: no Oura data for last night (ring not worn or not yet synced) — do not infer or assume last night's sleep from previous nights`);
@@ -168,10 +187,10 @@ export async function POST(request) {
 
     const context = lines.join('\n');
 
-    // First-time user — nothing to say yet
+    // First-time user welcome
     if (lines.length === 1) {
       const name = user.user_metadata?.name?.split(' ')[0] || 'there';
-      const welcome = `Welcome to Day Loop, ${name}. Connect your Oura ring and start logging notes, meals, and tasks — the insights get sharper the more context you give them.`;
+      const welcome = `Welcome to Day Lab, ${name}. Connect your Oura ring and start logging notes, meals, and tasks — the insights get sharper the more context you give them.`;
       await supabase.from('entries').upsert(
         { date, type: 'insights', data: { text: welcome, generatedAt: new Date().toISOString(), isWelcome: true }, user_id: user.id, updated_at: new Date().toISOString() },
         { onConflict: 'date,type,user_id' }
@@ -179,8 +198,7 @@ export async function POST(request) {
       return Response.json({ insight: welcome });
     }
 
-    // ── Generate ────────────────────────────────────────────────────────────
-
+    // ── Generate ───────────────────────────────────────────────────────────────
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
@@ -197,6 +215,11 @@ export async function POST(request) {
 
     const insight = (aiData.content?.find(b => b.type === 'text')?.text || '')
       .replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/^#{1,3}\s+/gm, '').trim();
+
+    // Increment usage count for free users (welcome message doesn't count)
+    if (!premium) {
+      await incrementInsightCount(supabase, user.id);
+    }
 
     await supabase.from('entries').upsert(
       { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: CACHE_VERSION, healthKey: healthKey || '' }, user_id: user.id, updated_at: new Date().toISOString() },
