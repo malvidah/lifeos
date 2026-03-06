@@ -2236,7 +2236,20 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
     if(h.steps)          p.set('steps',          h.steps);
     if(h.activeMinutes)  p.set('activeMinutes',  h.activeMinutes);
     fetch(`/api/scores?${p}`,{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(d=>{ if(!d.error) setScores(d); }).catch(()=>{});
+      .then(r=>r.json()).then(d=>{
+        if(!d.error){
+          setScores(d);
+          // Immediately update calendar dot for this date with the freshly computed scores
+          if(d.sleep?.score != null || d.readiness?.score != null || d.activity?.score != null || d.recovery?.score != null){
+            setHealthDots(prev=>({...prev,[date]:{
+              sleep:    d.sleep?.score    ?? prev[date]?.sleep    ?? 0,
+              readiness:d.readiness?.score?? prev[date]?.readiness?? 0,
+              activity: d.activity?.score ?? prev[date]?.activity ?? 0,
+              recovery: d.recovery?.score ?? prev[date]?.recovery ?? 0,
+            }}));
+          }
+        }
+      }).catch(()=>{});
   },[date,token,h]); // re-run when h updates (new health data synced)
 
   // ── Sparkline SVG ─────────────────────────────────────────────────────────
@@ -3729,9 +3742,10 @@ export default function Dashboard() {
     return ()=>{ if(calRefreshRef.current) clearInterval(calRefreshRef.current); };
   },[token]); // eslint-disable-line
 
-  const onHealthChange=useCallback((date,data)=>{
-    setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,recovery:+data.resilienceScore||0}}));
-  },[]);
+  // onHealthChange: called by HealthStrip when raw health data loads.
+  // Does NOT update healthDots — dots come from computed scores only.
+  // This callback's sole purpose is to trigger InsightsCard re-generation via healthKey.
+  const onHealthChange=useCallback(()=>{},[]);
 
   // Load health dots from computed scores only (type='scores').
   // Backfill now computes our own scores for all historical dates,
