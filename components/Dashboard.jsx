@@ -2458,14 +2458,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     const ticks = [];
     for (const t of rawTicks) {
       const pct = (t.i / span) * 100;
-      if (pct > 90) continue; // too close to endLabel
+      if (pct > 96) continue; // too close to right edge
       if (ticks.length > 0 && pct - (ticks[ticks.length-1].i / span) * 100 < 6) continue;
       ticks.push(t);
     }
-
-    const endLabel = date === todayKey()
-      ? 'today'
-      : new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
 
     return (
       <div style={{ padding: '0 0 4px' }}>
@@ -2521,9 +2517,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
               }}>{t.label}</div>
             );
           })}
-          <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: C.dim }}>
-            {endLabel}
-          </div>
+
         </div>
       </div>
     );
