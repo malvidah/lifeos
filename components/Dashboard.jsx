@@ -436,13 +436,35 @@ function InfoTip({text}) {
   );
 }
 
-function SectionLabel({children,info}) {
+function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, children}) {
+  // Toggle pill — same style as dark mode toggle
+  const Toggle = ({on, onOn, onOff}) => (
+    <button
+      onClick={on ? onOff : onOn}
+      style={{
+        background: on ? `rgba(196,168,130,0.15)` : `rgba(155,107,58,0.08)`,
+        border: `1px solid ${C.border2}`, borderRadius: 20, cursor: "pointer",
+        padding: 3, display: "flex", alignItems: "center", width: 40, height: 22,
+        justifyContent: on ? "flex-end" : "flex-start", flexShrink: 0,
+        transition: "all 0.2s",
+      }}>
+      <div style={{width:14,height:14,borderRadius:"50%",background:on?C.accent:C.dim,transition:"all 0.2s"}}/>
+    </button>
+  );
   return (
-    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:8}}>
-      <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flex:1}}>
+    <div>
+      <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:1}}>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flex:1}}>
+          {label}
+        </span>
         {children}
-      </span>
-      {info&&<InfoTip text={info}/>}
+        <Toggle on={connected} onOn={onToggleOn} onOff={onToggleOff}/>
+      </div>
+      {subtitle && (
+        <div style={{fontFamily:mono,fontSize:9,color:C.dim,letterSpacing:"0.03em",marginTop:3,paddingLeft:0}}>
+          — {subtitle}
+        </div>
+      )}
     </div>
   );
 }
@@ -645,91 +667,68 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Apple Health */}
           <div style={row}>
-            <SectionLabel info="Syncs steps, sleep, heart rate, HRV, and calories from Apple Health. Works with Apple Watch, Oura, Whoop, Garmin, and any app writing to Apple Health. Requires the iOS app.">
-              Apple Health
-            </SectionLabel>
-            {isIOS ? (
-              appleHealthHasData ? (
-                <button onClick={disconnectAppleHealth} style={connBtn(C.green)}>✓ Connected</button>
-              ) : (
-                <button
-                  onTouchEnd={e=>{e.preventDefault();connectAppleHealth();}}
-                  onClick={connectAppleHealth}
-                  style={connBtn(C.border2)}>
-                  {syncing==="apple"?"Syncing…":"Connect"}
-                </button>
-              )
-            ) : (
-              <div style={{...connBtn(appleHealthHasData?C.green:C.border2),color:appleHealthHasData?C.green:C.muted}}>
-                {appleHealthHasData?"✓ Connected":"iOS App Required"}
-              </div>
-            )}
+            <IntegrationRow
+              label="Apple Health"
+              subtitle={!isIOS && !appleHealthHasData ? "iOS App Required" : syncing==="apple" ? "Syncing…" : null}
+              connected={appleHealthHasData}
+              onToggleOn={isIOS ? connectAppleHealth : ()=>{}}
+              onToggleOff={disconnectAppleHealth}
+            />
           </div>
 
           {divider}
 
           {/* Oura */}
           <div style={row}>
-            <SectionLabel info="Syncs sleep score, HRV, readiness, and recovery data. Requires a personal access token from your Oura account.">
-              Oura
-            </SectionLabel>
-            {ouraConnected ? (
-              <button onClick={disconnectOura} style={connBtn(C.green)}>
-                {syncing==="oura"?"Syncing history…":"✓ Connected"}
-              </button>
-            ) : (
-              <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
-                <input type="password" value={ouraKey}
-                  onChange={e=>setOuraKey(e.target.value)}
-                  placeholder="Paste token"
-                  className="oura-token-input"
-                  style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
-                    borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
-                    padding:"6px 8px",boxSizing:"border-box"}}/>
-                {ouraKey.trim() ? (
-                  <button onClick={connectOura} disabled={syncing==="oura"}
-                    style={{background:C.accent,border:"none",borderRadius:5,
-                      color:C.bg,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-                      textTransform:"uppercase",padding:"0 10px",cursor:"pointer",flexShrink:0,
-                      opacity:syncing==="oura"?0.5:1}}>
-                    {syncing==="oura"?"…":"Connect"}
-                  </button>
-                ) : (
-                  <button
-                    onClick={()=>window.open("https://cloud.ouraring.com/personal-access-tokens","_blank")}
-                    style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,
-                      color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-                      textTransform:"uppercase",padding:"0 10px",cursor:"pointer",flexShrink:0,
-                      whiteSpace:"nowrap"}}>
-                    Get Token
-                  </button>
-                )}
-              </div>
-            )}
+            <IntegrationRow
+              label="Oura"
+              subtitle={syncing==="oura" ? "Syncing history…" : null}
+              connected={ouraConnected}
+              onToggleOn={()=>window.open("https://cloud.ouraring.com/personal-access-tokens","_blank")}
+              onToggleOff={disconnectOura}
+            >
+              {!ouraConnected && (
+                <div style={{display:"flex",gap:5,alignItems:"center",flex:1,minWidth:0}}>
+                  <input type="password" value={ouraKey}
+                    onChange={e=>setOuraKey(e.target.value)}
+                    placeholder="Paste token"
+                    className="oura-token-input"
+                    style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
+                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                      padding:"5px 7px",boxSizing:"border-box"}}/>
+                  {ouraKey.trim() && (
+                    <button onClick={connectOura} disabled={syncing==="oura"}
+                      style={{background:C.accent,border:"none",borderRadius:5,
+                        color:C.bg,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+                        textTransform:"uppercase",padding:"5px 8px",cursor:"pointer",flexShrink:0,
+                        opacity:syncing==="oura"?0.5:1}}>
+                      {syncing==="oura"?"…":"Save"}
+                    </button>
+                  )}
+                </div>
+              )}
+            </IntegrationRow>
           </div>
 
           {divider}
 
           {/* Strava */}
           <div style={row}>
-            <SectionLabel info="Syncs your runs, rides, and workouts automatically. After connecting, your history will be backfilled.">
-              Strava
-            </SectionLabel>
-            {stravaConnected ? (
-              <button onClick={disconnectStrava} style={connBtn(C.green)}>
-                {syncing==="strava"?"Syncing history…":"✓ Connected"}
-              </button>
-            ) : (
-              <button onClick={connectStrava} style={connBtn("#FC4C02")}>Connect</button>
-            )}
+            <IntegrationRow
+              label="Strava"
+              subtitle={syncing==="strava" ? "Syncing history…" : null}
+              connected={stravaConnected}
+              onToggleOn={connectStrava}
+              onToggleOff={disconnectStrava}
+            />
           </div>
 
           {divider}
 
           {/* Claude */}          <div style={row}>
-            <SectionLabel info="Adds Day Lab as an MCP connector in Claude. Once connected, you can say things like 'add a task' or 'what's on my calendar' directly in any Claude conversation.">
-              Claude
-            </SectionLabel>
+            <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>
+              Claude MCP
+            </div>
             <div style={{
               display:"flex",alignItems:"center",gap:6,
               background:C.surface,border:`1px solid ${C.border2}`,
