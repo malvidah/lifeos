@@ -779,7 +779,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) {
+function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday}) {
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
   const [isToday, setIsToday] = useState(false);
@@ -813,14 +813,126 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected}) 
       </div>
       {/* Day Loop — centered */}
       <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
-        <span style={{
+        <span onClick={onGoToToday} style={{
           fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
-          color:C.text,
+          color:C.text, cursor:onGoToToday?"pointer":"default",
         }}>Day Lab</span>
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
         <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange}/>
+      </div>
+    </div>
+  );
+}
+
+// ─── MonthView ────────────────────────────────────────────────────────────────
+function MonthView({ year, month, selected, onSelectDay, healthDots, token, userId }) {
+  const [summaries, setSummaries] = useState({});
+  const [loadedMonth, setLoadedMonth] = useState(null);
+
+  // Load AI summaries whenever month changes
+  useEffect(() => {
+    if (!token) return;
+    const key = `${year}-${month}`;
+    if (loadedMonth === key) return;
+    setLoadedMonth(key);
+    fetch('/api/month-summaries', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ year, month }),
+    }).then(r => r.json()).then(d => {
+      if (d.summaries) setSummaries(d.summaries);
+    }).catch(() => {});
+  }, [year, month, token]); // eslint-disable-line
+
+  const today = todayKey();
+  const firstDay = new Date(year, month, 1);
+  const startDow = firstDay.getDay(); // 0=Sun
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const DAY_NAMES = ['S','M','T','W','T','F','S'];
+
+  // Build grid cells (pad start)
+  const cells = [];
+  for (let i = 0; i < startDow; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+
+  return (
+    <div style={{ padding: '8px 12px 12px' }}>
+      {/* Day name headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+        {DAY_NAMES.map((n, i) => (
+          <div key={i} style={{ textAlign: 'center', fontFamily: mono, fontSize: '9px',
+            letterSpacing: '0.06em', color: C.muted, padding: '2px 0' }}>{n}</div>
+        ))}
+      </div>
+
+      {/* Day cells */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
+        {cells.map((day, idx) => {
+          if (!day) return <div key={`empty-${idx}`} />;
+          const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+          const isToday = dateKey === today;
+          const isSelected = dateKey === selected;
+          const dots = healthDots[dateKey] || {};
+          const summary = summaries[dateKey];
+
+          return (
+            <div key={dateKey}
+              onClick={() => onSelectDay(dateKey)}
+              style={{
+                borderRadius: 6,
+                padding: '5px 4px 5px',
+                cursor: 'pointer',
+                background: isSelected ? C.accent + '18' : isToday ? C.accent + '0A' : 'transparent',
+                border: `1px solid ${isSelected ? C.accent + '55' : isToday ? C.accent + '30' : C.border + '60'}`,
+                minHeight: 52,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2,
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.background = C.accent + '12'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.accent + '18' : isToday ? C.accent + '0A' : 'transparent'; }}
+            >
+              {/* Day number */}
+              <div style={{
+                fontFamily: serif,
+                fontSize: F.sm,
+                fontWeight: isToday || isSelected ? '600' : 'normal',
+                color: isToday ? C.accent : isSelected ? C.text : C.muted,
+                lineHeight: 1,
+              }}>{day}</div>
+
+              {/* Health dots */}
+              <div style={{ display: 'flex', gap: 2, justifyContent: 'center', height: 4 }}>
+                {(dots.sleep >= 85)     && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.blue }} />}
+                {(dots.readiness >= 85) && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.green }} />}
+                {(dots.activity >= 85)  && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.accent }} />}
+                {(dots.recovery >= 85)  && <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#8B6BB5' }} />}
+              </div>
+
+              {/* AI summary */}
+              <div style={{
+                fontFamily: mono,
+                fontSize: '8px',
+                color: C.dim,
+                lineHeight: 1.3,
+                textAlign: 'center',
+                overflow: 'hidden',
+                display: '-webkit-box',
+                WebkitLineClamp: 2,
+                WebkitBoxOrient: 'vertical',
+                wordBreak: 'break-word',
+                width: '100%',
+                opacity: summary ? 1 : 0.3,
+              }}>
+                {summary || '—'}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -890,7 +1002,7 @@ function NavBtn({onClick,title,children}) {
     </button>
   );
 }
-function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false, onEventClick, onAddClick, collapsed, onToggle}) {
+function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false, onEventClick, onAddClick, collapsed, onToggle, calView='day', onCalViewChange}) {
   const today = todayKey();
   const DAY_W = 175;
 
@@ -1082,8 +1194,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           </div>
         )}
 
-        {/* RIGHT: Today + chevron */}
-        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:6,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
+        {/* RIGHT: Today + M/D toggle */}
+        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:4,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
 
           <button onClick={()=>onSelect(todayKey())} style={{
             background: selInt===0 ? C.accent+"22" : 'none',
@@ -1094,7 +1206,17 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             onMouseLeave={e=>{e.currentTarget.style.color=selInt===0?C.accent:C.muted;e.currentTarget.style.borderColor=selInt===0?C.accent:C.border2;}}>
             Today
           </button>
-                  </div>
+          {onCalViewChange&&<>
+            <button onClick={()=>onCalViewChange('month')}
+              style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
+                padding:'3px 7px',borderRadius:4,cursor:'pointer',
+                background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>M</button>
+            <button onClick={()=>onCalViewChange('day')}
+              style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
+                padding:'3px 7px',borderRadius:4,cursor:'pointer',
+                background:C.accent+'22',border:`1px solid ${C.accent}`,color:C.accent}}>D</button>
+          </>}
+        </div>
       </div>
 
       {/* ── Day columns with events ──────────────────────────────────────── */}
@@ -1227,7 +1349,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     </div>
   );
 }
-function CalStrip({selected, onSelect, events, setEvents, healthDots, token, collapsed, onToggle}) {
+function CalStrip({selected, onSelect, events, setEvents, healthDots, token, collapsed, onToggle, calView, onCalViewChange}) {
   const mobile = useIsMobile();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -1415,14 +1537,71 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
     padding:0, margin:0, color:C.text,
   };
 
+  // Parse selected date for month view
+  const selDateObj = selected ? new Date(selected + 'T12:00:00') : new Date();
+  const [mvYear, setMvYear] = useState(selDateObj.getFullYear());
+  const [mvMonth, setMvMonth] = useState(selDateObj.getMonth());
+  const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
   return (
     <Card>
-      <MobileCalPicker
-        selected={selected} onSelect={onSelect}
-        events={events} healthDots={healthDots} desktop={!mobile}
-        onEventClick={openEvent} onAddClick={openAdd}
-        collapsed={collapsed} onToggle={onToggle}
-      />
+      {/* ── View toggle: inject M/D buttons into MobileCalPicker header via wrapper ── */}
+      {calView === 'month' ? (
+        <div style={{userSelect:'none',display:'flex',flexDirection:'column'}}>
+          {/* Month header bar */}
+          <div style={{display:'flex',alignItems:'center',padding:'10px 16px 8px',
+            borderBottom:`1px solid ${C.border}`,flexShrink:0,position:'relative'}}>
+            {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted,marginLeft:onToggle?8:0}}>Calendar</span>
+            {/* Month nav centered */}
+            <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
+              display:'flex',alignItems:'center',gap:8,userSelect:'none'}}>
+              <button onClick={()=>{
+                if(mvMonth===0){setMvMonth(11);setMvYear(y=>y-1);}else setMvMonth(m=>m-1);
+              }} style={{background:'none',border:'none',cursor:'pointer',color:C.muted,
+                padding:'2px 6px',fontFamily:mono,fontSize:F.md,lineHeight:1}}>‹</button>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',
+                color:C.accent,background:C.accent+'1A',borderRadius:6,padding:'4px 10px',whiteSpace:'nowrap'}}>
+                {MONTHS_SHORT[mvMonth]} {mvYear}
+              </span>
+              <button onClick={()=>{
+                if(mvMonth===11){setMvMonth(0);setMvYear(y=>y+1);}else setMvMonth(m=>m+1);
+              }} style={{background:'none',border:'none',cursor:'pointer',color:C.muted,
+                padding:'2px 6px',fontFamily:mono,fontSize:F.md,lineHeight:1}}>›</button>
+            </div>
+            {/* M/D toggle — right */}
+            <div style={{marginLeft:'auto',display:'flex',gap:4}}>
+              <button onClick={()=>onCalViewChange('month')}
+                style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
+                  padding:'3px 7px',borderRadius:4,cursor:'pointer',
+                  background:C.accent+'22',border:`1px solid ${C.accent}`,color:C.accent}}>M</button>
+              <button onClick={()=>onCalViewChange('day')}
+                style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
+                  padding:'3px 7px',borderRadius:4,cursor:'pointer',
+                  background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>D</button>
+            </div>
+          </div>
+          {!collapsed&&<MonthView
+            year={mvYear} month={mvMonth}
+            selected={selected}
+            onSelectDay={d=>{onSelect(d);onCalViewChange('day');}}
+            healthDots={healthDots}
+            token={token}
+          />}
+        </div>
+      ) : (
+        <MobileCalPicker
+          selected={selected} onSelect={s=>{
+            onSelect(s);
+            // Sync month view to follow selected date
+            const d=new Date(s+'T12:00:00');setMvYear(d.getFullYear());setMvMonth(d.getMonth());
+          }}
+          events={events} healthDots={healthDots} desktop={!mobile}
+          onEventClick={openEvent} onAddClick={openAdd}
+          collapsed={collapsed} onToggle={onToggle}
+          calView={calView} onCalViewChange={onCalViewChange}
+        />
+      )}
 
       {/* ── Event panel ── */}
       {active !== null && (
@@ -2883,6 +3062,7 @@ export default function Dashboard() {
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [selected,  setSelected]  = useState(todayKey);
+  const [calView,   setCalView]   = useState(() => localStorage.getItem('calView') || 'day');
   const [events,    setEvents]    = useState({});
   const [healthDots,setHealthDots]= useState({});
   const [syncing,   setSyncing]   = useState(new Set());
@@ -2924,9 +3104,12 @@ export default function Dashboard() {
     else localStorage.removeItem('daylab:token');
   },[token]);
 
+  useEffect(() => { localStorage.setItem('calView', calView); }, [calView]);
+
   // ── Pull-to-refresh from native iOS app ────────────────────────────────
   useEffect(() => {
     const handler = () => {
+      setSelected(todayKey());
       window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: {} }));
     };
     window.addEventListener('daylabRefresh', handler);
@@ -3072,7 +3255,7 @@ export default function Dashboard() {
         @keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
-      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected}/>
+      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, overflow:mobile?"visible":"hidden", padding:mobile?8:10,
@@ -3082,7 +3265,8 @@ export default function Dashboard() {
           <div style={{flexShrink:0}}>
             <CalStrip selected={selected} onSelect={setSelected}
               events={events} setEvents={setEvents} healthDots={healthDots}
-              token={token} collapsed={mobile?false:calCollapsed} onToggle={mobile?undefined:toggleCal}/>
+              token={token} collapsed={mobile?false:calCollapsed} onToggle={mobile?undefined:toggleCal}
+              calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
           </div>
 
           {/* Health */}
