@@ -161,8 +161,11 @@ export async function POST(request) {
     const dObj = new Date(date + 'T12:00:00');
     const lines = [`${DAY_NAMES[dObj.getDay()]} ${date}`];
 
+    // Track real data lines separately — the "no Oura data" sentinel is not real data
+    let realDataCount = 0;
+
     const todayLine = formatDay(date, today);
-    if (todayLine) lines.push(`Today: ${todayLine}`);
+    if (todayLine) { lines.push(`Today: ${todayLine}`); realDataCount++; }
 
     const hasTodayHealth = !!(today.health && (today.health.sleepScore || today.health.sleepHrs || today.health.readinessScore));
     if (!hasTodayHealth) {
@@ -173,7 +176,7 @@ export async function POST(request) {
       lines.push('');
       for (const day of recentDays) {
         const line = formatDay(day.date, day);
-        if (line) lines.push(`${DAY_NAMES[new Date(day.date + 'T12:00:00').getDay()]} ${day.date}: ${line}`);
+        if (line) { lines.push(`${DAY_NAMES[new Date(day.date + 'T12:00:00').getDay()]} ${day.date}: ${line}`); realDataCount++; }
       }
     }
 
@@ -181,16 +184,16 @@ export async function POST(request) {
       lines.push('');
       for (const day of lastYearDays) {
         const line = formatDay(day.date, day);
-        if (line) lines.push(`Last year ${day.date}: ${line}`);
+        if (line) { lines.push(`Last year ${day.date}: ${line}`); realDataCount++; }
       }
     }
 
     const context = lines.join('\n');
 
-    // First-time user welcome
-    if (lines.length === 1) {
+    // No data at all — show welcome, don't call AI
+    if (realDataCount === 0) {
       const name = user.user_metadata?.name?.split(' ')[0] || 'there';
-      const welcome = `Welcome to Day Lab, ${name}. Connect your Oura ring and start logging notes, meals, and tasks — the insights get sharper the more context you give them.`;
+      const welcome = `Welcome to Day Lab, ${name}. Connect your Oura ring and start logging meals, notes, and tasks — insights will start generating once there's data to work with.`;
       await supabase.from('entries').upsert(
         { date, type: 'insights', data: { text: welcome, generatedAt: new Date().toISOString(), isWelcome: true }, user_id: user.id, updated_at: new Date().toISOString() },
         { onConflict: 'date,type,user_id' }
