@@ -2336,35 +2336,32 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
     const data = trendData[metricKey];
     if (!data || trendLoading) {
       return (
-        <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>{trendLoading ? 'loading…' : '—'}</span>
         </div>
       );
     }
-    // Build ordered 30-day series
     const days = [];
     for (let i = -29; i <= 0; i++) days.push(toKey(shift(new Date(), i)));
     const vals = days.map(d => data[d]?.[metricKey] ?? null);
     const pts = vals.map((v, i) => v != null ? { v, i } : null).filter(Boolean);
-    if (pts.length < 2) return <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>not enough data</span></div>;
+    if (pts.length < 2) return <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>not enough data</span></div>;
 
-    const W = 100, H = 60; // percentage-based viewBox
+    // Fixed pixel viewBox — non-scaling-stroke keeps line uniform at any display width
+    const W = 600, H = 80;
     const mn = Math.max(0, Math.min(...pts.map(p => p.v)) - 5);
     const mx = Math.min(100, Math.max(...pts.map(p => p.v)) + 5);
     const range = mx - mn || 1;
     const xOf = i => (i / 29) * W;
-    const yOf = v => H - ((v - mn) / range) * (H - 4) - 2;
+    const yOf = v => H - ((v - mn) / range) * (H - 6) - 3;
 
-    // Fill path
     const linePts = pts.map(p => `${xOf(p.i).toFixed(1)},${yOf(p.v).toFixed(1)}`).join(' ');
     const first = pts[0], last = pts[pts.length - 1];
     const fillPath = `M${xOf(first.i).toFixed(1)},${H} L${linePts.split(' ').join(' L')} L${xOf(last.i).toFixed(1)},${H} Z`;
 
-    // Average line
     const avg = pts.reduce((s, p) => s + p.v, 0) / pts.length;
     const avgY = yOf(avg).toFixed(1);
 
-    // Month tick marks
     const ticks = [];
     days.forEach((d, i) => {
       if (d.endsWith('-01') || i === 0) {
@@ -2376,20 +2373,25 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
     return (
       <div style={{ padding: '0 0 4px' }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, display: 'block', overflow: 'visible' }}
-          preserveAspectRatio="none">
+          preserveAspectRatio="xMidYMid meet">
           <defs>
             <linearGradient id={`tg-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.22"/>
               <stop offset="100%" stopColor={color} stopOpacity="0"/>
             </linearGradient>
           </defs>
-          {/* fill under curve */}
+          {/* gradient fill */}
           <path d={fillPath} fill={`url(#tg-${metricKey})`} stroke="none"/>
-          {/* single clean uniform line */}
+          {/* avg dotted grey line */}
+          <line x1="0" y1={avgY} x2={W} y2={avgY}
+            stroke="rgba(255,255,255,0.2)" strokeWidth="1"
+            strokeDasharray="4,4" vectorEffect="non-scaling-stroke"/>
+          {/* main line — non-scaling-stroke = same 1.5px at any window width */}
           <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
-            strokeLinecap="round" strokeLinejoin="round"/>
+            strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
           {/* today dot */}
-          <circle cx={xOf(last.i).toFixed(1)} cy={yOf(last.v).toFixed(1)} r="2" fill={color}/>
+          <circle cx={xOf(last.i).toFixed(1)} cy={yOf(last.v).toFixed(1)} r="3" fill={color}
+            vectorEffect="non-scaling-stroke"/>
         </svg>
         {/* month labels */}
         <div style={{ display: 'flex', position: 'relative', height: 14 }}>
@@ -2484,31 +2486,34 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
         })}
       </div>}
 
-      {/* ── Expanded trend panel ── */}
-      {!collapsed && expandedMetric && (() => {
-        const m = metrics.find(x => x.key === expandedMetric);
-        if (!m) return null;
+      {/* ── Trend panel — always rendered at fixed height to prevent layout shift ── */}
+      {!collapsed && (() => {
+        const m = expandedMetric ? metrics.find(x => x.key === expandedMetric) : null;
+        const avgVal = m && trendData[expandedMetric]
+          ? (() => {
+              const days=[];for(let i=-29;i<=0;i++)days.push(toKey(shift(new Date(),i)));
+              const vals=days.map(d=>trendData[expandedMetric][d]?.[expandedMetric]).filter(v=>v!=null);
+              return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
+            })()
+          : null;
         return (
-          <div style={{padding:"16px 16px 14px",borderTop:`1px solid ${C.border}`,
-            animation:"fadeInUp 0.18s ease"}}>
-            {/* 30-day trend line */}
-            <div style={{marginBottom:12}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+          <div style={{
+            borderTop: expandedMetric ? `1px solid ${C.border}` : `1px solid transparent`,
+            height: 140, flexShrink: 0, overflow: 'hidden',
+            opacity: expandedMetric ? 1 : 0,
+            transition: 'opacity 0.18s ease',
+            padding: "10px 16px 8px",
+          }}>
+            {m && <>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
                 <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
                   textTransform:"uppercase",color:m.color}}>30-day trend</span>
-                <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>
-                  avg {trendData[expandedMetric]
-                    ? (() => {
-                        const days=[];for(let i=-29;i<=0;i++)days.push(toKey(shift(new Date(),i)));
-                        const vals=days.map(d=>trendData[expandedMetric][d]?.[expandedMetric]).filter(v=>v!=null);
-                        return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : "—";
-                      })()
-                    : "—"}
-                </span>
+                {avgVal != null && (
+                  <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
+                )}
               </div>
-              <TrendLine metricKey={expandedMetric} color={m.color}/>
-            </div>
-
+              <TrendLine metricKey={m.key} color={m.color}/>
+            </>}
           </div>
         );
       })()}
