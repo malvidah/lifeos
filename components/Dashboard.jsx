@@ -855,8 +855,10 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   const [displayOff, setDisplayOff] = useState(initYear * 12 + initMonth);
 
   // Responsive sizing — derive CELL_H from available height so months pack tight
-  const [vw, setVw] = useState(typeof window !== 'undefined' ? window.innerWidth : 1200);
+  // SSR-safe: start at 1200 to avoid hydration mismatch; real value set after mount
+  const [vw, setVw] = useState(1200);
   useEffect(()=>{
+    setVw(window.innerWidth); // sync on first client render
     const onResize = () => setVw(window.innerWidth);
     window.addEventListener('resize', onResize);
     return ()=>window.removeEventListener('resize', onResize);
@@ -1213,7 +1215,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                 }}>{MONTH_NAMES[mo]}</div>
 
                 {/* 6-row grid */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridAutoRows: CELL_H, gap: 2, flex: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gridTemplateRows: `repeat(6, ${CELL_H}px)`, gap: 2, flex: 1 }}>
                   {cells.map(({ day, dateKey, isOverflow }, idx) => {
                     // Overflow cells are invisible spacers — no content, no border
                     if (isOverflow) return <div key={`sp-${idx}`} style={{ height: CELL_H }} />;
