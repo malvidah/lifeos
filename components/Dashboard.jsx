@@ -2444,41 +2444,63 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     }
 
     // ── Scrubber state ────────────────────────────────────────────────────────
-    const [scrub, setScrub] = useState(null); // { i, v, dayKey } | null
+    // scrub = { frac, interpV, snapV, snapDayKey } | null
+    // frac: 0-1 cursor position (drives X — moves continuously)
+    // interpV: linearly interpolated score at cursor (drives Y — smooth)
+    // snapV: score of nearest data point (shown as the number)
+    // snapDayKey: date of nearest data point (shown as the label)
+    const [scrub, setScrub] = useState(null);
     const chartRef = useRef(null);
 
     function getScrubFromX(clientX) {
       const rect = chartRef.current?.getBoundingClientRect();
       if (!rect) return null;
       const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      const rawI = Math.round(frac * span);
-      // Snap to nearest actual data point
+      const rawI = frac * span;
+
+      // Linear interpolation between the two surrounding data points
+      let lo = null, hi = null;
+      for (const p of pts) {
+        if (p.i <= rawI && (lo === null || p.i > lo.i)) lo = p;
+        if (p.i >= rawI && (hi === null || p.i < hi.i)) hi = p;
+      }
+      let interpV;
+      if (!lo && !hi) return null;
+      if (!lo) interpV = hi.v;
+      else if (!hi) interpV = lo.v;
+      else if (lo.i === hi.i) interpV = lo.v;
+      else {
+        const t = (rawI - lo.i) / (hi.i - lo.i);
+        interpV = lo.v + t * (hi.v - lo.v);
+      }
+
+      // Snap to nearest point for label/score display
       let best = null, bestDist = Infinity;
       for (const p of pts) {
-        const dist = Math.abs(p.i - rawI);
-        if (dist < bestDist) { bestDist = dist; best = p; }
+        const d = Math.abs(p.i - rawI);
+        if (d < bestDist) { bestDist = d; best = p; }
       }
-      if (!best) return null;
-      return { i: best.i, v: best.v, dayKey: days[best.i] };
+
+      return { frac, interpV, snapV: best.v, snapDayKey: days[best.i] };
     }
 
     const scrubHandlers = {
-      onMouseMove: e => setScrub(getScrubFromX(e.clientX)),
+      onMouseMove:  e => setScrub(getScrubFromX(e.clientX)),
       onMouseLeave: () => setScrub(null),
       onTouchStart: e => { e.preventDefault(); setScrub(getScrubFromX(e.touches[0].clientX)); },
       onTouchMove:  e => { e.preventDefault(); setScrub(getScrubFromX(e.touches[0].clientX)); },
       onTouchEnd:   () => setTimeout(() => setScrub(null), 800),
     };
 
-    const scrubX = scrub ? (scrub.i / span) * W : null;
-    const scrubY = scrub ? yOf(scrub.v) : null;
+    // X follows cursor continuously; Y follows interpolated value
+    const scrubX   = scrub ? scrub.frac * W : null;
+    const scrubY   = scrub ? yOf(scrub.interpV) : null;
     const scrubLabel = scrub
-      ? new Date(scrub.dayKey + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      ? new Date(scrub.snapDayKey + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
       : null;
 
     return (
       <div style={{ padding: '0 0 4px' }}>
-        {/* Wrapper: relative so overlays can be absolutely positioned over the SVG */}
         <div ref={chartRef} style={{ position: 'relative', cursor: 'crosshair', touchAction: 'none' }}
           {...scrubHandlers}>
           <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, display: 'block', overflow: 'visible' }}
@@ -2489,33 +2511,21 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                 <stop offset="100%" stopColor={color} stopOpacity="0"/>
               </linearGradient>
             </defs>
-            {/* gradient fill */}
             <path d={fillPath} fill={`url(#tg-${metricKey})`} stroke="none"/>
-            {/* avg dotted grey line */}
             <line x1="0" y1={avgY} x2={W} y2={avgY}
               stroke="rgba(255,255,255,0.2)" strokeWidth="1"
               strokeDasharray="4,4" vectorEffect="non-scaling-stroke"/>
-            {/* main line */}
             <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
-            {/* scrubber vertical line */}
+            {/* scrubber vertical line — no dot */}
             {scrub && (
-              <line
-                x1={scrubX} y1={0} x2={scrubX} y2={H}
-                stroke={color} strokeWidth="1" strokeOpacity="0.5"
-                vectorEffect="non-scaling-stroke"
-              />
-            )}
-            {/* scrubber dot */}
-            {scrub && (
-              <circle cx={scrubX} cy={scrubY} r="3.5"
-                fill={color} stroke={C.bg} strokeWidth="1.5"
-                vectorEffect="non-scaling-stroke"
-              />
+              <line x1={scrubX} y1={0} x2={scrubX} y2={H}
+                stroke={color} strokeWidth="1" strokeOpacity="0.45"
+                vectorEffect="non-scaling-stroke"/>
             )}
           </svg>
 
-          {/* Today dot — HTML div so it stays a perfect circle */}
+          {/* Today dot */}
           {!scrub && (
             <div style={{
               position: 'absolute',
@@ -2528,51 +2538,54 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             }}/>
           )}
 
-          {/* Scrubber tooltip — date + score, floats above the line */}
+          {/* Score number — floats above where the line meets the scrubber */}
           {scrub && (() => {
-            const leftPct = (scrub.i / span) * 100;
+            const leftPct = scrub.frac * 100;
             const isRight = leftPct > 60;
             return (
               <div style={{
                 position: 'absolute',
-                left: isRight ? 'auto' : `calc(${leftPct}% + 8px)`,
-                right: isRight ? `calc(${100 - leftPct}% + 8px)` : 'auto',
-                top: 0,
+                left: isRight ? 'auto' : `calc(${leftPct}% + 7px)`,
+                right: isRight ? `calc(${100 - leftPct}% + 7px)` : 'auto',
+                top: `${Math.max(0, (scrubY / H) * 80 - 22)}px`,
                 pointerEvents: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: isRight ? 'flex-end' : 'flex-start',
               }}>
                 <span style={{
-                  fontFamily: mono, fontSize: '11px', fontWeight: 600,
-                  color: color, lineHeight: 1.2,
-                }}>{scrub.v}</span>
-                <span style={{
-                  fontFamily: mono, fontSize: '9px',
-                  color: C.dim, letterSpacing: '0.03em',
-                }}>{scrubLabel}</span>
+                  fontFamily: mono, fontSize: '13px', fontWeight: 700,
+                  color: color, lineHeight: 1,
+                }}>{scrub.snapV}</span>
               </div>
             );
           })()}
         </div>
 
-        {/* month / week labels */}
+        {/* Month/week labels + scrubbed date */}
         <div style={{ display: 'flex', position: 'relative', height: 14 }}>
           {ticks.map(t => (
             <div key={t.i} style={{
               position: 'absolute',
               left: `${(t.i / 29) * 100}%`,
               transform: 'translateX(-50%)',
-              fontFamily: mono, fontSize: '9px', color: C.dim,
+              fontFamily: mono, fontSize: '9px',
+              color: scrub ? 'transparent' : C.dim,
               letterSpacing: '0.04em',
+              transition: 'color 0.1s',
             }}>{t.label}</div>
           ))}
-          <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: scrub ? color : C.dim,
-            transition: 'color 0.1s' }}>
-            {scrub
-              ? scrubLabel
-              : date === todayKey() ? 'today' : new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
-          </div>
+          {/* Scrubbed date follows the line horizontally */}
+          {scrub ? (
+            <div style={{
+              position: 'absolute',
+              left: `${scrub.frac * 100}%`,
+              transform: 'translateX(-50%)',
+              fontFamily: mono, fontSize: '9px', color: color,
+              letterSpacing: '0.04em', whiteSpace: 'nowrap',
+            }}>{scrubLabel}</div>
+          ) : (
+            <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: C.dim }}>
+              {date === todayKey() ? 'today' : new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+            </div>
+          )}
         </div>
       </div>
     );
