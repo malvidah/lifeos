@@ -1182,7 +1182,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                 fontWeight: 'normal',
                 letterSpacing: '0.06em',
                 textTransform: 'uppercase',
-                color: C.muted, marginBottom: 5, flexShrink: 0,
+                color: C.muted, marginTop: 8, marginBottom: 8, flexShrink: 0,
                 paddingLeft: 2, overflow: 'hidden', whiteSpace: 'nowrap',
               }}>{MONTH_NAMES[mo]}</div>
 
