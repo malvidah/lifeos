@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/oura-sync",
+      "schedule": "0 6,8,10,12 * * *"
+    }
+  ]
+}

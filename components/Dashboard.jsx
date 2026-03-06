@@ -3802,6 +3802,26 @@ export default function Dashboard() {
 
   useEffect(() => { localStorage.setItem('calView', calView); }, [calView]);
 
+  // ── Auto-sync Oura on app open + visibility restore ────────────────────
+  // Oura ring syncs to Oura servers automatically — we just need to fetch it.
+  // Bust the module-level cache for today so HealthStrip re-fetches immediately.
+  const bustTodayCacheAndSync = useCallback(() => {
+    if (!token || !userId) return;
+    const today = todayKey();
+    // Remove today's entry from the module-level Oura cache so next render re-fetches
+    const k = `${userId}|${today}`;
+    delete _ouraCache[k];
+  }, [token, userId]);
+
+  // Bust on mount (app open) and whenever window becomes visible again (return from background)
+  useEffect(() => {
+    if (!token || !userId) return;
+    bustTodayCacheAndSync(); // immediate on mount
+    const onVis = () => { if (!document.hidden) bustTodayCacheAndSync(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [token, userId, bustTodayCacheAndSync]); // eslint-disable-line
+
   // ── Silent background scores backfill — runs once per session ──────────
   // Finds any health/health_apple rows that don't have a computed scores entry
   // and fills them in. This is what populates historical trend data.
