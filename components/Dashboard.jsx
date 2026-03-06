@@ -85,14 +85,14 @@ function ouraKey(userId, date) { return `${userId}|${date}`; }
 function cachedOuraFetch(date, token, userId) {
   const k = ouraKey(userId, date);
   if (_ouraCache[k]) return _ouraCache[k];
-  const p = fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
+  // Pass timezone offset so server computes the correct local "today"
+  const tzOffset = new Date().getTimezoneOffset() * -1; // minutes, e.g. -480 for PST
+  const p = fetch(`/api/oura?date=${date}&tzOffset=${tzOffset}`,{headers:{Authorization:`Bearer ${token}`}})
     .then(r=>r.json())
     .then(data => {
-      // Don't cache empty/error responses — they should be retried
-      // Also don't cache if sleep fields are missing (partial response) — they'll fill in later
+      // Don't cache error or empty responses — retry on next access
       const hasData = data && !data.error && Object.keys(data).length > 0;
-      const hasSleep = data?.sleepHrs || data?.sleepQuality;
-      if (!hasData || !hasSleep) delete _ouraCache[k];
+      if (!hasData) delete _ouraCache[k];
       return data;
     })
     .catch(()=>{ delete _ouraCache[k]; return {}; });
@@ -2308,7 +2308,8 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     if(!token||!loaded||scoreFingerprint===null) return;
     if(date > todayKey()) return; // never request scores for future dates
     const ctrl = new AbortController();
-    const p = new URLSearchParams({ date });
+    const tzOffset = new Date().getTimezoneOffset() * -1;
+    const p = new URLSearchParams({ date, tzOffset });
     if(h.sleepHrs)       p.set('sleepHrs',      h.sleepHrs);
     if(h.sleepEff)       p.set('sleepEff',       h.sleepEff);
     if(h.hrv)            p.set('hrv',            h.hrv);

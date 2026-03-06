@@ -7,7 +7,11 @@ import {
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const now = new Date();
-  const localToday = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
+  // Use client-provided timezone offset (minutes) to compute correct local date
+  // Falls back to UTC if not provided (safe for backfill/cron callers)
+  const tzOffset = parseInt(searchParams.get('tzOffset') ?? '0', 10);
+  const adjustedNow = new Date(now.getTime() + tzOffset * 60000);
+  const localToday = adjustedNow.toISOString().split('T')[0];
   const date = searchParams.get('date') || localToday;
   const isToday = date === localToday;
 
