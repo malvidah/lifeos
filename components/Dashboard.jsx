@@ -1785,9 +1785,9 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
         )}
         {showBadge&&(
           <span title={`Scores calibrating — ${calibDays}/14 days of data. Currently using health guidelines as reference.`}
-            style={{fontFamily:mono,fontSize:"10px",color:C.accent,border:`1px solid ${C.accent}`,
-              borderRadius:4,padding:"1px 5px",opacity:0.8,cursor:"default"}}>
-            ⚡ calibrating
+            style={{fontFamily:mono,fontSize:"10px",color:C.muted,background:"rgba(255,255,255,0.06)",
+              borderRadius:4,padding:"1px 6px",cursor:"default"}}>
+            Calibrating…
           </span>
         )}
       </div>

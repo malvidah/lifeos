@@ -296,6 +296,14 @@ export async function GET(request) {
 
   if (rowErr) return Response.json({ error: rowErr.message }, { status: 500 });
 
+  // Get total historical count (all time) to determine calibration status
+  const { count: totalHealthRows } = await supabase
+    .from('entries')
+    .select('date', { count: 'exact', head: true })
+    .eq('user_id', user.id)
+    .in('type', ['health', 'health_apple'])
+    .lte('date', date);
+
   // Merge health + health_apple by date (Oura wins per-field if both present)
   const byDate = {};
   for (const row of rows ?? []) {
@@ -321,7 +329,7 @@ export async function GET(request) {
     if (v != null && v !== '') overrides[k] = v;
   });
   const todayMerged = { ...todayData, ...overrides };
-  const calibrationDays = dates.length;
+  const calibrationDays = totalHealthRows ?? dates.length;
   const calibrated = calibrationDays >= CALIBRATION_DAYS;
 
   // Build history arrays (chronological, excluding today)

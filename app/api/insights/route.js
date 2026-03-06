@@ -84,7 +84,18 @@ export async function POST(request) {
     const { date, healthKey } = await request.json();
     if (!date) return Response.json({ error: 'date required' }, { status: 400 });
 
-    const rl = rateLimit(`insights:${user.id}`, { max: 30, windowMs: 60 * 60 * 1000 });
+    // Return cached insights if they exist and are less than 6 hours old
+    const { data: cached } = await supabase.from('entries')
+      .select('data, updated_at').eq('type', 'insights').eq('date', date)
+      .eq('user_id', user.id).maybeSingle();
+    if (cached?.data?.insight) {
+      const age = Date.now() - new Date(cached.updated_at).getTime();
+      if (age < 6 * 60 * 60 * 1000) {
+        return Response.json({ insight: cached.data.insight, cached: true });
+      }
+    }
+
+    const rl = rateLimit(`insights:${user.id}`, { max: 100, windowMs: 60 * 60 * 1000 });
     if (!rl.ok) return Response.json({ error: `Rate limited. Retry in ${rl.retryAfter}s.` }, { status: 429 });
 
     const apiKey = ANTHROPIC_KEY();
