@@ -2752,38 +2752,53 @@ function Notes({date,userId,token}) {
     </div>
   );
 
-  const textareaStyle = {
+  const baseTextStyle = {
     fontFamily:serif, fontSize:F.md, lineHeight:"1.7",
-    padding:0, margin:0, border:"none", outline:"none",
-    width:"100%", height:"100%", resize:"none",
-    background:"transparent", color:C.text, caretColor:C.accent,
     whiteSpace:"pre-wrap", wordBreak:"break-word",
   };
 
-  if (editing) {
-    return (
-      <textarea
-        ref={taRef}
-        value={value}
-        onChange={e => setValue(e.target.value, {skipHistory:true})}
-        onBlur={() => { setValue(v => v, {undoLabel:'Edit notes'}); setEditing(false); }}
-        onKeyDown={handleKeyDown}
-        style={textareaStyle}
-      />
-    );
+  // Auto-size textarea to content so switching view↔edit doesn't shift layout
+  useEffect(() => {
+    if (editing && taRef.current) {
+      const ta = taRef.current;
+      ta.style.height = "auto";
+      ta.style.height = ta.scrollHeight + "px";
+    }
+  }, [editing]);
+
+  function autoResize(e) {
+    e.target.style.height = "auto";
+    e.target.style.height = e.target.scrollHeight + "px";
+    setValue(e.target.value, {skipHistory:true});
   }
 
+  const minH = 80;
+
   return (
-    <div
-      onClick={() => setEditing(true)}
-      style={{height:"100%", overflow:"auto", cursor:"text"}}
-    >
-      {value && value.trim()
-        ? renderContent(value)
-        : <div style={{color:C.muted,fontFamily:serif,fontSize:F.md,lineHeight:"1.7"}}>
-            What's on your mind?
-          </div>
-      }
+    <div style={{minHeight:minH, cursor:"text"}} onClick={() => !editing && setEditing(true)}>
+      {editing ? (
+        <textarea
+          ref={taRef}
+          value={value}
+          onChange={autoResize}
+          onBlur={() => { setValue(v => v, {undoLabel:"Edit notes"}); setEditing(false); }}
+          onKeyDown={handleKeyDown}
+          style={{
+            ...baseTextStyle,
+            padding:0, margin:0, border:"none", outline:"none",
+            width:"100%", resize:"none", display:"block",
+            background:"transparent", color:C.text, caretColor:C.accent,
+            minHeight:minH, overflow:"hidden",
+          }}
+        />
+      ) : (
+        <div style={{...baseTextStyle, minHeight:minH}}>
+          {value && value.trim()
+            ? renderContent(value)
+            : <div style={{color:C.muted}}>What's on your mind?</div>
+          }
+        </div>
+      )}
     </div>
   );
 }
