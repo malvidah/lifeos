@@ -67,7 +67,7 @@ async function estimateNutrition(prompt, token) {
   try {
     const r = await fetch("/api/ai",{method:"POST",
       headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-      body:JSON.stringify({model:"claude-haiku-4-5",max_tokens:80,
+      body:JSON.stringify({model:"claude-haiku-4-5-20251001",max_tokens:80,
         system:"Return ONLY a valid JSON object with the requested integer fields. No explanation, no markdown, no backticks.",
         messages:[{role:"user",content:prompt}]})});
     const d = await r.json();
@@ -3451,32 +3451,49 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
   );
 }
 
-// ─── QuickAdd ─────────────────────────────────────────────────────────────────
-// Floating entry bar. Type a command, hit enter. Shows a brief status
-// notification (green = success, red = fail) that fades out automatically.
-// No conversation history — pure data entry.
+// ─── Chat / QuickAdd ──────────────────────────────────────────────────────────
+// Collapsed: floating entry bar (quick commands, no history).
+// Expanded: full-height panel with conversation history, Q&A + entry actions.
 function ChatFloat({date, token, userId}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(null); // {text, ok} | null
+  const [expanded, setExpanded] = useState(false);
+  const [messages, setMessages] = useState([]); // [{role, content, actions, summary}]
+  const [status, setStatus] = useState(null); // {text, ok} | null — collapsed mode only
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mobile = typeof window !== "undefined" && window.innerWidth < 768;
   const recognizerRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const recordingCancelledRef = useRef(false);
   const inputRef = useRef(null);
   const statusTimer = useRef(null);
+  const messagesEndRef = useRef(null);
 
-  // Auto-resize textarea when input changes (e.g. via voice)
+  // Auto-resize textarea
   useEffect(() => {
     const el = inputRef.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = Math.min(el.scrollHeight, 120) + "px";
-    // Scroll to bottom so latest dictation is always visible
     el.scrollTop = el.scrollHeight;
   }, [input]);
+
+  // Scroll to bottom when new messages arrive
+  useEffect(() => {
+    if (expanded && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, expanded]);
+
+  // Close panel on Escape
+  useEffect(() => {
+    if (!expanded) return;
+    const handler = (e) => { if (e.key === "Escape") setExpanded(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [expanded]);
 
   function showStatus(text, ok) {
     clearTimeout(statusTimer.current);
@@ -3487,13 +3504,14 @@ function ChatFloat({date, token, userId}) {
   async function recordAndTranscribe() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus") ? "audio/webm;codecs=opus"
+        : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const recorder = new MediaRecorder(stream, { mimeType });
       audioChunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
+        if (recordingCancelledRef.current) { recordingCancelledRef.current = false; setListening(false); setTranscribing(false); return; }
         setListening(false);
         setTranscribing(true);
         try {
@@ -3522,46 +3540,34 @@ function ChatFloat({date, token, userId}) {
 
   function toggleMic() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const hasMD = !!(navigator.mediaDevices?.getUserMedia);
-
-    // If already recording via MediaRecorder, stop it
     if (mediaRecorderRef.current?.state === "recording") {
       mediaRecorderRef.current.stop();
       return;
     }
-    // If already using SpeechRecognition, stop it
     if (recognizerRef.current && listening) {
       recognizerRef.current.stop();
       setListening(false);
       return;
     }
-
     if (!SR) {
       if (window.daylabNative) { showStatus("Voice not supported in this browser", false); return; }
       recordAndTranscribe();
       return;
     }
-
     const rec = new SR();
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = "en-US";
     recognizerRef.current = rec;
-
     let finalTranscript = "";
-
     rec.onstart = () => { setListening(true); };
     rec.onresult = (e) => {
       let interim = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) {
-          finalTranscript += e.results[i][0].transcript;
-        } else {
-          interim += e.results[i][0].transcript;
-        }
+        if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript;
+        else interim += e.results[i][0].transcript;
       }
-      // Show final + live interim in input
-      setInput(finalTranscript + (interim ? interim : ""));
+      setInput(finalTranscript + interim);
     };
     rec.onerror = (e) => {
       if (e.error === "not-allowed") { showStatus("Microphone access denied", false); setListening(false); }
@@ -3573,16 +3579,47 @@ function ChatFloat({date, token, userId}) {
     rec.start();
   }
 
-  async function send() {
-    if (!input.trim() || busy) return;
-    const userText = input.trim();
-    setInput("");
-    if (inputRef.current) { inputRef.current.style.height = "auto"; }
+  function stopMic() {
     if (mediaRecorderRef.current?.state === "recording") {
       recordingCancelledRef.current = true;
       mediaRecorderRef.current.stop();
-      setListening(false);
     }
+    if (recognizerRef.current) { recognizerRef.current.stop(); }
+    setListening(false);
+    setTranscribing(false);
+  }
+
+  // Dispatch refresh after chat actions, with undo support
+  function dispatchRefresh(refreshTypes, summary) {
+    if (!refreshTypes?.length) return;
+    const snapshots = {};
+    refreshTypes.forEach(t => {
+      const key = `${userId}:${date}:${t}`;
+      if (MEM[key] !== undefined) snapshots[key] = JSON.parse(JSON.stringify(MEM[key]));
+    });
+    window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: refreshTypes } }));
+    if (Object.keys(snapshots).length > 0) {
+      pushHistory({
+        label: `AI: ${summary || "entry"}`,
+        undo: () => {
+          Object.entries(snapshots).forEach(([k, v]) => { MEM[k] = v; DIRTY[k] = true; });
+          window.dispatchEvent(new CustomEvent("lifeos:snapshot-restore", { detail: { keys: Object.keys(snapshots) } }));
+        },
+        redo: () => {
+          Object.keys(snapshots).forEach(k => { delete MEM[k]; delete DIRTY[k]; });
+          window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: refreshTypes } }));
+        },
+      });
+    }
+  }
+
+  // ── Collapsed mode: quick command via voice-action ──────────────────────
+  async function sendQuick() {
+    if (!input.trim() || busy) return;
+    const userText = input.trim();
+    setInput("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
+    stopMic();
     setBusy(true);
     setStatus(null);
     try {
@@ -3594,145 +3631,275 @@ function ChatFloat({date, token, userId}) {
       });
       const data = await res.json();
       if (data.ok && data.results?.length > 0) {
-        // Snapshot current state of affected types before refresh wipes cache
-        const affectedTypes = data.results.map(r => r.type);
-        const snapshots = {};
-        affectedTypes.forEach(t => {
-          const key = `${userId}:${date}:${t}`;
-          if (MEM[key] !== undefined) snapshots[key] = JSON.parse(JSON.stringify(MEM[key]));
-        });
-        window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: affectedTypes } }));
+        dispatchRefresh(data.results.map(r => r.type), data.summary);
         showStatus(data.summary || "Done", true);
-        // Register undo: restore snapshots directly into MEM + re-render
-        if (Object.keys(snapshots).length > 0) {
-          pushHistory({
-            label: `AI: ${data.summary || 'entry'}`,
-            undo: () => {
-              Object.entries(snapshots).forEach(([k, v]) => {
-                MEM[k] = v; DIRTY[k] = true;
-              });
-              window.dispatchEvent(new CustomEvent("lifeos:snapshot-restore", { detail: { keys: Object.keys(snapshots) } }));
-            },
-            redo: () => {
-              Object.keys(snapshots).forEach(k => { delete MEM[k]; delete DIRTY[k]; });
-              window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: affectedTypes } }));
-            },
-          });
-        }
-      } else if (data.tier === 'free') {
-        showStatus('Voice entry requires Premium — tap to upgrade', false, true);
+      } else if (data.tier === "free") {
+        showStatus("Voice entry requires Premium", false);
       } else if (data.message) {
-        // Declined gracefully — couldn't parse or unsupported
         showStatus(data.message, false);
       } else if (data.error) {
         showStatus(data.error, false);
       } else {
         showStatus("Not sure what to add — try being more specific", false);
       }
+    } catch (e) { showStatus("Something went wrong", false); }
+    setBusy(false);
+  }
+
+  // ── Expanded mode: conversational chat ───────────────────────────────────
+  async function sendChat() {
+    if (!input.trim() || busy) return;
+    const userText = input.trim();
+    setInput("");
+    if (inputRef.current) inputRef.current.style.height = "auto";
+    stopMic();
+
+    const userMsg = { role: "user", content: userText };
+    const nextMessages = [...messages, userMsg];
+    setMessages([...nextMessages, { role: "assistant", content: null }]); // null = loading
+    setBusy(true);
+
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
+          date,
+          tz,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: `Error: ${data.error}` }));
+      } else {
+        const assistantMsg = { role: "assistant", content: data.reply, actions: data.actions, summary: data.summary };
+        setMessages(prev => prev.slice(0, -1).concat(assistantMsg));
+        if (data.refreshTypes?.length) dispatchRefresh(data.refreshTypes, data.summary);
+      }
     } catch (e) {
-      showStatus("Something went wrong", false);
+      setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: "Something went wrong. Try again." }));
     }
     setBusy(false);
   }
 
-  const hasMic = !!(window?.SpeechRecognition || window?.webkitSpeechRecognition);
+  function send() {
+    if (expanded) sendChat();
+    else sendQuick();
+  }
+
+  const hasMic = !!(window?.SpeechRecognition || window?.webkitSpeechRecognition || navigator?.mediaDevices?.getUserMedia);
+  const panelH = "72vh";
 
   return (
-    <div style={{
-      position: "fixed",
-      bottom: 0,
-      left: 0,
-      right: 0,
-      zIndex: 98,
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      background: C.surface,
-      borderTop: `1px solid ${C.border}`,
-      padding: "6px 12px",
-      paddingBottom: "max(6px, env(safe-area-inset-bottom, 6px))",
-      gap: 6,
-    }}>
-
-      {/* Status notification */}
-      {status && (
-        <div style={{
-          padding: "7px 14px",
-          borderRadius: 8,
-          background: status.ok ? `${C.green}18` : `${C.red}15`,
-          border: `1px solid ${status.ok ? C.green : C.red}40`,
-          animation: "fadeInUp 0.18s ease",
-          width: "100%", maxWidth: 560, boxSizing: "border-box",
-        }}>
-          <span style={{
-            fontFamily: mono, fontSize: F.sm,
-            color: status.ok ? C.green : C.red,
-            lineHeight: 1.5,
-          }}>
-            {status.ok ? "✓ " : ""}{status.text}
-          </span>
-        </div>
+    <>
+      {/* Backdrop when expanded */}
+      {expanded && (
+        <div onClick={() => setExpanded(false)} style={{
+          position: "fixed", inset: 0, zIndex: 96,
+          background: "rgba(0,0,0,0.45)",
+          animation: "fadeIn 0.18s ease",
+        }}/>
       )}
 
-      {/* Input row */}
+      {/* Main bar + panel */}
       <div style={{
-        display: "flex", alignItems: "center", gap: 8,
-        width: "100%", maxWidth: 560,
-        background: C.well,
-        borderRadius: mobile ? 24 : 20,
-        border: "none",
-        padding: mobile ? "10px 10px 10px 18px" : "8px 8px 8px 14px",
+        position: "fixed", bottom: 0, left: 0, right: 0,
+        zIndex: 97,
+        display: "flex", flexDirection: "column", alignItems: "center",
+        background: C.surface,
+        borderTop: `1px solid ${C.border}`,
+        borderRadius: expanded ? "20px 20px 0 0" : 0,
+        transition: "border-radius 0.25s ease",
+        maxHeight: expanded ? panelH : "auto",
+        boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.3)" : "none",
+        transition: "box-shadow 0.25s ease, border-radius 0.25s ease",
       }}>
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
-          onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder={busy ? "Adding…" : "Add anything…"}
-          disabled={busy}
-          rows={1}
-          style={{
-            flex: 1, background: "transparent", border: "none", outline: "none",
-            fontFamily: serif, fontSize: F.md, color: C.text,
-            padding: "0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
-            resize: "none", overflow: "auto", maxHeight: "120px",
-          }}
-        />
 
-        {input.trim() ? (
-          <button onClick={send} disabled={busy} style={{
-            background: C.accent, border: "none", borderRadius: "50%",
-            width: 36, height: 36, cursor: busy ? "default" : "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
+        {/* ── Expanded chat history ── */}
+        {expanded && (
+          <div style={{
+            width: "100%", maxWidth: 640,
+            flex: 1, overflowY: "auto",
+            padding: "0 16px",
+            display: "flex", flexDirection: "column",
+            gap: 12,
+            paddingTop: 16,
+            // smooth scroll
+            scrollBehavior: "smooth",
           }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="19" x2="12" y2="5"/>
-              <polyline points="5 12 12 5 19 12"/>
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ fontFamily: mono, fontSize: F.sm, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+                Day Lab AI
+              </span>
+              <button onClick={() => setExpanded(false)} style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: C.muted, fontSize: 18, lineHeight: 1, padding: "2px 4px",
+              }}>×</button>
+            </div>
+
+            {/* Empty state */}
+            {messages.length === 0 && (
+              <div style={{ padding: "24px 0", textAlign: "center" }}>
+                <div style={{ fontFamily: serif, fontSize: F.md, color: C.dim, lineHeight: 1.7 }}>
+                  Ask me anything about your day, or tell me what to add.
+                </div>
+                <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                  {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
+                    <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 50); }} style={{
+                      background: `${C.accent}15`, border: `1px solid ${C.accent}30`,
+                      borderRadius: 20, padding: "6px 14px",
+                      fontFamily: mono, fontSize: 11, color: C.accent,
+                      cursor: "pointer", letterSpacing: "0.04em",
+                    }}>{s}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Message bubbles */}
+            {messages.map((msg, i) => (
+              <div key={i} style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: msg.role === "user" ? "flex-end" : "flex-start",
+                gap: 4,
+              }}>
+                <div style={{
+                  maxWidth: "85%",
+                  padding: "10px 14px",
+                  borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  background: msg.role === "user" ? C.accent : `${C.text}0d`,
+                  color: msg.role === "user" ? "#fff" : C.text,
+                  fontFamily: msg.role === "user" ? mono : serif,
+                  fontSize: msg.role === "user" ? 13 : F.md,
+                  lineHeight: 1.55,
+                  letterSpacing: msg.role === "user" ? "0.02em" : 0,
+                }}>
+                  {msg.content === null ? (
+                    <span style={{ opacity: 0.5, fontFamily: mono, fontSize: 12 }}>thinking…</span>
+                  ) : msg.content}
+                </div>
+                {/* Action pill */}
+                {msg.actions?.length > 0 && msg.summary && (
+                  <div style={{
+                    fontSize: 11, fontFamily: mono, color: C.green,
+                    background: `${C.green}15`, border: `1px solid ${C.green}30`,
+                    borderRadius: 12, padding: "3px 10px",
+                    letterSpacing: "0.04em",
+                  }}>
+                    ✓ {msg.summary}
+                  </div>
+                )}
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
+
+        {/* ── Status bar (collapsed only) ── */}
+        {!expanded && status && (
+          <div style={{
+            padding: "7px 14px",
+            borderRadius: 8,
+            background: status.ok ? `${C.green}18` : `${C.red}15`,
+            border: `1px solid ${status.ok ? C.green : C.red}40`,
+            animation: "fadeInUp 0.18s ease",
+            width: "100%", maxWidth: 560, boxSizing: "border-box",
+            marginTop: 6,
+          }}>
+            <span style={{ fontFamily: mono, fontSize: F.sm, color: status.ok ? C.green : C.red, lineHeight: 1.5 }}>
+              {status.ok ? "✓ " : ""}{status.text}
+            </span>
+          </div>
+        )}
+
+        {/* ── Input row ── */}
+        <div style={{
+          display: "flex", alignItems: "center", gap: 8,
+          width: "100%", maxWidth: 640,
+          padding: mobile ? "8px 10px 8px 12px" : "8px 10px 8px 14px",
+          paddingBottom: `max(${mobile ? "10px" : "8px"}, env(safe-area-inset-bottom, 8px))`,
+          boxSizing: "border-box",
+        }}>
+
+          {/* Expand/collapse toggle */}
+          <button onClick={() => { setExpanded(e => !e); setTimeout(() => inputRef.current?.focus(), 80); }} style={{
+            background: expanded ? `${C.accent}20` : `${C.text}0d`,
+            border: "none", borderRadius: "50%",
+            width: 34, height: 34, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            flexShrink: 0, transition: "background 0.15s, transform 0.25s",
+            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+          }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={expanded ? C.accent : C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="18 15 12 9 6 15"/>
             </svg>
           </button>
-        ) : hasMic ? (
-          <button onClick={transcribing ? undefined : toggleMic} style={{
-            background: transcribing ? `${C.accent}22` : listening ? `${C.red}22` : `${C.text}10`,
-            border: "none", borderRadius: "50%",
-            width: 36, height: 36, cursor: transcribing ? "default" : "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, transition: "background 0.2s",
+
+          {/* Text input */}
+          <div style={{
+            flex: 1,
+            background: C.well,
+            borderRadius: mobile ? 22 : 18,
+            padding: mobile ? "9px 12px 9px 16px" : "7px 10px 7px 14px",
+            display: "flex", alignItems: "center", gap: 6,
           }}>
-            {transcribing ? (
-              <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${C.accent}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/>
-            ) : listening ? (
-              <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.red, boxShadow: `0 0 0 3px ${C.red}30`, animation: "pulse 1.2s ease-in-out infinite" }}/>
-            ) : (
-              <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted}>
-                <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z"/>
-                <path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V19H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.08A7 7 0 0 0 19 10z"/>
-              </svg>
-            )}
-          </button>
-        ) : null}
+            <textarea
+              ref={inputRef}
+              value={input}
+              onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              placeholder={busy ? (expanded ? "…" : "Adding…") : (expanded ? "Ask anything or add an entry…" : "Add anything…")}
+              disabled={busy}
+              rows={1}
+              style={{
+                flex: 1, background: "transparent", border: "none", outline: "none",
+                fontFamily: serif, fontSize: F.md, color: C.text,
+                padding: "0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
+                resize: "none", overflow: "auto", maxHeight: "120px",
+              }}
+            />
+
+            {/* Send or mic */}
+            {input.trim() ? (
+              <button onClick={send} disabled={busy} style={{
+                background: C.accent, border: "none", borderRadius: "50%",
+                width: 32, height: 32, cursor: busy ? "default" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
+              }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="19" x2="12" y2="5"/>
+                  <polyline points="5 12 12 5 19 12"/>
+                </svg>
+              </button>
+            ) : hasMic ? (
+              <button onClick={transcribing ? undefined : toggleMic} style={{
+                background: transcribing ? `${C.accent}22` : listening ? `${C.red}22` : "transparent",
+                border: "none", borderRadius: "50%",
+                width: 32, height: 32, cursor: transcribing ? "default" : "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, transition: "background 0.2s",
+              }}>
+                {transcribing ? (
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${C.accent}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/>
+                ) : listening ? (
+                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.red, boxShadow: `0 0 0 3px ${C.red}30`, animation: "pulse 1.2s ease-in-out infinite" }}/>
+                ) : (
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted}>
+                    <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z"/>
+                    <path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V19H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.08A7 7 0 0 0 19 10z"/>
+                  </svg>
+                )}
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
 
