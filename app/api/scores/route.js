@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import {
   CALIBRATION_DAYS, n, avg, weightedAvg, stdDev,
   calcSleepScore, calcReadinessScore, calcActivityScore, calcRecoveryScore,
-} from '../../../../lib/scoreCalc.js';
+} from '@/lib/scoreCalc.js';
 
 // ─── Route ────────────────────────────────────────────────────────────────────
 export async function GET(request) {

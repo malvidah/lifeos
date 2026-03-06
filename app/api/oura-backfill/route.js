@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { batchComputeScores, n } from '../../../../lib/scoreCalc.js';
+import { batchComputeScores, n } from '@/lib/scoreCalc.js';
 
 // Backfills Oura historical data into Supabase entries table.
 // Fetches in 90-day chunks to stay within Oura API limits.

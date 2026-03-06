@@ -2226,8 +2226,9 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
   };
 
   useEffect(()=>{
-    if(!token) return;
-    // Pass today's in-memory h data as params — avoids race with 200ms debounce save
+    // Wait until h is loaded from DB — prevents H_EMPTY first-fire from corrupting dots
+    if(!token||!loaded) return;
+    const ctrl = new AbortController();
     const p = new URLSearchParams({ date });
     if(h.sleepHrs)       p.set('sleepHrs',      h.sleepHrs);
     if(h.sleepEff)       p.set('sleepEff',       h.sleepEff);
@@ -2235,17 +2236,17 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     if(h.rhr)            p.set('rhr',            h.rhr);
     if(h.steps)          p.set('steps',          h.steps);
     if(h.activeMinutes)  p.set('activeMinutes',  h.activeMinutes);
-    fetch(`/api/scores?${p}`,{headers:{Authorization:`Bearer ${token}`}})
+    fetch(`/api/scores?${p}`,{signal:ctrl.signal,headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(d=>{
         if(!d.error){
           setScores(d);
-          // Notify parent with fresh computed scores so it can update calendar dots
           if(d.sleep?.score != null || d.readiness?.score != null || d.activity?.score != null || d.recovery?.score != null){
             onScoresReady(date, d);
           }
         }
-      }).catch(()=>{});
-  },[date,token,h]); // re-run when h updates (new health data synced)
+      }).catch(e=>{ if(e.name!=='AbortError') console.warn('scores fetch',e); });
+    return ()=>ctrl.abort(); // cancel stale requests on re-run
+  },[date,token,h,loaded]); // eslint-disable-line
 
   // ── Sparkline SVG ─────────────────────────────────────────────────────────
   function Sparkline({data, color, width=52, height=20}) {
