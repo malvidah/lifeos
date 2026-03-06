@@ -1599,7 +1599,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           /* ── Collapsed: prev ← date → next centered ── */
           <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
             display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
-            <button onClick={e=>{e.stopPropagation();const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()-1);onSelect(toKey(d));}} style={{
+            <button onClick={e=>{e.stopPropagation();const d=new Date(selDate);d.setDate(d.getDate()-1);onSelect(toKey(d));}} style={{
               background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
               fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
               onMouseEnter={e=>e.currentTarget.style.color=C.text}
@@ -1612,7 +1612,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
             </span>
-            <button onClick={e=>{e.stopPropagation();const d=new Date(selDate+'T12:00:00');d.setDate(d.getDate()+1);onSelect(toKey(d));}} style={{
+            <button onClick={e=>{e.stopPropagation();const d=new Date(selDate);d.setDate(d.getDate()+1);onSelect(toKey(d));}} style={{
               background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
               fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
               onMouseEnter={e=>e.currentTarget.style.color=C.text}
