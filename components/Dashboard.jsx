@@ -784,9 +784,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Recalculate History */}
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <SectionLabel info="Recomputes health scores for all historical dates with Apple Health or Oura data. Run this if your trend charts look flat or incomplete.">
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted}}>
               Score History
-            </SectionLabel>
+            </span>
             <button
               onClick={async () => {
                 if (resyncing) return;
