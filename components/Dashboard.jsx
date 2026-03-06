@@ -451,13 +451,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [ouraKey,setOuraKey]=useState("");
   const [ouraConnected,setOuraConnected]=useState(false);
   const [stravaConnected,setStravaConnected]=useState(false);
-  const [appleHealthConnected,setAppleHealthConnected]=useState(false);
   const [appleHealthHasData,setAppleHealthHasData]=useState(false);
   const [claudeConnected,setClaudeConnected]=useState(false);
-  const [ouraEditing,setOuraEditing]=useState(false);
-  const [saving,setSaving]=useState(false);
-  const [saved,setSaved]=useState(false);
-  const [syncing,setSyncing]=useState(null); // null | 'oura' | 'apple'
+  const [syncing,setSyncing]=useState(null); // null | 'oura' | 'strava' | 'apple'
   const [urlCopied,setUrlCopied]=useState(false);
 
   const ref=useRef(null);
@@ -466,22 +462,6 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const avatar=user?.user_metadata?.avatar_url;
   const [isIOS, setIsIOS] = useState(false);
   useEffect(()=>{ setIsIOS(!!window.daylabNative); },[]);
-
-  // Listen for HealthKit status events from iOS
-  useEffect(()=>{
-    if(!isIOS) return;
-    const handler = e => {
-      const status = e.detail?.status;
-      // Only update connected state from native events during active permission flow
-      // True "connected" = Supabase health_apple data exists (appleHealthHasData)
-      if (status === "authorized") setAppleHealthConnected("authorized");
-      else if (status === "denied") setAppleHealthConnected("denied");
-      // "not_determined" = reset to allow button to show
-      else setAppleHealthConnected(null);
-    };
-    window.addEventListener("daylabHealthKit", handler);
-    return () => window.removeEventListener("daylabHealthKit", handler);
-  },[isIOS]);
 
   useEffect(()=>{
     if(!token||!open)return;
@@ -515,71 +495,78 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     return ()=>document.removeEventListener("mousedown",fn);
   },[open]);
 
-  async function saveOura(){
-    if(!ouraKey.trim())return;
-    setSaving(true);
+  const row={padding:"0 16px"};
+  const divider=<div style={{height:1,background:C.border,margin:"10px 0"}}/>;
+  const connBtn = (color=C.green) => ({width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",background:"none",border:`1px solid ${color}`,borderRadius:5,color:color,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"});
+  const getSb = async () => (await import("@supabase/supabase-js")).createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {global:{headers:{Authorization:`Bearer ${token}`}}});
+
+  async function connectOura() {
+    if(!ouraKey.trim()) return;
+    setSyncing("oura");
     try {
-      await fetch("/api/entries",{
-        method:"POST",
+      // Save token
+      await fetch("/api/entries",{method:"POST",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey.trim()}}),
-      });
-      setOuraConnected(true);setSaved(true);setTimeout(()=>setSaved(false),2000);
-    } catch(e){alert("Save failed: "+e.message);}
-    setSaving(false);
+        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey.trim()}})});
+      setOuraConnected(true);
+      // Backfill history
+      const res = await fetch("/api/oura-backfill",{method:"POST",
+        headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({})});
+      const d = await res.json();
+      if(!d.ok) console.warn("Oura backfill error:", d.error);
+    } catch(e) { console.warn("Oura connect failed:", e); }
+    setSyncing(null);
   }
 
-  const row={padding:"0 16px"};
   async function disconnectOura() {
-    if(!confirm("Disconnect Oura? Your synced health data will remain but live sync will stop.")) return;
-    // Clear token from settings
-    const sb = (await import("@supabase/supabase-js")).createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {global:{headers:{Authorization:`Bearer ${token}`}}});
+    if(!confirm("Disconnect Oura? Your synced health data will remain.")) return;
+    const sb = await getSb();
     const {data:s} = await sb.from("entries").select("data").eq("type","settings").eq("date","global").eq("user_id",userId).maybeSingle();
-    const updated = {...(s?.data||{})};
-    delete updated.ouraToken;
+    const updated = {...(s?.data||{})}; delete updated.ouraToken;
     await sb.from("entries").upsert({user_id:userId,date:"global",type:"settings",data:updated,updated_at:new Date().toISOString()},{onConflict:"user_id,date,type"});
     setOuraConnected(false); setOuraKey("");
   }
 
-  async function connectOura() {
-    if(!ouraKey.trim()) return;
-    await saveOura();
-    // Backfill after connecting
-    setSyncing("oura");
-    try {
-      const res = await fetch("/api/oura-backfill",{method:"POST",
-        headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},
-        body:JSON.stringify({})});
-      const d = await res.json();
-      if(!d.ok) console.warn("Backfill error:", d.error);
-    } catch(e) { console.warn("Backfill failed:", e); }
-    setSyncing(null);
+  async function connectAppleHealth() {
+    const tok = token||localStorage.getItem("daylab:token")||"";
+    if(window.webkit?.messageHandlers?.daylabRequestHealthKit) {
+      window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token:tok});
+      // After HealthKit permission, poll for real data appearing
+      setSyncing("apple");
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        const sb = await getSb();
+        const {data} = await sb.from("entries").select("data").eq("type","health_apple").limit(5);
+        const hasReal = data?.some(r=>r.data&&Object.keys(r.data).some(k=>r.data[k]));
+        if(hasReal || attempts > 20) {
+          clearInterval(poll);
+          if(hasReal) setAppleHealthHasData(true);
+          setSyncing(null);
+        }
+      }, 3000);
+    }
   }
 
   async function disconnectAppleHealth() {
-    if(!confirm("Disconnect Apple Health? Your synced health data will remain but live sync will stop.")) return;
-    // Delete all health_apple entries
-    const sb = (await import("@supabase/supabase-js")).createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {global:{headers:{Authorization:`Bearer ${token}`}}});
+    if(!confirm("Disconnect Apple Health? Your synced health data will remain.")) return;
+    const sb = await getSb();
     await sb.from("entries").delete().eq("type","health_apple").eq("user_id",userId);
-    setAppleHealthHasData(false); setAppleHealthConnected(null);
+    setAppleHealthHasData(false);
+  }
+
+  async function connectStrava() {
+    window.location.href="/api/strava-connect";
   }
 
   async function disconnectStrava() {
-    if(!confirm("Disconnect Strava? Your synced activity data will remain but live sync will stop.")) return;
-    const sb = (await import("@supabase/supabase-js")).createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      {global:{headers:{Authorization:`Bearer ${token}`}}});
+    if(!confirm("Disconnect Strava? Your synced activity data will remain.")) return;
+    const sb = await getSb();
     await sb.from("entries").delete().eq("type","strava_token").eq("user_id",userId);
     setStravaConnected(false);
   }
-
-  const divider=<div style={{height:1,background:C.border,margin:"10px 0"}}/>;
-  // Shared connected-button style
-  const connBtn = (color=C.green) => ({width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",background:"none",border:`1px solid ${color}`,borderRadius:5,color:color,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"});
 
   return (
     <div ref={ref} style={{position:"relative"}}>
@@ -617,10 +604,10 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 <button onClick={disconnectAppleHealth} style={connBtn(C.green)}>✓ Connected</button>
               ) : (
                 <button
-                  onTouchEnd={(e)=>{e.preventDefault();const tok=token||localStorage.getItem('daylab:token')||'';if(window.webkit?.messageHandlers?.daylabRequestHealthKit){window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token:tok});}}}
-                  onClick={()=>{const tok=token||localStorage.getItem('daylab:token')||'';if(window.webkit?.messageHandlers?.daylabRequestHealthKit){window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token:tok});}}}
+                  onTouchEnd={e=>{e.preventDefault();connectAppleHealth();}}
+                  onClick={connectAppleHealth}
                   style={connBtn(C.border2)}>
-                  Connect
+                  {syncing==="apple"?"Syncing…":"Connect"}
                 </button>
               )
             ) : (
@@ -639,18 +626,18 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             </SectionLabel>
             {ouraConnected ? (
               <button onClick={disconnectOura} style={connBtn(C.green)}>
-                {syncing==="oura" ? "Syncing history…" : "✓ Connected"}
+                {syncing==="oura"?"Syncing history…":"✓ Connected"}
               </button>
             ) : (
               <div style={{display:"flex",flexDirection:"column",gap:5}}>
                 <div style={{display:"flex",gap:6,alignItems:"stretch"}}>
-                  <input
-                    type="password" value={ouraKey}
-                    onChange={e=>{setOuraKey(e.target.value);setSaved(false);}}
+                  <input type="password" value={ouraKey}
+                    onChange={e=>setOuraKey(e.target.value)}
                     placeholder="Paste personal access token…"
                     style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,padding:"6px 8px",boxSizing:"border-box"}}/>
-                  <button onClick={connectOura} disabled={saving||!ouraKey.trim()} style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",padding:"0 10px",cursor:"pointer",flexShrink:0}}>
-                    Connect
+                  <button onClick={connectOura} disabled={!ouraKey.trim()||syncing==="oura"}
+                    style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",padding:"0 10px",cursor:"pointer",flexShrink:0}}>
+                    {syncing==="oura"?"…":"Connect"}
                   </button>
                 </div>
                 <a href="https://cloud.ouraring.com/personal-access-tokens" target="_blank" rel="noreferrer"
@@ -665,15 +652,15 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {/* Strava */}
           <div style={row}>
-            <SectionLabel info="Syncs your runs, rides, and workouts automatically.">
+            <SectionLabel info="Syncs your runs, rides, and workouts automatically. After connecting, your history will be backfilled.">
               Strava
             </SectionLabel>
             {stravaConnected ? (
-              <button onClick={disconnectStrava} style={connBtn(C.green)}>✓ Connected</button>
-            ) : (
-              <button onClick={()=>window.location.href="/api/strava-connect"} style={connBtn("#FC4C02")}>
-                Connect
+              <button onClick={disconnectStrava} style={connBtn(C.green)}>
+                {syncing==="strava"?"Syncing history…":"✓ Connected"}
               </button>
+            ) : (
+              <button onClick={connectStrava} style={connBtn("#FC4C02")}>Connect</button>
             )}
           </div>
 

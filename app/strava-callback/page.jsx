@@ -30,9 +30,17 @@ function CallbackContent() {
         setStatus('Connection failed: ' + (data.error || 'unknown error'));
         setErr(true);
       } else {
-        setStatus(data.athlete ? `Connected! Welcome, ${data.athlete}.` : 'Strava connected!');
+        setStatus(data.athlete ? `Connected! Welcome, ${data.athlete}. Syncing history…` : 'Connected! Syncing history…');
+        // Backfill history in background
+        fetch('/api/strava-backfill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({}),
+        }).then(r=>r.json()).then(d=>{
+          setStatus(data.athlete ? `Connected! Welcome, ${data.athlete}.` : 'Strava connected!');
+        }).catch(()=>{});
         setDone(true);
-        setTimeout(() => window.location.href = '/', 1800);
+        setTimeout(() => window.location.href = '/', 3000);
       }
     });
   }, []);
