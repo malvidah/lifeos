@@ -3926,7 +3926,7 @@ export default function Dashboard() {
   const [leftWidget,...rightWidgets] = WIDGETS;
 
   return (
-    <div style={{background:C.bg,minHeight:"100vh",color:C.text,display:"flex",flexDirection:"column"}}>
+    <div style={{background:C.bg,height:mobile?"auto":"100vh",minHeight:mobile?"100vh":undefined,color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
         html,body{height:100%;overflow:hidden;background:${C.bg} !important;}
@@ -3946,8 +3946,8 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, overflow:mobile?"visible":"hidden", padding:mobile?8:10,
-          paddingBottom:mobile?120:0, display:"flex", flexDirection:"column", gap:8}}>
+        <div style={{flex:1, overflowY:"auto", overflowX:"hidden", padding:mobile?8:10,
+          paddingBottom:mobile?120:80, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
