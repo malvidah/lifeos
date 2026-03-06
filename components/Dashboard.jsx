@@ -771,12 +771,8 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {divider}
 
-
-
-          {divider}
-
           {/* Theme */}
-          <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+          <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:C.muted}}>
               {theme==="dark"?"Dark":"Light"} Mode
             </span>
@@ -790,34 +786,34 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             </button>
           </div>
 
-          {/* Downloads */}
-          <div style={row}>
-            <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>
+          {divider}
+
+          {/* Downloads — label + small buttons inline */}
+          <div style={{...row,display:"flex",alignItems:"center",gap:8}}>
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flex:1}}>
               Downloads
-            </div>
-            <div style={{display:"flex",gap:6}}>
-              <a href="/download/mac" style={{
-                flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-                padding:"6px 0",background:C.surface,
-                border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
-                color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                  <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                Mac
-              </a>
-              <a href="/download/ios" style={{
-                flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-                padding:"6px 0",background:C.surface,
-                border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
-                color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.08em",textTransform:"uppercase"}}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/>
-                </svg>
-                iOS Beta
-              </a>
-            </div>
+            </span>
+            <a href="/download/mac" style={{
+              display:"flex",alignItems:"center",gap:4,
+              padding:"4px 9px",background:C.surface,
+              border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
+              color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Mac
+            </a>
+            <a href="/download/ios" style={{
+              display:"flex",alignItems:"center",gap:4,
+              padding:"4px 9px",background:C.surface,
+              border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
+              color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/>
+              </svg>
+              iOS
+            </a>
           </div>
 
           {divider}
