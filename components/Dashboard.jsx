@@ -725,13 +725,25 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
           {divider}
 
           {/* Claude */}          <div style={row}>
-            <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>
-              Claude MCP
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted}}>
+                Claude MCP
+              </span>
+              {!claudeConnected && (
+                <a href="https://claude.ai/settings/connectors?modal=add-custom-connector"
+                  target="_blank" rel="noreferrer"
+                  style={{fontFamily:mono,fontSize:F.sm,color:C.dim,textDecoration:"none",letterSpacing:"0.02em"}}>
+                  add →
+                </a>
+              )}
+              {claudeConnected && (
+                <span style={{fontFamily:mono,fontSize:F.sm,color:C.green}}>✓</span>
+              )}
             </div>
             <div style={{
               display:"flex",alignItems:"center",gap:6,
               background:C.surface,border:`1px solid ${C.border2}`,
-              borderRadius:5,padding:"6px 8px",marginBottom:7,
+              borderRadius:5,padding:"6px 8px",
             }}>
               <span style={{flex:1,fontFamily:mono,fontSize:F.sm,color:C.accent,
                 userSelect:"all",letterSpacing:"0.02em",overflow:"hidden",
@@ -743,71 +755,21 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                   navigator.clipboard.writeText(window.location.origin + "/mcp");
                   setUrlCopied(true);setTimeout(()=>setUrlCopied(false),2000);
                 }}
+                title="Copy URL"
                 style={{background:"none",border:"none",cursor:"pointer",
-                  color:urlCopied?C.green:C.dim,fontFamily:mono,fontSize:F.sm,
-                  letterSpacing:"0.04em",textTransform:"uppercase",padding:0,flexShrink:0}}>
-                {urlCopied?"✓":"Copy"}
+                  color:urlCopied?C.green:C.dim,padding:0,flexShrink:0,
+                  display:"flex",alignItems:"center",lineHeight:1}}>
+                {urlCopied
+                  ? <span style={{fontSize:11}}>✓</span>
+                  : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                }
               </button>
             </div>
-            {claudeConnected ? (
-              <div style={{
-                width:"100%",padding:"7px 0",boxSizing:"border-box",textAlign:"center",
-                background:"none",border:`1px solid ${C.green}`,
-                borderRadius:5,color:C.green,fontFamily:mono,fontSize:F.sm,
-                letterSpacing:"0.04em",textTransform:"uppercase",
-              }}>
-                ✓ Connected
-              </div>
-            ) : (
-              <a
-                href="https://claude.ai/settings/connectors?modal=add-custom-connector"
-                target="_blank" rel="noreferrer"
-                style={{
-                  display:"flex",alignItems:"center",justifyContent:"center",
-                  width:"100%",padding:"7px 0",boxSizing:"border-box",
-                  background:C.accent+"18",border:`1px solid ${C.accent+"66"}`,
-                  borderRadius:5,textDecoration:"none",
-                  color:C.accent,fontFamily:mono,fontSize:F.sm,
-                  letterSpacing:"0.04em",textTransform:"uppercase",
-                }}>
-                Connect to Claude →
-              </a>
-            )}
           </div>
 
           {divider}
 
-          {divider}
 
-          {/* Recalculate History */}
-          <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted}}>
-              Score History
-            </span>
-            <button
-              onClick={async () => {
-                if (resyncing) return;
-                setResyncing(true);
-                try {
-                  const r = await fetch('/api/scores-backfill', {
-                    method: 'POST',
-                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ force: true }),
-                  });
-                  const d = await r.json();
-                  if (d.ok) alert(`Done! Computed scores for ${d.scored} day${d.scored !== 1 ? 's' : ''}.`);
-                  else alert('Error: ' + (d.error || 'unknown'));
-                } catch(e) { alert('Failed: ' + e.message); }
-                finally { setResyncing(false); }
-              }}
-              disabled={resyncing}
-              style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,
-                color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
-                textTransform:"uppercase",padding:"5px 10px",cursor:"pointer",flexShrink:0,
-                opacity: resyncing ? 0.5 : 1}}>
-              {resyncing ? 'Resyncing…' : 'Resync'}
-            </button>
-          </div>
 
           {divider}
 
@@ -853,15 +815,18 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
           {divider}
 
-          <div style={row}>
+          <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <a href="/about"
+              style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
+                textTransform:"uppercase",textDecoration:"none"}}>
+              Learn More
+            </a>
             <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
                 color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
-              Sign out →
+              Sign Out →
             </button>
-            {isIOS&&<span style={{fontFamily:mono,fontSize:"9px",color:C.muted,opacity:0.5,marginLeft:"auto"}}>
-              {window.daylabNative?.version||"?"}
-            </span>}
           </div>
 
         </div>
