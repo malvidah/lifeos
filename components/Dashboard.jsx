@@ -369,9 +369,10 @@ function Card({children,style={}}) {
 
 // ─── Widget card ─────────────────────────────────────────────────────────────
 function Widget({label,color,children,slim,collapsed,onToggle,headerRight}) {
+  const noParentHeight = !onToggle && !collapsed;
   return (
-    <div style={slim ? {} : {height:collapsed?"auto":"100%",display:"flex",flexDirection:"column"}}>
-      <Card style={collapsed ? {height:"auto"} : {}}>
+    <div style={slim ? {} : {height:noParentHeight?"auto":(collapsed?"auto":"100%"),display:"flex",flexDirection:"column"}}>
+      <Card style={(collapsed || noParentHeight) ? {height:"auto"} : {}}>
         <div style={{
           display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
           borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
@@ -3990,21 +3991,17 @@ export default function Dashboard() {
               <InsightsCard date={selected} token={token} userId={userId}
                 healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
                 collapsed={false} onToggle={undefined}/>
-              <div style={{minHeight:260}}>
-                <Widget label={leftWidget.label} color={leftWidget.color()}
-                  collapsed={false} onToggle={undefined}
-                  headerRight={leftWidget.headerRight?.()}>
-                  <leftWidget.Comp date={selected} token={token} userId={userId}/>
-                </Widget>
-              </div>
+              <Widget label={leftWidget.label} color={leftWidget.color()}
+                collapsed={false} onToggle={undefined}
+                headerRight={leftWidget.headerRight?.()}>
+                <leftWidget.Comp date={selected} token={token} userId={userId}/>
+              </Widget>
               {rightWidgets.map(w=>(
-                <div key={w.id} style={{minHeight:260}}>
-                  <Widget label={w.label} color={w.color()}
-                    collapsed={false} onToggle={undefined}
-                    headerRight={w.headerRight?.()}>
-                    <w.Comp date={selected} token={token} userId={userId}/>
-                  </Widget>
-                </div>
+                <Widget key={w.id} label={w.label} color={w.color()}
+                  collapsed={false} onToggle={undefined}
+                  headerRight={w.headerRight?.()}>
+                  <w.Comp date={selected} token={token} userId={userId}/>
+                </Widget>
               ))}
             </div>
           ) : (
