@@ -193,7 +193,7 @@ export async function POST(request) {
     // No data at all — show welcome, don't call AI
     if (realDataCount === 0) {
       const name = user.user_metadata?.name?.split(' ')[0] || 'there';
-      const welcome = `Welcome to Day Lab, ${name}. Connect your Oura ring and start logging meals, notes, and tasks — insights will start generating once there's data to work with.`;
+      const welcome = `Welcome to Day Lab, ${name}. Connect your health data (Oura or Apple Health) and start logging meals, notes, and tasks — insights will start generating once there's data to work with.`;
       await supabase.from('entries').upsert(
         { date, type: 'insights', data: { text: welcome, generatedAt: new Date().toISOString(), isWelcome: true }, user_id: user.id, updated_at: new Date().toISOString() },
         { onConflict: 'date,type,user_id' }
