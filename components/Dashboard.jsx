@@ -1247,20 +1247,36 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                           </div>
                         )}
 
-                        {/* Big events */}
-                        {bigEvents.map((ev, j) => (
-                          <div key={j} style={{
-                            fontFamily: mono, fontSize: vw < 600 ? '8px' : '9px', lineHeight: 1.2,
-                            color: ev.color || C.accent,
-                            background: (ev.color || C.accent) + '28',
-                            borderRadius: 3, padding: '2px 3px',
-                            overflow: 'hidden', whiteSpace: 'nowrap',
-                            textOverflow: 'ellipsis', flexShrink: 0,
-                          }}>{ev.title}</div>
-                        ))}
+                        {/* Big events:
+                             mobile → fixed-height 3px color bars (no text, no height expansion)
+                             desktop → text pill as before */}
+                        {vw < 600 ? (
+                          bigEvents.length > 0 && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flexShrink: 0, marginTop: 1 }}>
+                              {bigEvents.map((ev, j) => (
+                                <div key={j} style={{
+                                  height: 3, borderRadius: 2,
+                                  background: ev.color || C.accent,
+                                  flexShrink: 0,
+                                }} title={ev.title} />
+                              ))}
+                            </div>
+                          )
+                        ) : (
+                          bigEvents.map((ev, j) => (
+                            <div key={j} style={{
+                              fontFamily: mono, fontSize: '9px', lineHeight: 1.2,
+                              color: ev.color || C.accent,
+                              background: (ev.color || C.accent) + '28',
+                              borderRadius: 3, padding: '2px 3px',
+                              overflow: 'hidden', whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis', flexShrink: 0,
+                            }}>{ev.title}</div>
+                          ))
+                        )}
 
-                        {/* AI summary */}
-                        {summary && (
+                        {/* AI summary — desktop only, too small to read on mobile */}
+                        {vw >= 600 && summary && (
                           <div style={{
                             fontFamily: mono, fontSize: '7.5px', color: C.dim,
                             lineHeight: 1.25, overflow: 'hidden',
