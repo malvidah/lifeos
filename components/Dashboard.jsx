@@ -885,7 +885,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     const step = () => {
       vel.current *= 0.88;          // gentle friction — long, smooth coast
       liveOff.current += vel.current;
-      const target = Math.round(liveOff.current);
+      const target = Math.round(liveOff.current * 4) / 4; // snap to nearest week (~0.25 month)
       liveOff.current += (target - liveOff.current) * 0.08; // soft spring
       if (Math.abs(vel.current) < 0.0008 && Math.abs(liveOff.current - target) < 0.0008) {
         snapTo.current(target); return;
@@ -933,7 +933,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
       isDragging.current = false;
       vel.current = touchVel.current * 2.0;
       if (Math.abs(vel.current) > 0.008) doMomentum.current();
-      else snapTo.current(Math.round(liveOff.current));
+      else snapTo.current(Math.round(liveOff.current * 4) / 4);
     };
     let wheelTimer = null;
     const onWheel = (e) => {
@@ -946,7 +946,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
       liveOff.current += delta;
       repaint.current();
       clearTimeout(wheelTimer);
-      wheelTimer = setTimeout(() => snapTo.current(Math.round(liveOff.current)), 200);
+      wheelTimer = setTimeout(() => snapTo.current(Math.round(liveOff.current * 4) / 4), 200);
     };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup',   onMouseUp);
@@ -985,7 +985,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     isDragging.current = false;
     vel.current = touchVel.current * 2.0;
     if (Math.abs(vel.current) > 0.008) doMomentum.current();
-    else snapTo.current(Math.round(liveOff.current));
+    else snapTo.current(Math.round(liveOff.current * 4) / 4);
   };
   const handleMouseDown = (e) => {
     e.preventDefault();
@@ -1175,14 +1175,14 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
               padding: '4px 10px 4px 4px', boxSizing: 'border-box',
               display: 'flex', flexDirection: 'column',
             }}>
-              {/* ── Month name — big, at top, auto-shrinks for long names ── */}
+              {/* ── Month name — matches CALENDAR label style ── */}
               <div style={{
                 fontFamily: mono,
-                fontSize: 'clamp(9px, 1.6vw, 13px)',
-                fontWeight: '600',
-                letterSpacing: 'clamp(0.06em, 0.5vw, 0.18em)',
+                fontSize: F.sm,
+                fontWeight: 'normal',
+                letterSpacing: '0.06em',
                 textTransform: 'uppercase',
-                color: C.text, marginBottom: 5, flexShrink: 0,
+                color: C.muted, marginBottom: 5, flexShrink: 0,
                 paddingLeft: 2, overflow: 'hidden', whiteSpace: 'nowrap',
               }}>{MONTH_NAMES[mo]}</div>
 
