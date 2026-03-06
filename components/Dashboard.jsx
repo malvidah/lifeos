@@ -235,10 +235,11 @@ function useDbSave(date, type, empty, token, userId) {
       }
     };
     const onPageHide = () => flush();
-    // Poll every 30s passively — only if no local dirty changes
+    // Poll every 5min passively — only if no local dirty changes
+    // (single-user app; visibility flush + beforeunload cover real-time needs)
     const poll = setInterval(() => {
       if (!DIRTY[cacheKey]) setRev(r => r + 1);
-    }, 30000);
+    }, 5 * 60 * 1000);
     window.addEventListener("beforeunload", flush);
     window.addEventListener("pagehide", onPageHide);
     document.addEventListener("visibilitychange", onVis);
@@ -454,6 +455,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const [appleHealthHasData,setAppleHealthHasData]=useState(false);
   const [claudeConnected,setClaudeConnected]=useState(false);
   const [syncing,setSyncing]=useState(null); // null | 'oura' | 'strava' | 'apple'
+  const [resyncing, setResyncing]=useState(false); // local state for Score History resync
   const [urlCopied,setUrlCopied]=useState(false);
 
   const ref=useRef(null);
@@ -734,7 +736,8 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             </SectionLabel>
             <button
               onClick={async () => {
-                setSyncing(s => new Set([...s, 'scores']));
+                if (resyncing) return;
+                setResyncing(true);
                 try {
                   const r = await fetch('/api/scores-backfill', {
                     method: 'POST',
@@ -745,14 +748,14 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                   if (d.ok) alert(`Done! Computed scores for ${d.scored} day${d.scored !== 1 ? 's' : ''}.`);
                   else alert('Error: ' + (d.error || 'unknown'));
                 } catch(e) { alert('Failed: ' + e.message); }
-                finally { setSyncing(s => { const n = new Set(s); n.delete('scores'); return n; }); }
+                finally { setResyncing(false); }
               }}
-              disabled={syncing.has('scores')}
+              disabled={resyncing}
               style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,
                 color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
                 textTransform:"uppercase",padding:"5px 10px",cursor:"pointer",flexShrink:0,
-                opacity: syncing.has('scores') ? 0.5 : 1}}>
-              {syncing.has('scores') ? 'Resyncing…' : 'Resync'}
+                opacity: resyncing ? 0.5 : 1}}>
+              {resyncing ? 'Resyncing…' : 'Resync'}
             </button>
           </div>
 
@@ -2269,9 +2272,14 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     }
   };
 
+  // Stable fingerprint — only refetch scores when the fields that affect computation change
+  const scoreFingerprint = loaded
+    ? [h.sleepHrs,h.sleepEff,h.hrv,h.rhr,h.steps,h.activeMinutes].join(':')
+    : null;
+
   useEffect(()=>{
     // Wait until h is loaded from DB — prevents H_EMPTY first-fire from corrupting dots
-    if(!token||!loaded) return;
+    if(!token||!loaded||scoreFingerprint===null) return;
     const ctrl = new AbortController();
     const p = new URLSearchParams({ date });
     if(h.sleepHrs)       p.set('sleepHrs',      h.sleepHrs);
@@ -2289,8 +2297,8 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           }
         }
       }).catch(e=>{ if(e.name!=='AbortError') console.warn('scores fetch',e); });
-    return ()=>ctrl.abort(); // cancel stale requests on re-run
-  },[date,token,h,loaded]); // eslint-disable-line
+    return ()=>ctrl.abort();
+  },[date,token,scoreFingerprint,loaded]); // eslint-disable-line
 
   // ── Sparkline SVG ─────────────────────────────────────────────────────────
   function Sparkline({data, color, width=52, height=20}) {
