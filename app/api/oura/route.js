@@ -68,9 +68,8 @@ export async function GET(request) {
     // daily_sleep.day = today (when you woke up) — so we need both date AND date-1 for sessions
     const prev1 = new Date(date); prev1.setDate(prev1.getDate() - 1);
     const prevDate1 = prev1.toISOString().split("T")[0];
-    console.log("[oura] date:", date, "prevDate1:", prevDate1);
-    console.log("[oura] daily_sleep records:", JSON.stringify((sleepData.data??[]).map(d=>({day:d.day,score:d.score,efficiency:d.contributors?.sleep_efficiency}))));
-    console.log("[oura] sessions:", JSON.stringify((sessionData.data??[]).map(s=>({day:s.day,type:s.type,hrs:s.total_sleep_duration?(s.total_sleep_duration/3600).toFixed(1):null,hrv:s.average_hrv,rhr:s.lowest_heart_rate}))));
+
+
     // Include all non-nap sleep types — short sleeps (<5h) may not be classified as "long_sleep"
     const NON_NAP = ["long_sleep", "sleep", "rest"];
     // Anchor session to the requested date using bedtime_end (when you woke up), not day field.
@@ -92,7 +91,6 @@ export async function GET(request) {
         return wakeDate === date;
       })
       .sort((a, b) => (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0))[0] ?? null;
-    console.log("[oura] mainSession:", JSON.stringify(mainSession ? {day:mainSession.day,type:mainSession.type,hrs:(mainSession.total_sleep_duration/3600).toFixed(1)} : null));
 
     const result = {};
     if (daily) {
