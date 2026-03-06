@@ -857,7 +857,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   // Responsive sizing — derive CELL_H from available height so months pack tight
   const vw        = typeof window !== 'undefined' ? window.innerWidth : 390;
   const DAY_HDR_H_C = 22;  // fixed header row (hoisted for CELL_H calc)
-  const LABEL_H   = 28;    // month label: marginTop(8)+font(14)+marginBottom(6)
+  const LABEL_H   = 20;    // month label: marginTop(4)+font(14)+marginBottom(2)
   const MONTH_H   = vw < 600 ? 390 : 460;
   const SCROLL_H_C = MONTH_H - DAY_HDR_H_C;
   const CELL_H    = Math.floor((SCROLL_H_C - LABEL_H - 5 * 2) / 6); // 5 gaps of 2px between 6 rows
@@ -1203,7 +1203,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                 <div style={{
                   fontFamily: mono, fontSize: F.sm, fontWeight: 'normal',
                   letterSpacing: '0.06em', textTransform: 'uppercase',
-                  color: C.muted, marginTop: 8, marginBottom: 6, flexShrink: 0,
+                  color: C.muted, marginTop: 4, marginBottom: 2, flexShrink: 0,
                   paddingLeft: 2, overflow: 'hidden', whiteSpace: 'nowrap',
                 }}>{MONTH_NAMES[mo]}</div>
 
@@ -2375,27 +2375,25 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
 
     return (
       <div style={{ padding: '0 0 4px' }}>
-        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 72, display: 'block', overflow: 'visible' }}
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, display: 'block', overflow: 'visible' }}
           preserveAspectRatio="none">
           <defs>
             <linearGradient id={`tg-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={color} stopOpacity="0.18"/>
+              <stop offset="0%" stopColor={color} stopOpacity="0.22"/>
               <stop offset="100%" stopColor={color} stopOpacity="0"/>
             </linearGradient>
+            <filter id={`glow-${metricKey}`}>
+              <feGaussianBlur stdDeviation="1.2" result="blur"/>
+              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
           </defs>
-          {/* avg line */}
-          <line x1="0" y1={avgY} x2={W} y2={avgY} stroke={color} strokeWidth="0.4" strokeDasharray="2,2" opacity="0.3"/>
-          {/* fill */}
+          {/* fill under curve */}
           <path d={fillPath} fill={`url(#tg-${metricKey})`}/>
-          {/* line */}
-          <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
-          {/* last point dot */}
-          <circle cx={xOf(last.i).toFixed(1)} cy={yOf(last.v).toFixed(1)} r="1.5" fill={color}/>
-          {/* month ticks */}
-          {ticks.map(t => (
-            <line key={t.i} x1={xOf(t.i).toFixed(1)} y1={H-1} x2={xOf(t.i).toFixed(1)} y2={H+1}
-              stroke={color} strokeWidth="0.5" opacity="0.4"/>
-          ))}
+          {/* single uniform line with glow */}
+          <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
+            strokeLinecap="round" strokeLinejoin="round" filter={`url(#glow-${metricKey})`}/>
+          {/* today dot */}
+          <circle cx={xOf(last.i).toFixed(1)} cy={yOf(last.v).toFixed(1)} r="2" fill={color}/>
         </svg>
         {/* month labels */}
         <div style={{ display: 'flex', position: 'relative', height: 14 }}>
@@ -2516,19 +2514,6 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
               <TrendLine metricKey={expandedMetric} color={m.color}/>
             </div>
 
-            {/* What + How */}
-            <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
-              <div style={{flex:1,minWidth:180}}>
-                <div style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.1em",textTransform:"uppercase",
-                  color:m.color,marginBottom:5,opacity:0.8}}>What it measures</div>
-                <div style={{fontFamily:mono,fontSize:"11px",color:C.muted,lineHeight:1.55}}>{info.what}</div>
-              </div>
-              <div style={{flex:1,minWidth:180}}>
-                <div style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.1em",textTransform:"uppercase",
-                  color:m.color,marginBottom:5,opacity:0.8}}>How it's calculated</div>
-                <div style={{fontFamily:mono,fontSize:"11px",color:C.muted,lineHeight:1.55}}>{info.how}</div>
-              </div>
-            </div>
           </div>
         );
       })()}
