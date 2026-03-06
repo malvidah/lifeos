@@ -472,22 +472,18 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
     }).catch(()=>{});
     fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
       .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
-    // Check Apple Health data + Claude MCP connection
-    import("@supabase/supabase-js").then(({createClient:sbCreate})=>{
-      const sb = sbCreate(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-        {global:{headers:{Authorization:`Bearer ${token}`}}});
-      sb.from("entries").select("data").eq("type","health_apple").limit(5)
-        .then(({data})=>{
-          // Only show connected if at least one row has real health fields
-          const hasReal = data?.some(r => r.data && Object.keys(r.data).some(k=>r.data[k]));
-          if(hasReal) setAppleHealthHasData(true);
-        });
-      Promise.all([
-        sb.from("entries").select("date").eq("type","oauth_token").limit(1),
-        sb.from("entries").select("date").eq("type","agent_token").eq("date","global").limit(1),
-      ]).then(([oauth, agent])=>{
-        if(oauth.data?.length || agent.data?.length) setClaudeConnected(true);
-      });
+    // Check Apple Health data + Claude MCP connection (use singleton — no new GoTrueClient)
+    const _sb = createClient();
+    _sb.from("entries").select("data").eq("type","health_apple").limit(5)
+      .then(({data})=>{
+        const hasReal = data?.some(r => r.data && Object.keys(r.data).some(k=>r.data[k]));
+        if(hasReal) setAppleHealthHasData(true);
+      }).catch(()=>{});
+    Promise.all([
+      _sb.from("entries").select("date").eq("type","oauth_token").limit(1),
+      _sb.from("entries").select("date").eq("type","agent_token").eq("date","global").limit(1),
+    ]).then(([oauth, agent])=>{
+      if(oauth.data?.length || agent.data?.length) setClaudeConnected(true);
     }).catch(()=>{});
   },[token,open]); // eslint-disable-line
   useEffect(()=>{
@@ -500,9 +496,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   const row={padding:"0 16px"};
   const divider=<div style={{height:1,background:C.border,margin:"10px 0"}}/>;
   const connBtn = (color=C.green) => ({width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",background:"none",border:`1px solid ${color}`,borderRadius:5,color:color,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"});
-  const getSb = async () => (await import("@supabase/supabase-js")).createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {global:{headers:{Authorization:`Bearer ${token}`}}});
+  // Use the module-level singleton — avoids spawning new GoTrueClient instances
 
   async function connectOura() {
     if(!ouraKey.trim()) return;
@@ -530,7 +524,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
   async function disconnectOura() {
     if(!confirm("Disconnect Oura? Your synced health data will remain.")) return;
-    const sb = await getSb();
+    const sb = createClient();
     const {data:s} = await sb.from("entries").select("data").eq("type","settings").eq("date","global").eq("user_id",userId).maybeSingle();
     const updated = {...(s?.data||{})}; delete updated.ouraToken;
     await sb.from("entries").upsert({user_id:userId,date:"global",type:"settings",data:updated,updated_at:new Date().toISOString()},{onConflict:"user_id,date,type"});
@@ -546,7 +540,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
       let attempts = 0;
       const poll = setInterval(async () => {
         attempts++;
-        const sb = await getSb();
+        const sb = createClient();
         const {data} = await sb.from("entries").select("data").eq("type","health_apple").limit(5);
         const hasReal = data?.some(r=>r.data&&Object.keys(r.data).some(k=>r.data[k]));
         if(hasReal || attempts > 20) {
@@ -560,7 +554,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
   async function disconnectAppleHealth() {
     if(!confirm("Disconnect Apple Health? Your synced health data will remain.")) return;
-    const sb = await getSb();
+    const sb = createClient();
     await sb.from("entries").delete().eq("type","health_apple").eq("user_id",userId);
     setAppleHealthHasData(false);
   }
@@ -571,7 +565,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
 
   async function disconnectStrava() {
     if(!confirm("Disconnect Strava? Your synced activity data will remain.")) return;
-    const sb = await getSb();
+    const sb = createClient();
     await sb.from("entries").delete().eq("type","strava_token").eq("user_id",userId);
     setStravaConnected(false);
   }
@@ -2198,9 +2192,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     cachedOuraFetch(date, token, userId).then(async data=>{
         if(data.error==="no_token") {
           // No Oura — fall back to Apple Health data synced from iOS app
-          const { createClient: _sbCreate } = await import("../lib/supabase.js");
-          const sb = _sbCreate();
-          sb.auth.setSession({access_token:token,refresh_token:''});
+          const sb = createClient(); // singleton — already imported at top
           const {data:row} = await sb.from("entries").select("data")
             .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
           if(row?.data) {
