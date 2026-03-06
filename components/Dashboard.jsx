@@ -3295,7 +3295,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
     if (!t) return true;
     if (BAD_VALUES.some(b => t.includes(b))) return true;
     if (cached?.isWelcome && currentHealthKey) return true;
-    if (cached?.v !== 7) return true;
+    if (cached?.v !== 8) return true;
     // If the insight was generated with different health data than what we have now, it's stale.
     // e.g. generated with yesterday's bleeding data, or generated before Oura loaded.
     if (cached?.healthKey !== undefined && cached.healthKey !== currentHealthKey) return true;
@@ -3311,7 +3311,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
     try {
       const cached = await dbLoad(date, "insights", token);
       const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
-      if (cached?.text && !isBadCache(cached.text, cached, currentHealthKey) && age < 4 * 60 * 60 * 1000) {
+      if (cached?.text && !isBadCache(cached.text, cached, currentHealthKey) && age < 12 * 60 * 60 * 1000) {
         setText(cleanInsight(cached.text)); setBusy(false); return;
       }
       const res = await fetch("/api/insights", {

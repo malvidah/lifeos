@@ -90,7 +90,7 @@ export async function POST(request) {
       .eq('user_id', user.id).maybeSingle();
     if (cached?.data?.insight) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
-      if (age < 6 * 60 * 60 * 1000) {
+      if (age < 24 * 60 * 60 * 1000) {
         return Response.json({ insight: cached.data.insight, cached: true });
       }
     }

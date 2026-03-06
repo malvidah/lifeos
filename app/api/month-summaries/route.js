@@ -73,7 +73,7 @@ export async function POST(request) {
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
+      max_tokens: 350,
       system: `You summarize journal entries into ultra-short one-line summaries (max 8 words each). 
 Respond ONLY with valid JSON: {"YYYY-MM-DD": "summary", ...}
 Be specific and concrete. Capture what actually happened. No filler words.`,
