@@ -3817,6 +3817,11 @@ export default function Dashboard() {
     // Remove today's entry from the module-level Oura cache so next render re-fetches
     const k = `${userId}|${today}`;
     delete _ouraCache[k];
+    // Also evict today's health entry from the in-memory DB cache so useDbSave
+    // re-fetches from Supabase after the fresh Oura write lands
+    const healthKey = `${userId}:${today}:health`;
+    delete MEM[healthKey];
+    delete DIRTY[healthKey];
   }, [token, userId]);
 
   // Bust on mount (app open) and whenever window becomes visible again (return from background)

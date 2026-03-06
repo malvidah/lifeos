@@ -84,9 +84,12 @@ export async function GET(request) {
           return s.day === date || s.day === prevDate1;
         }
         // bedtime_end = ISO string like "2026-03-06T07:23:00+00:00" or "2026-03-06T07:23:00-08:00"
-        // Oura timestamps are in local time — extract the date portion directly (first 10 chars)
+        // Extract the date portion directly (first 10 chars = local date when you woke up)
+        // Only match the requested date — prevDate1 fallback is NOT needed here because
+        // bedtime_end already anchors to the wake-up day (unlike the day field which is sleep-start).
+        // Including prevDate1 would match the *previous* night's sleep and pick it if it's longer.
         const wakeDate = s.bedtime_end.slice(0, 10);
-        return wakeDate === date || wakeDate === prevDate1;
+        return wakeDate === date;
       })
       .sort((a, b) => (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0))[0] ?? null;
     console.log("[oura] mainSession:", JSON.stringify(mainSession ? {day:mainSession.day,type:mainSession.type,hrs:(mainSession.total_sleep_duration/3600).toFixed(1)} : null));
