@@ -436,9 +436,8 @@ function InfoTip({text}) {
   );
 }
 
-function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, children}) {
-  // Toggle pill — same style as dark mode toggle
-  const Toggle = ({on, onOn, onOff}) => (
+function IntegrationToggle({on, onOn, onOff}) {
+  return (
     <button
       onClick={on ? onOff : onOn}
       style={{
@@ -451,6 +450,9 @@ function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, ch
       <div style={{width:14,height:14,borderRadius:"50%",background:on?C.accent:C.dim,transition:"all 0.2s"}}/>
     </button>
   );
+}
+
+function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, children}) {
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:1}}>
@@ -458,10 +460,10 @@ function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, ch
           {label}
         </span>
         {children}
-        <Toggle on={connected} onOn={onToggleOn} onOff={onToggleOff}/>
+        <IntegrationToggle on={connected} onOn={onToggleOn} onOff={onToggleOff}/>
       </div>
       {subtitle && (
-        <div style={{fontFamily:mono,fontSize:9,color:C.dim,letterSpacing:"0.03em",marginTop:3,paddingLeft:0}}>
+        <div style={{fontFamily:mono,fontSize:9,color:C.dim,letterSpacing:"0.03em",marginTop:3}}>
           — {subtitle}
         </div>
       )}
