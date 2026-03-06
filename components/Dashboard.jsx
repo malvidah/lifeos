@@ -2410,7 +2410,6 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     const pts = vals.map((v, i) => v != null ? { v, i } : null).filter(Boolean);
     if (pts.length < 2) return <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>not enough data</span></div>;
 
-    // Fixed pixel viewBox — non-scaling-stroke keeps line uniform at any display width
     const W = 600, H = 80;
     const mn = Math.max(0, Math.min(...pts.map(p => p.v)) - 5);
     const mx = Math.min(100, Math.max(...pts.map(p => p.v)) + 5);
@@ -2425,86 +2424,44 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     const avg = pts.reduce((s, p) => s + p.v, 0) / pts.length;
     const avgY = yOf(avg).toFixed(1);
 
+    // ── X-axis ticks ──────────────────────────────────────────────────────────
+    // 12M: every month (Jan, Feb…) — 12 labels, clearly spaced
+    // 30D: every Monday — typically 4-5 labels with "Mon DD" format
+    // Both: tick marks in SVG + text labels below
     const ticks = [];
     if (trendRange === "12m") {
-      // Monthly ticks for 12M view
       days.forEach((d, i) => {
-        if (d.endsWith('-01') || i === 0) {
+        if (d.slice(8) === '01') { // first of month
           const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(d.split('-')[1]) - 1];
           ticks.push({ i, label: mo });
         }
       });
+      // Always include the rightmost anchor date
+      if (!ticks.length || ticks[ticks.length-1].i < span - 2) {
+        const anchor = new Date(date + 'T12:00:00');
+        const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][anchor.getMonth()];
+        ticks.push({ i: span, label: mo, isAnchor: true });
+      }
     } else {
-      // Weekly ticks for 30D view
+      // 30D: tick every Monday
       days.forEach((d, i) => {
-        if (i === 0 || i % 7 === 0) {
+        const dow = new Date(d + 'T12:00:00').getDay(); // 0=Sun, 1=Mon
+        if (dow === 1) {
           const dt = new Date(d + 'T12:00:00');
-          ticks.push({ i, label: dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
+          const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
+          ticks.push({ i, label: `${mo} ${dt.getDate()}` });
         }
       });
     }
 
-    // ── Scrubber state ────────────────────────────────────────────────────────
-    // scrub = { frac, interpV, snapV, snapDayKey } | null
-    // frac: 0-1 cursor position (drives X — moves continuously)
-    // interpV: linearly interpolated score at cursor (drives Y — smooth)
-    // snapV: score of nearest data point (shown as the number)
-    // snapDayKey: date of nearest data point (shown as the label)
-    const [scrub, setScrub] = useState(null);
-    const chartRef = useRef(null);
-
-    function getScrubFromX(clientX) {
-      const rect = chartRef.current?.getBoundingClientRect();
-      if (!rect) return null;
-      const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-      const rawI = frac * span;
-
-      // Linear interpolation between the two surrounding data points
-      let lo = null, hi = null;
-      for (const p of pts) {
-        if (p.i <= rawI && (lo === null || p.i > lo.i)) lo = p;
-        if (p.i >= rawI && (hi === null || p.i < hi.i)) hi = p;
-      }
-      let interpV;
-      if (!lo && !hi) return null;
-      if (!lo) interpV = hi.v;
-      else if (!hi) interpV = lo.v;
-      else if (lo.i === hi.i) interpV = lo.v;
-      else {
-        const t = (rawI - lo.i) / (hi.i - lo.i);
-        interpV = lo.v + t * (hi.v - lo.v);
-      }
-
-      // Snap to nearest point for label/score display
-      let best = null, bestDist = Infinity;
-      for (const p of pts) {
-        const d = Math.abs(p.i - rawI);
-        if (d < bestDist) { bestDist = d; best = p; }
-      }
-
-      return { frac, interpV, snapV: best.v, snapDayKey: days[best.i] };
-    }
-
-    const scrubHandlers = {
-      onMouseMove:  e => setScrub(getScrubFromX(e.clientX)),
-      onMouseLeave: () => setScrub(null),
-      onTouchStart: e => { e.preventDefault(); setScrub(getScrubFromX(e.touches[0].clientX)); },
-      onTouchMove:  e => { e.preventDefault(); setScrub(getScrubFromX(e.touches[0].clientX)); },
-      onTouchEnd:   () => setTimeout(() => setScrub(null), 800),
-    };
-
-    // X follows cursor continuously; Y follows interpolated value
-    const scrubX   = scrub ? scrub.frac * W : null;
-    const scrubY   = scrub ? yOf(scrub.interpV) : null;
-    const scrubLabel = scrub
-      ? new Date(scrub.snapDayKey + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      : null;
+    const endLabel = date === todayKey()
+      ? 'today'
+      : new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
 
     return (
       <div style={{ padding: '0 0 4px' }}>
-        <div ref={chartRef} style={{ position: 'relative', cursor: 'crosshair', touchAction: 'none' }}
-          {...scrubHandlers}>
-          <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, display: 'block', overflow: 'visible' }}
+        <div style={{ position: 'relative' }}>
+          <svg viewBox={`0 0 ${W} ${H + 10}`} style={{ width: '100%', height: 88, display: 'block', overflow: 'visible' }}
             preserveAspectRatio="none">
             <defs>
               <linearGradient id={`tg-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
@@ -2518,75 +2475,46 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
               strokeDasharray="4,4" vectorEffect="non-scaling-stroke"/>
             <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
-            {/* scrubber vertical line — no dot */}
-            {scrub && (
-              <line x1={scrubX} y1={0} x2={scrubX} y2={H}
-                stroke={color} strokeWidth="1" strokeOpacity="0.45"
+            {/* X-axis tick marks */}
+            {ticks.map(t => (
+              <line key={t.i}
+                x1={xOf(t.i)} y1={H} x2={xOf(t.i)} y2={H + 4}
+                stroke="rgba(255,255,255,0.18)" strokeWidth="1"
                 vectorEffect="non-scaling-stroke"/>
-            )}
+            ))}
           </svg>
 
           {/* Today dot */}
-          {!scrub && (
-            <div style={{
-              position: 'absolute',
-              left: `${(last.i / span) * 100}%`,
-              top: `${(yOf(last.v) / H) * 80}px`,
-              transform: 'translate(-50%, -50%)',
-              width: 7, height: 7, borderRadius: '50%',
-              background: color,
-              pointerEvents: 'none',
-            }}/>
-          )}
-
-          {/* Score number — floats above where the line meets the scrubber */}
-          {scrub && (() => {
-            const leftPct = scrub.frac * 100;
-            const isRight = leftPct > 60;
-            return (
-              <div style={{
-                position: 'absolute',
-                left: isRight ? 'auto' : `calc(${leftPct}% + 7px)`,
-                right: isRight ? `calc(${100 - leftPct}% + 7px)` : 'auto',
-                top: `${Math.max(0, (scrubY / H) * 80 - 22)}px`,
-                pointerEvents: 'none',
-              }}>
-                <span style={{
-                  fontFamily: mono, fontSize: '13px', fontWeight: 700,
-                  color: color, lineHeight: 1,
-                }}>{scrub.snapV}</span>
-              </div>
-            );
-          })()}
+          <div style={{
+            position: 'absolute',
+            left: `${(last.i / span) * 100}%`,
+            top: `${(yOf(last.v) / H) * 80}px`,
+            transform: 'translate(-50%, -50%)',
+            width: 7, height: 7, borderRadius: '50%',
+            background: color,
+            pointerEvents: 'none',
+          }}/>
         </div>
 
-        {/* Month/week labels + scrubbed date */}
-        <div style={{ display: 'flex', position: 'relative', height: 14 }}>
-          {ticks.map(t => (
-            <div key={t.i} style={{
-              position: 'absolute',
-              left: `${(t.i / 29) * 100}%`,
-              transform: 'translateX(-50%)',
-              fontFamily: mono, fontSize: '9px',
-              color: scrub ? 'transparent' : C.dim,
-              letterSpacing: '0.04em',
-              transition: 'color 0.1s',
-            }}>{t.label}</div>
-          ))}
-          {/* Scrubbed date follows the line horizontally */}
-          {scrub ? (
-            <div style={{
-              position: 'absolute',
-              left: `${scrub.frac * 100}%`,
-              transform: 'translateX(-50%)',
-              fontFamily: mono, fontSize: '9px', color: color,
-              letterSpacing: '0.04em', whiteSpace: 'nowrap',
-            }}>{scrubLabel}</div>
-          ) : (
-            <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: C.dim }}>
-              {date === todayKey() ? 'today' : new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
-            </div>
-          )}
+        {/* X-axis labels row */}
+        <div style={{ position: 'relative', height: 14, marginTop: -2 }}>
+          {ticks.map(t => {
+            const leftPct = (t.i / span) * 100;
+            // Avoid clipping at edges
+            const transform = leftPct < 8 ? 'none' : leftPct > 92 ? 'translateX(-100%)' : 'translateX(-50%)';
+            return (
+              <div key={t.i} style={{
+                position: 'absolute',
+                left: `${leftPct}%`,
+                transform,
+                fontFamily: mono, fontSize: '9px', color: C.dim,
+                letterSpacing: '0.04em', lineHeight: 1,
+              }}>{t.label}</div>
+            );
+          })}
+          <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: C.dim }}>
+            {endLabel}
+          </div>
         </div>
       </div>
     );
@@ -2706,7 +2634,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                   {avgVal != null && (
                     <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
                   )}
-                  {["30d","12m"].map(r => (
+                  {["12m","30d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
                       style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.05em",
                         padding:"2px 6px",borderRadius:4,cursor:"pointer",border:"none",
