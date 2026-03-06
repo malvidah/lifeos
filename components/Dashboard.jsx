@@ -856,6 +856,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
 
   // Keep constants in refs so event handlers can read them without stale closures
   const MONTH_H = 460; // px per month — big enough to feel like a real page flip
+  const CELL_H  = 72;  // px per day cell
 
   const repaint = useRef(() => {});
   repaint.current = () => setDisplayOff(liveOff.current);
