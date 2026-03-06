@@ -261,7 +261,7 @@ function PricingView({ session, onStartCheckout }) {
             }}>
               {p}
               {p === 'yearly' && (
-                <span style={{ position: 'absolute', top: -8, right: 6, background: `${green}25`, border: `1px solid ${green}50`, color: green, fontFamily: mono, fontSize: 7, letterSpacing: '0.08em', padding: '2px 5px', borderRadius: 4, textTransform: 'uppercase' }}>Save 20%</span>
+                <span style={{ position: 'absolute', top: -8, right: 6, background: `${accent}18`, border: `1px solid ${accent}40`, color: accent, fontFamily: mono, fontSize: 7, letterSpacing: '0.08em', padding: '2px 5px', borderRadius: 4, textTransform: 'uppercase' }}>Save 20%</span>
               )}
             </button>
           ))}
