@@ -28,7 +28,7 @@ export async function GET(request) {
     .maybeSingle();
 
   const ouraToken = settingsRow?.data?.ouraToken;
-  if (!ouraToken) return Response.json({ error: "no_token" }, { status: 404 });
+  if (!ouraToken) return Response.json({ error: "no_token" });
 
   try {
     // Oura records sleep/readiness the morning AFTER — so we need to look ahead by 1 day

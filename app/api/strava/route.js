@@ -58,10 +58,10 @@ export async function GET(request) {
   const settings = await getSettings(supabase, user.id);
   const clientId = settings.stravaClientId;
   const clientSecret = settings.stravaClientSecret;
-  if (!clientId || !clientSecret) return Response.json({ error: 'no_strava_creds' }, { status: 404 });
+  if (!clientId || !clientSecret) return Response.json({ activities: [] });
 
   let tokens = await getStravaTokens(supabase, user.id);
-  if (!tokens) return Response.json({ error: 'not_connected' }, { status: 404 });
+  if (!tokens) return Response.json({ activities: [] });
 
   // Refresh if expired (with 5min buffer)
   if (tokens.expires_at && Date.now() / 1000 > tokens.expires_at - 300) {
