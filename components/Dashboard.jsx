@@ -854,8 +854,10 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   const containerRef = useRef(null);
   const [displayOff, setDisplayOff] = useState(initYear * 12 + initMonth);
 
-  const CELL_H  = 76;
-  const MONTH_H = 470; // tall enough for 6-row months + header
+  // Responsive sizing — adapt to actual viewport, not fixed px
+  const vw       = typeof window !== 'undefined' ? window.innerWidth : 390;
+  const CELL_H   = vw < 600 ? 58 : 76;   // shorter cells on mobile
+  const MONTH_H  = vw < 600 ? 400 : 470; // proportionally shorter total height
 
   // Use refs for callbacks so mount-only listeners always see fresh values
   const repaint    = useRef(null);
@@ -1105,7 +1107,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     };
   }, [scrubDragging]); // eslint-disable-line
 
-  const SCRUB_W    = 18;  // px width of the left scrubber column
+  const SCRUB_W    = vw < 600 ? 12 : 18; // narrower on mobile
   const DAY_HDR_H  = 22;  // px height of fixed day-of-week header row
   const SCROLL_H   = MONTH_H - DAY_HDR_H; // scrollable area height
 
@@ -1118,7 +1120,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
         <div style={{ width: SCRUB_W, flexShrink: 0 }} />
         {/* day-of-week labels — never scroll */}
         <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
-                      paddingRight: 10 }}>
+                      paddingRight: 4 }}>
           {DAY_NAMES.map((n, i) => (
             <div key={i} style={{
               textAlign: 'center', fontFamily: mono, fontSize: '10px',
@@ -1191,7 +1193,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                 position: 'absolute', top: 0, left: 0, right: 0,
                 transform: `translateY(${translateY}px)`,
                 willChange: 'transform', height: SCROLL_H,
-                padding: '0 10px 4px 4px', boxSizing: 'border-box',
+                padding: '0 4px 4px 4px', boxSizing: 'border-box',
                 display: 'flex', flexDirection: 'column',
               }}>
                 {/* Month name */}
@@ -1248,7 +1250,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                         {/* Big events */}
                         {bigEvents.map((ev, j) => (
                           <div key={j} style={{
-                            fontFamily: mono, fontSize: '9px', lineHeight: 1.2,
+                            fontFamily: mono, fontSize: vw < 600 ? '8px' : '9px', lineHeight: 1.2,
                             color: ev.color || C.accent,
                             background: (ev.color || C.accent) + '28',
                             borderRadius: 3, padding: '2px 3px',
