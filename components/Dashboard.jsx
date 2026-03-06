@@ -1258,7 +1258,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
 
                     const isToday    = dateKey === today;
                     const isSelected = dateKey === selected;
-                    const dots       = healthDots[dateKey] || {};
+                    const dots       = dateKey <= today ? (healthDots[dateKey] || {}) : {};
                     const summary    = summaries[dateKey];
                     const bigEvents  = (events[dateKey] || []).filter(isBigEvent).slice(0, 2);
                     const hasDots    = dots.sleep >= 85 || dots.readiness >= 85 ||
@@ -1679,10 +1679,10 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   }}>{d.getDate()}</div>
                   {/* Health dots */}
                   <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
-                    {(healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
-                    {(healthDots[k]?.readiness >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
-                    {(healthDots[k]?.activity >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
-                    {(healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"#8B6BB5"}}/>}
+                    {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
+                    {k<=today && (healthDots[k]?.readiness >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
+                    {k<=today && (healthDots[k]?.activity >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
+                    {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"#8B6BB5"}}/>}
                   </div>
                 </div>
 
@@ -2272,6 +2272,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
   useEffect(()=>{
     // Wait until h is loaded from DB — prevents H_EMPTY first-fire from corrupting dots
     if(!token||!loaded||scoreFingerprint===null) return;
+    if(date > todayKey()) return; // never request scores for future dates
     const ctrl = new AbortController();
     const p = new URLSearchParams({ date });
     if(h.sleepHrs)       p.set('sleepHrs',      h.sleepHrs);
@@ -3963,8 +3964,9 @@ export default function Dashboard() {
     const supabase=createClient();
     supabase.auth.setSession({access_token:token,refresh_token:''});
     const since=toKey(shift(new Date(),-180));
+    const dotsToday = todayKey();
     supabase.from('entries').select('date,data')
-      .eq('user_id',userId).eq('type','scores').gte('date',since)
+      .eq('user_id',userId).eq('type','scores').gte('date',since).lte('date',dotsToday)
       .then(({data})=>{
         if(!data)return;
         const dots={};
