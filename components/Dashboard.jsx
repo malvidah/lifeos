@@ -467,7 +467,9 @@ function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, ch
           {label}
         </span>
         {children}
-        <IntegrationToggle on={connected} onOn={onToggleOn} onOff={onToggleOff} pending={pendingToggle}/>
+        <div style={{marginLeft:"auto",flexShrink:0}}>
+          <IntegrationToggle on={connected} onOn={onToggleOn} onOff={onToggleOff} pending={pendingToggle}/>
+        </div>
       </div>
       {subtitle && (
         <div style={{fontFamily:mono,fontSize:9,color:C.dim,letterSpacing:"0.03em",marginTop:3}}>
@@ -788,29 +790,34 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
             </button>
           </div>
 
-          {/* Apps side by side */}
-          <div style={{...row,display:"flex",gap:6,marginBottom:2}}>
-            <a href="/download/mac" style={{
-              flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-              padding:"6px 0",background:C.surface,
-              border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
-              color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              Mac
-            </a>
-            <a href="/download/ios" style={{
-              flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
-              padding:"6px 0",background:C.surface,
-              border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
-              color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.08em",textTransform:"uppercase"}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/>
-              </svg>
-              iOS Beta
-            </a>
+          {/* Downloads */}
+          <div style={row}>
+            <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,marginBottom:8}}>
+              Downloads
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <a href="/download/mac" style={{
+                flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+                padding:"6px 0",background:C.surface,
+                border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
+                color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Mac
+              </a>
+              <a href="/download/ios" style={{
+                flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+                padding:"6px 0",background:C.surface,
+                border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
+                color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.08em",textTransform:"uppercase"}}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/>
+                </svg>
+                iOS Beta
+              </a>
+            </div>
           </div>
 
           {divider}
@@ -820,7 +827,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
                 color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
                 textTransform:"uppercase",textDecoration:"none"}}>
-              Learn More
+              About
             </a>
             <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
