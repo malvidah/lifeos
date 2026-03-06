@@ -3946,8 +3946,8 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, overflowY:"auto", overflowX:"hidden", padding:mobile?8:10,
-          paddingBottom:mobile?120:80, display:"flex", flexDirection:"column", gap:8}}>
+        <div style={{flex:1, minHeight:0, overflow:"hidden", padding:mobile?8:10,
+          paddingBottom:mobile?120:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
@@ -3965,14 +3965,16 @@ export default function Dashboard() {
           </div>
 
           {/* Widgets — row on wide, column on narrow */}
-          <div style={{display:"flex", gap:8, flex: mobile?"0 0 auto":"1 1 0",
+          <div style={{display:"flex", gap:8,
+            flex: mobile?"0 0 auto":"1 1 0", minHeight: mobile?0:0,
             flexDirection: mobile?"column":"row",
-            alignItems:"stretch", minHeight: mobile?0:200, overflow:"visible"}}>
+            alignItems:"stretch", overflow:"hidden",
+            paddingBottom: mobile?0:80}}>
 
             {/* Left column: Insights + Notes */}
-            <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
+            <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
               display:"flex", flexDirection:"column", gap:8,
-              height: mobile?undefined:"100%", paddingBottom: mobile?0:80}}>
+              overflowY: mobile?"visible":"auto"}}>
               {/* Insights */}
               <div style={{flexShrink:0}}>
                 <InsightsCard date={selected} token={token} userId={userId}
@@ -3980,9 +3982,9 @@ export default function Dashboard() {
                   collapsed={mobile?false:insightCollapsed} onToggle={mobile?undefined:toggleInsight}/>
               </div>
               {/* Notes */}
-              <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
-                display:"flex", flexDirection:"column",
-                height: mobile?260:undefined, minHeight: mobile?0:undefined}}>
+              <div style={{flex: mobile?"0 0 auto":"1 1 0", minHeight: mobile?260:0,
+                maxHeight: mobile?260:undefined,
+                display:"flex", flexDirection:"column"}}>
                 <Widget label={leftWidget.label} color={leftWidget.color()}
                   collapsed={mobile?false:collapseMap[leftWidget.id]}
                   onToggle={mobile?undefined:toggleMap[leftWidget.id]}
@@ -3993,14 +3995,15 @@ export default function Dashboard() {
             </div>
 
             {/* Right widgets — column always */}
-            <div style={{flex: mobile?"0 0 auto":"1 1 0", minWidth:0,
+            <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
               display:"flex", flexDirection:"column", gap:8,
-              overflowY: mobile?"visible":"auto", paddingBottom: mobile?0:80}}>
+              overflowY: mobile?"visible":"auto"}}>
               {rightWidgets.map(w=>(
                 <div key={w.id} style={{
                   flex: mobile?"0 0 auto": collapseMap[w.id]?"0 0 auto":"1 1 0",
-                  height: mobile?260:undefined,
-                  minHeight: mobile?0: collapseMap[w.id]?0:160, overflow:"hidden"}}>
+                  minHeight: mobile?260: collapseMap[w.id]?0:80,
+                  maxHeight: mobile?260:undefined,
+                  overflow:"hidden"}}>
                   <Widget label={w.label} color={w.color()}
                     collapsed={mobile?false:collapseMap[w.id]}
                     onToggle={mobile?undefined:toggleMap[w.id]}
