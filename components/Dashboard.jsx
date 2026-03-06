@@ -2402,7 +2402,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         </div>
       );
     }
-    const span = trendRange === "12m" ? 364 : 29;
+    const span = trendRange === "12m" ? 364 : trendRange === "7d" ? 6 : 29;
     const anchorDate = new Date(date + 'T12:00:00');
     const days = [];
     for (let i = -span; i <= 0; i++) days.push(toKey(shift(anchorDate, i)));
@@ -2442,15 +2442,23 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][anchor.getMonth()];
         ticks.push({ i: span, label: mo, isAnchor: true });
       }
-    } else {
+    } else if (trendRange === "30d") {
       // 30D: tick every Monday
       days.forEach((d, i) => {
-        const dow = new Date(d + 'T12:00:00').getDay(); // 0=Sun, 1=Mon
+        const dow = new Date(d + 'T12:00:00').getDay();
         if (dow === 1) {
           const dt = new Date(d + 'T12:00:00');
           const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
           ticks.push({ i, label: `${mo} ${dt.getDate()}` });
         }
+      });
+    } else {
+      // 7D: tick every day except today (shown as endLabel)
+      days.forEach((d, i) => {
+        if (i === span) return; // skip last — shown as endLabel
+        const dt = new Date(d + 'T12:00:00');
+        const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
+        ticks.push({ i, label: `${mo} ${dt.getDate()}` });
       });
     }
 
@@ -2601,7 +2609,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         const trendCacheKey = expandedMetric ? `${expandedMetric}:${date}:${trendRange}` : null;
         const avgVal = m && trendCacheKey && trendData[trendCacheKey]
           ? (() => {
-              const span = trendRange === "12m" ? 364 : 29;
+              const span = trendRange === "12m" ? 364 : trendRange === "7d" ? 6 : 29;
               const anchorDate = new Date(date + 'T12:00:00');
               const days=[];for(let i=-span;i<=0;i++)days.push(toKey(shift(anchorDate,i)));
               const vals=days.map(d=>trendData[trendCacheKey][d]?.[expandedMetric]).filter(v=>v!=null);
@@ -2634,7 +2642,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                   {avgVal != null && (
                     <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
                   )}
-                  {["12m","30d"].map(r => (
+                  {["12m","30d","7d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
                       style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.05em",
                         padding:"2px 6px",borderRadius:4,cursor:"pointer",border:"none",
