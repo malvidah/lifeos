@@ -9,7 +9,7 @@ const THEMES = {
     // Direction: bg is medium-dark, surface is lighter, well is darkest
     bg:"#141412",      surface:"#232220",   card:"#232220",
     well:"#1A1918",    border:"#2C2A28",    border2:"#383532",
-    text:"#D8CEC2",    muted:"#6E6860",     dim:"#363230",
+    text:"#D8CEC2",    muted:"#9A9088",     dim:"#6A6258",
     accent:"#D08828",
     green:"#4A9A68",   blue:"#4878A8",
     purple:"#8860B8",  red:"#B04840",       orange:"#D08828",
@@ -2402,7 +2402,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         </div>
       );
     }
-    const span = trendRange === "12m" ? 364 : trendRange === "7d" ? 6 : 29;
+    const span = trendRange === "12m" ? 364 : 29;
     const anchorDate = new Date(date + 'T12:00:00');
     const days = [];
     for (let i = -span; i <= 0; i++) days.push(toKey(shift(anchorDate, i)));
@@ -2610,7 +2610,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         const trendCacheKey = expandedMetric ? `${expandedMetric}:${date}:${trendRange}` : null;
         const avgVal = m && trendCacheKey && trendData[trendCacheKey]
           ? (() => {
-              const span = trendRange === "12m" ? 364 : trendRange === "7d" ? 6 : 29;
+              const span = trendRange === "12m" ? 364 : 29;
               const anchorDate = new Date(date + 'T12:00:00');
               const days=[];for(let i=-span;i<=0;i++)days.push(toKey(shift(anchorDate,i)));
               const vals=days.map(d=>trendData[trendCacheKey][d]?.[expandedMetric]).filter(v=>v!=null);
@@ -2643,7 +2643,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                   {avgVal != null && (
                     <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
                   )}
-                  {["12m","30d","7d"].map(r => (
+                  {["12m","30d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
                       style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.05em",
                         padding:"2px 6px",borderRadius:4,cursor:"pointer",border:"none",
