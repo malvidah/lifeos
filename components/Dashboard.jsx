@@ -1643,7 +1643,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             const isTdy  = k === today;
             const dayEvents = (events[k] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
             const dist = Math.abs(i);
-            const opacity = isCtr ? 1 : Math.max(0.2, 1 - dist * 0.15);
+            const opacity = isCtr ? 1 : Math.max(0.12, 1 - Math.pow(dist / 6, 2) * 0.88);
 
             return (
               <div key={k}
