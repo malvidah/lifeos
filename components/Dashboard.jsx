@@ -3967,7 +3967,7 @@ export default function Dashboard() {
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?8:10,
-          paddingBottom:mobile?120:0, display:"flex", flexDirection:"column", gap:8}}>
+          paddingBottom:mobile?140:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
@@ -3984,56 +3984,75 @@ export default function Dashboard() {
               collapsed={mobile?false:healthCollapsed} onToggle={mobile?undefined:toggleHealth}/>
           </div>
 
-          {/* Widgets — row on wide, column on narrow */}
-          <div style={{display:"flex", gap:8,
-            flex: mobile?"0 0 auto":"1 1 0", minHeight: mobile?0:0,
-            flexDirection: mobile?"column":"row",
-            alignItems:"stretch", overflow:mobile?"visible":"hidden",
-            paddingBottom: mobile?0:80}}>
-
-            {/* Left column: Insights + Notes */}
-            <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
-              display:"flex", flexDirection:"column", gap:8,
-              overflowY: mobile?"visible":"auto"}}>
-              {/* Insights */}
-              <div style={{flexShrink:0}}>
-                <InsightsCard date={selected} token={token} userId={userId}
-                  healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
-                  collapsed={mobile?false:insightCollapsed} onToggle={mobile?undefined:toggleInsight}/>
-              </div>
-              {/* Notes */}
-              <div style={{flex: mobile?"0 0 auto":"1 1 0", minHeight: mobile?260:0,
-                maxHeight: mobile?260:undefined,
-                display:"flex", flexDirection:"column"}}>
+          {/* Widgets — row on wide, flat stack on narrow */}
+          {mobile ? (
+            <div style={{display:"flex", flexDirection:"column", gap:8, paddingBottom:8}}>
+              <InsightsCard date={selected} token={token} userId={userId}
+                healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
+                collapsed={false} onToggle={undefined}/>
+              <div style={{minHeight:260}}>
                 <Widget label={leftWidget.label} color={leftWidget.color()}
-                  collapsed={mobile?false:collapseMap[leftWidget.id]}
-                  onToggle={mobile?undefined:toggleMap[leftWidget.id]}
+                  collapsed={false} onToggle={undefined}
                   headerRight={leftWidget.headerRight?.()}>
                   <leftWidget.Comp date={selected} token={token} userId={userId}/>
                 </Widget>
               </div>
-            </div>
-
-            {/* Right widgets — column always */}
-            <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
-              display:"flex", flexDirection:"column", gap:8,
-              overflowY: mobile?"visible":"auto"}}>
               {rightWidgets.map(w=>(
-                <div key={w.id} style={{
-                  flex: mobile?"0 0 auto": collapseMap[w.id]?"0 0 auto":"1 1 0",
-                  minHeight: mobile?260: collapseMap[w.id]?0:80,
-                  maxHeight: mobile?260:undefined,
-                  overflow:mobile?"visible":"hidden"}}>
+                <div key={w.id} style={{minHeight:260}}>
                   <Widget label={w.label} color={w.color()}
-                    collapsed={mobile?false:collapseMap[w.id]}
-                    onToggle={mobile?undefined:toggleMap[w.id]}
+                    collapsed={false} onToggle={undefined}
                     headerRight={w.headerRight?.()}>
                     <w.Comp date={selected} token={token} userId={userId}/>
                   </Widget>
                 </div>
               ))}
             </div>
-          </div>
+          ) : (
+            <div style={{display:"flex", gap:8,
+              flex:"1 1 0", minHeight:0,
+              flexDirection:"row",
+              alignItems:"stretch", overflow:"hidden",
+              paddingBottom:80}}>
+
+              {/* Left column: Insights + Notes */}
+              <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
+                display:"flex", flexDirection:"column", gap:8,
+                overflowY:"auto"}}>
+                <div style={{flexShrink:0}}>
+                  <InsightsCard date={selected} token={token} userId={userId}
+                    healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
+                    collapsed={insightCollapsed} onToggle={toggleInsight}/>
+                </div>
+                <div style={{flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column"}}>
+                  <Widget label={leftWidget.label} color={leftWidget.color()}
+                    collapsed={collapseMap[leftWidget.id]}
+                    onToggle={toggleMap[leftWidget.id]}
+                    headerRight={leftWidget.headerRight?.()}>
+                    <leftWidget.Comp date={selected} token={token} userId={userId}/>
+                  </Widget>
+                </div>
+              </div>
+
+              {/* Right widgets — column always */}
+              <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
+                display:"flex", flexDirection:"column", gap:8,
+                overflowY:"auto"}}>
+                {rightWidgets.map(w=>(
+                  <div key={w.id} style={{
+                    flex: collapseMap[w.id]?"0 0 auto":"1 1 0",
+                    minHeight: collapseMap[w.id]?0:80,
+                    overflow:"hidden"}}>
+                    <Widget label={w.label} color={w.color()}
+                      collapsed={collapseMap[w.id]}
+                      onToggle={toggleMap[w.id]}
+                      headerRight={w.headerRight?.()}>
+                      <w.Comp date={selected} token={token} userId={userId}/>
+                    </Widget>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
       {/* Floating chat pill — always visible, both mobile + desktop */}
