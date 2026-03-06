@@ -827,44 +827,49 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
 }
 
 // ─── MonthView ────────────────────────────────────────────────────────────────
-// Keywords that mark an event as "big" (worth showing on the month grid)
-const BIG_EVENT_KEYWORDS = /birthday|bday|anniversary|wedding|graduation|party|trip|camping|hike|concert|festival|game night|board game|vacation|holiday|travel|flight|conference|retreat|summit|christm|thanksgiv|new year|halloween|passover|hanukkah|diwali|eid|week off|day off|surgery|date night|show|performance|recital|marathon|race|gala|ceremony|opening night/i;
+// Only truly special events belong on the month grid — not meals or daily tasks
+const BIG_EVENT_KEYWORDS = /birthday|bday|anniversary|wedding|graduation|party|trip|camping|hike|concert|festival|game.?night|board.?game|vacation|holiday|travel|flight|conference|retreat|summit|christm|thanksgiv|new.?year|halloween|passover|hanukkah|diwali|eid|week.?off|day.?off|surgery|date.?night|show|performance|recital|marathon|race|gala|ceremony|opening.?night|potluck|picnic|reunion|sleepover|road.?trip/i;
 
 function isBigEvent(ev) {
   if (!ev) return false;
   if (ev.allDay || ev.time === 'all day') return true;
-  if (BIG_EVENT_KEYWORDS.test(ev.title || '')) return true;
-  return false;
+  return BIG_EVENT_KEYWORDS.test(ev.title || '');
 }
 
 function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, healthDots, events, token }) {
-  const [summaries, setSummaries] = useState({});
+  const [summaries,    setSummaries]    = useState({});
   const [summaryCache, setSummaryCache] = useState({});
 
-  // ── Physics: fractional month index (year*12 + month) ─────────────────
-  const liveOff  = useRef(initYear * 12 + initMonth);
-  const vel      = useRef(0);
-  const rafId    = useRef(null);
-  const dragBase = useRef(0);
-  const startY   = useRef(0);
-  const lastY    = useRef(0);
-  const touchVel = useRef(0);
-  const totalDrag= useRef(0);
+  // ── Physics ────────────────────────────────────────────────────────────
+  // liveOff = fractional month index (year*12 + month)
+  const liveOff    = useRef(initYear * 12 + initMonth);
+  const vel        = useRef(0);
+  const rafId      = useRef(null);
+  const dragBase   = useRef(0);
+  const startY     = useRef(0);
+  const lastY      = useRef(0);
+  const touchVel   = useRef(0);
+  const totalDrag  = useRef(0);
   const isDragging = useRef(false);
   const containerRef = useRef(null);
   const [displayOff, setDisplayOff] = useState(initYear * 12 + initMonth);
 
-  // Keep constants in refs so event handlers can read them without stale closures
-  const MONTH_H = 460; // px per month — big enough to feel like a real page flip
-  const CELL_H  = 72;  // px per day cell
+  const CELL_H  = 76;
+  const MONTH_H = 470; // tall enough for 6-row months + header
 
-  const repaint = useRef(() => {});
+  // Use refs for callbacks so mount-only listeners always see fresh values
+  const repaint    = useRef(null);
+  const cancelRaf  = useRef(null);
+  const snapTo     = useRef(null);
+  const doMomentum = useRef(null);
+  const animateTo  = useRef(null);
+
   repaint.current = () => setDisplayOff(liveOff.current);
 
-  const cancelRaf = useRef(() => {});
-  cancelRaf.current = () => { if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; } };
+  cancelRaf.current = () => {
+    if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; }
+  };
 
-  const snapTo = useRef((target) => {});
   snapTo.current = (target) => {
     cancelRaf.current();
     liveOff.current = target;
@@ -875,14 +880,13 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     onMonthChange(yr, mo);
   };
 
-  const momentum = useRef(() => {});
-  momentum.current = () => {
+  doMomentum.current = () => {
     cancelRaf.current();
     const step = () => {
-      vel.current *= 0.82;
+      vel.current *= 0.80;
       liveOff.current += vel.current;
       const target = Math.round(liveOff.current);
-      liveOff.current += (target - liveOff.current) * 0.16;
+      liveOff.current += (target - liveOff.current) * 0.18;
       if (Math.abs(vel.current) < 0.0015 && Math.abs(liveOff.current - target) < 0.0015) {
         snapTo.current(target); return;
       }
@@ -892,7 +896,6 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     rafId.current = requestAnimationFrame(step);
   };
 
-  const animateTo = useRef((target) => {});
   animateTo.current = (target) => {
     cancelRaf.current();
     const step = () => {
@@ -905,110 +908,105 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     rafId.current = requestAnimationFrame(step);
   };
 
-  // Cleanup RAF on unmount
   useEffect(() => () => cancelRaf.current(), []);
 
-  // Sync when parent drives month change
+  // Sync when parent changes month (e.g. selecting a date)
   useEffect(() => {
     const target = initYear * 12 + initMonth;
     if (Math.abs(liveOff.current - target) > 0.5) animateTo.current(target);
   }, [initYear, initMonth]); // eslint-disable-line
 
-  // ── Single-mount global mouse + wheel listeners ────────────────────────
+  // ── Mount-only global listeners (refs keep them fresh) ─────────────────
   useEffect(() => {
     const onMouseMove = (e) => {
       if (!isDragging.current) return;
       const dy = e.clientY - startY.current;
       totalDrag.current = Math.abs(dy);
-      liveOff.current = dragBase.current + dy / MONTH_H;  // down=past, up=future
-      touchVel.current = (e.clientY - lastY.current) / MONTH_H;
+      // drag DOWN = past (lower liveOff), drag UP = future (higher liveOff)
+      liveOff.current = dragBase.current - dy / MONTH_H;
+      touchVel.current = -(e.clientY - lastY.current) / MONTH_H;
       lastY.current = e.clientY;
       repaint.current();
     };
     const onMouseUp = () => {
       if (!isDragging.current) return;
       isDragging.current = false;
-      vel.current = touchVel.current * 2.2;
-      if (Math.abs(vel.current) > 0.008) momentum.current();
+      vel.current = touchVel.current * 2.0;
+      if (Math.abs(vel.current) > 0.008) doMomentum.current();
       else snapTo.current(Math.round(liveOff.current));
     };
-    // Wheel: each notch = ~1/6 of a month, accumulates then snaps
     let wheelTimer = null;
     const onWheel = (e) => {
-      if (!containerRef.current || !containerRef.current.contains(e.target)) return;
+      if (!containerRef.current?.contains(e.target)) return;
       e.preventDefault();
       cancelRaf.current();
       isDragging.current = false;
-      // Normalize delta: trackpad gives small floats, mouse wheel gives 100+
-      const delta = e.deltaY / (Math.abs(e.deltaY) > 50 ? 500 : 120);
+      // scroll DOWN = future (deltaY positive → increase liveOff)
+      const delta = e.deltaY / (Math.abs(e.deltaY) > 50 ? 600 : 130);
       liveOff.current += delta;
       repaint.current();
       clearTimeout(wheelTimer);
-      wheelTimer = setTimeout(() => snapTo.current(Math.round(liveOff.current)), 180);
+      wheelTimer = setTimeout(() => snapTo.current(Math.round(liveOff.current)), 200);
     };
     window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    window.addEventListener('wheel', onWheel, { passive: false });
+    window.addEventListener('mouseup',   onMouseUp);
+    window.addEventListener('wheel',     onWheel, { passive: false });
     return () => {
       window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      window.removeEventListener('wheel', onWheel);
+      window.removeEventListener('mouseup',   onMouseUp);
+      window.removeEventListener('wheel',     onWheel);
       if (wheelTimer) clearTimeout(wheelTimer);
     };
-  }, []); // ← mount only — refs keep closures fresh
+  }, []); // mount only
 
-  // ── Touch handlers (attached via JSX) ─────────────────────────────────
+  // Touch handlers via JSX
   const handleTouchStart = (e) => {
     cancelRaf.current();
     isDragging.current = true;
-    totalDrag.current = 0;
-    startY.current = e.touches[0].clientY;
-    lastY.current = e.touches[0].clientY;
-    dragBase.current = liveOff.current;
-    touchVel.current = 0;
+    totalDrag.current  = 0;
+    startY.current     = e.touches[0].clientY;
+    lastY.current      = e.touches[0].clientY;
+    dragBase.current   = liveOff.current;
+    touchVel.current   = 0;
   };
   const handleTouchMove = (e) => {
     if (!isDragging.current) return;
     e.preventDefault();
-    const y = e.touches[0].clientY;
+    const y  = e.touches[0].clientY;
     const dy = y - startY.current;
-    totalDrag.current = Math.abs(dy);
-    liveOff.current = dragBase.current + dy / MONTH_H; // down=past, up=future
-    touchVel.current = (y - lastY.current) / MONTH_H;
-    lastY.current = y;
+    totalDrag.current  = Math.abs(dy);
+    liveOff.current    = dragBase.current - dy / MONTH_H; // up=future, down=past
+    touchVel.current   = -(y - lastY.current) / MONTH_H;
+    lastY.current      = y;
     repaint.current();
   };
   const handleTouchEnd = () => {
     if (!isDragging.current) return;
     isDragging.current = false;
-    vel.current = touchVel.current * 2.2;
-    if (Math.abs(vel.current) > 0.008) momentum.current();
+    vel.current = touchVel.current * 2.0;
+    if (Math.abs(vel.current) > 0.008) doMomentum.current();
     else snapTo.current(Math.round(liveOff.current));
   };
-
-  // Mouse down on container
   const handleMouseDown = (e) => {
     e.preventDefault();
     cancelRaf.current();
     isDragging.current = true;
-    totalDrag.current = 0;
-    startY.current = e.clientY;
-    lastY.current = e.clientY;
-    dragBase.current = liveOff.current;
-    touchVel.current = 0;
+    totalDrag.current  = 0;
+    startY.current     = e.clientY;
+    lastY.current      = e.clientY;
+    dragBase.current   = liveOff.current;
+    touchVel.current   = 0;
   };
 
-  // ── Load AI summaries for visible months ───────────────────────────────
-
-  // ── Load AI summaries for visible months ───────────────────────────────
+  // ── Load AI summaries ──────────────────────────────────────────────────
   const snappedIdx = Math.round(displayOff);
 
   useEffect(() => {
     if (!token) return;
     [-1, 0, 1].forEach(offset => {
       const idx = snappedIdx + offset;
-      const yr = Math.floor(idx / 12);
-      const mo = ((idx % 12) + 12) % 12;
+      const yr  = Math.floor(idx / 12);
+      const mo  = ((idx % 12) + 12) % 12;
       const key = `${yr}-${mo}`;
       if (summaryCache[key] !== undefined) return;
       setSummaryCache(prev => ({ ...prev, [key]: null }));
@@ -1017,26 +1015,67 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ year: yr, month: mo }),
       }).then(r => r.json()).then(d => {
-        if (d.summaries) {
-          setSummaries(prev => ({ ...prev, ...d.summaries }));
-          setSummaryCache(prev => ({ ...prev, [key]: true }));
-        }
+        if (d.summaries) setSummaries(prev => ({ ...prev, ...d.summaries }));
+        setSummaryCache(prev => ({ ...prev, [key]: true }));
       }).catch(() => {});
     });
   }, [snappedIdx, token]); // eslint-disable-line
 
+  // ── Helpers ────────────────────────────────────────────────────────────
   const today = todayKey();
-  const DAY_NAMES = ['S','M','T','W','T','F','S'];
-  const MONTHS_FULL_MV = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const DAY_NAMES   = ['S','M','T','W','T','F','S'];
+  const MONTH_NAMES = ["January","February","March","April","May","June",
+                       "July","August","September","October","November","December"];
   const fracOff = displayOff - snappedIdx;
   const N = 2;
+
+  // Build a 42-cell (6-row) continuous grid for a given year/month.
+  // Cells before day 1 come from the previous month; cells after the last day
+  // come from the next month. Each cell: { day, dateKey, isOverflow }.
+  function buildGrid(yr, mo) {
+    const firstDow   = new Date(yr, mo, 1).getDay();
+    const daysInMonth = new Date(yr, mo + 1, 0).getDate();
+
+    // prev month overflow
+    const prevDate   = new Date(yr, mo, 0); // last day of prev month
+    const prevDays   = prevDate.getDate();
+    const prevMo     = prevDate.getMonth();
+    const prevYr     = prevDate.getFullYear();
+
+    // next month
+    const nextDate   = new Date(yr, mo + 1, 1);
+    const nextMo     = nextDate.getMonth();
+    const nextYr     = nextDate.getFullYear();
+
+    const cells = [];
+    // leading overflow from previous month
+    for (let i = firstDow - 1; i >= 0; i--) {
+      const d   = prevDays - i;
+      const key = `${prevYr}-${String(prevMo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push({ day: d, dateKey: key, isOverflow: true });
+    }
+    // current month days
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push({ day: d, dateKey: key, isOverflow: false });
+    }
+    // trailing overflow to next month — fill to 42 cells (6 rows)
+    let nextDay = 1;
+    while (cells.length < 42) {
+      const key = `${nextYr}-${String(nextMo+1).padStart(2,'0')}-${String(nextDay).padStart(2,'0')}`;
+      cells.push({ day: nextDay, dateKey: key, isOverflow: true });
+      nextDay++;
+    }
+    return cells;
+  }
 
   return (
     <div
       ref={containerRef}
       style={{
         overflow: 'hidden', height: MONTH_H, position: 'relative',
-        userSelect: 'none', touchAction: 'none', cursor: isDragging.current ? 'grabbing' : 'grab',
+        userSelect: 'none', touchAction: 'none',
+        cursor: isDragging.current ? 'grabbing' : 'grab',
       }}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
@@ -1045,15 +1084,13 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     >
       {Array.from({ length: N * 2 + 1 }, (_, i) => i - N).map(relOffset => {
         const mIdx = snappedIdx + relOffset;
-        const yr = Math.floor(mIdx / 12);
-        const mo = ((mIdx % 12) + 12) % 12;
-        // Past months sit above (negative Y), future below (positive Y)
+        const yr   = Math.floor(mIdx / 12);
+        const mo   = ((mIdx % 12) + 12) % 12;
+        // drag DOWN = past → past months sit below (positive Y when relOffset < 0 is wrong)
+        // liveOff increases toward future → snappedIdx increases → relOffset=0 stays centered
+        // When liveOff > snappedIdx (fracOff > 0) → current month moves up → future slides in from below ✓
         const translateY = (relOffset - fracOff) * MONTH_H;
-        const firstDow = new Date(yr, mo, 1).getDay();
-        const daysInMonth = new Date(yr, mo + 1, 0).getDate();
-        const cells = [];
-        for (let i = 0; i < firstDow; i++) cells.push(null);
-        for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+        const cells = buildGrid(yr, mo);
 
         return (
           <div key={mIdx} style={{
@@ -1062,85 +1099,98 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
             willChange: 'transform', height: MONTH_H,
             padding: '4px 10px 4px', boxSizing: 'border-box',
           }}>
-            {/* Month label + day headers row */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'auto repeat(7, 1fr)', alignItems: 'center', marginBottom: 4 }}>
-              <div style={{ fontFamily: mono, fontSize: '9px', letterSpacing: '0.12em',
-                textTransform: 'uppercase', color: C.muted, paddingRight: 8, whiteSpace: 'nowrap' }}>
-                {MONTHS_FULL_MV[mo].slice(0,3)} {String(yr).slice(2)}
-              </div>
+            {/* Day-of-week headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 3 }}>
               {DAY_NAMES.map((n, i) => (
-                <div key={i} style={{ textAlign: 'center', fontFamily: mono, fontSize: '9px',
-                  letterSpacing: '0.04em', color: C.muted }}>{n}</div>
+                <div key={i} style={{
+                  textAlign: 'center', fontFamily: mono, fontSize: '9px',
+                  letterSpacing: '0.06em', color: C.muted, padding: '2px 0',
+                }}>{n}</div>
               ))}
             </div>
-            {/* Grid */}
+
+            {/* 6-row grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-              {cells.map((day, idx) => {
-                if (!day) return <div key={`e-${idx}`} style={{ height: CELL_H }} />;
-                const dateKey = `${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-                const isToday = dateKey === today;
+              {cells.map(({ day, dateKey, isOverflow }, idx) => {
+                const isToday    = dateKey === today;
                 const isSelected = dateKey === selected;
-                const dots = healthDots[dateKey] || {};
-                const summary = summaries[dateKey];
-                const dayBigEvents = (events[dateKey] || []).filter(isBigEvent).slice(0, 2);
-                const numDots = [dots.sleep >= 85, dots.readiness >= 85, dots.activity >= 85, dots.recovery >= 85].filter(Boolean).length;
+                const dots       = healthDots[dateKey] || {};
+                const summary    = summaries[dateKey];
+                const bigEvents  = (events[dateKey] || []).filter(isBigEvent).slice(0, 2);
+                const hasDots    = dots.sleep >= 85 || dots.readiness >= 85 ||
+                                   dots.activity >= 85 || dots.recovery >= 85;
+
+                // Overflow cells: dimmed, no border highlight
+                const cellOpacity = isOverflow ? 0.28 : 1;
 
                 return (
-                  <div key={dateKey}
+                  <div key={`${dateKey}-${idx}`}
                     onClick={e => { e.stopPropagation(); if (totalDrag.current < 6) onSelectDay(dateKey); }}
                     style={{
-                      height: CELL_H, borderRadius: 6, padding: '5px 5px 4px',
+                      height: CELL_H, borderRadius: 5, padding: '4px 4px 3px',
                       cursor: 'pointer', boxSizing: 'border-box',
-                      background: isSelected ? C.accent+'1A' : isToday ? C.accent+'0D' : 'transparent',
-                      border: `1px solid ${isSelected ? C.accent+'66' : isToday ? C.accent+'33' : C.border+'33'}`,
-                      display: 'flex', flexDirection: 'column', gap: 3,
+                      opacity: cellOpacity,
+                      background: !isOverflow && isSelected ? C.accent+'1A'
+                               : !isOverflow && isToday    ? C.accent+'0D'
+                               : 'transparent',
+                      border: `1px solid ${
+                        !isOverflow && isSelected ? C.accent+'66'
+                      : !isOverflow && isToday    ? C.accent+'33'
+                      : C.border+'25'}`,
+                      display: 'flex', flexDirection: 'column', gap: 2,
+                      pointerEvents: isOverflow ? 'none' : 'auto',
                     }}
                   >
                     {/* Day number */}
                     <div style={{
-                      fontFamily: serif, fontSize: '14px', lineHeight: 1,
+                      fontFamily: serif, fontSize: '13px', lineHeight: 1,
                       fontWeight: isToday || isSelected ? '700' : 'normal',
                       color: isToday ? C.text : isSelected ? C.accent : C.muted,
                       flexShrink: 0,
                     }}>{day}</div>
 
-                    {/* Health dots */}
-                    {numDots > 0 && (
+                    {/* Health dots — always rendered first so events can't push them out */}
+                    {hasDots && (
                       <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                        {dots.sleep >= 85     && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.blue }} />}
-                        {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.green }} />}
-                        {dots.activity >= 85  && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.accent }} />}
-                        {dots.recovery >= 85  && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8B6BB5' }} />}
+                        {dots.sleep     >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.blue,    flexShrink: 0 }} />}
+                        {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.green,   flexShrink: 0 }} />}
+                        {dots.activity  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.accent,  flexShrink: 0 }} />}
+                        {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8B6BB5', flexShrink: 0 }} />}
                       </div>
                     )}
 
-                    {/* Big events — clearly readable on mobile */}
-                    {dayBigEvents.map((ev, j) => (
+                    {/* Big events */}
+                    {bigEvents.map((ev, j) => (
                       <div key={j} style={{
-                        fontFamily: mono, fontSize: '9px', lineHeight: 1.25,
+                        fontFamily: mono, fontSize: '9px', lineHeight: 1.2,
                         color: ev.color || C.accent,
                         background: (ev.color || C.accent) + '28',
-                        borderRadius: 3, padding: '2px 4px',
+                        borderRadius: 3, padding: '2px 3px',
                         overflow: 'hidden', whiteSpace: 'nowrap',
                         textOverflow: 'ellipsis', flexShrink: 0,
-                        letterSpacing: '0.01em',
                       }}>{ev.title}</div>
                     ))}
 
-                    {/* AI summary — fills remaining space */}
-                    {summary && (
+                    {/* AI summary */}
+                    {!isOverflow && summary && (
                       <div style={{
-                        fontFamily: mono, fontSize: '8px', color: C.dim,
-                        lineHeight: 1.3, overflow: 'hidden',
+                        fontFamily: mono, fontSize: '7.5px', color: C.dim,
+                        lineHeight: 1.25, overflow: 'hidden',
                         display: '-webkit-box', WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        flex: 1, minHeight: 0,
+                        WebkitBoxOrient: 'vertical', flex: 1, minHeight: 0,
                       }}>{summary}</div>
                     )}
                   </div>
                 );
               })}
             </div>
+
+            {/* Month label — bottom of grid, subtle */}
+            <div style={{
+              textAlign: 'center', fontFamily: mono, fontSize: '8px',
+              letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: C.border2, marginTop: 4,
+            }}>{MONTH_NAMES[mo]} {yr}</div>
           </div>
         );
       })}
