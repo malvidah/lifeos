@@ -5,8 +5,7 @@ export async function GET(request) {
   const clientId = process.env.STRAVA_CLIENT_ID;
   if (!clientId) return Response.json({ error: 'Strava not configured' }, { status: 503 });
 
-  const origin = new URL(request.url).origin;
-  const redirectUri = `${origin}/strava-callback`;
+  const redirectUri = process.env.STRAVA_REDIRECT_URI || `${new URL(request.url).origin}/strava-callback`;
 
   const url = new URL('https://www.strava.com/oauth/authorize');
   url.searchParams.set('client_id', clientId);
