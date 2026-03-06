@@ -89,8 +89,10 @@ function cachedOuraFetch(date, token, userId) {
     .then(r=>r.json())
     .then(data => {
       // Don't cache empty/error responses — they should be retried
+      // Also don't cache if sleep fields are missing (partial response) — they'll fill in later
       const hasData = data && !data.error && Object.keys(data).length > 0;
-      if (!hasData) delete _ouraCache[k];
+      const hasSleep = data?.sleepHrs || data?.sleepQuality;
+      if (!hasData || !hasSleep) delete _ouraCache[k];
       return data;
     })
     .catch(()=>{ delete _ouraCache[k]; return {}; });
