@@ -368,11 +368,11 @@ function Card({children,style={}}) {
 
 
 // ─── Widget card ─────────────────────────────────────────────────────────────
-function Widget({label,color,children,slim,collapsed,onToggle,headerRight}) {
-  const noParentHeight = !onToggle && !collapsed;
+function Widget({label,color,children,slim,collapsed,onToggle,headerRight,autoHeight}) {
+  const useAutoHeight = autoHeight || (!onToggle && !collapsed);
   return (
-    <div style={slim ? {} : {height:noParentHeight?"auto":(collapsed?"auto":"100%"),display:"flex",flexDirection:"column"}}>
-      <Card style={(collapsed || noParentHeight) ? {height:"auto"} : {}}>
+    <div style={slim ? {} : {height:useAutoHeight?"auto":(collapsed?"auto":"100%"),display:"flex",flexDirection:"column"}}>
+      <Card style={(collapsed || useAutoHeight) ? {height:"auto"} : {}}>
         <div style={{
           display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
           borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
@@ -3989,7 +3989,7 @@ export default function Dashboard() {
           <div style={{flexShrink:0}}>
             <CalStrip selected={selected} onSelect={setSelected}
               events={events} setEvents={setEvents} healthDots={healthDots}
-              token={token} collapsed={mobile?false:calCollapsed} onToggle={mobile?undefined:toggleCal}
+              token={token} collapsed={calCollapsed} onToggle={toggleCal}
               calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
           </div>
 
@@ -3997,7 +3997,7 @@ export default function Dashboard() {
           <div style={{flexShrink:0}}>
             <HealthStrip date={selected} token={token} userId={userId}
               onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-              collapsed={mobile?false:healthCollapsed} onToggle={mobile?undefined:toggleHealth}/>
+              collapsed={healthCollapsed} onToggle={toggleHealth}/>
           </div>
 
           {/* Widgets — row on wide, flat stack on narrow */}
@@ -4005,16 +4005,18 @@ export default function Dashboard() {
             <div style={{display:"flex", flexDirection:"column", gap:8, paddingBottom:8}}>
               <InsightsCard date={selected} token={token} userId={userId}
                 healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
-                collapsed={false} onToggle={undefined}/>
+                collapsed={insightCollapsed} onToggle={toggleInsight}/>
               <Widget label={leftWidget.label} color={leftWidget.color()}
-                collapsed={false} onToggle={undefined}
-                headerRight={leftWidget.headerRight?.()}>
+                collapsed={collapseMap[leftWidget.id]}
+                onToggle={toggleMap[leftWidget.id]}
+                headerRight={leftWidget.headerRight?.()} autoHeight>
                 <leftWidget.Comp date={selected} token={token} userId={userId}/>
               </Widget>
               {rightWidgets.map(w=>(
                 <Widget key={w.id} label={w.label} color={w.color()}
-                  collapsed={false} onToggle={undefined}
-                  headerRight={w.headerRight?.()}>
+                  collapsed={collapseMap[w.id]}
+                  onToggle={toggleMap[w.id]}
+                  headerRight={w.headerRight?.()} autoHeight>
                   <w.Comp date={selected} token={token} userId={userId}/>
                 </Widget>
               ))}
