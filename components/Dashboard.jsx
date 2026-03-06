@@ -854,10 +854,13 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   const containerRef = useRef(null);
   const [displayOff, setDisplayOff] = useState(initYear * 12 + initMonth);
 
-  // Responsive sizing — adapt to actual viewport, not fixed px
-  const vw       = typeof window !== 'undefined' ? window.innerWidth : 390;
-  const CELL_H   = vw < 600 ? 58 : 76;   // shorter cells on mobile
-  const MONTH_H  = vw < 600 ? 400 : 470; // proportionally shorter total height
+  // Responsive sizing — derive CELL_H from available height so months pack tight
+  const vw        = typeof window !== 'undefined' ? window.innerWidth : 390;
+  const DAY_HDR_H_C = 22;  // fixed header row (hoisted for CELL_H calc)
+  const LABEL_H   = 28;    // month label: marginTop(8)+font(14)+marginBottom(6)
+  const MONTH_H   = vw < 600 ? 390 : 460;
+  const SCROLL_H_C = MONTH_H - DAY_HDR_H_C;
+  const CELL_H    = Math.floor((SCROLL_H_C - LABEL_H - 5 * 2) / 6); // 5 gaps of 2px between 6 rows
 
   // Use refs for callbacks so mount-only listeners always see fresh values
   const repaint    = useRef(null);
@@ -1108,8 +1111,8 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   }, [scrubDragging]); // eslint-disable-line
 
   const SCRUB_W    = vw < 600 ? 12 : 18; // narrower on mobile
-  const DAY_HDR_H  = 22;  // px height of fixed day-of-week header row
-  const SCROLL_H   = MONTH_H - DAY_HDR_H; // scrollable area height
+  const DAY_HDR_H  = DAY_HDR_H_C;
+  const SCROLL_H   = SCROLL_H_C;
 
   return (
     <div style={{ userSelect: 'none', touchAction: 'none' }}>
@@ -2277,6 +2280,139 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
       sparkline:scores?.recovery?.sparkline},
   ];
 
+  // ── Trend panel state ──────────────────────────────────────────────────────
+  const [expandedMetric, setExpandedMetric] = useState(null);
+  const [trendData, setTrendData]           = useState({});
+  const [trendLoading, setTrendLoading]     = useState(false);
+
+  useEffect(() => {
+    if (!expandedMetric || !token || !userId) return;
+    if (trendData[expandedMetric]) return; // cached
+    setTrendLoading(true);
+    const supabase = createClient();
+    const since = toKey(shift(new Date(), -30));
+    supabase
+      .from('entries').select('date,data')
+      .eq('user_id', userId).eq('type', 'scores').gte('date', since)
+      .order('date', { ascending: true })
+      .then(({ data }) => {
+        if (!data) { setTrendLoading(false); return; }
+        const map = {};
+        data.forEach(row => {
+          if (!row.date || !row.data) return;
+          map[row.date] = {
+            sleep:     +row.data.sleepScore     || null,
+            readiness: +row.data.readinessScore || null,
+            activity:  +row.data.activityScore  || null,
+            recovery:  +row.data.recoveryScore  || null,
+          };
+        });
+        setTrendData(prev => ({ ...prev, [expandedMetric]: map }));
+        setTrendLoading(false);
+      }).catch(() => setTrendLoading(false));
+  }, [expandedMetric, token, userId]); // eslint-disable-line
+
+  const TREND_INFO = {
+    sleep: {
+      what: "Measures how restorative last night's sleep was — combining total hours, efficiency, and physiological recovery signals like HRV and resting heart rate.",
+      how:  "Weighted blend: sleep duration (7–9h = 100), efficiency (>85% = 100), and HRV/RHR deviation from your personal baseline. Calibrates to your patterns after 14 days.",
+    },
+    readiness: {
+      what: "Reflects your body's recovery state and readiness to perform — how well you've bounced back from recent stress, training, and sleep debt.",
+      how:  "Derived from HRV and RHR compared to your rolling 14-day baseline. Higher HRV + lower RHR = higher readiness. Penalizes multi-day downward trends.",
+    },
+    activity: {
+      what: "Tracks daily movement and physical exertion — steps, active time, and calories burned relative to your typical output.",
+      how:  "Combines steps (goal: 8,000–10,000), active minutes (WHO: 22/day), and active calories. Scores your activity relative to your personal weekly average after calibration.",
+    },
+    recovery: {
+      what: "Measures stress-recovery balance — the ratio of calm physiological state to stress burden across the day and overnight.",
+      how:  "Uses calm vs. stress minutes from Oura (autonomic nervous system balance) when available, otherwise falls back to HRV/RHR trends as a proxy for allostatic load.",
+    },
+  };
+
+  // Build 30-day SVG trend line for a given metric key
+  function TrendLine({ metricKey, color }) {
+    const data = trendData[metricKey];
+    if (!data || trendLoading) {
+      return (
+        <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>{trendLoading ? 'loading…' : '—'}</span>
+        </div>
+      );
+    }
+    // Build ordered 30-day series
+    const days = [];
+    for (let i = -29; i <= 0; i++) days.push(toKey(shift(new Date(), i)));
+    const vals = days.map(d => data[d]?.[metricKey] ?? null);
+    const pts = vals.map((v, i) => v != null ? { v, i } : null).filter(Boolean);
+    if (pts.length < 2) return <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>not enough data</span></div>;
+
+    const W = 100, H = 60; // percentage-based viewBox
+    const mn = Math.max(0, Math.min(...pts.map(p => p.v)) - 5);
+    const mx = Math.min(100, Math.max(...pts.map(p => p.v)) + 5);
+    const range = mx - mn || 1;
+    const xOf = i => (i / 29) * W;
+    const yOf = v => H - ((v - mn) / range) * (H - 4) - 2;
+
+    // Fill path
+    const linePts = pts.map(p => `${xOf(p.i).toFixed(1)},${yOf(p.v).toFixed(1)}`).join(' ');
+    const first = pts[0], last = pts[pts.length - 1];
+    const fillPath = `M${xOf(first.i).toFixed(1)},${H} L${linePts.split(' ').join(' L')} L${xOf(last.i).toFixed(1)},${H} Z`;
+
+    // Average line
+    const avg = pts.reduce((s, p) => s + p.v, 0) / pts.length;
+    const avgY = yOf(avg).toFixed(1);
+
+    // Month tick marks
+    const ticks = [];
+    days.forEach((d, i) => {
+      if (d.endsWith('-01') || i === 0) {
+        const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(d.split('-')[1]) - 1];
+        ticks.push({ i, label: mo });
+      }
+    });
+
+    return (
+      <div style={{ padding: '0 0 4px' }}>
+        <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 72, display: 'block', overflow: 'visible' }}
+          preserveAspectRatio="none">
+          <defs>
+            <linearGradient id={`tg-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.18"/>
+              <stop offset="100%" stopColor={color} stopOpacity="0"/>
+            </linearGradient>
+          </defs>
+          {/* avg line */}
+          <line x1="0" y1={avgY} x2={W} y2={avgY} stroke={color} strokeWidth="0.4" strokeDasharray="2,2" opacity="0.3"/>
+          {/* fill */}
+          <path d={fillPath} fill={`url(#tg-${metricKey})`}/>
+          {/* line */}
+          <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+          {/* last point dot */}
+          <circle cx={xOf(last.i).toFixed(1)} cy={yOf(last.v).toFixed(1)} r="1.5" fill={color}/>
+          {/* month ticks */}
+          {ticks.map(t => (
+            <line key={t.i} x1={xOf(t.i).toFixed(1)} y1={H-1} x2={xOf(t.i).toFixed(1)} y2={H+1}
+              stroke={color} strokeWidth="0.5" opacity="0.4"/>
+          ))}
+        </svg>
+        {/* month labels */}
+        <div style={{ display: 'flex', position: 'relative', height: 14 }}>
+          {ticks.map(t => (
+            <div key={t.i} style={{
+              position: 'absolute',
+              left: `${(t.i / 29) * 100}%`,
+              transform: 'translateX(-50%)',
+              fontFamily: mono, fontSize: '9px', color: C.dim,
+              letterSpacing: '0.04em',
+            }}>{t.label}</div>
+          ))}
+          <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: C.dim }}>today</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <Card style={collapsed?{height:"auto"}:{}}>
@@ -2312,19 +2448,30 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
         </div>
       )}
       {/* Metrics row */}
-      {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto"}}>
-        {metrics.map((m,mi)=>(
+      {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto",
+        borderBottom:expandedMetric?`1px solid ${C.border}`:"none"}}>
+        {metrics.map((m,mi)=>{
+          const isExpanded = expandedMetric === m.key;
+          const isDimmed   = expandedMetric && !isExpanded;
+          return (
             <div key={m.key}
-              style={{flex:"1 0 auto",minWidth:130,display:"flex",alignItems:"center",gap:12,
-                padding:"12px 14px",
-                borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none"}}>
+              onClick={()=>setExpandedMetric(isExpanded ? null : m.key)}
+              style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
+                padding:"12px 14px",cursor:"pointer",transition:"opacity 0.2s, background 0.2s",
+                opacity: isDimmed ? 0.4 : 1,
+                background: isExpanded ? m.color + "0D" : "transparent",
+                borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
+                borderBottom: isExpanded ? `2px solid ${m.color}` : "2px solid transparent",
+                boxSizing:"border-box",
+              }}>
               <div style={{flexShrink:0}}>
                 <Ring score={m.score} color={m.color} size={48}/>
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                   <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                  {m.sparkline&&<Sparkline data={m.sparkline} color={m.color}/>}
+                  {/* hide sparkline when this metric is expanded — trend shows more detail */}
+                  {m.sparkline && !isExpanded && <Sparkline data={m.sparkline} color={m.color}/>}
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
@@ -2339,8 +2486,52 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
                 </div>
               </div>
             </div>
-        ))}
+          );
+        })}
       </div>}
+
+      {/* ── Expanded trend panel ── */}
+      {!collapsed && expandedMetric && (() => {
+        const m    = metrics.find(x => x.key === expandedMetric);
+        const info = TREND_INFO[expandedMetric];
+        if (!m || !info) return null;
+        return (
+          <div style={{padding:"16px 16px 14px",borderTop:`1px solid ${C.border}`,
+            animation:"fadeInUp 0.18s ease"}}>
+            {/* 30-day trend line */}
+            <div style={{marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+                  textTransform:"uppercase",color:m.color}}>30-day trend</span>
+                <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>
+                  avg {trendData[expandedMetric]
+                    ? (() => {
+                        const days=[];for(let i=-29;i<=0;i++)days.push(toKey(shift(new Date(),i)));
+                        const vals=days.map(d=>trendData[expandedMetric][d]?.[expandedMetric]).filter(v=>v!=null);
+                        return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : "—";
+                      })()
+                    : "—"}
+                </span>
+              </div>
+              <TrendLine metricKey={expandedMetric} color={m.color}/>
+            </div>
+
+            {/* What + How */}
+            <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:180}}>
+                <div style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.1em",textTransform:"uppercase",
+                  color:m.color,marginBottom:5,opacity:0.8}}>What it measures</div>
+                <div style={{fontFamily:mono,fontSize:"11px",color:C.muted,lineHeight:1.55}}>{info.what}</div>
+              </div>
+              <div style={{flex:1,minWidth:180}}>
+                <div style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.1em",textTransform:"uppercase",
+                  color:m.color,marginBottom:5,opacity:0.8}}>How it's calculated</div>
+                <div style={{fontFamily:mono,fontSize:"11px",color:C.muted,lineHeight:1.55}}>{info.how}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </Card>
   );
 }
