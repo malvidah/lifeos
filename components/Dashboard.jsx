@@ -827,113 +827,232 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
 }
 
 // ─── MonthView ────────────────────────────────────────────────────────────────
-function MonthView({ year, month, selected, onSelectDay, healthDots, token, userId }) {
+function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, healthDots, token }) {
   const [summaries, setSummaries] = useState({});
-  const [loadedMonth, setLoadedMonth] = useState(null);
+  const [summaryCache, setSummaryCache] = useState({});
 
-  // Load AI summaries whenever month changes
+  // Physics state — fractional month offset where 0 = initMonth/initYear
+  // We convert month to a linear index: year*12 + month
+  const baseMonthIdx = initYear * 12 + initMonth;
+  const liveOff = useRef(baseMonthIdx);
+  const vel = useRef(0);
+  const rafId = useRef(null);
+  const touchY = useRef(0);
+  const lastTouchY = useRef(0);
+  const touchVel = useRef(0);
+  const totalDrag = useRef(0);
+  const isDragging = useRef(false);
+  const [displayOff, setDisplayOff] = useState(baseMonthIdx);
+
+  const MONTH_H = 380; // height per month in px
+  const repaint = () => setDisplayOff(liveOff.current);
+
+  const cancelRaf = () => { if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; } };
+
+  const snap = () => {
+    cancelRaf();
+    const target = Math.round(liveOff.current);
+    liveOff.current = target;
+    vel.current = 0;
+    repaint();
+    // Notify parent of new month
+    const yr = Math.floor(target / 12);
+    const mo = target % 12;
+    onMonthChange(yr, mo);
+  };
+
+  const animateTo = (target) => {
+    cancelRaf();
+    const step = () => {
+      const diff = target - liveOff.current;
+      if (Math.abs(diff) < 0.002) { liveOff.current = target; vel.current = 0; repaint();
+        const yr = Math.floor(target/12); const mo = ((target%12)+12)%12;
+        onMonthChange(yr, mo); return; }
+      liveOff.current += diff * 0.18;
+      repaint(); rafId.current = requestAnimationFrame(step);
+    };
+    rafId.current = requestAnimationFrame(step);
+  };
+
+  const momentum = () => {
+    cancelRaf();
+    const step = () => {
+      vel.current *= 0.86;
+      liveOff.current += vel.current;
+      const target = Math.round(liveOff.current);
+      const spring = (target - liveOff.current) * 0.12;
+      liveOff.current += spring;
+      if (Math.abs(vel.current) < 0.003 && Math.abs(liveOff.current - target) < 0.003) {
+        snap(); return;
+      }
+      repaint(); rafId.current = requestAnimationFrame(step);
+    };
+    rafId.current = requestAnimationFrame(step);
+  };
+
+  useEffect(() => () => cancelRaf(), []); // eslint-disable-line
+
+  // Sync to parent-driven month changes (e.g. from selecting a date)
+  useEffect(() => {
+    const targetIdx = initYear * 12 + initMonth;
+    if (Math.abs(liveOff.current - targetIdx) > 0.5) {
+      animateTo(targetIdx);
+    }
+  }, [initYear, initMonth]); // eslint-disable-line
+
+  const onTouchStart = (e) => {
+    cancelRaf();
+    isDragging.current = true;
+    totalDrag.current = 0;
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    touchY.current = y; lastTouchY.current = y; touchVel.current = 0;
+  };
+  const onTouchMove = (e) => {
+    if (!isDragging.current) return;
+    if (e.preventDefault) e.preventDefault();
+    const y = e.touches ? e.touches[0].clientY : e.clientY;
+    const dy = y - touchY.current;
+    totalDrag.current += Math.abs(dy);
+    // Drag UP = back in time (past months above), drag DOWN = forward (future below)
+    liveOff.current += dy / MONTH_H;
+    touchVel.current = (y - lastTouchY.current) / MONTH_H;
+    lastTouchY.current = y; touchY.current = y;
+    repaint();
+  };
+  const onTouchEnd = () => {
+    isDragging.current = false;
+    vel.current = touchVel.current * 1.5;
+    if (Math.abs(vel.current) > 0.015) momentum(); else snap();
+  };
+
+  // Load summaries for visible months
+  const snappedIdx = Math.round(displayOff);
+  const snappedYear = Math.floor(snappedIdx / 12);
+  const snappedMonth = ((snappedIdx % 12) + 12) % 12;
+
   useEffect(() => {
     if (!token) return;
-    const key = `${year}-${month}`;
-    if (loadedMonth === key) return;
-    setLoadedMonth(key);
-    fetch('/api/month-summaries', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ year, month }),
-    }).then(r => r.json()).then(d => {
-      if (d.summaries) setSummaries(d.summaries);
-    }).catch(() => {});
-  }, [year, month, token]); // eslint-disable-line
+    // Load current and adjacent months
+    [-1, 0, 1].forEach(offset => {
+      const idx = snappedIdx + offset;
+      const yr = Math.floor(idx / 12);
+      const mo = ((idx % 12) + 12) % 12;
+      const key = `${yr}-${mo}`;
+      if (summaryCache[key] !== undefined) return;
+      setSummaryCache(prev => ({ ...prev, [key]: null })); // mark loading
+      fetch('/api/month-summaries', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ year: yr, month: mo }),
+      }).then(r => r.json()).then(d => {
+        if (d.summaries) {
+          setSummaries(prev => ({ ...prev, ...d.summaries }));
+          setSummaryCache(prev => ({ ...prev, [key]: true }));
+        }
+      }).catch(() => {});
+    });
+  }, [snappedIdx, token]); // eslint-disable-line
 
   const today = todayKey();
-  const firstDay = new Date(year, month, 1);
-  const startDow = firstDay.getDay(); // 0=Sun
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
   const DAY_NAMES = ['S','M','T','W','T','F','S'];
+  const MONTHS_FULL_MV = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-  // Build grid cells (pad start)
-  const cells = [];
-  for (let i = 0; i < startDow; i++) cells.push(null);
-  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  // Render N months around current
+  const N = 2;
+  const fracOff = displayOff - snappedIdx;
 
   return (
-    <div style={{ padding: '8px 12px 12px' }}>
-      {/* Day name headers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
-        {DAY_NAMES.map((n, i) => (
-          <div key={i} style={{ textAlign: 'center', fontFamily: mono, fontSize: '9px',
-            letterSpacing: '0.06em', color: C.muted, padding: '2px 0' }}>{n}</div>
-        ))}
-      </div>
+    <div
+      style={{ overflow: 'hidden', height: MONTH_H, position: 'relative', userSelect: 'none', touchAction: 'none' }}
+      onTouchStart={onTouchStart}
+      onTouchMove={onTouchMove}
+      onTouchEnd={onTouchEnd}
+      onMouseDown={e => { onTouchStart({ clientY: e.clientY }); }}
+      onMouseMove={e => { if (e.buttons !== 1) return; onTouchMove({ preventDefault: () => {}, clientY: e.clientY }); }}
+      onMouseUp={onTouchEnd}
+      onMouseLeave={e => { if (e.buttons === 1) onTouchEnd(); }}
+    >
+      {/* Month stack */}
+      {Array.from({ length: N * 2 + 1 }, (_, i) => i - N).map(offset => {
+        const mIdx = snappedIdx + offset;
+        const yr = Math.floor(mIdx / 12);
+        const mo = ((mIdx % 12) + 12) % 12;
+        const translateY = (offset - fracOff) * MONTH_H;
+        const firstDay = new Date(yr, mo, 1).getDay();
+        const daysInMonth = new Date(yr, mo + 1, 0).getDate();
+        const cells = [];
+        for (let i = 0; i < firstDay; i++) cells.push(null);
+        for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
-      {/* Day cells */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
-        {cells.map((day, idx) => {
-          if (!day) return <div key={`empty-${idx}`} />;
-          const dateKey = `${year}-${String(month+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
-          const isToday = dateKey === today;
-          const isSelected = dateKey === selected;
-          const dots = healthDots[dateKey] || {};
-          const summary = summaries[dateKey];
-
-          return (
-            <div key={dateKey}
-              onClick={() => onSelectDay(dateKey)}
-              style={{
-                borderRadius: 6,
-                padding: '5px 4px 5px',
-                cursor: 'pointer',
-                background: isSelected ? C.accent + '18' : isToday ? C.accent + '0A' : 'transparent',
-                border: `1px solid ${isSelected ? C.accent + '55' : isToday ? C.accent + '30' : C.border + '60'}`,
-                minHeight: 52,
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 2,
-                transition: 'background 0.1s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = C.accent + '12'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = isSelected ? C.accent + '18' : isToday ? C.accent + '0A' : 'transparent'; }}
-            >
-              {/* Day number */}
-              <div style={{
-                fontFamily: serif,
-                fontSize: F.sm,
-                fontWeight: isToday || isSelected ? '600' : 'normal',
-                color: isToday ? C.accent : isSelected ? C.text : C.muted,
-                lineHeight: 1,
-              }}>{day}</div>
-
-              {/* Health dots */}
-              <div style={{ display: 'flex', gap: 2, justifyContent: 'center', height: 4 }}>
-                {(dots.sleep >= 85)     && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.blue }} />}
-                {(dots.readiness >= 85) && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.green }} />}
-                {(dots.activity >= 85)  && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.accent }} />}
-                {(dots.recovery >= 85)  && <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#8B6BB5' }} />}
-              </div>
-
-              {/* AI summary */}
-              <div style={{
-                fontFamily: mono,
-                fontSize: '8px',
-                color: C.dim,
-                lineHeight: 1.3,
-                textAlign: 'center',
-                overflow: 'hidden',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                wordBreak: 'break-word',
-                width: '100%',
-                opacity: summary ? 1 : 0.3,
-              }}>
-                {summary || '—'}
-              </div>
+        return (
+          <div key={mIdx} style={{
+            position: 'absolute', top: 0, left: 0, right: 0,
+            transform: `translateY(${translateY}px)`,
+            willChange: 'transform',
+            height: MONTH_H,
+            padding: '4px 12px 8px',
+            boxSizing: 'border-box',
+          }}>
+            {/* Month label */}
+            <div style={{ textAlign: 'center', fontFamily: mono, fontSize: '9px',
+              letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: C.muted, marginBottom: 5 }}>
+              {MONTHS_FULL_MV[mo]} {yr}
             </div>
-          );
-        })}
-      </div>
+            {/* Day name headers */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 3 }}>
+              {DAY_NAMES.map((n, i) => (
+                <div key={i} style={{ textAlign: 'center', fontFamily: mono, fontSize: '9px',
+                  letterSpacing: '0.04em', color: C.muted }}>{n}</div>
+              ))}
+            </div>
+            {/* Day cells */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+              {cells.map((day, idx) => {
+                if (!day) return <div key={`e-${idx}`} />;
+                const dateKey = `${yr}-${String(mo+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+                const isToday = dateKey === today;
+                const isSelected = dateKey === selected;
+                const dots = healthDots[dateKey] || {};
+                const summary = summaries[dateKey];
+                return (
+                  <div key={dateKey}
+                    onClick={e => { e.stopPropagation(); if (totalDrag.current < 8) onSelectDay(dateKey); }}
+                    style={{
+                      borderRadius: 5, padding: '4px 2px',
+                      cursor: 'pointer',
+                      background: isSelected ? C.accent+'18' : isToday ? C.accent+'0A' : 'transparent',
+                      border: `1px solid ${isSelected ? C.accent+'55' : isToday ? C.accent+'30' : C.border+'50'}`,
+                      minHeight: 46, display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', gap: 2,
+                    }}
+                  >
+                    <div style={{
+                      fontFamily: serif, fontSize: F.sm, lineHeight: 1,
+                      fontWeight: isToday || isSelected ? '600' : 'normal',
+                      color: isToday ? C.text : isSelected ? C.accent : C.muted,
+                    }}>{day}</div>
+                    <div style={{ display: 'flex', gap: 2, justifyContent: 'center', height: 4 }}>
+                      {(dots.sleep >= 85)     && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.blue }} />}
+                      {(dots.readiness >= 85) && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.green }} />}
+                      {(dots.activity >= 85)  && <div style={{ width: 3, height: 3, borderRadius: '50%', background: C.accent }} />}
+                      {(dots.recovery >= 85)  && <div style={{ width: 3, height: 3, borderRadius: '50%', background: '#8B6BB5' }} />}
+                    </div>
+                    <div style={{
+                      fontFamily: mono, fontSize: '7px', color: C.dim,
+                      lineHeight: 1.2, textAlign: 'center',
+                      overflow: 'hidden', display: '-webkit-box',
+                      WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                      wordBreak: 'break-word', width: '100%',
+                      opacity: summary ? 0.8 : 0.2,
+                    }}>{summary || '—'}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -1167,8 +1286,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
             <span style={{
               fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-              color:C.accent,
-              background:C.accent+"1A",
+              color:selInt===0?C.text:C.accent,
+              background:(selInt===0?C.text:C.accent)+"1A",
               borderRadius:6,padding:"4px 10px",
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
@@ -1185,8 +1304,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
             <span style={{
               fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-              color:C.accent,
-              background:C.accent+"1A",
+              color:selInt===0?C.text:C.accent,
+              background:(selInt===0?C.text:C.accent)+"1A",
               borderRadius:6,padding:"4px 10px",
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
@@ -1194,18 +1313,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           </div>
         )}
 
-        {/* RIGHT: Today + M/D toggle */}
+        {/* RIGHT: M/D toggle only */}
         <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:4,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
-
-          <button onClick={()=>onSelect(todayKey())} style={{
-            background: selInt===0 ? C.accent+"22" : 'none',
-            border:`1px solid ${selInt===0 ? C.accent : C.border2}`,borderRadius:5,cursor:'pointer',
-            color: selInt===0 ? C.accent : C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',
-            textTransform:'uppercase',padding:'4px 9px',transition:'all 0.15s'}}
-            onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-            onMouseLeave={e=>{e.currentTarget.style.color=selInt===0?C.accent:C.muted;e.currentTarget.style.borderColor=selInt===0?C.accent:C.border2;}}>
-            Today
-          </button>
           {onCalViewChange&&<>
             <button onClick={()=>onCalViewChange('month')}
               style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
@@ -1537,40 +1646,34 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
     padding:0, margin:0, color:C.text,
   };
 
-  // Parse selected date for month view
+  // Derive selected date info for header pill
   const selDateObj = selected ? new Date(selected + 'T12:00:00') : new Date();
-  const [mvYear, setMvYear] = useState(selDateObj.getFullYear());
-  const [mvMonth, setMvMonth] = useState(selDateObj.getMonth());
-  const MONTHS_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const isSelToday = selected === todayKey();
+  const pillColor = isSelToday ? C.text : C.accent;
+  const SEL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const selPillLabel = `${SEL_MONTHS[selDateObj.getMonth()]} ${selDateObj.getDate()}, ${selDateObj.getFullYear()}`;
 
   return (
     <Card>
-      {/* ── View toggle: inject M/D buttons into MobileCalPicker header via wrapper ── */}
       {calView === 'month' ? (
         <div style={{userSelect:'none',display:'flex',flexDirection:'column'}}>
-          {/* Month header bar */}
+          {/* Month header — same layout as day view */}
           <div style={{display:'flex',alignItems:'center',padding:'10px 16px 8px',
-            borderBottom:`1px solid ${C.border}`,flexShrink:0,position:'relative'}}>
-            {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted,marginLeft:onToggle?8:0}}>Calendar</span>
-            {/* Month nav centered */}
-            <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
-              display:'flex',alignItems:'center',gap:8,userSelect:'none'}}>
-              <button onClick={()=>{
-                if(mvMonth===0){setMvMonth(11);setMvYear(y=>y-1);}else setMvMonth(m=>m-1);
-              }} style={{background:'none',border:'none',cursor:'pointer',color:C.muted,
-                padding:'2px 6px',fontFamily:mono,fontSize:F.md,lineHeight:1}}>‹</button>
-              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',
-                color:C.accent,background:C.accent+'1A',borderRadius:6,padding:'4px 10px',whiteSpace:'nowrap'}}>
-                {MONTHS_SHORT[mvMonth]} {mvYear}
+            borderBottom:`1px solid ${C.border}`,flexShrink:0,position:'relative',
+            cursor:onToggle?'pointer':'default'}} onClick={onToggle}>
+            <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
+              {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
+            </div>
+            {/* Selected date pill — centered, matches day view */}
+            <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
+                color:pillColor,background:pillColor+'1A',borderRadius:6,padding:'4px 10px'}}>
+                {selPillLabel}
               </span>
-              <button onClick={()=>{
-                if(mvMonth===11){setMvMonth(0);setMvYear(y=>y+1);}else setMvMonth(m=>m+1);
-              }} style={{background:'none',border:'none',cursor:'pointer',color:C.muted,
-                padding:'2px 6px',fontFamily:mono,fontSize:F.md,lineHeight:1}}>›</button>
             </div>
             {/* M/D toggle — right */}
-            <div style={{marginLeft:'auto',display:'flex',gap:4}}>
+            <div style={{marginLeft:'auto',display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
               <button onClick={()=>onCalViewChange('month')}
                 style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
                   padding:'3px 7px',borderRadius:4,cursor:'pointer',
@@ -1582,20 +1685,17 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
             </div>
           </div>
           {!collapsed&&<MonthView
-            year={mvYear} month={mvMonth}
+            initYear={selDateObj.getFullYear()} initMonth={selDateObj.getMonth()}
             selected={selected}
             onSelectDay={d=>{onSelect(d);onCalViewChange('day');}}
+            onMonthChange={()=>{}}
             healthDots={healthDots}
             token={token}
           />}
         </div>
       ) : (
         <MobileCalPicker
-          selected={selected} onSelect={s=>{
-            onSelect(s);
-            // Sync month view to follow selected date
-            const d=new Date(s+'T12:00:00');setMvYear(d.getFullYear());setMvMonth(d.getMonth());
-          }}
+          selected={selected} onSelect={onSelect}
           events={events} healthDots={healthDots} desktop={!mobile}
           onEventClick={openEvent} onAddClick={openAdd}
           collapsed={collapsed} onToggle={onToggle}
