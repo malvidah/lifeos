@@ -43,16 +43,43 @@ export async function GET(request) {
         .maybeSingle();
 
       if (stored?.data?.sleepScore != null || stored?.data?.activityScore != null) {
-        // Return stored scores in the same shape the frontend expects
         const d = stored.data;
+
+        // Fetch prior 7 days of health data to populate sparklines (same as full compute)
+        const spark7Since = new Date(date);
+        spark7Since.setDate(spark7Since.getDate() - 7);
+        const spark7SinceStr = spark7Since.toISOString().split('T')[0];
+        const { data: sparkRows } = await supabase
+          .from('entries').select('date, type, data')
+          .eq('user_id', user.id)
+          .in('type', ['health', 'health_apple'])
+          .gte('date', spark7SinceStr).lt('date', date)
+          .order('date', { ascending: true });
+
+        // Merge Oura + Apple for spark days
+        const sparkByDate = {};
+        for (const row of sparkRows ?? []) {
+          if (!sparkByDate[row.date]) sparkByDate[row.date] = {};
+          if (row.type === 'health') {
+            Object.assign(sparkByDate[row.date], row.data || {});
+          } else {
+            for (const [k, v] of Object.entries(row.data || {})) {
+              if (!sparkByDate[row.date][k]) sparkByDate[row.date][k] = v;
+            }
+          }
+        }
+        const sparkDates = Object.keys(sparkByDate).sort().slice(-7);
+        const spark7 = sparkDates.map(sd => sparkByDate[sd] || {});
+        const nv = v => (v != null && !isNaN(+v)) ? +v : null;
+
         return Response.json({
           date,
           calibrationDays: d.calibrationDays ?? CALIBRATION_DAYS,
           calibrated: d.calibrated ?? true,
-          sleep:     { score: d.sleepScore,     contributors: d.contributors?.sleep,     sparkline: [] },
-          readiness: { score: d.readinessScore, contributors: d.contributors?.readiness, sparkline: [] },
-          activity:  { score: d.activityScore,  contributors: d.contributors?.activity,  sparkline: [] },
-          recovery:  { score: d.recoveryScore,  contributors: d.contributors?.recovery,  sparkline: [] },
+          sleep:     { score: d.sleepScore,     contributors: d.contributors?.sleep,     sparkline: spark7.map(sd => nv(sd.sleepHrs)) },
+          readiness: { score: d.readinessScore, contributors: d.contributors?.readiness, sparkline: spark7.map(sd => nv(sd.hrv)) },
+          activity:  { score: d.activityScore,  contributors: d.contributors?.activity,  sparkline: spark7.map(sd => nv(sd.steps)) },
+          recovery:  { score: d.recoveryScore,  contributors: d.contributors?.recovery,  sparkline: spark7.map(sd => nv(sd.recoveryMins) ?? nv(sd.hrv)) },
           _cached: true,
         });
       }
@@ -143,7 +170,7 @@ export async function GET(request) {
     sleep:     { ...sleep,     sparkline: spark7.map(d => d.sleepHrs) },
     readiness: { ...readiness, sparkline: spark7.map(d => d.hrv) },
     activity:  { ...activity,  sparkline: spark7.map(d => d.steps) },
-    recovery:  { ...recovery,  sparkline: spark7.map(d => d.hrv) },
+    recovery:  { ...recovery,  sparkline: spark7.map(d => d.recoveryMins != null ? d.recoveryMins : d.hrv) },
   };
 
   // Store scores — always for today, only for gap past dates (not cached ones)
