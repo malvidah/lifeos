@@ -71,9 +71,10 @@ function calcSleepScore(today, history) {
   const hrv     = n(today.hrv);
   const rhr     = n(today.rhr);
 
-  // Total sleep: 7-9 = 100, <5 = 0
+  // Total sleep: 7-9h = 100. Steep penalty below 7h — floor at 5.5h (anything ≤5.5h = 0).
+  // This means 6.3h → ~53, 6.5h → ~67, 6h → ~33. High efficiency can't mask poor duration.
   const sleepHrsScore = hrs != null
-    ? rangeScore(hrs, 7, 9, 3, 12)
+    ? rangeScore(hrs, 7, 9, 5.5, 12)
     : null;
 
   // Efficiency: 85-100 = 100, <60 = 0
@@ -81,14 +82,14 @@ function calcSleepScore(today, history) {
     ? rangeScore(eff, 85, 100, 50, 100)
     : null;
 
-  // Compute from available contributors
+  // Compute from available contributors — hours weighted more heavily (70%) than efficiency (30%)
   const contributors = [sleepHrsScore, effScore].filter(v => v != null);
   if (!contributors.length) return { score: null, contributors: { sleepHrs: null, efficiency: null } };
 
   const weights = [];
   const weighted = [];
-  if (sleepHrsScore != null) { weights.push(0.6); weighted.push(sleepHrsScore * 0.6); }
-  if (effScore != null)       { weights.push(0.4); weighted.push(effScore * 0.4); }
+  if (sleepHrsScore != null) { weights.push(0.7); weighted.push(sleepHrsScore * 0.7); }
+  if (effScore != null)       { weights.push(0.3); weighted.push(effScore * 0.3); }
 
   const totalW = weights.reduce((a, b) => a + b, 0);
   const score  = Math.round(weighted.reduce((a, b) => a + b, 0) / totalW);
