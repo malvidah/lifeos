@@ -3966,7 +3966,7 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflow:"hidden", padding:mobile?8:10,
+        <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?8:10,
           paddingBottom:mobile?120:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
