@@ -2288,31 +2288,37 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Active",value:h.activeMinutes,unit:"min"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
-      fields: (h.recoveryMins || h.stressMins)
-        ? [{label:"CALM",value:h.recoveryMins,unit:"min"},{label:"STRESS",value:h.stressMins,unit:"min"}]
-        : [{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}],
+      fields: [
+        {label:"CALM",  value: h.recoveryMins || "",  unit: h.recoveryMins ? "min" : ""},
+        {label:"STRESS",value: h.stressMins   || "",  unit: h.stressMins   ? "min" : ""},
+      ],
       sparkline:scores?.recovery?.sparkline},
   ];
 
   // ── Trend panel state ──────────────────────────────────────────────────────
   const [expandedMetric, setExpandedMetric] = useState(null);
+  const [trendRange,     setTrendRange]     = useState("30d"); // "30d" | "12m"
   const [trendData, setTrendData]           = useState({});
   const [trendLoading, setTrendLoading]     = useState(false);
 
   useEffect(() => {
-    if (!expandedMetric || !token || !userId) return;
-    if (trendData[expandedMetric]) return; // cached
+    if (!expandedMetric || !token || !userId || !date) return;
+    const days = trendRange === "12m" ? 364 : 29;
+    const cacheKey = `${expandedMetric}:${date}:${trendRange}`;
+    if (trendData[cacheKey]) return;
     setTrendLoading(true);
     const supabase = createClient();
-    const since = toKey(shift(new Date(), -30));
+    const anchorDate = new Date(date + 'T12:00:00');
+    const since = toKey(shift(anchorDate, -days));
     supabase
       .from('entries').select('date,data')
-      .eq('user_id', userId).eq('type', 'scores').gte('date', since)
+      .eq('user_id', userId).eq('type', 'scores')
+      .gte('date', since).lte('date', date)
       .order('date', { ascending: true })
-      .then(({ data }) => {
-        if (!data) { setTrendLoading(false); return; }
+      .then(({ data: rows }) => {
+        if (!rows) { setTrendLoading(false); return; }
         const map = {};
-        data.forEach(row => {
+        rows.forEach(row => {
           if (!row.date || !row.data) return;
           map[row.date] = {
             sleep:     +row.data.sleepScore     || null,
@@ -2321,10 +2327,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             recovery:  +row.data.recoveryScore  || null,
           };
         });
-        setTrendData(prev => ({ ...prev, [expandedMetric]: map }));
+        setTrendData(prev => ({ ...prev, [cacheKey]: map }));
         setTrendLoading(false);
       }).catch(() => setTrendLoading(false));
-  }, [expandedMetric, token, userId]); // eslint-disable-line
+  }, [expandedMetric, trendRange, date, token, userId]); // eslint-disable-line
 
   const TREND_INFO = {
     sleep: {
@@ -2345,9 +2351,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     },
   };
 
-  // Build 30-day SVG trend line for a given metric key
+  // Build trend SVG line anchored to date, range = "30d" | "12m"
   function TrendLine({ metricKey, color }) {
-    const data = trendData[metricKey];
+    const cacheKey = `${metricKey}:${date}:${trendRange}`;
+    const data = trendData[cacheKey];
     if (!data || trendLoading) {
       return (
         <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -2355,8 +2362,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         </div>
       );
     }
+    const span = trendRange === "12m" ? 364 : 29;
+    const anchorDate = new Date(date + 'T12:00:00');
     const days = [];
-    for (let i = -29; i <= 0; i++) days.push(toKey(shift(new Date(), i)));
+    for (let i = -span; i <= 0; i++) days.push(toKey(shift(anchorDate, i)));
     const vals = days.map(d => data[d]?.[metricKey] ?? null);
     const pts = vals.map((v, i) => v != null ? { v, i } : null).filter(Boolean);
     if (pts.length < 2) return <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>not enough data</span></div>;
@@ -2366,7 +2375,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     const mn = Math.max(0, Math.min(...pts.map(p => p.v)) - 5);
     const mx = Math.min(100, Math.max(...pts.map(p => p.v)) + 5);
     const range = mx - mn || 1;
-    const xOf = i => (i / 29) * W;
+    const xOf = i => (i / span) * W;
     const yOf = v => H - ((v - mn) / range) * (H - 6) - 3;
 
     const linePts = pts.map(p => `${xOf(p.i).toFixed(1)},${yOf(p.v).toFixed(1)}`).join(' ');
@@ -2377,12 +2386,23 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     const avgY = yOf(avg).toFixed(1);
 
     const ticks = [];
-    days.forEach((d, i) => {
-      if (d.endsWith('-01') || i === 0) {
-        const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(d.split('-')[1]) - 1];
-        ticks.push({ i, label: mo });
-      }
-    });
+    if (trendRange === "12m") {
+      // Monthly ticks for 12M view
+      days.forEach((d, i) => {
+        if (d.endsWith('-01') || i === 0) {
+          const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(d.split('-')[1]) - 1];
+          ticks.push({ i, label: mo });
+        }
+      });
+    } else {
+      // Weekly ticks for 30D view
+      days.forEach((d, i) => {
+        if (i === 0 || i % 7 === 0) {
+          const dt = new Date(d + 'T12:00:00');
+          ticks.push({ i, label: dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) });
+        }
+      });
+    }
 
     return (
       <div style={{ padding: '0 0 4px' }}>
@@ -2410,7 +2430,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                x: percentage of last.i across 29 days. y: mapped from SVG coord to 80px height */}
           <div style={{
             position: 'absolute',
-            left: `${(last.i / 29) * 100}%`,
+            left: `${(last.i / span) * 100}%`,
             top: `${(yOf(last.v) / H) * 80}px`,
             transform: 'translate(-50%, -50%)',
             width: 7, height: 7, borderRadius: '50%',
@@ -2429,7 +2449,9 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
               letterSpacing: '0.04em',
             }}>{t.label}</div>
           ))}
-          <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: C.dim }}>today</div>
+          <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: C.dim }}>
+            {date === todayKey() ? 'today' : new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+          </div>
         </div>
       </div>
     );
@@ -2513,10 +2535,13 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       {/* ── Trend panel — always rendered at fixed height to prevent layout shift ── */}
       {!collapsed && (() => {
         const m = expandedMetric ? metrics.find(x => x.key === expandedMetric) : null;
-        const avgVal = m && trendData[expandedMetric]
+        const trendCacheKey = expandedMetric ? `${expandedMetric}:${date}:${trendRange}` : null;
+        const avgVal = m && trendCacheKey && trendData[trendCacheKey]
           ? (() => {
-              const days=[];for(let i=-29;i<=0;i++)days.push(toKey(shift(new Date(),i)));
-              const vals=days.map(d=>trendData[expandedMetric][d]?.[expandedMetric]).filter(v=>v!=null);
+              const span = trendRange === "12m" ? 364 : 29;
+              const anchorDate = new Date(date + 'T12:00:00');
+              const days=[];for(let i=-span;i<=0;i++)days.push(toKey(shift(anchorDate,i)));
+              const vals=days.map(d=>trendData[trendCacheKey][d]?.[expandedMetric]).filter(v=>v!=null);
               return vals.length ? Math.round(vals.reduce((a,b)=>a+b,0)/vals.length) : null;
             })()
           : null;
@@ -2531,11 +2556,32 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           }}>
             {m && <>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-                <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-                  textTransform:"uppercase",color:m.color}}>30-day trend</span>
-                {avgVal != null && (
-                  <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
-                )}
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+                    textTransform:"uppercase",color:m.color}}>
+                    trend
+                  </span>
+                  {date !== todayKey() && (
+                    <span style={{fontFamily:mono,fontSize:"9px",color:C.dim}}>
+                      to {new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+                    </span>
+                  )}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                  {avgVal != null && (
+                    <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
+                  )}
+                  {["30d","12m"].map(r => (
+                    <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
+                      style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.05em",
+                        padding:"2px 6px",borderRadius:4,cursor:"pointer",border:"none",
+                        background: trendRange===r ? m.color+"33" : "transparent",
+                        color: trendRange===r ? m.color : C.dim,
+                        transition:"background 0.15s,color 0.15s"}}>
+                      {r.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
               <TrendLine metricKey={m.key} color={m.color}/>
             </>}
