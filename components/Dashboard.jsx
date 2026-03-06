@@ -602,7 +602,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   }
 
   async function disconnectOura() {
-    if(!confirm("Disconnect Oura? Your synced health data will remain.")) return;
+    // disconnect immediately — no prompt (confirm() is blocked in WKWebView)
     const sb = createClient();
     const {data:s} = await sb.from("entries").select("data").eq("type","settings").eq("date","global").eq("user_id",userId).maybeSingle();
     const updated = {...(s?.data||{})}; delete updated.ouraToken;
@@ -632,7 +632,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   }
 
   async function disconnectAppleHealth() {
-    if(!confirm("Disconnect Apple Health? Your synced health data will remain.")) return;
+    // disconnect immediately
     const sb = createClient();
     await sb.from("entries").delete().eq("type","health_apple").eq("user_id",userId);
     setAppleHealthHasData(false);
@@ -643,7 +643,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
   }
 
   async function disconnectStrava() {
-    if(!confirm("Disconnect Strava? Your synced activity data will remain.")) return;
+    // disconnect immediately
     const sb = createClient();
     await sb.from("entries").delete().eq("type","strava_token").eq("user_id",userId);
     setStravaConnected(false);
