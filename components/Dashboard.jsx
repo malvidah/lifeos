@@ -828,7 +828,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
 
 // ─── MonthView ────────────────────────────────────────────────────────────────
 // Keywords that mark an event as "big" (worth showing on the month grid)
-const BIG_EVENT_KEYWORDS = /birthday|bday|anniversary|wedding|graduation|party|trip|camping|hike|concert|festival|game night|board game|dinner|brunch|vacation|holiday|travel|flight|conference|retreat|summit|christm|thanksgiv|new year|halloween|passover|hanukkah|diwali|eid|break|week off|day off|surgery|appointment|date night/i;
+const BIG_EVENT_KEYWORDS = /birthday|bday|anniversary|wedding|graduation|party|trip|camping|hike|concert|festival|game night|board game|vacation|holiday|travel|flight|conference|retreat|summit|christm|thanksgiv|new year|halloween|passover|hanukkah|diwali|eid|week off|day off|surgery|date night|show|performance|recital|marathon|race|gala|ceremony|opening night/i;
 
 function isBigEvent(ev) {
   if (!ev) return false;
@@ -842,116 +842,123 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   const [summaryCache, setSummaryCache] = useState({});
 
   // ── Physics: fractional month index (year*12 + month) ─────────────────
-  const liveOff = useRef(initYear * 12 + initMonth);
-  const vel = useRef(0);
-  const rafId = useRef(null);
-  const startY = useRef(0);
-  const lastY = useRef(0);
+  const liveOff  = useRef(initYear * 12 + initMonth);
+  const vel      = useRef(0);
+  const rafId    = useRef(null);
+  const dragBase = useRef(0);
+  const startY   = useRef(0);
+  const lastY    = useRef(0);
   const touchVel = useRef(0);
-  const totalDrag = useRef(0);
+  const totalDrag= useRef(0);
   const isDragging = useRef(false);
   const containerRef = useRef(null);
   const [displayOff, setDisplayOff] = useState(initYear * 12 + initMonth);
 
-  const CELL_H = 72;   // height of each day cell
-  const HEADER_H = 32; // month label + day-name row
-  const MONTH_H = HEADER_H + CELL_H * 6 + 5 * 2; // max 6 rows + gaps
+  // Keep constants in refs so event handlers can read them without stale closures
+  const MONTH_H = 460; // px per month — big enough to feel like a real page flip
 
-  const repaint = () => setDisplayOff(liveOff.current);
-  const cancelRaf = () => { if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; } };
+  const repaint = useRef(() => {});
+  repaint.current = () => setDisplayOff(liveOff.current);
 
-  const snapTo = (target, notify=true) => {
-    cancelRaf();
+  const cancelRaf = useRef(() => {});
+  cancelRaf.current = () => { if (rafId.current) { cancelAnimationFrame(rafId.current); rafId.current = null; } };
+
+  const snapTo = useRef((target) => {});
+  snapTo.current = (target) => {
+    cancelRaf.current();
     liveOff.current = target;
     vel.current = 0;
-    repaint();
-    if (notify) {
-      const yr = Math.floor(target / 12);
-      const mo = ((target % 12) + 12) % 12;
-      onMonthChange(yr, mo);
-    }
+    repaint.current();
+    const yr = Math.floor(target / 12);
+    const mo = ((target % 12) + 12) % 12;
+    onMonthChange(yr, mo);
   };
 
-  const animateTo = (target) => {
-    cancelRaf();
+  const momentum = useRef(() => {});
+  momentum.current = () => {
+    cancelRaf.current();
     const step = () => {
-      const diff = target - liveOff.current;
-      if (Math.abs(diff) < 0.001) { snapTo(target); return; }
-      liveOff.current += diff * 0.2;
-      repaint();
-      rafId.current = requestAnimationFrame(step);
-    };
-    rafId.current = requestAnimationFrame(step);
-  };
-
-  const momentum = () => {
-    cancelRaf();
-    const step = () => {
-      vel.current *= 0.84;
+      vel.current *= 0.82;
       liveOff.current += vel.current;
       const target = Math.round(liveOff.current);
-      const spring = (target - liveOff.current) * 0.14;
-      liveOff.current += spring;
-      if (Math.abs(vel.current) < 0.002 && Math.abs(liveOff.current - target) < 0.002) {
-        snapTo(target); return;
+      liveOff.current += (target - liveOff.current) * 0.16;
+      if (Math.abs(vel.current) < 0.0015 && Math.abs(liveOff.current - target) < 0.0015) {
+        snapTo.current(target); return;
       }
-      repaint();
+      repaint.current();
       rafId.current = requestAnimationFrame(step);
     };
     rafId.current = requestAnimationFrame(step);
   };
 
-  useEffect(() => () => cancelRaf(), []); // eslint-disable-line
-
-  // Sync when parent changes (e.g. selecting a date navigates to its month)
-  useEffect(() => {
-    const target = initYear * 12 + initMonth;
-    if (Math.abs(liveOff.current - target) > 0.5) animateTo(target);
-  }, [initYear, initMonth]); // eslint-disable-line
-
-  // ── Global mouse listeners for reliable desktop drag ───────────────────
-  // dragBase: the liveOff value at the start of this drag gesture
-  const dragBase = useRef(0);
-
-  const handleMouseDown = (e) => {
-    e.preventDefault();
-    cancelRaf();
-    isDragging.current = true;
-    totalDrag.current = 0;
-    startY.current = e.clientY;
-    lastY.current = e.clientY;
-    dragBase.current = liveOff.current;
-    touchVel.current = 0;
+  const animateTo = useRef((target) => {});
+  animateTo.current = (target) => {
+    cancelRaf.current();
+    const step = () => {
+      const diff = target - liveOff.current;
+      if (Math.abs(diff) < 0.001) { snapTo.current(target); return; }
+      liveOff.current += diff * 0.22;
+      repaint.current();
+      rafId.current = requestAnimationFrame(step);
+    };
+    rafId.current = requestAnimationFrame(step);
   };
 
+  // Cleanup RAF on unmount
+  useEffect(() => () => cancelRaf.current(), []);
+
+  // Sync when parent drives month change
   useEffect(() => {
-    const onMove = (e) => {
+    const target = initYear * 12 + initMonth;
+    if (Math.abs(liveOff.current - target) > 0.5) animateTo.current(target);
+  }, [initYear, initMonth]); // eslint-disable-line
+
+  // ── Single-mount global mouse + wheel listeners ────────────────────────
+  useEffect(() => {
+    const onMouseMove = (e) => {
       if (!isDragging.current) return;
       const dy = e.clientY - startY.current;
       totalDrag.current = Math.abs(dy);
-      // drag UP (dy<0) = past (decrease liveOff), drag DOWN (dy>0) = future (increase)
-      liveOff.current = dragBase.current - dy / MONTH_H;
-      touchVel.current = -(e.clientY - lastY.current) / MONTH_H;
+      liveOff.current = dragBase.current + dy / MONTH_H;  // down=past, up=future
+      touchVel.current = (e.clientY - lastY.current) / MONTH_H;
       lastY.current = e.clientY;
-      repaint();
+      repaint.current();
     };
-    const onUp = () => {
+    const onMouseUp = () => {
       if (!isDragging.current) return;
       isDragging.current = false;
-      vel.current = touchVel.current * 1.8;
-      if (Math.abs(vel.current) > 0.01) momentum(); else snapTo(Math.round(liveOff.current));
+      vel.current = touchVel.current * 2.2;
+      if (Math.abs(vel.current) > 0.008) momentum.current();
+      else snapTo.current(Math.round(liveOff.current));
     };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
+    // Wheel: each notch = ~1/6 of a month, accumulates then snaps
+    let wheelTimer = null;
+    const onWheel = (e) => {
+      if (!containerRef.current || !containerRef.current.contains(e.target)) return;
+      e.preventDefault();
+      cancelRaf.current();
+      isDragging.current = false;
+      // Normalize delta: trackpad gives small floats, mouse wheel gives 100+
+      const delta = e.deltaY / (Math.abs(e.deltaY) > 50 ? 500 : 120);
+      liveOff.current += delta;
+      repaint.current();
+      clearTimeout(wheelTimer);
+      wheelTimer = setTimeout(() => snapTo.current(Math.round(liveOff.current)), 180);
+    };
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    window.addEventListener('wheel', onWheel, { passive: false });
     return () => {
-      window.removeEventListener('mousemove', onMove);
-      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      window.removeEventListener('wheel', onWheel);
+      if (wheelTimer) clearTimeout(wheelTimer);
     };
-  }); // re-attach every render so closures are fresh
+  }, []); // ← mount only — refs keep closures fresh
 
-  // ── Touch handlers ─────────────────────────────────────────────────────
+  // ── Touch handlers (attached via JSX) ─────────────────────────────────
   const handleTouchStart = (e) => {
-    cancelRaf();
+    cancelRaf.current();
     isDragging.current = true;
     totalDrag.current = 0;
     startY.current = e.touches[0].clientY;
@@ -965,18 +972,32 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     const y = e.touches[0].clientY;
     const dy = y - startY.current;
     totalDrag.current = Math.abs(dy);
-    // drag UP (dy<0) = past, drag DOWN (dy>0) = future
-    liveOff.current = dragBase.current - dy / MONTH_H;
-    touchVel.current = -(y - lastY.current) / MONTH_H;
+    liveOff.current = dragBase.current + dy / MONTH_H; // down=past, up=future
+    touchVel.current = (y - lastY.current) / MONTH_H;
     lastY.current = y;
-    repaint();
+    repaint.current();
   };
   const handleTouchEnd = () => {
     if (!isDragging.current) return;
     isDragging.current = false;
-    vel.current = touchVel.current * 1.8;
-    if (Math.abs(vel.current) > 0.01) momentum(); else snapTo(Math.round(liveOff.current));
+    vel.current = touchVel.current * 2.2;
+    if (Math.abs(vel.current) > 0.008) momentum.current();
+    else snapTo.current(Math.round(liveOff.current));
   };
+
+  // Mouse down on container
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    cancelRaf.current();
+    isDragging.current = true;
+    totalDrag.current = 0;
+    startY.current = e.clientY;
+    lastY.current = e.clientY;
+    dragBase.current = liveOff.current;
+    touchVel.current = 0;
+  };
+
+  // ── Load AI summaries for visible months ───────────────────────────────
 
   // ── Load AI summaries for visible months ───────────────────────────────
   const snappedIdx = Math.round(displayOff);
@@ -1067,17 +1088,17 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                   <div key={dateKey}
                     onClick={e => { e.stopPropagation(); if (totalDrag.current < 6) onSelectDay(dateKey); }}
                     style={{
-                      height: CELL_H, borderRadius: 5, padding: '4px 4px 3px',
+                      height: CELL_H, borderRadius: 6, padding: '5px 5px 4px',
                       cursor: 'pointer', boxSizing: 'border-box',
                       background: isSelected ? C.accent+'1A' : isToday ? C.accent+'0D' : 'transparent',
-                      border: `1px solid ${isSelected ? C.accent+'66' : isToday ? C.accent+'33' : C.border+'44'}`,
-                      display: 'flex', flexDirection: 'column', gap: 2,
+                      border: `1px solid ${isSelected ? C.accent+'66' : isToday ? C.accent+'33' : C.border+'33'}`,
+                      display: 'flex', flexDirection: 'column', gap: 3,
                     }}
                   >
                     {/* Day number */}
                     <div style={{
-                      fontFamily: serif, fontSize: '12px', lineHeight: 1,
-                      fontWeight: isToday || isSelected ? '600' : 'normal',
+                      fontFamily: serif, fontSize: '14px', lineHeight: 1,
+                      fontWeight: isToday || isSelected ? '700' : 'normal',
                       color: isToday ? C.text : isSelected ? C.accent : C.muted,
                       flexShrink: 0,
                     }}>{day}</div>
@@ -1085,30 +1106,31 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                     {/* Health dots */}
                     {numDots > 0 && (
                       <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                        {dots.sleep >= 85     && <div style={{ width: 4, height: 4, borderRadius: '50%', background: C.blue }} />}
-                        {dots.readiness >= 85 && <div style={{ width: 4, height: 4, borderRadius: '50%', background: C.green }} />}
-                        {dots.activity >= 85  && <div style={{ width: 4, height: 4, borderRadius: '50%', background: C.accent }} />}
-                        {dots.recovery >= 85  && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#8B6BB5' }} />}
+                        {dots.sleep >= 85     && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.blue }} />}
+                        {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.green }} />}
+                        {dots.activity >= 85  && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.accent }} />}
+                        {dots.recovery >= 85  && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8B6BB5' }} />}
                       </div>
                     )}
 
-                    {/* Big events */}
+                    {/* Big events — clearly readable on mobile */}
                     {dayBigEvents.map((ev, j) => (
                       <div key={j} style={{
-                        fontFamily: mono, fontSize: '7px', lineHeight: 1.2,
+                        fontFamily: mono, fontSize: '9px', lineHeight: 1.25,
                         color: ev.color || C.accent,
-                        background: (ev.color || C.accent) + '22',
-                        borderRadius: 3, padding: '1px 3px',
+                        background: (ev.color || C.accent) + '28',
+                        borderRadius: 3, padding: '2px 4px',
                         overflow: 'hidden', whiteSpace: 'nowrap',
                         textOverflow: 'ellipsis', flexShrink: 0,
+                        letterSpacing: '0.01em',
                       }}>{ev.title}</div>
                     ))}
 
                     {/* AI summary — fills remaining space */}
                     {summary && (
                       <div style={{
-                        fontFamily: mono, fontSize: '7px', color: C.dim,
-                        lineHeight: 1.25, overflow: 'hidden',
+                        fontFamily: mono, fontSize: '8px', color: C.dim,
+                        lineHeight: 1.3, overflow: 'hidden',
                         display: '-webkit-box', WebkitLineClamp: 2,
                         WebkitBoxOrient: 'vertical',
                         flex: 1, minHeight: 0,
@@ -1755,7 +1777,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
           {!collapsed&&<MonthView
             initYear={selDateObj.getFullYear()} initMonth={selDateObj.getMonth()}
             selected={selected}
-            onSelectDay={d=>{onSelect(d);onCalViewChange('day');}}
+            onSelectDay={d=>onSelect(d)}
             onMonthChange={()=>{}}
             healthDots={healthDots}
             events={events}
