@@ -2373,7 +2373,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
     return (
       <div style={{ padding: '0 0 4px' }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, display: 'block', overflow: 'visible' }}
-          preserveAspectRatio="xMidYMid meet">
+          preserveAspectRatio="none">
           <defs>
             <linearGradient id={`tg-${metricKey}`} x1="0" y1="0" x2="0" y2="1">
               <stop offset="0%" stopColor={color} stopOpacity="0.22"/>
@@ -2466,8 +2466,7 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                   <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                  {/* hide sparkline when this metric is expanded — trend shows more detail */}
-                  {m.sparkline && !isExpanded && <Sparkline data={m.sparkline} color={m.color}/>}
+                  {m.sparkline && <Sparkline data={m.sparkline} color={m.color}/>}
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
@@ -2498,11 +2497,12 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
           : null;
         return (
           <div style={{
-            borderTop: expandedMetric ? `1px solid ${C.border}` : `1px solid transparent`,
-            height: 140, flexShrink: 0, overflow: 'hidden',
+            borderTop: expandedMetric ? `1px solid ${C.border}` : 'none',
+            maxHeight: expandedMetric ? 160 : 0,
+            overflow: 'hidden',
             opacity: expandedMetric ? 1 : 0,
-            transition: 'opacity 0.18s ease',
-            padding: "10px 16px 8px",
+            transition: 'max-height 0.25s ease, opacity 0.2s ease, border 0.2s ease',
+            padding: expandedMetric ? "10px 16px 8px" : "0 16px",
           }}>
             {m && <>
               <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
