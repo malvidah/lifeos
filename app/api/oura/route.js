@@ -64,8 +64,12 @@ export async function GET(request) {
     const readiness = readinessRecords.find(d => d.day === date) ?? null;
     const sessions   = sessionData.data ?? [];
     // Filter to sessions whose `day` matches the requested date before picking longest
+    // Oura sleep sessions: day = night sleep STARTED (yesterday), not when you woke up (today)
+    // daily_sleep.day = today (when you woke up) — so we need both date AND date-1 for sessions
+    const prev1 = new Date(date); prev1.setDate(prev1.getDate() - 1);
+    const prevDate1 = prev1.toISOString().split("T")[0];
     const mainSession = sessions
-      .filter(s => s.type === "long_sleep" && s.day === date)
+      .filter(s => s.type === "long_sleep" && (s.day === date || s.day === prevDate1))
       .sort((a, b) => (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0))[0] ?? null;
 
     const result = {};

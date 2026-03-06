@@ -86,7 +86,14 @@ function cachedOuraFetch(date, token, userId) {
   const k = ouraKey(userId, date);
   if (_ouraCache[k]) return _ouraCache[k];
   const p = fetch(`/api/oura?date=${date}`,{headers:{Authorization:`Bearer ${token}`}})
-    .then(r=>r.json()).catch(()=>({}));
+    .then(r=>r.json())
+    .then(data => {
+      // Don't cache empty/error responses — they should be retried
+      const hasData = data && !data.error && Object.keys(data).length > 0;
+      if (!hasData) delete _ouraCache[k];
+      return data;
+    })
+    .catch(()=>{ delete _ouraCache[k]; return {}; });
   _ouraCache[k] = p;
   // Expire after 5 minutes
   setTimeout(()=>{ delete _ouraCache[k]; }, 5 * 60 * 1000);
@@ -2238,7 +2245,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         }
         if(data.error){ onSyncEnd("oura"); return; }
         // Oura connected — also check if Apple Health has data for this date (could have both)
-        const sb2 = sb; // reuse same singleton client
+        const sb2 = createClient(); // singleton — safe to call multiple times
         const {data:appleRow} = await sb2.from("entries").select("date")
           .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
         setDataSource(appleRow ? "both" : "oura");
