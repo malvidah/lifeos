@@ -1023,7 +1023,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
 
   // ── Helpers ────────────────────────────────────────────────────────────
   const today = todayKey();
-  const DAY_NAMES   = ['S','M','T','W','T','F','S'];
+  const DAY_NAMES   = ['S','M','T','W','R','F','S']; // R=Thu to distinguish from T=Tue
   const MONTH_NAMES = ["January","February","March","April","May","June",
                        "July","August","September","October","November","December"];
   const fracOff = displayOff - snappedIdx;
@@ -1069,131 +1069,208 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     return cells;
   }
 
+  // ── Year scrubber state ───────────────────────────────────────────────
+  const SCRUB_MIN_YR = 2020;
+  const SCRUB_MAX_YR = 2030;
+  const SCRUB_RANGE  = SCRUB_MAX_YR - SCRUB_MIN_YR; // 10 years
+  const [scrubHover, setScrubHover] = useState(false);
+  const [scrubDragging, setScrubDragging] = useState(false);
+  const scrubRef = useRef(null);
+
+  const currentYr = Math.floor(snappedIdx / 12);
+  const currentMo = ((snappedIdx % 12) + 12) % 12;
+  const thumbPct  = Math.max(0, Math.min(1, (currentYr - SCRUB_MIN_YR) / SCRUB_RANGE));
+
+  const scrubJumpToY = (clientY) => {
+    if (!scrubRef.current) return;
+    const rect = scrubRef.current.getBoundingClientRect();
+    const pct  = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    const yr   = Math.round(SCRUB_MIN_YR + pct * SCRUB_RANGE);
+    animateTo.current(yr * 12 + currentMo);
+  };
+
+  useEffect(() => {
+    if (!scrubDragging) return;
+    const onMove = (e) => scrubJumpToY(e.touches ? e.touches[0].clientY : e.clientY);
+    const onUp   = () => setScrubDragging(false);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup',   onUp);
+    window.addEventListener('touchmove', onMove, { passive: true });
+    window.addEventListener('touchend',  onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup',   onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend',  onUp);
+    };
+  }, [scrubDragging]); // eslint-disable-line
+
   return (
-    <div
-      ref={containerRef}
-      style={{
-        overflow: 'hidden', height: MONTH_H, position: 'relative',
-        userSelect: 'none', touchAction: 'none',
-        cursor: isDragging.current ? 'grabbing' : 'grab',
-      }}
-      onMouseDown={handleMouseDown}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
-    >
-      {Array.from({ length: N * 2 + 1 }, (_, i) => i - N).map(relOffset => {
-        const mIdx = snappedIdx + relOffset;
-        const yr   = Math.floor(mIdx / 12);
-        const mo   = ((mIdx % 12) + 12) % 12;
-        // drag DOWN = past → past months sit below (positive Y when relOffset < 0 is wrong)
-        // liveOff increases toward future → snappedIdx increases → relOffset=0 stays centered
-        // When liveOff > snappedIdx (fracOff > 0) → current month moves up → future slides in from below ✓
-        const translateY = (relOffset - fracOff) * MONTH_H;
-        const cells = buildGrid(yr, mo);
+    <div style={{ display: 'flex', height: MONTH_H, overflow: 'hidden', position: 'relative',
+                  userSelect: 'none', touchAction: 'none' }}>
 
-        return (
-          <div key={mIdx} style={{
-            position: 'absolute', top: 0, left: 0, right: 0,
-            transform: `translateY(${translateY}px)`,
-            willChange: 'transform', height: MONTH_H,
-            padding: '4px 10px 4px', boxSizing: 'border-box',
-          }}>
-            {/* Day-of-week headers */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 3 }}>
-              {DAY_NAMES.map((n, i) => (
-                <div key={i} style={{
-                  textAlign: 'center', fontFamily: mono, fontSize: '9px',
-                  letterSpacing: '0.06em', color: C.muted, padding: '2px 0',
-                }}>{n}</div>
-              ))}
-            </div>
+      {/* ── Year scrubber — thin line + pill on far left ── */}
+      <div
+        ref={scrubRef}
+        onMouseEnter={() => setScrubHover(true)}
+        onMouseLeave={() => setScrubHover(false)}
+        onMouseDown={e => { e.stopPropagation(); setScrubDragging(true); scrubJumpToY(e.clientY); }}
+        onTouchStart={e => { e.stopPropagation(); setScrubDragging(true); scrubJumpToY(e.touches[0].clientY); }}
+        style={{
+          width: 18, flexShrink: 0, position: 'relative',
+          cursor: 'ns-resize', display: 'flex', justifyContent: 'center',
+          paddingTop: 4, paddingBottom: 4, boxSizing: 'border-box',
+        }}
+      >
+        {/* The line */}
+        <div style={{
+          width: 1, height: '100%',
+          background: scrubHover || scrubDragging ? C.border2 : C.border,
+          borderRadius: 1, transition: 'background 0.2s',
+          position: 'relative',
+        }}>
+          {/* Thumb pill */}
+          <div style={{
+            position: 'absolute', left: '50%', transform: 'translate(-50%, -50%)',
+            top: `${thumbPct * 100}%`,
+            width: scrubHover || scrubDragging ? 5 : 3,
+            height: scrubHover || scrubDragging ? 20 : 14,
+            borderRadius: 3,
+            background: scrubHover || scrubDragging ? C.accent : C.muted,
+            transition: 'width 0.15s, height 0.15s, background 0.15s',
+          }} />
+        </div>
+        {/* Year label — appears on hover/drag */}
+        {(scrubHover || scrubDragging) && (
+          <div style={{
+            position: 'absolute', left: 20, top: `calc(${thumbPct * 100}% - 8px)`,
+            fontFamily: mono, fontSize: '8px', letterSpacing: '0.08em',
+            color: C.accent, whiteSpace: 'nowrap', pointerEvents: 'none',
+            background: C.bg, padding: '1px 3px', borderRadius: 2,
+          }}>{currentYr}</div>
+        )}
+      </div>
 
-            {/* 6-row grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
-              {cells.map(({ day, dateKey, isOverflow }, idx) => {
-                const isToday    = dateKey === today;
-                const isSelected = dateKey === selected;
-                const dots       = healthDots[dateKey] || {};
-                const summary    = summaries[dateKey];
-                const bigEvents  = (events[dateKey] || []).filter(isBigEvent).slice(0, 2);
-                const hasDots    = dots.sleep >= 85 || dots.readiness >= 85 ||
-                                   dots.activity >= 85 || dots.recovery >= 85;
+      {/* ── Main scrollable calendar pane ── */}
+      <div
+        ref={containerRef}
+        style={{ flex: 1, overflow: 'hidden', position: 'relative', cursor: isDragging.current ? 'grabbing' : 'grab' }}
+        onMouseDown={handleMouseDown}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {Array.from({ length: N * 2 + 1 }, (_, i) => i - N).map(relOffset => {
+          const mIdx = snappedIdx + relOffset;
+          const yr   = Math.floor(mIdx / 12);
+          const mo   = ((mIdx % 12) + 12) % 12;
+          const translateY = (relOffset - fracOff) * MONTH_H;
+          const cells = buildGrid(yr, mo);
 
-                // Overflow cells: dimmed, no border highlight
-                const cellOpacity = isOverflow ? 0.28 : 1;
+          return (
+            <div key={mIdx} style={{
+              position: 'absolute', top: 0, left: 0, right: 0,
+              transform: `translateY(${translateY}px)`,
+              willChange: 'transform', height: MONTH_H,
+              padding: '4px 10px 4px 4px', boxSizing: 'border-box',
+              display: 'flex', flexDirection: 'column',
+            }}>
+              {/* ── Month name — big, at top ── */}
+              <div style={{
+                fontFamily: mono, fontSize: '13px', fontWeight: '600',
+                letterSpacing: '0.18em', textTransform: 'uppercase',
+                color: C.text, marginBottom: 5, flexShrink: 0,
+                paddingLeft: 2,
+              }}>{MONTH_NAMES[mo]}</div>
 
-                return (
-                  <div key={`${dateKey}-${idx}`}
-                    onClick={e => { e.stopPropagation(); if (totalDrag.current < 6) onSelectDay(dateKey); }}
-                    style={{
-                      height: CELL_H, borderRadius: 5, padding: '4px 4px 3px',
-                      cursor: 'pointer', boxSizing: 'border-box',
-                      opacity: cellOpacity,
-                      background: !isOverflow && isSelected ? C.accent+'1A'
-                               : !isOverflow && isToday    ? C.accent+'0D'
-                               : 'transparent',
-                      border: `1px solid ${
-                        !isOverflow && isSelected ? C.accent+'66'
-                      : !isOverflow && isToday    ? C.accent+'33'
-                      : C.border+'25'}`,
-                      display: 'flex', flexDirection: 'column', gap: 2,
-                      pointerEvents: isOverflow ? 'none' : 'auto',
-                    }}
-                  >
-                    {/* Day number */}
-                    <div style={{
-                      fontFamily: serif, fontSize: '13px', lineHeight: 1,
-                      fontWeight: isToday || isSelected ? '700' : 'normal',
-                      color: isToday ? C.text : isSelected ? C.accent : C.muted,
-                      flexShrink: 0,
-                    }}>{day}</div>
+              {/* ── Day-of-week headers — bigger, spaced ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', marginBottom: 3, flexShrink: 0 }}>
+                {DAY_NAMES.map((n, i) => (
+                  <div key={i} style={{
+                    textAlign: 'center', fontFamily: mono, fontSize: '10px',
+                    fontWeight: '500', letterSpacing: '0.08em',
+                    color: C.muted, padding: '1px 0',
+                  }}>{n}</div>
+                ))}
+              </div>
 
-                    {/* Health dots — always rendered first so events can't push them out */}
-                    {hasDots && (
-                      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                        {dots.sleep     >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.blue,    flexShrink: 0 }} />}
-                        {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.green,   flexShrink: 0 }} />}
-                        {dots.activity  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.accent,  flexShrink: 0 }} />}
-                        {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8B6BB5', flexShrink: 0 }} />}
-                      </div>
-                    )}
+              {/* ── 6-row grid ── */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, flex: 1 }}>
+                {cells.map(({ day, dateKey, isOverflow }, idx) => {
+                  const isToday    = dateKey === today;
+                  const isSelected = dateKey === selected;
+                  const dots       = healthDots[dateKey] || {};
+                  const summary    = summaries[dateKey];
+                  const bigEvents  = (events[dateKey] || []).filter(isBigEvent).slice(0, 2);
+                  const hasDots    = dots.sleep >= 85 || dots.readiness >= 85 ||
+                                     dots.activity >= 85 || dots.recovery >= 85;
+                  const cellOpacity = isOverflow ? 0.25 : 1;
 
-                    {/* Big events */}
-                    {bigEvents.map((ev, j) => (
-                      <div key={j} style={{
-                        fontFamily: mono, fontSize: '9px', lineHeight: 1.2,
-                        color: ev.color || C.accent,
-                        background: (ev.color || C.accent) + '28',
-                        borderRadius: 3, padding: '2px 3px',
-                        overflow: 'hidden', whiteSpace: 'nowrap',
-                        textOverflow: 'ellipsis', flexShrink: 0,
-                      }}>{ev.title}</div>
-                    ))}
-
-                    {/* AI summary */}
-                    {!isOverflow && summary && (
+                  return (
+                    <div key={`${dateKey}-${idx}`}
+                      onClick={e => { e.stopPropagation(); if (totalDrag.current < 6) onSelectDay(dateKey); }}
+                      style={{
+                        height: CELL_H, borderRadius: 5, padding: '4px 4px 3px',
+                        cursor: 'pointer', boxSizing: 'border-box',
+                        opacity: cellOpacity,
+                        background: !isOverflow && isSelected ? C.accent+'1A'
+                                 : !isOverflow && isToday    ? C.accent+'0D'
+                                 : 'transparent',
+                        border: `1px solid ${
+                          !isOverflow && isSelected ? C.accent+'66'
+                        : !isOverflow && isToday    ? C.accent+'33'
+                        : C.border+'25'}`,
+                        display: 'flex', flexDirection: 'column', gap: 2,
+                        pointerEvents: isOverflow ? 'none' : 'auto',
+                      }}
+                    >
+                      {/* Day number */}
                       <div style={{
-                        fontFamily: mono, fontSize: '7.5px', color: C.dim,
-                        lineHeight: 1.25, overflow: 'hidden',
-                        display: '-webkit-box', WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical', flex: 1, minHeight: 0,
-                      }}>{summary}</div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                        fontFamily: serif, fontSize: '13px', lineHeight: 1,
+                        fontWeight: isToday || isSelected ? '700' : 'normal',
+                        color: isToday ? C.text : isSelected ? C.accent : C.muted,
+                        flexShrink: 0,
+                      }}>{day}</div>
 
-            {/* Month label — bottom of grid, subtle */}
-            <div style={{
-              textAlign: 'center', fontFamily: mono, fontSize: '8px',
-              letterSpacing: '0.1em', textTransform: 'uppercase',
-              color: C.border2, marginTop: 4,
-            }}>{MONTH_NAMES[mo]} {yr}</div>
-          </div>
-        );
-      })}
+                      {/* Health dots — always above events */}
+                      {hasDots && (
+                        <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                          {dots.sleep     >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.blue,    flexShrink: 0 }} />}
+                          {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.green,   flexShrink: 0 }} />}
+                          {dots.activity  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.accent,  flexShrink: 0 }} />}
+                          {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8B6BB5', flexShrink: 0 }} />}
+                        </div>
+                      )}
+
+                      {/* Big events */}
+                      {bigEvents.map((ev, j) => (
+                        <div key={j} style={{
+                          fontFamily: mono, fontSize: '9px', lineHeight: 1.2,
+                          color: ev.color || C.accent,
+                          background: (ev.color || C.accent) + '28',
+                          borderRadius: 3, padding: '2px 3px',
+                          overflow: 'hidden', whiteSpace: 'nowrap',
+                          textOverflow: 'ellipsis', flexShrink: 0,
+                        }}>{ev.title}</div>
+                      ))}
+
+                      {/* AI summary */}
+                      {!isOverflow && summary && (
+                        <div style={{
+                          fontFamily: mono, fontSize: '7.5px', color: C.dim,
+                          lineHeight: 1.25, overflow: 'hidden',
+                          display: '-webkit-box', WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical', flex: 1, minHeight: 0,
+                        }}>{summary}</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
