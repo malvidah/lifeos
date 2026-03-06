@@ -2128,7 +2128,7 @@ function fmtMinsField(val) {
 }
 
 
-function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,collapsed,onToggle}) {
+function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
@@ -2239,14 +2239,9 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
       .then(r=>r.json()).then(d=>{
         if(!d.error){
           setScores(d);
-          // Immediately update calendar dot for this date with the freshly computed scores
+          // Notify parent with fresh computed scores so it can update calendar dots
           if(d.sleep?.score != null || d.readiness?.score != null || d.activity?.score != null || d.recovery?.score != null){
-            setHealthDots(prev=>({...prev,[date]:{
-              sleep:    d.sleep?.score    ?? prev[date]?.sleep    ?? 0,
-              readiness:d.readiness?.score?? prev[date]?.readiness?? 0,
-              activity: d.activity?.score ?? prev[date]?.activity ?? 0,
-              recovery: d.recovery?.score ?? prev[date]?.recovery ?? 0,
-            }}));
+            onScoresReady(date, d);
           }
         }
       }).catch(()=>{});
@@ -3742,10 +3737,19 @@ export default function Dashboard() {
     return ()=>{ if(calRefreshRef.current) clearInterval(calRefreshRef.current); };
   },[token]); // eslint-disable-line
 
-  // onHealthChange: called by HealthStrip when raw health data loads.
-  // Does NOT update healthDots — dots come from computed scores only.
-  // This callback's sole purpose is to trigger InsightsCard re-generation via healthKey.
+  // onHealthChange: called when raw health data loads — kept as prop, used for InsightsCard healthKey.
   const onHealthChange=useCallback(()=>{},[]);
+
+  // onScoresReady: called by HealthStrip when /api/scores returns fresh computed scores.
+  // Updates the calendar dot for that specific date with correct values.
+  const onScoresReady=useCallback((date, d)=>{
+    setHealthDots(prev=>({...prev,[date]:{
+      sleep:    d.sleep?.score    ?? prev[date]?.sleep    ?? 0,
+      readiness:d.readiness?.score?? prev[date]?.readiness?? 0,
+      activity: d.activity?.score ?? prev[date]?.activity ?? 0,
+      recovery: d.recovery?.score ?? prev[date]?.recovery ?? 0,
+    }}));
+  },[]);
 
   // Load health dots from computed scores only (type='scores').
   // Backfill now computes our own scores for all historical dates,
@@ -3819,7 +3823,7 @@ export default function Dashboard() {
           {/* Health */}
           <div style={{flexShrink:0}}>
             <HealthStrip date={selected} token={token} userId={userId}
-              onHealthChange={onHealthChange} onSyncStart={startSync} onSyncEnd={endSync}
+              onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
               collapsed={mobile?false:healthCollapsed} onToggle={mobile?undefined:toggleHealth}/>
           </div>
 
