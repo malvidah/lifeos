@@ -883,11 +883,11 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   doMomentum.current = () => {
     cancelRaf.current();
     const step = () => {
-      vel.current *= 0.80;
+      vel.current *= 0.88;          // gentle friction — long, smooth coast
       liveOff.current += vel.current;
       const target = Math.round(liveOff.current);
-      liveOff.current += (target - liveOff.current) * 0.18;
-      if (Math.abs(vel.current) < 0.0015 && Math.abs(liveOff.current - target) < 0.0015) {
+      liveOff.current += (target - liveOff.current) * 0.08; // soft spring
+      if (Math.abs(vel.current) < 0.0008 && Math.abs(liveOff.current - target) < 0.0008) {
         snapTo.current(target); return;
       }
       repaint.current();
@@ -901,7 +901,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     const step = () => {
       const diff = target - liveOff.current;
       if (Math.abs(diff) < 0.001) { snapTo.current(target); return; }
-      liveOff.current += diff * 0.22;
+      liveOff.current += diff * 0.12; // softer spring — feels like settling
       repaint.current();
       rafId.current = requestAnimationFrame(step);
     };
@@ -1175,12 +1175,15 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
               padding: '4px 10px 4px 4px', boxSizing: 'border-box',
               display: 'flex', flexDirection: 'column',
             }}>
-              {/* ── Month name — big, at top ── */}
+              {/* ── Month name — big, at top, auto-shrinks for long names ── */}
               <div style={{
-                fontFamily: mono, fontSize: '13px', fontWeight: '600',
-                letterSpacing: '0.18em', textTransform: 'uppercase',
+                fontFamily: mono,
+                fontSize: 'clamp(9px, 1.6vw, 13px)',
+                fontWeight: '600',
+                letterSpacing: 'clamp(0.06em, 0.5vw, 0.18em)',
+                textTransform: 'uppercase',
                 color: C.text, marginBottom: 5, flexShrink: 0,
-                paddingLeft: 2,
+                paddingLeft: 2, overflow: 'hidden', whiteSpace: 'nowrap',
               }}>{MONTH_NAMES[mo]}</div>
 
               {/* ── Day-of-week headers — bigger, spaced ── */}
@@ -1504,8 +1507,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
             <span style={{
               fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-              color:selInt===0?C.text:C.accent,
-              background:(selInt===0?C.text:C.accent)+"1A",
+              color:toKey(selDate)===today?C.text:C.accent,
+              background:(toKey(selDate)===today?C.text:C.accent)+"1A",
               borderRadius:6,padding:"4px 10px",
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
@@ -1522,8 +1525,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
             <span style={{
               fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-              color:selInt===0?C.text:C.accent,
-              background:(selInt===0?C.text:C.accent)+"1A",
+              color:toKey(selDate)===today?C.text:C.accent,
+              background:(toKey(selDate)===today?C.text:C.accent)+"1A",
               borderRadius:6,padding:"4px 10px",
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
@@ -3524,25 +3527,33 @@ export default function Dashboard() {
     setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,recovery:+data.resilienceScore||0}}));
   },[]);
 
-  // Prefetch Oura scores for ±14 days around today so dots show without clicking each day
+  // Load health dots from stored scores in Supabase (bulk, covers all displayed months)
   useEffect(()=>{
     if(!token||!userId)return;
-    const dates=[];
-    for(let i=-14;i<=0;i++) dates.push(toKey(shift(new Date(),i)));
-    dates.forEach((d,i)=>{
-      setTimeout(()=>{
-        fetch(`/api/oura?date=${d}`,{headers:{Authorization:`Bearer ${token}`}})
-          .then(r=>r.json()).then(data=>{
-            if(data.error)return;
-            setHealthDots(prev=>({...prev,[d]:{
-              sleep:+data.sleepScore||0,
-              readiness:+data.readinessScore||0,
-              activity:+data.activityScore||0,
-              recovery:+data.resilienceScore||0,
-            }}));
-          }).catch(()=>{});
-      }, i*150); // stagger 150ms apart to avoid hammering
-    });
+    const supabase=createClient();
+    supabase.auth.setSession({access_token:token,refresh_token:''});
+    // Load last 6 months of scores for month view dots
+    const since=toKey(shift(new Date(),-180));
+    supabase
+      .from('entries')
+      .select('date,data')
+      .eq('user_id',userId)
+      .eq('type','scores')
+      .gte('date',since)
+      .then(({data})=>{
+        if(!data)return;
+        const dots={};
+        data.forEach(row=>{
+          if(!row.date||!row.data)return;
+          dots[row.date]={
+            sleep:    +row.data.sleepScore    ||0,
+            readiness:+row.data.readinessScore||0,
+            activity: +row.data.activityScore ||0,
+            recovery: +row.data.recoveryScore ||0,
+          };
+        });
+        setHealthDots(dots);
+      }).catch(()=>{});
   },[token,userId]); // eslint-disable-line
 
   const mobile = useIsMobile();
