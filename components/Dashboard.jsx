@@ -2443,10 +2443,44 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       });
     }
 
+    // ── Scrubber state ────────────────────────────────────────────────────────
+    const [scrub, setScrub] = React.useState(null); // { i, v, dayKey } | null
+    const chartRef = React.useRef(null);
+
+    function getScrubFromX(clientX) {
+      const rect = chartRef.current?.getBoundingClientRect();
+      if (!rect) return null;
+      const frac = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      const rawI = Math.round(frac * span);
+      // Snap to nearest actual data point
+      let best = null, bestDist = Infinity;
+      for (const p of pts) {
+        const dist = Math.abs(p.i - rawI);
+        if (dist < bestDist) { bestDist = dist; best = p; }
+      }
+      if (!best) return null;
+      return { i: best.i, v: best.v, dayKey: days[best.i] };
+    }
+
+    const scrubHandlers = {
+      onMouseMove: e => setScrub(getScrubFromX(e.clientX)),
+      onMouseLeave: () => setScrub(null),
+      onTouchStart: e => { e.preventDefault(); setScrub(getScrubFromX(e.touches[0].clientX)); },
+      onTouchMove:  e => { e.preventDefault(); setScrub(getScrubFromX(e.touches[0].clientX)); },
+      onTouchEnd:   () => setTimeout(() => setScrub(null), 800),
+    };
+
+    const scrubX = scrub ? (scrub.i / span) * W : null;
+    const scrubY = scrub ? yOf(scrub.v) : null;
+    const scrubLabel = scrub
+      ? new Date(scrub.dayKey + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+      : null;
+
     return (
       <div style={{ padding: '0 0 4px' }}>
-        {/* Wrapper: relative so the HTML dot can be absolutely positioned over the SVG */}
-        <div style={{ position: 'relative' }}>
+        {/* Wrapper: relative so overlays can be absolutely positioned over the SVG */}
+        <div ref={chartRef} style={{ position: 'relative', cursor: 'crosshair', touchAction: 'none' }}
+          {...scrubHandlers}>
           <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 80, display: 'block', overflow: 'visible' }}
             preserveAspectRatio="none">
             <defs>
@@ -2464,20 +2498,65 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             {/* main line */}
             <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
+            {/* scrubber vertical line */}
+            {scrub && (
+              <line
+                x1={scrubX} y1={0} x2={scrubX} y2={H}
+                stroke={color} strokeWidth="1" strokeOpacity="0.5"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
+            {/* scrubber dot */}
+            {scrub && (
+              <circle cx={scrubX} cy={scrubY} r="3.5"
+                fill={color} stroke={C.bg} strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+              />
+            )}
           </svg>
-          {/* Today dot — HTML div so it stays a perfect circle at any window width.
-               x: percentage of last.i across 29 days. y: mapped from SVG coord to 80px height */}
-          <div style={{
-            position: 'absolute',
-            left: `${(last.i / span) * 100}%`,
-            top: `${(yOf(last.v) / H) * 80}px`,
-            transform: 'translate(-50%, -50%)',
-            width: 7, height: 7, borderRadius: '50%',
-            background: color,
-            pointerEvents: 'none',
-          }}/>
+
+          {/* Today dot — HTML div so it stays a perfect circle */}
+          {!scrub && (
+            <div style={{
+              position: 'absolute',
+              left: `${(last.i / span) * 100}%`,
+              top: `${(yOf(last.v) / H) * 80}px`,
+              transform: 'translate(-50%, -50%)',
+              width: 7, height: 7, borderRadius: '50%',
+              background: color,
+              pointerEvents: 'none',
+            }}/>
+          )}
+
+          {/* Scrubber tooltip — date + score, floats above the line */}
+          {scrub && (() => {
+            const leftPct = (scrub.i / span) * 100;
+            const isRight = leftPct > 60;
+            return (
+              <div style={{
+                position: 'absolute',
+                left: isRight ? 'auto' : `calc(${leftPct}% + 8px)`,
+                right: isRight ? `calc(${100 - leftPct}% + 8px)` : 'auto',
+                top: 0,
+                pointerEvents: 'none',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: isRight ? 'flex-end' : 'flex-start',
+              }}>
+                <span style={{
+                  fontFamily: mono, fontSize: '11px', fontWeight: 600,
+                  color: color, lineHeight: 1.2,
+                }}>{scrub.v}</span>
+                <span style={{
+                  fontFamily: mono, fontSize: '9px',
+                  color: C.dim, letterSpacing: '0.03em',
+                }}>{scrubLabel}</span>
+              </div>
+            );
+          })()}
         </div>
-        {/* month labels */}
+
+        {/* month / week labels */}
         <div style={{ display: 'flex', position: 'relative', height: 14 }}>
           {ticks.map(t => (
             <div key={t.i} style={{
@@ -2488,8 +2567,11 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
               letterSpacing: '0.04em',
             }}>{t.label}</div>
           ))}
-          <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: C.dim }}>
-            {date === todayKey() ? 'today' : new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
+          <div style={{ position: 'absolute', right: 0, fontFamily: mono, fontSize: '9px', color: scrub ? color : C.dim,
+            transition: 'color 0.1s' }}>
+            {scrub
+              ? scrubLabel
+              : date === todayKey() ? 'today' : new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
           </div>
         </div>
       </div>
