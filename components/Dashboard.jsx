@@ -2454,11 +2454,11 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         rawTicks.push({ i, label: `${MONTHS[dt.getMonth()]} ${dt.getDate()}` });
       });
     }
-    // Filter: remove ticks too close to right edge or to each other
+    // Filter: remove ticks too close to each other (min 6% gap)
+    // No right-edge guard needed — endLabel is gone, dot marks the end
     const ticks = [];
     for (const t of rawTicks) {
       const pct = (t.i / span) * 100;
-      if (pct > 96) continue; // too close to right edge
       if (ticks.length > 0 && pct - (ticks[ticks.length-1].i / span) * 100 < 6) continue;
       ticks.push(t);
     }
