@@ -156,59 +156,65 @@ function ManageView({ session, premiumData, onManage }) {
   const fromPortal = params.get('from') === 'portal';
   const plan = premiumData?.plan;
   const grantedAt = premiumData?.grantedAt ? new Date(premiumData.grantedAt) : null;
+  const premiumFeatures = FEATURES.filter(f => f.premium);
 
   return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 24px' }}>
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 24px 48px' }}>
       <div style={{ width: '100%', maxWidth: 400 }}>
 
         {fromPortal && (
-          <div style={{ background: `${green}18`, border: `1px solid ${green}40`, borderRadius: 8, padding: '11px 16px', marginBottom: 20, fontFamily: mono, fontSize: 10, color: green, letterSpacing: '0.04em' }}>
+          <div style={{ background: `${green}18`, border: `1px solid ${green}40`, borderRadius: 8, padding: '11px 16px', marginBottom: 24, fontFamily: mono, fontSize: 10, color: green, letterSpacing: '0.04em', textAlign: 'center' }}>
             ✓ Your billing changes have been saved.
           </div>
         )}
 
-        {/* Plan card */}
-        <div style={{ background: surface, borderRadius: 10, border: `1px solid ${border}`, overflow: 'hidden', marginBottom: 16 }}>
-          <div style={{ padding: '20px 20px 18px', borderBottom: `1px solid ${border}` }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <span style={{ fontFamily: mono, fontSize: 10, color: accent, letterSpacing: '0.1em', textTransform: 'uppercase' }}>Premium</span>
-              <span style={{ color: accent, fontSize: 10 }}>✦</span>
-              <span style={{ marginLeft: 'auto', background: `${accent}18`, border: `1px solid ${accent}30`, borderRadius: 4, padding: '2px 8px', fontFamily: mono, fontSize: 8, color: accent, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Active</span>
-            </div>
-            <div style={{ fontFamily: mono, fontSize: 11, color: muted }}>
-              {plan === 'yearly' ? 'Annual plan · $48/yr ($4/mo)' : 'Monthly plan · $5/mo'}
-            </div>
-            {grantedAt && (
-              <div style={{ fontFamily: mono, fontSize: 10, color: dim, marginTop: 8 }}>
-                Member since {grantedAt.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-              </div>
-            )}
-          </div>
+        {/* Header — mirrors PricingView */}
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ fontFamily: serif, fontSize: 44, color: accent, marginBottom: 12, lineHeight: 1 }}>✦</div>
+          <h1 style={{ fontFamily: serif, fontSize: 36, color: text, margin: '0 0 10px', letterSpacing: '-0.02em', fontWeight: 400 }}>Premium</h1>
+          <p style={{ fontFamily: mono, fontSize: 11, color: muted, lineHeight: 1.8, margin: 0 }}>
+            AI that knows your body,<br/>your patterns, and your day.
+          </p>
+        </div>
 
-          {/* Included features */}
-          <div style={{ padding: '4px 0' }}>
-            {FEATURES.filter(f => f.premium).map((f, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 20px', borderBottom: i < FEATURES.filter(f=>f.premium).length - 1 ? `1px solid ${border}` : 'none' }}>
-                <span style={{ color: accent, fontSize: 9, flexShrink: 0 }}>✦</span>
-                <span style={{ fontFamily: mono, fontSize: 10, color: muted, letterSpacing: '0.03em' }}>{f.label}</span>
-              </div>
-            ))}
+        {/* Price display */}
+        <div style={{ textAlign: 'center', marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'center', gap: 2 }}>
+            <span style={{ fontFamily: mono, fontSize: 14, color: dim, marginTop: 10 }}>$</span>
+            <span style={{ fontFamily: serif, fontSize: 58, color: text, lineHeight: 1, letterSpacing: '-0.03em' }}>
+              {plan === 'yearly' ? '48' : '5'}
+            </span>
+          </div>
+          <div style={{ fontFamily: mono, fontSize: 10, color: dim, marginTop: 4, letterSpacing: '0.06em' }}>
+            {plan === 'yearly' ? 'per year · $4/mo' : 'per month'}
+            {grantedAt && <span style={{ color: dim }}> · member since {grantedAt.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}</span>}
           </div>
         </div>
 
-        {/* Manage button */}
+        {/* Features — same card as PricingView */}
+        <div style={{ background: surface, borderRadius: 10, border: `1px solid ${border}`, padding: '4px 0', marginBottom: 22 }}>
+          {FEATURES.map((f, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 18px', borderBottom: i < FEATURES.length - 1 ? `1px solid ${border}` : 'none' }}>
+              <span style={{ fontSize: 10, color: f.premium ? accent : green, flexShrink: 0 }}>{f.premium ? '✦' : '✓'}</span>
+              <span style={{ fontFamily: mono, fontSize: 10, color: f.premium ? text : muted, letterSpacing: '0.03em' }}>{f.label}</span>
+              {!f.premium && <span style={{ fontFamily: mono, fontSize: 8, color: dim, letterSpacing: '0.1em', textTransform: 'uppercase', marginLeft: 'auto', flexShrink: 0 }}>free</span>}
+            </div>
+          ))}
+        </div>
+
+        {/* Manage CTA — same scale as GET PREMIUM button */}
         <button onClick={onManage} style={{
           width: '100%', background: 'none', border: `1px solid ${border2}`, borderRadius: 8,
-          color: muted, fontFamily: mono, fontSize: 10, letterSpacing: '0.1em',
-          textTransform: 'uppercase', padding: '13px 0', cursor: 'pointer', marginBottom: 10,
-          transition: 'border-color 0.15s, color 0.15s',
+          color: text, fontFamily: mono, fontSize: 11, letterSpacing: '0.12em',
+          textTransform: 'uppercase', padding: '14px 0', cursor: 'pointer', marginBottom: 10,
+          transition: 'border-color 0.15s, background 0.15s',
         }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = muted; e.currentTarget.style.color = text; }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = border2; e.currentTarget.style.color = muted; }}>
+          onMouseEnter={e => { e.currentTarget.style.borderColor = muted; e.currentTarget.style.background = `${muted}10`; }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = border2; e.currentTarget.style.background = 'none'; }}>
           Manage Billing & Plan →
         </button>
-        <p style={{ fontFamily: mono, fontSize: 9, color: dim, textAlign: 'center', margin: 0, letterSpacing: '0.04em' }}>
-          Change plan, update payment, or cancel anytime.
+        <p style={{ fontFamily: mono, fontSize: 9, color: dim, textAlign: 'center', margin: 0, letterSpacing: '0.05em' }}>
+          Switch plans, update payment, or cancel anytime.
         </p>
       </div>
     </div>
