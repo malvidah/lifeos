@@ -3988,7 +3988,7 @@ export default function Dashboard() {
           <div style={{display:"flex", gap:8,
             flex: mobile?"0 0 auto":"1 1 0", minHeight: mobile?0:0,
             flexDirection: mobile?"column":"row",
-            alignItems:"stretch", overflow:"hidden",
+            alignItems:"stretch", overflow:mobile?"visible":"hidden",
             paddingBottom: mobile?0:80}}>
 
             {/* Left column: Insights + Notes */}
@@ -4023,7 +4023,7 @@ export default function Dashboard() {
                   flex: mobile?"0 0 auto": collapseMap[w.id]?"0 0 auto":"1 1 0",
                   minHeight: mobile?260: collapseMap[w.id]?0:80,
                   maxHeight: mobile?260:undefined,
-                  overflow:"hidden"}}>
+                  overflow:mobile?"visible":"hidden"}}>
                   <Widget label={w.label} color={w.color()}
                     collapsed={mobile?false:collapseMap[w.id]}
                     onToggle={mobile?undefined:toggleMap[w.id]}
