@@ -2222,6 +2222,9 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
 
   useEffect(()=>{
     if(!loaded||!token)return;
+    // Never fetch Oura for future dates — no data exists and the wide session window
+    // would incorrectly pull today's sleep data onto tomorrow's date
+    if(date > todayKey()) { onSyncEnd("oura"); return; }
     onSyncStart("oura");
     cachedOuraFetch(date, token, userId).then(async data=>{
         if(data.error==="no_token") {
