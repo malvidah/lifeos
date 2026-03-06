@@ -1984,7 +1984,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                 {/* Time inputs — hidden when allDay */}
                 <div style={{
                   display:'flex',alignItems:'center',gap:5,
-                  maxWidth:form.allDay?0:200,
+                  maxWidth:form.allDay?0:240,
                   overflow:'hidden',
                   opacity:form.allDay?0:1,
                   transition:'max-width 0.25s ease, opacity 0.2s ease',
@@ -1992,13 +1992,13 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                   <input type='time' value={form.startTime}
                     onChange={e=>updateForm({startTime:e.target.value})}
                     style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:C.muted,
-                      width:70,cursor:'text'}}
+                      width:96,cursor:'text'}}
                   />
                   <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,opacity:0.4}}>–</span>
                   <input type='time' value={form.endTime}
                     onChange={e=>updateForm({endTime:e.target.value})}
                     style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:C.muted,
-                      width:70,cursor:'text'}}
+                      width:96,cursor:'text'}}
                   />
                 </div>
 
