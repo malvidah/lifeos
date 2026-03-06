@@ -9,7 +9,9 @@ export async function GET(request) {
   const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
 
   const authHeader = request.headers.get('authorization') || '';
-  const jwt = authHeader.replace('Bearer ', '').trim();
+  // Also accept token as query param for browser-direct access
+  const jwt = authHeader.replace('Bearer ', '').trim() 
+    || searchParams.get('token') || '';
   if (!jwt) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   const supabase = createClient(
