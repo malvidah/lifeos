@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { batchComputeScores, n } from '../../../../lib/scoreCalc.js';
 
 // Backfills Oura historical data into Supabase entries table.
 // Fetches in 90-day chunks to stay within Oura API limits.
@@ -67,16 +68,17 @@ export async function POST(request) {
 
       for (const r of sleepData.data ?? []) {
         ensure(r.day);
-        if (r.score != null) byDate[r.day].sleepScore = String(r.score);
+        // Store sleep efficiency (used in our calcSleepScore as sleepQuality)
         if (r.contributors?.sleep_efficiency != null) byDate[r.day].sleepQuality = String(r.contributors.sleep_efficiency);
+        // NOTE: Oura's r.score is intentionally NOT stored — we compute our own scores
       }
       for (const r of readData.data ?? []) {
         ensure(r.day);
-        if (r.score != null) byDate[r.day].readinessScore = String(r.score);
+        // Oura's readiness score intentionally NOT stored — computed from raw metrics
       }
       for (const r of actData.data ?? []) {
         ensure(r.day);
-        if (r.score != null) byDate[r.day].activityScore = String(r.score);
+        // Oura's activity score intentionally NOT stored — computed from raw metrics
         if (r.steps != null) byDate[r.day].steps = String(r.steps);
         if (r.total_calories != null) byDate[r.day].totalCalories = String(Math.round(r.total_calories));
         if (r.active_calories != null) byDate[r.day].activeCalories = String(Math.round(r.active_calories));
@@ -113,6 +115,49 @@ export async function POST(request) {
     } catch (err) {
       errors.push(`${s}-${e}: ${err.message}`);
     }
+  }
+
+  // ── Batch compute our scores for ALL stored health data ──────────────────
+  // Fetch everything we have (not just this backfill window) so history is accurate
+  try {
+    const { data: allHealth } = await supabase
+      .from('entries')
+      .select('date, data')
+      .eq('user_id', user.id)
+      .eq('type', 'health')
+      .order('date', { ascending: true });
+
+    if (allHealth && allHealth.length > 0) {
+      const byDateAll = {};
+      for (const row of allHealth) {
+        if (row.date && row.data) byDateAll[row.date] = row.data;
+      }
+
+      const scored = batchComputeScores(byDateAll, allHealth.length);
+
+      // Upsert in batches of 200
+      const BATCH = 200;
+      for (let i = 0; i < scored.length; i += BATCH) {
+        const chunk = scored.slice(i, i + BATCH).map(s => ({
+          user_id: user.id,
+          date: s.date,
+          type: 'scores',
+          data: {
+            sleepScore:     s.sleepScore,
+            readinessScore: s.readinessScore,
+            activityScore:  s.activityScore,
+            recoveryScore:  s.recoveryScore,
+            calibrated:     s.calibrated,
+            contributors:   s.contributors,
+            computedAt:     s.computedAt,
+          },
+          updated_at: new Date().toISOString(),
+        }));
+        await supabase.from('entries').upsert(chunk, { onConflict: 'user_id,date,type' });
+      }
+    }
+  } catch (scoreErr) {
+    errors.push(`score_batch: ${scoreErr.message}`);
   }
 
   return Response.json({ ok: true, totalUpserted, chunks: chunks.length, errors: errors.length ? errors : undefined });

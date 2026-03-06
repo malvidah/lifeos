@@ -70,10 +70,10 @@ export async function GET(request) {
 
     const result = {};
     if (daily) {
-      result.sleepScore   = daily.score != null ? String(daily.score) : "";
+      // Oura's sleepScore intentionally NOT stored — we compute our own scores from raw metrics
       result.sleepQuality = daily.contributors?.sleep_efficiency != null ? String(daily.contributors.sleep_efficiency) : "";
     }
-    if (readiness) result.readinessScore = readiness.score != null ? String(readiness.score) : "";
+    // Oura's readinessScore intentionally NOT stored
     if (mainSession) {
       if (mainSession.lowest_heart_rate != null)  result.rhr = String(Math.round(mainSession.lowest_heart_rate));
       if (mainSession.average_hrv != null)         result.hrv = String(Math.round(mainSession.average_hrv));
@@ -84,7 +84,7 @@ export async function GET(request) {
 
     const activity = (activityData.data ?? []).find(d => d.day === date) ?? null;
     if (activity) {
-      if (activity.score != null)           result.activityScore   = String(activity.score);
+      // Oura's activityScore intentionally NOT stored — computed from raw metrics
       // total_calories = full day burn (matches Oura "Total Burn")
       // active_calories = active-only portion
       const totalCals  = activity.total_calories  ?? null;

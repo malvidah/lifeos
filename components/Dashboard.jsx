@@ -3733,40 +3733,30 @@ export default function Dashboard() {
     setHealthDots(prev=>({...prev,[date]:{sleep:+data.sleepScore||0,readiness:+data.readinessScore||0,activity:+data.activityScore||0,recovery:+data.resilienceScore||0}}));
   },[]);
 
-  // Load health dots from Supabase — computed scores first, fall back to Oura raw scores
+  // Load health dots from computed scores only (type='scores').
+  // Backfill now computes our own scores for all historical dates,
+  // so we never fall back to Oura's scoring system.
   useEffect(()=>{
     if(!token||!userId)return;
     const supabase=createClient();
     supabase.auth.setSession({access_token:token,refresh_token:''});
     const since=toKey(shift(new Date(),-180));
-    // Load both types in parallel: computed scores + raw Oura health entries
-    Promise.all([
-      supabase.from('entries').select('date,data').eq('user_id',userId).eq('type','scores').gte('date',since),
-      supabase.from('entries').select('date,data').eq('user_id',userId).eq('type','health').gte('date',since),
-    ]).then(([scoresRes, healthRes])=>{
-      const dots={};
-      // First pass: raw Oura health entries (sleepScore is Oura's own score for the day)
-      (healthRes.data||[]).forEach(row=>{
-        if(!row.date||!row.data)return;
-        dots[row.date]={
-          sleep:    +row.data.sleepScore    ||0,
-          readiness:+row.data.readinessScore||0,
-          activity: +row.data.activityScore ||0,
-          recovery: +row.data.resilienceScore||0,
-        };
-      });
-      // Second pass: computed scores override where available (more accurate)
-      (scoresRes.data||[]).forEach(row=>{
-        if(!row.date||!row.data)return;
-        dots[row.date]={
-          sleep:    +row.data.sleepScore    ||0,
-          readiness:+row.data.readinessScore||0,
-          activity: +row.data.activityScore ||0,
-          recovery: +row.data.recoveryScore ||0,
-        };
-      });
-      setHealthDots(dots);
-    }).catch(()=>{});
+    supabase.from('entries').select('date,data')
+      .eq('user_id',userId).eq('type','scores').gte('date',since)
+      .then(({data})=>{
+        if(!data)return;
+        const dots={};
+        data.forEach(row=>{
+          if(!row.date||!row.data)return;
+          dots[row.date]={
+            sleep:    +row.data.sleepScore    ||0,
+            readiness:+row.data.readinessScore||0,
+            activity: +row.data.activityScore ||0,
+            recovery: +row.data.recoveryScore ||0,
+          };
+        });
+        setHealthDots(dots);
+      }).catch(()=>{});
   },[token,userId]); // eslint-disable-line
 
   const mobile = useIsMobile();
