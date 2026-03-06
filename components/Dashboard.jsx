@@ -856,9 +856,9 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
 
   // Responsive sizing — derive CELL_H from available height so months pack tight
   const vw        = typeof window !== 'undefined' ? window.innerWidth : 390;
-  const DAY_HDR_H_C = 22;  // fixed header row (hoisted for CELL_H calc)
-  const LABEL_H   = 20;    // month label: marginTop(4)+font(14)+marginBottom(2)
-  const MONTH_H   = vw < 600 ? 390 : 460;
+  const DAY_HDR_H_C = 20;
+  const LABEL_H   = 18;
+  const MONTH_H   = vw < 600 ? 340 : 400;
   const SCROLL_H_C = MONTH_H - DAY_HDR_H_C;
   const CELL_H    = Math.floor((SCROLL_H_C - LABEL_H - 5 * 2) / 6); // 5 gaps of 2px between 6 rows
 
@@ -1203,7 +1203,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                 <div style={{
                   fontFamily: mono, fontSize: F.sm, fontWeight: 'normal',
                   letterSpacing: '0.06em', textTransform: 'uppercase',
-                  color: C.muted, marginTop: 4, marginBottom: 2, flexShrink: 0,
+                  color: C.muted, marginTop: 2, marginBottom: 4, flexShrink: 0,
                   paddingLeft: 2, overflow: 'hidden', whiteSpace: 'nowrap',
                 }}>{MONTH_NAMES[mo]}</div>
 
@@ -2382,16 +2382,12 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
               <stop offset="0%" stopColor={color} stopOpacity="0.22"/>
               <stop offset="100%" stopColor={color} stopOpacity="0"/>
             </linearGradient>
-            <filter id={`glow-${metricKey}`}>
-              <feGaussianBlur stdDeviation="1.2" result="blur"/>
-              <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-            </filter>
           </defs>
           {/* fill under curve */}
-          <path d={fillPath} fill={`url(#tg-${metricKey})`}/>
-          {/* single uniform line with glow */}
+          <path d={fillPath} fill={`url(#tg-${metricKey})`} stroke="none"/>
+          {/* single clean uniform line */}
           <polyline points={linePts} fill="none" stroke={color} strokeWidth="1.5"
-            strokeLinecap="round" strokeLinejoin="round" filter={`url(#glow-${metricKey})`}/>
+            strokeLinecap="round" strokeLinejoin="round"/>
           {/* today dot */}
           <circle cx={xOf(last.i).toFixed(1)} cy={yOf(last.v).toFixed(1)} r="2" fill={color}/>
         </svg>
@@ -2490,9 +2486,8 @@ function HealthStrip({date,token,userId,onHealthChange,onSyncStart,onSyncEnd,col
 
       {/* ── Expanded trend panel ── */}
       {!collapsed && expandedMetric && (() => {
-        const m    = metrics.find(x => x.key === expandedMetric);
-        const info = TREND_INFO[expandedMetric];
-        if (!m || !info) return null;
+        const m = metrics.find(x => x.key === expandedMetric);
+        if (!m) return null;
         return (
           <div style={{padding:"16px 16px 14px",borderTop:`1px solid ${C.border}`,
             animation:"fadeInUp 0.18s ease"}}>
