@@ -2609,10 +2609,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
                     <div key={f.label}>
-                      <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.muted,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
+                      <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
                       <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                         <span style={{fontFamily:serif,fontSize:F.md,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
-                        {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:C.muted}}>{f.unit}</span>}
+                        {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>{f.unit}</span>}
                       </div>
                     </div>
                   ))}
@@ -3420,7 +3420,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
               }}>Upgrade to Premium →</button>
             </div>
           ) : text ? (
-            <div style={{ fontFamily: mono, fontSize:13, color: C.muted, lineHeight: 1.75, whiteSpace: "pre-line" }}>
+            <div style={{ fontFamily: mono, fontSize:13, color: C.dim, lineHeight: 1.75, whiteSpace: "pre-line" }}>
               {text}
             </div>
           ) : busy ? (
@@ -3725,11 +3725,11 @@ function ChatFloat({date, token, userId}) {
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
-const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>energy</span></span>;
+const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span></span>;
 const ACT_HDR = <span style={{display:"flex",gap:0}}>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:60,textAlign:"center"}}>dist</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:100,textAlign:"center"}}>pace</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.muted,width:72,textAlign:"center"}}>energy</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:60,textAlign:"center"}}>dist</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:100,textAlign:"center"}}>pace</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
   {id:"notes",    label:"Journal",  color:()=>C.accent, Comp:Notes},
@@ -3969,7 +3969,7 @@ export default function Dashboard() {
         ::-webkit-scrollbar{display:none;}
         *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
-        input::placeholder,textarea::placeholder{color:${C.muted};opacity:1;}
+        input::placeholder,textarea::placeholder{color:${C.dim};opacity:1;}
         .oura-token-input::placeholder{color:${C.dim};opacity:1;}
         a{text-decoration:none;}
         @media(max-width:768px){input,textarea,select{font-size:16px;}}
