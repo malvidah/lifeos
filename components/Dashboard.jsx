@@ -2425,41 +2425,42 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     const avgY = yOf(avg).toFixed(1);
 
     // ── X-axis ticks ──────────────────────────────────────────────────────────
-    // 12M: every month (Jan, Feb…) — 12 labels, clearly spaced
-    // 30D: every Monday — typically 4-5 labels with "Mon DD" format
-    // Both: tick marks in SVG + text labels below
-    const ticks = [];
+    // 12M: every month (Jan, Feb…) — up to 12 labels
+    // 30D: every Monday — typically 4-5 labels
+    // 7D:  every day except today
+    // Right-edge guard: drop any tick whose left% is within 10% of right edge
+    //   to prevent collision with the fixed endLabel
+    // Min-gap guard: drop ticks that are within 6% of the previous tick
+    const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const rawTicks = [];
     if (trendRange === "12m") {
       days.forEach((d, i) => {
-        if (d.slice(8) === '01') { // first of month
-          const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(d.split('-')[1]) - 1];
-          ticks.push({ i, label: mo });
+        if (d.slice(8) === '01') {
+          rawTicks.push({ i, label: MONTHS[parseInt(d.split('-')[1]) - 1] });
         }
       });
-      // Always include the rightmost anchor date
-      if (!ticks.length || ticks[ticks.length-1].i < span - 2) {
-        const anchor = new Date(date + 'T12:00:00');
-        const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][anchor.getMonth()];
-        ticks.push({ i: span, label: mo, isAnchor: true });
-      }
     } else if (trendRange === "30d") {
-      // 30D: tick every Monday
       days.forEach((d, i) => {
         const dow = new Date(d + 'T12:00:00').getDay();
         if (dow === 1) {
           const dt = new Date(d + 'T12:00:00');
-          const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
-          ticks.push({ i, label: `${mo} ${dt.getDate()}` });
+          rawTicks.push({ i, label: `${MONTHS[dt.getMonth()]} ${dt.getDate()}` });
         }
       });
     } else {
-      // 7D: tick every day except today (shown as endLabel)
       days.forEach((d, i) => {
-        if (i === span) return; // skip last — shown as endLabel
+        if (i === span) return;
         const dt = new Date(d + 'T12:00:00');
-        const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][dt.getMonth()];
-        ticks.push({ i, label: `${mo} ${dt.getDate()}` });
+        rawTicks.push({ i, label: `${MONTHS[dt.getMonth()]} ${dt.getDate()}` });
       });
+    }
+    // Filter: remove ticks too close to right edge or to each other
+    const ticks = [];
+    for (const t of rawTicks) {
+      const pct = (t.i / span) * 100;
+      if (pct > 90) continue; // too close to endLabel
+      if (ticks.length > 0 && pct - (ticks[ticks.length-1].i / span) * 100 < 6) continue;
+      ticks.push(t);
     }
 
     const endLabel = date === todayKey()
