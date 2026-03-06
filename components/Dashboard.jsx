@@ -747,9 +747,9 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               background:C.surface,border:`1px solid ${C.border2}`,
               borderRadius:5,padding:"6px 8px",
             }}>
-              <span style={{flex:1,fontFamily:mono,fontSize:F.sm,color:C.accent,
+              <span style={{flex:1,fontFamily:mono,fontSize:F.sm,
                 userSelect:"all",letterSpacing:"0.02em",overflow:"hidden",
-                textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                textOverflow:"ellipsis",whiteSpace:"nowrap",color:C.muted}}>
                 {window.location.origin}/mcp
               </span>
               <button
@@ -827,7 +827,7 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
                 color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
                 textTransform:"uppercase",textDecoration:"none"}}>
-              About
+              Learn More
             </a>
             <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
