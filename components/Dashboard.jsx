@@ -882,7 +882,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
         <div style={{width:70}}/>
       </div>
       {/* Day Loop — centered */}
-      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)"}}>
+      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
         <span onClick={onGoToToday} style={{
           fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
           color:C.text, cursor:onGoToToday?"pointer":"default",
