@@ -624,12 +624,27 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               }
             </SectionLabel>
             {ouraConnected&&!ouraEditing ? (
-              <div style={{
-                width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",
-                background:"none",border:`1px solid ${C.green}`,
-                borderRadius:5,color:C.green,fontFamily:mono,fontSize:F.sm,
-                letterSpacing:"0.04em",textTransform:"uppercase"}}>
-                ✓ Connected
+              <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                <div style={{
+                  width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",
+                  background:"none",border:`1px solid ${C.green}`,
+                  borderRadius:5,color:C.green,fontFamily:mono,fontSize:F.sm,
+                  letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                  ✓ Connected
+                </div>
+                <button onClick={async()=>{
+                  if(!confirm("This will fetch up to 2 years of Oura history into your dashboard. Takes ~30 seconds. Continue?")) return;
+                  const res = await fetch("/api/oura-backfill",{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({})});
+                  const d = await res.json();
+                  if(d.ok) alert(`Backfill complete: ${d.totalUpserted} days synced.`);
+                  else alert("Error: " + (d.error||"unknown"));
+                }} style={{
+                  width:"100%",padding:"5px",textAlign:"center",boxSizing:"border-box",
+                  background:"none",border:`1px solid ${C.border2}`,
+                  borderRadius:5,color:C.muted,fontFamily:mono,fontSize:"10px",
+                  letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"}}>
+                  Sync History →
+                </button>
               </div>
             ) : (
               <div style={{display:"flex",gap:6,alignItems:"stretch"}}>

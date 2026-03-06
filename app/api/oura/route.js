@@ -130,6 +130,16 @@ export async function GET(request) {
       }));
     }
 
+    // Auto-save to Supabase so history accumulates over time
+    const saveData = { ...result };
+    delete saveData.workouts; // workouts stored separately in activity entries
+    if (Object.keys(saveData).length > 0) {
+      supabase.from("entries").upsert({
+        user_id: user.id, date, type: "health", data: saveData,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id,date,type" }).then(() => {}); // fire and forget
+    }
+
     return Response.json(result);
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
