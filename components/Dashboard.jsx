@@ -436,31 +436,38 @@ function InfoTip({text}) {
   );
 }
 
-function IntegrationToggle({on, onOn, onOff}) {
+function IntegrationToggle({on, onOn, onOff, pending}) {
+  const bg = on
+    ? `rgba(196,168,130,0.15)`
+    : pending
+      ? `rgba(208,136,40,0.18)`
+      : `rgba(155,107,58,0.08)`;
+  const dot = on ? C.accent : pending ? C.accent : C.dim;
+  const borderColor = pending ? `${C.accent}70` : C.border2;
   return (
     <button
       onClick={on ? onOff : onOn}
       style={{
-        background: on ? `rgba(196,168,130,0.15)` : `rgba(155,107,58,0.08)`,
-        border: `1px solid ${C.border2}`, borderRadius: 20, cursor: "pointer",
+        background: bg,
+        border: `1px solid ${borderColor}`, borderRadius: 20, cursor: "pointer",
         padding: 3, display: "flex", alignItems: "center", width: 40, height: 22,
         justifyContent: on ? "flex-end" : "flex-start", flexShrink: 0,
         transition: "all 0.2s",
       }}>
-      <div style={{width:14,height:14,borderRadius:"50%",background:on?C.accent:C.dim,transition:"all 0.2s"}}/>
+      <div style={{width:14,height:14,borderRadius:"50%",background:dot,transition:"all 0.2s"}}/>
     </button>
   );
 }
 
-function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, children}) {
+function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, children, pendingToggle}) {
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:1}}>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flex:1}}>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flexShrink:0}}>
           {label}
         </span>
         {children}
-        <IntegrationToggle on={connected} onOn={onToggleOn} onOff={onToggleOff}/>
+        <IntegrationToggle on={connected} onOn={onToggleOn} onOff={onToggleOff} pending={pendingToggle}/>
       </div>
       {subtitle && (
         <div style={{fontFamily:mono,fontSize:9,color:C.dim,letterSpacing:"0.03em",marginTop:3}}>
@@ -686,28 +693,18 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
               label="Oura"
               subtitle={syncing==="oura" ? "Syncing history…" : null}
               connected={ouraConnected}
-              onToggleOn={()=>window.open("https://cloud.ouraring.com/personal-access-tokens","_blank")}
+              onToggleOn={ouraKey.trim() ? connectOura : ()=>window.open("https://cloud.ouraring.com/personal-access-tokens","_blank")}
               onToggleOff={disconnectOura}
+              pendingToggle={!ouraConnected && !!ouraKey.trim()}
             >
               {!ouraConnected && (
-                <div style={{display:"flex",gap:5,alignItems:"center",flex:1,minWidth:0}}>
-                  <input type="password" value={ouraKey}
-                    onChange={e=>setOuraKey(e.target.value)}
-                    placeholder="Paste token"
-                    className="oura-token-input"
-                    style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
-                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
-                      padding:"5px 7px",boxSizing:"border-box"}}/>
-                  {ouraKey.trim() && (
-                    <button onClick={connectOura} disabled={syncing==="oura"}
-                      style={{background:C.accent,border:"none",borderRadius:5,
-                        color:C.bg,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-                        textTransform:"uppercase",padding:"5px 8px",cursor:"pointer",flexShrink:0,
-                        opacity:syncing==="oura"?0.5:1}}>
-                      {syncing==="oura"?"…":"Save"}
-                    </button>
-                  )}
-                </div>
+                <input type="password" value={ouraKey}
+                  onChange={e=>setOuraKey(e.target.value)}
+                  placeholder="Token"
+                  className="oura-token-input"
+                  style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
+                    borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                    padding:"5px 7px",boxSizing:"border-box",width:0}}/>
               )}
             </IntegrationRow>
           </div>
