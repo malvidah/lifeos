@@ -516,6 +516,12 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
         headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({})});
       const d = await res.json();
       if(!d.ok) console.warn("Oura backfill error:", d.error);
+      // Also recompute all scores from the fresh data
+      fetch('/api/scores-backfill', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: true }),
+      }).catch(() => {});
     } catch(e) { console.warn("Oura connect failed:", e); }
     setSyncing(null);
   }
@@ -715,6 +721,39 @@ function UserMenu({session,token,userId,theme,onThemeChange}) {
                 Connect to Claude →
               </a>
             )}
+          </div>
+
+          {divider}
+
+          {divider}
+
+          {/* Recalculate History */}
+          <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <SectionLabel info="Recomputes health scores for all historical dates with Apple Health or Oura data. Run this if your trend charts look flat or incomplete.">
+              Score History
+            </SectionLabel>
+            <button
+              onClick={async () => {
+                setSyncing(s => new Set([...s, 'scores']));
+                try {
+                  const r = await fetch('/api/scores-backfill', {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ force: true }),
+                  });
+                  const d = await r.json();
+                  if (d.ok) alert(`Done! Computed scores for ${d.scored} day${d.scored !== 1 ? 's' : ''}.`);
+                  else alert('Error: ' + (d.error || 'unknown'));
+                } catch(e) { alert('Failed: ' + e.message); }
+                finally { setSyncing(s => { const n = new Set(s); n.delete('scores'); return n; }); }
+              }}
+              disabled={syncing.has('scores')}
+              style={{background:"none",border:`1px solid ${C.border2}`,borderRadius:5,
+                color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
+                textTransform:"uppercase",padding:"5px 10px",cursor:"pointer",flexShrink:0,
+                opacity: syncing.has('scores') ? 0.5 : 1}}>
+              {syncing.has('scores') ? 'Resyncing…' : 'Resync'}
+            </button>
           </div>
 
           {divider}
@@ -3693,6 +3732,24 @@ export default function Dashboard() {
   },[token]);
 
   useEffect(() => { localStorage.setItem('calView', calView); }, [calView]);
+
+  // ── Silent background scores backfill — runs once per session ──────────
+  // Finds any health/health_apple rows that don't have a computed scores entry
+  // and fills them in. This is what populates historical trend data.
+  useEffect(() => {
+    if (!token || !userId) return;
+    const key = `scores_backfill_done:${userId}`;
+    if (sessionStorage.getItem(key)) return; // already ran this session
+    sessionStorage.setItem(key, '1');
+    fetch('/api/scores-backfill', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then(r => r.json())
+      .then(d => { if (d.scored > 0) console.log(`[daylab] backfilled ${d.scored} score entries`); })
+      .catch(() => {}); // silent — never block the UI
+  }, [token, userId]); // eslint-disable-line
 
   // ── Pull-to-refresh from native iOS app ────────────────────────────────
   useEffect(() => {
