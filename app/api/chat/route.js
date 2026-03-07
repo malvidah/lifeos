@@ -48,60 +48,81 @@ export async function POST(request) {
     const { messages, date, tz } = await request.json();
     if (!messages?.length || !date) return Response.json({ error: 'messages and date required' }, { status: 400 });
 
-    // Build today's data context
-    const { data: todayEntries } = await supabase.from('entries')
-      .select('type, data').eq('date', date).eq('user_id', user.id);
-    const today = {};
-    for (const row of todayEntries || []) today[row.type] = row.data;
+    // Build data context: today + last 6 days for trends
+    const startDate = new Date(date);
+    startDate.setDate(startDate.getDate() - 6);
+    const fromDate = startDate.toISOString().split('T')[0];
 
-    const snapshot = [];
-    if (today.health) {
-      const h = today.health;
-      const parts = [];
-      if (h.sleep_score) parts.push(`sleep score ${h.sleep_score}`);
-      if (h.sleep_hours) parts.push(`${h.sleep_hours}h sleep`);
-      if (h.sleep_efficiency) parts.push(`${h.sleep_efficiency}% efficiency`);
-      if (h.readiness_score) parts.push(`readiness ${h.readiness_score}`);
-      if (h.hrv) parts.push(`HRV ${h.hrv}ms`);
-      if (h.rhr) parts.push(`RHR ${h.rhr}bpm`);
-      if (parts.length) snapshot.push(`Health: ${parts.join(', ')}`);
-    }
-    if (today.meals?.length) {
-      const mealTexts = today.meals.filter(r => r.text?.trim()).map(r => {
-        let s = r.text;
-        if (r.kcal) s += ` (${r.kcal}kcal`;
-        if (r.protein) s += `, ${r.protein}g protein`;
-        if (r.kcal || r.protein) s += ')';
-        return s;
-      });
-      if (mealTexts.length) snapshot.push(`Meals: ${mealTexts.join(', ')}`);
-    }
-    if (today.tasks?.length) {
-      const taskTexts = today.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
-      if (taskTexts.length) snapshot.push(`Tasks: ${taskTexts.join(', ')}`);
-    }
-    if (today.activity?.length) {
-      const actTexts = today.activity.filter(r => r.text?.trim()).map(r => {
-        let s = r.text;
-        if (r.kcal) s += ` (${r.kcal}kcal)`;
-        return s;
-      });
-      if (actTexts.length) snapshot.push(`Activity: ${actTexts.join(', ')}`);
-    }
-    if (today.notes) snapshot.push(`Notes: ${String(today.notes).slice(0, 400)}`);
+    const { data: allEntries } = await supabase.from('entries')
+      .select('date, type, data')
+      .eq('user_id', user.id)
+      .gte('date', fromDate)
+      .lte('date', date)
+      .not('type', 'in', '("google_token","premium","settings")');
 
-    const contextBlock = snapshot.length ? snapshot.join('\n') : 'No data logged yet today.';
+    // Group by date
+    const byDate = {};
+    for (const row of allEntries || []) {
+      if (!byDate[row.date]) byDate[row.date] = {};
+      byDate[row.date][row.type] = row.data;
+    }
 
-    const systemPrompt = `You are a personal wellness assistant inside Day Lab, a health and productivity tracking app.
+    const formatDay = (d, data) => {
+      const isToday = d === date;
+      const label = isToday ? `TODAY (${d})` : d;
+      const lines = [];
 
-Today is ${date}. The user's data for today:
+      if (data.health) {
+        const h = data.health;
+        const parts = [];
+        if (h.sleep_hours != null) parts.push(`${h.sleep_hours}h sleep`);
+        if (h.sleep_score) parts.push(`sleep score ${h.sleep_score}`);
+        if (h.sleep_efficiency) parts.push(`${h.sleep_efficiency}% efficiency`);
+        if (h.readiness_score) parts.push(`readiness ${h.readiness_score}`);
+        if (h.hrv) parts.push(`HRV ${h.hrv}ms`);
+        if (h.rhr) parts.push(`RHR ${h.rhr}bpm`);
+        if (h.steps) parts.push(`${h.steps} steps`);
+        if (parts.length) lines.push(`  health: ${parts.join(', ')}`);
+      }
+      if (data.meals?.length) {
+        const texts = data.meals.filter(r => r.text?.trim()).map(r => {
+          let s = r.text;
+          if (r.kcal) s += ` (${r.kcal}kcal${r.protein ? `, ${r.protein}g protein` : ''})`;
+          return s;
+        });
+        if (texts.length) lines.push(`  meals: ${texts.join(', ')}`);
+      }
+      if (data.activity?.length) {
+        const texts = data.activity.filter(r => r.text?.trim()).map(r =>
+          r.kcal ? `${r.text} (${r.kcal}kcal)` : r.text
+        );
+        if (texts.length) lines.push(`  activity: ${texts.join(', ')}`);
+      }
+      if (data.tasks?.length) {
+        const texts = data.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
+        if (texts.length) lines.push(`  tasks: ${texts.join(', ')}`);
+      }
+      if (data.notes) lines.push(`  notes: ${String(data.notes).slice(0, 300)}`);
+
+      return lines.length ? `${label}:\n${lines.join('\n')}` : null;
+    };
+
+    const sortedDates = Object.keys(byDate).sort();
+    const contextParts = sortedDates.map(d => formatDay(d, byDate[d])).filter(Boolean);
+    const contextBlock = contextParts.length ? contextParts.join('\n\n') : 'No data logged yet.';
+
+    const systemPrompt = `You are the AI inside Day Lab — a personal wellness and productivity tracker. You have access to the user's real data.
+
+Today is ${date} (user timezone: ${tz || 'unknown'}).
+
+User data — last 7 days:
 ${contextBlock}
 
-You can both ANSWER QUESTIONS conversationally and ADD/EDIT/DELETE entries.
+Your voice: curious, open, thoughtful, empathetic. Never sycophantic, never preachy. Prioritize insight over information — cut through the noise rather than listing everything back at them. Short is almost always better. If something is genuinely interesting or worth flagging in their data, name it plainly.
 
-When the user asks a question or wants insights, respond naturally and helpfully. Reference their actual data when relevant.
+You can ANSWER QUESTIONS and ADD/EDIT/DELETE entries.
 
-When the user wants to add/edit/delete data, respond with a JSON block in this exact format embedded in your reply:
+When adding data, embed an actions block in your reply:
 
 \`\`\`actions
 {"actions":[...], "summary":"Brief confirmation"}
@@ -110,18 +131,14 @@ When the user wants to add/edit/delete data, respond with a JSON block in this e
 Action formats:
 - Add meals: {"type":"meals","entries":["salmon 400kcal","green salad"]}
 - Add tasks: {"type":"tasks","entries":[{"text":"call dentist","done":false}]}
-- Add note: {"type":"notes","append":"felt good today"}
+- Add note: {"type":"notes","append":"text to append"}
 - Add activity: {"type":"activity","entries":["30 min run"]}
 - Edit meal: {"type":"meals","edit":{"find":"salmon","replace":"salmon tacos"}}
-- Delete task: {"type":"tasks","delete":"call dentist"}
-- Add calendar event: {"type":"calendar","events":[{"title":"Lunch","startTime":"12:00","endTime":"13:00","allDay":false}]}
-- Complete task: {"type":"tasks","complete":"call dentist"}
+- Delete: {"type":"tasks","delete":"call dentist"} or {"type":"meals","delete":"text"}
+- Complete task: {"type":"tasks","complete":"task text"}
+- Calendar event: {"type":"calendar","events":[{"title":"Lunch","startTime":"12:00","endTime":"13:00","allDay":false}]}
 
-You can combine a conversational reply AND an actions block in the same response.
-Example: "Added breakfast for you! That puts you at about 650 calories so far today.\n\`\`\`actions\n{"actions":[{"type":"meals","entries":["oatmeal 320kcal","banana 90kcal"]}],"summary":"Added breakfast"}\n\`\`\`"
-
-Keep replies concise and warm. Don't be overly formal. You know their health data — use it.
-For calendar events: parse natural language times, default 1hr duration if no end time given.`;
+You can combine a reply and an actions block in the same response. Default calendar event duration is 1hr if no end time given.`;
 
     // Clamp message history to last 12 turns to control token usage
     const trimmed = messages.slice(-12);
