@@ -3485,7 +3485,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
 // ─── Chat / QuickAdd ──────────────────────────────────────────────────────────
 // Collapsed: floating entry bar (quick commands, no history).
 // Expanded: full-height panel with conversation history, Q&A + entry actions.
-function ChatFloat({date, token, userId, healthKey}) {
+function ChatFloat({date, token, userId, healthKey, isPremium}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -3832,33 +3832,75 @@ function ChatFloat({date, token, userId, healthKey}) {
         background: C.surface,
         borderTop: `1px solid ${C.border}`,
         borderRadius: expanded ? "20px 20px 0 0" : 0,
-        transition: "border-radius 0.25s ease",
-        maxHeight: expanded ? panelH : "auto",
         boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.3)" : "none",
-        transition: "box-shadow 0.25s ease, border-radius 0.25s ease",
+        transition: "box-shadow 0.35s cubic-bezier(0.4,0,0.2,1), border-radius 0.35s cubic-bezier(0.4,0,0.2,1)",
       }}>
 
-        {/* ── Expanded chat history ── */}
-        {expanded && (
+        {/* ── Day Lab AI header — always pinned at top ── */}
+        <div style={{
+          width: "100%", maxWidth: 640, boxSizing: "border-box",
+          padding: "8px 20px 0",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+          flexShrink: 0,
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Day Lab AI
+            </span>
+            {isPremium ? (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: "#b8860b", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)",
+                borderRadius: 4, padding: "2px 6px",
+              }}>✦ premium</span>
+            ) : chatLimitReached ? (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: C.orange, background: `${C.orange}20`, border: `1px solid ${C.orange}40`,
+                borderRadius: 4, padding: "2px 6px",
+              }}>free · {chatQueryCount}/{FREE_CHAT_LIMIT} used</span>
+            ) : (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: C.muted, background: `${C.text}0a`, borderRadius: 4, padding: "2px 6px",
+              }}>{chatQueryCount}/{FREE_CHAT_LIMIT} free</span>
+            )}
+          </div>
+          <button
+            onClick={() => { setExpanded(e => !e); if (!expanded) setTimeout(() => inputRef.current?.focus(), 380); }}
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              width: 28, height: 28, borderRadius: "50%",
+              transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
+              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
+            }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={expanded ? C.accent : C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* ── Animated expandable chat area ── */}
+        <div style={{
+          width: "100%",
+          maxHeight: expanded ? panelH : "0px",
+          overflow: "hidden",
+          opacity: expanded ? 1 : 0,
+          transition: "max-height 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.25s cubic-bezier(0.4,0,0.2,1)",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          position: "relative",
+        }}>
           <div style={{
             width: "100%", maxWidth: 640,
-            flex: 1, overflowY: "auto",
-            padding: "0 16px",
+            overflowY: "auto",
+            padding: "12px 16px 16px",
             display: "flex", flexDirection: "column",
             gap: 12,
-            paddingTop: 16,
-            // smooth scroll
             scrollBehavior: "smooth",
+            maxHeight: `calc(${panelH} - 60px)`,
           }}>
-            {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
-              <button onClick={() => setExpanded(false)} style={{
-                background: "none", border: "none", cursor: "pointer",
-                color: C.muted, fontSize: 18, lineHeight: 1, padding: "2px 4px",
-              }}>×</button>
-            </div>
-
-            {/* Suggestion chips — shown when no user messages yet */}
+            {/* Suggestion chips */}
             {messages.filter(m => m.role === "user").length === 0 && !insightLoading && (
               <div style={{ padding: "8px 0 4px", display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
                 {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
@@ -3875,8 +3917,7 @@ function ChatFloat({date, token, userId, healthKey}) {
             {/* Message bubbles */}
             {messages.map((msg, i) => (
               <div key={i} style={{
-                display: "flex",
-                flexDirection: "column",
+                display: "flex", flexDirection: "column",
                 alignItems: msg.role === "user" ? "flex-end" : "flex-start",
                 gap: 4,
               }}>
@@ -3895,79 +3936,40 @@ function ChatFloat({date, token, userId, healthKey}) {
                     <span style={{ opacity: 0.5, fontFamily: mono, fontSize: 12 }}>thinking…</span>
                   ) : msg.content}
                 </div>
-                {/* Action pill */}
                 {msg.actions?.length > 0 && msg.summary && (
                   <div style={{
                     fontSize: 11, fontFamily: mono, color: C.green,
                     background: `${C.green}15`, border: `1px solid ${C.green}30`,
-                    borderRadius: 12, padding: "3px 10px",
-                    letterSpacing: "0.04em",
-                  }}>
-                    ✓ {msg.summary}
-                  </div>
+                    borderRadius: 12, padding: "3px 10px", letterSpacing: "0.04em",
+                  }}>✓ {msg.summary}</div>
                 )}
               </div>
             ))}
             <div ref={messagesEndRef} />
           </div>
-        )}
 
-        {/* ── Free tier upgrade wall (shown over input when limit reached) ── */}
-        {chatLimitReached && expanded && (
-          <div style={{
-            position: "absolute", inset: 0, zIndex: 2,
-            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-            background: "rgba(0,0,0,0.55)",
-            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-            gap: 12, padding: 24, borderRadius: "20px 20px 0 0",
-          }}>
-            <span style={{ fontFamily: mono, fontSize: 13, color: C.text, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-              {FREE_CHAT_LIMIT} free queries used
-            </span>
-            <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim, lineHeight: 1.6, textAlign: "center", maxWidth: 280 }}>
-              Upgrade to Premium for unlimited AI chat, daily insights, and voice entry.
-            </span>
-            <button onClick={() => window.location.href = "/upgrade"} style={{
-              background: C.accent, border: "none", borderRadius: 8,
-              padding: "10px 24px", cursor: "pointer",
-              fontFamily: mono, fontSize: F.sm, color: "#fff",
-              letterSpacing: "0.08em", textTransform: "uppercase",
-              marginTop: 4,
-            }}>Upgrade to Premium →</button>
-          </div>
-        )}
-
-
-        {/* ── Day Lab AI header strip (always visible) ── */}
-        <div style={{
-          width: "100%", maxWidth: 640, boxSizing: "border-box",
-          padding: "8px 20px 0",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-              Day Lab AI
-            </span>
-            {/* Premium / free badge */}
-            {chatLimitReached ? (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: C.orange, background: `${C.orange}20`, border: `1px solid ${C.orange}40`,
-                borderRadius: 4, padding: "2px 6px",
-              }}>free · {chatQueryCount}/{FREE_CHAT_LIMIT} used</span>
-            ) : chatQueryCount > 0 ? (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: C.muted, background: `${C.text}0a`, borderRadius: 4, padding: "2px 6px",
-              }}>{chatQueryCount}/{FREE_CHAT_LIMIT}</span>
-            ) : null}
-          </div>
-          {!expanded && (
-            <button onClick={() => { setExpanded(true); setTimeout(() => inputRef.current?.focus(), 80); }} style={{
-              background: "none", border: "none", cursor: "pointer",
-              fontFamily: mono, fontSize: 9, color: C.accent, letterSpacing: "0.08em", textTransform: "uppercase",
-              padding: "2px 0",
-            }}>open ↑</button>
+          {/* Free tier upgrade wall */}
+          {chatLimitReached && (
+            <div style={{
+              position: "absolute", inset: 0, zIndex: 2,
+              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+              background: "rgba(0,0,0,0.55)",
+              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+              gap: 12, padding: 24,
+            }}>
+              <span style={{ fontFamily: mono, fontSize: 13, color: C.text, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+                {FREE_CHAT_LIMIT} free queries used
+              </span>
+              <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim, lineHeight: 1.6, textAlign: "center", maxWidth: 280 }}>
+                Upgrade to Premium for unlimited AI chat, daily insights, and voice entry.
+              </span>
+              <button onClick={() => window.location.href = "/upgrade"} style={{
+                background: C.accent, border: "none", borderRadius: 8,
+                padding: "10px 24px", cursor: "pointer",
+                fontFamily: mono, fontSize: F.sm, color: "#fff",
+                letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4,
+              }}>Upgrade to Premium →</button>
+            </div>
           )}
         </div>
 
@@ -3979,8 +3981,7 @@ function ChatFloat({date, token, userId, healthKey}) {
           return (
             <div onClick={() => setExpanded(true)} style={{
               width: "100%", maxWidth: 640, boxSizing: "border-box",
-              padding: "8px 20px 2px",
-              cursor: "pointer",
+              padding: "8px 20px 2px", cursor: "pointer",
             }}>
               {preview ? (
                 <div style={{ fontFamily: mono, fontSize: 12, color: C.dim, lineHeight: 1.6, letterSpacing: "0.02em" }}>
@@ -4004,16 +4005,6 @@ function ChatFloat({date, token, userId, healthKey}) {
           boxSizing: "border-box",
         }}>
 
-          {/* Expand/collapse toggle */}
-          <button onClick={() => { setExpanded(e => !e); setTimeout(() => inputRef.current?.focus(), 80); }} style={{
-            background: expanded ? `${C.accent}20` : `${C.text}0d`,
-            border: "none", borderRadius: "50%",
-            width: 34, height: 34, cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            flexShrink: 0, transition: "background 0.15s, transform 0.25s",
-            transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-          }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={expanded ? C.accent : C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="18 15 12 9 6 15"/>
             </svg>
           </button>
@@ -4080,6 +4071,7 @@ function ChatFloat({date, token, userId, healthKey}) {
       </div>
     </>
   );
+}
 }
 
 
@@ -4446,7 +4438,8 @@ export default function Dashboard() {
 
       {/* Floating chat pill — always visible, both mobile + desktop */}
       <ChatFloat date={selected} token={token} userId={userId}
-        healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
+        healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
+        isPremium={planInfo?.isPremium ?? false}/>
     </div>
   );
 }
