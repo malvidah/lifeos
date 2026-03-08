@@ -3963,7 +3963,7 @@ function ChatFloat({date, token, userId, healthKey}) {
         borderTop: `1px solid ${C.border}50`,
         borderRadius: expanded ? "20px 20px 0 0" : 0,
         boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.4)" : "0 -1px 0 rgba(255,255,255,0.04)",
-        transition: "box-shadow 0.35s cubic-bezier(0.4,0,0.2,1), border-radius 0.35s cubic-bezier(0.4,0,0.2,1), background 0.35s ease",
+        transition: "box-shadow 0.32s cubic-bezier(0.4,0,0.2,1), border-radius 0.32s cubic-bezier(0.4,0,0.2,1), background 0.32s ease",
       }}>
 
         {/* ── Day Lab AI header — always pinned at top ── */}
@@ -4017,9 +4017,12 @@ function ChatFloat({date, token, userId, healthKey}) {
           maxHeight: expanded ? panelH : "0px",
           overflow: "hidden",
           opacity: expanded ? 1 : 0,
-          transition: "max-height 0.38s cubic-bezier(0.4,0,0.2,1), opacity 0.25s cubic-bezier(0.4,0,0.2,1)",
+          transition: expanded
+            ? "max-height 0.36s cubic-bezier(0.4,0,0.2,1), opacity 0.18s ease"
+            : "opacity 0.14s ease, max-height 0.32s cubic-bezier(0.4,0,0.2,1) 0.1s",
           display: "flex", flexDirection: "column", alignItems: "center",
           position: "relative",
+          willChange: "max-height, opacity",
         }}>
           <div style={{
             width: "100%", maxWidth: 640,
