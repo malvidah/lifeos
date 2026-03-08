@@ -2376,6 +2376,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
   // ── Trend panel state ──────────────────────────────────────────────────────
   const [expandedMetric, setExpandedMetric] = useState(null);
   const [trendRange,     setTrendRange]     = useState("30d"); // "30d" | "12m"
+  const [showBreakdown,  setShowBreakdown]  = useState(false);
   const [trendData, setTrendData]           = useState({});
   const [trendLoading, setTrendLoading]     = useState(false);
 
@@ -2602,7 +2603,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           const isDimmed   = expandedMetric && !isExpanded;
           return (
             <div key={m.key}
-              onClick={()=>setExpandedMetric(isExpanded ? null : m.key)}
+              onClick={()=>{ setExpandedMetric(isExpanded ? null : m.key); setShowBreakdown(false); }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 padding:"12px 14px",cursor:"pointer",transition:"opacity 0.2s, background 0.2s",
                 opacity: isDimmed ? 0.4 : 1,
@@ -2675,16 +2676,26 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                   {avgVal != null && (
                     <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
                   )}
-                  {["12m","30d"].map(r => (
+                  {[\"12m\",\"30d\"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
-                      style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.05em",
-                        padding:"2px 6px",borderRadius:4,cursor:"pointer",border:"none",
-                        background: trendRange===r ? m.color+"33" : "transparent",
+                      style={{fontFamily:mono,fontSize:\"9px\",letterSpacing:\"0.05em\",
+                        padding:\"2px 6px\",borderRadius:4,cursor:\"pointer\",border:\"none\",
+                        background: trendRange===r ? m.color+\"33\" : \"transparent\",
                         color: trendRange===r ? m.color : C.dim,
-                        transition:"background 0.15s,color 0.15s"}}>
+                        transition:\"background 0.15s,color 0.15s\"}}>
                       {r.toUpperCase()}
                     </button>
                   ))}
+                  <button onClick={e=>{e.stopPropagation();setShowBreakdown(v=>!v);}}
+                    title="Score breakdown"
+                    style={{
+                      fontFamily:mono, fontSize:"9px", letterSpacing:"0.05em",
+                      padding:"2px 7px", borderRadius:4, cursor:"pointer",
+                      border:`1px solid ${showBreakdown ? m.color+"60" : C.border}`,
+                      background: showBreakdown ? m.color+"20" : "transparent",
+                      color: showBreakdown ? m.color : C.dim,
+                      transition:"background 0.15s,color 0.15s,border 0.15s",
+                    }}>i</button>
                 </div>
               </div>
               <TrendLine metricKey={m.key} color={m.color}/>
@@ -2694,120 +2705,116 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       })()}
 
       {/* ── Score Breakdown ─────────────────────────────────────────────────── */}
-      {!collapsed && expandedMetric && (() => {
+      {!collapsed && expandedMetric && showBreakdown && (() => {
         const m = metrics.find(x => x.key === expandedMetric);
         if (!m || !scores?.[expandedMetric]?.contributors) return null;
         const c = scores[expandedMetric].contributors;
 
-        // Build contributor chips per metric
-        const chip = (label, rawVal, scoreVal, unit="", weight) => {
-          if (scoreVal == null && rawVal == null) return null;
-          const s = scoreVal ?? 50;
+        // chip: label shown, display value, sub-score (0-100), weight fraction
+        const chip = (label, displayVal, scoreVal, weight) => {
+          if (scoreVal == null) return null;
+          const s = scoreVal;
           const isGood = s >= 70;
           const isBad  = s < 45;
           const color  = isGood ? C.green : isBad ? C.red : C.muted;
           const bg     = isGood ? `${C.green}18` : isBad ? `${C.red}18` : `${C.text}0a`;
           const border = isGood ? `${C.green}35` : isBad ? `${C.red}35` : `${C.border}`;
-          const display = rawVal != null ? `${rawVal}${unit}` : `${Math.round(s)}`;
-          return { label, display, color, bg, border, weight };
+          return { label, display: displayVal ?? `score ${s}`, color, bg, border, weight, score: s };
         };
 
         let chips = [];
-        let formula = "";
-        let denominator = null;
 
         if (expandedMetric === "sleep") {
           chips = [
-            chip("sleep hrs",   h.sleepHrs ? `${(+h.sleepHrs).toFixed(1)}` : null,  c.sleepHrs,    "h",   "70%"),
-            chip("efficiency",  h.sleepEff ? `${Math.round(+h.sleepEff)}` : null,    c.efficiency,  "%",   "30%"),
+            chip(`${h.sleepHrs ? (+h.sleepHrs).toFixed(1)+"h slept" : "sleep hrs"}`,  h.sleepHrs ? `${(+h.sleepHrs).toFixed(1)}h` : null,  c.sleepHrs,    0.70),
+            chip(`${h.sleepEff ? Math.round(+h.sleepEff)+"% efficiency" : "efficiency"}`, h.sleepEff ? `${Math.round(+h.sleepEff)}%` : null, c.efficiency, 0.30),
           ].filter(Boolean);
-          denominator = chips.length;
         } else if (expandedMetric === "readiness") {
+          // HRV contributor uses trend vs baseline, not today's raw value
+          const hrvLabel = h.hrv ? `${Math.round(+h.hrv)}ms HRV` : "HRV trend";
+          const rhrLabel = h.rhr ? `${Math.round(+h.rhr)}bpm RHR` : "RHR trend";
           chips = [
-            chip("HRV",   h.hrv  ? `${Math.round(+h.hrv)}` : null,  c.hrv,  "ms",  "40%"),
-            chip("RHR",   h.rhr  ? `${Math.round(+h.rhr)}` : null,  c.rhr,  "bpm", "30%"),
-            chip("sleep", scores?.sleep?.score != null ? `${scores.sleep.score}` : null, scores?.sleep?.score, "", "30%"),
+            chip(hrvLabel, h.hrv ? `${Math.round(+h.hrv)}ms` : "trend", c.hrv, 0.40),
+            chip(rhrLabel, h.rhr ? `${Math.round(+h.rhr)}bpm` : "trend", c.rhr, 0.30),
+            chip(`sleep ${scores?.sleep?.score ?? ""}`, `sleep ${scores?.sleep?.score ?? "—"}`, scores?.sleep?.score, 0.30),
           ].filter(Boolean);
-          denominator = chips.length;
         } else if (expandedMetric === "activity") {
           chips = [
-            chip("steps",    h.steps ? Number(h.steps).toLocaleString() : null, c.steps,         "",    "35%"),
-            chip("active",   h.activeMinutes ? `${h.activeMinutes}` : null,     c.activeMinutes, "min", "35%"),
-            chip("frequency", null, c.frequency, "", "15%"),
-            chip("rest days", null, c.recovery,  "", "15%"),
+            chip(h.steps ? `${Number(h.steps).toLocaleString()} steps` : "steps",    h.steps ? Number(h.steps).toLocaleString() : null, c.steps,         0.35),
+            chip(h.activeMinutes ? `${h.activeMinutes}min active` : "active min",     h.activeMinutes ? `${h.activeMinutes}min` : null,  c.activeMinutes, 0.35),
+            chip("weekly frequency", null, c.frequency, 0.15),
+            chip("rest balance",     null, c.recovery,  0.15),
           ].filter(Boolean);
-          denominator = chips.length;
         } else if (expandedMetric === "recovery") {
           chips = [
-            chip("HRV trend", h.hrv ? `${Math.round(+h.hrv)}ms` : null, c.hrvTrend, "", "50%"),
-            chip("RHR trend", h.rhr ? `${Math.round(+h.rhr)}bpm` : null, c.rhrTrend, "", "30%"),
-            chip("sleep",     scores?.sleep?.score != null ? `${scores.sleep.score}` : null, scores?.sleep?.score, "", "20%"),
+            chip(h.hrv ? `${Math.round(+h.hrv)}ms HRV (7d trend)` : "HRV 7d trend",  h.hrv ? `${Math.round(+h.hrv)}ms` : "trend", c.hrvTrend, 0.50),
+            chip(h.rhr ? `${Math.round(+h.rhr)}bpm RHR (7d trend)` : "RHR 7d trend", h.rhr ? `${Math.round(+h.rhr)}bpm` : "trend", c.rhrTrend, 0.30),
+            chip(`sleep ${scores?.sleep?.score ?? ""}`, `sleep ${scores?.sleep?.score ?? "—"}`, scores?.sleep?.score, 0.20),
           ].filter(Boolean);
-          denominator = chips.length;
         }
 
         if (!chips.length) return null;
 
+        // Weighted average: sum(score × weight) / sum(weights)
+        const totalW = chips.reduce((a, ch) => a + ch.weight, 0);
+        const computed = Math.round(chips.reduce((a, ch) => a + ch.score * ch.weight, 0) / totalW);
+
         return (
           <div style={{
             borderTop: `1px solid ${C.border}`,
-            padding: "10px 16px 12px",
+            padding: "10px 16px 14px",
             display: "flex", flexDirection: "column", gap: 8,
+            animation: "fadeInUp 0.18s ease",
           }}>
             <span style={{fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase", color:C.dim}}>
               breakdown
             </span>
+            {/* Formula row */}
             <div style={{display:"flex", alignItems:"center", flexWrap:"wrap", gap:6}}>
-              {chips.map((chip, i) => (
-                <Fragment key={chip.label}>
-                  {i > 0 && (
-                    <span style={{fontFamily:mono, fontSize:12, color:C.dim, userSelect:"none"}}>+</span>
-                  )}
-                  <div style={{
-                    display:"flex", flexDirection:"column", alignItems:"center", gap:2,
-                  }}>
+              <span style={{fontFamily:mono, fontSize:11, color:C.dim, marginRight:2}}>
+                (
+              </span>
+              {chips.map((ch, i) => (
+                <Fragment key={ch.label}>
+                  {i > 0 && <span style={{fontFamily:mono, fontSize:12, color:C.dim}}>+</span>}
+                  <div style={{display:"flex", flexDirection:"column", alignItems:"center", gap:2}}>
                     <div style={{
-                      background: chip.bg, border: `1px solid ${chip.border}`,
+                      background: ch.bg, border: `1px solid ${ch.border}`,
                       borderRadius: 8, padding: "4px 10px",
-                      display:"flex", alignItems:"baseline", gap:4,
+                      display:"flex", alignItems:"baseline", gap:5,
                     }}>
-                      <span style={{fontFamily:mono, fontSize:13, color:chip.color, fontWeight:500}}>
-                        {chip.display}
-                      </span>
-                      <span style={{fontFamily:mono, fontSize:9, color:chip.color, opacity:0.65, letterSpacing:"0.05em", textTransform:"uppercase"}}>
-                        {chip.label}
+                      <span style={{fontFamily:mono, fontSize:13, color:ch.color, fontWeight:500}}>
+                        {ch.display}
                       </span>
                     </div>
-                    <span style={{fontFamily:mono, fontSize:9, color:C.dim, opacity:0.7}}>{chip.weight}</span>
+                    <span style={{fontFamily:mono, fontSize:9, color:C.dim, opacity:0.65}}>
+                      {ch.label} · ×{Math.round(ch.weight*100)}%
+                    </span>
                   </div>
                 </Fragment>
               ))}
-              {denominator > 0 && (
+              <span style={{fontFamily:mono, fontSize:11, color:C.dim, marginLeft:2}}>
+                )
+              </span>
+              {totalW < 0.999 && (
                 <>
-                  <span style={{fontFamily:mono, fontSize:12, color:C.dim, margin:"0 2px"}}>÷</span>
-                  <div style={{
-                    background:`${C.text}08`, border:`1px solid ${C.border}`,
-                    borderRadius:8, padding:"4px 10px",
-                  }}>
-                    <span style={{fontFamily:mono, fontSize:13, color:C.muted}}>{denominator}</span>
-                  </div>
-                  <span style={{fontFamily:mono, fontSize:12, color:C.dim, margin:"0 2px"}}>×</span>
-                  <div style={{
-                    background:`${C.text}08`, border:`1px solid ${C.border}`,
-                    borderRadius:8, padding:"4px 10px",
-                  }}>
-                    <span style={{fontFamily:mono, fontSize:13, color:C.muted}}>100</span>
-                  </div>
-                  <span style={{fontFamily:mono, fontSize:12, color:C.dim, margin:"0 4px"}}>=</span>
-                  <div style={{
-                    background:`${m.color}18`, border:`1px solid ${m.color}35`,
-                    borderRadius:8, padding:"4px 12px",
-                  }}>
-                    <span style={{fontFamily:mono, fontSize:14, color:m.color, fontWeight:600}}>{m.score ?? "—"}</span>
+                  <span style={{fontFamily:mono, fontSize:11, color:C.dim}}>÷</span>
+                  <div style={{background:`${C.text}08`, border:`1px solid ${C.border}`, borderRadius:8, padding:"4px 10px"}}>
+                    <span style={{fontFamily:mono, fontSize:13, color:C.muted}}>{Math.round(totalW*100)}%</span>
                   </div>
                 </>
               )}
+              <span style={{fontFamily:mono, fontSize:12, color:C.dim, margin:"0 2px"}}>=</span>
+              <div style={{background:`${m.color}18`, border:`1px solid ${m.color}35`, borderRadius:8, padding:"4px 12px"}}>
+                <span style={{fontFamily:mono, fontSize:14, color:m.color, fontWeight:600}}>{m.score ?? "—"}</span>
+              </div>
             </div>
+            {/* Note about HRV trend when no raw today value */}
+            {(expandedMetric === "readiness" || expandedMetric === "recovery") && !h.hrv && (
+              <span style={{fontFamily:mono, fontSize:9, color:C.dim, lineHeight:1.6, opacity:0.7}}>
+                * HRV trend uses your 7-day rolling average vs 30-day baseline — no today value needed.
+              </span>
+            )}
           </div>
         );
       })()}
