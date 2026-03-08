@@ -7,15 +7,15 @@ const THEMES = {
   dark: {
     // 3 depth levels: bg (page) < surface/card (bars+cards) < well (inset inputs)
     // Direction: bg is medium-dark, surface is lighter, well is darkest
-    bg:"#141412",      surface:"#232220",   card:"#232220",
-    well:"#1A1918",    border:"#2C2A28",    border2:"#383532",
+    bg:"#111110",      surface:"#1E1C1A",   card:"#1E1C1A",
+    well:"#171614",    border:"#272422",    border2:"#333028",
     text:"#D8CEC2",    muted:"#9A9088",     dim:"#6A6258",
     accent:"#D08828",
     green:"#4A9A68",   blue:"#4878A8",
     purple:"#8860B8",  red:"#B04840",       orange:"#D08828",
     yellow:"#B88828",
-    shadow:"0 1px 3px rgba(0,0,0,0.5),0 4px 16px rgba(0,0,0,0.3)",
-    shadowSm:"0 1px 3px rgba(0,0,0,0.35)",
+    shadow:"0 1px 4px rgba(0,0,0,0.6),0 6px 24px rgba(0,0,0,0.4)",
+    shadowSm:"0 1px 3px rgba(0,0,0,0.45)",
   },
   light: {
     // 3 depth levels: bg (page) < surface/card (bars+cards) < well (inset inputs)
@@ -51,7 +51,7 @@ function useIsMobile() {
 }
 
 
-const R = "12px";
+const R = "16px";
 
 const toKey = d => {
   const dt = d instanceof Date ? d : new Date(d);
@@ -3584,7 +3584,7 @@ function ChatFloat({date, token, userId, healthKey}) {
           });
           const data = await res.json();
           if (data.insight) text = data.insight;
-          else if (data.tier === "free") text = "Upgrade to Premium to unlock daily AI insights.";
+          else if (data.tier === "free") text = "Upgrade to Premium to unlock daily AI insights, voice entry, and chat.";
         }
         if (text) {
           const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
@@ -3966,7 +3966,7 @@ function ChatFloat({date, token, userId, healthKey}) {
                 {FREE_CHAT_LIMIT} free queries used
               </span>
               <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim, lineHeight: 1.6, textAlign: "center", maxWidth: 280 }}>
-                Upgrade to Premium for unlimited AI chat, daily insights, and voice entry.
+                Unlock daily AI insights, ask questions about your data, and add anything to Day Lab by voice.
               </span>
               <button onClick={() => window.location.href = "/upgrade"} style={{
                 background: C.accent, border: "none", borderRadius: 8,
@@ -3989,7 +3989,12 @@ function ChatFloat({date, token, userId, healthKey}) {
               padding: "8px 20px 2px", cursor: "pointer",
             }}>
               {preview ? (
-                <div style={{ fontFamily: mono, fontSize: 12, color: C.dim, lineHeight: 1.6, letterSpacing: "0.02em" }}>
+                <div style={{
+                  fontFamily: mono, fontSize: 12, color: C.text, lineHeight: 1.6, letterSpacing: "0.02em",
+                  opacity: 0.7,
+                  borderLeft: `2px solid ${C.accent}60`,
+                  paddingLeft: 10,
+                }}>
                   {preview}
                 </div>
               ) : (
@@ -4378,7 +4383,7 @@ export default function Dashboard() {
 
           {/* Widgets — row on wide, flat stack on narrow */}
           {mobile ? (
-            <div style={{display:"flex", flexDirection:"column", gap:8, paddingBottom:8}}>
+            <div style={{display:"flex", flexDirection:"column", gap:8, paddingBottom:160}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
                 collapsed={collapseMap[leftWidget.id]}
                 onToggle={toggleMap[leftWidget.id]}
@@ -4398,13 +4403,12 @@ export default function Dashboard() {
             <div style={{display:"flex", gap:8,
               flex:"1 1 0", minHeight:0,
               flexDirection:"row",
-              alignItems:"stretch", overflow:"hidden",
-              paddingBottom:120}}>
+              alignItems:"stretch", overflow:"hidden"}}>
 
               {/* Left column: Notes + left widget */}
               <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
                 display:"flex", flexDirection:"column", gap:8,
-                overflowY:"auto"}}>
+                overflowY:"auto", paddingBottom:130}}>
                 <div style={{flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column"}}>
                   <Widget label={leftWidget.label} color={leftWidget.color()}
                     collapsed={collapseMap[leftWidget.id]}
@@ -4418,7 +4422,7 @@ export default function Dashboard() {
               {/* Right widgets — column always */}
               <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
                 display:"flex", flexDirection:"column", gap:8,
-                overflowY:"auto"}}>
+                overflowY:"auto", paddingBottom:130}}>
                 {rightWidgets.map(w=>(
                   <div key={w.id} style={{
                     flex: collapseMap[w.id]?"0 0 auto":"1 1 0",
@@ -4438,6 +4442,12 @@ export default function Dashboard() {
         </div>
 
       {/* Floating chat pill — always visible, both mobile + desktop */}
+      {/* Fade scrim so cards dissolve into the bar */}
+      <div style={{
+        position:"fixed", bottom:0, left:0, right:0, height:80, zIndex:96,
+        background:`linear-gradient(to top, ${C.bg} 30%, transparent)`,
+        pointerEvents:"none",
+      }}/>
       <ChatFloat date={selected} token={token} userId={userId}
         healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
     </div>
