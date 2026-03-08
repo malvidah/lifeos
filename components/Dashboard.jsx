@@ -4367,7 +4367,7 @@ export default function Dashboard() {
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
-          paddingBottom:mobile?160:0, display:"flex", flexDirection:"column", gap:mobile?10:8}}>
+          paddingBottom:mobile?200:0, display:"flex", flexDirection:"column", gap:mobile?10:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
@@ -4386,7 +4386,7 @@ export default function Dashboard() {
 
           {/* Widgets — row on wide, flat stack on narrow */}
           {mobile ? (
-            <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:160}}>
+            <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
                 collapsed={collapseMap[leftWidget.id]}
                 onToggle={toggleMap[leftWidget.id]}
@@ -4406,12 +4406,12 @@ export default function Dashboard() {
             <div style={{display:"flex", gap:10,
               flex:"1 1 0", minHeight:0,
               flexDirection:"row",
-              alignItems:"stretch", overflow:"hidden"}}>
+              alignItems:"stretch"}}>
 
               {/* Left column: Notes + left widget */}
               <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
                 display:"flex", flexDirection:"column", gap:10,
-                overflowY:"auto", paddingBottom:130}}>
+                overflowY:"auto", paddingBottom:180}}>
                 <div style={{flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column"}}>
                   <Widget label={leftWidget.label} color={leftWidget.color()}
                     collapsed={collapseMap[leftWidget.id]}
@@ -4425,7 +4425,7 @@ export default function Dashboard() {
               {/* Right widgets — column always */}
               <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
                 display:"flex", flexDirection:"column", gap:10,
-                overflowY:"auto", paddingBottom:130}}>
+                overflowY:"auto", paddingBottom:180}}>
                 {rightWidgets.map(w=>(
                   <div key={w.id} style={{
                     flex: collapseMap[w.id]?"0 0 auto":"1 1 0",
