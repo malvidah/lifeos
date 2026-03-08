@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { createClient } from "../lib/supabase.js";
 
 
@@ -3846,48 +3846,46 @@ function ChatFloat({date, token, userId, healthKey}) {
         {/* ── Day Lab AI header — always pinned at top ── */}
         <div style={{
           width: "100%", maxWidth: 640, boxSizing: "border-box",
-          padding: "8px 16px 0",
-          display: "flex", alignItems: "center", justifyContent: "space-between",
+          padding: "0 16px",
+          height: 44,
+          display: "flex", alignItems: "center", gap: 10,
           flexShrink: 0,
-        }}>
-          {/* Left: label + badge */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-              Day Lab AI
-            </span>
-            {isPremiumUser ? (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: "#b8860b", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)",
-                borderRadius: 4, padding: "2px 6px",
-              }}>✦ premium</span>
-            ) : chatLimitReached ? (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: C.orange, background: `${C.orange}20`, border: `1px solid ${C.orange}40`,
-                borderRadius: 4, padding: "2px 6px",
-              }}>free · {chatQueryCount}/{FREE_CHAT_LIMIT} used</span>
-            ) : (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: C.muted, background: `${C.text}0a`, borderRadius: 4, padding: "2px 6px",
-              }}>{chatQueryCount}/{FREE_CHAT_LIMIT} free</span>
-            )}
-          </div>
-          {/* Right: chevron */}
-          <button
-            onClick={() => { setExpanded(e => !e); if (!expanded) setTimeout(() => inputRef.current?.focus(), 380); }}
+          cursor: "pointer",
+        }} onClick={() => { setExpanded(e => !e); if (!expanded) setTimeout(() => inputRef.current?.focus(), 380); }}>
+          {/* Chevron */}
+          <svg
+            width="13" height="13" viewBox="0 0 24 24" fill="none"
+            stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
             style={{
-              background: "none", border: "none", cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              width: 28, height: 28, borderRadius: "50%",
+              flexShrink: 0,
               transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
               transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
             }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={expanded ? C.accent : C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="18 15 12 9 6 15"/>
-            </svg>
-          </button>
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+          {/* Label */}
+          <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+            Day Lab AI
+          </span>
+          {/* Badge */}
+          {isPremiumUser ? (
+            <span style={{
+              fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+              color: "#b8860b", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)",
+              borderRadius: 4, padding: "2px 6px",
+            }}>✦ premium</span>
+          ) : chatLimitReached ? (
+            <span style={{
+              fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+              color: C.orange, background: `${C.orange}20`, border: `1px solid ${C.orange}40`,
+              borderRadius: 4, padding: "2px 6px",
+            }}>free · {chatQueryCount}/{FREE_CHAT_LIMIT} used</span>
+          ) : (
+            <span style={{
+              fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+              color: C.muted, background: `${C.text}0a`, borderRadius: 4, padding: "2px 6px",
+            }}>{chatQueryCount}/{FREE_CHAT_LIMIT} free</span>
+          )}
         </div>
 
         {/* ── Animated expandable chat area ── */}
@@ -3911,7 +3909,7 @@ function ChatFloat({date, token, userId, healthKey}) {
           }}>
             {/* Message bubbles — chips injected after the insight bubble */}
             {messages.map((msg, i) => (
-              <React.Fragment key={i}>
+              <Fragment key={i}>
                 <div style={{
                   display: "flex", flexDirection: "column",
                   alignItems: msg.role === "user" ? "flex-end" : "flex-start",
@@ -3953,7 +3951,7 @@ function ChatFloat({date, token, userId, healthKey}) {
                     ))}
                   </div>
                 )}
-              </React.Fragment>
+              </Fragment>
             ))}
             <div ref={messagesEndRef} />
           </div>
