@@ -2366,7 +2366,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",ck:"steps"},{label:"Active",value:h.activeMinutes,unit:"min",ck:"activeMinutes"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
-      fields:[{label:"HRV",value:h.hrv||"",unit:h.hrv?"ms":"",ck:"hrvTrend"},{label:"RHR",value:h.rhr||"",unit:h.rhr?"bpm":"",ck:"rhrTrend"}],
+      fields:[{label:"Calm",value:h.recoveryMins?String(Math.round(+h.recoveryMins)):"",unit:h.recoveryMins?"min":"",ck:"hrvTrend"},{label:"Stress",value:h.stressMins?String(Math.round(+h.stressMins)):"",unit:h.stressMins?"min":"",ck:"rhrTrend"}],
       sparkline:scores?.recovery?.sparkline},
   ];
 
@@ -2597,83 +2597,52 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         borderBottom:expandedMetric?`1px solid ${C.border}`:"none", position:"relative"}}>
         {metrics.map((m,mi)=>{
           const isTrend     = expandedMetric  === m.key;
-          const isBreakdown = breakdownMetric === m.key;
-          const isDimmed    = expandedMetric && !isTrend;
+          const isDimmed = expandedMetric && !isTrend;
           return (
             <div key={m.key}
-              style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"stretch",
+              onClick={()=>{ isTrend ? setExpandedMetric(null) : setExpandedMetric(m.key); }}
+              style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
                 boxSizing:"border-box", overflow:"hidden",
+                padding:"12px 14px",cursor:"pointer",
+                background: isTrend ? m.color+"0D" : "transparent",
+                borderBottom: isTrend ? `2px solid ${m.color}` : "2px solid transparent",
                 opacity: isDimmed ? 0.45 : 1,
-                transition:"opacity 0.2s",
+                transition:"background 0.2s, opacity 0.2s",
               }}>
-
-              {/* ── Left zone: Ring + label + fields → toggles contributors ── */}
-              <div
-                onClick={()=>{
-                  setBreakdownMetric(isBreakdown ? null : m.key);
-                  if (expandedMetric) setExpandedMetric(m.key);
-                }}
-                style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:12,
-                  padding:"12px 14px 12px 14px",cursor:"pointer",
-                  background: isBreakdown ? m.color+"0D" : "transparent",
-                  borderBottom: isBreakdown ? `2px solid ${m.color}` : "2px solid transparent",
-                  transition:"background 0.2s",
-                }}>
-                <div style={{flexShrink:0}}>
-                  <Ring score={m.score} color={m.color} size={48}/>
+              <div style={{flexShrink:0}}>
+                <Ring score={m.score} color={m.color} size={48}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
+                  <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
+                  {m.sparkline && (
+                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                      <Sparkline data={m.sparkline} color={isTrend ? m.color : C.dim} width={46} height={18}/>
+                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
+                        style={{transition:"transform 0.25s cubic-bezier(0.4,0,0.2,1)",transform:isTrend?"rotate(180deg)":"rotate(0deg)"}}>
+                        <polyline points="1,1 5,5 9,1" stroke={isTrend?m.color:C.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  )}
                 </div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
-                    <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                  </div>
-                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                    {m.fields.map(f=>{
-                      const sub = f.ck ? (scores?.[m.key]?.contributors?.[f.ck] ?? null) : null;
-                      const hasVal = f.value && f.value !== "—" && f.value !== "";
-                      const fc = !hasVal ? C.dim : sub == null ? C.dim : sub >= 70 ? C.green : sub < 45 ? C.red : C.muted;
-                      return (
-                        <div key={f.label}>
-                          <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
-                          <div style={{display:"flex",alignItems:"baseline",gap:2}}>
-                            <span style={{fontFamily:serif,fontSize:F.md,color:fc}}>{f.value||"—"}</span>
-                            {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:fc,opacity:0.7}}>{f.unit}</span>}
-                          </div>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                  {m.fields.map(f=>{
+                    const sub = f.ck ? (scores?.[m.key]?.contributors?.[f.ck] ?? null) : null;
+                    const hasVal = f.value && f.value !== "—" && f.value !== "";
+                    const fc = !hasVal ? C.dim : sub == null ? C.dim : sub >= 70 ? C.green : sub < 45 ? C.red : C.muted;
+                    return (
+                      <div key={f.label}>
+                        <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
+                        <div style={{display:"flex",alignItems:"baseline",gap:2}}>
+                          <span style={{fontFamily:serif,fontSize:F.md,color:fc}}>{f.value||"—"}</span>
+                          {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:fc,opacity:0.7}}>{f.unit}</span>}
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-
-              {/* ── Right zone: Sparkline + chevron → toggles trend ── */}
-              {m.sparkline && (
-                <div
-                  onClick={e=>{
-                    e.stopPropagation();
-                    if (isTrend) { setExpandedMetric(null); }
-                    else {
-                      setExpandedMetric(m.key);
-                      // Contributors follows if open
-                      if (breakdownMetric) setBreakdownMetric(m.key);
-                    }
-                  }}
-                  style={{
-                    flexShrink:0, display:"flex", flexDirection:"column",
-                    alignItems:"center", justifyContent:"center", gap:4,
-                    padding:"10px 14px 10px 8px", cursor:"pointer",
-                    background: isTrend ? m.color+"0D" : "transparent",
-                    borderBottom: isTrend ? `2px solid ${m.color}` : "2px solid transparent",
-                    borderLeft: `1px solid ${C.border}30`,
-                    transition:"background 0.2s",
-                  }}>
-                  <Sparkline data={m.sparkline} color={isTrend ? m.color : C.dim} width={52} height={20}/>
-                  <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
-                    style={{transition:"transform 0.25s cubic-bezier(0.4,0,0.2,1)", transform: isTrend ? "rotate(180deg)" : "rotate(0deg)"}}>
-                    <polyline points="1,1 5,5 9,1" stroke={isTrend ? m.color : C.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-              )}
             </div>
           );
         })}
