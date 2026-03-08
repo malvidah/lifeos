@@ -4005,9 +4005,6 @@ function ChatFloat({date, token, userId, healthKey, isPremium}) {
           boxSizing: "border-box",
         }}>
 
-              <polyline points="18 15 12 9 6 15"/>
-            </svg>
-          </button>
 
           {/* Text input */}
           <div style={{
