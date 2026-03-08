@@ -2676,13 +2676,13 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                   {avgVal != null && (
                     <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
                   )}
-                  {[\"12m\",\"30d\"].map(r => (
+                  {["12m","30d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
-                      style={{fontFamily:mono,fontSize:\"9px\",letterSpacing:\"0.05em\",
-                        padding:\"2px 6px\",borderRadius:4,cursor:\"pointer\",border:\"none\",
-                        background: trendRange===r ? m.color+\"33\" : \"transparent\",
+                      style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.05em",
+                        padding:"2px 6px",borderRadius:4,cursor:"pointer",border:"none",
+                        background: trendRange===r ? m.color+"33" : "transparent",
                         color: trendRange===r ? m.color : C.dim,
-                        transition:\"background 0.15s,color 0.15s\"}}>
+                        transition:"background 0.15s,color 0.15s"}}>
                       {r.toUpperCase()}
                     </button>
                   ))}
