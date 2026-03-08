@@ -2840,6 +2840,23 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   const totalKcal = [...safe, ...merged].reduce((s,r) => s + (r.kcal||0), 0);
   const totalProtein = showProtein ? [...safe, ...merged].reduce((s,r) => s + (r.protein||0), 0) : 0;
 
+  // Estimate for manual rows with no kcal (e.g. added via voice/chat, no blur fired)
+  useEffect(() => {
+    if (!token || !loaded) return;
+    safe
+      .filter(r => r.text?.trim() && !r.kcal && !estimating.current.has(r.id))
+      .forEach(row => {
+        estimating.current.add(row.id);
+        setTick(t => t+1);
+        estimateNutrition(promptFn(row.text), token).then(result => {
+          estimating.current.delete(row.id);
+          if (result) setRows(prev => (Array.isArray(prev)?prev:safe).map(r =>
+            r.id===row.id ? {...r, kcal:result.kcal||null, protein:result.protein||null} : r));
+          else setTick(t => t+1);
+        });
+      });
+  }, [safe.map(r=>r.id+r.text).join(","), loaded, token]); // eslint-disable-line
+
   // Estimate for synced rows with no native calories
   useEffect(() => {
     if (!token || !loaded || !estimatesLoaded) return;
@@ -3086,6 +3103,20 @@ function Activity({date,token,userId}) {
       }
     });
   },[date,token,userId]); // eslint-disable-line
+
+  // AI kcal estimation for manual rows with no kcal (e.g. added via voice/chat)
+  useEffect(()=>{
+    if(!token||!loaded)return;
+    safe.filter(r=>r.text?.trim()&&!r.kcal&&!estimating.current.has(r.id)).forEach(row=>{
+      estimating.current.add(row.id);
+      setTick(t=>t+1);
+      estimateNutrition(`Calories burned for: "${row.text}" for a typical adult. Return JSON: {"kcal":300}`, token).then(result=>{
+        estimating.current.delete(row.id);
+        if(result?.kcal) setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===row.id?{...r,kcal:result.kcal||null}:r));
+        else setTick(t=>t+1);
+      });
+    });
+  },[safe.map(r=>r.id+r.text).join(","),loaded,token]); // eslint-disable-line
 
   // AI kcal estimation for synced rows without native calories
   useEffect(()=>{
@@ -3454,12 +3485,15 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
 // ─── Chat / QuickAdd ──────────────────────────────────────────────────────────
 // Collapsed: floating entry bar (quick commands, no history).
 // Expanded: full-height panel with conversation history, Q&A + entry actions.
-function ChatFloat({date, token, userId}) {
+function ChatFloat({date, token, userId, healthKey}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [messages, setMessages] = useState([]); // [{role, content, actions, summary}]
-  const [status, setStatus] = useState(null); // {text, ok} | null — collapsed mode only
+  const [messages, setMessages] = useState([]); // [{role, content, actions, summary, isInsight}]
+  const [insightLoading, setInsightLoading] = useState(false);
+  const generatedInsightKey = useRef(null); // "date:healthKey" — prevents double-generation
+  const prevDate = useRef(date);
+
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -3468,7 +3502,7 @@ function ChatFloat({date, token, userId}) {
   const audioChunksRef = useRef([]);
   const recordingCancelledRef = useRef(false);
   const inputRef = useRef(null);
-  const statusTimer = useRef(null);
+
   const messagesEndRef = useRef(null);
 
   // Auto-resize textarea
@@ -3495,10 +3529,67 @@ function ChatFloat({date, token, userId}) {
     return () => window.removeEventListener("keydown", handler);
   }, [expanded]);
 
-  function showStatus(text, ok) {
-    clearTimeout(statusTimer.current);
-    setStatus({ text, ok });
-    statusTimer.current = setTimeout(() => setStatus(null), ok ? 3000 : 5000);
+  // ── Insight generation — seeded as messages[0] ──────────────────────────
+  useEffect(() => {
+    if (!token || !userId) return;
+    // Reset on date change
+    if (prevDate.current !== date) {
+      prevDate.current = date;
+      generatedInsightKey.current = null;
+      setMessages([]);
+    }
+    const [, sleep, readiness] = (healthKey || "::").split(":");
+    const hasRealData = (+sleep > 0) || (+readiness > 0);
+    const key = `${date}:${healthKey}`;
+    if (generatedInsightKey.current === key) return;
+
+    // Wait for real data; if none after 3s, proceed with whatever we have
+    const run = async () => {
+      if (generatedInsightKey.current === key) return;
+      generatedInsightKey.current = key;
+      setInsightLoading(true);
+      try {
+        // Check cache first
+        const cached = await dbLoad(date, "insights", token);
+        const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
+        const stale = !cached?.text || cached?.v !== 8 || age > 12 * 60 * 60 * 1000 ||
+          (cached?.healthKey !== undefined && cached.healthKey !== healthKey);
+        let text = null;
+        if (!stale) {
+          text = cached.text;
+        } else {
+          const res = await fetch("/api/insights", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ date, healthKey }),
+          });
+          const data = await res.json();
+          if (data.insight) text = data.insight;
+          else if (data.tier === "free") text = "Upgrade to Premium to unlock daily AI insights.";
+        }
+        if (text) {
+          const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
+            .replace(/^#{1,3}\s+/gm, '').replace(/^[A-Za-z]+,\s+\w+ \d+\n+/, '').trim();
+          setMessages(prev => {
+            // Replace existing insight (first message if isInsight) or prepend
+            const withoutInsight = prev.filter(m => !m.isInsight);
+            return [{ role: "assistant", content: clean, isInsight: true }, ...withoutInsight];
+          });
+        }
+      } catch (_) {}
+      setInsightLoading(false);
+    };
+
+    if (hasRealData) {
+      run();
+    } else {
+      const t = setTimeout(run, 3000);
+      return () => clearTimeout(t);
+    }
+  }, [date, token, userId, healthKey]); // eslint-disable-line
+
+  function logMicError(text) {
+    setMessages(prev => [...prev, { role: "assistant", content: text }]);
   }
 
   async function recordAndTranscribe() {
@@ -3528,14 +3619,14 @@ function ChatFloat({date, token, userId}) {
           });
           const data = await resp.json();
           if (data.text) setInput(prev => prev ? prev + " " + data.text : data.text);
-          else showStatus(data.error || "Could not transcribe", false);
-        } catch (e) { showStatus("Transcription failed", false); }
+          else logMicError(data.error || "Could not transcribe");
+        } catch (e) { logMicError("Transcription failed"); }
         setTranscribing(false);
       };
       mediaRecorderRef.current = recorder;
       recorder.start();
       setListening(true);
-    } catch (e) { showStatus("Microphone access denied", false); }
+    } catch (e) { logMicError("Microphone access denied"); }
   }
 
   function toggleMic() {
@@ -3550,7 +3641,7 @@ function ChatFloat({date, token, userId}) {
       return;
     }
     if (!SR) {
-      if (window.daylabNative) { showStatus("Voice not supported in this browser", false); return; }
+      if (window.daylabNative) { logMicError("Voice not supported in this browser"); return; }
       recordAndTranscribe();
       return;
     }
@@ -3570,9 +3661,9 @@ function ChatFloat({date, token, userId}) {
       setInput(finalTranscript + interim);
     };
     rec.onerror = (e) => {
-      if (e.error === "not-allowed") { showStatus("Microphone access denied", false); setListening(false); }
+      if (e.error === "not-allowed") { logMicError("Microphone access denied"); setListening(false); }
       else if (e.error === "network") { setListening(false); if (!window.daylabNative) recordAndTranscribe(); }
-      else if (e.error !== "no-speech" && e.error !== "aborted") { showStatus(`Mic error: ${e.error}`, false); setListening(false); }
+      else if (e.error !== "no-speech" && e.error !== "aborted") { logMicError(`Mic error: ${e.error}`); setListening(false); }
       else { setListening(false); }
     };
     rec.onend = () => { setListening(false); };
@@ -3614,6 +3705,14 @@ function ChatFloat({date, token, userId}) {
   }
 
   // ── Collapsed mode: quick command via voice-action ──────────────────────
+  function logToChat(userText, replyText) {
+    setMessages(prev => [
+      ...prev,
+      { role: "user", content: userText },
+      { role: "assistant", content: replyText },
+    ]);
+  }
+
   async function sendQuick() {
     if (!input.trim() || busy) return;
     const userText = input.trim();
@@ -3621,7 +3720,6 @@ function ChatFloat({date, token, userId}) {
     if (inputRef.current) inputRef.current.style.height = "auto";
     stopMic();
     setBusy(true);
-    setStatus(null);
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const res = await fetch("/api/voice-action", {
@@ -3632,17 +3730,17 @@ function ChatFloat({date, token, userId}) {
       const data = await res.json();
       if (data.ok && data.results?.length > 0) {
         dispatchRefresh(data.results.map(r => r.type), data.summary);
-        showStatus(data.summary || "Done", true);
+        logToChat(userText, data.summary || "Done");
       } else if (data.tier === "free") {
-        showStatus("Voice entry requires Premium", false);
+        logToChat(userText, "Voice entry requires Premium");
       } else if (data.message) {
-        showStatus(data.message, false);
+        logToChat(userText, data.message);
       } else if (data.error) {
-        showStatus(data.error, false);
+        logToChat(userText, data.error);
       } else {
-        showStatus("Not sure what to add — try being more specific", false);
+        logToChat(userText, "Not sure what to add — try being more specific");
       }
-    } catch (e) { showStatus("Something went wrong", false); }
+    } catch (e) { logToChat(userText, "Something went wrong"); }
     setBusy(false);
   }
 
@@ -3740,22 +3838,17 @@ function ChatFloat({date, token, userId}) {
               }}>×</button>
             </div>
 
-            {/* Empty state */}
-            {messages.length === 0 && (
-              <div style={{ padding: "24px 0", textAlign: "center" }}>
-                <div style={{ fontFamily: serif, fontSize: F.md, color: C.dim, lineHeight: 1.7 }}>
-                  Ask me anything about your day, or tell me what to add.
-                </div>
-                <div style={{ marginTop: 16, display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-                  {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
-                    <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 50); }} style={{
-                      background: `${C.accent}15`, border: `1px solid ${C.accent}30`,
-                      borderRadius: 20, padding: "6px 14px",
-                      fontFamily: mono, fontSize: 11, color: C.accent,
-                      cursor: "pointer", letterSpacing: "0.04em",
-                    }}>{s}</button>
-                  ))}
-                </div>
+            {/* Suggestion chips — shown when no user messages yet */}
+            {messages.filter(m => m.role === "user").length === 0 && !insightLoading && (
+              <div style={{ padding: "8px 0 4px", display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
+                  <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 50); }} style={{
+                    background: `${C.accent}15`, border: `1px solid ${C.accent}30`,
+                    borderRadius: 20, padding: "6px 14px",
+                    fontFamily: mono, fontSize: 11, color: C.accent,
+                    cursor: "pointer", letterSpacing: "0.04em",
+                  }}>{s}</button>
+                ))}
               </div>
             )}
 
@@ -3773,10 +3866,10 @@ function ChatFloat({date, token, userId}) {
                   borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                   background: msg.role === "user" ? C.accent : `${C.text}0d`,
                   color: msg.role === "user" ? "#fff" : C.text,
-                  fontFamily: msg.role === "user" ? mono : serif,
-                  fontSize: msg.role === "user" ? 13 : F.md,
+                  fontFamily: msg.role === "user" ? serif : mono,
+                  fontSize: msg.role === "user" ? F.md : 13,
                   lineHeight: 1.55,
-                  letterSpacing: msg.role === "user" ? "0.02em" : 0,
+                  letterSpacing: msg.role === "user" ? 0 : "0.02em",
                 }}>
                   {msg.content === null ? (
                     <span style={{ opacity: 0.5, fontFamily: mono, fontSize: 12 }}>thinking…</span>
@@ -3799,22 +3892,30 @@ function ChatFloat({date, token, userId}) {
           </div>
         )}
 
-        {/* ── Status bar (collapsed only) ── */}
-        {!expanded && status && (
-          <div style={{
-            padding: "7px 14px",
-            borderRadius: 8,
-            background: status.ok ? `${C.green}18` : `${C.red}15`,
-            border: `1px solid ${status.ok ? C.green : C.red}40`,
-            animation: "fadeInUp 0.18s ease",
-            width: "100%", maxWidth: 560, boxSizing: "border-box",
-            marginTop: 6,
-          }}>
-            <span style={{ fontFamily: mono, fontSize: F.sm, color: status.ok ? C.green : C.red, lineHeight: 1.5 }}>
-              {status.ok ? "✓ " : ""}{status.text}
-            </span>
-          </div>
-        )}
+
+        {/* ── Collapsed insight preview ── */}
+        {!expanded && (() => {
+          const insight = messages.find(m => m.isInsight);
+          if (!insight && !insightLoading) return null;
+          const preview = insight?.content ? insight.content.split("\n")[0].slice(0, 110) + (insight.content.length > 110 ? "…" : "") : null;
+          return (
+            <div onClick={() => setExpanded(true)} style={{
+              width: "100%", maxWidth: 640, boxSizing: "border-box",
+              padding: "8px 20px 2px",
+              cursor: "pointer",
+            }}>
+              {preview ? (
+                <div style={{ fontFamily: mono, fontSize: 12, color: C.dim, lineHeight: 1.6, letterSpacing: "0.02em" }}>
+                  {preview}
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <Shimmer width="60%" height={11} />
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ── Input row ── */}
         <div style={{
@@ -4031,7 +4132,6 @@ export default function Dashboard() {
   // ── Collapse state ─────────────────────────────────────────────────────
   const [calCollapsed,    toggleCal]      = useCollapse("cal",     false);
   const [healthCollapsed, toggleHealth]   = useCollapse("health",  true);
-  const [insightCollapsed,toggleInsight]  = useCollapse("insights",true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
@@ -4208,9 +4308,6 @@ export default function Dashboard() {
           {/* Widgets — row on wide, flat stack on narrow */}
           {mobile ? (
             <div style={{display:"flex", flexDirection:"column", gap:8, paddingBottom:8}}>
-              <InsightsCard date={selected} token={token} userId={userId}
-                healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
-                collapsed={insightCollapsed} onToggle={toggleInsight}/>
               <Widget label={leftWidget.label} color={leftWidget.color()}
                 collapsed={collapseMap[leftWidget.id]}
                 onToggle={toggleMap[leftWidget.id]}
@@ -4233,15 +4330,10 @@ export default function Dashboard() {
               alignItems:"stretch", overflow:"hidden",
               paddingBottom:80}}>
 
-              {/* Left column: Insights + Notes */}
+              {/* Left column: Notes + left widget */}
               <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
                 display:"flex", flexDirection:"column", gap:8,
                 overflowY:"auto"}}>
-                <div style={{flexShrink:0}}>
-                  <InsightsCard date={selected} token={token} userId={userId}
-                    healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
-                    collapsed={insightCollapsed} onToggle={toggleInsight}/>
-                </div>
                 <div style={{flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column"}}>
                   <Widget label={leftWidget.label} color={leftWidget.color()}
                     collapsed={collapseMap[leftWidget.id]}
@@ -4275,7 +4367,8 @@ export default function Dashboard() {
         </div>
 
       {/* Floating chat pill — always visible, both mobile + desktop */}
-      <ChatFloat date={selected} token={token} userId={userId}/>
+      <ChatFloat date={selected} token={token} userId={userId}
+        healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
     </div>
   );
 }
