@@ -2374,9 +2374,9 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
   ];
 
   // ── Trend panel state ──────────────────────────────────────────────────────
-  const [expandedMetric, setExpandedMetric] = useState(null);
+  const [expandedMetric, setExpandedMetric] = useState(null);  // controls trend
+  const [breakdownMetric, setBreakdownMetric] = useState(null); // controls score breakdown
   const [trendRange,     setTrendRange]     = useState("30d"); // "30d" | "12m"
-  const [showBreakdown,  setShowBreakdown]  = useState(false);
   const [trendData, setTrendData]           = useState({});
   const [trendLoading, setTrendLoading]     = useState(false);
 
@@ -2584,17 +2584,6 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             Calibrating…
           </span>
         )}
-        <button
-          onClick={e=>{e.stopPropagation();setShowBreakdown(v=>!v);}}
-          title="Score breakdown"
-          style={{
-            fontFamily:mono, fontSize:"9px", letterSpacing:"0.06em",
-            padding:"3px 7px", borderRadius:4, cursor:"pointer",
-            background: showBreakdown ? C.accent+"22" : "none",
-            border: `1px solid ${showBreakdown ? C.accent : C.border2}`,
-            color: showBreakdown ? C.accent : C.muted,
-            transition:"background 0.15s,color 0.15s,border 0.15s",
-          }}>i</button>
       </div>
       {/* Apple Health connect prompt — iOS only, shown when not yet authorized */}
       {hkStatus==="not_determined"&&!collapsed&&(
@@ -2610,17 +2599,18 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto",
         borderBottom:expandedMetric?`1px solid ${C.border}`:"none", position:"relative"}}>
         {metrics.map((m,mi)=>{
-          const isExpanded = expandedMetric === m.key;
-          const isDimmed   = expandedMetric && !isExpanded;
+          const isBreakdown = breakdownMetric === m.key;
+          const isTrend     = expandedMetric  === m.key;
+          const isDimmed    = breakdownMetric && !isBreakdown;
           return (
             <div key={m.key}
-              onClick={()=>{ setExpandedMetric(isExpanded ? null : m.key); }}
+              onClick={()=>{ setBreakdownMetric(isBreakdown ? null : m.key); }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 padding:"12px 14px",cursor:"pointer",transition:"opacity 0.2s, background 0.2s",
                 opacity: isDimmed ? 0.4 : 1,
-                background: isExpanded ? m.color + "0D" : "transparent",
+                background: isBreakdown ? m.color + "0D" : "transparent",
                 borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
-                borderBottom: isExpanded ? `2px solid ${m.color}` : "2px solid transparent",
+                borderBottom: isBreakdown ? `2px solid ${m.color}` : "2px solid transparent",
                 boxSizing:"border-box",
               }}>
               <div style={{flexShrink:0}}>
@@ -2629,7 +2619,14 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                   <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                  {m.sparkline && <Sparkline data={m.sparkline} color={m.color}/>}
+                  {m.sparkline && (
+                    <div onClick={e=>{e.stopPropagation(); setExpandedMetric(isTrend ? null : m.key);}}
+                      style={{cursor:"pointer", padding:"2px", borderRadius:4,
+                        background: isTrend ? m.color+"14" : "transparent",
+                        transition:"background 0.15s"}}>
+                      <Sparkline data={m.sparkline} color={m.color}/>
+                    </div>
+                  )}
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
@@ -2648,10 +2645,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         })}
       </div>}
 
-      {/* ── Score Breakdown — shown above trend when [i] is active ── */}
-      {!collapsed && expandedMetric && showBreakdown && (() => {
-        const m = metrics.find(x => x.key === expandedMetric);
-        const c = scores?.[expandedMetric]?.contributors ?? {};
+      {/* ── Score Breakdown — shown above trend when a score is clicked ── */}
+      {!collapsed && breakdownMetric && (() => {
+        const m = metrics.find(x => x.key === breakdownMetric);
+        const c = scores?.[breakdownMetric]?.contributors ?? {};
 
         // Always produce a chip, even with no data
         const mkChip = (topLabel, value, unit, scoreVal, weight) => {
@@ -2666,25 +2663,25 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         };
 
         let chips = [];
-        if (expandedMetric === "sleep") {
+        if (breakdownMetric === "sleep") {
           chips = [
             mkChip("HOURS SLEPT", h.sleepHrs ? (+h.sleepHrs).toFixed(1) : null, "h",   c.sleepHrs,   0.70),
             mkChip("EFFICIENCY",  h.sleepEff ? Math.round(+h.sleepEff)   : null, "%",   c.efficiency, 0.30),
           ];
-        } else if (expandedMetric === "readiness") {
+        } else if (breakdownMetric === "readiness") {
           chips = [
             mkChip("HRV TREND",  h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,              0.40),
             mkChip("RHR TREND",  h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,              0.30),
             mkChip("SLEEP",      scores?.sleep?.score ?? null, "",         scores?.sleep?.score, 0.30),
           ];
-        } else if (expandedMetric === "activity") {
+        } else if (breakdownMetric === "activity") {
           chips = [
             mkChip("STEPS",      h.steps ? Number(h.steps).toLocaleString() : null, "",    c.steps,         0.35),
             mkChip("ACTIVE",     h.activeMinutes ?? null, "min",                           c.activeMinutes, 0.35),
             mkChip("FREQUENCY",  null, "",                                                 c.frequency,     0.15),
             mkChip("REST BAL.",  null, "",                                                 c.recovery,      0.15),
           ];
-        } else if (expandedMetric === "recovery") {
+        } else if (breakdownMetric === "recovery") {
           chips = [
             mkChip("7D HRV",  h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50),
             mkChip("7D RHR",  h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30),
