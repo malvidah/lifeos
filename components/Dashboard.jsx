@@ -3485,7 +3485,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
 // ─── Chat / QuickAdd ──────────────────────────────────────────────────────────
 // Collapsed: floating entry bar (quick commands, no history).
 // Expanded: full-height panel with conversation history, Q&A + entry actions.
-function ChatFloat({date, token, userId, healthKey, isPremium}) {
+function ChatFloat({date, token, userId, healthKey}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -3496,15 +3496,20 @@ function ChatFloat({date, token, userId, healthKey, isPremium}) {
 
   const [chatQueryCount, setChatQueryCount] = useState(0);
   const [chatLimitReached, setChatLimitReached] = useState(false);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
   const FREE_CHAT_LIMIT = 10;
 
-  // Load chat query count from DB
+  // Load chat query count + premium status from DB
   useEffect(() => {
     if (!token || !userId) return;
-    dbLoad("global", "chat_usage", token).then(d => {
-      const count = d?.count || 0;
+    Promise.all([
+      dbLoad("global", "chat_usage", token),
+      dbLoad("global", "premium", token),
+    ]).then(([usage, prem]) => {
+      const count = usage?.count || 0;
       setChatQueryCount(count);
       if (count >= FREE_CHAT_LIMIT) setChatLimitReached(true);
+      setIsPremiumUser(prem?.active === true);
     });
   }, [token, userId]); // eslint-disable-line
 
@@ -3792,7 +3797,7 @@ function ChatFloat({date, token, userId, healthKey, isPremium}) {
         setMessages(prev => prev.slice(0, -1).concat(assistantMsg));
         if (data.refreshTypes?.length) dispatchRefresh(data.refreshTypes, data.summary);
         // Track usage for free accounts
-        if (!data.isPremium) {
+        if (!data.isPremium && !isPremiumUser) {
           const newCount = chatQueryCount + 1;
           setChatQueryCount(newCount);
           if (newCount >= FREE_CHAT_LIMIT) setChatLimitReached(true);
@@ -3847,7 +3852,7 @@ function ChatFloat({date, token, userId, healthKey, isPremium}) {
             <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Day Lab AI
             </span>
-            {isPremium ? (
+            {isPremiumUser ? (
               <span style={{
                 fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
                 color: "#b8860b", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)",
@@ -4434,8 +4439,7 @@ export default function Dashboard() {
 
       {/* Floating chat pill — always visible, both mobile + desktop */}
       <ChatFloat date={selected} token={token} userId={userId}
-        healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
-        isPremium={planInfo?.isPremium ?? false}/>
+        healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
     </div>
   );
 }
