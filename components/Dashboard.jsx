@@ -3846,10 +3846,11 @@ function ChatFloat({date, token, userId, healthKey}) {
         {/* ── Day Lab AI header — always pinned at top ── */}
         <div style={{
           width: "100%", maxWidth: 640, boxSizing: "border-box",
-          padding: "8px 20px 0",
+          padding: "8px 16px 0",
           display: "flex", alignItems: "center", justifyContent: "space-between",
           flexShrink: 0,
         }}>
+          {/* Left: label + badge */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
               Day Lab AI
@@ -3873,6 +3874,7 @@ function ChatFloat({date, token, userId, healthKey}) {
               }}>{chatQueryCount}/{FREE_CHAT_LIMIT} free</span>
             )}
           </div>
+          {/* Right: chevron */}
           <button
             onClick={() => { setExpanded(e => !e); if (!expanded) setTimeout(() => inputRef.current?.focus(), 380); }}
             style={{
@@ -3907,50 +3909,51 @@ function ChatFloat({date, token, userId, healthKey}) {
             scrollBehavior: "smooth",
             maxHeight: `calc(${panelH} - 60px)`,
           }}>
-            {/* Suggestion chips */}
-            {messages.filter(m => m.role === "user").length === 0 && !insightLoading && (
-              <div style={{ padding: "8px 0 4px", display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-                {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
-                  <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 50); }} style={{
-                    background: `${C.accent}15`, border: `1px solid ${C.accent}30`,
-                    borderRadius: 20, padding: "6px 14px",
-                    fontFamily: mono, fontSize: 11, color: C.accent,
-                    cursor: "pointer", letterSpacing: "0.04em",
-                  }}>{s}</button>
-                ))}
-              </div>
-            )}
-
-            {/* Message bubbles */}
+            {/* Message bubbles — chips injected after the insight bubble */}
             {messages.map((msg, i) => (
-              <div key={i} style={{
-                display: "flex", flexDirection: "column",
-                alignItems: msg.role === "user" ? "flex-end" : "flex-start",
-                gap: 4,
-              }}>
+              <React.Fragment key={i}>
                 <div style={{
-                  maxWidth: "85%",
-                  padding: "10px 14px",
-                  borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                  background: msg.role === "user" ? C.accent : `${C.text}0d`,
-                  color: msg.role === "user" ? "#fff" : C.text,
-                  fontFamily: msg.role === "user" ? serif : mono,
-                  fontSize: msg.role === "user" ? F.md : 13,
-                  lineHeight: 1.55,
-                  letterSpacing: msg.role === "user" ? 0 : "0.02em",
+                  display: "flex", flexDirection: "column",
+                  alignItems: msg.role === "user" ? "flex-end" : "flex-start",
+                  gap: 4,
                 }}>
-                  {msg.content === null ? (
-                    <span style={{ opacity: 0.5, fontFamily: mono, fontSize: 12 }}>thinking…</span>
-                  ) : msg.content}
-                </div>
-                {msg.actions?.length > 0 && msg.summary && (
                   <div style={{
-                    fontSize: 11, fontFamily: mono, color: C.green,
-                    background: `${C.green}15`, border: `1px solid ${C.green}30`,
-                    borderRadius: 12, padding: "3px 10px", letterSpacing: "0.04em",
-                  }}>✓ {msg.summary}</div>
+                    maxWidth: "85%",
+                    padding: "10px 14px",
+                    borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                    background: msg.role === "user" ? C.accent : `${C.text}0d`,
+                    color: msg.role === "user" ? "#fff" : C.text,
+                    fontFamily: msg.role === "user" ? serif : mono,
+                    fontSize: msg.role === "user" ? F.md : 13,
+                    lineHeight: 1.55,
+                    letterSpacing: msg.role === "user" ? 0 : "0.02em",
+                  }}>
+                    {msg.content === null ? (
+                      <span style={{ opacity: 0.5, fontFamily: mono, fontSize: 12 }}>thinking…</span>
+                    ) : msg.content}
+                  </div>
+                  {msg.actions?.length > 0 && msg.summary && (
+                    <div style={{
+                      fontSize: 11, fontFamily: mono, color: C.green,
+                      background: `${C.green}15`, border: `1px solid ${C.green}30`,
+                      borderRadius: 12, padding: "3px 10px", letterSpacing: "0.04em",
+                    }}>✓ {msg.summary}</div>
+                  )}
+                </div>
+                {/* Suggestion chips — rendered after the insight bubble, before any user message */}
+                {msg.isInsight && messages.filter(m => m.role === "user").length === 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-start", paddingLeft: 4 }}>
+                    {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
+                      <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 50); }} style={{
+                        background: `${C.accent}12`, border: `1px solid ${C.accent}28`,
+                        borderRadius: 20, padding: "5px 12px",
+                        fontFamily: mono, fontSize: 11, color: C.accent,
+                        cursor: "pointer", letterSpacing: "0.04em",
+                      }}>{s}</button>
+                    ))}
+                  </div>
                 )}
-              </div>
+              </React.Fragment>
             ))}
             <div ref={messagesEndRef} />
           </div>
