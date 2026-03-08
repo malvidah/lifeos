@@ -2648,6 +2648,87 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         })}
       </div>}
 
+      {/* ── Score Breakdown — shown above trend when [i] is active ── */}
+      {!collapsed && expandedMetric && showBreakdown && (() => {
+        const m = metrics.find(x => x.key === expandedMetric);
+        const c = scores?.[expandedMetric]?.contributors ?? {};
+
+        // Always produce a chip, even with no data
+        const mkChip = (topLabel, value, unit, scoreVal, weight) => {
+          const hasData = value != null;
+          const s = scoreVal;
+          const isGood = s != null && s >= 70;
+          const isBad  = s != null && s < 45;
+          const color  = !hasData ? C.dim : isGood ? C.green : isBad ? C.red : C.muted;
+          const bg     = !hasData ? `${C.text}06` : isGood ? `${C.green}14` : isBad ? `${C.red}14` : `${C.text}08`;
+          const border = !hasData ? C.border : isGood ? `${C.green}30` : isBad ? `${C.red}30` : C.border;
+          return { topLabel, value: hasData ? value : null, unit: hasData ? unit : null, color, bg, border, weight };
+        };
+
+        let chips = [];
+        if (expandedMetric === "sleep") {
+          chips = [
+            mkChip("HOURS SLEPT", h.sleepHrs ? (+h.sleepHrs).toFixed(1) : null, "h",   c.sleepHrs,   0.70),
+            mkChip("EFFICIENCY",  h.sleepEff ? Math.round(+h.sleepEff)   : null, "%",   c.efficiency, 0.30),
+          ];
+        } else if (expandedMetric === "readiness") {
+          chips = [
+            mkChip("HRV TREND",  h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,              0.40),
+            mkChip("RHR TREND",  h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,              0.30),
+            mkChip("SLEEP",      scores?.sleep?.score ?? null, "",         scores?.sleep?.score, 0.30),
+          ];
+        } else if (expandedMetric === "activity") {
+          chips = [
+            mkChip("STEPS",      h.steps ? Number(h.steps).toLocaleString() : null, "",    c.steps,         0.35),
+            mkChip("ACTIVE",     h.activeMinutes ?? null, "min",                           c.activeMinutes, 0.35),
+            mkChip("FREQUENCY",  null, "",                                                 c.frequency,     0.15),
+            mkChip("REST BAL.",  null, "",                                                 c.recovery,      0.15),
+          ];
+        } else if (expandedMetric === "recovery") {
+          chips = [
+            mkChip("7D HRV",  h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50),
+            mkChip("7D RHR",  h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30),
+            mkChip("SLEEP",   scores?.sleep?.score ?? null, "",           scores?.sleep?.score, 0.20),
+          ];
+        }
+
+        // Sort by weight descending — most impactful first
+        chips.sort((a, b) => b.weight - a.weight);
+
+        return (
+          <div style={{
+            borderTop: `1px solid ${C.border}`,
+            padding: "10px 16px 12px",
+            display: "flex", flexDirection: "column", gap: 8,
+            animation: "fadeInUp 0.18s ease",
+          }}>
+            <span style={{fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase", color:m.color}}>
+              score breakdown
+            </span>
+            <div style={{display:"flex", alignItems:"flex-start", flexWrap:"wrap", gap:6}}>
+              {chips.map((ch) => (
+                <div key={ch.topLabel} style={{
+                  background: ch.bg, border: `1px solid ${ch.border}`,
+                  borderRadius: 6, padding: "5px 10px",
+                  display:"flex", flexDirection:"column", alignItems:"flex-start", gap:2,
+                  minWidth: 48,
+                }}>
+                  <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.65, letterSpacing:"0.06em", textTransform:"uppercase", lineHeight:1}}>
+                    {ch.topLabel}
+                  </span>
+                  <div style={{display:"flex", alignItems:"baseline", gap:2}}>
+                    <span style={{fontFamily:serif, fontSize:F.md, color:ch.value != null ? ch.color : C.dim, lineHeight:1}}>
+                      {ch.value ?? "no data"}
+                    </span>
+                    {ch.unit && <span style={{fontFamily:mono, fontSize:F.sm, color:ch.color, opacity:0.7}}>{ch.unit}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Trend panel — always rendered at fixed height to prevent layout shift ── */}
       {!collapsed && (() => {
         const m = expandedMetric ? metrics.find(x => x.key === expandedMetric) : null;
@@ -2705,87 +2786,6 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         );
       })()}
 
-      {/* ── Score Breakdown ─────────────────────────────────────────────────── */}
-      {!collapsed && expandedMetric && showBreakdown && (() => {
-        const m = metrics.find(x => x.key === expandedMetric);
-        if (!m || !scores?.[expandedMetric]?.contributors) return null;
-        const c = scores[expandedMetric].contributors;
-
-        // chip(label, displayVal, subScore 0-100, weight)
-        const mkChip = (label, display, score, weight) => {
-          if (score == null) return null;
-          const isGood = score >= 70;
-          const isBad  = score < 45;
-          return {
-            label, display: display ?? `${score}`,
-            color:  isGood ? C.green  : isBad ? C.red  : C.muted,
-            bg:     isGood ? `${C.green}18` : isBad ? `${C.red}18`  : `${C.text}0a`,
-            border: isGood ? `${C.green}35` : isBad ? `${C.red}35`  : C.border,
-            weight, score,
-          };
-        };
-
-        let chips = [];
-        if (expandedMetric === "sleep") {
-          chips = [
-            mkChip("hours slept",  h.sleepHrs ? `${(+h.sleepHrs).toFixed(1)}h` : null,  c.sleepHrs,   0.70),
-            mkChip("efficiency",   h.sleepEff ? `${Math.round(+h.sleepEff)}%`  : null,  c.efficiency, 0.30),
-          ];
-        } else if (expandedMetric === "readiness") {
-          chips = [
-            mkChip("HRV trend",  h.hrv ? `${Math.round(+h.hrv)}ms` : "trend", c.hrv,              0.40),
-            mkChip("RHR trend",  h.rhr ? `${Math.round(+h.rhr)}bpm`: "trend", c.rhr,              0.30),
-            mkChip("sleep",      scores?.sleep?.score != null ? `${scores.sleep.score}` : null, scores?.sleep?.score, 0.30),
-          ];
-        } else if (expandedMetric === "activity") {
-          chips = [
-            mkChip("steps",      h.steps ? Number(h.steps).toLocaleString() : null, c.steps,         0.35),
-            mkChip("active min", h.activeMinutes ? `${h.activeMinutes}m` : null,    c.activeMinutes, 0.35),
-            mkChip("frequency",  null, c.frequency, 0.15),
-            mkChip("rest bal.",  null, c.recovery,  0.15),
-          ];
-        } else if (expandedMetric === "recovery") {
-          chips = [
-            mkChip("HRV 7d",  h.hrv ? `${Math.round(+h.hrv)}ms`  : "trend", c.hrvTrend, 0.50),
-            mkChip("RHR 7d",  h.rhr ? `${Math.round(+h.rhr)}bpm` : "trend", c.rhrTrend, 0.30),
-            mkChip("sleep",   scores?.sleep?.score != null ? `${scores.sleep.score}` : null, scores?.sleep?.score, 0.20),
-          ];
-        }
-
-        // Filter nulls then sort by weight descending (most impactful first)
-        chips = chips.filter(Boolean).sort((a, b) => b.weight - a.weight);
-        if (!chips.length) return null;
-
-        return (
-          <div style={{
-            borderTop: `1px solid ${C.border}`,
-            padding: "10px 16px 14px",
-            display: "flex", flexDirection: "column", gap: 8,
-            animation: "fadeInUp 0.18s ease",
-          }}>
-            <span style={{fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase", color:C.dim}}>
-              breakdown
-            </span>
-            <div style={{display:"flex", alignItems:"flex-start", flexWrap:"wrap", gap:6}}>
-              {chips.map((ch) => (
-                <div key={ch.label} style={{
-                  background: ch.bg, border: `1px solid ${ch.border}`,
-                  borderRadius: 8, padding: "5px 11px",
-                  display:"flex", flexDirection:"column", alignItems:"center", gap:2,
-                  minWidth: 52,
-                }}>
-                  <span style={{fontFamily:mono, fontSize:14, color:ch.color, fontWeight:600, lineHeight:1}}>
-                    {ch.display}
-                  </span>
-                  <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.65, letterSpacing:"0.05em", textTransform:"uppercase"}}>
-                    {ch.label}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
     </Card>
   );
 }
