@@ -2682,21 +2682,18 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         const m = metrics.find(x => x.key === breakdownMetric);
         const c = scores?.[breakdownMetric]?.contributors ?? {};
 
-        // chip(topLabel, rawValue, unit, scoreVal, weight)
-        // Color logic: use raw value thresholds for known metrics, fall back to scoreVal
-        const mkChip = (topLabel, value, unit, scoreVal, weight, colorFn) => {
+        // chip color from sub-score (reflects personal baseline when calibrated)
+        // Only override with raw-value thresholds for metrics where absolute range is meaningful
+        const mkChip = (topLabel, value, unit, scoreVal, weight) => {
           const hasData = value != null;
-          // colorFn(value) returns 'good'|'bad'|'neutral', or fall back to scoreVal
-          let status = "neutral";
-          if (colorFn && hasData) { status = colorFn(value); }
-          else if (scoreVal != null) { status = scoreVal >= 70 ? "good" : scoreVal < 45 ? "bad" : "neutral"; }
-          const color  = status === "good" ? C.green : status === "bad" ? C.red : C.muted;
-          const bg     = status === "good" ? `${C.green}14` : status === "bad" ? `${C.red}14` : `${C.text}08`;
-          const border = status === "good" ? `${C.green}30` : status === "bad" ? `${C.red}30` : C.border;
+          const s = scoreVal;
+          const isGood = s != null && s >= 70;
+          const isBad  = s != null && s < 45;
+          const color  = !hasData ? C.dim : isGood ? C.green : isBad ? C.red : C.muted;
+          const bg     = !hasData ? `${C.text}06` : isGood ? `${C.green}14` : isBad ? `${C.red}14` : `${C.text}08`;
+          const border = !hasData ? C.border : isGood ? `${C.green}30` : isBad ? `${C.red}30` : C.border;
           return { topLabel, value: hasData ? value : null, unit: hasData ? unit : null, color, bg, border, weight };
         };
-        const rhrColor = v => v <= 65 ? "good" : v <= 75 ? "neutral" : "bad";
-        const hrvColor = v => v >= 60 ? "good" : v >= 40 ? "neutral" : "bad";
 
         let chips = [];
         if (breakdownMetric === "sleep") {
@@ -2719,8 +2716,8 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           ];
         } else if (breakdownMetric === "recovery") {
           chips = [
-            mkChip("HRV 7D", h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50, hrvColor),
-            mkChip("RHR 7D", h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30, rhrColor),
+            mkChip("HRV 7D", h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50),
+            mkChip("RHR 7D", h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30),
             mkChip("SLEEP",   scores?.sleep?.score ?? null, "",           scores?.sleep?.score, 0.20),
           ];
         }
@@ -2738,6 +2735,11 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             <span style={{fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase", color:m.color}}>
               contributors
             </span>
+            {scores?.calibrated && (
+              <span style={{fontFamily:mono, fontSize:9, color:C.dim, opacity:0.7}}>
+                scored vs your personal baseline
+              </span>
+            )}
             <div style={{display:"flex", alignItems:"flex-start", flexWrap:"wrap", gap:6}}>
               {chips.map((ch) => (
                 <div key={ch.topLabel} style={{
