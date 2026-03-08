@@ -2617,13 +2617,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                   <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
                   {m.sparkline && (
-                    <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                      <Sparkline data={m.sparkline} color={isTrend ? m.color : C.dim} width={46} height={18}/>
-                      <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
-                        style={{transition:"transform 0.25s cubic-bezier(0.4,0,0.2,1)",transform:isTrend?"rotate(180deg)":"rotate(0deg)"}}>
-                        <polyline points="1,1 5,5 9,1" stroke={isTrend?m.color:C.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </div>
+                    <Sparkline data={m.sparkline} color={m.color} width={46} height={18}/>
                   )}
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
