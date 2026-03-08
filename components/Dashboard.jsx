@@ -3967,7 +3967,6 @@ function ChatFloat({date, token, userId, healthKey}) {
         borderTop: `1px solid ${C.border}50`,
         borderRadius: expanded ? "20px 20px 0 0" : 0,
         boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.4)" : "0 -1px 0 rgba(255,255,255,0.04)",
-        transition: "box-shadow 0.32s cubic-bezier(0.4,0,0.2,1), border-radius 0.32s cubic-bezier(0.4,0,0.2,1), background 0.32s ease",
       }}>
 
         {/* ── Day Lab AI header — always pinned at top ── */}
@@ -4015,19 +4014,13 @@ function ChatFloat({date, token, userId, healthKey}) {
           )}
         </div>
 
-        {/* ── Animated expandable chat area ── */}
-        <div style={{
-          width: "100%",
-          maxHeight: expanded ? panelH : "0px",
-          overflow: "hidden",
-          opacity: expanded ? 1 : 0,
-          transition: expanded
-            ? "max-height 0.36s cubic-bezier(0.4,0,0.2,1), opacity 0.18s ease"
-            : "opacity 0.14s ease, max-height 0.32s cubic-bezier(0.4,0,0.2,1) 0.1s",
-          display: "flex", flexDirection: "column", alignItems: "center",
-          position: "relative",
-          willChange: "max-height, opacity",
-        }}>
+        {/* ── Expandable chat area ── */}
+        {expanded && (
+          <div style={{
+            width: "100%",
+            display: "flex", flexDirection: "column", alignItems: "center",
+            position: "relative",
+          }}>
           <div style={{
             width: "100%", maxWidth: 640,
             overflowY: "auto",
@@ -4109,7 +4102,7 @@ function ChatFloat({date, token, userId, healthKey}) {
               }}>Upgrade to Premium →</button>
             </div>
           )}
-        </div>
+        )}
 
         {/* ── Collapsed insight preview ── */}
         {!expanded && (() => {
