@@ -2613,7 +2613,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
 
               {/* ── Left zone: Ring + label + fields → toggles contributors ── */}
               <div
-                onClick={()=>setBreakdownMetric(isBreakdown ? null : m.key)}
+                onClick={()=>{
+                  setBreakdownMetric(isBreakdown ? null : m.key);
+                  if (expandedMetric) setExpandedMetric(m.key);
+                }}
                 style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:12,
                   padding:"12px 14px 12px 14px",cursor:"pointer",
                   background: isBreakdown ? m.color+"0D" : "transparent",
