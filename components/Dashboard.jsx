@@ -2681,10 +2681,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       {!collapsed && breakdownMetric && (() => {
         const m = metrics.find(x => x.key === breakdownMetric);
         const c = scores?.[breakdownMetric]?.contributors ?? {};
+        const bl = scores?.[breakdownMetric]?.baselines ?? {};
 
         // chip color from sub-score (reflects personal baseline when calibrated)
-        // Only override with raw-value thresholds for metrics where absolute range is meaningful
-        const mkChip = (topLabel, value, unit, scoreVal, weight) => {
+        const mkChip = (topLabel, value, unit, scoreVal, weight, baselineVal, baselineLabel) => {
           const hasData = value != null;
           const s = scoreVal;
           const isGood = s != null && s >= 70;
@@ -2692,7 +2692,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           const color  = !hasData ? C.dim : isGood ? C.green : isBad ? C.red : C.muted;
           const bg     = !hasData ? `${C.text}06` : isGood ? `${C.green}14` : isBad ? `${C.red}14` : `${C.text}08`;
           const border = !hasData ? C.border : isGood ? `${C.green}30` : isBad ? `${C.red}30` : C.border;
-          return { topLabel, value: hasData ? value : null, unit: hasData ? unit : null, color, bg, border, weight };
+          return { topLabel, value: hasData ? value : null, unit: hasData ? unit : null, color, bg, border, weight, baselineVal, baselineLabel: baselineLabel ?? null };
         };
 
         let chips = [];
@@ -2703,22 +2703,22 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           ];
         } else if (breakdownMetric === "readiness") {
           chips = [
-            mkChip("HRV",   h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,   0.40),
-            mkChip("RHR",   h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,   0.30),
-            mkChip("SLEEP",      scores?.sleep?.score ?? null, "",         scores?.sleep?.score, 0.30),
+            mkChip("HRV",   h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,   0.40, bl.hrv != null ? `${bl.hrv} ms` : null, "90D AVG"),
+            mkChip("RHR",   h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,   0.30, bl.rhr != null ? `${bl.rhr} bpm` : null, "60D AVG"),
+            mkChip("SLEEP", scores?.sleep?.score ?? null, "",           scores?.sleep?.score, 0.30),
           ];
         } else if (breakdownMetric === "activity") {
           chips = [
-            mkChip("STEPS",      h.steps ? Number(h.steps).toLocaleString() : null, "",    c.steps,         0.35),
-            mkChip("ACTIVE",     h.activeMinutes ?? null, "min",                           c.activeMinutes, 0.35),
-            mkChip("FREQUENCY",  null, "",                                                 c.frequency,     0.15),
-            mkChip("REST BAL.",  null, "",                                                 c.recovery,      0.15),
+            mkChip("STEPS",     h.steps ? Number(h.steps).toLocaleString() : null, "",    c.steps,         0.35),
+            mkChip("ACTIVE",    h.activeMinutes ?? null, "min",                           c.activeMinutes, 0.35),
+            mkChip("FREQUENCY", null, "",                                                 c.frequency,     0.15),
+            mkChip("REST BAL.", null, "",                                                 c.recovery,      0.15),
           ];
         } else if (breakdownMetric === "recovery") {
           chips = [
-            mkChip("HRV 7D", h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50),
-            mkChip("RHR 7D", h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30),
-            mkChip("SLEEP",   scores?.sleep?.score ?? null, "",           scores?.sleep?.score, 0.20),
+            mkChip("HRV 7D", h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50, bl.hrv != null ? `${bl.hrv} ms` : null,  "30D AVG"),
+            mkChip("RHR 7D", h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30, bl.rhr != null ? `${bl.rhr} bpm` : null, "30D AVG"),
+            mkChip("SLEEP",  scores?.sleep?.score ?? null, "",           scores?.sleep?.score, 0.20),
           ];
         }
 
@@ -2744,19 +2744,39 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
               {chips.map((ch) => (
                 <div key={ch.topLabel} style={{
                   background: ch.bg, border: `1px solid ${ch.border}`,
-                  borderRadius: 6, padding: "5px 10px",
-                  display:"flex", flexDirection:"column", alignItems:"flex-start", gap:2,
-                  minWidth: 48,
+                  borderRadius: 6, overflow: "hidden",
+                  display: "flex", flexDirection: "column", alignItems: "stretch",
+                  minWidth: ch.baselineVal ? 80 : 56,
                 }}>
-                  <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.65, letterSpacing:"0.06em", textTransform:"uppercase", lineHeight:1}}>
-                    {ch.topLabel}
-                  </span>
-                  <div style={{display:"flex", alignItems:"baseline", gap:2}}>
-                    <span style={{fontFamily:serif, fontSize:F.md, color:ch.value != null ? ch.color : C.dim, lineHeight:1}}>
-                      {ch.value ?? "no data"}
+                  {/* Label */}
+                  <div style={{ padding: "5px 10px 3px", borderBottom: ch.baselineVal ? `1px solid ${ch.border}` : "none" }}>
+                    <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.65, letterSpacing:"0.06em", textTransform:"uppercase", lineHeight:1}}>
+                      {ch.topLabel}
                     </span>
-                    {ch.unit && <span style={{fontFamily:mono, fontSize:F.sm, color:ch.color, opacity:0.7}}>{ch.unit}</span>}
                   </div>
+                  {/* Split today / baseline or single value */}
+                  {ch.baselineVal ? (
+                    <div style={{ display: "flex", alignItems: "stretch" }}>
+                      <div style={{ flex: 1, padding: "5px 8px 6px", display: "flex", flexDirection: "column", gap: 1, borderRight: `1px solid ${ch.border}` }}>
+                        <span style={{fontFamily:mono, fontSize:8, color:C.dim, opacity:0.6, letterSpacing:"0.05em", textTransform:"uppercase", lineHeight:1}}>TODAY</span>
+                        <div style={{display:"flex", alignItems:"baseline", gap:2}}>
+                          <span style={{fontFamily:serif, fontSize:F.md, color:ch.color, lineHeight:1}}>{ch.value ?? "—"}</span>
+                          {ch.unit && <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.7}}>{ch.unit}</span>}
+                        </div>
+                      </div>
+                      <div style={{ flex: 1, padding: "5px 8px 6px", display: "flex", flexDirection: "column", gap: 1 }}>
+                        <span style={{fontFamily:mono, fontSize:8, color:C.dim, opacity:0.6, letterSpacing:"0.05em", textTransform:"uppercase", lineHeight:1}}>{ch.baselineLabel}</span>
+                        <span style={{fontFamily:serif, fontSize:F.md, color:C.muted, lineHeight:1}}>{ch.baselineVal}</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ padding: "4px 10px 6px", display:"flex", alignItems:"baseline", gap:2 }}>
+                      <span style={{fontFamily:serif, fontSize:F.md, color:ch.value != null ? ch.color : C.dim, lineHeight:1}}>
+                        {ch.value ?? "no data"}
+                      </span>
+                      {ch.unit && <span style={{fontFamily:mono, fontSize:F.sm, color:ch.color, opacity:0.7}}>{ch.unit}</span>}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
