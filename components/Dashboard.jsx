@@ -2735,48 +2735,24 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             <span style={{fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase", color:m.color}}>
               contributors
             </span>
-            {scores?.calibrated && (
-              <span style={{fontFamily:mono, fontSize:9, color:C.dim, opacity:0.7}}>
-                scored vs your personal baseline
-              </span>
-            )}
+
             <div style={{display:"flex", alignItems:"flex-start", flexWrap:"wrap", gap:6}}>
               {chips.map((ch) => (
                 <div key={ch.topLabel} style={{
                   background: ch.bg, border: `1px solid ${ch.border}`,
-                  borderRadius: 6, overflow: "hidden",
-                  display: "flex", flexDirection: "column", alignItems: "stretch",
-                  minWidth: ch.baselineVal ? 80 : 56,
+                  borderRadius: 6, padding: "5px 10px",
+                  display:"flex", flexDirection:"column", alignItems:"flex-start", gap:2,
+                  minWidth: 48,
                 }}>
-                  {/* Label */}
-                  <div style={{ padding: "5px 10px 3px", borderBottom: ch.baselineVal ? `1px solid ${ch.border}` : "none" }}>
-                    <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.65, letterSpacing:"0.06em", textTransform:"uppercase", lineHeight:1}}>
-                      {ch.topLabel}
+                  <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.65, letterSpacing:"0.06em", textTransform:"uppercase", lineHeight:1}}>
+                    {ch.topLabel}
+                  </span>
+                  <div style={{display:"flex", alignItems:"baseline", gap:2}}>
+                    <span style={{fontFamily:serif, fontSize:F.md, color:ch.value != null ? ch.color : C.dim, lineHeight:1}}>
+                      {ch.value ?? "no data"}
                     </span>
+                    {ch.unit && <span style={{fontFamily:mono, fontSize:F.sm, color:ch.color, opacity:0.7}}>{ch.unit}</span>}
                   </div>
-                  {/* Split today / baseline or single value */}
-                  {ch.baselineVal ? (
-                    <div style={{ display: "flex", alignItems: "stretch" }}>
-                      <div style={{ flex: 1, padding: "5px 8px 6px", display: "flex", flexDirection: "column", gap: 1, borderRight: `1px solid ${ch.border}` }}>
-                        <span style={{fontFamily:mono, fontSize:8, color:C.dim, opacity:0.6, letterSpacing:"0.05em", textTransform:"uppercase", lineHeight:1}}>TODAY</span>
-                        <div style={{display:"flex", alignItems:"baseline", gap:2}}>
-                          <span style={{fontFamily:serif, fontSize:F.md, color:ch.color, lineHeight:1}}>{ch.value ?? "—"}</span>
-                          {ch.unit && <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.7}}>{ch.unit}</span>}
-                        </div>
-                      </div>
-                      <div style={{ flex: 1, padding: "5px 8px 6px", display: "flex", flexDirection: "column", gap: 1 }}>
-                        <span style={{fontFamily:mono, fontSize:8, color:C.dim, opacity:0.6, letterSpacing:"0.05em", textTransform:"uppercase", lineHeight:1}}>{ch.baselineLabel}</span>
-                        <span style={{fontFamily:serif, fontSize:F.md, color:C.muted, lineHeight:1}}>{ch.baselineVal}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ padding: "4px 10px 6px", display:"flex", alignItems:"baseline", gap:2 }}>
-                      <span style={{fontFamily:serif, fontSize:F.md, color:ch.value != null ? ch.color : C.dim, lineHeight:1}}>
-                        {ch.value ?? "no data"}
-                      </span>
-                      {ch.unit && <span style={{fontFamily:mono, fontSize:F.sm, color:ch.color, opacity:0.7}}>{ch.unit}</span>}
-                    </div>
-                  )}
                 </div>
               ))}
             </div>
