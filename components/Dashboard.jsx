@@ -4104,6 +4104,7 @@ function ChatFloat({date, token, userId, healthKey}) {
               }}>Upgrade to Premium →</button>
             </div>
           )}
+          </div>
         )}
 
         {/* ── Collapsed insight preview ── */}
