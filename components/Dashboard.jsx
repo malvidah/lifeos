@@ -864,7 +864,8 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
   }, [selected]);
   const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   return (
-    <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,
+    <div style={{background:`${C.surface}e8`, borderBottom:`1px solid ${C.border}50`,
+      backdropFilter:"blur(20px) saturate(1.4)", WebkitBackdropFilter:"blur(20px) saturate(1.4)",
       padding:"0 16px",
       paddingTop: "env(safe-area-inset-top, 0px)",
       height: "calc(44px + env(safe-area-inset-top, 0px))",
@@ -3834,11 +3835,13 @@ function ChatFloat({date, token, userId, healthKey}) {
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
-        background: C.surface,
-        borderTop: `1px solid ${C.border}`,
+        background: expanded ? C.surface : `${C.surface}e8`,
+        backdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
+        WebkitBackdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
+        borderTop: `1px solid ${C.border}50`,
         borderRadius: expanded ? "20px 20px 0 0" : 0,
-        boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.3)" : "none",
-        transition: "box-shadow 0.35s cubic-bezier(0.4,0,0.2,1), border-radius 0.35s cubic-bezier(0.4,0,0.2,1)",
+        boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.4)" : "0 -1px 0 rgba(255,255,255,0.04)",
+        transition: "box-shadow 0.35s cubic-bezier(0.4,0,0.2,1), border-radius 0.35s cubic-bezier(0.4,0,0.2,1), background 0.35s ease",
       }}>
 
         {/* ── Day Lab AI header — always pinned at top ── */}
@@ -4363,8 +4366,8 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?8:10,
-          paddingBottom:mobile?160:0, display:"flex", flexDirection:"column", gap:8}}>
+        <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
+          paddingBottom:mobile?160:0, display:"flex", flexDirection:"column", gap:mobile?10:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
@@ -4383,7 +4386,7 @@ export default function Dashboard() {
 
           {/* Widgets — row on wide, flat stack on narrow */}
           {mobile ? (
-            <div style={{display:"flex", flexDirection:"column", gap:8, paddingBottom:160}}>
+            <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:160}}>
               <Widget label={leftWidget.label} color={leftWidget.color()}
                 collapsed={collapseMap[leftWidget.id]}
                 onToggle={toggleMap[leftWidget.id]}
@@ -4400,14 +4403,14 @@ export default function Dashboard() {
               ))}
             </div>
           ) : (
-            <div style={{display:"flex", gap:8,
+            <div style={{display:"flex", gap:10,
               flex:"1 1 0", minHeight:0,
               flexDirection:"row",
               alignItems:"stretch", overflow:"hidden"}}>
 
               {/* Left column: Notes + left widget */}
               <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
-                display:"flex", flexDirection:"column", gap:8,
+                display:"flex", flexDirection:"column", gap:10,
                 overflowY:"auto", paddingBottom:130}}>
                 <div style={{flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column"}}>
                   <Widget label={leftWidget.label} color={leftWidget.color()}
@@ -4421,7 +4424,7 @@ export default function Dashboard() {
 
               {/* Right widgets — column always */}
               <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
-                display:"flex", flexDirection:"column", gap:8,
+                display:"flex", flexDirection:"column", gap:10,
                 overflowY:"auto", paddingBottom:130}}>
                 {rightWidgets.map(w=>(
                   <div key={w.id} style={{
