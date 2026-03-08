@@ -14,8 +14,8 @@ const THEMES = {
     green:"#4A9A68",   blue:"#4878A8",
     purple:"#8860B8",  red:"#B04840",       orange:"#D08828",
     yellow:"#B88828",
-    shadow:"0 1px 4px rgba(0,0,0,0.6),0 6px 24px rgba(0,0,0,0.4)",
-    shadowSm:"0 1px 3px rgba(0,0,0,0.45)",
+    shadow:"0 1px 2px rgba(0,0,0,0.4),0 2px 8px rgba(0,0,0,0.18)",
+    shadowSm:"0 1px 2px rgba(0,0,0,0.3)",
   },
   light: {
     // 3 depth levels: bg (page) < surface/card (bars+cards) < well (inset inputs)
@@ -367,7 +367,6 @@ function Card({children,style={}}) {
     <div style={{
       background:C.card,borderRadius:R,border:`1px solid ${C.border}`,
       overflow:"clip",height:"100%",
-      boxShadow:C.shadow,
       display:"flex",flexDirection:"column",
       ...style,
     }}>{children}</div>
