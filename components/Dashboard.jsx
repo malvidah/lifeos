@@ -2597,13 +2597,13 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       )}
       {/* Metrics row */}
       {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto",
-        borderBottom:expandedMetric?`1px solid ${C.border}`:"none"}}>
+        borderBottom:expandedMetric?`1px solid ${C.border}`:"none", position:"relative"}}>
         {metrics.map((m,mi)=>{
           const isExpanded = expandedMetric === m.key;
           const isDimmed   = expandedMetric && !isExpanded;
           return (
             <div key={m.key}
-              onClick={()=>{ setExpandedMetric(isExpanded ? null : m.key); setShowBreakdown(false); }}
+              onClick={()=>{ setExpandedMetric(isExpanded ? null : m.key); }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 padding:"12px 14px",cursor:"pointer",transition:"opacity 0.2s, background 0.2s",
                 opacity: isDimmed ? 0.4 : 1,
@@ -2635,6 +2635,22 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             </div>
           );
         })}
+        {/* [i] breakdown toggle — visible when a metric is expanded */}
+        {expandedMetric && (
+          <button
+            onClick={e=>{e.stopPropagation();setShowBreakdown(v=>!v);}}
+            title="Score breakdown"
+            style={{
+              flexShrink:0, alignSelf:"center",
+              fontFamily:mono, fontSize:"10px", letterSpacing:"0.05em",
+              margin:"0 12px",
+              padding:"3px 9px", borderRadius:4, cursor:"pointer",
+              border:`1px solid ${showBreakdown ? C.accent+"60" : C.border}`,
+              background: showBreakdown ? C.accent+"18" : "transparent",
+              color: showBreakdown ? C.accent : C.dim,
+              transition:"background 0.15s,color 0.15s,border 0.15s",
+            }}>i</button>
+        )}
       </div>}
 
       {/* ── Trend panel — always rendered at fixed height to prevent layout shift ── */}
@@ -2686,16 +2702,6 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                       {r.toUpperCase()}
                     </button>
                   ))}
-                  <button onClick={e=>{e.stopPropagation();setShowBreakdown(v=>!v);}}
-                    title="Score breakdown"
-                    style={{
-                      fontFamily:mono, fontSize:"9px", letterSpacing:"0.05em",
-                      padding:"2px 7px", borderRadius:4, cursor:"pointer",
-                      border:`1px solid ${showBreakdown ? m.color+"60" : C.border}`,
-                      background: showBreakdown ? m.color+"20" : "transparent",
-                      color: showBreakdown ? m.color : C.dim,
-                      transition:"background 0.15s,color 0.15s,border 0.15s",
-                    }}>i</button>
                 </div>
               </div>
               <TrendLine metricKey={m.key} color={m.color}/>
