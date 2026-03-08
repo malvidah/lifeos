@@ -2629,7 +2629,6 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
                     <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                    <span style={{fontFamily:mono,fontSize:9,color:isBreakdown?m.color:C.dim,opacity:isBreakdown?1:0.5,transition:"color 0.15s"}}>ⓘ</span>
                   </div>
                   <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                     {m.fields.map(f=>(
