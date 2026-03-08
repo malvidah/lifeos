@@ -2357,19 +2357,16 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
 
   const metrics=[
     {key:"sleep",    label:"Sleep",    color:C.blue,  score:scores?.sleep?.score,
-      fields:[{label:"Hours",value:h.sleepHrs,unit:"h"},{label:"Effic.",value:h.sleepEff,unit:"%"}],
+      fields:[{label:"Hours",value:h.sleepHrs,unit:"h",ck:"sleepHrs"},{label:"Effic.",value:h.sleepEff,unit:"%",ck:"efficiency"}],
       sparkline:scores?.sleep?.sparkline},
     {key:"readiness",label:"Readiness",color:C.green, score:scores?.readiness?.score,
-      fields:[{label:"HRV",value:h.hrv,unit:"ms"},{label:"RHR",value:h.rhr,unit:"bpm"}],
+      fields:[{label:"HRV",value:h.hrv,unit:"ms",ck:"hrv"},{label:"RHR",value:h.rhr,unit:"bpm",ck:"rhr"}],
       sparkline:scores?.readiness?.sparkline},
     {key:"activity", label:"Activity", color:C.accent,score:scores?.activity?.score,
-      fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():""},{label:"Active",value:h.activeMinutes,unit:"min"}],
+      fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",ck:"steps"},{label:"Active",value:h.activeMinutes,unit:"min",ck:"activeMinutes"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
-      fields: [
-        {label:"CALM",  value: h.recoveryMins || "",  unit: h.recoveryMins ? "min" : ""},
-        {label:"STRESS",value: h.stressMins   || "",  unit: h.stressMins   ? "min" : ""},
-      ],
+      fields:[{label:"HRV",value:h.hrv||"",unit:h.hrv?"ms":"",ck:"hrvTrend"},{label:"RHR",value:h.rhr||"",unit:h.rhr?"bpm":"",ck:"rhrTrend"}],
       sparkline:scores?.recovery?.sparkline},
   ];
 
@@ -2631,15 +2628,20 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                     <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
                   </div>
                   <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                    {m.fields.map(f=>(
-                      <div key={f.label}>
-                        <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
-                        <div style={{display:"flex",alignItems:"baseline",gap:2}}>
-                          <span style={{fontFamily:serif,fontSize:F.md,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
-                          {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>{f.unit}</span>}
+                    {m.fields.map(f=>{
+                      const sub = f.ck ? (scores?.[m.key]?.contributors?.[f.ck] ?? null) : null;
+                      const hasVal = f.value && f.value !== "—" && f.value !== "";
+                      const fc = !hasVal ? C.dim : sub == null ? C.dim : sub >= 70 ? C.green : sub < 45 ? C.red : C.muted;
+                      return (
+                        <div key={f.label}>
+                          <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
+                          <div style={{display:"flex",alignItems:"baseline",gap:2}}>
+                            <span style={{fontFamily:serif,fontSize:F.md,color:fc}}>{f.value||"—"}</span>
+                            {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:fc,opacity:0.7}}>{f.unit}</span>}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -2677,88 +2679,6 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         })}
       </div>}
 
-      {/* ── Score Breakdown — shown above trend when a score is clicked ── */}
-      {!collapsed && breakdownMetric && (() => {
-        const m = metrics.find(x => x.key === breakdownMetric);
-        const c = scores?.[breakdownMetric]?.contributors ?? {};
-        const bl = scores?.[breakdownMetric]?.baselines ?? {};
-
-        // chip color from sub-score (reflects personal baseline when calibrated)
-        const mkChip = (topLabel, value, unit, scoreVal, weight, baselineVal, baselineLabel) => {
-          const hasData = value != null;
-          const s = scoreVal;
-          const isGood = s != null && s >= 70;
-          const isBad  = s != null && s < 45;
-          const color  = !hasData ? C.dim : isGood ? C.green : isBad ? C.red : C.muted;
-          const bg     = !hasData ? `${C.text}06` : isGood ? `${C.green}14` : isBad ? `${C.red}14` : `${C.text}08`;
-          const border = !hasData ? C.border : isGood ? `${C.green}30` : isBad ? `${C.red}30` : C.border;
-          return { topLabel, value: hasData ? value : null, unit: hasData ? unit : null, color, bg, border, weight, baselineVal, baselineLabel: baselineLabel ?? null };
-        };
-
-        let chips = [];
-        if (breakdownMetric === "sleep") {
-          chips = [
-            mkChip("HOURS SLEPT", h.sleepHrs ? (+h.sleepHrs).toFixed(1) : null, "h",   c.sleepHrs,   0.70),
-            mkChip("EFFICIENCY",  h.sleepEff ? Math.round(+h.sleepEff)   : null, "%",   c.efficiency, 0.30),
-          ];
-        } else if (breakdownMetric === "readiness") {
-          chips = [
-            mkChip("HRV",   h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,   0.40, bl.hrv != null ? `${bl.hrv} ms` : null, "90D AVG"),
-            mkChip("RHR",   h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,   0.30, bl.rhr != null ? `${bl.rhr} bpm` : null, "60D AVG"),
-            mkChip("SLEEP", scores?.sleep?.score ?? null, "",           scores?.sleep?.score, 0.30),
-          ];
-        } else if (breakdownMetric === "activity") {
-          chips = [
-            mkChip("STEPS",     h.steps ? Number(h.steps).toLocaleString() : null, "",    c.steps,         0.35),
-            mkChip("ACTIVE",    h.activeMinutes ?? null, "min",                           c.activeMinutes, 0.35),
-            mkChip("FREQUENCY", null, "",                                                 c.frequency,     0.15),
-            mkChip("REST BAL.", null, "",                                                 c.recovery,      0.15),
-          ];
-        } else if (breakdownMetric === "recovery") {
-          chips = [
-            mkChip("HRV 7D", h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50, bl.hrv != null ? `${bl.hrv} ms` : null,  "30D AVG"),
-            mkChip("RHR 7D", h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30, bl.rhr != null ? `${bl.rhr} bpm` : null, "30D AVG"),
-            mkChip("SLEEP",  scores?.sleep?.score ?? null, "",           scores?.sleep?.score, 0.20),
-          ];
-        }
-
-        // Sort by weight descending — most impactful first
-        chips.sort((a, b) => b.weight - a.weight);
-
-        return (
-          <div style={{
-            borderTop: `1px solid ${C.border}`,
-            padding: "10px 16px 12px",
-            display: "flex", flexDirection: "column", gap: 8,
-            animation: "fadeInUp 0.18s ease",
-          }}>
-            <span style={{fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase", color:m.color}}>
-              contributors
-            </span>
-
-            <div style={{display:"flex", alignItems:"flex-start", flexWrap:"wrap", gap:6}}>
-              {chips.map((ch) => (
-                <div key={ch.topLabel} style={{
-                  background: ch.bg, border: `1px solid ${ch.border}`,
-                  borderRadius: 6, padding: "5px 10px",
-                  display:"flex", flexDirection:"column", alignItems:"flex-start", gap:2,
-                  minWidth: 48,
-                }}>
-                  <span style={{fontFamily:mono, fontSize:9, color:ch.color, opacity:0.65, letterSpacing:"0.06em", textTransform:"uppercase", lineHeight:1}}>
-                    {ch.topLabel}
-                  </span>
-                  <div style={{display:"flex", alignItems:"baseline", gap:2}}>
-                    <span style={{fontFamily:serif, fontSize:F.md, color:ch.value != null ? ch.color : C.dim, lineHeight:1}}>
-                      {ch.value ?? "no data"}
-                    </span>
-                    {ch.unit && <span style={{fontFamily:mono, fontSize:F.sm, color:ch.color, opacity:0.7}}>{ch.unit}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Trend panel — always rendered at fixed height to prevent layout shift ── */}
       {!collapsed && (() => {
