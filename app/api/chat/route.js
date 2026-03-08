@@ -88,7 +88,11 @@ export async function POST(request) {
         if (h.rhr) parts.push(`RHR ${h.rhr}bpm`);
         if (h.steps) parts.push(`${h.steps} steps`);
         if (parts.length) lines.push(`  health: ${parts.join(', ')}`);
+        else if (isToday) lines.push(`  health: no data synced for today`);
+      } else if (isToday) {
+        lines.push(`  health: no data synced for today`);
       }
+
       if (data.meals?.length) {
         const texts = data.meals.filter(r => r.text?.trim()).map(r => {
           let s = r.text;
@@ -109,8 +113,13 @@ export async function POST(request) {
       }
       if (data.notes) lines.push(`  notes: ${String(data.notes).slice(0, 300)}`);
 
-      return lines.length ? `${label}:\n${lines.join('\n')}` : null;
+      // Always emit TODAY even if empty
+      if (!lines.length && !isToday) return null;
+      return `${label}:\n${lines.length ? lines.join('\n') : '  (no data logged)'}`;
     };
+
+    // Always include today even if no DB entry
+    if (!byDate[date]) byDate[date] = {};
 
     const sortedDates = Object.keys(byDate).sort();
     const contextParts = sortedDates.map(d => formatDay(d, byDate[d])).filter(Boolean);
@@ -124,6 +133,8 @@ User data — last 7 days:
 ${contextBlock}
 
 Your voice: curious, open, thoughtful, empathetic. Never sycophantic, never preachy. Prioritize insight over information — cut through the noise rather than listing everything back at them. Short is almost always better. If something is genuinely interesting or worth flagging in their data, name it plainly.
+
+IMPORTANT: If today's health shows "no data synced for today", do NOT assume or infer today's sleep/readiness from prior days. Acknowledge the gap honestly and comment only on what's actually present.
 
 You can ANSWER QUESTIONS and ADD/EDIT/DELETE entries.
 
