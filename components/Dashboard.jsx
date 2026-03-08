@@ -2682,17 +2682,21 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         const m = metrics.find(x => x.key === breakdownMetric);
         const c = scores?.[breakdownMetric]?.contributors ?? {};
 
-        // Always produce a chip, even with no data
-        const mkChip = (topLabel, value, unit, scoreVal, weight) => {
+        // chip(topLabel, rawValue, unit, scoreVal, weight)
+        // Color logic: use raw value thresholds for known metrics, fall back to scoreVal
+        const mkChip = (topLabel, value, unit, scoreVal, weight, colorFn) => {
           const hasData = value != null;
-          const s = scoreVal;
-          const isGood = s != null && s >= 70;
-          const isBad  = s != null && s < 45;
-          const color  = !hasData ? C.dim : isGood ? C.green : isBad ? C.red : C.muted;
-          const bg     = !hasData ? `${C.text}06` : isGood ? `${C.green}14` : isBad ? `${C.red}14` : `${C.text}08`;
-          const border = !hasData ? C.border : isGood ? `${C.green}30` : isBad ? `${C.red}30` : C.border;
+          // colorFn(value) returns 'good'|'bad'|'neutral', or fall back to scoreVal
+          let status = "neutral";
+          if (colorFn && hasData) { status = colorFn(value); }
+          else if (scoreVal != null) { status = scoreVal >= 70 ? "good" : scoreVal < 45 ? "bad" : "neutral"; }
+          const color  = status === "good" ? C.green : status === "bad" ? C.red : C.muted;
+          const bg     = status === "good" ? `${C.green}14` : status === "bad" ? `${C.red}14` : `${C.text}08`;
+          const border = status === "good" ? `${C.green}30` : status === "bad" ? `${C.red}30` : C.border;
           return { topLabel, value: hasData ? value : null, unit: hasData ? unit : null, color, bg, border, weight };
         };
+        const rhrColor = v => v <= 65 ? "good" : v <= 75 ? "neutral" : "bad";
+        const hrvColor = v => v >= 60 ? "good" : v >= 40 ? "neutral" : "bad";
 
         let chips = [];
         if (breakdownMetric === "sleep") {
@@ -2702,8 +2706,8 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           ];
         } else if (breakdownMetric === "readiness") {
           chips = [
-            mkChip("HRV TREND",  h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,              0.40),
-            mkChip("RHR",        h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,              0.30),
+            mkChip("HRV",   h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,   0.40, hrvColor),
+            mkChip("RHR",   h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,   0.30, rhrColor),
             mkChip("SLEEP",      scores?.sleep?.score ?? null, "",         scores?.sleep?.score, 0.30),
           ];
         } else if (breakdownMetric === "activity") {
@@ -2715,8 +2719,8 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           ];
         } else if (breakdownMetric === "recovery") {
           chips = [
-            mkChip("7D HRV",  h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50),
-            mkChip("7D RHR",  h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30),
+            mkChip("HRV 7D", h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrvTrend, 0.50, hrvColor),
+            mkChip("RHR 7D", h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhrTrend, 0.30, rhrColor),
             mkChip("SLEEP",   scores?.sleep?.score ?? null, "",           scores?.sleep?.score, 0.20),
           ];
         }
