@@ -2703,8 +2703,8 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           ];
         } else if (breakdownMetric === "readiness") {
           chips = [
-            mkChip("HRV",   h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,   0.40, hrvColor),
-            mkChip("RHR",   h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,   0.30, rhrColor),
+            mkChip("HRV",   h.hrv ? Math.round(+h.hrv) : null, "ms",  c.hrv,   0.40),
+            mkChip("RHR",   h.rhr ? Math.round(+h.rhr) : null, "bpm", c.rhr,   0.30),
             mkChip("SLEEP",      scores?.sleep?.score ?? null, "",         scores?.sleep?.score, 0.30),
           ];
         } else if (breakdownMetric === "activity") {
