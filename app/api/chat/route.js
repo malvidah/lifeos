@@ -74,7 +74,7 @@ export async function POST(request) {
 
     const formatDay = (d, data) => {
       const isToday = d === date;
-      const label = isToday ? `TODAY (${d})` : d;
+      const tag = isToday ? `[TODAY ${d}]` : `[${d}]`;
       const lines = [];
 
       if (data.health) {
@@ -87,10 +87,10 @@ export async function POST(request) {
         if (h.hrv) parts.push(`HRV ${h.hrv}ms`);
         if (h.rhr) parts.push(`RHR ${h.rhr}bpm`);
         if (h.steps) parts.push(`${h.steps} steps`);
-        if (parts.length) lines.push(`  health: ${parts.join(', ')}`);
-        else if (isToday) lines.push(`  health: no data synced for today`);
+        if (parts.length) lines.push(`${tag} health: ${parts.join(', ')}`);
+        else if (isToday) lines.push(`${tag} health: no data synced for today`);
       } else if (isToday) {
-        lines.push(`  health: no data synced for today`);
+        lines.push(`${tag} health: no data synced for today`);
       }
 
       if (data.meals?.length) {
@@ -99,23 +99,25 @@ export async function POST(request) {
           if (r.kcal) s += ` (${r.kcal}kcal${r.protein ? `, ${r.protein}g protein` : ''})`;
           return s;
         });
-        if (texts.length) lines.push(`  meals: ${texts.join(', ')}`);
+        if (texts.length) lines.push(`${tag} meals: ${texts.join(', ')}`);
       }
       if (data.activity?.length) {
         const texts = data.activity.filter(r => r.text?.trim()).map(r =>
           r.kcal ? `${r.text} (${r.kcal}kcal)` : r.text
         );
-        if (texts.length) lines.push(`  activity: ${texts.join(', ')}`);
+        if (texts.length) lines.push(`${tag} activity: ${texts.join(', ')}`);
       }
       if (data.tasks?.length) {
         const texts = data.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
-        if (texts.length) lines.push(`  tasks: ${texts.join(', ')}`);
+        if (texts.length) lines.push(`${tag} tasks: ${texts.join(', ')}`);
       }
-      if (data.notes) lines.push(`  notes: ${String(data.notes).slice(0, 300)}`);
+      if (data.notes) lines.push(`${tag} notes: ${String(data.notes).slice(0, 300)}`);
 
-      // Always emit TODAY even if empty
-      if (!lines.length && !isToday) return null;
-      return `${label}:\n${lines.length ? lines.join('\n') : '  (no data logged)'}`;
+      if (!lines.length) {
+        if (isToday) lines.push(`${tag} (no data logged)`);
+        else return null;
+      }
+      return lines.join('\n');
     };
 
     // Always include today even if no DB entry
