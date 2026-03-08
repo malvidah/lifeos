@@ -2604,57 +2604,72 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           const isDimmed    = expandedMetric && !isTrend;
           return (
             <div key={m.key}
-              onClick={()=>{
-                // Card body → toggle trend; if contributors open, switch it to this metric
-                if (isTrend) { setExpandedMetric(null); }
-                else { setExpandedMetric(m.key); if (breakdownMetric) setBreakdownMetric(m.key); }
-              }}
-              style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
-                padding:"12px 14px",cursor:"pointer",transition:"opacity 0.2s, background 0.2s",
-                opacity: isDimmed ? 0.4 : 1,
-                background: isTrend ? m.color + "0D" : "transparent",
+              style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"stretch",
                 borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
-                borderBottom: isTrend ? `2px solid ${m.color}` : "2px solid transparent",
-                boxSizing:"border-box",
+                boxSizing:"border-box", overflow:"hidden",
+                opacity: isDimmed ? 0.45 : 1,
+                transition:"opacity 0.2s",
               }}>
-              <div style={{flexShrink:0}}>
-                <Ring score={m.score} color={m.color} size={48}/>
-              </div>
-              <div style={{flex:1,minWidth:0}}>
-                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
-                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+
+              {/* ── Left zone: Ring + label + fields → toggles contributors ── */}
+              <div
+                onClick={()=>setBreakdownMetric(isBreakdown ? null : m.key)}
+                style={{flex:1,minWidth:0,display:"flex",alignItems:"center",gap:12,
+                  padding:"12px 14px 12px 14px",cursor:"pointer",
+                  background: isBreakdown ? m.color+"0D" : "transparent",
+                  borderBottom: isBreakdown ? `2px solid ${m.color}` : "2px solid transparent",
+                  transition:"background 0.2s",
+                }}>
+                <div style={{flexShrink:0}}>
+                  <Ring score={m.score} color={m.color} size={48}/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
                     <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                    {/* (i) info button — toggles contributor breakdown */}
-                    <button
-                      onClick={e=>{
-                        e.stopPropagation();
-                        // Toggle contributors off if already showing this metric, otherwise switch to this metric
-                        setBreakdownMetric(isBreakdown ? null : m.key);
-                        // If trend is open for a different metric, switch it too
-                        if (expandedMetric && expandedMetric !== m.key) setExpandedMetric(null);
-                      }}
-                      style={{
-                        background:"none", border:"none", cursor:"pointer", padding:"0 2px",
-                        color: isBreakdown ? m.color : C.dim,
-                        fontSize:10, fontFamily:mono, lineHeight:1,
-                        opacity: isBreakdown ? 1 : 0.55,
-                        transition:"color 0.15s, opacity 0.15s",
-                      }}>ⓘ</button>
+                    <span style={{fontFamily:mono,fontSize:9,color:isBreakdown?m.color:C.dim,opacity:isBreakdown?1:0.5,transition:"color 0.15s"}}>ⓘ</span>
                   </div>
-                  {m.sparkline && <Sparkline data={m.sparkline} color={m.color}/>}
-                </div>
-                <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                  {m.fields.map(f=>(
-                    <div key={f.label}>
-                      <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
-                      <div style={{display:"flex",alignItems:"baseline",gap:2}}>
-                        <span style={{fontFamily:serif,fontSize:F.md,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
-                        {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>{f.unit}</span>}
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                    {m.fields.map(f=>(
+                      <div key={f.label}>
+                        <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
+                        <div style={{display:"flex",alignItems:"baseline",gap:2}}>
+                          <span style={{fontFamily:serif,fontSize:F.md,color:f.value&&f.value!=="—"?C.text:C.dim}}>{f.value||"—"}</span>
+                          {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>{f.unit}</span>}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
+
+              {/* ── Right zone: Sparkline + chevron → toggles trend ── */}
+              {m.sparkline && (
+                <div
+                  onClick={e=>{
+                    e.stopPropagation();
+                    if (isTrend) { setExpandedMetric(null); }
+                    else {
+                      setExpandedMetric(m.key);
+                      // Contributors follows if open
+                      if (breakdownMetric) setBreakdownMetric(m.key);
+                    }
+                  }}
+                  style={{
+                    flexShrink:0, display:"flex", flexDirection:"column",
+                    alignItems:"center", justifyContent:"center", gap:4,
+                    padding:"10px 14px 10px 8px", cursor:"pointer",
+                    background: isTrend ? m.color+"0D" : "transparent",
+                    borderBottom: isTrend ? `2px solid ${m.color}` : "2px solid transparent",
+                    borderLeft: `1px solid ${C.border}30`,
+                    transition:"background 0.2s",
+                  }}>
+                  <Sparkline data={m.sparkline} color={isTrend ? m.color : C.dim} width={52} height={20}/>
+                  <svg width="10" height="6" viewBox="0 0 10 6" fill="none"
+                    style={{transition:"transform 0.25s cubic-bezier(0.4,0,0.2,1)", transform: isTrend ? "rotate(180deg)" : "rotate(0deg)"}}>
+                    <polyline points="1,1 5,5 9,1" stroke={isTrend ? m.color : C.dim} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                </div>
+              )}
             </div>
           );
         })}
