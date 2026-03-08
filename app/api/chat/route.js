@@ -42,6 +42,11 @@ export async function POST(request) {
     const rl = rateLimit(`chat:${user.id}`, { max: 80, windowMs: 60 * 60 * 1000 });
     if (!rl.ok) return Response.json({ error: `Rate limited. Retry in ${rl.retryAfter}s.` }, { status: 429 });
 
+    // Check premium status
+    const { data: premRow } = await supabase.from('entries').select('data')
+      .eq('type', 'premium').eq('date', 'global').eq('user_id', user.id).maybeSingle();
+    const isPremium = premRow?.data?.active === true;
+
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
 
@@ -327,7 +332,7 @@ You can combine a reply and an actions block in the same response. Default calen
     // Types that had changes — so the client can refresh them
     const refreshTypes = [...new Set(executedActions.map(a => a.type))];
 
-    return Response.json({ reply: cleanReply, actions: executedActions, refreshTypes, summary });
+    return Response.json({ reply: cleanReply, actions: executedActions, refreshTypes, summary, isPremium });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }

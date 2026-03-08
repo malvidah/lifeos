@@ -3494,6 +3494,20 @@ function ChatFloat({date, token, userId, healthKey}) {
   const generatedInsightKey = useRef(null); // "date:healthKey" — prevents double-generation
   const prevDate = useRef(date);
 
+  const [chatQueryCount, setChatQueryCount] = useState(0);
+  const [chatLimitReached, setChatLimitReached] = useState(false);
+  const FREE_CHAT_LIMIT = 10;
+
+  // Load chat query count from DB
+  useEffect(() => {
+    if (!token || !userId) return;
+    dbLoad("global", "chat_usage", token).then(d => {
+      const count = d?.count || 0;
+      setChatQueryCount(count);
+      if (count >= FREE_CHAT_LIMIT) setChatLimitReached(true);
+    });
+  }, [token, userId]); // eslint-disable-line
+
   const [listening, setListening] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const mobile = typeof window !== "undefined" && window.innerWidth < 768;
@@ -3747,6 +3761,8 @@ function ChatFloat({date, token, userId, healthKey}) {
   // ── Expanded mode: conversational chat ───────────────────────────────────
   async function sendChat() {
     if (!input.trim() || busy) return;
+    // Free tier gate — check isPremium via response or local count
+    if (chatLimitReached) return;
     const userText = input.trim();
     setInput("");
     if (inputRef.current) inputRef.current.style.height = "auto";
@@ -3775,6 +3791,13 @@ function ChatFloat({date, token, userId, healthKey}) {
         const assistantMsg = { role: "assistant", content: data.reply, actions: data.actions, summary: data.summary };
         setMessages(prev => prev.slice(0, -1).concat(assistantMsg));
         if (data.refreshTypes?.length) dispatchRefresh(data.refreshTypes, data.summary);
+        // Track usage for free accounts
+        if (!data.isPremium) {
+          const newCount = chatQueryCount + 1;
+          setChatQueryCount(newCount);
+          if (newCount >= FREE_CHAT_LIMIT) setChatLimitReached(true);
+          dbSave("global", "chat_usage", { count: newCount }, token);
+        }
       }
     } catch (e) {
       setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: "Something went wrong. Try again." }));
@@ -3828,10 +3851,7 @@ function ChatFloat({date, token, userId, healthKey}) {
             scrollBehavior: "smooth",
           }}>
             {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
-              <span style={{ fontFamily: mono, fontSize: F.sm, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                Day Lab AI
-              </span>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
               <button onClick={() => setExpanded(false)} style={{
                 background: "none", border: "none", cursor: "pointer",
                 color: C.muted, fontSize: 18, lineHeight: 1, padding: "2px 4px",
@@ -3892,6 +3912,64 @@ function ChatFloat({date, token, userId, healthKey}) {
           </div>
         )}
 
+        {/* ── Free tier upgrade wall (shown over input when limit reached) ── */}
+        {chatLimitReached && expanded && (
+          <div style={{
+            position: "absolute", inset: 0, zIndex: 2,
+            backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
+            background: "rgba(0,0,0,0.55)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            gap: 12, padding: 24, borderRadius: "20px 20px 0 0",
+          }}>
+            <span style={{ fontFamily: mono, fontSize: 13, color: C.text, letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              {FREE_CHAT_LIMIT} free queries used
+            </span>
+            <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim, lineHeight: 1.6, textAlign: "center", maxWidth: 280 }}>
+              Upgrade to Premium for unlimited AI chat, daily insights, and voice entry.
+            </span>
+            <button onClick={() => window.location.href = "/upgrade"} style={{
+              background: C.accent, border: "none", borderRadius: 8,
+              padding: "10px 24px", cursor: "pointer",
+              fontFamily: mono, fontSize: F.sm, color: "#fff",
+              letterSpacing: "0.08em", textTransform: "uppercase",
+              marginTop: 4,
+            }}>Upgrade to Premium →</button>
+          </div>
+        )}
+
+
+        {/* ── Day Lab AI header strip (always visible) ── */}
+        <div style={{
+          width: "100%", maxWidth: 640, boxSizing: "border-box",
+          padding: "8px 20px 0",
+          display: "flex", alignItems: "center", justifyContent: "space-between",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Day Lab AI
+            </span>
+            {/* Premium / free badge */}
+            {chatLimitReached ? (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: C.orange, background: `${C.orange}20`, border: `1px solid ${C.orange}40`,
+                borderRadius: 4, padding: "2px 6px",
+              }}>free · {chatQueryCount}/{FREE_CHAT_LIMIT} used</span>
+            ) : chatQueryCount > 0 ? (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: C.muted, background: `${C.text}0a`, borderRadius: 4, padding: "2px 6px",
+              }}>{chatQueryCount}/{FREE_CHAT_LIMIT}</span>
+            ) : null}
+          </div>
+          {!expanded && (
+            <button onClick={() => { setExpanded(true); setTimeout(() => inputRef.current?.focus(), 80); }} style={{
+              background: "none", border: "none", cursor: "pointer",
+              fontFamily: mono, fontSize: 9, color: C.accent, letterSpacing: "0.08em", textTransform: "uppercase",
+              padding: "2px 0",
+            }}>open ↑</button>
+          )}
+        </div>
 
         {/* ── Collapsed insight preview ── */}
         {!expanded && (() => {
@@ -4288,7 +4366,7 @@ export default function Dashboard() {
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?8:10,
-          paddingBottom:mobile?140:0, display:"flex", flexDirection:"column", gap:8}}>
+          paddingBottom:mobile?160:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Calendar */}
           <div style={{flexShrink:0}}>
@@ -4328,7 +4406,7 @@ export default function Dashboard() {
               flex:"1 1 0", minHeight:0,
               flexDirection:"row",
               alignItems:"stretch", overflow:"hidden",
-              paddingBottom:80}}>
+              paddingBottom:120}}>
 
               {/* Left column: Notes + left widget */}
               <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
