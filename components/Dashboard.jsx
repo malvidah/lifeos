@@ -4069,7 +4069,6 @@ function ChatFloat({date, token, userId, healthKey, isPremium}) {
     </>
   );
 }
-}
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
