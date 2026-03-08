@@ -2601,13 +2601,13 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         {metrics.map((m,mi)=>{
           const isTrend     = expandedMetric  === m.key;
           const isBreakdown = breakdownMetric === m.key;
-          const isDimmed    = (expandedMetric || breakdownMetric) && !isTrend && !isBreakdown;
+          const isDimmed    = expandedMetric && !isTrend;
           return (
             <div key={m.key}
               onClick={()=>{
-                // Card body → toggle trend; close breakdown if switching metric
+                // Card body → toggle trend; if contributors open, switch it to this metric
                 if (isTrend) { setExpandedMetric(null); }
-                else { setExpandedMetric(m.key); if (breakdownMetric && breakdownMetric !== m.key) setBreakdownMetric(null); }
+                else { setExpandedMetric(m.key); if (breakdownMetric) setBreakdownMetric(m.key); }
               }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 padding:"12px 14px",cursor:"pointer",transition:"opacity 0.2s, background 0.2s",
@@ -2628,8 +2628,10 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                     <button
                       onClick={e=>{
                         e.stopPropagation();
-                        if (isBreakdown) { setBreakdownMetric(null); }
-                        else { setBreakdownMetric(m.key); if (expandedMetric && expandedMetric !== m.key) setExpandedMetric(null); }
+                        // Toggle contributors off if already showing this metric, otherwise switch to this metric
+                        setBreakdownMetric(isBreakdown ? null : m.key);
+                        // If trend is open for a different metric, switch it too
+                        if (expandedMetric && expandedMetric !== m.key) setExpandedMetric(null);
                       }}
                       style={{
                         background:"none", border:"none", cursor:"pointer", padding:"0 2px",
