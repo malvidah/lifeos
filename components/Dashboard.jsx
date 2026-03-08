@@ -2599,18 +2599,22 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto",
         borderBottom:expandedMetric?`1px solid ${C.border}`:"none", position:"relative"}}>
         {metrics.map((m,mi)=>{
-          const isBreakdown = breakdownMetric === m.key;
           const isTrend     = expandedMetric  === m.key;
-          const isDimmed    = breakdownMetric && !isBreakdown;
+          const isBreakdown = breakdownMetric === m.key;
+          const isDimmed    = (expandedMetric || breakdownMetric) && !isTrend && !isBreakdown;
           return (
             <div key={m.key}
-              onClick={()=>{ setBreakdownMetric(isBreakdown ? null : m.key); }}
+              onClick={()=>{
+                // Card body → toggle trend; close breakdown if switching metric
+                if (isTrend) { setExpandedMetric(null); }
+                else { setExpandedMetric(m.key); if (breakdownMetric && breakdownMetric !== m.key) setBreakdownMetric(null); }
+              }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 padding:"12px 14px",cursor:"pointer",transition:"opacity 0.2s, background 0.2s",
                 opacity: isDimmed ? 0.4 : 1,
-                background: isBreakdown ? m.color + "0D" : "transparent",
+                background: isTrend ? m.color + "0D" : "transparent",
                 borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
-                borderBottom: isBreakdown ? `2px solid ${m.color}` : "2px solid transparent",
+                borderBottom: isTrend ? `2px solid ${m.color}` : "2px solid transparent",
                 boxSizing:"border-box",
               }}>
               <div style={{flexShrink:0}}>
@@ -2618,15 +2622,24 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
-                  <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                  {m.sparkline && (
-                    <div onClick={e=>{e.stopPropagation(); setExpandedMetric(isTrend ? null : m.key);}}
-                      style={{cursor:"pointer", padding:"2px", borderRadius:4,
-                        background: isTrend ? m.color+"14" : "transparent",
-                        transition:"background 0.15s"}}>
-                      <Sparkline data={m.sparkline} color={m.color}/>
-                    </div>
-                  )}
+                  <div style={{display:"flex",alignItems:"center",gap:5}}>
+                    <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
+                    {/* (i) info button — toggles contributor breakdown */}
+                    <button
+                      onClick={e=>{
+                        e.stopPropagation();
+                        if (isBreakdown) { setBreakdownMetric(null); }
+                        else { setBreakdownMetric(m.key); if (expandedMetric && expandedMetric !== m.key) setExpandedMetric(null); }
+                      }}
+                      style={{
+                        background:"none", border:"none", cursor:"pointer", padding:"0 2px",
+                        color: isBreakdown ? m.color : C.dim,
+                        fontSize:10, fontFamily:mono, lineHeight:1,
+                        opacity: isBreakdown ? 1 : 0.55,
+                        transition:"color 0.15s, opacity 0.15s",
+                      }}>ⓘ</button>
+                  </div>
+                  {m.sparkline && <Sparkline data={m.sparkline} color={m.color}/>}
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>(
@@ -2700,7 +2713,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             animation: "fadeInUp 0.18s ease",
           }}>
             <span style={{fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase", color:m.color}}>
-              score breakdown
+              contributors
             </span>
             <div style={{display:"flex", alignItems:"flex-start", flexWrap:"wrap", gap:6}}>
               {chips.map((ch) => (
