@@ -2206,6 +2206,7 @@ function fmtMinsField(val) {
 
 
 function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle}) {
+  const [showScoreInfo, setShowScoreInfo] = useState(false);
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
@@ -2583,7 +2584,106 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             Calibrating…
           </span>
         )}
+        <button onClick={e=>{e.stopPropagation();setShowScoreInfo(true);}}
+          style={{background:"none",border:`1px solid ${C.border}`,borderRadius:4,
+            padding:"1px 7px",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:C.dim,
+            letterSpacing:"0.04em",marginLeft:2}}>
+          How scores work
+        </button>
       </div>
+
+      {/* Score info modal */}
+      {showScoreInfo&&(
+        <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",
+          background:"rgba(0,0,0,0.6)",backdropFilter:"blur(6px)"}}
+          onClick={()=>setShowScoreInfo(false)}>
+          <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,
+            width:"min(560px,92vw)",maxHeight:"80vh",overflowY:"auto",
+            padding:"24px 28px",display:"flex",flexDirection:"column",gap:20}}
+            onClick={e=>e.stopPropagation()}>
+            {/* Modal header */}
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontFamily:mono,fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:C.muted}}>
+                How We Calculate Scores
+              </span>
+              <button onClick={()=>setShowScoreInfo(false)}
+                style={{background:"none",border:"none",cursor:"pointer",color:C.dim,fontSize:18,lineHeight:1,padding:4}}>✕</button>
+            </div>
+
+            {[
+              {
+                label:"SLEEP",color:C.blue,
+                what:"How restored you are after sleep.",
+                how:[
+                  "Sleep hours (40%) — scored against 7–9h target. Under 6h or over 10h penalises.",
+                  "Sleep efficiency (30%) — time asleep vs time in bed. >85% is ideal.",
+                  "HRV during sleep (20%) — compared to your 30-day baseline. Higher relative HRV = better recovery.",
+                  "Resting heart rate (10%) — lower is generally better; scored against your personal range.",
+                ],
+                note:"When you have <14 days of history, absolute ranges are used instead of personal baselines."
+              },
+              {
+                label:"READINESS",color:C.green,
+                what:"How prepared your body is for the day ahead.",
+                how:[
+                  "HRV vs baseline (40%) — 7-day average vs 30-day average. A dip signals accumulated load.",
+                  "RHR vs baseline (30%) — elevated resting HR typically means your system is under stress.",
+                  "Sleep score (30%) — readiness is downstream of sleep; poor sleep depresses readiness.",
+                ],
+                note:"Readiness is the single best day-level predictor of performance capacity."
+              },
+              {
+                label:"ACTIVITY",color:C.orange,
+                what:"How active you were relative to your baseline.",
+                how:[
+                  "Steps (35%) — scored against your 30-day average. 8,000–12,000 steps/day is the target band.",
+                  "Active minutes (35%) — minutes above a moderate-intensity threshold.",
+                  "Activity frequency (15%) — how many of the last 7 days had meaningful activity.",
+                  "Rest days (15%) — 1–3 rest days per week scores highest; too many or zero both penalise.",
+                ],
+                note:"Requires at least 5 days of history to use your personal baseline."
+              },
+              {
+                label:"RECOVERY",color:"#a855f7",
+                what:"How well your nervous system is bouncing back over time.",
+                how:[
+                  "7-day HRV trend vs 30-day baseline (50%) — the main signal. A declining 7-day average vs your longer baseline means accumulated fatigue.",
+                  "7-day RHR trend vs 30-day baseline (30%) — elevated RHR over recent days confirms stress load.",
+                  "Sleep score (20%) — chronic poor sleep is reflected here as a secondary input.",
+                ],
+                note:"Calm/Stress minutes from Oura are stored but not yet used in the score — they will factor in when enough longitudinal data is available. The score dropping with no calm/stress data is expected: it's purely responding to your HRV/RHR trends.",
+                noteColor: C.orange,
+              },
+            ].map(({label,color,what,how,note,noteColor})=>(
+              <div key={label} style={{display:"flex",flexDirection:"column",gap:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontFamily:mono,fontSize:10,letterSpacing:"0.1em",color,textTransform:"uppercase"}}>{label}</span>
+                  <span style={{height:1,flex:1,background:C.border}}/>
+                </div>
+                <p style={{fontFamily:sans,fontSize:13,color:C.text,margin:0,lineHeight:1.5,opacity:0.8}}>{what}</p>
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  {how.map((line,i)=>(
+                    <div key={i} style={{display:"flex",gap:8,alignItems:"flex-start"}}>
+                      <span style={{fontFamily:mono,fontSize:11,color:color,opacity:0.6,flexShrink:0,marginTop:1}}>→</span>
+                      <span style={{fontFamily:mono,fontSize:11,color:C.muted,lineHeight:1.55}}>{line}</span>
+                    </div>
+                  ))}
+                </div>
+                {note&&(
+                  <div style={{background:`${noteColor||C.text}0a`,border:`1px solid ${noteColor||C.text}20`,
+                    borderRadius:6,padding:"6px 10px"}}>
+                    <span style={{fontFamily:mono,fontSize:10,color:noteColor||C.dim,lineHeight:1.55}}>{note}</span>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            <p style={{fontFamily:mono,fontSize:10,color:C.dim,margin:0,lineHeight:1.6,borderTop:`1px solid ${C.border}`,paddingTop:14}}>
+              All scores are 0–100. With &lt;14 days of data, absolute health guidelines are used as reference. After 14 days, your personal baselines replace them and scores become more personalised over time.
+            </p>
+          </div>
+        </div>
+      )}
       {/* Apple Health connect prompt — iOS only, shown when not yet authorized */}
       {hkStatus==="not_determined"&&!collapsed&&(
         <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`}}>
