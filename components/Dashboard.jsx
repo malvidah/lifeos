@@ -2946,56 +2946,69 @@ function Notes({date,userId,token}) {
     });
   }
 
+  // Move cursor off any [img:] line — always land on the line below it
+  function normalizeCursor(ta, val) {
+    if (!ta) return;
+    const pos = ta.selectionStart;
+    const lines = (val ?? ta.value).split("\n");
+    let charCount = 0;
+    for (let i = 0; i < lines.length; i++) {
+      const lineStart = charCount;
+      const lineEnd = charCount + lines[i].length;
+      if (/^\[img:/.test(lines[i]) && pos >= lineStart && pos <= lineEnd) {
+        // Jump to start of next line (or end of value if last line)
+        const target = Math.min(lineEnd + 1, (val ?? ta.value).length);
+        ta.setSelectionRange(target, target);
+        return;
+      }
+      charCount += lines[i].length + 1;
+    }
+  }
+
   function handleKeyDown(e) {
     if ((e.metaKey||e.ctrlKey) && e.key==="b") { e.preventDefault(); wrapSelection("**"); return; }
     if ((e.metaKey||e.ctrlKey) && e.key==="i") { e.preventDefault(); wrapSelection("*"); return; }
 
     if (e.key === "Backspace" || e.key === "Delete") {
-      // If an image is already selected → delete it
+      // If already selected → delete it
       if (selectedImgLine !== null) {
         e.preventDefault();
         const lines = value.split("\n");
-        lines.splice(selectedImgLine, 1);
-        // Remove a trailing blank line left by the marker padding if present
-        if (selectedImgLine < lines.length && lines[selectedImgLine].trim() === "") {
-          lines.splice(selectedImgLine, 1);
-        }
+        // Remove the img line and the blank padding line before/after if present
+        const start = (selectedImgLine > 0 && lines[selectedImgLine-1].trim() === "") ? selectedImgLine - 1 : selectedImgLine;
+        const end = (selectedImgLine + 1 < lines.length && lines[selectedImgLine+1].trim() === "") ? selectedImgLine + 1 : selectedImgLine;
+        lines.splice(start, end - start + 1);
         setValue(lines.join("\n"), {skipHistory:true});
         setSelectedImgLine(null);
         requestAnimationFrame(() => { const t=taRef.current; if(t){t.style.height="auto";t.style.height=t.scrollHeight+"px";} });
         return;
       }
 
-      // Check if cursor is immediately after or before an [img:] line → select it first
       const ta = taRef.current;
       if (!ta) return;
       const pos = ta.selectionStart;
-      const sel = ta.selectionEnd;
       const lines = value.split("\n");
+      // Build per-line start positions
       let charCount = 0;
       for (let i = 0; i < lines.length; i++) {
         const lineStart = charCount;
-        const lineEnd = charCount + lines[i].length;
-        const isImg = /^\[img:/.test(lines[i]);
-        // Cursor at end of img line, or at start of line after img line (backspace)
-        if (isImg && (pos === lineEnd || pos === lineEnd + 1 ||
-            (pos === lineStart && i > 0 && /^\[img:/.test(lines[i-1])))) {
+        // Cursor is at the start of this line, and the previous line is [img:]
+        if (e.key === "Backspace" && pos === lineStart && i > 0 && /^\[img:/.test(lines[i-1])) {
           e.preventDefault();
-          setSelectedImgLine(isImg ? i : i - 1);
-          return;
-        }
-        // Selected range covers an img line
-        if (isImg && sel > lineStart && pos <= lineEnd) {
-          e.preventDefault();
-          setSelectedImgLine(i);
+          setSelectedImgLine(i - 1);
           return;
         }
         charCount += lines[i].length + 1;
       }
     }
 
-    // Any other key clears image selection
-    if (!["Shift","Meta","Control","Alt","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)) {
+    // Arrow keys: normalize cursor after movement
+    if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)) {
+      requestAnimationFrame(() => normalizeCursor(taRef.current, value));
+    }
+
+    // Any other printable key clears image selection
+    if (!["Shift","Meta","Control","Alt","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Backspace","Delete","Tab"].includes(e.key)) {
       setSelectedImgLine(null);
     }
   }
@@ -3089,13 +3102,14 @@ function Notes({date,userId,token}) {
     // Overlay approach: textarea in normal flow (sizes container); rendered div on top (pointer-events:none)
     // No mode toggle → no layout shift on click. Cursor always visible via caretColor.
     <div style={{ position:"relative", minHeight:minH, cursor:"text" }}
-      onClick={() => taRef.current?.focus()}>
+      onClick={() => { taRef.current?.focus(); requestAnimationFrame(() => normalizeCursor(taRef.current, value)); }}>
       {/* Textarea — sizes the container, text is transparent so only cursor shows */}
       <textarea
         ref={taRef}
         value={value}
         onChange={e => { setValue(e.target.value, {skipHistory:true}); const t=e.target; t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }}
         onBlur={() => setValue(v => v, {undoLabel:"Edit notes"})}
+        onSelect={() => normalizeCursor(taRef.current, value)}
         onKeyDown={handleKeyDown}
         placeholder=" "
         onPaste={async e => {
@@ -3116,7 +3130,12 @@ function Notes({date,userId,token}) {
 `;
               const next = cur.slice(0, pos) + marker + cur.slice(pos);
               setValue(next, {skipHistory:true});
-              requestAnimationFrame(() => { ta.style.height="auto"; ta.style.height=ta.scrollHeight+"px"; });
+              requestAnimationFrame(() => {
+                ta.style.height="auto"; ta.style.height=ta.scrollHeight+"px";
+                // Position cursor on the blank line after the image
+                const afterImg = pos + marker.length;
+                ta.setSelectionRange(afterImg, afterImg);
+              });
               break;
             }
           }
