@@ -4741,8 +4741,7 @@ function ChatFloat({date, token, userId, healthKey}) {
             : (mobile ? "14px 10px 14px 16px" : "14px 10px 14px 18px"),
           paddingBottom: expanded ? (mobile ? "10px" : "8px") : "14px",
           boxSizing: "border-box",
-          cursor: !expanded ? "text" : "default",
-        }} onClick={!expanded ? () => { setExpanded(true); setTimeout(() => inputRef.current?.focus(), 80); } : undefined}>
+        }}>
 
 
           {/* Text input */}
@@ -4758,7 +4757,7 @@ function ChatFloat({date, token, userId, healthKey}) {
               value={input}
               onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-
+              onFocus={() => { if (!expanded) setExpanded(true); }}
               placeholder={busy ? "…" : "Ask or add anything…"}
               disabled={busy}
               rows={1}
@@ -4767,6 +4766,9 @@ function ChatFloat({date, token, userId, healthKey}) {
                 fontFamily: serif, fontSize: F.md, color: C.text,
                 padding: "0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
                 resize: "none", overflow: "auto", maxHeight: "120px",
+                // Extend tap area to fill the full pill height
+                margin: expanded ? "0" : "-14px -6px",
+                padding: expanded ? "0" : "14px 6px",
               }}
             />
 
