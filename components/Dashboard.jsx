@@ -3086,12 +3086,9 @@ function Activity({date,token,userId,stravaConnected}) {
   useEffect(()=>{
     if(!token||!userId)return;
     setSyncedRows([]);
-    const stravaPromise = stravaConnected
-      ? fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({}))
-      : Promise.resolve({});
     Promise.all([
       cachedOuraFetch(date, token, userId),
-      stravaPromise,
+      fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({})),
     ]).then(([ouraData, stravaData])=>{
       const merged = mergeWorkouts(ouraData.workouts||[], stravaData.activities||[]);
       const rows = merged.map(w=>({
