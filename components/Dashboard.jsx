@@ -3658,6 +3658,43 @@ function Activity({date,token,userId,stravaConnected}) {
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
+// ─── NewProjectTask — empty-state inline task input for project view ─────────
+function NewProjectTask({ project, onAdd }) {
+  const [text, setText] = useState('');
+  const inputRef = useRef(null);
+  const col = projectColor(project);
+
+  function commit() {
+    if (text.trim()) { onAdd(text); setText(''); }
+  }
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
+      {/* Checkbox placeholder */}
+      <div style={{
+        width: 14, height: 14, flexShrink: 0,
+        borderRadius: 3, border: `1.5px solid ${C.border2}`,
+        background: 'transparent',
+      }}/>
+      <input
+        ref={inputRef}
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        }}
+        onBlur={commit}
+        placeholder={`Add a task… #${project} will be added`}
+        style={{
+          flex: 1, background: 'transparent', border: 'none', outline: 'none',
+          fontFamily: serif, fontSize: F.md, color: C.text,
+          caretColor: col,
+        }}
+      />
+    </div>
+  );
+}
+
 // ─── TaskFilterBtns ──────────────────────────────────────────────────────────
 function TaskFilterBtns({ filter, setFilter }) {
   const OpenIcon = () => (
@@ -4806,6 +4843,28 @@ function ProjectView({ project, token, userId, onBack }) {
     } : prev);
   }
 
+  // Add a brand-new task to today's date with the project tag appended
+  async function addNewTask(text) {
+    if (!text.trim() || project === '__everything__') return;
+    const today = new Date().toISOString().slice(0, 10);
+    const taskText = text.trim().endsWith(`#${project}`)
+      ? text.trim()
+      : `${text.trim()} #${project}`;
+    const current = await dbLoad(today, 'tasks', token);
+    const existing = Array.isArray(current) ? current : [];
+    const newTask = { id: Date.now(), text: taskText, done: false };
+    const updated = [...existing, newTask];
+    await dbSave(today, 'tasks', updated, token);
+    MEM[`${userId}:${today}:tasks`] = updated;
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+    registerNewTags(taskText);
+    // Append to local entries so it appears immediately
+    setEntries(prev => prev ? {
+      ...prev,
+      taskEntries: [...(prev.taskEntries || []), { date: today, id: newTask.id, text: taskText, done: false }],
+    } : prev);
+  }
+
   const loadingCards = (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <Shimmer width="80%" height={13}/><Shimmer width="65%" height={13}/><Shimmer width="72%" height={13}/>
@@ -5019,9 +5078,11 @@ function ProjectView({ project, token, userId, onBack }) {
             <Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/>
           </div>
         ) : taskEntries.length === 0 ? (
-          <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
-            {project === '__everything__' ? 'No tasks yet.' : `No tasks tagged #${project} yet.`}
-          </div>
+          project === '__everything__' ? (
+            <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>No tasks yet.</div>
+          ) : (
+            <NewProjectTask project={project} onAdd={addNewTask} />
+          )
         ) : (
           <div>
             {tasksByDate.map(([date, { open, done }], dateIdx) => (
