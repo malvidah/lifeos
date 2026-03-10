@@ -5152,12 +5152,15 @@ function fmtDate(ds) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// ─── AddJournalLine — inline journal entry input for project/health view ──────
-function AddJournalLine({ project, onAdd, placeholder }) {
-  const [text, setText] = useState('');
+// ─── AddJournalLine — inline entry input; supports uncontrolled (default) or controlled (value+onChange) ──
+function AddJournalLine({ project, onAdd, placeholder, value: controlledValue, onChange: controlledOnChange }) {
+  const [internalText, setInternalText] = useState('');
+  const isControlled = controlledValue !== undefined;
+  const text = isControlled ? controlledValue : internalText;
+  const setText = isControlled ? controlledOnChange : setInternalText;
   const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
   function commit() {
-    if (text.trim()) { onAdd(text.trim()); setText(''); }
+    if (text.trim()) { onAdd(text.trim()); if (!isControlled) setText(''); }
   }
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
@@ -5177,6 +5180,9 @@ function AddJournalLine({ project, onAdd, placeholder }) {
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
 function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
   const [allMeals, setAllMeals] = useState(null);
+  const [addText, setAddText] = useState('');
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   useEffect(() => {
     if (!token || !userId) return;
     const sb = createClient();
@@ -5192,6 +5198,23 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
       });
   }, [token, userId]);
 
+  async function commitMeal() {
+    const text = addText.trim();
+    if (!text) return;
+    setAddText('');
+    const current = await dbLoad(todayStr, 'meals', token);
+    const existing = Array.isArray(current) ? current.filter(r => r.text) : [];
+    const newRow = { id: Date.now(), text, kcal: null, protein: null };
+    await dbSave(todayStr, 'meals', [...existing, newRow], token);
+    MEM[`${userId}:${todayStr}:meals`] = [...existing, newRow];
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['meals'] } }));
+    setAllMeals(prev => [...(prev || []), { date: todayStr, ...newRow }]);
+    estimateNutrition(`Estimate for: "${text}". Return JSON: {"kcal":420,"protein":30}`, token)
+      .then(result => {
+        if (result) setAllMeals(prev => (prev||[]).map(r => r.id === newRow.id ? {...r, kcal: result.kcal||null, protein: result.protein||null} : r));
+      });
+  }
+
   const PROT_W = 50, ENRG_W = 72;
   const colProtein  = {fontFamily:mono,fontSize:F.sm,color:C.blue,  flexShrink:0,width:PROT_W,textAlign:'center',whiteSpace:'nowrap'};
   const colKcal     = {fontFamily:mono,fontSize:F.sm,color:C.orange,flexShrink:0,width:ENRG_W,textAlign:'center',whiteSpace:'nowrap'};
@@ -5201,25 +5224,65 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
   const rowS        = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
 
   if (!allMeals) return <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
-  if (!allMeals.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No meals logged yet.</div>;
 
+  const todayMeals = allMeals.filter(r => r.date === todayStr);
+  const pastMeals  = allMeals.filter(r => r.date !== todayStr);
   const byDate = {};
-  allMeals.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+  pastMeals.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+  const todayKcal    = todayMeals.reduce((s,r) => s+(r.kcal||0), 0);
+  const todayProtein = todayMeals.reduce((s,r) => s+(r.protein||0), 0);
+
+  function DateLabel({ date, isToday }) {
+    return (
+      <div
+        onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
+        style={{fontFamily:mono,fontSize:10,
+          color:isToday?C.accent:C.muted,
+          letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4,
+          cursor:(!isToday&&onSelectDate)?'pointer':'default',
+          display:'inline-block',transition:'color 0.15s'}}
+        onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.text;}}
+        onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.muted;}}
+      >{isToday ? 'Today' : fmtDate(date)}</div>
+    );
+  }
 
   return (
     <div>
-      {Object.entries(byDate).map(([date, rows], di) => {
+      {/* ── Today section — always shown ── */}
+      <DateLabel date={todayStr} isToday />
+      <AddJournalLine
+        onAdd={commitMeal}
+        placeholder="Add a meal…"
+        value={addText}
+        onChange={setAddText}
+      />
+      {todayMeals.map((r, i) => (
+        <div key={r.id||i} style={rowS}>
+          <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
+          <span style={r.protein ? colProtein : colMutedP}>{r.protein ? `${r.protein}g` : '—'}</span>
+          <span style={r.kcal    ? colKcal    : colMutedE}>{r.kcal    ? `${r.kcal}kcal` : '—'}</span>
+        </div>
+      ))}
+      {(todayKcal > 0 || todayProtein > 0) && (
+        <div style={{display:'flex',alignItems:'center',gap:0,paddingTop:4,marginTop:2}}>
+          <div style={{flex:1}}/>
+          <div style={{width:PROT_W,display:'flex',justifyContent:'center'}}>
+            {todayProtein > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{todayProtein}g</span>}
+          </div>
+          <div style={{width:ENRG_W,display:'flex',justifyContent:'center'}}>
+            {todayKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:C.orange}}>{todayKcal}kcal</span>}
+          </div>
+        </div>
+      )}
+      {/* ── Past dates ── */}
+      {Object.entries(byDate).sort(([a],[b])=>b.localeCompare(a)).map(([date, rows], di) => {
         const totalKcal    = rows.reduce((s,r) => s+(r.kcal||0), 0);
         const totalProtein = rows.reduce((s,r) => s+(r.protein||0), 0);
         return (
           <div key={date}>
-            {di > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
-            <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
-              style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4,
-                cursor: onSelectDate ? 'pointer' : 'default', display:'inline-block', transition:'color 0.15s'}}
-              onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
-              onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
-            >{fmtDate(date)}</div>
+            <div style={{height:1,background:C.border,margin:'8px 0'}}/>
+            <DateLabel date={date} isToday={false} />
             {rows.map((r, i) => (
               <div key={i} style={rowS}>
                 <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
@@ -5308,30 +5371,98 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
   const chipBase  = {fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',flexShrink:0,borderRadius:4,padding:'2px 8px',whiteSpace:'nowrap'};
   const rowS      = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
 
+  const [actAddText, setActAddText] = useState('');
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  async function commitActivity() {
+    const text = actAddText.trim();
+    if (!text) return;
+    setActAddText('');
+    const current = await dbLoad(todayStr, 'activity', token);
+    const existing = Array.isArray(current) ? current.filter(r => r.text) : [];
+    const newRow = { id: Date.now(), text, dist: null, pace: null, kcal: null };
+    await dbSave(todayStr, 'activity', [...existing, newRow], token);
+    MEM[`${userId}:${todayStr}:activity`] = [...existing, newRow];
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['activity'] } }));
+    setRows(prev => [...(prev || []), { date: todayStr, ...newRow }]);
+    estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token)
+      .then(result => {
+        if (result?.kcal) setRows(prev => (prev||[]).map(r => r.id === newRow.id ? {...r, kcal: result.kcal} : r));
+      });
+  }
+
   if (!rows) return <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
-  const withData = rows.filter(r => r.text);
-  if (!withData.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No activities logged yet.</div>;
 
   function parseDist(d){ const m=String(d||'').match(/[\d.]+/); return m?+m[0]:null; }
 
+  const withData = rows.filter(r => r.text);
+  const todayRows = withData.filter(r => r.date === todayStr);
+  const pastRows  = withData.filter(r => r.date !== todayStr);
   const byDate = {};
-  withData.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+  pastRows.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+  const todayKcal = todayRows.reduce((s,r) => s+(r.kcal||0), 0);
+  const todayDistVals = todayRows.map(r => parseDist(r.dist)).filter(Boolean);
+  const todayDist = todayDistVals.length ? todayDistVals.reduce((a,b)=>a+b,0) : 0;
+
+  function ActDateLabel({ date, isToday }) {
+    return (
+      <div
+        onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
+        style={{fontFamily:mono,fontSize:10,
+          color:isToday?C.accent:C.muted,
+          letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4,
+          cursor:(!isToday&&onSelectDate)?'pointer':'default',
+          display:'inline-block',transition:'color 0.15s'}}
+        onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.text;}}
+        onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.muted;}}
+      >{isToday ? 'Today' : fmtDate(date)}</div>
+    );
+  }
 
   return (
     <div>
+      {/* ── Today section — always shown ── */}
+      <ActDateLabel date={todayStr} isToday />
+      <AddJournalLine
+        onAdd={commitActivity}
+        placeholder="Add an activity…"
+        value={actAddText}
+        onChange={setActAddText}
+      />
+      {todayRows.map((r, i) => (
+        <div key={r.id||i} style={rowS}>
+          <span style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0,overflow:'hidden'}}>
+            <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.text}</span>
+            <SourceBadge source={r.source}/>
+          </span>
+          <span style={r.dist ? colDist : colMuted(DCOL)}>{r.dist || '—'}</span>
+          <span style={r.pace ? colPace : colMuted(PCOL)}>{r.pace ? `${r.pace}/mi` : '—'}</span>
+          <span style={r.kcal ? colKcal : colMuted(KCOL)}>
+            {estimating.has(r.id) ? '…' : r.kcal ? `-${r.kcal}kcal` : '—'}
+          </span>
+        </div>
+      ))}
+      {(todayKcal > 0 || todayDist > 0) && (
+        <div style={{display:'flex',alignItems:'center',gap:0,paddingTop:4,marginTop:2}}>
+          <div style={{flex:1}}/>
+          <div style={{width:DCOL,display:'flex',justifyContent:'center'}}>
+            {todayDist > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{todayDist.toFixed(1)}mi</span>}
+          </div>
+          <div style={{width:PCOL}}/>
+          <div style={{width:KCOL,display:'flex',justifyContent:'center'}}>
+            {todayKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:C.orange}}>{todayKcal}kcal</span>}
+          </div>
+        </div>
+      )}
+      {/* ── Past dates ── */}
       {Object.entries(byDate).sort(([a],[b])=>b.localeCompare(a)).map(([date, dateRows], di) => {
         const totalKcal = dateRows.reduce((s,r) => s+(r.kcal||0), 0);
         const distVals  = dateRows.map(r => parseDist(r.dist)).filter(Boolean);
         const totalDist = distVals.length ? distVals.reduce((a,b)=>a+b,0) : 0;
         return (
           <div key={date}>
-            {di > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
-            <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
-              style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4,
-                cursor: onSelectDate ? 'pointer' : 'default', display:'inline-block', transition:'color 0.15s'}}
-              onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
-              onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
-            >{fmtDate(date)}</div>
+            <div style={{height:1,background:C.border,margin:'8px 0'}}/>
+            <ActDateLabel date={date} isToday={false} />
             {dateRows.map((r, i) => (
               <div key={r.id||i} style={rowS}>
                 <span style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0,overflow:'hidden'}}>
