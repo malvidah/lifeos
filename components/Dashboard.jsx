@@ -4686,7 +4686,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
 // Shared date formatter used by ProjectView + HealthProjectView
 function fmtDate(ds) {
   const d = new Date(ds + 'T12:00:00');
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
