@@ -601,8 +601,8 @@ function Card({children,style={},fitContent=false}) {
 function Widget({label,color,children,slim,collapsed,onToggle,headerRight,headerLeft,autoHeight}) {
   const useAutoHeight = autoHeight || (!onToggle && !collapsed);
   return (
-    <div style={slim ? {} : {height:useAutoHeight?"auto":(collapsed?"auto":"100%"),display:"flex",flexDirection:"column"}}>
-      <Card style={(collapsed || useAutoHeight) ? {height:"auto"} : {}}>
+    <div style={slim ? {} : {flex:useAutoHeight?"0 0 auto":1,display:"flex",flexDirection:"column"}}>
+      <Card style={(collapsed || useAutoHeight) ? {height:"auto"} : {flex:1}}>
         <div style={{
           display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
           borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
@@ -6747,13 +6747,13 @@ export default function Dashboard() {
               ) : (
                 <div style={{display:"flex", gap:10,
                   flexDirection:"row",
-                  alignItems:"flex-start"}}>
+                  alignItems:"stretch"}}>
 
-                  {/* Left column: Journal */}
+                  {/* Left column: Journal — stretches to match right col height */}
                   <div style={{flex:"1 1 0", minWidth:0,
                     display:"flex", flexDirection:"column", gap:10,
                     paddingBottom:180}}>
-                    <div style={{minHeight:320, display:"flex", flexDirection:"column"}}>
+                    <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
                       <Widget label={leftWidget.label} color={leftWidget.color()}
                         collapsed={collapseMap[leftWidget.id]}
                         onToggle={toggleMap[leftWidget.id]}
@@ -6763,12 +6763,14 @@ export default function Dashboard() {
                     </div>
                   </div>
 
-                  {/* Right widgets — column always */}
+                  {/* Right widgets — column always; last card stretches to fill */}
                   <div style={{flex:"1 1 0", minWidth:0,
                     display:"flex", flexDirection:"column", gap:10,
                     paddingBottom:180}}>
-                    {rightWidgets.map(w=>(
+                    {rightWidgets.map((w, i)=>(
                       <div key={w.id} style={{
+                        display:"flex", flexDirection:"column",
+                        flex: (!collapseMap[w.id] && i === rightWidgets.length - 1) ? 1 : "0 0 auto",
                         minHeight: collapseMap[w.id]?0:200}}>
                         <Widget label={w.label} color={w.color()}
                           collapsed={collapseMap[w.id]}
