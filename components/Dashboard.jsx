@@ -4509,11 +4509,11 @@ function ChatFloat({date, token, userId, healthKey}) {
   }
 
   // ── Expanded mode: conversational chat ───────────────────────────────────
-  async function sendChat() {
-    if (!input.trim() || busy) return;
+  async function sendChat(override) {
+    const userText = (override ?? input).trim();
+    if (!userText || busy) return;
     // Free tier gate — check isPremium via response or local count
     if (chatLimitReached) return;
-    const userText = input.trim();
     setInput("");
     if (inputRef.current) inputRef.current.style.height = "auto";
     stopMic();
@@ -4563,24 +4563,46 @@ function ChatFloat({date, token, userId, healthKey}) {
   const hasMic = !!(window?.SpeechRecognition || window?.webkitSpeechRecognition || navigator?.mediaDevices?.getUserMedia);
   return (
     <>
-      {/* ── Fullscreen AI overlay — slides in when expanded ── */}
+      {/* ── Fullscreen AI overlay — covers everything incl TopBar ── */}
       {expanded && (
         <div style={{
-          position: "fixed", inset: 0, zIndex: 96,
-          background: `${C.bg}f4`,
+          position: "fixed", inset: 0, zIndex: 101,
+          background: C.bg,
           display: "flex", flexDirection: "column",
           animation: "fadeIn 0.15s ease",
-          overflowY: "hidden",
         }}>
-          {/* Top tap-to-dismiss strip (clears the sticky topbar) */}
-          <div
-            onClick={() => setExpanded(false)}
-            style={{
-              flexShrink: 0,
-              height: "calc(env(safe-area-inset-top, 0px) + 72px)",
-              cursor: "pointer",
-            }}
-          />
+          {/* Top bar: safe-area + back + date header */}
+          <div style={{
+            flexShrink: 0,
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
+            paddingLeft: 20, paddingRight: 20, paddingBottom: 12,
+            display: "flex", flexDirection: "column", gap: 2,
+          }}>
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <button onClick={() => setExpanded(false)} style={{
+                background: "none", border: "none", cursor: "pointer",
+                color: C.muted, display: "flex", alignItems: "center", gap: 5,
+                padding: "6px 0", fontFamily: mono, fontSize: 11, letterSpacing: "0.08em",
+                minHeight: 36, transition: "color 0.12s", flexShrink: 0,
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = C.text}
+              onMouseLeave={e => e.currentTarget.style.color = C.muted}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                BACK
+              </button>
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  Day Lab AI{isPremiumUser ? " · Premium" : ""}
+                </span>
+                <span style={{ fontFamily: serif, fontSize: F.lg, color: C.text, letterSpacing: "-0.02em", marginTop: 1 }}>
+                  {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                </span>
+              </div>
+              <div style={{ width: 56 }}/>
+            </div>
+          </div>
 
           {/* Messages scroll area */}
           <div style={{
@@ -4653,7 +4675,7 @@ function ChatFloat({date, token, userId, healthKey}) {
                   {msg.isInsight && messages.filter(m => m.role === "user").length === 0 && (
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingLeft: 2 }}>
                       {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
-                        <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 30); }}
+                        <button key={s} onClick={() => { setInput(s); setTimeout(() => { sendChat(s); }, 30); }}
                           style={{
                             background: `${C.accent}12`, border: `1px solid ${C.accent}28`,
                             borderRadius: 20, padding: "6px 14px",
@@ -4723,7 +4745,7 @@ function ChatFloat({date, token, userId, healthKey}) {
                 onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                 onFocus={() => { if (!expanded) setExpanded(true); }}
-                placeholder={busy ? "…" : "Ask or add anything…"}
+                placeholder={busy ? "…" : "Ask AI anything…"}
                 disabled={busy || (expanded && chatLimitReached && !isPremiumUser)}
                 rows={1}
                 style={{
