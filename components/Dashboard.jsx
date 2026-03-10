@@ -148,6 +148,22 @@ function TagChip({ name, onClick, style={}, plain=false }) {
     >#{name}</span>
   );
 }
+// Edit-mode tag renderer: colored #tag spans (no chip pill), consistent with Notes focused renderInline.
+// Used in task edit overlay and any other edit context across the app.
+function renderTaskInline(text) {
+  if (!text) return null;
+  const re = /(#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9]))/g;
+  const parts = []; let last = 0, m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
+    const col = projectColor(m[2].toLowerCase());
+    parts.push(<span key={`c${m.index}`} style={{ color: col, fontFamily: 'inherit' }}>{m[1]}</span>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
+  return parts.length ? parts : text;
+}
+
 function renderWithTags(text, dimTag=null) {
   if (!text) return null;
   const parts = []; let last = 0;
@@ -3114,8 +3130,8 @@ function Notes({date,userId,token}) {
       }
       else {
         if (focused) {
-          // While editing: zero-padding span so cursor stays aligned with textarea
-          const col = projectColor(m[4]);
+          // While editing: colored span matching renderTaskInline — consistent with task edit mode
+          const col = projectColor(m[4].toLowerCase());
           parts.push(<span key={m.index} style={{color:col,fontFamily:serif}}>{m[0]}</span>);
         } else {
           // While reading: full chip
@@ -3835,32 +3851,52 @@ function Tasks({date,token,userId,taskFilter='all'}) {
               display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
             {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
           </button>
-          {/* Focused: real textarea — native cursor, native multi-row selection.
-               Blurred: rendered div with tag chips. No overlay tricks needed. */}
+          {/* Overlay approach (same as Notes):
+               - Transparent textarea in normal flow (sizes the row, receives input, shows caret at zIndex 3)
+               - Absolute overlay div with colored tags (zIndex 2, pointerEvents none)
+               When not focused: plain rendered div — allows free drag-selection across all rows.
+               Drag detection on the blurred div prevents accidentally entering edit mode mid-drag. */}
           <div style={{ flex:1, minWidth:0 }}>
             {focusedId === row.id ? (
-              <textarea
-                ref={el=>{ refs.current[row.id]=el; if(el) autoResizeTask(el); }}
-                value={row.text} rows={1}
-                autoFocus
-                onChange={e=>{ setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r)); autoResizeTask(e.target); }}
-                onKeyDown={e=>onKey(e,row.id,idx)}
-                onBlur={()=>setFocusedId(null)}
-                placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=="done"?"Add a task…":""}
-                style={{
-                  background:"transparent",border:"none",outline:"none",padding:0,
-                  width:"100%",lineHeight:1.7,resize:"none",overflow:"hidden",
+              <div style={{ position:"relative" }}>
+                <textarea
+                  ref={el=>{ refs.current[row.id]=el; if(el) autoResizeTask(el); }}
+                  value={row.text} rows={1}
+                  autoFocus
+                  onChange={e=>{ setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r)); autoResizeTask(e.target); }}
+                  onKeyDown={e=>onKey(e,row.id,idx)}
+                  onBlur={()=>setFocusedId(null)}
+                  placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=="done"?"Add a task…":""}
+                  style={{
+                    background:"transparent",border:"none",outline:"none",padding:0,
+                    width:"100%",lineHeight:1.7,resize:"none",overflow:"hidden",
+                    color:"transparent",
+                    caretColor:row.done?C.muted:C.accent,
+                    fontFamily:serif,fontSize:F.md,
+                    textDecoration:row.done?"line-through":"none",
+                    whiteSpace:"pre-wrap",wordBreak:"break-word",
+                    display:"block", position:"relative", zIndex:3,
+                  }}
+                />
+                {/* Colored overlay — tags in edit-mode color, same as Notes focused renderInline */}
+                <div style={{
+                  position:"absolute",top:0,left:0,right:0,
+                  fontFamily:serif,fontSize:F.md,lineHeight:1.7,
                   color:row.done?C.muted:C.text,
-                  caretColor:row.done?C.muted:C.accent,
-                  fontFamily:serif,fontSize:F.md,
+                  pointerEvents:"none",zIndex:2,
                   textDecoration:row.done?"line-through":"none",
                   whiteSpace:"pre-wrap",wordBreak:"break-word",
-                  display:"block",
-                }}
-              />
+                }}>
+                  {row.text
+                    ? renderTaskInline(row.text)
+                    : <span style={{color:C.dim}}>{idx===0&&visible.length===1&&taskFilter!=="done"?"Add a task…":""}</span>
+                  }
+                </div>
+              </div>
             ) : (
               <div
-                onClick={()=>{ setFocusedId(row.id); setTimeout(()=>{ const el=refs.current[row.id]; if(el){el.focus();autoResizeTask(el);} },10); }}
+                onPointerDown={e=>{ e._taskDownX=e.clientX; e._taskDownY=e.clientY; }}
+                onPointerUp={e=>{ const dx=e.clientX-(e._taskDownX??e.clientX),dy=e.clientY-(e._taskDownY??e.clientY); if(Math.sqrt(dx*dx+dy*dy)<5){ setFocusedId(row.id); setTimeout(()=>{ const el=refs.current[row.id]; if(el){el.focus();autoResizeTask(el);} },10); } }}
                 style={{
                   fontFamily:serif,fontSize:F.md,lineHeight:1.7,
                   color:row.done?C.muted:C.text,
