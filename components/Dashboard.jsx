@@ -4684,6 +4684,12 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
   );
 }
 
+// Shared date formatter used by ProjectView + HealthProjectView
+function fmtDate(ds) {
+  const d = new Date(ds + 'T12:00:00');
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
 // ─── HealthProjectView ───────────────────────────────────────────────────────
 function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresReady, startSync, endSync }) {
   const today = new Date().toISOString().slice(0, 10);
@@ -5028,11 +5034,6 @@ function ProjectView({ project, token, userId, onBack }) {
     });
     return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
   }, [taskEntries]);
-
-  function fmtDate(ds) {
-    const d = new Date(ds + 'T12:00:00');
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  }
 
   // Register any new tags found in edited text into projectsMeta
   function registerNewTags(text) {
