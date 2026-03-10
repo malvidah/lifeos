@@ -3748,63 +3748,115 @@ function Tasks({date,token,userId,taskFilter='all'}) {
               display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
             {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
           </button>
-          {/* Overlay approach (same as Notes):
-               - Transparent textarea in normal flow (sizes the row, receives input, shows caret at zIndex 3)
-               - Absolute overlay div with colored tags (zIndex 2, pointerEvents none)
-               When not focused: plain rendered div — allows free drag-selection across all rows.
-               Drag detection on the blurred div prevents accidentally entering edit mode mid-drag. */}
           <div style={{ flex:1, minWidth:0 }}>
             {focusedId === row.id ? (
-              <div style={{ position:"relative" }}>
-                <textarea
-                  ref={el=>{ refs.current[row.id]=el; if(el) autoResizeTask(el); }}
-                  value={row.text} rows={1}
-                  autoFocus
-                  onChange={e=>{ setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r)); autoResizeTask(e.target); }}
-                  onKeyDown={e=>onKey(e,row.id,idx)}
-                  onBlur={()=>setFocusedId(null)}
-                  placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=="done"?"Add a task…":""}
-                  style={{
-                    background:"transparent",border:"none",outline:"none",padding:0,
-                    width:"100%",lineHeight:1.7,resize:"none",overflow:"hidden",
-                    color:"transparent",
-                    caretColor:row.done?C.muted:C.accent,
-                    fontFamily:serif,fontSize:F.md,
-                    textDecoration:row.done?"line-through":"none",
-                    whiteSpace:"pre-wrap",wordBreak:"break-word",
-                    display:"block", position:"relative", zIndex:3,
-                  }}
-                />
-                {/* Colored overlay — tags in edit-mode color, same as Notes focused renderInline */}
-                <div style={{
-                  position:"absolute",top:0,left:0,right:0,
-                  fontFamily:serif,fontSize:F.md,lineHeight:1.7,
-                  color:row.done?C.muted:C.text,
-                  pointerEvents:"none",zIndex:2,
-                  textDecoration:row.done?"line-through":"none",
-                  whiteSpace:"pre-wrap",wordBreak:"break-word",
-                }}>
-                  {row.text
-                    ? renderTaskInline(row.text)
-                    : <span style={{color:C.dim}}>{idx===0&&visible.length===1&&taskFilter!=="done"?"Add a task…":""}</span>
+              // contenteditable: real DOM node, cursor & selection work natively
+              // Colored #tag spans set on focus; textContent read on input/keydown
+              <div
+                ref={el => {
+                  if (!el) return;
+                  refs.current[row.id] = el;
+                  // Set innerHTML with colored spans on first mount, then focus
+                  el.innerHTML = row.text
+                    ? (() => {
+                        const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                        return esc(row.text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g,
+                          (m, tag) => `<span style="color:${projectColor(tag)}">${m}</span>`);
+                      })()
+                    : '';
+                  // Move cursor to end
+                  requestAnimationFrame(() => {
+                    el.focus();
+                    const range = document.createRange();
+                    range.selectNodeContents(el);
+                    range.collapse(false);
+                    const sel = window.getSelection();
+                    sel.removeAllRanges(); sel.addRange(range);
+                  });
+                }}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={e => {
+                  const text = e.currentTarget.textContent;
+                  setRows(safe.map(r => r.id === row.id ? {...r, text} : r));
+                }}
+                onKeyDown={e => {
+                  // Read textContent (not innerHTML) for all logic
+                  const el = e.currentTarget;
+                  const text = el.textContent;
+                  const sel = window.getSelection();
+                  const range = sel.rangeCount ? sel.getRangeAt(0) : null;
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    // Get caret offset in plain text
+                    let caretOffset = 0;
+                    if (range) {
+                      const pre = range.cloneRange();
+                      pre.selectNodeContents(el); pre.setEnd(range.startContainer, range.startOffset);
+                      caretOffset = pre.toString().length;
+                    }
+                    const before = text.slice(0, caretOffset);
+                    const after  = text.slice(caretOffset);
+                    const newRow = {id: Date.now(), text: after, done: false};
+                    const newRows = safe.map(r => r.id === row.id ? {...r, text: before} : r);
+                    newRows.splice(idx + 1, 0, newRow);
+                    setRows(newRows);
+                    setFocusedId(newRow.id);
+                  } else if (e.key === 'Backspace') {
+                    let caretOffset = 0;
+                    if (range) {
+                      const pre = range.cloneRange();
+                      pre.selectNodeContents(el); pre.setEnd(range.startContainer, range.startOffset);
+                      caretOffset = pre.toString().length;
+                    }
+                    if (caretOffset === 0 && idx > 0) {
+                      e.preventDefault();
+                      const prev = safe[idx - 1];
+                      const mergedText = prev.text + text;
+                      const newRows = safe.filter(r => r.id !== row.id).map(r => r.id === prev.id ? {...r, text: mergedText} : r);
+                      setRows(newRows);
+                      setFocusedId(prev.id);
+                      // Cursor will be set to prev.text.length in next focus ref callback
+                      refs.current['_pendingCaret'] = prev.text.length;
+                    } else if (text === '' && safe.length > 1) {
+                      e.preventDefault();
+                      setRows(safe.filter(r => r.id !== row.id));
+                      setFocusedId(safe[idx - 1]?.id ?? null);
+                    }
+                  } else if (e.key === 'Escape') {
+                    el.blur();
                   }
-                </div>
-              </div>
+                }}
+                onBlur={e => {
+                  const text = e.currentTarget.textContent;
+                  setRows(safe.map(r => r.id === row.id ? {...r, text} : r));
+                  setFocusedId(null);
+                }}
+                style={{
+                  fontFamily: serif, fontSize: F.md, lineHeight: 1.7,
+                  color: row.done ? C.muted : C.text,
+                  textDecoration: row.done ? 'line-through' : 'none',
+                  outline: 'none', cursor: 'text',
+                  minHeight: '1.7em', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                  caretColor: row.done ? C.muted : C.accent,
+                }}
+                data-placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=='done'?'Add a task…':''}
+              />
             ) : (
               <div
                 onPointerDown={e=>{ e._taskDownX=e.clientX; e._taskDownY=e.clientY; }}
-                onPointerUp={e=>{ const dx=e.clientX-(e._taskDownX??e.clientX),dy=e.clientY-(e._taskDownY??e.clientY); if(Math.sqrt(dx*dx+dy*dy)<5){ setFocusedId(row.id); setTimeout(()=>{ const el=refs.current[row.id]; if(el){el.focus();autoResizeTask(el);} },10); } }}
+                onPointerUp={e=>{ const dx=e.clientX-(e._taskDownX??e.clientX),dy=e.clientY-(e._taskDownY??e.clientY); if(Math.sqrt(dx*dx+dy*dy)<5){ setFocusedId(row.id); } }}
                 style={{
                   fontFamily:serif,fontSize:F.md,lineHeight:1.7,
                   color:row.done?C.muted:C.text,
-                  textDecoration:row.done?"line-through":"none",
-                  whiteSpace:"pre-wrap",wordBreak:"break-word",
-                  cursor:"text",minHeight:"1.7em",
-                  userSelect:"text",
+                  textDecoration:row.done?'line-through':'none',
+                  whiteSpace:'pre-wrap',wordBreak:'break-word',
+                  cursor:'text',minHeight:'1.7em',
+                  userSelect:'text',
                 }}>
                 {row.text
                   ? renderWithTags(row.text)
-                  : (idx===0&&open.length===1&&taskFilter!=="done" ? <span style={{color:C.dim}}>Add a task…</span> : null)
+                  : (idx===0&&open.length===1&&taskFilter!=='done' ? <span style={{color:C.dim}}>Add a task…</span> : null)
                 }
               </div>
             )}
@@ -4582,82 +4634,77 @@ function ChatFloat({date, token, userId, healthKey}) {
 // ─── Widget definitions ───────────────────────────────────────────────────────
 
 // ─── SearchBar ────────────────────────────────────────────────────────────────
-function SearchBar({ token, userId, onSelectDate, onClose }) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState(null); // null=idle, []|[...]=searched
+// ─── useSearch: debounced live search across all entry types ─────────────────
+function useSearch(query, token, userId) {
+  const [results, setResults] = useState(null); // null=idle, []=empty, [...]=hits
   const [loading, setLoading] = useState(false);
-  const inputRef = useRef(null);
-  const debounceRef = useRef(null);
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  const debRef = useRef(null);
 
   useEffect(() => {
-    clearTimeout(debounceRef.current);
-    if (!query.trim() || query.trim().length < 2) { setResults(null); return; }
-    debounceRef.current = setTimeout(() => doSearch(query.trim()), 280);
-    return () => clearTimeout(debounceRef.current);
-  }, [query]); // eslint-disable-line
+    clearTimeout(debRef.current);
+    const q = query.trim();
+    if (!q || q.length < 2) { setResults(null); return; }
+    debRef.current = setTimeout(() => run(q), 200);
+    return () => clearTimeout(debRef.current);
+  }, [query, token, userId]); // eslint-disable-line
 
-  async function doSearch(q) {
+  async function run(q) {
     if (!token || !userId) return;
     setLoading(true);
     try {
       const sb = createClient();
-      // Set session so RLS allows reads
       await sb.auth.setSession({ access_token: token, refresh_token: '' });
       const types = ['notes', 'tasks', 'meals', 'activity', 'workouts'];
-      const [notesR, tasksR, mealsR, activityR, workoutsR] = await Promise.all(
+      const rows = await Promise.all(
         types.map(t => sb.from('entries').select('date, data, type')
-          .eq('user_id', userId).eq('type', t).order('date', { ascending: false }).limit(400))
+          .eq('user_id', userId).eq('type', t).order('date', { ascending: false }).limit(400)
+          .then(r => r.data || []))
       );
-      const qLower = q.toLowerCase();
+      const [notesR, tasksR, mealsR, activityR, workoutsR] = rows;
+      const qL = q.toLowerCase();
       const hits = [];
-
-      // Notes
-      (notesR.data || []).forEach(row => {
-        const text = typeof row.data === 'string' ? row.data : '';
-        const lines = text.split('\n').filter(l => l.trim());
-        lines.forEach((line, i) => {
-          if (line.toLowerCase().includes(qLower))
-            hits.push({ type: 'journal', date: row.date, text: line, lineIndex: i });
+      notesR.forEach(row => {
+        (typeof row.data === 'string' ? row.data : '').split('\n').filter(l => l.trim()).forEach(line => {
+          if (line.toLowerCase().includes(qL)) hits.push({ type: 'journal', date: row.date, text: line });
         });
       });
-      // Tasks
-      (tasksR.data || []).forEach(row => {
+      tasksR.forEach(row => {
         (Array.isArray(row.data) ? row.data : []).forEach(task => {
-          if (task?.text?.toLowerCase().includes(qLower))
+          if (task?.text?.toLowerCase().includes(qL))
             hits.push({ type: 'task', date: row.date, text: task.text, done: task.done });
         });
       });
-      // Meals
-      (mealsR.data || []).forEach(row => {
+      mealsR.forEach(row => {
         (Array.isArray(row.data) ? row.data : []).forEach(meal => {
-          if (meal?.text?.toLowerCase().includes(qLower))
+          if (meal?.text?.toLowerCase().includes(qL))
             hits.push({ type: 'meal', date: row.date, text: meal.text, kcal: meal.kcal });
         });
       });
-      // Activity (manual)
-      (activityR.data || []).forEach(row => {
+      activityR.forEach(row => {
         (Array.isArray(row.data) ? row.data : []).forEach(act => {
-          if (act?.text?.toLowerCase().includes(qLower))
+          if (act?.text?.toLowerCase().includes(qL))
             hits.push({ type: 'activity', date: row.date, text: act.text });
         });
       });
-      // Workouts (Strava/Oura synced)
-      (workoutsR.data || []).forEach(row => {
+      workoutsR.forEach(row => {
         (Array.isArray(row.data) ? row.data : []).forEach(w => {
           const t = w?.name || w?.text || '';
-          if (t.toLowerCase().includes(qLower))
-            hits.push({ type: 'activity', date: row.date, text: t, source: w.source });
+          if (t.toLowerCase().includes(qL)) hits.push({ type: 'activity', date: row.date, text: t });
         });
       });
-
-      // Sort by date desc, limit 60
       hits.sort((a, b) => b.date.localeCompare(a.date));
-      setResults(hits.slice(0, 60));
+      setResults(hits.slice(0, 80));
     } catch(e) { setResults([]); }
     setLoading(false);
   }
+
+  return { results, loading };
+}
+
+// ─── SearchResults: renders result blocks with keyword highlight ──────────────
+function SearchResults({ results, loading, query, onSelectDate }) {
+  const TYPE_LABEL = { journal: 'Journal', task: 'Task', meal: 'Meal', activity: 'Activity' };
+  const TYPE_COLOR = { journal: C.accent, task: C.accent, meal: C.red, activity: C.blue };
 
   function highlight(text, q) {
     if (!q || !text) return text;
@@ -4666,7 +4713,7 @@ function SearchBar({ token, userId, onSelectDate, onClose }) {
     return (
       <>
         {text.slice(0, idx)}
-        <mark style={{ background: C.accent + '44', color: C.accent, borderRadius: 2, padding: '0 1px' }}>
+        <mark style={{ background: C.accent + '30', color: C.accent, borderRadius: 2, padding: '0 1px', fontStyle: 'normal' }}>
           {text.slice(idx, idx + q.length)}
         </mark>
         {text.slice(idx + q.length)}
@@ -4674,76 +4721,72 @@ function SearchBar({ token, userId, onSelectDate, onClose }) {
     );
   }
 
-  const TYPE_LABEL = { journal: 'Journal', task: 'Task', meal: 'Meal', activity: 'Activity' };
-  const TYPE_COLOR = { journal: C.accent, task: C.accent, meal: C.red, activity: C.blue };
+  if (loading && !results) return (
+    <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
+      <span style={{ fontFamily: mono, fontSize: 9, color: C.muted, letterSpacing: '0.15em', textTransform: 'uppercase' }}>searching…</span>
+    </div>
+  );
+
+  if (!results || query.trim().length < 2) return (
+    <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+      <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: '0.12em' }}>type to search</span>
+    </div>
+  );
+
+  if (results.length === 0) return (
+    <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
+      <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: '0.1em' }}>No entries match your search</span>
+    </div>
+  );
+
+  // Group by date
+  const byDate = [];
+  let lastDate = null;
+  results.forEach(hit => {
+    if (hit.date !== lastDate) { byDate.push({ date: hit.date, hits: [] }); lastDate = hit.date; }
+    byDate[byDate.length - 1].hits.push(hit);
+  });
 
   return (
-    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 200, background: C.bg }}>
-      {/* Search input row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderBottom: `1px solid ${C.border}` }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input
-          ref={inputRef}
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
-          placeholder="Search tasks, journal, meals, activities…"
-          style={{
-            flex: 1, background: 'transparent', border: 'none', outline: 'none',
-            fontFamily: serif, fontSize: F.md, color: C.text, caretColor: C.accent,
-          }}
-        />
-        {loading && <span style={{ fontFamily: mono, fontSize: 9, color: C.muted, letterSpacing: '0.1em' }}>…</span>}
-        <button onClick={onClose} style={{
-          background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
-          fontFamily: mono, fontSize: F.sm, color: C.muted, letterSpacing: '0.04em',
-        }}>esc</button>
-      </div>
-
-      {/* Results */}
-      {results !== null && (
-        <div style={{ maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', padding: '4px 0' }}>
-          {results.length === 0 ? (
-            <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim, padding: '16px 14px', letterSpacing: '0.06em' }}>
-              no results for "{query}"
-            </div>
-          ) : (
-            results.map((hit, i) => (
+    <div style={{ paddingBottom: 180 }}>
+      {byDate.map(({ date, hits }) => (
+        <div key={date} style={{ marginBottom: 4 }}>
+          <div
+            onClick={() => onSelectDate && onSelectDate(date)}
+            style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase',
+              color: C.muted, padding: '12px 14px 4px', cursor: 'pointer', display: 'inline-block',
+              transition: 'color 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.color = C.text}
+            onMouseLeave={e => e.currentTarget.style.color = C.muted}
+          >{fmtDate(date)}</div>
+          <div style={{ background: C.surface, borderRadius: 10, overflow: 'hidden', margin: '0 0 0 0' }}>
+            {hits.map((hit, i) => (
               <div key={i}
-                onClick={() => { onClose(); if (onSelectDate) onSelectDate(hit.date); }}
-                style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10,
-                  padding: '7px 14px', cursor: 'pointer',
-                  borderBottom: `1px solid ${C.border}`,
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = C.surface}
+                onClick={() => onSelectDate && onSelectDate(date)}
+                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 14px',
+                  borderBottom: i < hits.length - 1 ? `1px solid ${C.border}` : 'none',
+                  cursor: 'pointer', transition: 'background 0.1s' }}
+                onMouseEnter={e => e.currentTarget.style.background = C.border + '55'}
                 onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
               >
-                <span style={{
-                  fontFamily: mono, fontSize: 8, letterSpacing: '0.08em', textTransform: 'uppercase',
-                  color: TYPE_COLOR[hit.type] + '99', flexShrink: 0, paddingTop: 3, width: 44,
-                }}>{TYPE_LABEL[hit.type]}</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontFamily: serif, fontSize: F.md, lineHeight: 1.5, color: C.text,
-                    whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                    {highlight(hit.text, query.trim())}
-                    {hit.done && <span style={{ color: C.muted, marginLeft: 6, fontSize: '0.85em' }}>✓</span>}
-                  </div>
-                </div>
-                <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, flexShrink: 0, paddingTop: 3 }}>
-                  {fmtDate(hit.date)}
+                <span style={{ fontFamily: mono, fontSize: 8, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: TYPE_COLOR[hit.type] + 'aa', flexShrink: 0, paddingTop: 4, width: 42 }}>
+                  {TYPE_LABEL[hit.type]}
                 </span>
+                <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: 1.6, color: C.text,
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                  {highlight(hit.text, query.trim())}
+                  {hit.done && <span style={{ color: C.muted, marginLeft: 5, fontSize: '0.85em' }}>✓</span>}
+                </div>
               </div>
-            ))
-          )}
+            ))}
+          </div>
         </div>
-      )}
+      ))}
     </div>
   );
 }
+
 
 // ─── ProjectsCard ─────────────────────────────────────────────────────────────
 // Source of truth: #tags present in the DB (notes + tasks). projectsMeta is
@@ -5744,6 +5787,9 @@ export default function Dashboard() {
   const [stravaConnected, setStravaConnected] = useState(false);
   const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef(null);
+  const { results: srResults, loading: srLoading } = useSearch(searchQuery, token, userId);
 
 
   useEffect(()=>{
@@ -5998,54 +6044,118 @@ export default function Dashboard() {
         <div style={{flex:1, minHeight:0, overflow:activeProject?"hidden":mobile?"auto":"hidden", padding:activeProject?0:mobile?"6px 8px":10,
           paddingBottom:activeProject?0:mobile?200:0, display:"flex", flexDirection:"column", gap:activeProject?0:mobile?10:8}}>
 
-          {/* Calendar + Health — hidden in project view */}
-          {!activeProject && (
-            <>
-              {/* ── Projects strip + search button ── */}
-              <div style={{ position: 'relative', flexShrink: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
+          {/* Calendar + Health + Search — hidden in project view */}
+          {!activeProject && (() => {
+            return (
+              <>
+                {/* ── Projects strip ↔ Search pill (crossfade) ── */}
+                <div style={{ position: 'relative', flexShrink: 0, height: 40, overflow: 'visible' }}>
+                  {/* Projects bar — fades out when search open */}
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0,
+                    opacity: searchOpen ? 0 : 1,
+                    pointerEvents: searchOpen ? 'none' : 'auto',
+                    transition: 'opacity 0.18s ease',
+                    display: 'flex', alignItems: 'center',
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSearchOpen(true);
+                        setTimeout(() => searchInputRef.current?.focus(), 60);
+                      }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        padding: '6px 14px 6px 6px', display: 'flex', alignItems: 'center',
+                        color: C.muted, flexShrink: 0, transition: 'color 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = C.text}
+                      onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                      aria-label="Search"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      </svg>
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setSearchOpen(true)}
-                    style={{
-                      background: 'none', border: 'none', cursor: 'pointer',
-                      padding: '6px 14px 6px 6px', display: 'flex', alignItems: 'center',
-                      color: C.muted, flexShrink: 0, transition: 'color 0.15s',
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.color = C.text}
-                    onMouseLeave={e => e.currentTarget.style.color = C.muted}
-                    aria-label="Search"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                  </button>
+
+                  {/* Search pill — fades in when search open */}
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                    opacity: searchOpen ? 1 : 0,
+                    pointerEvents: searchOpen ? 'auto' : 'none',
+                    transition: 'opacity 0.18s ease',
+                    display: 'flex', alignItems: 'center',
+                    padding: '0 10px',
+                  }}>
+                    <div style={{
+                      flex: 1, display: 'flex', alignItems: 'center', gap: 8,
+                      background: C.surface,
+                      border: `1px solid ${C.border2}`,
+                      borderRadius: 999,
+                      padding: '0 14px',
+                      height: 32,
+                      boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      </svg>
+                      <input
+                        ref={searchInputRef}
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
+                        }}
+                        placeholder="Search entries…"
+                        style={{
+                          flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                          fontFamily: serif, fontSize: F.md, color: C.text, caretColor: C.accent,
+                        }}
+                      />
+                      {srLoading && (
+                        <span style={{ fontFamily: mono, fontSize: 8, color: C.muted, letterSpacing: '0.12em', flexShrink: 0 }}>…</span>
+                      )}
+                      <button
+                        onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+                          color: C.muted, display: 'flex', alignItems: 'center', flexShrink: 0,
+                          transition: 'color 0.12s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = C.text}
+                        onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                        aria-label="Close search"
+                      >
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                {searchOpen && (
-                  <SearchBar
-                    token={token} userId={userId}
-                    onSelectDate={d => setSelected(d)}
-                    onClose={() => setSearchOpen(false)}
-                  />
+
+                {/* Cal + Health — hidden during search */}
+                {!searchOpen && (
+                  <>
+                    <div style={{flexShrink:0}}>
+                      <CalStrip selected={selected} onSelect={setSelected}
+                        events={events} setEvents={setEvents} healthDots={healthDots}
+                        token={token} collapsed={calCollapsed} onToggle={toggleCal}
+                        calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
+                    </div>
+                    <div style={{flexShrink:0}}>
+                      <HealthStrip date={selected} token={token} userId={userId}
+                        onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
+                        collapsed={healthCollapsed} onToggle={toggleHealth}/>
+                    </div>
+                  </>
                 )}
-              </div>
-
-              <div style={{flexShrink:0}}>
-                <CalStrip selected={selected} onSelect={setSelected}
-                  events={events} setEvents={setEvents} healthDots={healthDots}
-                  token={token} collapsed={calCollapsed} onToggle={toggleCal}
-                  calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
-              </div>
-
-              <div style={{flexShrink:0}}>
-                <HealthStrip date={selected} token={token} userId={userId}
-                  onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-                  collapsed={healthCollapsed} onToggle={toggleHealth}/>
-              </div>
-            </>
-          )}
+              </>
+            );
+          })()}
 
           {/* Project view OR daily widgets */}
           {activeProject ? (
@@ -6092,6 +6202,16 @@ export default function Dashboard() {
                 </>
               );
             })()
+          ) : searchOpen ? (
+            /* ── Search results — replace widgets while searching ── */
+            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease' }}>
+              <SearchResults
+                results={srResults}
+                loading={srLoading}
+                query={searchQuery}
+                onSelectDate={d => { setSearchOpen(false); setSearchQuery(''); setSelected(d); }}
+              />
+            </div>
           ) : (
             <>
               {/* Widgets — row on wide, flat stack on narrow */}
@@ -6156,15 +6276,18 @@ export default function Dashboard() {
           )}
         </div>
 
-      {/* Floating chat pill — always visible, both mobile + desktop */}
-      {/* Fade scrim so cards dissolve into the bar */}
+      {/* Floating chat pill — hidden during search */}
       <div style={{
         position:"fixed", bottom:0, left:0, right:0, height:80, zIndex:96,
         background:`linear-gradient(to top, ${C.bg} 30%, transparent)`,
         pointerEvents:"none",
+        opacity: searchOpen ? 0 : 1,
+        transition: 'opacity 0.18s ease',
       }}/>
-      <ChatFloat date={selected} token={token} userId={userId}
-        healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
+      {!searchOpen && (
+        <ChatFloat date={selected} token={token} userId={userId}
+          healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
+      )}
     </div>
   );
 }
