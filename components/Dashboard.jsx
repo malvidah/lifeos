@@ -4738,7 +4738,7 @@ function HealthAllMeals({ token, userId }) {
               </div>
             ))}
             {(totalKcal > 0 || totalProtein > 0) && (
-              <div style={{display:'flex',alignItems:'center',gap:0,borderTop:`1px solid ${C.border}`,paddingTop:4,marginTop:2}}>
+              <div style={{display:'flex',alignItems:'center',gap:0,paddingTop:4,marginTop:2}}>
                 <div style={{flex:1}}/>
                 <div style={{width:PROT_W,display:'flex',justifyContent:'center'}}>
                   {totalProtein > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{totalProtein}g</span>}
