@@ -157,6 +157,93 @@ function renderWithTags(text, dimTag=null) {
 }
 
 
+// ─── URL + Image rendering helpers ──────────────────────────────────────────
+const URL_RE = /https?:\/\/[^\s<>"')\]]+/g;
+const IMG_RE = /\[img:(https?:\/\/[^\]]+|data:[^\]]+)\]/g;
+
+// Split text by images first, then render each text segment with URLs+tags
+function renderRichLine(text, dimTag=null) {
+  if (!text) return null;
+  const parts = [];
+  let last = 0;
+  const re = new RegExp(IMG_RE.source, 'g'); let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) {
+      parts.push(<span key={`t${last}`}>{renderTextWithLinksAndTags(text.slice(last, m.index), dimTag, last)}</span>);
+    }
+    parts.push(
+      <div key={`img${m.index}`} style={{ margin: '6px 0', lineHeight: 0 }}>
+        <img src={m[1]} alt="" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 8, display: 'block' }} />
+      </div>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<span key={`e${last}`}>{renderTextWithLinksAndTags(text.slice(last), dimTag, last)}</span>);
+  return parts.length ? parts : renderTextWithLinksAndTags(text, dimTag, 0);
+}
+
+function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0) {
+  if (!text) return null;
+  // Build a combined regex for URLs and #tags
+  const combined = /(https?:\/\/[^\s<>"')\]]+)|(#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9]))/g;
+  const parts = []; let last = 0; let m;
+  while ((m = combined.exec(text)) !== null) {
+    if (m.index > last) parts.push(<Fragment key={`${keyOffset}t${last}`}>{text.slice(last, m.index)}</Fragment>);
+    if (m[1]) {
+      // URL
+      const url = m[1];
+      parts.push(
+        <a key={`${keyOffset}u${m.index}`} href={url} target="_blank" rel="noreferrer"
+          style={{ color: '#C8820A', textDecoration: 'none', transition: 'color 0.15s', pointerEvents: 'auto' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#F5A623'}
+          onMouseLeave={e => e.currentTarget.style.color = '#C8820A'}
+        >{url}</a>
+      );
+    } else {
+      // #tag
+      const isOwn = dimTag && m[3].toLowerCase() === dimTag.toLowerCase();
+      parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={m[3]} plain={isOwn}/>);
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<Fragment key={`${keyOffset}e${last}`}>{text.slice(last)}</Fragment>);
+  return parts.length ? parts : text;
+}
+
+// Client-side image resize+compress before upload
+async function resizeImage(file, maxW=1200, quality=0.82) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, maxW / img.width);
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ base64: reader.result.split(',')[1], mimeType: 'image/jpeg' });
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', quality);
+    };
+    img.src = url;
+  });
+}
+
+async function uploadImageFile(file, token) {
+  const { base64, mimeType } = await resizeImage(file);
+  const res = await fetch('/api/upload-image', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ image: base64, mimeType, filename: file.name }),
+  });
+  const d = await res.json();
+  return d.url || null;
+}
+
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateNutrition(prompt, token) {
   if (!token) return null;
@@ -2864,6 +2951,11 @@ function Notes({date,userId,token}) {
   function renderContent(text) {
     if (!text || !text.trim()) return null;
     return text.split("\n").map((line, i) => {
+      // Image line
+      if (/^\[img:/.test(line)) {
+        const m = line.match(/^\[img:([^\]]+)\]/);
+        if (m) return <div key={i} style={{margin:"4px 0",lineHeight:0}}><img src={m[1]} alt="" style={{maxWidth:"100%",maxHeight:320,borderRadius:8,display:"block"}}/></div>;
+      }
       // Heading
       if (line.startsWith("# ")) {
         return <div key={i} style={{color:C.accent,fontFamily:serif,fontSize:F.md,lineHeight:"1.7"}}>{renderInline(line.slice(2))}</div>;
@@ -2873,17 +2965,26 @@ function Notes({date,userId,token}) {
         return <div key={i} style={{height:"1.7em"}}>&nbsp;</div>;
       }
       // Normal
-      return <div key={i} style={{color:C.text,fontFamily:serif,fontSize:F.md,lineHeight:"1.7"}}>{renderInline(line)}</div>;
+      return <div key={i} style={{color:C.text,fontFamily:serif,fontSize:F.md,lineHeight:"1.7",pointerEvents:"none"}}>{renderInline(line)}</div>;
     });
   }
 
   function renderInline(text) {
-    const re = /(\*\*(.+?)\*\*|\*(.+?)\*|#([A-Za-z][A-Za-z0-9]+))/g;
+    // Combined: bold, italic, URLs, #tags
+    const re = /(\*\*(.+?)\*\*|\*(.+?)\*|https?:\/\/[^\s<>"')\]]+|#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9]))/g;
     const parts = []; let last=0, m;
     while ((m = re.exec(text)) !== null) {
       if (m.index > last) parts.push(text.slice(last, m.index));
       if (m[0].startsWith("**")) parts.push(<strong key={m.index}>{m[2]}</strong>);
       else if (m[0].startsWith("*")) parts.push(<em key={m.index}>{m[3]}</em>);
+      else if (m[0].startsWith("http")) {
+        const url = m[0];
+        parts.push(<a key={m.index} href={url} target="_blank" rel="noreferrer"
+          style={{color:"#C8820A",textDecoration:"none",pointerEvents:"auto",transition:"color 0.15s"}}
+          onMouseEnter={e=>e.currentTarget.style.color="#F5A623"}
+          onMouseLeave={e=>e.currentTarget.style.color="#C8820A"}
+        >{url}</a>);
+      }
       else parts.push(<TagChip key={m.index} name={m[4]}/>);
       last = m.index + m[0].length;
     }
@@ -2927,6 +3028,45 @@ function Notes({date,userId,token}) {
         onBlur={() => setValue(v => v, {undoLabel:"Edit notes"})}
         onKeyDown={handleKeyDown}
         placeholder=" "
+        onPaste={async e => {
+          const items = e.clipboardData?.items;
+          if (!items) return;
+          for (const item of items) {
+            if (item.type.startsWith("image/")) {
+              e.preventDefault();
+              const file = item.getAsFile();
+              if (!file) continue;
+              const url = await uploadImageFile(file, token);
+              if (!url) continue;
+              const ta = taRef.current;
+              const pos = ta.selectionStart;
+              const cur = ta.value;
+              const marker = `
+[img:${url}]
+`;
+              const next = cur.slice(0, pos) + marker + cur.slice(pos);
+              setValue(next, {skipHistory:true});
+              requestAnimationFrame(() => { ta.style.height="auto"; ta.style.height=ta.scrollHeight+"px"; });
+              break;
+            }
+          }
+        }}
+        onDrop={async e => {
+          const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith("image/"));
+          if (!files.length) return;
+          e.preventDefault();
+          const url = await uploadImageFile(files[0], token);
+          if (!url) return;
+          const ta = taRef.current;
+          const cur = ta.value;
+          const marker = `
+[img:${url}]
+`;
+          const next = cur + marker;
+          setValue(next, {skipHistory:true});
+          requestAnimationFrame(() => { ta.style.height="auto"; ta.style.height=ta.scrollHeight+"px"; });
+        }}
+        onDragOver={e => e.preventDefault()}
         style={{
           ...sharedStyle,
           width:"100%", resize:"none", display:"block",
@@ -4366,7 +4506,7 @@ function EntryLine({ entry, date, editing, editText, onStartEdit, onChangeEdit, 
   }
   return (
     <div style={{ ...baseStyle, color:C.text, cursor:'text' }} onClick={onStartEdit}>
-      {renderWithTags(entry.text, dimTag)}
+      {renderRichLine(entry.text, dimTag)}
     </div>
   );
 }
@@ -4561,6 +4701,37 @@ function ProjectView({ project, token, userId, onBack }) {
                   setProjectsMeta(updated, { skipHistory: true });
                 }}
                 onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
+                onPaste={async e => {
+                  const items = e.clipboardData?.items;
+                  if (!items) return;
+                  for (const item of items) {
+                    if (item.type.startsWith('image/')) {
+                      e.preventDefault();
+                      const file = item.getAsFile();
+                      if (!file) continue;
+                      const url = await uploadImageFile(file, token);
+                      if (!url) continue;
+                      const ta = descRef.current;
+                      const pos = ta.selectionStart;
+                      const marker = `\n[img:${url}]\n`;
+                      const next = descVal.slice(0, pos) + marker + descVal.slice(pos);
+                      setDescVal(next);
+                      requestAnimationFrame(() => { ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; });
+                      break;
+                    }
+                  }
+                }}
+                onDrop={async e => {
+                  const files = Array.from(e.dataTransfer?.files||[]).filter(f=>f.type.startsWith('image/'));
+                  if (!files.length) return;
+                  e.preventDefault();
+                  const url = await uploadImageFile(files[0], token);
+                  if (!url) return;
+                  const marker = `\n[img:${url}]\n`;
+                  setDescVal(v => v + marker);
+                  setTimeout(() => { const ta=descRef.current; if(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';} }, 50);
+                }}
+                onDragOver={e => e.preventDefault()}
                 style={{
                   width: '100%', border: 'none', outline: 'none', background: 'transparent',
                   color: C.text, fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
@@ -4587,7 +4758,14 @@ function ProjectView({ project, token, userId, onBack }) {
                   }, 10);
                 }}
               >
-                {meta.description || 'Add a project description…'}
+                {meta.description
+                  ? meta.description.split('\n').map((line, i) => {
+                      const imgM = line.match(/^\[img:([^\]]+)\]$/);
+                      if (imgM) return <div key={i} style={{margin:'4px 0',lineHeight:0}}><img src={imgM[1]} alt="" style={{maxWidth:'100%',maxHeight:320,borderRadius:8,display:'block'}}/></div>;
+                      return <div key={i} style={{lineHeight:'1.7'}}>{renderRichLine(line)}</div>;
+                    })
+                  : 'Add a project description…'
+                }
               </div>
             )}
           </div>
@@ -4706,7 +4884,7 @@ function ProjectView({ project, token, userId, onBack }) {
                     ) : (
                       <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}
                         style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.text, cursor:'text', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
-                        {renderWithTags(task.text, project==='__everything__' ? null : project)}
+                        {renderRichLine(task.text, project==='__everything__' ? null : project)}
                       </div>
                     )}
                   </div>
@@ -4719,7 +4897,7 @@ function ProjectView({ project, token, userId, onBack }) {
                       display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
                     }}><span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span></button>
                     <div style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.muted, textDecoration:'line-through' }}>
-                      {renderWithTags(task.text, project==='__everything__' ? null : project)}
+                      {renderRichLine(task.text, project==='__everything__' ? null : project)}
                     </div>
                   </div>
                 ))}
