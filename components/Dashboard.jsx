@@ -5363,34 +5363,65 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
     >
       {entries === null ? (
         <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
-      ) : taskEntries.length === 0 ? (
-        <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health tasks yet.</div>
-      ) : (
-        <div>
-          {tasksByDate.filter(([, { open, done }]) =>
-            pvTaskFilter === 'open' ? open.length > 0 :
-            pvTaskFilter === 'done' ? done.length > 0 : true
-          ).map(([date, { open, done }], dateIdx) => (
-            <div key={date}>
-              <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginTop:dateIdx===0?0:4,marginBottom:6}}>{fmtDate(date)}</div>
-              {pvTaskFilter !== 'done' && open.map(task => (
-                <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0'}}>
-                  <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.border2}`,background:'transparent'}}/>
-                  <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{renderRichLine(task.text)}</div>
-                </div>
-              ))}
-              {pvTaskFilter !== 'open' && done.map(task => (
-                <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0',opacity:0.45}}>
-                  <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.accent}`,background:C.accent,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                    <span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>
+      ) : (() => {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const otherDates = tasksByDate.filter(([d]) => d !== todayStr);
+        const todayEntry = tasksByDate.find(([d]) => d === todayStr);
+        const allDates = todayEntry
+          ? [[todayStr, todayEntry[1]], ...otherDates]
+          : [[todayStr, { all:[], open:[], done:[] }], ...otherDates];
+        return (
+          <div>
+            {allDates.filter(([date, { open, done }]) =>
+              pvTaskFilter === 'open' ? (open.length > 0 || date === todayStr) :
+              pvTaskFilter === 'done' ? (done.length > 0 || date === todayStr) : true
+            ).map(([date, { open, done }], dateIdx) => {
+              const isToday = date === todayStr;
+              return (
+                <div key={date}>
+                  <div style={{fontFamily:mono,fontSize:10,
+                    color:isToday?C.accent:C.muted,
+                    letterSpacing:'0.06em',textTransform:'uppercase',
+                    marginTop:dateIdx===0?0:4,marginBottom:6}}>
+                    {isToday ? 'Today' : fmtDate(date)}
                   </div>
-                  <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}>{renderRichLine(task.text)}</div>
+                  {isToday && pvTaskFilter !== 'done' && (
+                    <NewProjectTask project="__health__" onAdd={async text => {
+                      const taskText = text.trim();
+                      const current = await dbLoad(todayStr, 'tasks', token);
+                      const existing = Array.isArray(current) ? current : [];
+                      const newTask = { id: Date.now(), text: taskText, done: false };
+                      const updated = [...existing, newTask];
+                      await dbSave(todayStr, 'tasks', updated, token);
+                      MEM[`${userId}:${todayStr}:tasks`] = updated;
+                      window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+                      setEntries(prev => prev ? {
+                        ...prev,
+                        taskEntries: [...(prev.taskEntries||[]), { date: todayStr, id: newTask.id, text: taskText, done: false }],
+                      } : prev);
+                    }} />
+                  )}
+                  {pvTaskFilter !== 'done' && open.map(task => (
+                    <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0'}}>
+                      <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.border2}`,background:'transparent'}}/>
+                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{renderRichLine(task.text)}</div>
+                    </div>
+                  ))}
+                  {pvTaskFilter !== 'open' && done.map(task => (
+                    <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0',opacity:0.45}}>
+                      <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.accent}`,background:C.accent,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>
+                      </div>
+                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}>{renderRichLine(task.text)}</div>
+                    </div>
+                  ))}
+                  {dateIdx < allDates.length - 1 && <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,marginBottom:4}}/>}
                 </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        );
+      })()}
     </Widget>
   );
 
@@ -5402,28 +5433,56 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
     >
       {entries === null ? (
         <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
-      ) : journalEntries.length === 0 ? (
-        <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health journal entries yet.</div>
-      ) : (
-        <div>
-          {journalByDate.map(([date, lines], dateIdx) => (
-            <div key={date}>
-              {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
-              <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
-                style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6,
-                  cursor: onSelectDate ? 'pointer' : 'default', display:'inline-block', transition:'color 0.15s'}}
-                onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
-                onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
-              >{fmtDate(date)}</div>
-              {lines.map((entry, i) => (
-                <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
-                  {renderRichLine(entry.text)}
+      ) : (() => {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const otherDates = journalByDate.filter(([d]) => d !== todayStr);
+        const todayLines = journalByDate.find(([d]) => d === todayStr)?.[1] || [];
+        const allDates = [[todayStr, todayLines], ...otherDates];
+        return (
+          <div>
+            {allDates.map(([date, lines], dateIdx) => {
+              const isToday = date === todayStr;
+              if (!isToday && lines.length === 0) return null;
+              return (
+                <div key={date}>
+                  {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
+                  <div
+                    onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
+                    style={{fontFamily:mono,fontSize:10,
+                      color:isToday?C.accent:C.muted,
+                      letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6,
+                      cursor:(!isToday&&onSelectDate)?'pointer':'default',
+                      display:'inline-block',transition:'color 0.15s'}}
+                    onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.text;}}
+                    onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.muted;}}
+                  >{isToday ? 'Today' : fmtDate(date)}</div>
+                  {isToday && (
+                    <AddJournalLine project="__health__" onAdd={async text => {
+                      const entryText = text.trim();
+                      const current = await dbLoad(todayStr, 'notes', token);
+                      const existing = (typeof current === 'string' ? current : '') || '';
+                      const updated = existing ? existing.trimEnd() + "\n" + entryText : entryText;
+                      const newLineIndex = updated.split("\n").lastIndexOf(entryText);
+                      await dbSave(todayStr, 'notes', updated, token);
+                      MEM[`${userId}:${todayStr}:notes`] = updated;
+                      window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['notes'] } }));
+                      setEntries(prev => prev ? {
+                        ...prev,
+                        journalEntries: [...(prev.journalEntries||[]), { date: todayStr, lineIndex: newLineIndex, text: entryText }],
+                      } : prev);
+                    }} placeholder="Add a health journal entry…" />
+                  )}
+                  {lines.map((entry, i) => (
+                    <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
+                      {renderRichLine(entry.text)}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      )}
+              );
+            })}
+          </div>
+        );
+      })()}
     </Widget>
   );
 
@@ -5871,57 +5930,64 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
         headerLeft={null}
       >
         {entries === null ? loadingCards
-          : journalByDate.length === 0 ? (
-            <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
-              {project === '__everything__' ? 'No journal entries yet.' : `No journal entries tagged #${project} yet.`}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {journalByDate.map(([date, lines], dateIdx) => {
-                // Split lines into blocks: new block when lineIndex gap > 1
-                const blocks = [];
-                let cur = [];
-                lines.forEach((entry, i) => {
-                  if (i === 0 || entry.lineIndex === lines[i-1].lineIndex + 1) {
-                    cur.push(entry);
-                  } else {
-                    if (cur.length) blocks.push(cur);
-                    cur = [entry];
-                  }
-                });
-                if (cur.length) blocks.push(cur);
-                return (
-                  <div key={date}>
-                    <div style={{
-                      fontFamily: mono, fontSize: 10, color: C.muted,
-                      letterSpacing: '0.06em', textTransform: 'uppercase',
-                      marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 8,
-                    }}>{fmtDate(date)}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      {blocks.map((block, bi) => (
-                        <div key={bi} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                          {block.map(entry => (
-                            <EntryLine
-                              key={`${date}-${entry.lineIndex}`}
-                              entry={entry} date={date}
-                              editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
-                              editText={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? editingEntry.text : ''}
-                              onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
-                              onChangeEdit={t => setEditingEntry(prev => ({...prev, text: t}))}
-                              onSave={async () => { await saveJournalEdit(date, entry.lineIndex, editingEntry.text); setEditingEntry(null); }}
-                              dimTag={project === '__everything__' ? null : project}
-                            />
-                          ))}
-                        </div>
-                      ))}
+          : (() => {
+            const today = new Date().toISOString().slice(0, 10);
+            const otherDates = journalByDate.filter(([d]) => d !== today);
+            const todayLines = journalByDate.find(([d]) => d === today)?.[1] || [];
+            const allDates = [[today, todayLines], ...otherDates];
+
+            function renderLines(date, lines) {
+              const blocks = [];
+              let cur = [];
+              lines.forEach((entry, i) => {
+                if (i === 0 || entry.lineIndex === lines[i-1].lineIndex + 1) cur.push(entry);
+                else { if (cur.length) blocks.push(cur); cur = [entry]; }
+              });
+              if (cur.length) blocks.push(cur);
+              return blocks.map((block, bi) => (
+                <div key={bi} style={{ display:'flex', flexDirection:'column', gap:0 }}>
+                  {block.map(entry => (
+                    <EntryLine
+                      key={`${date}-${entry.lineIndex}`}
+                      entry={entry} date={date}
+                      editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
+                      editText={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? editingEntry.text : ''}
+                      onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
+                      onChangeEdit={t => setEditingEntry(prev => ({...prev, text: t}))}
+                      onSave={async () => { await saveJournalEdit(date, entry.lineIndex, editingEntry.text); setEditingEntry(null); }}
+                      dimTag={project === '__everything__' ? null : project}
+                    />
+                  ))}
+                </div>
+              ));
+            }
+
+            return (
+              <div style={{ display:'flex', flexDirection:'column' }}>
+                {allDates.map(([date, lines], dateIdx) => {
+                  const isToday = date === today;
+                  if (!isToday && lines.length === 0) return null;
+                  return (
+                    <div key={date}>
+                      <div style={{
+                        fontFamily: mono, fontSize: 10,
+                        color: isToday ? C.accent : C.muted,
+                        letterSpacing: '0.06em', textTransform: 'uppercase',
+                        marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 8,
+                      }}>{isToday ? 'Today' : fmtDate(date)}</div>
+                      {isToday && project !== '__everything__' && (
+                        <AddJournalLine project={project} onAdd={addNewJournal} />
+                      )}
+                      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
+                        {renderLines(date, lines)}
+                      </div>
+                      <div style={{ borderTop:`1px solid ${C.border}`, marginTop:16, marginBottom:4 }}/>
                     </div>
-                    {/* Thin separator after each date group */}
-                    <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, marginBottom: 4 }}/>
-                  </div>
-                );
-              })}
-            </div>
-          )
+                  );
+                })}
+              </div>
+            );
+          })()
         }
       </Widget>
     </div>
