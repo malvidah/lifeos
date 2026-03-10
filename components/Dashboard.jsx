@@ -164,14 +164,15 @@ function renderTaskInline(text) {
   return parts.length ? parts : text;
 }
 
-function renderWithTags(text, dimTag=null) {
+function renderWithTags(text, dimTag=null, onTagClick=null) {
   if (!text) return null;
   const parts = []; let last = 0;
   const re = /#([A-Za-z][A-Za-z0-9]+)/g; let m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
     const isOwn = dimTag && m[1].toLowerCase() === dimTag.toLowerCase();
-    parts.push(<TagChip key={`c${m.index}`} name={m[1]} plain={isOwn}/>);
+    const _handleTag = !isOwn ? () => { if (onTagClick) onTagClick(m[1]); else if (typeof window !== 'undefined' && window.__lifeos_onTagClick) window.__lifeos_onTagClick(m[1]); } : undefined;
+    parts.push(<TagChip key={`c${m.index}`} name={m[1]} plain={isOwn} onClick={_handleTag}/>);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
@@ -184,14 +185,14 @@ const URL_RE = /https?:\/\/[^\s<>"')\]]+/g;
 const IMG_RE = /\[img:(https?:\/\/[^\]]+|data:[^\]]+)\]/g;
 
 // Split text by images first, then render each text segment with URLs+tags
-function renderRichLine(text, dimTag=null) {
+function renderRichLine(text, dimTag=null, onTagClick=null) {
   if (!text) return null;
   const parts = [];
   let last = 0;
   const re = new RegExp(IMG_RE.source, 'g'); let m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) {
-      parts.push(<span key={`t${last}`}>{renderTextWithLinksAndTags(text.slice(last, m.index), dimTag, last)}</span>);
+      parts.push(<span key={`t${last}`}>{renderTextWithLinksAndTags(text.slice(last, m.index), dimTag, last, onTagClick)}</span>);
     }
     parts.push(
       <div key={`img${m.index}`} style={{ margin: '6px 0', lineHeight: 0 }}>
@@ -200,11 +201,11 @@ function renderRichLine(text, dimTag=null) {
     );
     last = m.index + m[0].length;
   }
-  if (last < text.length) parts.push(<span key={`e${last}`}>{renderTextWithLinksAndTags(text.slice(last), dimTag, last)}</span>);
-  return parts.length ? parts : renderTextWithLinksAndTags(text, dimTag, 0);
+  if (last < text.length) parts.push(<span key={`e${last}`}>{renderTextWithLinksAndTags(text.slice(last), dimTag, last, onTagClick)}</span>);
+  return parts.length ? parts : renderTextWithLinksAndTags(text, dimTag, 0, onTagClick);
 }
 
-function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0) {
+function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0, onTagClick=null) {
   if (!text) return null;
   // Build a combined regex for URLs and #tags
   const combined = /(https?:\/\/[^\s<>"')\]]+)|(#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9]))/g;
@@ -224,7 +225,8 @@ function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0) {
     } else {
       // #tag
       const isOwn = dimTag && m[3].toLowerCase() === dimTag.toLowerCase();
-      parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={m[3]} plain={isOwn}/>);
+      const _handleTag2 = !isOwn ? () => { if (onTagClick) onTagClick(m[3]); else if (typeof window !== 'undefined' && window.__lifeos_onTagClick) window.__lifeos_onTagClick(m[3]); } : undefined;
+      parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={m[3]} plain={isOwn} onClick={_handleTag2}/>);
     }
     last = m.index + m[0].length;
   }
@@ -5166,7 +5168,7 @@ function AddJournalLine({ project, onAdd, placeholder }) {
         onChange={e => setText(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
         onBlur={commit}
-        placeholder={placeholder || 'Add a journal entry…'}
+        placeholder={placeholder || (project === '__health__' ? 'Add a health entry…' : 'Add a journal entry…')}
         style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none',
           fontFamily: serif, fontSize: F.md, color: C.text, caretColor: col }}
       />
@@ -5451,7 +5453,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                   </div>
                   {isToday && pvTaskFilter !== 'done' && (
                     <NewProjectTask project="__health__" onAdd={async text => {
-                      const taskText = text.trim();
+                      const taskText = text.trim().toLowerCase().includes('#health') ? text.trim() : text.trim() + ' #Health';
                       const current = await dbLoad(todayStr, 'tasks', token);
                       const existing = Array.isArray(current) ? current : [];
                       const newTask = { id: Date.now(), text: taskText, done: false };
@@ -5522,7 +5524,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                   >{isToday ? 'Today' : fmtDate(date)}</div>
                   {isToday && (
                     <AddJournalLine project="__health__" onAdd={async text => {
-                      const entryText = text.trim();
+                      const entryText = text.trim().toLowerCase().includes('#health') ? text.trim() : text.trim() + ' #Health';
                       const current = await dbLoad(todayStr, 'notes', token);
                       const existing = (typeof current === 'string' ? current : '') || '';
                       const updated = existing ? existing.trimEnd() + "\n" + entryText : entryText;
@@ -6134,6 +6136,19 @@ export default function Dashboard() {
   const [googleToken,setGoogleToken] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
+
+  // Global tag click router — maps #TagName → project key
+  // #Health → '__health__', anything else → tag name as project key
+  useEffect(() => {
+    window.__lifeos_onTagClick = (tagName) => {
+      if (tagName.toLowerCase() === 'health') {
+        setActiveProject('__health__');
+      } else {
+        setActiveProject(tagName);
+      }
+    };
+    return () => { delete window.__lifeos_onTagClick; };
+  }, []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
