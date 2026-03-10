@@ -4572,7 +4572,7 @@ function ChatFloat({date, token, userId, healthKey}) {
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: `0 12px max(${expanded ? "14px" : "12px"}, calc(env(safe-area-inset-bottom, 0px) + ${expanded ? "4px" : "4px"}))`,
+        padding: `0 10px max(${expanded ? "10px" : "6px"}, calc(env(safe-area-inset-bottom, 0px) + 2px))`,
         pointerEvents: "none",
         transition: "padding 0.2s cubic-bezier(0.4,0,0.2,1)",
       }}>
@@ -4586,7 +4586,7 @@ function ChatFloat({date, token, userId, healthKey}) {
         WebkitBackdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
         background: expanded ? `${C.surface}f0` : `${C.surface}cc`,
         border: `1px solid ${C.border}${expanded ? "80" : "70"}`,
-        borderRadius: 20,
+        borderRadius: expanded ? 24 : 100,
         boxShadow: expanded
           ? "0 8px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)"
           : "0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
@@ -6765,13 +6765,6 @@ export default function Dashboard() {
         </div>
 
       {/* Floating chat pill — hidden during search */}
-      <div style={{
-        position:"fixed", bottom:0, left:0, right:0, height:80, zIndex:96,
-        background:`linear-gradient(to top, ${C.bg} 30%, transparent)`,
-        pointerEvents:"none",
-        opacity: searchOpen ? 0 : 1,
-        transition: 'opacity 0.18s ease',
-      }}/>
       {!searchOpen && (
         <ChatFloat date={selected} token={token} userId={userId}
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
