@@ -105,19 +105,14 @@ function projectColor(name) {
 function TagChip({ name, onClick, style={}, plain=false }) {
   const col = projectColor(name);
   if (plain) {
-    // Project's own tag: just colored text at low opacity, no chip box. Full on hover.
+    // Project's own tag: dimmed colored text, no chip, no hover interaction
     return (
       <span
-        onClick={onClick}
         style={{
           color: col, fontSize: '0.9em', fontFamily: serif,
-          opacity: 0.35,
-          cursor: onClick ? 'pointer' : 'default',
-          transition: 'opacity 0.15s',
+          opacity: 0.3, cursor: 'default',
           ...style,
         }}
-        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-        onMouseLeave={e => e.currentTarget.style.opacity = '0.35'}
       >#{name}</span>
     );
   }
