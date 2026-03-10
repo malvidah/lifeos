@@ -105,12 +105,18 @@ function projectColor(name) {
 function TagChip({ name, onClick, style={}, plain=false }) {
   const col = projectColor(name);
   if (plain) {
-    // Project's own tag: dimmed colored text, no chip, no hover interaction
+    // Project's own tag: same chip but dimmed, no hover
     return (
       <span
         style={{
-          color: col, fontSize: '0.9em', fontFamily: serif,
-          opacity: 0.3, cursor: 'default',
+          display:'inline-flex', alignItems:'center',
+          background: col + '10',
+          border: `1px solid ${col}25`,
+          borderRadius: 4, padding: '0 5px',
+          fontSize: '0.82em', color: col + '55',
+          fontFamily: mono, lineHeight: '1.6',
+          flexShrink: 0, verticalAlign: 'middle',
+          cursor: 'default', opacity: 0.5,
           ...style,
         }}
       >#{name}</span>
