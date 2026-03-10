@@ -2923,6 +2923,7 @@ function Notes({date,userId,token}) {
   const taRef = useRef(null);
   const [selectedImgLine, setSelectedImgLine] = useState(null); // line index of selected [img:] or null
   const pendingCursorRef = useRef(null); // cursor position to apply after next value update
+  const [focused, setFocused] = useState(false); // true while textarea has focus — chips vs spans
 
   // Auto-resize + apply pending cursor whenever value changes
   useEffect(() => {
@@ -2991,7 +2992,7 @@ function Notes({date,userId,token}) {
         let charCount = 0;
         for (let i = 0; i < Math.min(selectedImgLine, lines.length); i++) charCount += lines[i].length + 1;
         pendingCursorRef.current = Math.min(charCount, next.length);
-        setValue(next, {skipHistory:true});
+        setValue(next, {undoLabel:"Delete image"});
         setSelectedImgLine(null);
         return;
       }
@@ -3090,9 +3091,14 @@ function Notes({date,userId,token}) {
         >{url}</a>);
       }
       else {
-        // Zero-padding colored span — width must match raw "#TagName" text in textarea
-        const col = projectColor(m[4]);
-        parts.push(<span key={m.index} style={{color:col,fontFamily:serif}}>{m[0]}</span>);
+        if (focused) {
+          // While editing: zero-padding span so cursor stays aligned with textarea
+          const col = projectColor(m[4]);
+          parts.push(<span key={m.index} style={{color:col,fontFamily:serif}}>{m[0]}</span>);
+        } else {
+          // While reading: full chip
+          parts.push(<TagChip key={m.index} name={m[4]}/>);
+        }
       }
       last = m.index + m[0].length;
     }
@@ -3133,7 +3139,8 @@ function Notes({date,userId,token}) {
         ref={taRef}
         value={value}
         onChange={e => { setValue(e.target.value, {skipHistory:true}); const t=e.target; t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }}
-        onBlur={() => setValue(v => v, {undoLabel:"Edit notes"})}
+        onFocus={() => setFocused(true)}
+        onBlur={() => { setFocused(false); setValue(v => v, {undoLabel:"Edit notes"}); }}
         onSelect={() => normalizeCursor(taRef.current)}
         onKeyDown={handleKeyDown}
         placeholder=" "
