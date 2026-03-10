@@ -3686,48 +3686,54 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const mkRow=()=>({id:Date.now(),text:"",done:false});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
   const refs=useRef({});
-  const skipBlurRef=useRef(false); // set true on Enter/Backspace so onBlur doesn't clobber the split
+  const skipBlurRef=useRef(false);
+  const longPressTimer=useRef(null);
   const [focusedId, setFocusedId] = useState(null);
+  const [selMode, setSelMode] = useState(false);
+  const [selIds, setSelIds] = useState(new Set());
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
   const visible = taskFilter==='open' ? open : taskFilter==='done' ? done : safe;
-  function onKey(e,id,idx){
-    if(e.key==="Enter"){
-      e.preventDefault();
-      const ta = refs.current[id];
-      const pos = ta ? ta.selectionStart : safe[idx].text.length;
-      const before = safe[idx].text.slice(0, pos);
-      const after  = safe[idx].text.slice(pos);
-      const row = mkRow();
-      const newRows = safe.map(r=>r.id===id?{...r,text:before}:r);
-      newRows.splice(idx+1,0,{...row,text:after});
-      setRows(newRows);
-      setTimeout(()=>{ const el=refs.current[row.id]; if(el){el.focus();el.setSelectionRange(0,0);autoResizeTask(el);} },30);
-    }
-    if(e.key==="Backspace"){
-      const ta = refs.current[id];
-      const pos = ta ? ta.selectionStart : 0;
-      // At start of non-first task → merge text into end of previous task
-      if(pos===0 && idx>0){
-        e.preventDefault();
-        const prev = safe[idx-1];
-        const mergedText = prev.text + safe[idx].text;
-        const cursorPos = prev.text.length;
-        const newRows = safe.filter(r=>r.id!==id).map(r=>r.id===prev.id?{...r,text:mergedText}:r);
-        setRows(newRows);
-        setTimeout(()=>{
-          const el=refs.current[prev.id];
-          if(el){ el.focus(); el.setSelectionRange(cursorPos,cursorPos); autoResizeTask(el); }
-        },30);
-      } else if(safe[idx].text===""&&safe.length>1){
-        // Empty task, any position → delete row
-        e.preventDefault();
-        setRows(safe.filter(r=>r.id!==id));
-        if(safe[idx-1]) setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);
-      }
-    }
+
+  // ── chip HTML for contenteditable (display:inline — NOT inline-block) ──────
+  // inline-block inside contenteditable causes browser to insert implicit block
+  // wrappers, corrupting el.textContent with doubled content. inline is safe.
+  function chipHtml(text) {
+    if (!text) return '';
+    const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    return esc(text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) => {
+      const col = projectColor(tag);
+      return `<span style="color:${col};background:${col}20;border:1px solid ${col}40;border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;vertical-align:middle;display:inline">${m}</span>`;
+    });
   }
-  function autoResizeTask(el){ if(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px"; } }
+
+  // ── selection mode helpers ────────────────────────────────────────────────
+  function enterSelMode(id) {
+    setSelMode(true);
+    setSelIds(new Set([id]));
+    setFocusedId(null);
+  }
+  function exitSelMode() {
+    setSelMode(false);
+    setSelIds(new Set());
+  }
+  function toggleSel(id) {
+    setSelIds(prev => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      if (n.size === 0) { setSelMode(false); }
+      return n;
+    });
+  }
+  function bulkDone(done) {
+    setRows(prev => (Array.isArray(prev)?prev:[]).map(r => selIds.has(r.id) ? {...r, done} : r));
+    exitSelMode();
+  }
+  function bulkDelete() {
+    setRows(prev => (Array.isArray(prev)?prev:[]).filter(r => !selIds.has(r.id)));
+    exitSelMode();
+  }
+
   if(!loaded) return (
     <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
       <Shimmer width="75%" height={13}/>
@@ -3735,44 +3741,91 @@ function Tasks({date,token,userId,taskFilter='all'}) {
       <Shimmer width="65%" height={13}/>
     </div>
   );
+
   return (
     <div style={{flex:1,overflow:"auto"}}>
-      {visible.map((row,idx)=>(
+      {/* ── Selection toolbar ── */}
+      {selMode && (
+        <div style={{display:'flex',alignItems:'center',gap:8,padding:'4px 2px 8px',
+          borderBottom:`1px solid ${C.border}`,marginBottom:6}}>
+          <span style={{fontFamily:mono,fontSize:10,color:C.muted,flex:1}}>
+            {selIds.size} selected
+          </span>
+          <button onClick={()=>bulkDone(true)} style={{fontFamily:mono,fontSize:9,letterSpacing:'0.05em',
+            padding:'3px 8px',borderRadius:4,cursor:'pointer',
+            background:C.accent+'22',border:`1px solid ${C.accent}40`,color:C.accent}}>Done</button>
+          <button onClick={()=>bulkDone(false)} style={{fontFamily:mono,fontSize:9,letterSpacing:'0.05em',
+            padding:'3px 8px',borderRadius:4,cursor:'pointer',
+            background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>Reopen</button>
+          <button onClick={bulkDelete} style={{fontFamily:mono,fontSize:9,letterSpacing:'0.05em',
+            padding:'3px 8px',borderRadius:4,cursor:'pointer',
+            background:C.red+'22',border:`1px solid ${C.red}40`,color:C.red}}>Delete</button>
+          <button onClick={exitSelMode} style={{fontFamily:mono,fontSize:11,
+            padding:'2px 6px',borderRadius:4,cursor:'pointer',
+            background:'none',border:`1px solid ${C.border2}`,color:C.muted,lineHeight:1}}>✕</button>
+        </div>
+      )}
+
+      {visible.map((row,idx)=>{
+        const isSel = selIds.has(row.id);
+        return (
         <div key={row.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"4px 0",minHeight:28,
-          opacity:row.done?0.35:1,transition:"opacity 0.2s"}}>
-          <button onClick={()=>{
-              const wasDone = row.done;
-              const newRows = safe.map(r=>r.id===row.id?{...r,done:!r.done}:r);
-              setRows(newRows);
-              pushHistory({
-                label: wasDone ? `Uncomplete "${row.text}"` : `Complete "${row.text}"`,
-                undo: ()=>setRows(safe.map(r=>r.id===row.id?{...r,done:wasDone}:r)),
-                redo: ()=>setRows(safe.map(r=>r.id===row.id?{...r,done:!wasDone}:r)),
-              });
+          opacity:row.done&&!selMode?0.35:1,transition:"opacity 0.2s",
+          background:isSel?C.accent+'15':'transparent',
+          borderRadius:isSel?6:0,
+        }}>
+          {selMode ? (
+            /* ── Selection checkbox ── */
+            <div onClick={()=>toggleSel(row.id)}
+              style={{width:15,height:15,flexShrink:0,borderRadius:4,marginTop:5,cursor:'pointer',
+                border:`1.5px solid ${isSel?C.accent:C.border2}`,
+                background:isSel?C.accent:'transparent',
+                display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'}}>
+              {isSel&&<span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>}
+            </div>
+          ) : (
+            /* ── Done checkbox ── */
+            <button onClick={()=>{
+                const wasDone = row.done;
+                setRows(safe.map(r=>r.id===row.id?{...r,done:!r.done}:r));
+                pushHistory({
+                  label: wasDone ? `Uncomplete "${row.text}"` : `Complete "${row.text}"`,
+                  undo: ()=>setRows(safe.map(r=>r.id===row.id?{...r,done:wasDone}:r)),
+                  redo: ()=>setRows(safe.map(r=>r.id===row.id?{...r,done:!wasDone}:r)),
+                });
+              }}
+              style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",marginTop:5,
+                border:`1.5px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
+                display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
+              {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
+            </button>
+          )}
+
+          <div style={{ flex:1, minWidth:0 }}
+            onTouchStart={selMode ? undefined : ()=>{
+              longPressTimer.current = setTimeout(()=>{ longPressTimer.current=null; enterSelMode(row.id); }, 500);
             }}
-            style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",marginTop:5,
-              border:`1.5px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
-              display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
-            {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
-          </button>
-          <div style={{ flex:1, minWidth:0 }}>
-            {focusedId === row.id ? (
-              // contenteditable for edit mode — pill chips matching view mode
+            onTouchMove={()=>{ clearTimeout(longPressTimer.current); longPressTimer.current=null; }}
+            onTouchEnd={()=>{ clearTimeout(longPressTimer.current); longPressTimer.current=null; }}
+          >
+            {selMode ? (
+              /* ── Selection tap target ── */
+              <div onClick={()=>toggleSel(row.id)}
+                style={{fontFamily:serif,fontSize:F.md,lineHeight:1.7,
+                  color:row.done?C.muted:C.text,
+                  textDecoration:row.done?'line-through':'none',
+                  whiteSpace:'pre-wrap',wordBreak:'break-word',
+                  cursor:'pointer',minHeight:'1.7em',userSelect:'none'}}>
+                {row.text ? renderWithTags(row.text) : null}
+              </div>
+            ) : focusedId === row.id ? (
+              /* ── Edit: contenteditable with inline (not inline-block) chips ── */
               <div
                 ref={el => {
                   if (!el) return;
-                  // Guard: only init innerHTML on genuine first mount of this element
-                  if (refs.current[row.id] === el) return;
+                  if (refs.current[row.id] === el) return; // guard: only init on genuine new mount
                   refs.current[row.id] = el;
-                  const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                  // Edit mode: plain colored spans only — NO display:inline-block.
-                  // inline-block in contenteditables causes browsers to insert implicit
-                  // whitespace nodes, making textContent return doubled/corrupted content.
-                  // Full pill chips are rendered in view mode via renderWithTags.
-                  el.innerHTML = row.text
-                    ? esc(row.text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) =>
-                        `<span style="color:${projectColor(tag)}">${m}</span>`)
-                    : '';
+                  el.innerHTML = chipHtml(row.text);
                   requestAnimationFrame(() => {
                     el.focus();
                     const range = document.createRange();
@@ -3785,9 +3838,8 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                 contentEditable
                 suppressContentEditableWarning
                 onInput={e => {
-                  // Use functional updater — avoids stale closure from render-time 'safe'
                   const text = e.currentTarget.textContent;
-                  setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));
+                  setRows(prev => (Array.isArray(prev)?prev:[]).map(r => r.id===row.id ? {...r,text} : r));
                 }}
                 onKeyDown={e => {
                   const el = e.currentTarget;
@@ -3802,65 +3854,62 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   };
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    skipBlurRef.current = true; // onBlur must not overwrite the split
+                    skipBlurRef.current = true;
                     const caretOffset = getOffset();
                     const before = text.slice(0, caretOffset);
                     const after  = text.slice(caretOffset);
                     const newRow = {id: Date.now(), text: after, done: false};
-                    // Functional updater — immune to stale closure
                     setRows(prev => {
-                      const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
-                      const nr = ps.map(r => r.id === row.id ? {...r, text: before} : r);
-                      nr.splice(idx + 1, 0, newRow);
+                      const ps = Array.isArray(prev)&&prev.length ? prev : [mkRow()];
+                      const nr = ps.map(r => r.id===row.id ? {...r,text:before} : r);
+                      nr.splice(idx+1, 0, newRow);
                       return nr;
                     });
                     setFocusedId(newRow.id);
                   } else if (e.key === 'Backspace') {
                     const caretOffset = getOffset();
-                    const prevRow = safe[idx - 1];
-                    if (caretOffset === 0 && idx > 0) {
+                    const prevRow = safe[idx-1];
+                    if (caretOffset===0 && idx>0) {
                       e.preventDefault();
                       skipBlurRef.current = true;
                       const mergedText = prevRow.text + text;
                       setRows(prev => {
-                        const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
-                        return ps.filter(r => r.id !== row.id).map(r => r.id === prevRow.id ? {...r, text: mergedText} : r);
+                        const ps = Array.isArray(prev)&&prev.length ? prev : [mkRow()];
+                        return ps.filter(r=>r.id!==row.id).map(r=>r.id===prevRow.id?{...r,text:mergedText}:r);
                       });
                       setFocusedId(prevRow.id);
-                    } else if (text === '' && safe.length > 1) {
+                    } else if (text==='' && safe.length>1) {
                       e.preventDefault();
                       skipBlurRef.current = true;
-                      setRows(prev => (Array.isArray(prev) ? prev : []).filter(r => r.id !== row.id));
-                      setFocusedId(safe[idx - 1]?.id ?? null);
+                      setRows(prev=>(Array.isArray(prev)?prev:[]).filter(r=>r.id!==row.id));
+                      setFocusedId(safe[idx-1]?.id ?? null);
                     }
-                  } else if (e.key === 'Escape') {
+                  } else if (e.key==='Escape') {
                     el.blur();
                   }
                 }}
-                onBlur={e => {
-                  if (skipBlurRef.current) {
-                    skipBlurRef.current = false;
-                    return; // Enter/Backspace handled commit — don't touch focusedId either
-                  }
-                  // onInput already saved every keystroke — no setRows needed here.
-                  // Reading textContent from a contenteditable with inline-block chip spans
-                  // is unreliable and was causing the doubling bug.
-                  setTimeout(() => setFocusedId(prev => prev === row.id ? null : prev), 0);
+                onBlur={() => {
+                  if (skipBlurRef.current) { skipBlurRef.current=false; return; }
+                  setTimeout(()=>setFocusedId(prev=>prev===row.id?null:prev), 0);
                 }}
                 style={{
-                  fontFamily: serif, fontSize: F.md, lineHeight: 1.7,
-                  color: row.done ? C.muted : C.text,
-                  textDecoration: row.done ? 'line-through' : 'none',
-                  outline: 'none', cursor: 'text',
-                  minHeight: '1.7em', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                  caretColor: row.done ? C.muted : C.accent,
+                  fontFamily:serif,fontSize:F.md,lineHeight:1.7,
+                  color:row.done?C.muted:C.text,
+                  textDecoration:row.done?'line-through':'none',
+                  outline:'none',cursor:'text',
+                  minHeight:'1.7em',whiteSpace:'pre-wrap',wordBreak:'break-word',
+                  caretColor:row.done?C.muted:C.accent,
                 }}
                 data-placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=='done'?'Add a task…':''}
               />
             ) : (
+              /* ── View: full pill chips via renderWithTags ── */
               <div
                 onPointerDown={e=>{ e._taskDownX=e.clientX; e._taskDownY=e.clientY; }}
-                onPointerUp={e=>{ const dx=e.clientX-(e._taskDownX??e.clientX),dy=e.clientY-(e._taskDownY??e.clientY); if(Math.sqrt(dx*dx+dy*dy)<5){ setFocusedId(row.id); } }}
+                onPointerUp={e=>{
+                  const dx=e.clientX-(e._taskDownX??e.clientX),dy=e.clientY-(e._taskDownY??e.clientY);
+                  if(Math.sqrt(dx*dx+dy*dy)<5){ setFocusedId(row.id); }
+                }}
                 style={{
                   fontFamily:serif,fontSize:F.md,lineHeight:1.7,
                   color:row.done?C.muted:C.text,
@@ -3877,7 +3926,8 @@ function Tasks({date,token,userId,taskFilter='all'}) {
             )}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
