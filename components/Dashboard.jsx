@@ -4874,12 +4874,20 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   const today = new Date().toISOString().slice(0, 10);
   const [entries, setEntries] = useState(null);
   const [pvTaskFilter, setPvTaskFilter] = useState('all');
+  const [vw, setVw] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 800);
+  useEffect(() => {
+    const fn = () => setVw(window.innerWidth);
+    window.addEventListener('resize', fn);
+    return () => window.removeEventListener('resize', fn);
+  }, []);
+  const wide = vw >= 900;
 
   // Collapse state for health project widgets (persisted)
-  const [mealsCollapsed,    toggleMeals]    = useCollapse('hpv:meals',    false);
+  const [healthCollapsed,     toggleHealth]     = useCollapse('hpv:health',     false);
+  const [mealsCollapsed,      toggleMeals]      = useCollapse('hpv:meals',      false);
   const [activitiesCollapsed, toggleActivities] = useCollapse('hpv:activities', false);
-  const [tasksCollapsed,    toggleTasks]    = useCollapse('hpv:tasks',    false);
-  const [entriesCollapsed,  toggleEntries]  = useCollapse('hpv:entries',  false);
+  const [tasksCollapsed,      toggleTasks]      = useCollapse('hpv:tasks',      false);
+  const [entriesCollapsed,    toggleEntries]    = useCollapse('hpv:entries',    false);
 
   useEffect(() => {
     if (!token) return;
@@ -4915,6 +4923,97 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
     return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
   }, [journalEntries]);
 
+  const tasksWidget = (
+    <Widget
+      label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
+      color={C.blue} autoHeight
+      collapsed={tasksCollapsed} onToggle={toggleTasks}
+      headerRight={<TaskFilterBtns filter={pvTaskFilter} setFilter={setPvTaskFilter}/>}
+    >
+      {entries === null ? (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
+      ) : taskEntries.length === 0 ? (
+        <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health tasks yet.</div>
+      ) : (
+        <div>
+          {tasksByDate.filter(([, { open, done }]) =>
+            pvTaskFilter === 'open' ? open.length > 0 :
+            pvTaskFilter === 'done' ? done.length > 0 : true
+          ).map(([date, { open, done }], dateIdx) => (
+            <div key={date}>
+              <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginTop:dateIdx===0?0:4,marginBottom:6}}>{fmtDate(date)}</div>
+              {pvTaskFilter !== 'done' && open.map(task => (
+                <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0'}}>
+                  <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.border2}`,background:'transparent'}}/>
+                  <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{renderRichLine(task.text)}</div>
+                </div>
+              ))}
+              {pvTaskFilter !== 'open' && done.map(task => (
+                <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0',opacity:0.45}}>
+                  <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.accent}`,background:C.accent,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>
+                  </div>
+                  <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}>{renderRichLine(task.text)}</div>
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </Widget>
+  );
+
+  const entriesWidget = (
+    <Widget
+      label={journalEntries.length ? `Entries · ${journalEntries.length}` : 'Entries'}
+      color={C.accent} autoHeight
+      collapsed={entriesCollapsed} onToggle={toggleEntries}
+    >
+      {entries === null ? (
+        <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
+      ) : journalEntries.length === 0 ? (
+        <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health journal entries yet.</div>
+      ) : (
+        <div>
+          {journalByDate.map(([date, lines], dateIdx) => (
+            <div key={date}>
+              {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
+              <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
+              {lines.map((entry, i) => (
+                <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
+                  {renderRichLine(entry.text)}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+    </Widget>
+  );
+
+  const mealsWidget = (
+    <Widget label="Meals" color={C.red} autoHeight collapsed={mealsCollapsed} onToggle={toggleMeals}
+      headerRight={<span style={{display:'flex',gap:0}}>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:50,textAlign:'center'}}>prot</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
+      </span>}
+    >
+      <HealthAllMeals token={token} userId={userId} />
+    </Widget>
+  );
+
+  const activitiesWidget = (
+    <Widget label="Activity" color={C.green} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
+      headerRight={<span style={{display:'flex',gap:0}}>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:60,textAlign:'center'}}>dist</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:100,textAlign:'center'}}>pace</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
+      </span>}
+    >
+      <HealthAllActivities token={token} userId={userId} />
+    </Widget>
+  );
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingBottom:200 }}>
       {/* Top nav strip */}
@@ -4925,102 +5024,38 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
         <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:C.green }}>Health</span>
       </div>
 
-      {/* Health strip */}
+      {/* Health strip — collapsible */}
       <HealthStrip
         date={today} token={token} userId={userId}
         onHealthChange={onHealthChange || (()=>{})}
         onScoresReady={onScoresReady || (()=>{})}
         onSyncStart={startSync || (()=>{})}
         onSyncEnd={endSync || (()=>{})}
-        collapsed={false} onToggle={null}
+        collapsed={healthCollapsed} onToggle={toggleHealth}
       />
 
-      {/* Meals */}
-      <Widget label="Meals" color={C.red} autoHeight collapsed={mealsCollapsed} onToggle={toggleMeals}
-        headerRight={<span style={{display:'flex',gap:0}}>
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:50,textAlign:'center'}}>prot</span>
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
-        </span>}
-      >
-        <HealthAllMeals token={token} userId={userId} />
-      </Widget>
-
-      {/* Activities */}
-      <Widget label="Activity" color={C.green} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
-        headerRight={<span style={{display:'flex',gap:0}}>
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:60,textAlign:'center'}}>dist</span>
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:100,textAlign:'center'}}>pace</span>
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
-        </span>}
-      >
-        <HealthAllActivities token={token} userId={userId} />
-      </Widget>
-
-      {/* Tasks */}
-      <Widget
-        label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
-        color={C.blue} autoHeight
-        collapsed={tasksCollapsed} onToggle={toggleTasks}
-        headerRight={<TaskFilterBtns filter={pvTaskFilter} setFilter={setPvTaskFilter}/>}
-      >
-        {entries === null ? (
-          <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
-        ) : taskEntries.length === 0 ? (
-          <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health tasks yet.</div>
-        ) : (
-          <div>
-            {tasksByDate.filter(([, { open, done }]) =>
-              pvTaskFilter === 'open' ? open.length > 0 :
-              pvTaskFilter === 'done' ? done.length > 0 : true
-            ).map(([date, { open, done }], dateIdx) => (
-              <div key={date}>
-                <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginTop:dateIdx===0?0:4,marginBottom:6}}>{fmtDate(date)}</div>
-                {pvTaskFilter !== 'done' && open.map(task => (
-                  <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0'}}>
-                    <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.border2}`,background:'transparent'}}/>
-                    <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{renderRichLine(task.text)}</div>
-                  </div>
-                ))}
-                {pvTaskFilter !== 'open' && done.map(task => (
-                  <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0',opacity:0.45}}>
-                    <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.accent}`,background:C.accent,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                      <span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>
-                    </div>
-                    <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}>{renderRichLine(task.text)}</div>
-                  </div>
-                ))}
-              </div>
-            ))}
+      {/* Wide: two-column layout; narrow: single column */}
+      {wide ? (
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, alignItems:'start' }}>
+          {/* Left col: Tasks, Entries */}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {tasksWidget}
+            {entriesWidget}
           </div>
-        )}
-      </Widget>
-
-      {/* Journal Entries */}
-      <Widget
-        label={journalEntries.length ? `Entries · ${journalEntries.length}` : 'Entries'}
-        color={C.accent} autoHeight
-        collapsed={entriesCollapsed} onToggle={toggleEntries}
-      >
-        {entries === null ? (
-          <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
-        ) : journalEntries.length === 0 ? (
-          <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health journal entries yet.</div>
-        ) : (
-          <div>
-            {journalByDate.map(([date, lines], dateIdx) => (
-              <div key={date}>
-                {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
-                <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
-                {lines.map((entry, i) => (
-                  <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
-                    {renderRichLine(entry.text)}
-                  </div>
-                ))}
-              </div>
-            ))}
+          {/* Right col: Meals, Activity */}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+            {mealsWidget}
+            {activitiesWidget}
           </div>
-        )}
-      </Widget>
+        </div>
+      ) : (
+        <>
+          {tasksWidget}
+          {entriesWidget}
+          {mealsWidget}
+          {activitiesWidget}
+        </>
+      )}
     </div>
   );
 }
