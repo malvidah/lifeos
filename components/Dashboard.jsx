@@ -4581,7 +4581,7 @@ function ChatFloat({date, token, userId, healthKey}) {
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
         paddingLeft: 10, paddingRight: 10,
-        paddingBottom: expanded ? "max(10px, env(safe-area-inset-bottom, 10px))" : "env(safe-area-inset-bottom, 8px)",
+        paddingBottom: expanded ? "max(14px, env(safe-area-inset-bottom, 14px))" : "max(16px, env(safe-area-inset-bottom, 16px))",
         pointerEvents: "none",
       }}>
       {/* Inner card: glass pill collapsed / glass panel expanded */}
