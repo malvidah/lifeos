@@ -4749,7 +4749,7 @@ function ChatFloat({date, token, userId, healthKey}) {
               value={input}
               onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              placeholder={busy ? (expanded ? "…" : "Adding…") : (expanded ? "Ask anything or add an entry…" : "Add anything…")}
+              placeholder={busy ? "…" : "Ask or add anything…"}
               disabled={busy}
               rows={1}
               style={{
@@ -4898,15 +4898,11 @@ function SearchResults({ results, loading, query, onSelectDate }) {
     </div>
   );
 
-  if (!results || query.trim().length < 2) return (
-    <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-      <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: '0.04em' }}>Type to search</span>
-    </div>
-  );
+  if (!results || query.trim().length < 2) return null;
 
   if (results.length === 0) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-      <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: '0.1em' }}>No entries match your search</span>
+      <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: '0.06em' }}>No results match your search</span>
     </div>
   );
 
@@ -6572,12 +6568,14 @@ export default function Dashboard() {
                     <div style={{
                       width: '100%', maxWidth: 560,
                       display: 'flex', alignItems: 'center', gap: 8,
-                      background: C.surface,
-                      border: `1px solid ${C.border2}`,
+                      backdropFilter: 'blur(24px) saturate(1.8) brightness(1.04)',
+                      WebkitBackdropFilter: 'blur(24px) saturate(1.8) brightness(1.04)',
+                      background: `${C.surface}cc`,
+                      border: `1px solid ${C.border}70`,
                       borderRadius: 999,
                       padding: '0 14px',
-                      height: 32,
-                      boxShadow: '0 2px 12px rgba(0,0,0,0.25)',
+                      height: 34,
+                      boxShadow: '0 2px 18px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.07)',
                     }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -6589,7 +6587,7 @@ export default function Dashboard() {
                         onKeyDown={e => {
                           if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
                         }}
-                        placeholder="Search entries…"
+                        placeholder="Search"
                         style={{
                           flex: 1, background: 'transparent', border: 'none', outline: 'none',
                           fontFamily: serif, fontSize: F.md, color: C.text, caretColor: C.accent,
