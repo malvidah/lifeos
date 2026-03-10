@@ -2806,8 +2806,14 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         </div>
       )}
       {/* Metrics row */}
-      {!collapsed&&<div style={{display:"flex",alignItems:"stretch",overflow:"auto",
-        borderBottom:expandedMetric?`1px solid ${C.border}`:"none", position:"relative"}}>
+      {!collapsed&&<div style={{position:"relative"}}>
+      <div style={{display:"flex",alignItems:"stretch",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none",
+        borderBottom:expandedMetric?`1px solid ${C.border}`:"none",position:"relative"}} ref={el=>{
+          if(!el) return;
+          const upd=()=>{const f=el.parentElement?.querySelector('.hs-fade');if(f)f.style.opacity=el.scrollWidth>el.clientWidth+2?'1':'0';};
+          el._hsCheck=upd; upd(); const ro=new ResizeObserver(upd); ro.observe(el);
+          el.addEventListener('scroll',upd);
+        }}>
         {metrics.map((m,mi)=>{
           const isTrend     = expandedMetric  === m.key;
           const isDimmed = expandedMetric && !isTrend;
@@ -2853,6 +2859,18 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
             </div>
           );
         })}
+      </div>
+      <div className="hs-fade" style={{
+        position:'absolute', right:0, top:0, bottom:0, width:40, pointerEvents:'none',
+        background:`linear-gradient(to right, transparent, ${C.bg})`,
+        display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:6,
+        opacity:0, transition:'opacity 0.2s', zIndex:1,
+      }}>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted}
+          strokeWidth="2.5" strokeLinecap="round" opacity="0.5">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </div>
       </div>}
 
 
@@ -2961,7 +2979,7 @@ function Notes({date,userId,token}) {
   }
 
   // Move cursor off any [img:] line — always land on the line below it.
-  // Always reads ta.value (DOM truth), never the stale React state.
+  // Also tracks selectedImgLine so the image gets a selection outline.
   function normalizeCursor(ta) {
     if (!ta) return;
     const val = ta.value;
@@ -2972,7 +2990,7 @@ function Notes({date,userId,token}) {
       const lineStart = charCount;
       const lineEnd = charCount + lines[i].length;
       if (/^\[img:/.test(lines[i]) && pos >= lineStart && pos <= lineEnd) {
-        // Try to go to next line; if last line, go to start of this line
+        setSelectedImgLine(i);
         const afterImg = lineEnd + 1;
         const target = afterImg <= val.length ? afterImg : lineStart;
         ta.setSelectionRange(target, target);
@@ -2980,6 +2998,8 @@ function Notes({date,userId,token}) {
       }
       charCount += lines[i].length + 1;
     }
+    // Cursor is not on any img line — clear selection
+    setSelectedImgLine(null);
   }
 
   function handleKeyDown(e) {
@@ -3040,32 +3060,14 @@ function Notes({date,userId,token}) {
         const m = line.match(/^\[img:([^\]]+)\]/);
         if (m) {
           const isSelected = selectedImgLine === i;
-          // While focused (editing): show dim placeholder so textarea caret stays visible
-          if (focused) {
-            return (
-              <div key={i} style={{margin:"2px 0",lineHeight:"1.7",pointerEvents:"none",
-                color:C.dim,fontFamily:mono,fontSize:"11px",letterSpacing:"0.04em"}}>
-                [image]
-              </div>
-            );
-          }
-          // While blurred (reading): show full image
+          // Always show full image. pointerEvents:none so ALL clicks fall through to textarea.
+          // Image selection is handled by normalizeCursor detecting cursor on the img line.
           return (
-            <div key={i} style={{margin:"4px 0",lineHeight:0,pointerEvents:"auto",display:"inline-block"}}>
+            <div key={i} style={{margin:"4px 0",lineHeight:0,pointerEvents:"none",display:"inline-block"}}>
               <img
                 src={m[1]} alt=""
-                onClick={e => {
-                  e.stopPropagation();
-                  setSelectedImgLine(isSelected ? null : i);
-                  taRef.current?.focus();
-                  let cc = 0;
-                  const lines = value.split("\n");
-                  for (let li = 0; li <= i && li < lines.length; li++) cc += lines[li].length + 1;
-                  pendingCursorRef.current = Math.min(cc, value.length);
-                }}
                 style={{
                   maxWidth:"100%", maxHeight:320, borderRadius:8, display:"block",
-                  cursor:"pointer",
                   outline: isSelected ? "2px solid #D08828" : "2px solid transparent",
                   outlineOffset: 2,
                   transition:"outline-color 0.15s",
@@ -3759,6 +3761,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const mkRow=()=>({id:Date.now(),text:"",done:false});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
   const refs=useRef({});
+  const [focusedId, setFocusedId] = useState(null);
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
   const visible = taskFilter==='open' ? open : taskFilter==='done' ? done : safe;
@@ -3826,37 +3829,46 @@ function Tasks({date,token,userId,taskFilter='all'}) {
               display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
             {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
           </button>
-          {/* Overlay: auto-grow textarea (transparent) + chip render div on top */}
-          <div style={{ position:"relative", flex:1, lineHeight:1.7 }} onClick={() => refs.current[row.id]?.focus()}>
-            <textarea ref={el=>{ refs.current[row.id]=el; if(el) autoResizeTask(el); }} value={row.text}
-              rows={1}
-              onChange={e=>{ setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r)); autoResizeTask(e.target); }}
-              onKeyDown={e=>onKey(e,row.id,idx)}
-              placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=="done"?"Add a task…":""}
-              style={{
-                background:"transparent",border:"none",outline:"none",padding:0,
-                width:"100%",lineHeight:1.7,resize:"none",overflow:"hidden",
-                color:"transparent",
-                caretColor:row.done?C.muted:C.accent,
-                fontFamily:serif,fontSize:F.md,
-                textDecoration:row.done?"line-through":"none",
-                position:"relative",zIndex:1,
-                whiteSpace:"pre-wrap",wordBreak:"break-word",
-                display:"block",
-              }}/>
-            <div style={{
-              position:"absolute",top:0,left:0,right:0,
-              fontFamily:serif,fontSize:F.md,lineHeight:1.7,
-              color:row.done?C.muted:C.text,
-              pointerEvents:"none",zIndex:2,
-              textDecoration:row.done?"line-through":"none",
-              whiteSpace:"pre-wrap",wordBreak:"break-word",
-            }}>
-              {row.text
-                ? renderWithTags(row.text)
-                : (idx===0&&open.length===1 ? <span style={{color:C.dim}}>Add a task…</span> : null)
-              }
-            </div>
+          {/* Focused: real textarea — native cursor, native multi-row selection.
+               Blurred: rendered div with tag chips. No overlay tricks needed. */}
+          <div style={{ flex:1, minWidth:0 }}>
+            {focusedId === row.id ? (
+              <textarea
+                ref={el=>{ refs.current[row.id]=el; if(el) autoResizeTask(el); }}
+                value={row.text} rows={1}
+                autoFocus
+                onChange={e=>{ setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r)); autoResizeTask(e.target); }}
+                onKeyDown={e=>onKey(e,row.id,idx)}
+                onBlur={()=>setFocusedId(null)}
+                placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=="done"?"Add a task…":""}
+                style={{
+                  background:"transparent",border:"none",outline:"none",padding:0,
+                  width:"100%",lineHeight:1.7,resize:"none",overflow:"hidden",
+                  color:row.done?C.muted:C.text,
+                  caretColor:row.done?C.muted:C.accent,
+                  fontFamily:serif,fontSize:F.md,
+                  textDecoration:row.done?"line-through":"none",
+                  whiteSpace:"pre-wrap",wordBreak:"break-word",
+                  display:"block",
+                }}
+              />
+            ) : (
+              <div
+                onClick={()=>{ setFocusedId(row.id); setTimeout(()=>{ const el=refs.current[row.id]; if(el){el.focus();autoResizeTask(el);} },10); }}
+                style={{
+                  fontFamily:serif,fontSize:F.md,lineHeight:1.7,
+                  color:row.done?C.muted:C.text,
+                  textDecoration:row.done?"line-through":"none",
+                  whiteSpace:"pre-wrap",wordBreak:"break-word",
+                  cursor:"text",minHeight:"1.7em",
+                  userSelect:"text",
+                }}>
+                {row.text
+                  ? renderWithTags(row.text)
+                  : (idx===0&&open.length===1&&taskFilter!=="done" ? <span style={{color:C.dim}}>Add a task…</span> : null)
+                }
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -4663,13 +4675,31 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
   }, [todayTags, projectsLoaded, notes, tasks]); // eslint-disable-line
 
   const names = Object.keys(projectsMeta || {}).sort();
+
+  const pcScrollRef = useRef(null);
+  const [pcFade, setPcFade] = useState(false);
+  useEffect(() => {
+    const el = pcScrollRef.current;
+    if (!el) return;
+    const check = () => setPcFade(el.scrollWidth > el.clientWidth + 2);
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    el.addEventListener('scroll', check);
+    return () => { ro.disconnect(); el.removeEventListener('scroll', check); };
+  }, [names.length]); // eslint-disable-line
+
   if (!projectsLoaded || names.length === 0) return null;
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
-      padding: '8px 14px',
-    }}>
+    <div style={{ position:'relative', padding:'4px 0' }}>
+      <div
+        ref={pcScrollRef}
+        style={{
+          display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 6,
+          padding: '4px 14px', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none',
+        }}
+      >
       <span style={{
         fontFamily: mono, fontSize: 9, letterSpacing: '0.1em',
         textTransform: 'uppercase', color: C.dim, flexShrink: 0, paddingRight: 2,
@@ -4727,6 +4757,19 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
           >{tagDisplayName(name)}</button>
         );
       })}
+      </div>
+      {pcFade && (
+        <div style={{
+          position:'absolute', right:0, top:0, bottom:0, width:40, pointerEvents:'none',
+          background:`linear-gradient(to right, transparent, ${C.bg})`,
+          display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:6,
+        }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted}
+            strokeWidth="2.5" strokeLinecap="round" opacity="0.5">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+        </div>
+      )}
     </div>
   );
 }
@@ -5820,6 +5863,9 @@ export default function Dashboard() {
           {/* Calendar + Health — hidden in project view */}
           {!activeProject && (
             <>
+              {/* ── Projects strip — very top, above calendar ── */}
+              <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
+
               <div style={{flexShrink:0}}>
                 <CalStrip selected={selected} onSelect={setSelected}
                   events={events} setEvents={setEvents} healthDots={healthDots}
@@ -5843,7 +5889,7 @@ export default function Dashboard() {
               return (
                 <>
                   {/* Fixed project header — outside scroll area */}
-                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'6px 14px',background:C.bg}}>
+                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'8px 14px',background:C.bg}}>
                     <button
                       onClick={async () => setActiveProject(null)}
                       style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',padding:'0 2px',color:pcol+'99',flexShrink:0}}
@@ -5880,14 +5926,6 @@ export default function Dashboard() {
             })()
           ) : (
             <>
-              {/* Projects nav strip — above Journal, only if projects exist */}
-              <ProjectsCard
-                date={selected}
-                token={token}
-                userId={userId}
-                onSelectProject={setActiveProject}
-              />
-
               {/* Widgets — row on wide, flat stack on narrow */}
               {mobile ? (
                 <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
