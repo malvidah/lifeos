@@ -5154,7 +5154,7 @@ function fmtDate(ds) {
 
 // ─── AddJournalLine — inline journal entry input for project/health view ──────
 function AddJournalLine({ project, onAdd, placeholder }) {
-  const [text, setText] = React.useState('');
+  const [text, setText] = useState('');
   const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
   function commit() {
     if (text.trim()) { onAdd(text.trim()); setText(''); }
@@ -5813,6 +5813,26 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
     setEntries(prev => prev ? {
       ...prev,
       taskEntries: [...(prev.taskEntries || []), { date: today, id: newTask.id, text: taskText, done: false }],
+    } : prev);
+  }
+
+  async function addNewJournal(text) {
+    if (!text.trim() || project === '__everything__') return;
+    const today = new Date().toISOString().slice(0, 10);
+    const entryText = text.trim().endsWith(`#${project}`)
+      ? text.trim()
+      : `${text.trim()} #${project}`;
+    const current = await dbLoad(today, 'notes', token);
+    const existing = (typeof current === 'string' ? current : '') || '';
+    const updated = existing ? existing.trimEnd() + '\n' + entryText : entryText;
+    const newLineIndex = updated.split('\n').lastIndexOf(entryText);
+    await dbSave(today, 'notes', updated, token);
+    MEM[`${userId}:${today}:notes`] = updated;
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['notes'] } }));
+    registerNewTags(entryText);
+    setEntries(prev => prev ? {
+      ...prev,
+      journalEntries: [...(prev.journalEntries || []), { date: today, lineIndex: newLineIndex, text: entryText }],
     } : prev);
   }
 
