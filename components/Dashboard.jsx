@@ -489,11 +489,11 @@ function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, ch
   );
 }
 
-function UserMenu({session,token,userId,theme,onThemeChange}) {
+function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onStravaChange}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
   const [ouraConnected,setOuraConnected]=useState(false);
-  const [stravaConnected,setStravaConnected]=useState(false);
+  const setStravaConnected = onStravaChange;
   const [appleHealthHasData,setAppleHealthHasData]=useState(false);
   const [claudeConnected,setClaudeConnected]=useState(false);
   const [syncing,setSyncing]=useState(null); // null | 'oura' | 'strava' | 'apple'
@@ -890,7 +890,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
-        <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange}/>
+        <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
       </div>
     </div>
   );
@@ -4125,6 +4125,7 @@ export default function Dashboard() {
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
   const [googleToken,setGoogleToken] = useState(null);
+  const [stravaConnected, setStravaConnected] = useState(false);
 
 
   useEffect(()=>{
