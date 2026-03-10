@@ -1108,7 +1108,6 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
       paddingBottom: 10,
       flexShrink: 0,
       position: "sticky", top: 0, zIndex: 100,
-      overflow: "visible",
       WebkitAppRegion: "drag", userSelect: "none",
     }}>
       {/* Pull-down overscroll patch */}
@@ -1144,12 +1143,6 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
           <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
         </div>
       </div>
-      {/* Vignette — hangs just below the sticky bar, stops before projects strip */}
-      <div style={{
-        position:"absolute", top:"100%", left:0, right:0,
-        height:32, pointerEvents:"none", zIndex:98,
-        background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`,
-      }}/>
     </div>
   );
 }
@@ -6548,6 +6541,13 @@ export default function Dashboard() {
       `}</style>
 
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+
+      {/* Vignette — fixed, low z-index so menus/dropdowns always render above */}
+      <div style={{
+        position:"fixed", top:0, left:0, right:0,
+        height:110, pointerEvents:"none", zIndex:50,
+        background:`linear-gradient(to bottom, ${C.bg} 0%, ${C.bg}88 50%, transparent 100%)`,
+      }}/>
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
