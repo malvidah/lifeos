@@ -21,14 +21,14 @@ const THEMES = {
     // 3 depth levels: bg (page) < surface/card (bars+cards) < well (inset inputs)
     // Direction: bg slightly darker taupe, surface is the main cream, well is darkest
     bg:"#D4CCB8",      surface:"#EAE3D6",   card:"#EAE3D6",
-    well:"#CBBFB0",    border:"#D4CCBE",    border2:"#BEB6A8",
-    text:"#4A3C2E",    muted:"#887870",     dim:"#ACA49A",
+    well:"#C8BCA8",    border:"#C8BEA8",    border2:"#B8AC98",
+    text:"#3A2E22",    muted:"#7A6E66",     dim:"#9A9088",
     accent:"#B87018",
     green:"#38684A",   blue:"#386088",
     purple:"#604888",  red:"#843830",       orange:"#B87018",
     yellow:"#806818",
-    shadow:"0 1px 2px rgba(36,24,12,0.08),0 3px 10px rgba(36,24,12,0.05)",
-    shadowSm:"0 1px 2px rgba(36,24,12,0.06)",
+    shadow:"0 1px 3px rgba(36,24,12,0.10),0 2px 8px rgba(36,24,12,0.07)",
+    shadowSm:"0 1px 2px rgba(36,24,12,0.08)",
   },
 };
 // C is set at render time via setTheme — default dark
@@ -1110,12 +1110,12 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
         maxWidth: 1200, margin: "0 auto",
         height: 52,
         display: "flex", alignItems: "center", gap: 12, position: "relative",
-        backdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
-        WebkitBackdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
-        background: `${C.surface}cc`,
-        border: `1px solid ${C.border}70`,
+        backdropFilter: "blur(20px) saturate(1.4)",
+        WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+        background: `${C.surface}dd`,
+        border: `1px solid ${C.border}`,
         borderRadius: 16,
-        boxShadow: `0 4px 24px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.07)`,
+        boxShadow: C.shadow,
         padding: "0 8px 0 18px",
         WebkitAppRegion: "drag",
       }}>
@@ -4735,15 +4735,13 @@ function ChatFloat({date, token, userId, healthKey}) {
           width: "100%", maxWidth: 560,
           pointerEvents: "auto",
           display: "flex", flexDirection: "row", alignItems: "center",
-          backdropFilter: expanded ? "none" : "blur(28px) saturate(1.8) brightness(1.04)",
-          WebkitBackdropFilter: expanded ? "none" : "blur(28px) saturate(1.8) brightness(1.04)",
-          background: expanded ? C.surface : `${C.surface}cc`,
-          border: `1px solid ${expanded ? C.border : C.border + "70"}`,
+          backdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
+          WebkitBackdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
+          background: expanded ? C.surface : `${C.surface}ee`,
+          border: `1px solid ${C.border}`,
           borderRadius: 100,
           minHeight: 52,
-          boxShadow: expanded
-            ? "0 4px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.06)"
-            : "0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
+          boxShadow: C.shadow,
           overflow: "hidden",
           transition: "box-shadow 0.18s ease",
         }}
@@ -6595,14 +6593,14 @@ export default function Dashboard() {
                     <div style={{
                       width: '100%', maxWidth: 560,
                       display: 'flex', alignItems: 'center', gap: 8,
-                      backdropFilter: 'blur(28px) saturate(1.8) brightness(1.04)',
-                      WebkitBackdropFilter: 'blur(28px) saturate(1.8) brightness(1.04)',
-                      background: `${C.surface}cc`,
-                      border: `1px solid ${C.border}70`,
+                      backdropFilter: 'blur(20px) saturate(1.4)',
+                      WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                      background: `${C.surface}ee`,
+                      border: `1px solid ${C.border}`,
                       borderRadius: 100,
                       padding: '0 18px',
                       height: 52,
-                      boxShadow: '0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)',
+                      boxShadow: C.shadow,
                     }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
