@@ -1105,18 +1105,18 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
     }}>
       {/* Pull-down overscroll patch */}
       <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.bg,zIndex:99}}/>
-      {/* Glass pill */}
+      {/* Glass bar — card-level rounding */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",
-        height: 44,
+        height: 52,
         display: "flex", alignItems: "center", gap: 12, position: "relative",
-        backdropFilter: "blur(24px) saturate(1.8) brightness(1.04)",
-        WebkitBackdropFilter: "blur(24px) saturate(1.8) brightness(1.04)",
-        background: `${C.surface}bb`,
+        backdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
+        WebkitBackdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
+        background: `${C.surface}cc`,
         border: `1px solid ${C.border}70`,
-        borderRadius: 100,
-        boxShadow: `0 2px 18px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.07)`,
-        padding: "0 6px 0 16px",
+        borderRadius: 16,
+        boxShadow: `0 4px 24px rgba(0,0,0,0.30), inset 0 1px 0 rgba(255,255,255,0.07)`,
+        padding: "0 8px 0 18px",
         WebkitAppRegion: "drag",
       }}>
         {/* Ghost left copy for centering balance */}
@@ -4588,6 +4588,7 @@ function ChatFloat({date, token, userId, healthKey}) {
         background: expanded ? `${C.surface}f0` : `${C.surface}cc`,
         border: `1px solid ${C.border}${expanded ? "80" : "70"}`,
         borderRadius: expanded ? 24 : 100,
+        minHeight: expanded ? undefined : 52,
         boxShadow: expanded
           ? "0 8px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)"
           : "0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
@@ -4730,8 +4731,8 @@ function ChatFloat({date, token, userId, healthKey}) {
           width: "100%",
           padding: expanded
             ? (mobile ? "8px 16px 8px 20px" : "8px 14px 8px 20px")
-            : (mobile ? "6px 8px 6px 14px" : "6px 8px 6px 16px"),
-          paddingBottom: expanded ? (mobile ? "10px" : "8px") : "6px",
+            : (mobile ? "14px 10px 14px 16px" : "14px 10px 14px 18px"),
+          paddingBottom: expanded ? (mobile ? "10px" : "8px") : "14px",
           boxSizing: "border-box",
           cursor: !expanded ? "text" : "default",
         }} onClick={!expanded ? () => { setExpanded(true); setTimeout(() => inputRef.current?.focus(), 80); } : undefined}>
@@ -6576,14 +6577,14 @@ export default function Dashboard() {
                     <div style={{
                       width: '100%', maxWidth: 560,
                       display: 'flex', alignItems: 'center', gap: 8,
-                      backdropFilter: 'blur(24px) saturate(1.8) brightness(1.04)',
-                      WebkitBackdropFilter: 'blur(24px) saturate(1.8) brightness(1.04)',
+                      backdropFilter: 'blur(28px) saturate(1.8) brightness(1.04)',
+                      WebkitBackdropFilter: 'blur(28px) saturate(1.8) brightness(1.04)',
                       background: `${C.surface}cc`,
                       border: `1px solid ${C.border}70`,
-                      borderRadius: 999,
-                      padding: '0 14px',
-                      height: 34,
-                      boxShadow: '0 2px 18px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.07)',
+                      borderRadius: 100,
+                      padding: '0 18px',
+                      height: 52,
+                      boxShadow: '0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)',
                     }}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
