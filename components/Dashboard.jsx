@@ -65,11 +65,13 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 function extractTags(text) {
   if (!text || typeof text !== 'string') return [];
   // Require a non-word char (space, punctuation, EOL) after the tag so
-  // partial words mid-typing don't create spurious projects
+  // partial words mid-typing don't create spurious projects.
+  // Normalize to lowercase so #DayLab and #DayLAb are always the same tag.
   const re = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
   const tags = []; const seen = new Set(); let m;
   while ((m = re.exec(text)) !== null) {
-    if (!seen.has(m[1])) { seen.add(m[1]); tags.push(m[1]); }
+    const norm = m[1].toLowerCase();
+    if (!seen.has(norm)) { seen.add(norm); tags.push(norm); }
   }
   return tags;
 }
@@ -82,10 +84,14 @@ function extractTagsFromAll(notes, tasks) {
   return [...tags];
 }
 // BigThink → Big Think  (used for project-level labels, not inline chips)
+// Also handles all-lowercase normalized tags: 'daylab' → 'Daylab'
 function tagDisplayName(name) {
-  return name
+  // camelCase split (legacy mixed-case keys like 'BigThink' → 'Big Think')
+  const spaced = name
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+  // Capitalize first letter of each word
+  return spaced.replace(/\b\w/g, c => c.toUpperCase());
 }
 // Pastel accent palette for project chips — warm tones that fit the dark theme
 const PROJECT_PALETTE = [
@@ -4665,7 +4671,9 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     if (!projectsLoaded) return;
     const timer = setTimeout(() => {
       const meta = projectsMeta || {};
-      const newTags = [...todayTags].filter(t => !meta[t]);
+      // Case-insensitive check: don't create 'daylab' if 'DayLab' already exists
+      const existingLower = new Set(Object.keys(meta).map(k => k.toLowerCase()));
+      const newTags = [...todayTags].filter(t => !existingLower.has(t.toLowerCase()));
       if (!newTags.length) return;
       const updated = { ...meta };
       newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; });
@@ -4674,7 +4682,22 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     return () => clearTimeout(timer);
   }, [todayTags, projectsLoaded, notes, tasks]); // eslint-disable-line
 
-  const names = Object.keys(projectsMeta || {}).sort();
+  // Deduplicate case-insensitively: if 'DayLab' and 'DayLAb' both exist, show only one.
+  // Prefer the key whose tagDisplayName contains a space (better camelCase), else the shorter one.
+  const names = (() => {
+    const all = Object.keys(projectsMeta || {}).sort();
+    const seen = new Map(); // lowercase → chosen key
+    for (const k of all) {
+      const lower = k.toLowerCase();
+      if (!seen.has(lower)) { seen.set(lower, k); continue; }
+      const current = seen.get(lower);
+      const kHasSpace = tagDisplayName(k).includes(' ');
+      const curHasSpace = tagDisplayName(current).includes(' ');
+      // Prefer the one whose display name has spaces (proper camelCase); else keep current
+      if (kHasSpace && !curHasSpace) seen.set(lower, k);
+    }
+    return [...seen.values()].sort();
+  })();
 
   const pcScrollRef = useRef(null);
   const [pcFade, setPcFade] = useState(false);
