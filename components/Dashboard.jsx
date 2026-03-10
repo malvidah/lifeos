@@ -4572,7 +4572,7 @@ function ChatFloat({date, token, userId, healthKey}) {
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: expanded ? "0 12px 14px" : "0 12px 12px",
+        padding: `0 12px max(${expanded ? "14px" : "12px"}, calc(env(safe-area-inset-bottom, 0px) + ${expanded ? "4px" : "4px"}))`,
         pointerEvents: "none",
         transition: "padding 0.2s cubic-bezier(0.4,0,0.2,1)",
       }}>
@@ -4730,7 +4730,7 @@ function ChatFloat({date, token, userId, healthKey}) {
           padding: expanded
             ? (mobile ? "8px 16px 8px 20px" : "8px 14px 8px 20px")
             : (mobile ? "7px 8px 7px 14px" : "7px 8px 7px 16px"),
-          paddingBottom: `max(${expanded ? (mobile ? "10px" : "8px") : (mobile ? "9px" : "9px")}, env(safe-area-inset-bottom, ${expanded ? "8px" : "9px"}))`,
+          paddingBottom: expanded ? (mobile ? "10px" : "8px") : (mobile ? "9px" : "9px"),
           boxSizing: "border-box",
           cursor: !expanded ? "text" : "default",
         }} onClick={!expanded ? () => { setExpanded(true); setTimeout(() => inputRef.current?.focus(), 80); } : undefined}>
@@ -5078,6 +5078,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
           cursor: 'pointer', opacity: 1,
           transition: 'opacity 0.15s, color 0.15s, background 0.15s',
           letterSpacing: '0.03em', lineHeight: '1.8',
+          whiteSpace: 'nowrap', flexShrink: 0,
         }}
         onMouseEnter={e => { e.currentTarget.style.background = C.accent + '22'; e.currentTarget.style.color = C.accent; }}
         onMouseLeave={e => { e.currentTarget.style.background = C.accent + '11'; e.currentTarget.style.color = C.accent + 'aa'; }}
@@ -5092,6 +5093,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
           fontFamily: mono, fontSize: F.sm, color: C.green + 'aa',
           cursor: 'pointer', transition: 'all 0.15s',
           letterSpacing: '0.03em', lineHeight: '1.8',
+          whiteSpace: 'nowrap', flexShrink: 0,
         }}
         onMouseEnter={e => { e.currentTarget.style.background = C.green + '22'; e.currentTarget.style.color = C.green; }}
         onMouseLeave={e => { e.currentTarget.style.background = C.green + '11'; e.currentTarget.style.color = C.green + 'aa'; }}
@@ -5111,6 +5113,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
               cursor: 'pointer', opacity: active ? 1 : 0.35,
               transition: 'opacity 0.15s, color 0.15s',
               letterSpacing: '0.03em', lineHeight: '1.8',
+              whiteSpace: 'nowrap', flexShrink: 0,
             }}
             onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = col; }}
             onMouseLeave={e => {
