@@ -1097,19 +1097,23 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
   return (
     <div style={{background:`${C.surface}e8`, borderBottom:`1px solid ${C.border}50`,
       backdropFilter:"blur(20px) saturate(1.4)", WebkitBackdropFilter:"blur(20px) saturate(1.4)",
-      padding:"0 16px",
       paddingTop: "env(safe-area-inset-top, 0px)",
       height: "calc(44px + env(safe-area-inset-top, 0px))",
-      display:"flex",alignItems:"flex-end",gap:12,flexShrink:0,
-      paddingBottom: 6,
+      display:"flex",alignItems:"stretch",flexShrink:0,
       position:"sticky",top:0,zIndex:100,
       WebkitAppRegion:"drag",userSelect:"none"}}>
       {/* Extend topbar color behind pull-down overscroll area */}
       <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.surface,zIndex:99}}/>
+      {/* Inner content: constrained to MAX_W, centered */}
+      <div style={{
+        flex:1, maxWidth:1100, margin:"0 auto", width:"100%",
+        padding:"0 16px 6px",
+        display:"flex", alignItems:"flex-end", gap:12, position:"relative",
+        WebkitAppRegion:"drag",
+      }}>
       {/* Left spacer on desktop so date centers properly */}
       <div style={{flex:1,display:"flex",alignItems:"baseline",gap:7,
-        justifyContent:"flex-start",visibility:"hidden",pointerEvents:"none",
-        "@media(maxWidth:768px)":{display:"none"}}}>
+        justifyContent:"flex-start",visibility:"hidden",pointerEvents:"none"}}>
         <span style={{fontFamily:mono,fontSize:F.md}}>●</span>
         <div style={{width:70}}/>
       </div>
@@ -1123,6 +1127,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
         <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
+      </div>
       </div>
     </div>
   );
@@ -4556,16 +4561,29 @@ function ChatFloat({date, token, userId, healthKey}) {
       )}
 
       {/* Main bar + panel */}
+      {/* Outer: full-width fixed anchor, centers the card */}
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
-        background: expanded ? C.surface : `${C.surface}e8`,
-        backdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
-        WebkitBackdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
-        borderTop: `1px solid ${C.border}50`,
-        borderRadius: expanded ? "20px 20px 0 0" : 0,
-        boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.4)" : "0 -1px 0 rgba(255,255,255,0.04)",
+        padding: "0 12px",
+        pointerEvents: "none",
+      }}>
+      {/* Inner card: constrained width, rounded top, floats above content */}
+      <div style={{
+        width: "100%",
+        maxWidth: expanded ? 740 : 1100,
+        pointerEvents: "auto",
+        display: "flex", flexDirection: "column", alignItems: "stretch",
+        background: expanded ? C.surface : `${C.surface}ee`,
+        backdropFilter: "blur(20px) saturate(1.4)",
+        WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+        borderTop: `1px solid ${C.border}60`,
+        borderLeft: `1px solid ${C.border}40`,
+        borderRight: `1px solid ${C.border}40`,
+        borderRadius: "14px 14px 0 0",
+        boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.45)" : "0 -4px 24px rgba(0,0,0,0.22)",
+        transition: "max-width 0.3s cubic-bezier(0.4,0,0.2,1)",
       }}>
 
         {/* ── Day Lab AI header — always pinned at top ── */}
@@ -4802,6 +4820,7 @@ function ChatFloat({date, token, userId, healthKey}) {
           </div>
         </div>
       </div>
+    </div>{/* end outer anchor */}
     </>
   );
 }
@@ -6521,7 +6540,11 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflow:activeProject?"hidden":mobile?"auto":"hidden", padding:activeProject?0:mobile?"6px 8px":10,
+        <div style={{flex:1, minHeight:0, overflow:activeProject?"hidden":mobile?"auto":"hidden", display:"flex", flexDirection:"column", alignItems:"stretch"}}>
+        <div style={{
+          flex:1, minHeight:0, maxWidth:1100, width:"100%", margin:"0 auto", alignSelf:"stretch",
+          overflow:activeProject?"hidden":mobile?"auto":"hidden",
+          padding:activeProject?0:mobile?"6px 8px":10,
           paddingBottom:activeProject?0:mobile?200:0, display:"flex", flexDirection:"column", gap:activeProject?0:mobile?10:8}}>
 
           {/* Calendar + Health + Search — hidden in project view */}
@@ -6757,6 +6780,7 @@ export default function Dashboard() {
               )}
             </>
           )}
+        </div>
         </div>
 
       {/* Floating chat pill — hidden during search */}
