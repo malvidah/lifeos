@@ -3765,11 +3765,13 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   if (refs.current[row.id] === el) return;
                   refs.current[row.id] = el;
                   const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+                  // Edit mode: plain colored spans only — NO display:inline-block.
+                  // inline-block in contenteditables causes browsers to insert implicit
+                  // whitespace nodes, making textContent return doubled/corrupted content.
+                  // Full pill chips are rendered in view mode via renderWithTags.
                   el.innerHTML = row.text
-                    ? esc(row.text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) => {
-                        const col = projectColor(tag);
-                        return `<span style="color:${col};background:${col}20;border:1px solid ${col}40;border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;line-height:1.6;vertical-align:middle;display:inline-block">${m}</span>`;
-                      })
+                    ? esc(row.text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) =>
+                        `<span style="color:${projectColor(tag)}">${m}</span>`)
                     : '';
                   requestAnimationFrame(() => {
                     el.focus();
