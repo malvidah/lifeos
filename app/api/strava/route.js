@@ -73,10 +73,11 @@ export async function GET(request) {
   }
 
   try {
-    // Wide UTC window: pad ±12h around the requested date so any local timezone
-    // offset is covered. We filter by start_date_local in the result.
-    const dayStart = Math.floor(new Date(date + 'T00:00:00Z').getTime() / 1000) - 12 * 3600;
-    const dayEnd   = Math.floor(new Date(date + 'T23:59:59Z').getTime() / 1000) + 12 * 3600;
+    // Anchor on noon of the requested date in UTC, then span ±14h to cover any local timezone.
+    // This ensures the full calendar day is covered regardless of local offset (up to UTC±14).
+    const noon = Math.floor(new Date(date + 'T12:00:00Z').getTime() / 1000);
+    const dayStart = noon - 14 * 3600;
+    const dayEnd   = noon + 14 * 3600;
 
     const r = await fetch(
       `https://www.strava.com/api/v3/athlete/activities?after=${dayStart}&before=${dayEnd}&per_page=20`,

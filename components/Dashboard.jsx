@@ -3086,9 +3086,12 @@ function Activity({date,token,userId}) {
   useEffect(()=>{
     if(!token||!userId)return;
     setSyncedRows([]);
+    const stravaPromise = stravaConnected
+      ? fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({}))
+      : Promise.resolve({});
     Promise.all([
       cachedOuraFetch(date, token, userId),
-      fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({})),
+      stravaPromise,
     ]).then(([ouraData, stravaData])=>{
       const merged = mergeWorkouts(ouraData.workouts||[], stravaData.activities||[]);
       const rows = merged.map(w=>({
@@ -3110,7 +3113,7 @@ function Activity({date,token,userId}) {
           body:JSON.stringify({date,type:'workouts',data:summary})}).catch(()=>{});
       }
     });
-  },[date,token,userId]); // eslint-disable-line
+  },[date,token,userId,stravaConnected]); // eslint-disable-line
 
   // AI kcal estimation for manual rows with no kcal (e.g. added via voice/chat)
   useEffect(()=>{
