@@ -66,12 +66,12 @@ function extractTags(text) {
   if (!text || typeof text !== 'string') return [];
   // Require a non-word char (space, punctuation, EOL) after the tag so
   // partial words mid-typing don't create spurious projects.
-  // Normalize to lowercase so #DayLab and #DayLAb are always the same tag.
+  // Keep original case — dedup is handled case-insensitively at the project level.
   const re = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
-  const tags = []; const seen = new Set(); let m;
+  const tags = []; const seenLower = new Set(); let m;
   while ((m = re.exec(text)) !== null) {
-    const norm = m[1].toLowerCase();
-    if (!seen.has(norm)) { seen.add(norm); tags.push(norm); }
+    const lower = m[1].toLowerCase();
+    if (!seenLower.has(lower)) { seenLower.add(lower); tags.push(m[1]); }
   }
   return tags;
 }
@@ -156,7 +156,7 @@ function renderTaskInline(text) {
   const parts = []; let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
-    const col = projectColor(m[2].toLowerCase());
+    const col = projectColor(m[2]);
     parts.push(<span key={`c${m.index}`} style={{ color: col, fontFamily: 'inherit' }}>{m[1]}</span>);
     last = m.index + m[0].length;
   }
@@ -4684,6 +4684,170 @@ function ChatFloat({date, token, userId, healthKey}) {
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
 
+// ─── SearchBar ────────────────────────────────────────────────────────────────
+function SearchBar({ token, userId, onSelectDate, onClose }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState(null); // null=idle, []|[...]=searched
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
+  const debounceRef = useRef(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    if (!query.trim() || query.trim().length < 2) { setResults(null); return; }
+    debounceRef.current = setTimeout(() => doSearch(query.trim()), 280);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]); // eslint-disable-line
+
+  async function doSearch(q) {
+    if (!token || !userId) return;
+    setLoading(true);
+    try {
+      const sb = createClient();
+      // Set session so RLS allows reads
+      await sb.auth.setSession({ access_token: token, refresh_token: '' });
+      const types = ['notes', 'tasks', 'meals', 'activity', 'workouts'];
+      const [notesR, tasksR, mealsR, activityR, workoutsR] = await Promise.all(
+        types.map(t => sb.from('entries').select('date, data, type')
+          .eq('user_id', userId).eq('type', t).order('date', { ascending: false }).limit(400))
+      );
+      const qLower = q.toLowerCase();
+      const hits = [];
+
+      // Notes
+      (notesR.data || []).forEach(row => {
+        const text = typeof row.data === 'string' ? row.data : '';
+        const lines = text.split('\n').filter(l => l.trim());
+        lines.forEach((line, i) => {
+          if (line.toLowerCase().includes(qLower))
+            hits.push({ type: 'journal', date: row.date, text: line, lineIndex: i });
+        });
+      });
+      // Tasks
+      (tasksR.data || []).forEach(row => {
+        (Array.isArray(row.data) ? row.data : []).forEach(task => {
+          if (task?.text?.toLowerCase().includes(qLower))
+            hits.push({ type: 'task', date: row.date, text: task.text, done: task.done });
+        });
+      });
+      // Meals
+      (mealsR.data || []).forEach(row => {
+        (Array.isArray(row.data) ? row.data : []).forEach(meal => {
+          if (meal?.text?.toLowerCase().includes(qLower))
+            hits.push({ type: 'meal', date: row.date, text: meal.text, kcal: meal.kcal });
+        });
+      });
+      // Activity (manual)
+      (activityR.data || []).forEach(row => {
+        (Array.isArray(row.data) ? row.data : []).forEach(act => {
+          if (act?.text?.toLowerCase().includes(qLower))
+            hits.push({ type: 'activity', date: row.date, text: act.text });
+        });
+      });
+      // Workouts (Strava/Oura synced)
+      (workoutsR.data || []).forEach(row => {
+        (Array.isArray(row.data) ? row.data : []).forEach(w => {
+          const t = w?.name || w?.text || '';
+          if (t.toLowerCase().includes(qLower))
+            hits.push({ type: 'activity', date: row.date, text: t, source: w.source });
+        });
+      });
+
+      // Sort by date desc, limit 60
+      hits.sort((a, b) => b.date.localeCompare(a.date));
+      setResults(hits.slice(0, 60));
+    } catch(e) { setResults([]); }
+    setLoading(false);
+  }
+
+  function highlight(text, q) {
+    if (!q || !text) return text;
+    const idx = text.toLowerCase().indexOf(q.toLowerCase());
+    if (idx === -1) return text;
+    return (
+      <>
+        {text.slice(0, idx)}
+        <mark style={{ background: C.accent + '44', color: C.accent, borderRadius: 2, padding: '0 1px' }}>
+          {text.slice(idx, idx + q.length)}
+        </mark>
+        {text.slice(idx + q.length)}
+      </>
+    );
+  }
+
+  const TYPE_LABEL = { journal: 'Journal', task: 'Task', meal: 'Meal', activity: 'Activity' };
+  const TYPE_COLOR = { journal: C.accent, task: C.accent, meal: C.red, activity: C.blue };
+
+  return (
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 200, background: C.bg }}>
+      {/* Search input row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 14px', borderBottom: `1px solid ${C.border}` }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Escape') onClose(); }}
+          placeholder="Search tasks, journal, meals, activities…"
+          style={{
+            flex: 1, background: 'transparent', border: 'none', outline: 'none',
+            fontFamily: serif, fontSize: F.md, color: C.text, caretColor: C.accent,
+          }}
+        />
+        {loading && <span style={{ fontFamily: mono, fontSize: 9, color: C.muted, letterSpacing: '0.1em' }}>…</span>}
+        <button onClick={onClose} style={{
+          background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+          fontFamily: mono, fontSize: F.sm, color: C.muted, letterSpacing: '0.04em',
+        }}>esc</button>
+      </div>
+
+      {/* Results */}
+      {results !== null && (
+        <div style={{ maxHeight: 'calc(100vh - 120px)', overflowY: 'auto', padding: '4px 0' }}>
+          {results.length === 0 ? (
+            <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim, padding: '16px 14px', letterSpacing: '0.06em' }}>
+              no results for "{query}"
+            </div>
+          ) : (
+            results.map((hit, i) => (
+              <div key={i}
+                onClick={() => { onClose(); if (onSelectDate) onSelectDate(hit.date); }}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 10,
+                  padding: '7px 14px', cursor: 'pointer',
+                  borderBottom: `1px solid ${C.border}`,
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = C.surface}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <span style={{
+                  fontFamily: mono, fontSize: 8, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: TYPE_COLOR[hit.type] + '99', flexShrink: 0, paddingTop: 3, width: 44,
+                }}>{TYPE_LABEL[hit.type]}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontFamily: serif, fontSize: F.md, lineHeight: 1.5, color: C.text,
+                    whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                    {highlight(hit.text, query.trim())}
+                    {hit.done && <span style={{ color: C.muted, marginLeft: 6, fontSize: '0.85em' }}>✓</span>}
+                  </div>
+                </div>
+                <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, flexShrink: 0, paddingTop: 3 }}>
+                  {fmtDate(hit.date)}
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── ProjectsCard ─────────────────────────────────────────────────────────────
 function ProjectsCard({ date, token, userId, onSelectProject }) {
   const { value: notes }  = useDbSave(date, 'notes', '', token, userId);
@@ -4719,18 +4883,24 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
   }, [todayTags, projectsLoaded, notes, tasks]); // eslint-disable-line
 
   // Deduplicate case-insensitively: if 'DayLab' and 'DayLAb' both exist, show only one.
-  // Prefer the key whose tagDisplayName contains a space (better camelCase), else the shorter one.
+  // Score each key: prefer fewest single-char words in display name (avoids 'Day L Ab'),
+  // then prefer the one with the most camelCase spaces ('Day Lab' > 'Daylab').
   const names = (() => {
+    const scoreKey = k => {
+      const words = tagDisplayName(k).split(' ');
+      const singleCharWords = words.filter(w => w.length <= 1).length;
+      const spaces = words.length - 1;
+      return [-singleCharWords, spaces]; // higher is better
+    };
     const all = Object.keys(projectsMeta || {}).sort();
     const seen = new Map(); // lowercase → chosen key
     for (const k of all) {
       const lower = k.toLowerCase();
       if (!seen.has(lower)) { seen.set(lower, k); continue; }
       const current = seen.get(lower);
-      const kHasSpace = tagDisplayName(k).includes(' ');
-      const curHasSpace = tagDisplayName(current).includes(' ');
-      // Prefer the one whose display name has spaces (proper camelCase); else keep current
-      if (kHasSpace && !curHasSpace) seen.set(lower, k);
+      const [kS0, kS1] = scoreKey(k);
+      const [cS0, cS1] = scoreKey(current);
+      if (kS0 > cS0 || (kS0 === cS0 && kS1 > cS1)) seen.set(lower, k);
     }
     return [...seen.values()].sort();
   })();
@@ -4879,7 +5049,12 @@ function HealthAllMeals({ token, userId }) {
         return (
           <div key={date}>
             {di > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
-            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4}}>{fmtDate(date)}</div>
+            <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
+              style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4,
+                cursor: onSelectDate ? 'pointer' : 'default', display:'inline-block', transition:'color 0.15s'}}
+              onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
+              onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
+            >{fmtDate(date)}</div>
             {rows.map((r, i) => (
               <div key={i} style={rowS}>
                 <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
@@ -4986,7 +5161,12 @@ function HealthAllActivities({ token, userId }) {
         return (
           <div key={date}>
             {di > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
-            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4}}>{fmtDate(date)}</div>
+            <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
+              style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4,
+                cursor: onSelectDate ? 'pointer' : 'default', display:'inline-block', transition:'color 0.15s'}}
+              onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
+              onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
+            >{fmtDate(date)}</div>
             {dateRows.map((r, i) => (
               <div key={r.id||i} style={rowS}>
                 <span style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0,overflow:'hidden'}}>
@@ -5019,7 +5199,7 @@ function HealthAllActivities({ token, userId }) {
   );
 }
 // ─── HealthProjectView ───────────────────────────────────────────────────────
-function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresReady, startSync, endSync }) {
+function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresReady, startSync, endSync, onSelectDate }) {
   const today = new Date().toISOString().slice(0, 10);
   const [entries, setEntries] = useState(null);
   const [pvTaskFilter, setPvTaskFilter] = useState('all');
@@ -5127,7 +5307,12 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
           {journalByDate.map(([date, lines], dateIdx) => (
             <div key={date}>
               {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
-              <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
+              <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
+                style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6,
+                  cursor: onSelectDate ? 'pointer' : 'default', display:'inline-block', transition:'color 0.15s'}}
+                onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
+                onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
+              >{fmtDate(date)}</div>
               {lines.map((entry, i) => (
                 <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
                   {renderRichLine(entry.text)}
@@ -5246,7 +5431,7 @@ function EntryLine({ entry, date, editing, editText, onStartEdit, onChangeEdit, 
 }
 
 // ─── ProjectView ──────────────────────────────────────────────────────────────
-function ProjectView({ project, token, userId, onBack }) {
+function ProjectView({ project, token, userId, onBack, onSelectDate }) {
   const { value: projectsMeta, setValue: setProjectsMeta } =
     useDbSave('global', 'projects', {}, token, userId);
 
@@ -5517,11 +5702,18 @@ function ProjectView({ project, token, userId, onBack }) {
               pvTaskFilter === 'done' ? done.length > 0 : true
             ).map(([date, { open, done }], dateIdx) => (
               <div key={date}>
-                <div style={{
-                  fontFamily: mono, fontSize: 10, color: C.muted,
-                  letterSpacing: '0.06em', textTransform: 'uppercase',
-                  marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6,
-                }}>{fmtDate(date)}</div>
+                <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
+                  style={{
+                    fontFamily: mono, fontSize: 10, color: C.muted,
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6,
+                    cursor: onSelectDate ? 'pointer' : 'default',
+                    display: 'inline-block',
+                    transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
+                  onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
+                >{fmtDate(date)}</div>
                 {pvTaskFilter !== 'done' && open.map(task => (
                   <div key={task.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0' }}>
                     <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
@@ -5922,8 +6114,41 @@ export default function Dashboard() {
           {/* Calendar + Health — hidden in project view */}
           {!activeProject && (
             <>
-              {/* ── Projects strip — very top, above calendar ── */}
-              <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
+              {/* ── Projects strip + search button ── */}
+              {(() => {
+                const [searchOpen, setSearchOpen] = useState(false);
+                return (
+                  <div style={{ position: 'relative', flexShrink: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
+                      </div>
+                      <button
+                        onClick={() => setSearchOpen(true)}
+                        style={{
+                          background: 'none', border: 'none', cursor: 'pointer',
+                          padding: '6px 14px 6px 6px', display: 'flex', alignItems: 'center',
+                          color: C.muted, flexShrink: 0, transition: 'color 0.15s',
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.color = C.text}
+                        onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                        aria-label="Search"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                      </button>
+                    </div>
+                    {searchOpen && (
+                      <SearchBar
+                        token={token} userId={userId}
+                        onSelectDate={d => setSelected(d)}
+                        onClose={() => setSearchOpen(false)}
+                      />
+                    )}
+                  </div>
+                );
+              })()}
 
               <div style={{flexShrink:0}}>
                 <CalStrip selected={selected} onSelect={setSelected}
@@ -5970,6 +6195,7 @@ export default function Dashboard() {
                         onScoresReady={onScoresReady}
                         startSync={startSync}
                         endSync={endSync}
+                        onSelectDate={d => { setActiveProject(null); setSelected(d); }}
                       />
                     ) : (
                       <ProjectView
@@ -5977,6 +6203,7 @@ export default function Dashboard() {
                         token={token}
                         userId={userId}
                         onBack={() => setActiveProject(null)}
+                        onSelectDate={d => { setActiveProject(null); setSelected(d); }}
                       />
                     )}
                   </div>

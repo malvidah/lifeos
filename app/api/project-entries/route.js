@@ -19,14 +19,15 @@ function toDisplayName(name) {
 }
 
 // For regular projects: match #Tag, camelCase word, or spaced display name
+// Match #tag form always; only add bare display-name match for multi-word names.
+// Avoids false positives: "can" project must not match "Can't" in task text.
 function makeMatchRe(name) {
   const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const display = toDisplayName(name);
-  const parts = [
-    `#${esc(name)}(?![A-Za-z0-9])`,
-    `\\b${esc(name)}\\b`,
-  ];
-  if (display !== name) parts.push(`\\b${esc(display)}\\b`);
+  const parts = [`#${esc(name)}(?![A-Za-z0-9])`];
+  if (display !== name && display.includes(' ')) {
+    parts.push(`\\b${esc(display)}\\b`);
+  }
   return new RegExp(parts.join('|'), 'i');
 }
 
