@@ -4849,61 +4849,49 @@ function SearchBar({ token, userId, onSelectDate, onClose }) {
 }
 
 // ─── ProjectsCard ─────────────────────────────────────────────────────────────
+// Source of truth: #tags present in the DB (notes + tasks). projectsMeta is
+// metadata-only (description). No tag in DB = no project button, period.
 function ProjectsCard({ date, token, userId, onSelectProject }) {
-  const { value: notes }  = useDbSave(date, 'notes', '', token, userId);
+  const { value: notes } = useDbSave(date, 'notes', '', token, userId);
   const { value: tasks }  = useDbSave(date, 'tasks', [], token, userId);
-  const { value: projectsMeta, setValue: setProjectsMeta, loaded: projectsLoaded } =
-    useDbSave('global', 'projects', {}, token, userId);
+  // projectsMeta is metadata-only (descriptions). NOT source of truth for project existence.
+  const { value: projectsMeta } = useDbSave('global', 'projects', {}, token, userId);
 
-  // Extract today's tags
+  // Which tags exist in today's entries (for active/dim styling)
   const todayTags = useMemo(() => {
     const s = new Set();
-    extractTags(notes || '').forEach(t => s.add(t));
+    extractTags(notes || '').forEach(t => s.add(t.toLowerCase()));
     (Array.isArray(tasks) ? tasks : []).forEach(r => {
-      if (r?.text) extractTags(r.text).forEach(t => s.add(t));
+      if (r?.text) extractTags(r.text).forEach(t => s.add(t.toLowerCase()));
     });
     return s;
   }, [notes, tasks]);
 
-  // Auto-create projects from today's tags — debounced so partial mid-word tags are ignored.
-  // Never auto-delete: projects from other days aren't in MEM cache on fresh load.
+  // Tags that actually exist anywhere in the DB — fetched from /api/all-tags
+  const [allTags, setAllTags] = useState(null); // null=loading
+  const fetchedRef = useRef(false);
   useEffect(() => {
-    if (!projectsLoaded) return;
-    const timer = setTimeout(() => {
-      const meta = projectsMeta || {};
-      // Case-insensitive check: don't create 'daylab' if 'DayLab' already exists
-      const existingLower = new Set(Object.keys(meta).map(k => k.toLowerCase()));
-      const newTags = [...todayTags].filter(t => !existingLower.has(t.toLowerCase()));
-      if (!newTags.length) return;
-      const updated = { ...meta };
-      newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; });
-      setProjectsMeta(updated, { skipHistory: true });
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [todayTags, projectsLoaded, notes, tasks]); // eslint-disable-line
+    if (!token || fetchedRef.current) return;
+    fetchedRef.current = true;
+    fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setAllTags(Array.isArray(d.tags) ? d.tags : []))
+      .catch(() => setAllTags([]));
+  }, [token]); // eslint-disable-line
 
-  // Deduplicate case-insensitively: if 'DayLab' and 'DayLAb' both exist, show only one.
-  // Score each key: prefer fewest single-char words in display name (avoids 'Day L Ab'),
-  // then prefer the one with the most camelCase spaces ('Day Lab' > 'Daylab').
-  const names = (() => {
-    const scoreKey = k => {
-      const words = tagDisplayName(k).split(' ');
-      const singleCharWords = words.filter(w => w.length <= 1).length;
-      const spaces = words.length - 1;
-      return [-singleCharWords, spaces]; // higher is better
-    };
-    const all = Object.keys(projectsMeta || {}).sort();
-    const seen = new Map(); // lowercase → chosen key
-    for (const k of all) {
-      const lower = k.toLowerCase();
-      if (!seen.has(lower)) { seen.set(lower, k); continue; }
-      const current = seen.get(lower);
-      const [kS0, kS1] = scoreKey(k);
-      const [cS0, cS1] = scoreKey(current);
-      if (kS0 > cS0 || (kS0 === cS0 && kS1 > cS1)) seen.set(lower, k);
-    }
-    return [...seen.values()].sort();
-  })();
+  // Re-fetch when today's notes/tasks change (new tag added or deleted)
+  const prevTagsKey = useRef('');
+  useEffect(() => {
+    const key = todayTags ? [...todayTags].sort().join(',') : '';
+    if (key === prevTagsKey.current || !token) return;
+    prevTagsKey.current = key;
+    fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setAllTags(Array.isArray(d.tags) ? d.tags : []))
+      .catch(() => {});
+  }, [todayTags, token]); // eslint-disable-line
+
+  const names = allTags || [];
 
   const pcScrollRef = useRef(null);
   const [pcFade, setPcFade] = useState(false);
@@ -4918,7 +4906,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     return () => { ro.disconnect(); el.removeEventListener('scroll', check); };
   }, [names.length]); // eslint-disable-line
 
-  if (!projectsLoaded || names.length === 0) return null;
+  if (allTags === null || names.length === 0) return null;
 
   return (
     <div style={{ position:'relative', padding:'4px 0' }}>
@@ -4963,7 +4951,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
         onMouseLeave={e => { e.currentTarget.style.background = C.green + '11'; e.currentTarget.style.color = C.green + 'aa'; }}
       >Health</button>
       {names.map(name => {
-        const active = todayTags.has(name);
+        const active = todayTags.has(name.toLowerCase());
         const col = projectColor(name);
         return (
           <button
