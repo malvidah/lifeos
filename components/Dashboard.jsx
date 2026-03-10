@@ -5846,6 +5846,7 @@ export default function Dashboard() {
   const [googleToken,setGoogleToken] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
+  const [searchOpen, setSearchOpen] = useState(false);
 
 
   useEffect(()=>{
@@ -6103,40 +6104,35 @@ export default function Dashboard() {
           {!activeProject && (
             <>
               {/* ── Projects strip + search button ── */}
-              {(() => {
-                const [searchOpen, setSearchOpen] = useState(false);
-                return (
-                  <div style={{ position: 'relative', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
-                      </div>
-                      <button
-                        onClick={() => setSearchOpen(true)}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer',
-                          padding: '6px 14px 6px 6px', display: 'flex', alignItems: 'center',
-                          color: C.muted, flexShrink: 0, transition: 'color 0.15s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = C.text}
-                        onMouseLeave={e => e.currentTarget.style.color = C.muted}
-                        aria-label="Search"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                        </svg>
-                      </button>
-                    </div>
-                    {searchOpen && (
-                      <SearchBar
-                        token={token} userId={userId}
-                        onSelectDate={d => setSelected(d)}
-                        onClose={() => setSearchOpen(false)}
-                      />
-                    )}
+              <div style={{ position: 'relative', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
                   </div>
-                );
-              })()}
+                  <button
+                    onClick={() => setSearchOpen(true)}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      padding: '6px 14px 6px 6px', display: 'flex', alignItems: 'center',
+                      color: C.muted, flexShrink: 0, transition: 'color 0.15s',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = C.text}
+                    onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                    aria-label="Search"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                  </button>
+                </div>
+                {searchOpen && (
+                  <SearchBar
+                    token={token} userId={userId}
+                    onSelectDate={d => setSelected(d)}
+                    onClose={() => setSearchOpen(false)}
+                  />
+                )}
+              </div>
 
               <div style={{flexShrink:0}}>
                 <CalStrip selected={selected} onSelect={setSelected}
