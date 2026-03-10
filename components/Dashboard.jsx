@@ -79,6 +79,12 @@ function extractTagsFromAll(notes, tasks) {
   });
   return [...tags];
 }
+// BigThink → Big Think  (used for project-level labels, not inline chips)
+function tagDisplayName(name) {
+  return name
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+}
 function TagChip({ name, onClick, style={} }) {
   return (
     <span
@@ -2761,21 +2767,15 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
 // Cmd+B / Cmd+I wrap selected text in ** / *.
 function Notes({date,userId,token}) {
   const {value,setValue,loaded} = useDbSave(date,"notes","",token,userId);
-  const [editing, setEditing] = useState(false);
   const taRef = useRef(null);
 
+  // Auto-resize textarea whenever value changes
   useEffect(() => {
-    if (editing) taRef.current?.focus();
-  }, [editing]);
-
-  // Auto-size textarea to content so switching view↔edit doesn't shift layout
-  useEffect(() => {
-    if (editing && taRef.current) {
-      const ta = taRef.current;
-      ta.style.height = "auto";
-      ta.style.height = ta.scrollHeight + "px";
-    }
-  }, [editing]);
+    const ta = taRef.current;
+    if (!ta) return;
+    ta.style.height = "auto";
+    ta.style.height = ta.scrollHeight + "px";
+  }, [value, loaded]);
 
   function wrapSelection(marker) {
     const ta = taRef.current;
@@ -2846,32 +2846,43 @@ function Notes({date,userId,token}) {
   }
 
   const minH = 80;
+  const sharedStyle = { ...baseTextStyle, padding:0, margin:0, minHeight:minH };
 
   return (
-    <div style={{minHeight:minH, cursor:"text"}} onClick={() => !editing && setEditing(true)}>
-      {editing ? (
-        <textarea
-          ref={taRef}
-          value={value}
-          onChange={autoResize}
-          onBlur={() => { setValue(v => v, {undoLabel:"Edit notes"}); setEditing(false); }}
-          onKeyDown={handleKeyDown}
-          style={{
-            ...baseTextStyle,
-            padding:0, margin:0, border:"none", outline:"none",
-            width:"100%", resize:"none", display:"block",
-            background:"transparent", color:C.text, caretColor:C.accent,
-            minHeight:minH, overflow:"hidden",
-          }}
-        />
-      ) : (
-        <div style={{...baseTextStyle, minHeight:minH}}>
-          {value && value.trim()
-            ? renderContent(value)
-            : <div style={{color:C.dim}}>What's on your mind?</div>
-          }
-        </div>
-      )}
+    // Overlay approach: textarea in normal flow (sizes container); rendered div on top (pointer-events:none)
+    // No mode toggle → no layout shift on click. Cursor always visible via caretColor.
+    <div style={{ position:"relative", minHeight:minH, cursor:"text" }}
+      onClick={() => taRef.current?.focus()}>
+      {/* Textarea — sizes the container, text is transparent so only cursor shows */}
+      <textarea
+        ref={taRef}
+        value={value}
+        onChange={e => { setValue(e.target.value, {skipHistory:true}); const t=e.target; t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }}
+        onBlur={() => setValue(v => v, {undoLabel:"Edit notes"})}
+        onKeyDown={handleKeyDown}
+        placeholder=" "
+        style={{
+          ...sharedStyle,
+          width:"100%", resize:"none", display:"block",
+          border:"none", outline:"none",
+          background:"transparent",
+          color:"transparent",
+          caretColor:C.accent,
+          overflow:"hidden",
+          position:"relative", zIndex:1,
+        }}
+      />
+      {/* Overlay — rendered chips + formatting. Pointer-events off so clicks reach textarea */}
+      <div style={{
+        ...sharedStyle,
+        position:"absolute", top:0, left:0, right:0,
+        color:C.text, pointerEvents:"none", zIndex:2,
+      }}>
+        {value && value.trim()
+          ? renderContent(value)
+          : <div style={{color:C.dim}}>What's on your mind?</div>
+        }
+      </div>
     </div>
   );
 }
@@ -3362,12 +3373,35 @@ function Tasks({date,token,userId}) {
               display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
             {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
           </button>
-          <input ref={el=>refs.current[row.id]=el} value={row.text}
-            onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
-            onKeyDown={e=>onKey(e,row.id,idx)}
-            placeholder={idx===0&&open.length===1&&!row.text?"Add a task…":""}
-            style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,lineHeight:1.7,
-              color:row.done?C.muted:C.text,fontFamily:serif,fontSize:F.md,textDecoration:row.done?"line-through":"none"}}/>
+          {/* Overlay approach: transparent input + chip render div on top */}
+          <div style={{ position:"relative", flex:1, lineHeight:1.7 }} onClick={() => refs.current[row.id]?.focus()}>
+            <input ref={el=>refs.current[row.id]=el} value={row.text}
+              onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
+              onKeyDown={e=>onKey(e,row.id,idx)}
+              placeholder={idx===0&&open.length===1&&!row.text?"Add a task…":""}
+              style={{
+                background:"transparent",border:"none",outline:"none",padding:0,
+                width:"100%",lineHeight:1.7,
+                color:"transparent",
+                caretColor:row.done?C.muted:C.accent,
+                fontFamily:serif,fontSize:F.md,
+                textDecoration:row.done?"line-through":"none",
+                position:"relative",zIndex:1,
+              }}/>
+            <div style={{
+              position:"absolute",top:0,left:0,right:0,
+              fontFamily:serif,fontSize:F.md,lineHeight:1.7,
+              color:row.done?C.muted:C.text,
+              pointerEvents:"none",zIndex:2,
+              textDecoration:row.done?"line-through":"none",
+              overflow:"hidden",whiteSpace:"nowrap",
+            }}>
+              {row.text
+                ? renderWithTags(row.text)
+                : (idx===0&&open.length===1 ? <span style={{color:C.dim}}>Add a task…</span> : null)
+              }
+            </div>
+          </div>
         </div>
       ))}
     </div>
@@ -4215,7 +4249,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
               e.currentTarget.style.opacity = active ? '1' : '0.35';
               e.currentTarget.style.color = active ? C.accent : C.muted;
             }}
-          >#{name}</button>
+          >{tagDisplayName(name)}</button>
         );
       })}
     </div>
@@ -4341,8 +4375,8 @@ function ProjectView({ project, token, userId, onBack }) {
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
 
-      {/* Overview — hidden for Everything. Custom header: ← ProjectName + description */}
-      {project !== '__everything__' && (
+      {/* Overview card: ← ProjectName + editable description */}
+      {(
         <Card>
           {/* Back arrow + project name — tappable header row */}
           <div style={{
@@ -4367,7 +4401,7 @@ function ProjectView({ project, token, userId, onBack }) {
               fontFamily: serif, fontSize: F.md, letterSpacing: '-0.01em',
               color: C.text, flex: 1,
             }}>
-              {project === '__everything__' ? 'Everything' : project}
+              {project === '__everything__' ? 'Everything' : tagDisplayName(project)}
             </span>
           </div>
           {/* Description — click to edit */}
@@ -4440,41 +4474,50 @@ function ProjectView({ project, token, userId, onBack }) {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {lines.map(entry => (
                       <div key={`${date}-${entry.lineIndex}`}>
-                        {editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? (
-                          <input
-                            autoFocus
-                            value={editingEntry.text}
+                        {/* Overlay approach — no layout shift on click */}
+                        <div
+                          style={{ position:'relative', cursor:'text' }}
+                          onClick={() => {
+                            if (!editingEntry || editingEntry.lineIndex !== entry.lineIndex || editingEntry.date !== date) {
+                              setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text });
+                            }
+                          }}
+                        >
+                          <textarea
+                            autoFocus={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
+                            value={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? editingEntry.text : entry.text}
+                            readOnly={!(editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex)}
                             onChange={e => setEditingEntry(prev => ({ ...prev, text: e.target.value }))}
+                            onFocus={e => { e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
+                            onInput={e => { e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
                             onBlur={async () => {
-                              await saveJournalEdit(date, entry.lineIndex, editingEntry.text);
-                              setEditingEntry(null);
+                              if (editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex) {
+                                await saveJournalEdit(date, entry.lineIndex, editingEntry.text);
+                                setEditingEntry(null);
+                              }
                             }}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter' || e.key === 'Escape') e.target.blur();
-                            }}
+                            onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
                             style={{
-                              width: '100%', border: 'none', outline: 'none',
-                              background: C.well, color: C.text,
-                              fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-                              padding: '2px 8px', borderRadius: 5, caretColor: C.accent,
+                              width:'100%', border:'none', outline:'none', resize:'none', overflow:'hidden',
+                              background:'transparent',
+                              color: editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? 'transparent' : 'transparent',
+                              caretColor: C.accent,
+                              fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
+                              padding:'2px 0', margin:0, display:'block',
+                              minHeight:'1.7em',
+                              position:'relative', zIndex:1,
                             }}
                           />
-                        ) : (
-                          <div
-                            style={{
-                              fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-                              color: C.text, cursor: 'text',
-                              padding: '2px 0',
-                              borderRadius: 5,
-                              transition: 'background 0.1s',
-                            }}
-                            onClick={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
-                            onMouseEnter={e => e.currentTarget.style.background = C.border + '60'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                          >
+                          <div style={{
+                            position:'absolute', top:0, left:0, right:0,
+                            fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
+                            color:C.text, padding:'2px 0',
+                            pointerEvents:'none', zIndex:2,
+                            whiteSpace:'pre-wrap', wordBreak:'break-word',
+                          }}>
                             {renderWithTags(entry.text)}
                           </div>
-                        )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -4514,27 +4557,38 @@ function ProjectView({ project, token, userId, onBack }) {
                     transition: 'all 0.15s',
                   }}
                 />
-                {editingTask?.date === task.date && editingTask?.id === task.id ? (
+                {/* Overlay approach for task editing */}
+                <div style={{ position:'relative', flex:1, cursor:'text' }}
+                  onClick={() => { if (!editingTask || editingTask.id !== task.id) setEditingTask({ date: task.date, id: task.id, text: task.text }); }}>
                   <input
-                    autoFocus
-                    value={editingTask.text}
+                    autoFocus={editingTask?.date === task.date && editingTask?.id === task.id}
+                    readOnly={!(editingTask?.date === task.date && editingTask?.id === task.id)}
+                    value={editingTask?.date === task.date && editingTask?.id === task.id ? editingTask.text : task.text}
                     onChange={e => setEditingTask(prev => ({ ...prev, text: e.target.value }))}
-                    onBlur={async () => { await saveTaskEdit(task.date, task.id, editingTask.text); setEditingTask(null); }}
+                    onBlur={async () => {
+                      if (editingTask?.date === task.date && editingTask?.id === task.id) {
+                        await saveTaskEdit(task.date, task.id, editingTask.text);
+                        setEditingTask(null);
+                      }
+                    }}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.target.blur(); }}
                     style={{
-                      background: 'transparent', border: 'none', outline: 'none',
-                      padding: 0, flex: 1, color: C.text,
-                      fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+                      background:'transparent', border:'none', outline:'none',
+                      padding:0, width:'100%', lineHeight:'1.7',
+                      color:'transparent', caretColor:C.accent,
+                      fontFamily:serif, fontSize:F.md,
+                      position:'relative', zIndex:1,
                     }}
                   />
-                ) : (
-                  <div
-                    onClick={() => setEditingTask({ date: task.date, id: task.id, text: task.text })}
-                    style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: '1.7', color: C.text, cursor: 'text' }}
-                  >
+                  <div style={{
+                    position:'absolute', top:0, left:0, right:0,
+                    fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
+                    color:C.text, pointerEvents:'none', zIndex:2,
+                    overflow:'hidden', whiteSpace:'nowrap',
+                  }}>
                     {renderWithTags(task.text)}
                   </div>
-                )}
+                </div>
                 <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, flexShrink: 0 }}>
                   {fmtDate(task.date)}
                 </span>

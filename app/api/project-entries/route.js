@@ -53,22 +53,21 @@ export async function GET(req) {
       });
     }
 
-    // Tasks only for tagged projects (Everything skips tasks — too noisy)
+    // Fetch tasks — for Everything fetch all, for tagged projects filter by tag
     const taskEntries = [];
-    if (!isEverything) {
-      const { data: tasksRows, error: te } = await supabase
-        .from('entries').select('date, data')
-        .eq('user_id', user.id).eq('type', 'tasks')
-        .order('date', { ascending: true });
-      if (te) throw te;
-      for (const row of tasksRows || []) {
-        const tasks = Array.isArray(row.data) ? row.data : [];
-        tasks.forEach(task => {
-          if (task?.text && tagRe.test(task.text)) {
-            taskEntries.push({ date: row.date, id: task.id, text: task.text, done: !!task.done });
-          }
-        });
-      }
+    const { data: tasksRows, error: te } = await supabase
+      .from('entries').select('date, data')
+      .eq('user_id', user.id).eq('type', 'tasks')
+      .order('date', { ascending: true });
+    if (te) throw te;
+    for (const row of tasksRows || []) {
+      const tasks = Array.isArray(row.data) ? row.data : [];
+      tasks.forEach(task => {
+        if (!task?.text) return;
+        if (isEverything || tagRe.test(task.text)) {
+          taskEntries.push({ date: row.date, id: task.id, text: task.text, done: !!task.done });
+        }
+      });
     }
 
     return Response.json({ journalEntries, taskEntries, isEverything });
