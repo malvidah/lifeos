@@ -3014,8 +3014,8 @@ function Notes({date,userId,token}) {
       }
     }
 
-    // Arrow keys: normalize cursor after movement
-    if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)) {
+    // Arrow/Enter: normalize cursor after movement in case it landed on an [img:] line
+    if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Enter"].includes(e.key)) {
       requestAnimationFrame(() => normalizeCursor(taRef.current));
     }
 
@@ -3038,7 +3038,16 @@ function Notes({date,userId,token}) {
             <div key={i} style={{margin:"4px 0",lineHeight:0,pointerEvents:"auto",display:"inline-block"}}>
               <img
                 src={m[1]} alt=""
-                onClick={e => { e.stopPropagation(); setSelectedImgLine(isSelected ? null : i); taRef.current?.focus(); }}
+                onClick={e => {
+                  e.stopPropagation();
+                  setSelectedImgLine(isSelected ? null : i);
+                  taRef.current?.focus();
+                  // Place cursor on the line below the image so typing starts there
+                  let cc = 0;
+                  const lines = value.split("\n");
+                  for (let li = 0; li <= i && li < lines.length; li++) cc += lines[li].length + 1;
+                  pendingCursorRef.current = Math.min(cc, value.length);
+                }}
                 style={{
                   maxWidth:"100%", maxHeight:320, borderRadius:8, display:"block",
                   cursor:"pointer",
@@ -3642,12 +3651,58 @@ function Activity({date,token,userId,stravaConnected}) {
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
-function Tasks({date,token,userId}) {
+// ─── TaskFilterBtns ──────────────────────────────────────────────────────────
+function TaskFilterBtns({ filter, setFilter }) {
+  const OpenIcon = () => (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="12" height="12" rx="2.5"/>
+    </svg>
+  );
+  const DoneIcon = () => (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="12" height="12" rx="2.5"/>
+      <polyline points="5,8.5 7,10.5 11,6"/>
+    </svg>
+  );
+  const btns = [
+    { key: 'all',  label: 'ALL', icon: null },
+    { key: 'open', label: null,  icon: <OpenIcon/> },
+    { key: 'done', label: null,  icon: <DoneIcon/> },
+  ];
+  return (
+    <div style={{ display:'flex', gap:4 }}>
+      {btns.map(b => {
+        const active = filter === b.key;
+        return (
+          <button key={b.key} onClick={() => setFilter(b.key)}
+            style={{
+              fontFamily: mono, fontSize: '9px', letterSpacing: '0.06em',
+              padding: b.label ? '3px 7px' : '3px 6px',
+              borderRadius: 4, cursor: 'pointer',
+              background: active ? C.accent+'22' : 'none',
+              border: `1px solid ${active ? C.accent : C.border2}`,
+              color: active ? C.accent : C.muted,
+              display: 'flex', alignItems: 'center', gap: 3,
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor=C.accent+'66'; e.currentTarget.style.color=C.text; }}}
+            onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor=C.border2; e.currentTarget.style.color=C.muted; }}}
+          >
+            {b.label || b.icon}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Tasks({date,token,userId,taskFilter='all'}) {
   const mkRow=()=>({id:Date.now(),text:"",done:false});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
   const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
+  const visible = taskFilter==='open' ? open : taskFilter==='done' ? done : [...open,...done];
   function onKey(e,id,idx){
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);}
@@ -3661,7 +3716,7 @@ function Tasks({date,token,userId}) {
   );
   return (
     <div style={{flex:1,overflow:"auto"}}>
-      {[...open,...done].map((row,idx)=>(
+      {visible.map((row,idx)=>(
         <div key={row.id} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0",minHeight:28,
           opacity:row.done?0.35:1,transition:"opacity 0.2s"}}>
           <button onClick={()=>{
@@ -3684,7 +3739,7 @@ function Tasks({date,token,userId}) {
             <input ref={el=>refs.current[row.id]=el} value={row.text}
               onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
               onKeyDown={e=>onKey(e,row.id,idx)}
-              placeholder={idx===0&&open.length===1&&!row.text?"Add a task…":""}
+              placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=="done"?"Add a task…":""}
               style={{
                 background:"transparent",border:"none",outline:"none",padding:0,
                 width:"100%",lineHeight:1.7,
@@ -4618,6 +4673,7 @@ function ProjectView({ project, token, userId, onBack }) {
 
   const [entries, setEntries] = useState(null); // null=loading, obj=loaded
   const [showCompleted, setShowCompleted] = useState(false);
+  const [pvTaskFilter, setPvTaskFilter] = useState('all');
   const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}
   const [editingTask, setEditingTask]   = useState(null); // {date,id,text}
   const [editingDesc, setEditingDesc]   = useState(false);
@@ -4949,6 +5005,7 @@ function ProjectView({ project, token, userId, onBack }) {
       <Widget
         label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
         color={C.blue} autoHeight
+        headerRight={<TaskFilterBtns filter={pvTaskFilter} setFilter={setPvTaskFilter}/>}
       >
         {entries === null ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -4967,7 +5024,7 @@ function ProjectView({ project, token, userId, onBack }) {
                   letterSpacing: '0.06em', textTransform: 'uppercase',
                   marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6,
                 }}>{fmtDate(date)}</div>
-                {open.map(task => (
+                {pvTaskFilter !== 'done' && open.map(task => (
                   <div key={task.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0' }}>
                     <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
                       width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
@@ -4989,7 +5046,7 @@ function ProjectView({ project, token, userId, onBack }) {
                     )}
                   </div>
                 ))}
-                {done.length > 0 && showCompleted && done.map(task => (
+                {pvTaskFilter !== 'open' && done.map(task => (
                   <div key={task.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0', opacity:0.35 }}>
                     <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
                       width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
@@ -5005,18 +5062,7 @@ function ProjectView({ project, token, userId, onBack }) {
                 <div style={{ borderTop:`1px solid ${C.border}`, marginTop:12, marginBottom:4 }}/>
               </div>
             ))}
-            {doneTasks.length > 0 && (
-              <button onClick={() => setShowCompleted(v => !v)} style={{
-                background:'none', border:'none', cursor:'pointer',
-                display:'flex', alignItems:'center', gap:4, padding:'4px 0',
-                fontFamily:mono, fontSize:F.sm, color:C.dim, letterSpacing:'0.04em',
-              }}>
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                  {showCompleted ? <polyline points="18 15 12 9 6 15"/> : <polyline points="6 9 12 15 18 9"/>}
-                </svg>
-                {showCompleted ? 'Hide' : 'Show'} completed ({doneTasks.length})
-              </button>
-            )}
+
           </div>
         )}
       </Widget>
@@ -5154,6 +5200,7 @@ export default function Dashboard() {
   const [healthCollapsed, toggleHealth]   = useCollapse("health",  true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
+  const [taskFilter, setTaskFilter] = useState('all');
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
   const [actCollapsed,    toggleAct]      = useCollapse("activity",false);
   const collapseMap = {notes:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,activity:actCollapsed};
@@ -5359,8 +5406,8 @@ export default function Dashboard() {
                     <Widget key={w.id} label={w.label} color={w.color()}
                       collapsed={collapseMap[w.id]}
                       onToggle={toggleMap[w.id]}
-                      headerRight={w.headerRight?.()} autoHeight>
-                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
+                      headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
+                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
                     </Widget>
                   ))}
                 </div>
@@ -5396,8 +5443,8 @@ export default function Dashboard() {
                         <Widget label={w.label} color={w.color()}
                           collapsed={collapseMap[w.id]}
                           onToggle={toggleMap[w.id]}
-                          headerRight={w.headerRight?.()}>
-                          <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
+                          headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
+                          <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
                         </Widget>
                       </div>
                     ))}
