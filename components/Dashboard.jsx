@@ -3755,14 +3755,16 @@ function Tasks({date,token,userId,taskFilter='all'}) {
               <div
                 ref={el => {
                   if (!el) return;
+                  // Only initialize innerHTML on first mount — not on every re-render.
+                  // Inline arrow refs fire on every render (new fn identity); guard with
+                  // refs.current check so we don't clobber the user's live edits.
+                  if (refs.current[row.id] === el) return;
                   refs.current[row.id] = el;
-                  // Set innerHTML with colored spans on first mount, then focus
+                  // Set innerHTML with colored spans
+                  const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
                   el.innerHTML = row.text
-                    ? (() => {
-                        const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-                        return esc(row.text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g,
-                          (m, tag) => `<span style="color:${projectColor(tag)}">${m}</span>`);
-                      })()
+                    ? esc(row.text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g,
+                        (m, tag) => `<span style="color:${projectColor(tag)}">${m}</span>`)
                     : '';
                   // Move cursor to end
                   requestAnimationFrame(() => {
@@ -6127,11 +6129,12 @@ export default function Dashboard() {
                     opacity: searchOpen ? 1 : 0,
                     pointerEvents: searchOpen ? 'auto' : 'none',
                     transition: 'opacity 0.18s ease',
-                    display: 'flex', alignItems: 'center',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                     padding: '0 10px',
                   }}>
                     <div style={{
-                      flex: 1, display: 'flex', alignItems: 'center', gap: 8,
+                      width: '100%', maxWidth: 560,
+                      display: 'flex', alignItems: 'center', gap: 8,
                       background: C.surface,
                       border: `1px solid ${C.border2}`,
                       borderRadius: 999,
