@@ -3066,7 +3066,7 @@ function calcPace(w) {
 }
 function isRun(w) { return (w.sport||w.type||w.name||"").toLowerCase().match(/run|jog/); }
 
-function Activity({date,token,userId}) {
+function Activity({date,token,userId,stravaConnected}) {
   const [syncedRows, setSyncedRows] = useState([]);
   const mkRow = () => ({id:Date.now(), text:"", dist:null, pace:null, kcal:null});
   const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "activity", [mkRow()], token, userId);
@@ -4399,14 +4399,14 @@ export default function Dashboard() {
                 collapsed={collapseMap[leftWidget.id]}
                 onToggle={toggleMap[leftWidget.id]}
                 headerRight={leftWidget.headerRight?.()} autoHeight>
-                <leftWidget.Comp date={selected} token={token} userId={userId}/>
+                <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
               </Widget>
               {rightWidgets.map(w=>(
                 <Widget key={w.id} label={w.label} color={w.color()}
                   collapsed={collapseMap[w.id]}
                   onToggle={toggleMap[w.id]}
                   headerRight={w.headerRight?.()} autoHeight>
-                  <w.Comp date={selected} token={token} userId={userId}/>
+                  <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
                 </Widget>
               ))}
             </div>
@@ -4425,7 +4425,7 @@ export default function Dashboard() {
                     collapsed={collapseMap[leftWidget.id]}
                     onToggle={toggleMap[leftWidget.id]}
                     headerRight={leftWidget.headerRight?.()}>
-                    <leftWidget.Comp date={selected} token={token} userId={userId}/>
+                    <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
                   </Widget>
                 </div>
               </div>
@@ -4443,7 +4443,7 @@ export default function Dashboard() {
                       collapsed={collapseMap[w.id]}
                       onToggle={toggleMap[w.id]}
                       headerRight={w.headerRight?.()}>
-                      <w.Comp date={selected} token={token} userId={userId}/>
+                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
                     </Widget>
                   </div>
                 ))}
