@@ -4584,40 +4584,39 @@ function ChatFloat({date, token, userId, healthKey}) {
 
           {/* Messages scroll area */}
           <div style={{
-            flex: 1, overflowY: "auto",
+            flex: 1, overflowY: "auto", position: "relative",
             display: "flex", flexDirection: "column", alignItems: "center",
             padding: "0 10px",
-            paddingBottom: "calc(52px + max(20px, env(safe-area-inset-bottom, 20px)) + 24px)",
+            paddingBottom: "calc(80px + max(20px, env(safe-area-inset-bottom, 20px)))",
           }}>
+            {/* Free tier vignette — sticky top overlay as limit approaches */}
+            {!isPremiumUser && (chatQueryCount >= FREE_CHAT_LIMIT - 1 || chatLimitReached) && (
+              <div style={{
+                position: "sticky", top: 0, zIndex: 10, width: "100%",
+                background: `linear-gradient(to bottom, ${C.bg} 30%, ${C.bg}cc 70%, transparent 100%)`,
+                padding: "14px 16px 44px", marginBottom: -32,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
+                pointerEvents: chatLimitReached ? "auto" : "none",
+              }}>
+                <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.08em" }}>
+                  {chatLimitReached
+                    ? `${FREE_CHAT_LIMIT}/${FREE_CHAT_LIMIT} FREE MESSAGES USED`
+                    : `${chatQueryCount}/${FREE_CHAT_LIMIT} free messages`}
+                </span>
+                {chatLimitReached && (
+                  <button onClick={() => window.location.href = "/upgrade"} style={{
+                    background: C.accent, border: "none", borderRadius: 10,
+                    padding: "9px 22px", cursor: "pointer",
+                    fontFamily: mono, fontSize: 11, color: "#fff",
+                    letterSpacing: "0.08em", textTransform: "uppercase",
+                  }}>Upgrade to Premium →</button>
+                )}
+              </div>
+            )}
             <div style={{
-              width: "100%", maxWidth: 1200,
-              display: "flex", flexDirection: "column", gap: 12,
+              width: "100%", maxWidth: 720,
+              display: "flex", flexDirection: "column", gap: 12, paddingTop: 8,
             }}>
-              {/* Free tier banner — shown instead of upgrade wall */}
-              {!isPremiumUser && (
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "8px 14px",
-                  background: chatLimitReached ? `${C.orange}18` : `${C.text}08`,
-                  border: `1px solid ${chatLimitReached ? C.orange + "40" : C.border}`,
-                  borderRadius: 12,
-                  gap: 12,
-                }}>
-                  <span style={{ fontFamily: mono, fontSize: 11, color: chatLimitReached ? C.orange : C.muted, letterSpacing: "0.06em" }}>
-                    {chatLimitReached
-                      ? `Free limit reached · ${FREE_CHAT_LIMIT}/${FREE_CHAT_LIMIT} used`
-                      : `${chatQueryCount}/${FREE_CHAT_LIMIT} free messages used`}
-                  </span>
-                  {chatLimitReached && (
-                    <button onClick={() => window.location.href = "/upgrade"} style={{
-                      background: C.accent, border: "none", borderRadius: 8,
-                      padding: "5px 14px", cursor: "pointer", flexShrink: 0,
-                      fontFamily: mono, fontSize: 10, color: "#fff",
-                      letterSpacing: "0.08em", textTransform: "uppercase",
-                    }}>Upgrade →</button>
-                  )}
-                </div>
-              )}
 
               {/* Message bubbles */}
               {messages.map((msg, i) => (
