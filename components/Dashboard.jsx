@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
 import { createClient } from "../lib/supabase.js";
 
 
@@ -60,6 +60,57 @@ const toKey = d => {
 };
 const todayKey = () => toKey(new Date());
 const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+
+// ─── Projects — tag parsing & rendering ──────────────────────────────────────
+function extractTags(text) {
+  if (!text || typeof text !== 'string') return [];
+  const re = /#([A-Za-z][A-Za-z0-9]+)/g;
+  const tags = []; const seen = new Set(); let m;
+  while ((m = re.exec(text)) !== null) {
+    if (!seen.has(m[1])) { seen.add(m[1]); tags.push(m[1]); }
+  }
+  return tags;
+}
+function extractTagsFromAll(notes, tasks) {
+  const tags = new Set();
+  extractTags(notes || '').forEach(t => tags.add(t));
+  (Array.isArray(tasks) ? tasks : []).forEach(task => {
+    if (task?.text) extractTags(task.text).forEach(t => tags.add(t));
+  });
+  return [...tags];
+}
+function TagChip({ name, onClick, style={} }) {
+  return (
+    <span
+      onClick={onClick}
+      style={{
+        display:'inline-flex', alignItems:'center',
+        background: C.accent + '20',
+        border: `1px solid ${C.accent}40`,
+        borderRadius: 4, padding: '0 5px',
+        fontSize: '0.82em', color: C.accent,
+        fontFamily: mono, lineHeight: '1.6',
+        flexShrink: 0, verticalAlign: 'middle',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'opacity 0.15s',
+        ...style,
+      }}
+    >#{name}</span>
+  );
+}
+function renderWithTags(text) {
+  if (!text) return null;
+  const parts = []; let last = 0;
+  const re = /#([A-Za-z][A-Za-z0-9]+)/g; let m;
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
+    parts.push(<TagChip key={`c${m.index}`} name={m[1]}/>);
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
+  return parts.length > 0 ? parts : text;
+}
+
 
 // ─── AI ───────────────────────────────────────────────────────────────────────
 async function estimateNutrition(prompt, token) {
@@ -848,7 +899,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,stravaConnected,onStravaChange}) {
+function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,stravaConnected,onStravaChange,activeProject,onBackFromProject}) {
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
   const [isToday, setIsToday] = useState(false);
@@ -881,12 +932,29 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
         <span style={{fontFamily:mono,fontSize:F.md}}>●</span>
         <div style={{width:70}}/>
       </div>
-      {/* Day Loop — centered */}
-      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
-        <span onClick={onGoToToday} style={{
-          fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
-          color:C.text, cursor:onGoToToday?"pointer":"default",
-        }}>Day Lab</span>
+      {/* Center: project back nav or Day Lab title */}
+      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:8}}>
+        {activeProject ? (
+          <button
+            onClick={onBackFromProject}
+            style={{
+              background:"none",border:"none",cursor:"pointer",
+              display:"flex",alignItems:"center",gap:6,padding:"2px 4px",
+              fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",color:C.text,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+            <span style={{color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase"}}>Back</span>
+            <span style={{color:C.text,fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em"}}>#{activeProject}</span>
+          </button>
+        ) : (
+          <span onClick={onGoToToday} style={{
+            fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
+            color:C.text, cursor:onGoToToday?"pointer":"default",
+          }}>Day Lab</span>
+        )}
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
@@ -2761,12 +2829,13 @@ function Notes({date,userId,token}) {
   }
 
   function renderInline(text) {
-    const re = /(\*\*(.+?)\*\*|\*(.+?)\*)/g;
+    const re = /(\*\*(.+?)\*\*|\*(.+?)\*|#([A-Za-z][A-Za-z0-9]+))/g;
     const parts = []; let last=0, m;
     while ((m = re.exec(text)) !== null) {
       if (m.index > last) parts.push(text.slice(last, m.index));
       if (m[0].startsWith("**")) parts.push(<strong key={m.index}>{m[2]}</strong>);
-      else parts.push(<em key={m.index}>{m[3]}</em>);
+      else if (m[0].startsWith("*")) parts.push(<em key={m.index}>{m[3]}</em>);
+      else parts.push(<TagChip key={m.index} name={m[4]}/>);
       last = m.index + m[0].length;
     }
     if (last < text.length) parts.push(text.slice(last));
@@ -4087,6 +4156,412 @@ function ChatFloat({date, token, userId, healthKey}) {
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
+
+// ─── ProjectsCard ─────────────────────────────────────────────────────────────
+function ProjectsCard({ date, token, userId, onSelectProject }) {
+  const { value: notes }  = useDbSave(date, 'notes', '', token, userId);
+  const { value: tasks }  = useDbSave(date, 'tasks', [], token, userId);
+  const { value: projectsMeta, setValue: setProjectsMeta, loaded: projectsLoaded } =
+    useDbSave('global', 'projects', {}, token, userId);
+
+  // Extract today's tags
+  const todayTags = useMemo(() => {
+    const s = new Set();
+    extractTags(notes || '').forEach(t => s.add(t));
+    (Array.isArray(tasks) ? tasks : []).forEach(r => {
+      if (r?.text) extractTags(r.text).forEach(t => s.add(t));
+    });
+    return s;
+  }, [notes, tasks]);
+
+  // Auto-create projects for new tags
+  useEffect(() => {
+    if (!projectsLoaded) return;
+    const meta = projectsMeta || {};
+    const newTags = [...todayTags].filter(t => !meta[t]);
+    if (!newTags.length) return;
+    const updated = { ...meta };
+    newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; });
+    setProjectsMeta(updated, { skipHistory: true });
+  }, [todayTags, projectsLoaded]); // eslint-disable-line
+
+  const names = Object.keys(projectsMeta || {}).sort();
+  if (!projectsLoaded || names.length === 0) return null;
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
+      padding: '0 14px 10px',
+    }}>
+      <span style={{
+        fontFamily: mono, fontSize: 9, letterSpacing: '0.1em',
+        textTransform: 'uppercase', color: C.dim, flexShrink: 0, paddingRight: 2,
+      }}>Projects</span>
+      {names.map(name => {
+        const active = todayTags.has(name);
+        return (
+          <button
+            key={name}
+            onClick={() => onSelectProject(name)}
+            style={{
+              background: active ? C.accent + '22' : 'transparent',
+              border: `1px solid ${active ? C.accent + '55' : C.border2}`,
+              borderRadius: 20, padding: '2px 10px',
+              fontFamily: mono, fontSize: F.sm, color: active ? C.accent : C.muted,
+              cursor: 'pointer', opacity: active ? 1 : 0.35,
+              transition: 'opacity 0.15s, color 0.15s',
+              letterSpacing: '0.03em', lineHeight: '1.8',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = C.text; }}
+            onMouseLeave={e => {
+              e.currentTarget.style.opacity = active ? '1' : '0.35';
+              e.currentTarget.style.color = active ? C.accent : C.muted;
+            }}
+          >#{name}</button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ─── ProjectView ──────────────────────────────────────────────────────────────
+function ProjectView({ project, token, userId, onBack }) {
+  const { value: projectsMeta, setValue: setProjectsMeta } =
+    useDbSave('global', 'projects', {}, token, userId);
+
+  const [entries, setEntries] = useState(null); // null=loading, obj=loaded
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}
+  const [editingTask, setEditingTask]   = useState(null); // {date,id,text}
+  const [editingDesc, setEditingDesc]   = useState(false);
+  const [descVal, setDescVal]           = useState('');
+  const descRef = useRef(null);
+
+  const meta = useMemo(() => ((projectsMeta || {})[project] || {}), [projectsMeta, project]);
+
+  // Load entries when project changes
+  useEffect(() => {
+    if (!token || !project) return;
+    setEntries(null);
+    fetch(`/api/project-entries?project=${encodeURIComponent(project)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setEntries({ journalEntries: [], taskEntries: [] }); return; }
+        // Auto-delete project if it has no entries anywhere
+        if (!d.journalEntries?.length && !d.taskEntries?.length) {
+          const updated = { ...(projectsMeta || {}) };
+          delete updated[project];
+          setProjectsMeta(updated, { skipHistory: true });
+          onBack();
+          return;
+        }
+        setEntries(d);
+      })
+      .catch(() => setEntries({ journalEntries: [], taskEntries: [] }));
+  }, [project, token]); // eslint-disable-line
+
+  // Group journal entries by date (oldest first)
+  const journalByDate = useMemo(() => {
+    if (!entries?.journalEntries?.length) return [];
+    const map = {};
+    entries.journalEntries.forEach(e => {
+      if (!map[e.date]) map[e.date] = [];
+      map[e.date].push(e);
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [entries]);
+
+  const taskEntries = entries?.taskEntries || [];
+  const openTasks = taskEntries.filter(t => !t.done);
+  const doneTasks = taskEntries.filter(t => t.done);
+
+  function fmtDate(ds) {
+    const d = new Date(ds + 'T12:00:00');
+    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  async function saveJournalEdit(date, lineIndex, newText) {
+    const current = await dbLoad(date, 'notes', token);
+    if (current === null) return;
+    const lines = (current || '').split('\n');
+    lines[lineIndex] = newText;
+    const updated = lines.join('\n');
+    await dbSave(date, 'notes', updated, token);
+    // Update module-level cache so daily view reflects immediately
+    MEM[`${userId}:${date}:notes`] = updated;
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['notes'] } }));
+    setEntries(prev => prev ? {
+      ...prev,
+      journalEntries: prev.journalEntries.map(e =>
+        (e.date === date && e.lineIndex === lineIndex) ? { ...e, text: newText } : e
+      ),
+    } : prev);
+  }
+
+  async function toggleTask(date, taskId, currentDone) {
+    const current = await dbLoad(date, 'tasks', token);
+    if (!Array.isArray(current)) return;
+    const updated = current.map(t => t.id === taskId ? { ...t, done: !currentDone } : t);
+    await dbSave(date, 'tasks', updated, token);
+    MEM[`${userId}:${date}:tasks`] = updated;
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+    setEntries(prev => prev ? {
+      ...prev,
+      taskEntries: prev.taskEntries.map(t =>
+        (t.date === date && t.id === taskId) ? { ...t, done: !currentDone } : t
+      ),
+    } : prev);
+  }
+
+  async function saveTaskEdit(date, taskId, newText) {
+    const current = await dbLoad(date, 'tasks', token);
+    if (!Array.isArray(current)) return;
+    const updated = current.map(t => t.id === taskId ? { ...t, text: newText } : t);
+    await dbSave(date, 'tasks', updated, token);
+    MEM[`${userId}:${date}:tasks`] = updated;
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+    setEntries(prev => prev ? {
+      ...prev,
+      taskEntries: prev.taskEntries.map(t =>
+        (t.date === date && t.id === taskId) ? { ...t, text: newText } : t
+      ),
+    } : prev);
+  }
+
+  const loadingCards = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <Shimmer width="80%" height={13}/><Shimmer width="65%" height={13}/><Shimmer width="72%" height={13}/>
+    </div>
+  );
+
+  return (
+    <div style={{
+      flex: 1, minHeight: 0, overflow: 'auto',
+      padding: 10, paddingBottom: 200,
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+
+      {/* Overview */}
+      <Widget label="Overview" color={C.accent} autoHeight>
+        {editingDesc ? (
+          <textarea
+            ref={descRef}
+            value={descVal}
+            onChange={e => { setDescVal(e.target.value); e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
+            onBlur={() => {
+              setEditingDesc(false);
+              const updated = { ...(projectsMeta || {}), [project]: { ...meta, description: descVal } };
+              setProjectsMeta(updated, { skipHistory: true });
+            }}
+            onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
+            style={{
+              width: '100%', border: 'none', outline: 'none', background: 'transparent',
+              color: C.text, fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+              resize: 'none', minHeight: 60, padding: 0, caretColor: C.accent,
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              minHeight: 44, cursor: 'text',
+              fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+              color: meta.description ? C.text : C.dim,
+              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            }}
+            onClick={() => {
+              setDescVal(meta.description || '');
+              setEditingDesc(true);
+              setTimeout(() => {
+                if (descRef.current) {
+                  descRef.current.focus();
+                  descRef.current.style.height = 'auto';
+                  descRef.current.style.height = descRef.current.scrollHeight + 'px';
+                }
+              }, 10);
+            }}
+          >
+            {meta.description || 'Add a project description…'}
+          </div>
+        )}
+      </Widget>
+
+      {/* Journal Entries */}
+      <Widget
+        label={entries?.journalEntries?.length ? `Entries · ${entries.journalEntries.length}` : 'Entries'}
+        color={C.accent} autoHeight
+      >
+        {entries === null ? loadingCards
+          : journalByDate.length === 0 ? (
+            <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
+              No journal entries tagged #{project} yet.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+              {journalByDate.map(([date, lines]) => (
+                <div key={date}>
+                  <div style={{
+                    fontFamily: mono, fontSize: 10, color: C.muted,
+                    letterSpacing: '0.06em', textTransform: 'uppercase',
+                    marginBottom: 7,
+                  }}>{fmtDate(date)}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {lines.map(entry => (
+                      <div key={`${date}-${entry.lineIndex}`}>
+                        {editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? (
+                          <input
+                            autoFocus
+                            value={editingEntry.text}
+                            onChange={e => setEditingEntry(prev => ({ ...prev, text: e.target.value }))}
+                            onBlur={async () => {
+                              await saveJournalEdit(date, entry.lineIndex, editingEntry.text);
+                              setEditingEntry(null);
+                            }}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter' || e.key === 'Escape') e.target.blur();
+                            }}
+                            style={{
+                              width: '100%', border: 'none', outline: 'none',
+                              background: C.well, color: C.text,
+                              fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+                              padding: '2px 8px', borderRadius: 5, caretColor: C.accent,
+                            }}
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+                              color: C.text, cursor: 'text',
+                              padding: '2px 0',
+                              borderRadius: 5,
+                              transition: 'background 0.1s',
+                            }}
+                            onClick={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
+                            onMouseEnter={e => e.currentTarget.style.background = C.border + '60'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                          >
+                            {renderWithTags(entry.text)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </Widget>
+
+      {/* Tasks */}
+      <Widget
+        label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
+        color={C.blue} autoHeight
+      >
+        {entries === null ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/>
+          </div>
+        ) : taskEntries.length === 0 ? (
+          <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
+            No tasks tagged #{project} yet.
+          </div>
+        ) : (
+          <div>
+            {/* Open tasks */}
+            {openTasks.map(task => (
+              <div key={`${task.date}-${task.id}`}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', minHeight: 28 }}
+              >
+                <button
+                  onClick={() => toggleTask(task.date, task.id, task.done)}
+                  style={{
+                    width: 15, height: 15, flexShrink: 0, borderRadius: 4, padding: 0, cursor: 'pointer',
+                    border: `1.5px solid ${C.border2}`, background: 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.15s',
+                  }}
+                />
+                {editingTask?.date === task.date && editingTask?.id === task.id ? (
+                  <input
+                    autoFocus
+                    value={editingTask.text}
+                    onChange={e => setEditingTask(prev => ({ ...prev, text: e.target.value }))}
+                    onBlur={async () => { await saveTaskEdit(task.date, task.id, editingTask.text); setEditingTask(null); }}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.target.blur(); }}
+                    style={{
+                      background: 'transparent', border: 'none', outline: 'none',
+                      padding: 0, flex: 1, color: C.text,
+                      fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+                    }}
+                  />
+                ) : (
+                  <div
+                    onClick={() => setEditingTask({ date: task.date, id: task.id, text: task.text })}
+                    style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: '1.7', color: C.text, cursor: 'text' }}
+                  >
+                    {renderWithTags(task.text)}
+                  </div>
+                )}
+                <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, flexShrink: 0 }}>
+                  {fmtDate(task.date)}
+                </span>
+              </div>
+            ))}
+
+            {/* Completed tasks */}
+            {doneTasks.length > 0 && (
+              <div style={{ marginTop: openTasks.length ? 8 : 0 }}>
+                <button
+                  onClick={() => setShowCompleted(v => !v)}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '4px 0',
+                    fontFamily: mono, fontSize: F.sm, color: C.dim,
+                    letterSpacing: '0.04em',
+                  }}
+                >
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    {showCompleted
+                      ? <polyline points="18 15 12 9 6 15"/>
+                      : <polyline points="6 9 12 15 18 9"/>}
+                  </svg>
+                  {showCompleted ? 'Hide' : 'Show'} completed ({doneTasks.length})
+                </button>
+                {showCompleted && doneTasks.map(task => (
+                  <div key={`${task.date}-${task.id}`}
+                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', opacity: 0.35 }}
+                  >
+                    <button
+                      onClick={() => toggleTask(task.date, task.id, task.done)}
+                      style={{
+                        width: 15, height: 15, flexShrink: 0, borderRadius: 4, padding: 0, cursor: 'pointer',
+                        border: `1.5px solid ${C.accent}`, background: C.accent,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: C.bg, lineHeight: 1 }}>✓</span>
+                    </button>
+                    <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: '1.7', color: C.muted, textDecoration: 'line-through' }}>
+                      {renderWithTags(task.text)}
+                    </div>
+                    <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, flexShrink: 0 }}>
+                      {fmtDate(task.date)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </Widget>
+    </div>
+  );
+}
+
 const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span></span>;
 const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:60,textAlign:"center"}}>dist</span>
@@ -4120,6 +4595,7 @@ export default function Dashboard() {
   const [lastSync,  setLastSync]  = useState(null);
   const [googleToken,setGoogleToken] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
+  const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
 
 
   useEffect(()=>{
@@ -4366,7 +4842,7 @@ export default function Dashboard() {
         @keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
-      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected} activeProject={activeProject} onBackFromProject={()=>setActiveProject(null)}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
@@ -4387,63 +4863,83 @@ export default function Dashboard() {
               collapsed={healthCollapsed} onToggle={toggleHealth}/>
           </div>
 
-          {/* Widgets — row on wide, flat stack on narrow */}
-          {mobile ? (
-            <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
-              <Widget label={leftWidget.label} color={leftWidget.color()}
-                collapsed={collapseMap[leftWidget.id]}
-                onToggle={toggleMap[leftWidget.id]}
-                headerRight={leftWidget.headerRight?.()} autoHeight>
-                <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
-              </Widget>
-              {rightWidgets.map(w=>(
-                <Widget key={w.id} label={w.label} color={w.color()}
-                  collapsed={collapseMap[w.id]}
-                  onToggle={toggleMap[w.id]}
-                  headerRight={w.headerRight?.()} autoHeight>
-                  <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
-                </Widget>
-              ))}
-            </div>
+          {/* Project view OR daily widgets */}
+          {activeProject ? (
+            <ProjectView
+              project={activeProject}
+              token={token}
+              userId={userId}
+              onBack={() => setActiveProject(null)}
+            />
           ) : (
-            <div style={{display:"flex", gap:10,
-              flex:"1 1 0", minHeight:0,
-              flexDirection:"row",
-              alignItems:"stretch"}}>
+            <>
+              {/* Projects nav strip — above Journal, only if projects exist */}
+              <ProjectsCard
+                date={selected}
+                token={token}
+                userId={userId}
+                onSelectProject={setActiveProject}
+              />
 
-              {/* Left column: Notes + left widget */}
-              <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
-                display:"flex", flexDirection:"column", gap:10,
-                overflowY:"auto", paddingBottom:180}}>
-                <div style={{flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column"}}>
+              {/* Widgets — row on wide, flat stack on narrow */}
+              {mobile ? (
+                <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
                   <Widget label={leftWidget.label} color={leftWidget.color()}
                     collapsed={collapseMap[leftWidget.id]}
                     onToggle={toggleMap[leftWidget.id]}
-                    headerRight={leftWidget.headerRight?.()}>
+                    headerRight={leftWidget.headerRight?.()} autoHeight>
                     <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
                   </Widget>
-                </div>
-              </div>
-
-              {/* Right widgets — column always */}
-              <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
-                display:"flex", flexDirection:"column", gap:10,
-                overflowY:"auto", paddingBottom:180}}>
-                {rightWidgets.map(w=>(
-                  <div key={w.id} style={{
-                    flex: collapseMap[w.id]?"0 0 auto":"1 1 0",
-                    minHeight: collapseMap[w.id]?0:80,
-                    overflow:"hidden"}}>
-                    <Widget label={w.label} color={w.color()}
+                  {rightWidgets.map(w=>(
+                    <Widget key={w.id} label={w.label} color={w.color()}
                       collapsed={collapseMap[w.id]}
                       onToggle={toggleMap[w.id]}
-                      headerRight={w.headerRight?.()}>
+                      headerRight={w.headerRight?.()} autoHeight>
                       <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
                     </Widget>
+                  ))}
+                </div>
+              ) : (
+                <div style={{display:"flex", gap:10,
+                  flex:"1 1 0", minHeight:0,
+                  flexDirection:"row",
+                  alignItems:"stretch"}}>
+
+                  {/* Left column: Journal */}
+                  <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
+                    display:"flex", flexDirection:"column", gap:10,
+                    overflowY:"auto", paddingBottom:180}}>
+                    <div style={{flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column"}}>
+                      <Widget label={leftWidget.label} color={leftWidget.color()}
+                        collapsed={collapseMap[leftWidget.id]}
+                        onToggle={toggleMap[leftWidget.id]}
+                        headerRight={leftWidget.headerRight?.()}>
+                        <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
+                      </Widget>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </div>
+
+                  {/* Right widgets — column always */}
+                  <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
+                    display:"flex", flexDirection:"column", gap:10,
+                    overflowY:"auto", paddingBottom:180}}>
+                    {rightWidgets.map(w=>(
+                      <div key={w.id} style={{
+                        flex: collapseMap[w.id]?"0 0 auto":"1 1 0",
+                        minHeight: collapseMap[w.id]?0:80,
+                        overflow:"hidden"}}>
+                        <Widget label={w.label} color={w.color()}
+                          collapsed={collapseMap[w.id]}
+                          onToggle={toggleMap[w.id]}
+                          headerRight={w.headerRight?.()}>
+                          <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
+                        </Widget>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
