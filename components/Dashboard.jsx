@@ -4242,7 +4242,7 @@ function ChatFloat({date, token, userId, healthKey}) {
   const [chatQueryCount, setChatQueryCount] = useState(0);
   const [chatLimitReached, setChatLimitReached] = useState(false);
   const [isPremiumUser, setIsPremiumUser] = useState(false);
-  const FREE_CHAT_LIMIT = 10;
+  const FREE_CHAT_LIMIT = 3;
 
   // Load chat query count + premium status from DB
   useEffect(() => {
@@ -4561,256 +4561,220 @@ function ChatFloat({date, token, userId, healthKey}) {
   }
 
   const hasMic = !!(window?.SpeechRecognition || window?.webkitSpeechRecognition || navigator?.mediaDevices?.getUserMedia);
-  const panelH = "72vh";
-
   return (
     <>
-      {/* Backdrop when expanded */}
+      {/* ── Fullscreen AI overlay — slides in when expanded ── */}
       {expanded && (
-        <div onClick={() => setExpanded(false)} style={{
+        <div style={{
           position: "fixed", inset: 0, zIndex: 96,
-          background: "rgba(0,0,0,0.45)",
-          animation: "fadeIn 0.18s ease",
-        }}/>
+          background: `${C.bg}f4`,
+          display: "flex", flexDirection: "column",
+          animation: "fadeIn 0.15s ease",
+          overflowY: "hidden",
+        }}>
+          {/* Top tap-to-dismiss strip (clears the sticky topbar) */}
+          <div
+            onClick={() => setExpanded(false)}
+            style={{
+              flexShrink: 0,
+              height: "calc(env(safe-area-inset-top, 0px) + 72px)",
+              cursor: "pointer",
+            }}
+          />
+
+          {/* Messages scroll area */}
+          <div style={{
+            flex: 1, overflowY: "auto",
+            display: "flex", flexDirection: "column", alignItems: "center",
+            padding: "0 10px",
+            paddingBottom: "calc(52px + max(20px, env(safe-area-inset-bottom, 20px)) + 24px)",
+          }}>
+            <div style={{
+              width: "100%", maxWidth: 1200,
+              display: "flex", flexDirection: "column", gap: 12,
+            }}>
+              {/* Free tier banner — shown instead of upgrade wall */}
+              {!isPremiumUser && (
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "8px 14px",
+                  background: chatLimitReached ? `${C.orange}18` : `${C.text}08`,
+                  border: `1px solid ${chatLimitReached ? C.orange + "40" : C.border}`,
+                  borderRadius: 12,
+                  gap: 12,
+                }}>
+                  <span style={{ fontFamily: mono, fontSize: 11, color: chatLimitReached ? C.orange : C.muted, letterSpacing: "0.06em" }}>
+                    {chatLimitReached
+                      ? `Free limit reached · ${FREE_CHAT_LIMIT}/${FREE_CHAT_LIMIT} used`
+                      : `${chatQueryCount}/${FREE_CHAT_LIMIT} free messages used`}
+                  </span>
+                  {chatLimitReached && (
+                    <button onClick={() => window.location.href = "/upgrade"} style={{
+                      background: C.accent, border: "none", borderRadius: 8,
+                      padding: "5px 14px", cursor: "pointer", flexShrink: 0,
+                      fontFamily: mono, fontSize: 10, color: "#fff",
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                    }}>Upgrade →</button>
+                  )}
+                </div>
+              )}
+
+              {/* Message bubbles */}
+              {messages.map((msg, i) => (
+                <Fragment key={i}>
+                  <div style={{
+                    display: "flex", flexDirection: "column",
+                    alignItems: msg.role === "user" ? "flex-end" : "flex-start",
+                    gap: 4,
+                  }}>
+                    <div style={{
+                      maxWidth: "72%",
+                      padding: "10px 16px",
+                      borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                      background: msg.role === "user" ? C.accent : `${C.text}0e`,
+                      color: msg.role === "user" ? "#fff" : C.text,
+                      fontFamily: msg.role === "user" ? serif : mono,
+                      fontSize: msg.role === "user" ? F.md : 13,
+                      lineHeight: 1.55,
+                      letterSpacing: msg.role === "user" ? 0 : "0.02em",
+                    }}>
+                      {msg.content === null
+                        ? <span style={{ opacity: 0.5, fontFamily: mono, fontSize: 12 }}>thinking…</span>
+                        : msg.content}
+                    </div>
+                    {msg.actions?.length > 0 && msg.summary && (
+                      <div style={{
+                        fontSize: 11, fontFamily: mono, color: C.green,
+                        background: `${C.green}15`, border: `1px solid ${C.green}30`,
+                        borderRadius: 12, padding: "3px 10px", letterSpacing: "0.04em",
+                      }}>✓ {msg.summary}</div>
+                    )}
+                  </div>
+                  {/* Suggestion chips after insight */}
+                  {msg.isInsight && messages.filter(m => m.role === "user").length === 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, paddingLeft: 2 }}>
+                      {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
+                        <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 30); }}
+                          style={{
+                            background: `${C.accent}12`, border: `1px solid ${C.accent}28`,
+                            borderRadius: 20, padding: "6px 14px",
+                            fontFamily: mono, fontSize: 11, color: C.accent,
+                            cursor: "pointer", letterSpacing: "0.04em",
+                          }}>{s}</button>
+                      ))}
+                    </div>
+                  )}
+                </Fragment>
+              ))}
+
+              {insightLoading && messages.length === 0 && (
+                <div style={{ fontFamily: mono, fontSize: 12, color: C.muted, letterSpacing: "0.06em", padding: "4px 2px" }}>
+                  thinking…
+                </div>
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Main bar + panel */}
-      {/* Outer: full-width fixed anchor, centers the card */}
+      {/* ── Floating pill — ALWAYS same capsule shape, fixed at bottom ── */}
       <div style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
         paddingLeft: 10, paddingRight: 10,
-        paddingBottom: expanded ? "max(14px, env(safe-area-inset-bottom, 14px))" : "max(16px, env(safe-area-inset-bottom, 16px))",
+        paddingBottom: "max(16px, env(safe-area-inset-bottom, 16px))",
         pointerEvents: "none",
       }}>
-      {/* Inner card: glass pill collapsed / glass panel expanded */}
-      <div style={{
-        width: "100%",
-        maxWidth: 800,
-        pointerEvents: "auto",
-        display: "flex", flexDirection: "column", alignItems: "stretch",
-        backdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
-        WebkitBackdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
-        background: expanded ? `${C.surface}f0` : `${C.surface}cc`,
-        border: `1px solid ${C.border}${expanded ? "80" : "70"}`,
-        borderRadius: expanded ? 24 : 100,
-        minHeight: expanded ? undefined : 52,
-        boxShadow: expanded
-          ? "0 8px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)"
-          : "0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
-        transition: "max-width 0.18s cubic-bezier(0.4,0,0.2,1), box-shadow 0.18s ease",
-        overflow: "hidden",
-      }}
-      onClick={!expanded ? () => inputRef.current?.focus() : undefined}>
-
-        {/* ── Expanded-only top bar with label + chevron ── */}
-        {expanded && (
-          <div style={{
-            display: "flex", alignItems: "center", gap: 10,
-            padding: "10px 20px 6px",
-            flexShrink: 0, cursor: "pointer",
-          }} onClick={() => setExpanded(false)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-              stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-              style={{ flexShrink:0, transform: "rotate(180deg)" }}>
-              <polyline points="18 15 12 9 6 15"/>
-            </svg>
-            <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-              Day Lab AI
-            </span>
-            {isPremiumUser ? (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: "#b8860b", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)",
-                borderRadius: 4, padding: "2px 6px",
-              }}>✦ premium</span>
-            ) : chatLimitReached ? (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: C.orange, background: `${C.orange}20`, border: `1px solid ${C.orange}40`,
-                borderRadius: 4, padding: "2px 6px",
-              }}>free · {chatQueryCount}/{FREE_CHAT_LIMIT} used</span>
-            ) : (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                color: C.muted, background: `${C.text}0a`, borderRadius: 4, padding: "2px 6px",
-              }}>{chatQueryCount}/{FREE_CHAT_LIMIT} free</span>
-            )}
-          </div>
-        )}
-
-        {/* ── Expandable chat area ── */}
-        {expanded && (
-          <div style={{
-            width: "100%",
-            display: "flex", flexDirection: "column", alignItems: "center",
-            position: "relative",
-          }}>
-          <div style={{
-            width: "100%", maxWidth: 640,
-            overflowY: "auto",
-            padding: "12px 16px 16px",
-            display: "flex", flexDirection: "column",
-            gap: 12,
-            scrollBehavior: "smooth",
-            maxHeight: `calc(${panelH} - 60px)`,
-          }}>
-            {/* Message bubbles — chips injected after the insight bubble */}
-            {messages.map((msg, i) => (
-              <Fragment key={i}>
-                <div style={{
-                  display: "flex", flexDirection: "column",
-                  alignItems: msg.role === "user" ? "flex-end" : "flex-start",
-                  gap: 4,
-                }}>
-                  <div style={{
-                    maxWidth: "85%",
-                    padding: "10px 14px",
-                    borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                    background: msg.role === "user" ? C.accent : `${C.text}0d`,
-                    color: msg.role === "user" ? "#fff" : C.text,
-                    fontFamily: msg.role === "user" ? serif : mono,
-                    fontSize: msg.role === "user" ? F.md : 13,
-                    lineHeight: 1.55,
-                    letterSpacing: msg.role === "user" ? 0 : "0.02em",
-                  }}>
-                    {msg.content === null ? (
-                      <span style={{ opacity: 0.5, fontFamily: mono, fontSize: 12 }}>thinking…</span>
-                    ) : msg.content}
-                  </div>
-                  {msg.actions?.length > 0 && msg.summary && (
-                    <div style={{
-                      fontSize: 11, fontFamily: mono, color: C.green,
-                      background: `${C.green}15`, border: `1px solid ${C.green}30`,
-                      borderRadius: 12, padding: "3px 10px", letterSpacing: "0.04em",
-                    }}>✓ {msg.summary}</div>
-                  )}
-                </div>
-                {/* Suggestion chips — rendered after the insight bubble, before any user message */}
-                {msg.isInsight && messages.filter(m => m.role === "user").length === 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "flex-start", paddingLeft: 4 }}>
-                    {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
-                      <button key={s} onClick={() => { setInput(s); setTimeout(() => inputRef.current?.focus(), 50); }} style={{
-                        background: `${C.accent}12`, border: `1px solid ${C.accent}28`,
-                        borderRadius: 20, padding: "5px 12px",
-                        fontFamily: mono, fontSize: 11, color: C.accent,
-                        cursor: "pointer", letterSpacing: "0.04em",
-                      }}>{s}</button>
-                    ))}
-                  </div>
-                )}
-              </Fragment>
-            ))}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {/* Free tier upgrade wall */}
-          {chatLimitReached && (
-            <div style={{
-              position: "absolute", inset: 0, zIndex: 2,
-              backdropFilter: "blur(8px)", WebkitBackdropFilter: "blur(8px)",
-              background: "rgba(0,0,0,0.55)",
-              display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-              gap: 12, padding: 24,
-            }}>
-              <span style={{ fontFamily: mono, fontSize: 13, color: C.text, letterSpacing: "0.06em", textTransform: "uppercase" }}>
-                {FREE_CHAT_LIMIT} free queries used
-              </span>
-              <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim, lineHeight: 1.6, textAlign: "center", maxWidth: 280 }}>
-                Unlock daily AI insights, ask questions about your data, and add anything to Day Lab by voice.
-              </span>
-              <button onClick={() => window.location.href = "/upgrade"} style={{
-                background: C.accent, border: "none", borderRadius: 8,
-                padding: "10px 24px", cursor: "pointer",
-                fontFamily: mono, fontSize: F.sm, color: "#fff",
-                letterSpacing: "0.08em", textTransform: "uppercase", marginTop: 4,
-              }}>Upgrade to Premium →</button>
-            </div>
-          )}
-          </div>
-        )}
-
-
-
-        {/* ── Input row — fills pill width when collapsed, panel width when expanded ── */}
         <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          width: "100%",
-          padding: expanded
-            ? (mobile ? "8px 16px 8px 20px" : "8px 14px 8px 20px")
-            : (mobile ? "14px 10px 14px 16px" : "14px 10px 14px 18px"),
-          paddingBottom: expanded ? (mobile ? "10px" : "8px") : "14px",
-          boxSizing: "border-box",
-        }}>
+          width: "100%", maxWidth: 800,
+          pointerEvents: "auto",
+          display: "flex", flexDirection: "row", alignItems: "center",
+          backdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
+          WebkitBackdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
+          background: `${C.surface}cc`,
+          border: `1px solid ${C.border}70`,
+          borderRadius: 100,
+          minHeight: 52,
+          boxShadow: expanded
+            ? "0 8px 32px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.07)"
+            : "0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
+          overflow: "hidden",
+          transition: "box-shadow 0.18s ease",
+        }}
+        onClick={!expanded ? () => inputRef.current?.focus() : undefined}>
 
-
-          {/* Text input */}
+          {/* ── Input row ── */}
           <div style={{
-            flex: 1,
-            background: expanded ? C.well : "transparent",
-            borderRadius: expanded ? (mobile ? 22 : 18) : 0,
-            padding: expanded ? (mobile ? "9px 12px 9px 16px" : "7px 10px 7px 14px") : "0",
-            display: "flex", alignItems: "center", gap: 6,
+            display: "flex", alignItems: "center", gap: 8,
+            width: "100%",
+            padding: mobile ? "14px 10px 14px 16px" : "14px 10px 14px 18px",
+            boxSizing: "border-box",
           }}>
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-              onFocus={() => { if (!expanded) setExpanded(true); }}
-              placeholder={busy ? "…" : "Ask or add anything…"}
-              disabled={busy}
-              rows={1}
-              style={{
-                flex: 1, background: "transparent", border: "none", outline: "none",
-                fontFamily: serif, fontSize: F.md, color: C.text,
-                padding: "0", margin: "0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
-                resize: "none", overflow: "hidden", maxHeight: "120px",
-                display: "block",
-              }}
-            />
+            {/* Text input well */}
+            <div style={{
+              flex: 1,
+              background: "transparent",
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+                onFocus={() => { if (!expanded) setExpanded(true); }}
+                placeholder={busy ? "…" : "Ask or add anything…"}
+                disabled={busy || (expanded && chatLimitReached && !isPremiumUser)}
+                rows={1}
+                style={{
+                  flex: 1, background: "transparent", border: "none", outline: "none",
+                  fontFamily: serif, fontSize: F.md, color: C.text,
+                  padding: "0", margin: "0", opacity: (busy || (expanded && chatLimitReached && !isPremiumUser)) ? 0.4 : 1,
+                  lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px",
+                  display: "block",
+                }}
+              />
 
-            {/* Send or mic */}
-            {input.trim() ? (
-              <button onClick={send} disabled={busy} style={{
-                background: C.accent, border: "none", borderRadius: "50%",
-                width: 32, height: 32, cursor: busy ? "default" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
-              }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="19" x2="12" y2="5"/>
-                  <polyline points="5 12 12 5 19 12"/>
-                </svg>
-              </button>
-            ) : hasMic ? (
-              <button onClick={transcribing ? undefined : toggleMic} style={{
-                background: transcribing ? `${C.accent}22` : listening ? `${C.red}22` : "transparent",
-                border: "none", borderRadius: "50%",
-                width: 32, height: 32, cursor: transcribing ? "default" : "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, transition: "background 0.2s",
-              }}>
-                {transcribing ? (
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${C.accent}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/>
-                ) : listening ? (
-                  <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.red, boxShadow: `0 0 0 3px ${C.red}30`, animation: "pulse 1.2s ease-in-out infinite" }}/>
-                ) : (
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill={C.muted}>
-                    <path d="M12 1a4 4 0 0 1 4 4v6a4 4 0 0 1-8 0V5a4 4 0 0 1 4-4z"/>
-                    <path d="M19 10a1 1 0 0 0-2 0 5 5 0 0 1-10 0 1 1 0 0 0-2 0 7 7 0 0 0 6 6.92V19H9a1 1 0 0 0 0 2h6a1 1 0 0 0 0-2h-2v-2.08A7 7 0 0 0 19 10z"/>
+              {/* Send or mic */}
+              {input.trim() ? (
+                <button onClick={send} disabled={busy} style={{
+                  background: C.accent, border: "none", borderRadius: "50%",
+                  width: 32, height: 32, cursor: busy ? "default" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="19" x2="12" y2="5"/>
+                    <polyline points="5 12 12 5 19 12"/>
                   </svg>
-                )}
-              </button>
-            ) : null}
+                </button>
+              ) : hasMic ? (
+                <button onClick={transcribing ? undefined : toggleMic} style={{
+                  background: transcribing ? `${C.accent}22` : listening ? `${C.red}22` : "transparent",
+                  border: "none", borderRadius: "50%",
+                  width: 32, height: 32, cursor: transcribing ? "default" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, transition: "background 0.2s",
+                }}>
+                  {transcribing ? (
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${C.accent}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/>
+                  ) : listening ? (
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.red, boxShadow: `0 0 0 3px ${C.red}30`, animation: "pulse 1.2s ease-in-out infinite" }}/>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="9" y="2" width="6" height="11" rx="3"/>
+                      <path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/>
+                    </svg>
+                  )}
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
       </div>
-    </div>{/* end outer anchor */}
     </>
-  );
-}
+  )}
 
 
 // ─── Widget definitions ───────────────────────────────────────────────────────
@@ -6542,10 +6506,10 @@ export default function Dashboard() {
             return (
               <>
                 {/* ── Projects strip ↔ Search pill (crossfade) ── */}
-                <div style={{ position: 'relative', flexShrink: 0, height: 40, overflow: 'visible' }}>
+                <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible' }}>
                   {/* Projects bar — fades out when search open */}
                   <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0,
+                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
                     opacity: searchOpen ? 0 : 1,
                     pointerEvents: searchOpen ? 'none' : 'auto',
                     transition: 'opacity 0.18s ease',
