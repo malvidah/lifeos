@@ -4214,21 +4214,21 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
         fontFamily: mono, fontSize: 9, letterSpacing: '0.1em',
         textTransform: 'uppercase', color: C.dim, flexShrink: 0, paddingRight: 2,
       }}>Projects</span>
-      {/* Everything card — always first, grey */}
+      {/* ALL card — always first, lighter amber tint */}
       <button
         onClick={() => onSelectProject('__everything__')}
         style={{
-          background: 'transparent',
-          border: `1px solid ${C.border2}`,
+          background: C.accent + '11',
+          border: `1px solid ${C.accent}33`,
           borderRadius: 20, padding: '2px 10px',
-          fontFamily: mono, fontSize: F.sm, color: C.muted,
-          cursor: 'pointer', opacity: 0.55,
-          transition: 'opacity 0.15s, color 0.15s',
+          fontFamily: mono, fontSize: F.sm, color: C.accent + 'aa',
+          cursor: 'pointer', opacity: 1,
+          transition: 'opacity 0.15s, color 0.15s, background 0.15s',
           letterSpacing: '0.03em', lineHeight: '1.8',
         }}
-        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = C.text; }}
-        onMouseLeave={e => { e.currentTarget.style.opacity = '0.55'; e.currentTarget.style.color = C.muted; }}
-      >Everything</button>
+        onMouseEnter={e => { e.currentTarget.style.background = C.accent + '22'; e.currentTarget.style.color = C.accent; }}
+        onMouseLeave={e => { e.currentTarget.style.background = C.accent + '11'; e.currentTarget.style.color = C.accent + 'aa'; }}
+      >ALL</button>
       {names.map(name => {
         const active = todayTags.has(name);
         return (
@@ -4375,8 +4375,8 @@ function ProjectView({ project, token, userId, onBack }) {
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
 
-      {/* Overview card: ← ProjectName + editable description */}
-      {(
+      {/* Overview card — hidden for Everything; just a back arrow before ALL ENTRIES for that */}
+      {project === '__everything__' ? null : (
         <Card>
           {/* Back arrow + project name — tappable header row */}
           <div style={{
@@ -4401,7 +4401,7 @@ function ProjectView({ project, token, userId, onBack }) {
               fontFamily: serif, fontSize: F.md, letterSpacing: '-0.01em',
               color: C.text, flex: 1,
             }}>
-              {project === '__everything__' ? 'Everything' : tagDisplayName(project)}
+              {tagDisplayName(project)}
             </span>
           </div>
           {/* Description — click to edit */}
@@ -4453,10 +4453,21 @@ function ProjectView({ project, token, userId, onBack }) {
       {/* Journal Entries */}
       <Widget
         label={entries?.journalEntries?.length
-          ? (project === '__everything__' ? `All Entries · ${entries.journalEntries.length}` : `Entries · ${entries.journalEntries.length}`)
-          : (project === '__everything__' ? 'All Entries' : 'Entries')}
+          ? (project === '__everything__' ? `ALL ENTRIES · ${entries.journalEntries.length}` : `Entries · ${entries.journalEntries.length}`)
+          : (project === '__everything__' ? 'ALL ENTRIES' : 'Entries')}
         color={C.accent} autoHeight
       >
+        {/* Back arrow for Everything — sits above entries */}
+        {project === '__everything__' && (
+          <button onClick={onBack} style={{
+            background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center',
+            gap:6, padding:'0 0 10px 0', color:C.muted,
+          }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
+        )}
         {entries === null ? loadingCards
           : journalByDate.length === 0 ? (
             <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
