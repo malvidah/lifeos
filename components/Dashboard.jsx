@@ -2223,13 +2223,34 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
               {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
               <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
             </div>
-            {/* Selected date pill — centered, matches day view */}
-            <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
-              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
-                color:pillColor,background:pillColor+'1A',borderRadius:6,padding:'4px 10px'}}>
-                {selPillLabel}
-              </span>
-            </div>
+            {collapsed ? (
+              /* Collapsed month: ‹ MAR 2026 › navigation */
+              <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
+                display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
+                <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setMonth(n.getMonth()-1);onSelect(toKey(n));}}
+                  style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                    fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
+                <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
+                  color:C.accent,background:C.accent+'1A',borderRadius:6,padding:'4px 10px'}}>
+                  {SEL_MONTHS[selDateObj.getMonth()].slice(0,3).toUpperCase()} {selDateObj.getFullYear()}
+                </span>
+                <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setMonth(n.getMonth()+1);onSelect(toKey(n));}}
+                  style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                    fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
+              </div>
+            ) : (
+              /* Expanded month: selected date pill */
+              <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
+                <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
+                  color:pillColor,background:pillColor+'1A',borderRadius:6,padding:'4px 10px'}}>
+                  {selPillLabel}
+                </span>
+              </div>
+            )}
             {/* M/D toggle — right */}
             <div style={{marginLeft:'auto',display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
               <button onClick={()=>onCalViewChange('month')}
@@ -3788,6 +3809,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
   const skipBlurRef=useRef(false);
   const longPressTimer=useRef(null);
+  const clickCaretRef=useRef(null);
   const [focusedId, setFocusedId] = useState(null);
   const [selMode, setSelMode] = useState(false);
   const [selIds, setSelIds] = useState(new Set());
@@ -3875,7 +3897,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
             {/* Text area — key changes edit↔view so React always creates a fresh DOM node,
                 preventing reconciliation from merging our manually-set innerHTML with
                 React-rendered children (which caused the doubling bug) */}
-            <div style={{flex:1,minWidth:0}}
+            <div style={{flex:1,minWidth:0,minHeight:'1.7em',lineHeight:1.7}}
               onTouchStart={selMode?undefined:()=>{
                 longPressTimer.current=setTimeout(()=>{longPressTimer.current=null;enterSelMode(row.id);},500);
               }}
@@ -3911,10 +3933,17 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   </div>
                   {/* Actual textarea — transparent so overlay shows, but caret+selection are native */}
                   <textarea
-                    ref={el=>{if(el){el.style.height='0';el.style.height=el.scrollHeight+'px';}}}
-                    autoFocus
+                    ref={el=>{
+                      if(el){
+                        el.style.height='0';
+                        el.style.height=el.scrollHeight+'px';
+                        el.focus();
+                        const cp=clickCaretRef.current??row.text.length;
+                        clickCaretRef.current=null;
+                        requestAnimationFrame(()=>{try{el.setSelectionRange(cp,cp);}catch(_){}});
+                      }
+                    }}
                     value={row.text}
-                    rows={1}
                     onChange={e=>{
                       const text=e.target.value;
                       const el=e.target; el.style.height='0'; el.style.height=el.scrollHeight+'px';
@@ -3977,7 +4006,20 @@ function Tasks({date,token,userId,taskFilter='all'}) {
               ):(
                 /* VIEW MODE — fresh DOM node guaranteed by key change from edit mode */
                 <div key={`v${row.id}`}
-                  onPointerDown={e=>{e._taskDownX=e.clientX;e._taskDownY=e.clientY;}}
+                  onPointerDown={e=>{
+                    e._taskDownX=e.clientX;e._taskDownY=e.clientY;
+                    try {
+                      let range=null;
+                      if(document.caretRangeFromPoint) range=document.caretRangeFromPoint(e.clientX,e.clientY);
+                      else if(document.caretPositionFromPoint){const cp=document.caretPositionFromPoint(e.clientX,e.clientY);if(cp){range=document.createRange();range.setStart(cp.offsetNode,cp.offset);}}
+                      if(range){
+                        let pos=0,found=false;
+                        function walkNodes(node){if(found)return;if(node.nodeType===Node.TEXT_NODE){if(node===range.startContainer){pos+=range.startOffset;found=true;return;}pos+=node.textContent.length;}else{for(const c of node.childNodes)walkNodes(c);}}
+                        walkNodes(e.currentTarget);
+                        clickCaretRef.current=found?pos:null;
+                      }
+                    }catch(_){clickCaretRef.current=null;}
+                  }}
                   onPointerUp={e=>{
                     const dx=e.clientX-(e._taskDownX??e.clientX),dy=e.clientY-(e._taskDownY??e.clientY);
                     if(Math.sqrt(dx*dx+dy*dy)<5)setFocusedId(row.id);
@@ -5111,7 +5153,7 @@ function fmtDate(ds) {
 }
 
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
-function HealthAllMeals({ token, userId }) {
+function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
   const [allMeals, setAllMeals] = useState(null);
   useEffect(() => {
     if (!token || !userId) return;
@@ -5182,7 +5224,7 @@ function HealthAllMeals({ token, userId }) {
 }
 
 // ─── HealthAllActivities ──────────────────────────────────────────────────────
-function HealthAllActivities({ token, userId }) {
+function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
   const [rows, setRows] = useState(null);
   const [estimating, setEstimating] = useState(new Set());
 
@@ -5493,7 +5535,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
       </span>}
     >
-      <HealthAllMeals token={token} userId={userId} />
+      <HealthAllMeals token={token} userId={userId} onSelectDate={onSelectDate} onBack={onBack} />
     </Widget>
   );
 
@@ -5505,7 +5547,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
       </span>}
     >
-      <HealthAllActivities token={token} userId={userId} />
+      <HealthAllActivities token={token} userId={userId} onSelectDate={onSelectDate} onBack={onBack} />
     </Widget>
   );
 
