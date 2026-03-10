@@ -4828,7 +4828,14 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingBottom:200 }}>
-      {/* Health strip — back arrow replaces chevron, no collapse */}
+      {/* ── Top nav strip */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px' }}>
+        <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:C.green+'99', flexShrink:0 }} aria-label="Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:C.green }}>Health</span>
+      </div>
+      {/* Health strip — no collapse */}
       <HealthStrip
         date={viewDate} token={token} userId={userId}
         onHealthChange={onHealthChange || (()=>{})}
@@ -4836,7 +4843,6 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
         onSyncStart={startSync || (()=>{})}
         onSyncEnd={endSync || (()=>{})}
         collapsed={false} onToggle={null}
-        backAction={onBack}
         defaultExpandedMetric={expandedMetric}
         onExpandedMetricChange={handleMetricChange}
       />
@@ -4852,32 +4858,6 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
         <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>All Activities</div>
         <AllActivities />
       </Card>
-
-      {/* Journal Entries */}
-      <Widget
-        label={journalEntries.length ? `Entries · ${journalEntries.length}` : 'Entries'}
-        color={C.accent} autoHeight
-      >
-        {entries === null ? (
-          <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
-        ) : journalEntries.length === 0 ? (
-          <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health journal entries yet.</div>
-        ) : (
-          <div>
-            {journalByDate.map(([date, lines], dateIdx) => (
-              <div key={date}>
-                {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
-                <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
-                {lines.map((entry, i) => (
-                  <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
-                    {renderRichLine(entry.text)}
-                  </div>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
-      </Widget>
 
       {/* Tasks */}
       <Widget
@@ -4913,6 +4893,32 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                   </div>
                 ))}
                 {pvTaskFilter !== 'open' && done.length > 0 && <div style={{height:1,background:C.border,margin:'6px 0'}}/>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Widget>
+
+      {/* Journal Entries */}
+      <Widget
+        label={journalEntries.length ? `Entries · ${journalEntries.length}` : 'Entries'}
+        color={C.accent} autoHeight
+      >
+        {entries === null ? (
+          <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
+        ) : journalEntries.length === 0 ? (
+          <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health journal entries yet.</div>
+        ) : (
+          <div>
+            {journalByDate.map(([date, lines], dateIdx) => (
+              <div key={date}>
+                {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
+                <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
+                {lines.map((entry, i) => (
+                  <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
+                    {renderRichLine(entry.text)}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
@@ -5122,45 +5128,25 @@ function ProjectView({ project, token, userId, onBack }) {
     </div>
   );
 
-  return (
-    <div style={{
-      flex: 1, minHeight: 0, overflow: 'auto',
-      padding: 10, paddingBottom: 200,
-      display: 'flex', flexDirection: 'column', gap: 10,
-    }}>
+  const _pcol = project === '__everything__' ? C.accent : projectColor(project);
 
-      {/* Overview card — hidden for Everything; shrinks to content height */}
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingBottom: 200 }}>
+
+      {/* ── Top nav strip — back arrow + project name, bare like projects chip bar ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px' }}>
+        <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:_pcol+'99', flexShrink:0 }} aria-label="Back">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:_pcol }}>
+          {project === '__everything__' ? 'ALL' : tagDisplayName(project)}
+        </span>
+      </div>
+
+      {/* Overview card — description only, no internal header; hidden for Everything */}
       {project === '__everything__' ? null : (
         <div style={{ flexShrink: 0 }}>
         <Card>
-          {/* Back arrow + project name — tappable header row */}
-          {(() => { const pcol = projectColor(project); return (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 8,
-            padding: '11px 14px', borderBottom: `1px solid ${pcol}30`,
-            flexShrink: 0,
-          }}>
-            <button
-              onClick={onBack}
-              style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                display: 'flex', alignItems: 'center', padding: '0 2px',
-                color: pcol + '99', flexShrink: 0,
-              }}
-              aria-label="Back"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <polyline points="15 18 9 12 15 6"/>
-              </svg>
-            </button>
-            <span style={{
-              fontFamily: mono, fontSize: F.sm, letterSpacing: '0.05em',
-              textTransform: 'uppercase', color: pcol, flex: 1,
-            }}>
-              {tagDisplayName(project)}
-            </span>
-          </div>
-          ); })()}
           {/* Description — click to edit */}
           <div style={{ padding: 16 }}>
             {editingDesc ? (
@@ -5246,78 +5232,6 @@ function ProjectView({ project, token, userId, onBack }) {
         </div>
       )}
 
-      {/* Journal Entries */}
-      <Widget
-        label={entries?.journalEntries?.length
-          ? (project === '__everything__' ? `ALL ENTRIES · ${entries.journalEntries.length}` : `Entries · ${entries.journalEntries.length}`)
-          : (project === '__everything__' ? 'ALL ENTRIES' : 'Entries')}
-        color={C.accent} autoHeight
-        headerLeft={project === '__everything__' ? (
-          <button onClick={onBack} style={{
-            background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center',
-            padding:'0 4px 0 0', color:C.muted, flexShrink:0,
-          }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-          </button>
-        ) : null}
-      >
-        {entries === null ? loadingCards
-          : journalByDate.length === 0 ? (
-            <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
-              {project === '__everything__' ? 'No journal entries yet.' : `No journal entries tagged #${project} yet.`}
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {journalByDate.map(([date, lines], dateIdx) => {
-                // Split lines into blocks: new block when lineIndex gap > 1
-                const blocks = [];
-                let cur = [];
-                lines.forEach((entry, i) => {
-                  if (i === 0 || entry.lineIndex === lines[i-1].lineIndex + 1) {
-                    cur.push(entry);
-                  } else {
-                    if (cur.length) blocks.push(cur);
-                    cur = [entry];
-                  }
-                });
-                if (cur.length) blocks.push(cur);
-                return (
-                  <div key={date}>
-                    <div style={{
-                      fontFamily: mono, fontSize: 10, color: C.muted,
-                      letterSpacing: '0.06em', textTransform: 'uppercase',
-                      marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 8,
-                    }}>{fmtDate(date)}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      {blocks.map((block, bi) => (
-                        <div key={bi} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                          {block.map(entry => (
-                            <EntryLine
-                              key={`${date}-${entry.lineIndex}`}
-                              entry={entry} date={date}
-                              editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
-                              editText={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? editingEntry.text : ''}
-                              onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
-                              onChangeEdit={t => setEditingEntry(prev => ({...prev, text: t}))}
-                              onSave={async () => { await saveJournalEdit(date, entry.lineIndex, editingEntry.text); setEditingEntry(null); }}
-                              dimTag={project === '__everything__' ? null : project}
-                            />
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                    {/* Thin separator after each date group */}
-                    <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, marginBottom: 4 }}/>
-                  </div>
-                );
-              })}
-            </div>
-          )
-        }
-      </Widget>
-
       {/* Tasks — grouped by date with separators */}
       <Widget
         label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
@@ -5384,6 +5298,69 @@ function ProjectView({ project, token, userId, onBack }) {
 
           </div>
         )}
+      </Widget>
+
+      {/* Journal Entries */}
+      <Widget
+        label={entries?.journalEntries?.length
+          ? (project === '__everything__' ? `ALL ENTRIES · ${entries.journalEntries.length}` : `Entries · ${entries.journalEntries.length}`)
+          : (project === '__everything__' ? 'ALL ENTRIES' : 'Entries')}
+        color={C.accent} autoHeight
+        headerLeft={null}
+      >
+        {entries === null ? loadingCards
+          : journalByDate.length === 0 ? (
+            <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
+              {project === '__everything__' ? 'No journal entries yet.' : `No journal entries tagged #${project} yet.`}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {journalByDate.map(([date, lines], dateIdx) => {
+                // Split lines into blocks: new block when lineIndex gap > 1
+                const blocks = [];
+                let cur = [];
+                lines.forEach((entry, i) => {
+                  if (i === 0 || entry.lineIndex === lines[i-1].lineIndex + 1) {
+                    cur.push(entry);
+                  } else {
+                    if (cur.length) blocks.push(cur);
+                    cur = [entry];
+                  }
+                });
+                if (cur.length) blocks.push(cur);
+                return (
+                  <div key={date}>
+                    <div style={{
+                      fontFamily: mono, fontSize: 10, color: C.muted,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 8,
+                    }}>{fmtDate(date)}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {blocks.map((block, bi) => (
+                        <div key={bi} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                          {block.map(entry => (
+                            <EntryLine
+                              key={`${date}-${entry.lineIndex}`}
+                              entry={entry} date={date}
+                              editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
+                              editText={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? editingEntry.text : ''}
+                              onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
+                              onChangeEdit={t => setEditingEntry(prev => ({...prev, text: t}))}
+                              onSave={async () => { await saveJournalEdit(date, entry.lineIndex, editingEntry.text); setEditingEntry(null); }}
+                              dimTag={project === '__everything__' ? null : project}
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Thin separator after each date group */}
+                    <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, marginBottom: 4 }}/>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        }
       </Widget>
     </div>
   );
