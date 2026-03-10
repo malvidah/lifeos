@@ -3756,23 +3756,20 @@ function Tasks({date,token,userId,taskFilter='all'}) {
           </button>
           <div style={{ flex:1, minWidth:0 }}>
             {focusedId === row.id ? (
-              // contenteditable: real DOM node, cursor & selection work natively
-              // Colored #tag spans set on focus; textContent read on input/keydown
+              // contenteditable for edit mode — pill chips matching view mode
               <div
                 ref={el => {
                   if (!el) return;
-                  // Only initialize innerHTML on first mount — not on every re-render.
-                  // Inline arrow refs fire on every render (new fn identity); guard with
-                  // refs.current check so we don't clobber the user's live edits.
+                  // Guard: only init innerHTML on genuine first mount of this element
                   if (refs.current[row.id] === el) return;
                   refs.current[row.id] = el;
-                  // Set innerHTML with colored spans
                   const esc = t => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
                   el.innerHTML = row.text
-                    ? esc(row.text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g,
-                        (m, tag) => `<span style="color:${projectColor(tag)}">${m}</span>`)
+                    ? esc(row.text).replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) => {
+                        const col = projectColor(tag);
+                        return `<span style="color:${col};background:${col}20;border:1px solid ${col}40;border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;line-height:1.6;vertical-align:middle;display:inline-block">${m}</span>`;
+                      })
                     : '';
-                  // Move cursor to end
                   requestAnimationFrame(() => {
                     el.focus();
                     const range = document.createRange();
@@ -3785,50 +3782,49 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                 contentEditable
                 suppressContentEditableWarning
                 onInput={e => {
+                  // Use functional updater — avoids stale closure from render-time 'safe'
                   const text = e.currentTarget.textContent;
-                  setRows(safe.map(r => r.id === row.id ? {...r, text} : r));
+                  setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));
                 }}
                 onKeyDown={e => {
-                  // Read textContent (not innerHTML) for all logic
                   const el = e.currentTarget;
                   const text = el.textContent;
                   const sel = window.getSelection();
                   const range = sel.rangeCount ? sel.getRangeAt(0) : null;
+                  const getOffset = () => {
+                    if (!range) return text.length;
+                    const pre = range.cloneRange();
+                    pre.selectNodeContents(el); pre.setEnd(range.startContainer, range.startOffset);
+                    return pre.toString().length;
+                  };
                   if (e.key === 'Enter') {
                     e.preventDefault();
-                    // Get caret offset in plain text
-                    let caretOffset = 0;
-                    if (range) {
-                      const pre = range.cloneRange();
-                      pre.selectNodeContents(el); pre.setEnd(range.startContainer, range.startOffset);
-                      caretOffset = pre.toString().length;
-                    }
+                    const caretOffset = getOffset();
                     const before = text.slice(0, caretOffset);
                     const after  = text.slice(caretOffset);
                     const newRow = {id: Date.now(), text: after, done: false};
-                    const newRows = safe.map(r => r.id === row.id ? {...r, text: before} : r);
-                    newRows.splice(idx + 1, 0, newRow);
-                    setRows(newRows);
+                    // Functional updater — immune to stale closure
+                    setRows(prev => {
+                      const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
+                      const nr = ps.map(r => r.id === row.id ? {...r, text: before} : r);
+                      nr.splice(idx + 1, 0, newRow);
+                      return nr;
+                    });
                     setFocusedId(newRow.id);
                   } else if (e.key === 'Backspace') {
-                    let caretOffset = 0;
-                    if (range) {
-                      const pre = range.cloneRange();
-                      pre.selectNodeContents(el); pre.setEnd(range.startContainer, range.startOffset);
-                      caretOffset = pre.toString().length;
-                    }
+                    const caretOffset = getOffset();
+                    const prevRow = safe[idx - 1];
                     if (caretOffset === 0 && idx > 0) {
                       e.preventDefault();
-                      const prev = safe[idx - 1];
-                      const mergedText = prev.text + text;
-                      const newRows = safe.filter(r => r.id !== row.id).map(r => r.id === prev.id ? {...r, text: mergedText} : r);
-                      setRows(newRows);
-                      setFocusedId(prev.id);
-                      // Cursor will be set to prev.text.length in next focus ref callback
-                      refs.current['_pendingCaret'] = prev.text.length;
+                      const mergedText = prevRow.text + text;
+                      setRows(prev => {
+                        const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
+                        return ps.filter(r => r.id !== row.id).map(r => r.id === prevRow.id ? {...r, text: mergedText} : r);
+                      });
+                      setFocusedId(prevRow.id);
                     } else if (text === '' && safe.length > 1) {
                       e.preventDefault();
-                      setRows(safe.filter(r => r.id !== row.id));
+                      setRows(prev => (Array.isArray(prev) ? prev : []).filter(r => r.id !== row.id));
                       setFocusedId(safe[idx - 1]?.id ?? null);
                     }
                   } else if (e.key === 'Escape') {
@@ -3836,9 +3832,12 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   }
                 }}
                 onBlur={e => {
+                  // Save text on blur using functional updater
                   const text = e.currentTarget.textContent;
-                  setRows(safe.map(r => r.id === row.id ? {...r, text} : r));
-                  setFocusedId(null);
+                  setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));
+                  // Defer focusedId clear so that concurrent setFocusedId(newRow.id) from
+                  // Enter/Backspace (which fires before blur) wins via functional check
+                  setTimeout(() => setFocusedId(prev => prev === row.id ? null : prev), 0);
                 }}
                 style={{
                   fontFamily: serif, fontSize: F.md, lineHeight: 1.7,
