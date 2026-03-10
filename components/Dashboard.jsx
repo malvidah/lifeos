@@ -5143,92 +5143,86 @@ function ProjectView({ project, token, userId, onBack }) {
         </span>
       </div>
 
-      {/* Overview card — description only, no internal header; hidden for Everything */}
+      {/* Description — bare on background, no card chrome */}
       {project === '__everything__' ? null : (
-        <div style={{ flexShrink: 0 }}>
-        <Card>
-          {/* Description — click to edit */}
-          <div style={{ padding: 16 }}>
-            {editingDesc ? (
-              <textarea
-                ref={descRef}
-                value={descVal}
-                onChange={e => { setDescVal(e.target.value); e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
-                onBlur={() => {
-                  setEditingDesc(false);
-                  const updated = { ...(projectsMeta || {}), [project]: { ...meta, description: descVal } };
-                  setProjectsMeta(updated, { skipHistory: true });
-                }}
-                onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
-                onPaste={async e => {
-                  const items = e.clipboardData?.items;
-                  if (!items) return;
-                  for (const item of items) {
-                    if (item.type.startsWith('image/')) {
-                      e.preventDefault();
-                      const file = item.getAsFile();
-                      if (!file) continue;
-                      const url = await uploadImageFile(file, token);
-                      if (!url) continue;
-                      const ta = descRef.current;
-                      const pos = ta.selectionStart;
-                      const marker = `\n[img:${url}]\n`;
-                      const next = descVal.slice(0, pos) + marker + descVal.slice(pos);
-                      setDescVal(next);
-                      requestAnimationFrame(() => { ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; });
-                      break;
-                    }
+        <div style={{ padding: '0 4px' }}>
+          {editingDesc ? (
+            <textarea
+              ref={descRef}
+              value={descVal}
+              onChange={e => { setDescVal(e.target.value); e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
+              onBlur={() => {
+                setEditingDesc(false);
+                const updated = { ...(projectsMeta || {}), [project]: { ...meta, description: descVal } };
+                setProjectsMeta(updated, { skipHistory: true });
+              }}
+              onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
+              onPaste={async e => {
+                const items = e.clipboardData?.items;
+                if (!items) return;
+                for (const item of items) {
+                  if (item.type.startsWith('image/')) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (!file) continue;
+                    const url = await uploadImageFile(file, token);
+                    if (!url) continue;
+                    const ta = descRef.current;
+                    const pos = ta.selectionStart;
+                    const marker = `\n[img:${url}]\n`;
+                    const next = descVal.slice(0, pos) + marker + descVal.slice(pos);
+                    setDescVal(next);
+                    requestAnimationFrame(() => { ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; });
+                    break;
                   }
-                }}
-                onDrop={async e => {
-                  const files = Array.from(e.dataTransfer?.files||[]).filter(f=>f.type.startsWith('image/'));
-                  if (!files.length) return;
-                  e.preventDefault();
-                  const url = await uploadImageFile(files[0], token);
-                  if (!url) return;
-                  const marker = `\n[img:${url}]\n`;
-                  setDescVal(v => v + marker);
-                  setTimeout(() => { const ta=descRef.current; if(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';} }, 50);
-                }}
-                onDragOver={e => e.preventDefault()}
-                style={{
-                  width: '100%', border: 'none', outline: 'none', background: 'transparent',
-                  color: C.text, fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-                  resize: 'none', minHeight: 60, padding: 0, caretColor: C.accent,
-                }}
-              />
-            ) : (
-              <div
-                style={{
-                  minHeight: 0, cursor: 'text',
-                  fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-                  color: meta.description ? C.text : C.dim,
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                }}
-                onClick={() => {
-                  setDescVal(meta.description || '');
-                  setEditingDesc(true);
-                  setTimeout(() => {
-                    if (descRef.current) {
-                      descRef.current.focus();
-                      descRef.current.style.height = 'auto';
-                      descRef.current.style.height = descRef.current.scrollHeight + 'px';
-                    }
-                  }, 10);
-                }}
-              >
-                {meta.description
-                  ? meta.description.split('\n').map((line, i) => {
-                      const imgM = line.match(/^\[img:([^\]]+)\]$/);
-                      if (imgM) return <div key={i} style={{margin:'4px 0',lineHeight:0}}><img src={imgM[1]} alt="" style={{maxWidth:'100%',maxHeight:320,borderRadius:8,display:'block'}}/></div>;
-                      return <div key={i} style={{lineHeight:'1.7'}}>{renderRichLine(line)}</div>;
-                    })
-                  : 'Add a project description…'
                 }
-              </div>
-            )}
-          </div>
-        </Card>
+              }}
+              onDrop={async e => {
+                const files = Array.from(e.dataTransfer?.files||[]).filter(f=>f.type.startsWith('image/'));
+                if (!files.length) return;
+                e.preventDefault();
+                const url = await uploadImageFile(files[0], token);
+                if (!url) return;
+                const marker = `\n[img:${url}]\n`;
+                setDescVal(v => v + marker);
+                setTimeout(() => { const ta=descRef.current; if(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';} }, 50);
+              }}
+              onDragOver={e => e.preventDefault()}
+              style={{
+                width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                color: C.text, fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+                resize: 'none', minHeight: 40, padding: 0, caretColor: C.accent,
+              }}
+            />
+          ) : (
+            <div
+              style={{
+                cursor: 'text', fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+                color: meta.description ? C.text : C.dim,
+                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+              }}
+              onClick={() => {
+                setDescVal(meta.description || '');
+                setEditingDesc(true);
+                setTimeout(() => {
+                  if (descRef.current) {
+                    descRef.current.focus();
+                    descRef.current.style.height = 'auto';
+                    descRef.current.style.height = descRef.current.scrollHeight + 'px';
+                  }
+                }, 10);
+              }}
+            >
+              {meta.description
+                ? meta.description.split('\n').map((line, i) => {
+                    const imgM = line.match(/^\[img:([^\]]+)\]$/);
+                    if (imgM) return <div key={i} style={{margin:'4px 0',lineHeight:0}}><img src={imgM[1]} alt="" style={{maxWidth:'100%',maxHeight:320,borderRadius:8,display:'block'}}/></div>;
+                    return <div key={i} style={{lineHeight:'1.7'}}>{renderRichLine(line)}</div>;
+                  })
+                : 'Add a project description…'
+              }
+            </div>
+          )}
         </div>
       )}
 
