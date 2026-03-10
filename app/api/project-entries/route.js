@@ -23,50 +23,55 @@ export async function GET(req) {
 
   const { searchParams } = new URL(req.url);
   const project = searchParams.get('project');
-  if (!project || !/^[A-Za-z][A-Za-z0-9]+$/.test(project)) {
+  const isEverything = project === '__everything__';
+  if (!project || (!isEverything && !/^[A-Za-z][A-Za-z0-9]+$/.test(project))) {
     return Response.json({ error: 'invalid project name' }, { status: 400 });
   }
 
   try {
-    // Fetch all notes and tasks entries for this user
-    const [{ data: notesRows, error: ne }, { data: tasksRows, error: te }] = await Promise.all([
-      supabase.from('entries').select('date, data').eq('user_id', user.id).eq('type', 'notes').order('date', { ascending: true }),
-      supabase.from('entries').select('date, data').eq('user_id', user.id).eq('type', 'tasks').order('date', { ascending: true }),
-    ]);
+    // Fetch all notes entries for this user
+    const { data: notesRows, error: ne } = await supabase
+      .from('entries').select('date, data')
+      .eq('user_id', user.id).eq('type', 'notes')
+      .order('date', { ascending: true });
     if (ne) throw ne;
-    if (te) throw te;
 
-    const tagRe = TAG_RE(project);
+    const tagRe = isEverything ? null : TAG_RE(project);
 
-    // Extract journal lines tagged with this project
+    // Extract journal lines
     const journalEntries = [];
     for (const row of notesRows || []) {
       const text = typeof row.data === 'string' ? row.data : '';
-      if (!tagRe.test(text)) continue;
+      if (!text.trim()) continue;
+      if (!isEverything && !tagRe.test(text)) continue;
       text.split('\n').forEach((line, lineIndex) => {
-        if (tagRe.test(line)) {
-          journalEntries.push({ date: row.date, text: line.trim(), lineIndex });
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        if (isEverything || tagRe.test(line)) {
+          journalEntries.push({ date: row.date, text: trimmed, lineIndex });
         }
       });
     }
 
-    // Extract tasks tagged with this project
+    // Tasks only for tagged projects (Everything skips tasks — too noisy)
     const taskEntries = [];
-    for (const row of tasksRows || []) {
-      const tasks = Array.isArray(row.data) ? row.data : [];
-      tasks.forEach(task => {
-        if (task?.text && tagRe.test(task.text)) {
-          taskEntries.push({
-            date: row.date,
-            id: task.id,
-            text: task.text,
-            done: !!task.done,
-          });
-        }
-      });
+    if (!isEverything) {
+      const { data: tasksRows, error: te } = await supabase
+        .from('entries').select('date, data')
+        .eq('user_id', user.id).eq('type', 'tasks')
+        .order('date', { ascending: true });
+      if (te) throw te;
+      for (const row of tasksRows || []) {
+        const tasks = Array.isArray(row.data) ? row.data : [];
+        tasks.forEach(task => {
+          if (task?.text && tagRe.test(task.text)) {
+            taskEntries.push({ date: row.date, id: task.id, text: task.text, done: !!task.done });
+          }
+        });
+      }
     }
 
-    return Response.json({ journalEntries, taskEntries });
+    return Response.json({ journalEntries, taskEntries, isEverything });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }

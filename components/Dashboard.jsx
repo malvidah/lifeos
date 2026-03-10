@@ -947,7 +947,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
               <polyline points="15 18 9 12 15 6"/>
             </svg>
             <span style={{color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase"}}>Back</span>
-            <span style={{color:C.text,fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em"}}>#{activeProject}</span>
+            <span style={{color:C.text,fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em"}}>{activeProject === '__everything__' ? 'Everything' : `#${activeProject}`}</span>
           </button>
         ) : (
           <span onClick={onGoToToday} style={{
@@ -4191,12 +4191,27 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 6,
-      padding: '0 14px 10px',
+      padding: '8px 14px',
     }}>
       <span style={{
         fontFamily: mono, fontSize: 9, letterSpacing: '0.1em',
         textTransform: 'uppercase', color: C.dim, flexShrink: 0, paddingRight: 2,
       }}>Projects</span>
+      {/* Everything card — always first, grey */}
+      <button
+        onClick={() => onSelectProject('__everything__')}
+        style={{
+          background: 'transparent',
+          border: `1px solid ${C.border2}`,
+          borderRadius: 20, padding: '2px 10px',
+          fontFamily: mono, fontSize: F.sm, color: C.muted,
+          cursor: 'pointer', opacity: 0.55,
+          transition: 'opacity 0.15s, color 0.15s',
+          letterSpacing: '0.03em', lineHeight: '1.8',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = C.text; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = '0.55'; e.currentTarget.style.color = C.muted; }}
+      >Everything</button>
       {names.map(name => {
         const active = todayTags.has(name);
         return (
@@ -4249,8 +4264,8 @@ function ProjectView({ project, token, userId, onBack }) {
       .then(r => r.json())
       .then(d => {
         if (d.error) { setEntries({ journalEntries: [], taskEntries: [] }); return; }
-        // Auto-delete project if it has no entries anywhere
-        if (!d.journalEntries?.length && !d.taskEntries?.length) {
+        // Auto-delete project if it has no entries anywhere (skip for Everything)
+        if (!d.isEverything && !d.journalEntries?.length && !d.taskEntries?.length) {
           const updated = { ...(projectsMeta || {}) };
           delete updated[project];
           setProjectsMeta(updated, { skipHistory: true });
@@ -4343,8 +4358,8 @@ function ProjectView({ project, token, userId, onBack }) {
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
 
-      {/* Overview */}
-      <Widget label="Overview" color={C.accent} autoHeight>
+      {/* Overview — hidden for Everything */}
+      {project !== '__everything__' && <Widget label="Overview" color={C.accent} autoHeight>
         {editingDesc ? (
           <textarea
             ref={descRef}
@@ -4385,17 +4400,19 @@ function ProjectView({ project, token, userId, onBack }) {
             {meta.description || 'Add a project description…'}
           </div>
         )}
-      </Widget>
+      </Widget>}
 
       {/* Journal Entries */}
       <Widget
-        label={entries?.journalEntries?.length ? `Entries · ${entries.journalEntries.length}` : 'Entries'}
+        label={entries?.journalEntries?.length
+          ? (project === '__everything__' ? `All Entries · ${entries.journalEntries.length}` : `Entries · ${entries.journalEntries.length}`)
+          : (project === '__everything__' ? 'All Entries' : 'Entries')}
         color={C.accent} autoHeight
       >
         {entries === null ? loadingCards
           : journalByDate.length === 0 ? (
             <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
-              No journal entries tagged #{project} yet.
+              {project === '__everything__' ? 'No journal entries yet.' : `No journal entries tagged #${project} yet.`}
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -4848,20 +4865,23 @@ export default function Dashboard() {
         <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
           paddingBottom:mobile?200:0, display:"flex", flexDirection:"column", gap:mobile?10:8}}>
 
-          {/* Calendar */}
-          <div style={{flexShrink:0}}>
-            <CalStrip selected={selected} onSelect={setSelected}
-              events={events} setEvents={setEvents} healthDots={healthDots}
-              token={token} collapsed={calCollapsed} onToggle={toggleCal}
-              calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
-          </div>
+          {/* Calendar + Health — hidden in project view */}
+          {!activeProject && (
+            <>
+              <div style={{flexShrink:0}}>
+                <CalStrip selected={selected} onSelect={setSelected}
+                  events={events} setEvents={setEvents} healthDots={healthDots}
+                  token={token} collapsed={calCollapsed} onToggle={toggleCal}
+                  calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
+              </div>
 
-          {/* Health */}
-          <div style={{flexShrink:0}}>
-            <HealthStrip date={selected} token={token} userId={userId}
-              onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-              collapsed={healthCollapsed} onToggle={toggleHealth}/>
-          </div>
+              <div style={{flexShrink:0}}>
+                <HealthStrip date={selected} token={token} userId={userId}
+                  onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
+                  collapsed={healthCollapsed} onToggle={toggleHealth}/>
+              </div>
+            </>
+          )}
 
           {/* Project view OR daily widgets */}
           {activeProject ? (
