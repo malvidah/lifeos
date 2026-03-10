@@ -5161,16 +5161,12 @@ function AddJournalLine({ project, onAdd, placeholder }) {
   }
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
-      <div style={{ width: 5, height: 5, flexShrink: 0, borderRadius: '50%',
-        background: col + '88', marginTop: 11 }}/>
       <input
         value={text}
         onChange={e => setText(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
         onBlur={commit}
-        placeholder={placeholder || (project && project !== '__everything__' && project !== '__health__'
-          ? 'Add a journal entry… #' + project + ' will be added'
-          : 'Add a journal entry…')}
+        placeholder={placeholder || 'Add a journal entry…'}
         style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none',
           fontFamily: serif, fontSize: F.md, color: C.text, caretColor: col }}
       />
@@ -5947,65 +5943,87 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
           ) : (
             <NewProjectTask project={project} onAdd={addNewTask} />
           )
-        ) : (
-          <div>
-            {tasksByDate.filter(([, { open, done }]) =>
-              pvTaskFilter === 'open' ? open.length > 0 :
-              pvTaskFilter === 'done' ? done.length > 0 : true
-            ).map(([date, { all }], dateIdx) => (
-              <div key={date}>
-                <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
-                  style={{
-                    fontFamily: mono, fontSize: 10, color: C.muted,
-                    letterSpacing: '0.06em', textTransform: 'uppercase',
-                    marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6,
-                    cursor: onSelectDate ? 'pointer' : 'default',
-                    display: 'inline-block', transition: 'color 0.15s',
-                  }}
-                  onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
-                  onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
-                >{fmtDate(date)}</div>
-                {all
-                  .filter(task =>
-                    pvTaskFilter === 'open' ? !task.done :
-                    pvTaskFilter === 'done' ? task.done : true
-                  )
-                  .map(task => (
-                  <div key={task.id} style={{
-                    display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0',
-                    opacity: task.done ? 0.35 : 1, transition: 'opacity 0.2s',
-                  }}>
-                    <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
-                      width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
-                      border:`1.5px solid ${task.done ? C.accent : C.border2}`,
-                      background: task.done ? C.accent : 'transparent',
-                      display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
-                    }}>{task.done && <span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span>}</button>
-                    {editingTask?.date === task.date && editingTask?.id === task.id ? (
-                      <input autoFocus value={editingTask.text}
-                        onChange={e => setEditingTask(prev => ({...prev, text: e.target.value}))}
-                        onBlur={async () => { await saveTaskEdit(task.date, task.id, editingTask.text); setEditingTask(null); }}
-                        onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') e.target.blur(); }}
-                        style={{ background:'transparent', border:'none', outline:'none', padding:0, flex:1, lineHeight:'1.7',
-                          color: task.done ? C.muted : C.text, caretColor:C.accent, fontFamily:serif, fontSize:F.md,
-                          textDecoration: task.done ? 'line-through' : 'none' }}
-                      />
-                    ) : (
-                      <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}
-                        style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
-                          color: task.done ? C.muted : C.text, cursor:'text',
-                          textDecoration: task.done ? 'line-through' : 'none',
-                          whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
-                        {renderRichLine(task.text, project==='__everything__' ? null : project)}
-                      </div>
-                    )}
+        ) : (() => {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const otherDates = tasksByDate.filter(([d]) => d !== todayStr);
+          const todayEntry = tasksByDate.find(([d]) => d === todayStr);
+          const allDates = todayEntry
+            ? [[todayStr, todayEntry[1]], ...otherDates]
+            : [[todayStr, { all:[], open:[], done:[] }], ...otherDates];
+
+          function renderTaskRow(task) {
+            return (
+              <div key={task.id} style={{
+                display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0',
+                opacity: task.done ? 0.35 : 1, transition: 'opacity 0.2s',
+              }}>
+                <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
+                  width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
+                  border:`1.5px solid ${task.done ? C.accent : C.border2}`,
+                  background: task.done ? C.accent : 'transparent',
+                  display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
+                }}>{task.done && <span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span>}</button>
+                {editingTask?.date === task.date && editingTask?.id === task.id ? (
+                  <input autoFocus value={editingTask.text}
+                    onChange={e => setEditingTask(prev => ({...prev, text: e.target.value}))}
+                    onBlur={async () => { await saveTaskEdit(task.date, task.id, editingTask.text); setEditingTask(null); }}
+                    onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') e.target.blur(); }}
+                    style={{ background:'transparent', border:'none', outline:'none', padding:0, flex:1, lineHeight:'1.7',
+                      color: task.done ? C.muted : C.text, caretColor:C.accent, fontFamily:serif, fontSize:F.md,
+                      textDecoration: task.done ? 'line-through' : 'none' }}
+                  />
+                ) : (
+                  <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}
+                    style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
+                      color: task.done ? C.muted : C.text, cursor:'text',
+                      textDecoration: task.done ? 'line-through' : 'none',
+                      whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                    {renderRichLine(task.text, project==='__everything__' ? null : project)}
                   </div>
-                ))}
-                <div style={{ borderTop:`1px solid ${C.border}`, marginTop:12, marginBottom:4 }}/>
+                )}
               </div>
-            ))}
-          </div>
-        )}
+            );
+          }
+
+          return (
+            <div>
+              {allDates.filter(([date, { open, done }]) =>
+                pvTaskFilter === 'open' ? (open.length > 0 || date === todayStr) :
+                pvTaskFilter === 'done' ? (done.length > 0 || date === todayStr) : true
+              ).map(([date, { all }], dateIdx) => {
+                const isToday = date === todayStr;
+                const filtered = all.filter(t =>
+                  pvTaskFilter === 'open' ? !t.done :
+                  pvTaskFilter === 'done' ? t.done : true
+                );
+                return (
+                  <div key={date}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8,
+                      marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6 }}>
+                      <div
+                        onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
+                        style={{
+                          fontFamily: mono, fontSize: 10,
+                          color: isToday ? C.accent : C.muted,
+                          letterSpacing: '0.06em', textTransform: 'uppercase',
+                          cursor: (!isToday && onSelectDate) ? 'pointer' : 'default',
+                          display: 'inline-block', transition: 'color 0.15s',
+                        }}
+                        onMouseEnter={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = C.text; }}
+                        onMouseLeave={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = isToday ? C.accent : C.muted; }}
+                      >{isToday ? 'Today' : fmtDate(date)}</div>
+                    </div>
+                    {isToday && project !== '__everything__' && pvTaskFilter !== 'done' && (
+                      <NewProjectTask project={project} onAdd={addNewTask} />
+                    )}
+                    {filtered.map(task => renderTaskRow(task))}
+                    <div style={{ borderTop:`1px solid ${C.border}`, marginTop:12, marginBottom:4 }}/>
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })()}
       </Widget>
 
       {/* Journal Entries */}
