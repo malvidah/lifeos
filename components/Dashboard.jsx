@@ -3488,10 +3488,10 @@ function Activity({date,token,userId,stravaConnected}) {
       }));
       setSyncedRows(rows);
       if (rows.length && token) {
-        const summary = merged.map(w=>({
-          name:w.name, sport:w.sport, source:w.source,
-          durationMins:w.durationMins||null, distance:w.distance||null,
-          calories:w.calories||null, avgHr:w.avgHr||null,
+        // Save normalized display rows (same schema as manual activity rows) for history view
+        const summary = rows.map(r=>({
+          id:r.id, text:r.text, source:r.source,
+          dist:r.dist||null, pace:r.pace||null, kcal:r.kcal||null,
         }));
         fetch('/api/entries',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
           body:JSON.stringify({date,type:'workouts',data:summary})}).catch(()=>{});
@@ -4757,82 +4757,97 @@ function HealthAllMeals({ token, userId }) {
 
 // ─── HealthAllActivities ──────────────────────────────────────────────────────
 function HealthAllActivities({ token, userId }) {
-  const [allActs, setAllActs] = useState(null);
+  const [rows, setRows] = useState(null);
+  const [estimating, setEstimating] = useState(new Set());
+
   useEffect(() => {
     if (!token || !userId) return;
     const sb = createClient();
     Promise.all([
-      // Manual activity rows: {text, dist, pace, kcal}
-      sb.from('entries').select('date, data').eq('user_id', userId).eq('type', 'activity').order('date', { ascending: false }),
-      // Synced workout rows (Oura + Strava): {name, source, distance(km), calories, durationMins}
+      // Synced workouts (already normalized: {id,text,source,dist,pace,kcal})
       sb.from('entries').select('date, data').eq('user_id', userId).eq('type', 'workouts').order('date', { ascending: false }),
-    ]).then(([{ data: actData }, { data: wktData }]) => {
-      const manual = (actData || []).flatMap(row =>
-        (Array.isArray(row.data) ? row.data : []).filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }))
-      );
-      const synced = (wktData || []).flatMap(row =>
-        (Array.isArray(row.data) ? row.data : []).filter(r => r?.name?.trim()).map(r => ({
-          date: row.date,
-          text: r.name,
-          source: r.source,
-          dist: r.distance ? `${(r.distance * 0.621371).toFixed(2)}mi` : null,
-          pace: null, // pace not stored in workouts summary
-          kcal: r.calories || null,
-        }))
-      );
-      // Merge by date, synced first per date
-      const byDate = {};
-      [...synced, ...manual].forEach(r => {
-        if (!byDate[r.date]) byDate[r.date] = [];
-        byDate[r.date].push(r);
-      });
-      // Flatten back to array sorted by date desc, deduped by text+date
+      // Manual activity rows: {id,text,dist,pace,kcal}
+      sb.from('entries').select('date, data').eq('user_id', userId).eq('type', 'activity').order('date', { ascending: false }),
+    ]).then(([{ data: wktData }, { data: actData }]) => {
       const seen = new Set();
-      const rows = Object.entries(byDate)
-        .sort(([a], [b]) => b.localeCompare(a))
-        .flatMap(([date, items]) => items.filter(r => {
-          const key = `${date}:${r.text}`;
-          if (seen.has(key)) return false;
+      const all = [];
+      // Synced first (higher quality)
+      for (const row of (wktData || [])) {
+        for (const r of (Array.isArray(row.data) ? row.data : [])) {
+          if (!r?.text?.trim()) continue;
+          const key = `${row.date}:${r.text}`;
+          if (seen.has(key)) continue;
           seen.add(key);
-          return true;
-        }).map(r => ({ ...r, date })));
-      setAllActs(rows);
+          all.push({ date: row.date, id: r.id || key, text: r.text, source: r.source||null, dist: r.dist||null, pace: r.pace||null, kcal: r.kcal||null });
+        }
+      }
+      // Manual entries
+      for (const row of (actData || [])) {
+        for (const r of (Array.isArray(row.data) ? row.data : [])) {
+          if (!r?.text?.trim()) continue;
+          const key = `${row.date}:${r.text}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          all.push({ date: row.date, id: r.id || key, text: r.text, source: null, dist: r.dist||null, pace: r.pace||null, kcal: r.kcal||null });
+        }
+      }
+      setRows(all);
     });
   }, [token, userId]);
 
+  // AI kcal estimation for rows missing kcal
+  useEffect(() => {
+    if (!rows || !token) return;
+    const missing = rows.filter(r => r.text && !r.kcal && !estimating.has(r.id));
+    if (!missing.length) return;
+    setEstimating(prev => new Set([...prev, ...missing.map(r => r.id)]));
+    missing.forEach(row => {
+      estimateNutrition(`Calories burned for: "${row.text}"${row.dist ? ` (${row.dist})` : ''} for a typical adult. Return JSON: {"kcal":300}`, token)
+        .then(result => {
+          if (result?.kcal) setRows(prev => (prev||[]).map(r => r.id === row.id ? {...r, kcal: result.kcal} : r));
+          setEstimating(prev => { const n = new Set(prev); n.delete(row.id); return n; });
+        });
+    });
+  }, [rows?.map(r=>r.id).join(','), token]); // eslint-disable-line
+
   const KCOL=72, DCOL=60, PCOL=100;
-  const colDist  = {fontFamily:mono,fontSize:F.sm,color:C.blue,   flexShrink:0,width:DCOL,textAlign:'center',whiteSpace:'nowrap'};
-  const colPace  = {fontFamily:mono,fontSize:F.sm,color:C.green,  flexShrink:0,width:PCOL,textAlign:'center',whiteSpace:'nowrap'};
-  const colKcal  = {fontFamily:mono,fontSize:F.sm,color:C.orange, flexShrink:0,width:KCOL,textAlign:'center',whiteSpace:'nowrap'};
-  const colMuted = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0,width:w,textAlign:'center',whiteSpace:'nowrap'});
-  const chipBase = {fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',flexShrink:0,borderRadius:4,padding:'2px 8px',whiteSpace:'nowrap'};
-  const rowS     = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
+  const colDist   = {fontFamily:mono,fontSize:F.sm,color:C.blue,   flexShrink:0,width:DCOL,textAlign:'center',whiteSpace:'nowrap'};
+  const colPace   = {fontFamily:mono,fontSize:F.sm,color:C.green,  flexShrink:0,width:PCOL,textAlign:'center',whiteSpace:'nowrap'};
+  const colKcal   = {fontFamily:mono,fontSize:F.sm,color:C.orange, flexShrink:0,width:KCOL, textAlign:'center',whiteSpace:'nowrap'};
+  const colMuted  = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0,width:w,textAlign:'center',whiteSpace:'nowrap'});
+  const chipBase  = {fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',flexShrink:0,borderRadius:4,padding:'2px 8px',whiteSpace:'nowrap'};
+  const rowS      = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
 
-  if (!allActs) return <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
-  if (!allActs.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No activities logged yet.</div>;
-
-  const byDate = {};
-  allActs.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+  if (!rows) return <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
+  const withData = rows.filter(r => r.text);
+  if (!withData.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No activities logged yet.</div>;
 
   function parseDist(d){ const m=String(d||'').match(/[\d.]+/); return m?+m[0]:null; }
 
+  const byDate = {};
+  withData.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+
   return (
     <div>
-      {Object.entries(byDate).sort(([a],[b])=>b.localeCompare(a)).map(([date, rows], di) => {
-        const totalKcal  = rows.reduce((s,r) => s+(r.kcal||0), 0);
-        const distVals   = rows.map(r => parseDist(r.dist)).filter(Boolean);
-        const totalDist  = distVals.length ? distVals.reduce((a,b)=>a+b,0) : 0;
+      {Object.entries(byDate).sort(([a],[b])=>b.localeCompare(a)).map(([date, dateRows], di) => {
+        const totalKcal = dateRows.reduce((s,r) => s+(r.kcal||0), 0);
+        const distVals  = dateRows.map(r => parseDist(r.dist)).filter(Boolean);
+        const totalDist = distVals.length ? distVals.reduce((a,b)=>a+b,0) : 0;
         return (
           <div key={date}>
             {di > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
             <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4}}>{fmtDate(date)}</div>
-            {rows.map((r, i) => (
-              <div key={i} style={rowS}>
-                <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
-                <SourceBadge source={r.source}/>
-                <span style={r.dist ? colDist : colMuted(DCOL)}>{r.dist||''}</span>
-                <span style={r.pace ? colPace : colMuted(PCOL)}>{r.pace ? `${r.pace}/mi` : ''}</span>
-                <span style={r.kcal ? colKcal : colMuted(KCOL)}>{r.kcal ? `-${r.kcal}kcal` : ''}</span>
+            {dateRows.map((r, i) => (
+              <div key={r.id||i} style={rowS}>
+                <span style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0,overflow:'hidden'}}>
+                  <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.text}</span>
+                  <SourceBadge source={r.source}/>
+                </span>
+                <span style={r.dist ? colDist : colMuted(DCOL)}>{r.dist || '—'}</span>
+                <span style={r.pace ? colPace : colMuted(PCOL)}>{r.pace ? `${r.pace}/mi` : '—'}</span>
+                <span style={r.kcal ? colKcal : colMuted(KCOL)}>
+                  {estimating.has(r.id) ? '…' : r.kcal ? `-${r.kcal}kcal` : '—'}
+                </span>
               </div>
             ))}
             {(totalKcal > 0 || totalDist > 0) && (
@@ -4853,7 +4868,6 @@ function HealthAllActivities({ token, userId }) {
     </div>
   );
 }
-
 // ─── HealthProjectView ───────────────────────────────────────────────────────
 function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresReady, startSync, endSync }) {
   const today = new Date().toISOString().slice(0, 10);
