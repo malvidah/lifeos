@@ -2922,13 +2922,23 @@ function Notes({date,userId,token}) {
   const {value,setValue,loaded} = useDbSave(date,"notes","",token,userId);
   const taRef = useRef(null);
   const [selectedImgLine, setSelectedImgLine] = useState(null); // line index of selected [img:] or null
+  const pendingCursorRef = useRef(null); // cursor position to apply after next value update
 
-  // Auto-resize textarea whenever value changes
+  // Auto-resize + apply pending cursor whenever value changes
   useEffect(() => {
     const ta = taRef.current;
     if (!ta) return;
     ta.style.height = "auto";
     ta.style.height = ta.scrollHeight + "px";
+    if (pendingCursorRef.current !== null) {
+      const pos = pendingCursorRef.current;
+      pendingCursorRef.current = null;
+      // Defer one tick so the textarea value is fully committed
+      requestAnimationFrame(() => {
+        ta.setSelectionRange(pos, pos);
+        ta.focus();
+      });
+    }
   }, [value, loaded]);
 
   // Clear image selection when date changes
@@ -2946,18 +2956,19 @@ function Notes({date,userId,token}) {
     });
   }
 
-  // Move cursor off any [img:] line — always land on the line below it
-  function normalizeCursor(ta, val) {
+  // Move cursor off any [img:] line — always land on the line below it.
+  // Always reads ta.value (DOM truth), never the stale React state.
+  function normalizeCursor(ta) {
     if (!ta) return;
+    const val = ta.value;
     const pos = ta.selectionStart;
-    const lines = (val ?? ta.value).split("\n");
+    const lines = val.split("\n");
     let charCount = 0;
     for (let i = 0; i < lines.length; i++) {
       const lineStart = charCount;
       const lineEnd = charCount + lines[i].length;
       if (/^\[img:/.test(lines[i]) && pos >= lineStart && pos <= lineEnd) {
-        // Jump to start of next line (or end of value if last line)
-        const target = Math.min(lineEnd + 1, (val ?? ta.value).length);
+        const target = Math.min(lineEnd + 1, val.length);
         ta.setSelectionRange(target, target);
         return;
       }
@@ -2974,13 +2985,14 @@ function Notes({date,userId,token}) {
       if (selectedImgLine !== null) {
         e.preventDefault();
         const lines = value.split("\n");
-        // Remove the img line and the blank padding line before/after if present
-        const start = (selectedImgLine > 0 && lines[selectedImgLine-1].trim() === "") ? selectedImgLine - 1 : selectedImgLine;
-        const end = (selectedImgLine + 1 < lines.length && lines[selectedImgLine+1].trim() === "") ? selectedImgLine + 1 : selectedImgLine;
-        lines.splice(start, end - start + 1);
-        setValue(lines.join("\n"), {skipHistory:true});
+        lines.splice(selectedImgLine, 1);
+        const next = lines.join("\n");
+        // Place cursor at the same line index (now the line below the deleted img)
+        let charCount = 0;
+        for (let i = 0; i < Math.min(selectedImgLine, lines.length); i++) charCount += lines[i].length + 1;
+        pendingCursorRef.current = Math.min(charCount, next.length);
+        setValue(next, {skipHistory:true});
         setSelectedImgLine(null);
-        requestAnimationFrame(() => { const t=taRef.current; if(t){t.style.height="auto";t.style.height=t.scrollHeight+"px";} });
         return;
       }
 
@@ -3004,7 +3016,7 @@ function Notes({date,userId,token}) {
 
     // Arrow keys: normalize cursor after movement
     if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)) {
-      requestAnimationFrame(() => normalizeCursor(taRef.current, value));
+      requestAnimationFrame(() => normalizeCursor(taRef.current));
     }
 
     // Any other printable key clears image selection
@@ -3106,14 +3118,14 @@ function Notes({date,userId,token}) {
     // Overlay approach: textarea in normal flow (sizes container); rendered div on top (pointer-events:none)
     // No mode toggle → no layout shift on click. Cursor always visible via caretColor.
     <div style={{ position:"relative", minHeight:minH, cursor:"text" }}
-      onClick={() => { taRef.current?.focus(); requestAnimationFrame(() => normalizeCursor(taRef.current, value)); }}>
+      onClick={() => { taRef.current?.focus(); requestAnimationFrame(() => normalizeCursor(taRef.current)); }}>
       {/* Textarea — sizes the container, text is transparent so only cursor shows */}
       <textarea
         ref={taRef}
         value={value}
         onChange={e => { setValue(e.target.value, {skipHistory:true}); const t=e.target; t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }}
         onBlur={() => setValue(v => v, {undoLabel:"Edit notes"})}
-        onSelect={() => normalizeCursor(taRef.current, value)}
+        onSelect={() => normalizeCursor(taRef.current)}
         onKeyDown={handleKeyDown}
         placeholder=" "
         onPaste={async e => {
@@ -3133,13 +3145,8 @@ function Notes({date,userId,token}) {
 [img:${url}]
 `;
               const next = cur.slice(0, pos) + marker + cur.slice(pos);
+              pendingCursorRef.current = pos + marker.length;
               setValue(next, {skipHistory:true});
-              requestAnimationFrame(() => {
-                ta.style.height="auto"; ta.style.height=ta.scrollHeight+"px";
-                // Position cursor on the blank line after the image
-                const afterImg = pos + marker.length;
-                ta.setSelectionRange(afterImg, afterImg);
-              });
               break;
             }
           }
@@ -3156,8 +3163,8 @@ function Notes({date,userId,token}) {
 [img:${url}]
 `;
           const next = cur + marker;
+          pendingCursorRef.current = next.length;
           setValue(next, {skipHistory:true});
-          requestAnimationFrame(() => { ta.style.height="auto"; ta.style.height=ta.scrollHeight+"px"; });
         }}
         onDragOver={e => e.preventDefault()}
         style={{
