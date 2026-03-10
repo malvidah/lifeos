@@ -17,8 +17,8 @@ export async function POST(request) {
   // Get Strava tokens + client creds
   const { data: settings } = await supabase.from("entries").select("data")
     .eq("type","settings").eq("date","global").eq("user_id",user.id).maybeSingle();
-  const clientId = settings?.data?.stravaClientId;
-  const clientSecret = settings?.data?.stravaClientSecret;
+  const clientId = settings?.data?.stravaClientId || process.env.STRAVA_CLIENT_ID;
+  const clientSecret = settings?.data?.stravaClientSecret || process.env.STRAVA_CLIENT_SECRET;
   if (!clientId || !clientSecret) return Response.json({ error: "no_strava_creds" }, { status: 404 });
 
   const { data: tokenRow } = await supabase.from("entries").select("data")

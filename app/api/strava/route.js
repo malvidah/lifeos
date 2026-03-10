@@ -56,8 +56,8 @@ export async function GET(request) {
   if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   const settings = await getSettings(supabase, user.id);
-  const clientId = settings.stravaClientId;
-  const clientSecret = settings.stravaClientSecret;
+  const clientId = settings.stravaClientId || process.env.STRAVA_CLIENT_ID;
+  const clientSecret = settings.stravaClientSecret || process.env.STRAVA_CLIENT_SECRET;
   if (!clientId || !clientSecret) return Response.json({ activities: [] });
 
   let tokens = await getStravaTokens(supabase, user.id);
