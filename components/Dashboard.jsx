@@ -4413,6 +4413,18 @@ function ProjectView({ project, token, userId, onBack }) {
     return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   }
 
+  // Register any new tags found in edited text into projectsMeta
+  function registerNewTags(text) {
+    const tags = extractTags(text);
+    if (!tags.length) return;
+    const meta = projectsMeta || {};
+    const newTags = tags.filter(t => !meta[t]);
+    if (!newTags.length) return;
+    const updated = { ...meta };
+    newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; });
+    setProjectsMeta(updated, { skipHistory: true });
+  }
+
   async function saveJournalEdit(date, lineIndex, newText) {
     const current = await dbLoad(date, 'notes', token);
     if (current === null) return;
@@ -4423,6 +4435,7 @@ function ProjectView({ project, token, userId, onBack }) {
     // Update module-level cache so daily view reflects immediately
     MEM[`${userId}:${date}:notes`] = updated;
     window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['notes'] } }));
+    registerNewTags(newText);
     setEntries(prev => prev ? {
       ...prev,
       journalEntries: prev.journalEntries.map(e =>
@@ -4453,6 +4466,7 @@ function ProjectView({ project, token, userId, onBack }) {
     await dbSave(date, 'tasks', updated, token);
     MEM[`${userId}:${date}:tasks`] = updated;
     window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+    registerNewTags(newText);
     setEntries(prev => prev ? {
       ...prev,
       taskEntries: prev.taskEntries.map(t =>
