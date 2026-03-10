@@ -777,7 +777,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
   const planBadge = planInfo === null ? null : planInfo.isPremium ? (
     <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid ${C.accent}30`,overflow:"hidden"}}>
       <div style={{padding:"10px 12px",textAlign:"center"}}>
-        <div style={{fontFamily:mono,fontSize:F.sm,color:C.accent,letterSpacing:"0.06em",textTransform:"uppercase"}}>Day Lab Premium ✦</div>
+        <div style={{fontFamily:mono,fontSize:F.sm,color:C.accent,letterSpacing:"0.06em",textTransform:"uppercase"}}>Premium ✦</div>
         <div style={{fontFamily:mono,fontSize:"10px",color:C.muted,marginTop:3}}>{planInfo.plan === 'yearly' ? 'Annual plan · $4/mo' : 'Monthly plan · $5/mo'}</div>
       </div>
       <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"7px 12px",background:"none",borderTop:`1px solid ${C.accent}20`,border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",textAlign:"center"}}>
@@ -901,7 +901,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
           {/* Identity + refresh */}
           <div style={{...row,paddingBottom:2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontFamily:serif,fontSize:F.md,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
+              <div style={{fontFamily:blurweb,fontSize:F.md,color:theme==="light"?"#6B5440":"#D8CEC2",letterSpacing:"0.04em"}}>{user?.user_metadata?.name||"—"}</div>
               <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
             </div>
             <button
@@ -1121,8 +1121,8 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
       }}>
         <span style={{
           fontFamily: blurweb,
-          fontSize: 30,
-          letterSpacing: "0.24em",
+          fontSize: 22,
+          letterSpacing: "0.22em",
           textTransform: "uppercase",
           color: theme === "light" ? "#6B5440" : "#D8CEC2",
           userSelect: "none",
@@ -4619,7 +4619,7 @@ function ChatFloat({date, token, userId, healthKey}) {
             </div>
 
             {/* Date */}
-            <span style={{ fontFamily: serif, fontSize: F.lg, color: "#FFFFFF", letterSpacing: "-0.02em" }}>
+            <span style={{ fontFamily: blurweb, fontSize: F.lg, color: theme === "light" ? "#6B5440" : "#D8CEC2", letterSpacing: "0.06em" }}>
               {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>
