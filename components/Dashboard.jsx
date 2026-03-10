@@ -4668,9 +4668,9 @@ function ProjectView({ project, token, userId, onBack }) {
                   marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6,
                 }}>{fmtDate(date)}</div>
                 {open.map(task => (
-                  <div key={task.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'3px 0', minHeight:26 }}>
+                  <div key={task.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0' }}>
                     <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
-                      width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer',
+                      width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
                       border:`1.5px solid ${C.border2}`, background:'transparent',
                       display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
                     }}/>
@@ -4683,16 +4683,16 @@ function ProjectView({ project, token, userId, onBack }) {
                       />
                     ) : (
                       <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}
-                        style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.text, cursor:'text' }}>
+                        style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.text, cursor:'text', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
                         {renderWithTags(task.text, project==='__everything__' ? null : project)}
                       </div>
                     )}
                   </div>
                 ))}
                 {done.length > 0 && showCompleted && done.map(task => (
-                  <div key={task.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'3px 0', opacity:0.35 }}>
+                  <div key={task.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0', opacity:0.35 }}>
                     <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
-                      width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer',
+                      width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
                       border:`1.5px solid ${C.accent}`, background:C.accent,
                       display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
                     }}><span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span></button>
