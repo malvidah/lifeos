@@ -2415,7 +2415,7 @@ function fmtMinsField(val) {
 }
 
 
-function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle}) {
+function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,defaultExpandedMetric,onExpandedMetricChange}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
@@ -2581,7 +2581,11 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
   ];
 
   // ── Trend panel state ──────────────────────────────────────────────────────
-  const [expandedMetric, setExpandedMetric] = useState(null);  // controls trend
+  const [expandedMetric, setExpandedMetric] = useState(defaultExpandedMetric ?? null);  // controls trend
+  function setExpandedMetricWithCb(m) {
+    setExpandedMetricWithCb(m);
+    if (onExpandedMetricChange) onExpandedMetricChange(m);
+  }
   const [breakdownMetric, setBreakdownMetric] = useState(null); // controls score breakdown
   const [trendRange,     setTrendRange]     = useState("30d"); // "30d" | "12m"
   const [trendData, setTrendData]           = useState({});
@@ -2810,7 +2814,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           const isDimmed = expandedMetric && !isTrend;
           return (
             <div key={m.key}
-              onClick={()=>{ isTrend ? setExpandedMetric(null) : setExpandedMetric(m.key); }}
+              onClick={()=>{ isTrend ? setExpandedMetric(null) : setExpandedMetricWithCb(m.key); }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
                 boxSizing:"border-box", overflow:"hidden",
@@ -4638,6 +4642,20 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
         onMouseEnter={e => { e.currentTarget.style.background = C.accent + '22'; e.currentTarget.style.color = C.accent; }}
         onMouseLeave={e => { e.currentTarget.style.background = C.accent + '11'; e.currentTarget.style.color = C.accent + 'aa'; }}
       >ALL</button>
+      {/* Health — always-visible built-in project */}
+      <button
+        onClick={() => onSelectProject('__health__')}
+        style={{
+          background: C.green + '11',
+          border: `1px solid ${C.green}33`,
+          borderRadius: 20, padding: '2px 10px',
+          fontFamily: mono, fontSize: F.sm, color: C.green + 'aa',
+          cursor: 'pointer', transition: 'all 0.15s',
+          letterSpacing: '0.03em', lineHeight: '1.8',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.background = C.green + '22'; e.currentTarget.style.color = C.green; }}
+        onMouseLeave={e => { e.currentTarget.style.background = C.green + '11'; e.currentTarget.style.color = C.green + 'aa'; }}
+      >Health</button>
       {names.map(name => {
         const active = todayTags.has(name);
         const col = projectColor(name);
@@ -4662,6 +4680,241 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
           >{tagDisplayName(name)}</button>
         );
       })}
+    </div>
+  );
+}
+
+// ─── HealthProjectView ───────────────────────────────────────────────────────
+function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresReady, startSync, endSync }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [viewDate, setViewDate] = useState(today);
+  const [entries, setEntries] = useState(null);
+  const [pvTaskFilter, setPvTaskFilter] = useState('all');
+
+  // Persist last-used expanded metric across Health project views
+  const [expandedMetric, setExpandedMetric] = useState(() => {
+    try { return localStorage.getItem('health_expandedMetric') || 'sleep'; } catch { return 'sleep'; }
+  });
+  function handleMetricChange(m) {
+    setExpandedMetricWithCb(m);
+    try { localStorage.setItem('health_expandedMetric', m); } catch {}
+  }
+
+  // Load health journal+task entries
+  useEffect(() => {
+    if (!token) return;
+    setEntries(null);
+    fetch('/api/project-entries?project=__health__', {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then(r => r.json()).then(d => {
+      setEntries(d.error ? { journalEntries: [], taskEntries: [] } : d);
+    }).catch(() => setEntries({ journalEntries: [], taskEntries: [] }));
+  }, [token]);
+
+  // All meals grouped by date
+  const AllMeals = useCallback(() => {
+    const [allMeals, setAllMeals] = useState(null);
+    useEffect(() => {
+      if (!token || !userId) return;
+      const sb = createClient();
+      sb.from('entries').select('date, data')
+        .eq('user_id', userId).eq('type', 'meals')
+        .order('date', { ascending: false })
+        .then(({ data }) => {
+          const rows = (data || []).flatMap(row => {
+            const items = Array.isArray(row.data) ? row.data : [];
+            return items.filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }));
+          });
+          setAllMeals(rows);
+        });
+    }, []);
+    if (!allMeals) return <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
+    if (!allMeals.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No meals logged yet.</div>;
+    // Group by date
+    const byDate = {};
+    allMeals.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+    return (
+      <div>
+        {Object.entries(byDate).map(([date, rows], di) => (
+          <div key={date}>
+            {di > 0 && <div style={{height:1,background:C.border,margin:'10px 0'}}/>}
+            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
+            {rows.map((r, i) => (
+              <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'2px 0',fontFamily:serif,fontSize:F.md,color:C.text}}>
+                <span style={{flex:1}}>{r.text}</span>
+                {r.kcal ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.kcal} kcal</span> : null}
+                {r.protein ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.accent,flexShrink:0}}>{r.protein}g</span> : null}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }, [token, userId]);
+
+  // All activities grouped by date
+  const AllActivities = useCallback(() => {
+    const [allActs, setAllActs] = useState(null);
+    useEffect(() => {
+      if (!token || !userId) return;
+      const sb = createClient();
+      sb.from('entries').select('date, data')
+        .eq('user_id', userId).eq('type', 'activity')
+        .order('date', { ascending: false })
+        .then(({ data }) => {
+          const rows = (data || []).flatMap(row => {
+            const items = Array.isArray(row.data) ? row.data : [];
+            return items.filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }));
+          });
+          setAllActs(rows);
+        });
+    }, []);
+    if (!allActs) return <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
+    if (!allActs.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No activities logged yet.</div>;
+    const byDate = {};
+    allActs.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+    return (
+      <div>
+        {Object.entries(byDate).map(([date, rows], di) => (
+          <div key={date}>
+            {di > 0 && <div style={{height:1,background:C.border,margin:'10px 0'}}/>}
+            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
+            {rows.map((r, i) => (
+              <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'2px 0',fontFamily:serif,fontSize:F.md,color:C.text}}>
+                <span style={{flex:1}}>{r.text}</span>
+                {r.dist ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.dist}</span> : null}
+                {r.kcal ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.kcal} kcal</span> : null}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    );
+  }, [token, userId]);
+
+  const taskEntries = entries?.taskEntries || [];
+  const journalEntries = entries?.journalEntries || [];
+  const openTasks = taskEntries.filter(t => !t.done);
+  const doneTasks = taskEntries.filter(t => t.done);
+
+  const tasksByDate = useMemo(() => {
+    if (!taskEntries.length) return [];
+    const map = {};
+    taskEntries.forEach(t => {
+      if (!map[t.date]) map[t.date] = { open: [], done: [] };
+      if (t.done) map[t.date].done.push(t); else map[t.date].open.push(t);
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [taskEntries]);
+
+  const journalByDate = useMemo(() => {
+    if (!journalEntries.length) return [];
+    const map = {};
+    journalEntries.forEach(e => {
+      if (!map[e.date]) map[e.date] = [];
+      map[e.date].push(e);
+    });
+    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
+  }, [journalEntries]);
+
+  return (
+    <div style={{ flex:1, minHeight:0, overflow:'auto', padding:10, paddingBottom:200, display:'flex', flexDirection:'column', gap:10 }}>
+      {/* Back header */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, paddingBottom:2 }}>
+        <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', color:C.green, fontFamily:mono, fontSize:F.sm, padding:0, display:'flex', alignItems:'center', gap:4 }}>
+          ← <span style={{ letterSpacing:'0.08em', textTransform:'uppercase' }}>Health</span>
+        </button>
+      </div>
+
+      {/* Health strip — always expanded */}
+      <HealthStrip
+        date={viewDate} token={token} userId={userId}
+        onHealthChange={onHealthChange || (()=>{})}
+        onScoresReady={onScoresReady || (()=>{})}
+        onSyncStart={startSync || (()=>{})}
+        onSyncEnd={endSync || (()=>{})}
+        collapsed={false} onToggle={()=>{}}
+        defaultExpandedMetric={expandedMetric}
+        onExpandedMetricChange={handleMetricChange}
+      />
+
+      {/* All Meals */}
+      <Card>
+        <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>All Meals</div>
+        <AllMeals />
+      </Card>
+
+      {/* All Activities */}
+      <Card>
+        <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>All Activities</div>
+        <AllActivities />
+      </Card>
+
+      {/* Journal Entries */}
+      <Widget
+        label={journalEntries.length ? `Entries · ${journalEntries.length}` : 'Entries'}
+        color={C.accent} autoHeight
+      >
+        {entries === null ? (
+          <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
+        ) : journalEntries.length === 0 ? (
+          <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health journal entries yet.</div>
+        ) : (
+          <div>
+            {journalByDate.map(([date, lines], dateIdx) => (
+              <div key={date}>
+                {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
+                <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
+                {lines.map((entry, i) => (
+                  <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
+                    {renderRichLine(entry.text)}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </Widget>
+
+      {/* Tasks */}
+      <Widget
+        label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
+        color={C.blue} autoHeight
+        headerRight={<TaskFilterBtns filter={pvTaskFilter} setFilter={setPvTaskFilter}/>}
+      >
+        {entries === null ? (
+          <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
+        ) : taskEntries.length === 0 ? (
+          <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health tasks yet.</div>
+        ) : (
+          <div>
+            {tasksByDate.map(([date, { open, done }], dateIdx) => (
+              <div key={date}>
+                <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginTop:dateIdx===0?0:4,marginBottom:6}}>{fmtDate(date)}</div>
+                {pvTaskFilter !== 'done' && open.map(task => (
+                  <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0'}}>
+                    <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.border2}`,background:'transparent'}}/>
+                    <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>
+                      {renderRichLine(task.text)}
+                    </div>
+                  </div>
+                ))}
+                {pvTaskFilter !== 'open' && done.map(task => (
+                  <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0',opacity:0.45}}>
+                    <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.accent}`,background:C.accent,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                      <span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>
+                    </div>
+                    <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}>
+                      {renderRichLine(task.text)}
+                    </div>
+                  </div>
+                ))}
+                {pvTaskFilter !== 'open' && done.length > 0 && <div style={{height:1,background:C.border,margin:'6px 0'}}/>}
+              </div>
+            ))}
+          </div>
+        )}
+      </Widget>
     </div>
   );
 }
@@ -5445,12 +5698,23 @@ export default function Dashboard() {
 
           {/* Project view OR daily widgets */}
           {activeProject ? (
+            activeProject === '__health__' ? (
+              <HealthProjectView
+                token={token} userId={userId}
+                onBack={() => setActiveProject(null)}
+                onHealthChange={onHealthChange}
+                onScoresReady={onScoresReady}
+                startSync={startSync}
+                endSync={endSync}
+              />
+            ) : (
             <ProjectView
               project={activeProject}
               token={token}
               userId={userId}
               onBack={() => setActiveProject(null)}
             />
+            )
           ) : (
             <>
               {/* Projects nav strip — above Journal, only if projects exist */}

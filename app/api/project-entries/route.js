@@ -12,18 +12,13 @@ function getUserClient(req) {
   return { supabase, token };
 }
 
-// "BigThink" → "Big Think", "CuriosityLab" → "Curiosity Lab"
 function toDisplayName(name) {
   return name
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
 }
 
-// Matches a line if it contains:
-//   1. #ProjectName  (tag syntax)
-//   2. The raw camelCase name as a whole word: BigThink / bigthink / BIGTHINK
-//   3. The spaced display name as whole words: "Big Think" / "big think"
-//      Word boundaries prevent partial matches (network ≠ work)
+// For regular projects: match #Tag, camelCase word, or spaced display name
 function makeMatchRe(name) {
   const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const display = toDisplayName(name);
@@ -35,6 +30,9 @@ function makeMatchRe(name) {
   return new RegExp(parts.join('|'), 'i');
 }
 
+// Health project: broad keyword set covering fitness, body, wellness mentions
+const HEALTH_RE = /\b(health|workout|working out|worked out|run|ran|running|walk|walked|walking|bike|biked|biking|cycle|cycled|cycling|swim|swam|swimming|hike|hiked|hiking|gym|lift|lifted|lifting|yoga|stretch|stretching|sleep|slept|sleeping|recovery|recover|calories|calorie|nutrition|diet|meal|eat|ate|eating|exercise|exercised|exercising|weight|reps|sets|miles|km|heart rate|hrv|steps|active|activity|fitness|training|trained|train|breathwork|meditation|meditate|meditating|rest|resting|rested|sick|illness|pain|sore|soreness|energy|fatigue|tired|exhausted|hydrat|water|protein|macros|cardio|strength|endurance|mobility|flexibility|vo2|pace|distance)\b/i;
+
 export async function GET(req) {
   const { supabase } = getUserClient(req);
   if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
@@ -45,7 +43,9 @@ export async function GET(req) {
   const { searchParams } = new URL(req.url);
   const project = searchParams.get('project');
   const isEverything = project === '__everything__';
-  if (!project || (!isEverything && !/^[A-Za-z][A-Za-z0-9]+$/.test(project))) {
+  const isHealth = project === '__health__';
+
+  if (!project || (!isEverything && !isHealth && !/^[A-Za-z][A-Za-z0-9]+$/.test(project))) {
     return Response.json({ error: 'invalid project name' }, { status: 400 });
   }
 
@@ -56,15 +56,13 @@ export async function GET(req) {
       .order('date', { ascending: true });
     if (ne) throw ne;
 
-    const matchRe = isEverything ? null : makeMatchRe(project);
+    const matchRe = isEverything ? null : isHealth ? HEALTH_RE : makeMatchRe(project);
 
-    // Block-level grouping: consecutive non-empty lines form a block.
-    // Include whole block if any line matches tag OR plain word OR spaced name.
     const journalEntries = [];
     for (const row of notesRows || []) {
       const text = typeof row.data === 'string' ? row.data : '';
       if (!text.trim()) continue;
-      if (!isEverything && !matchRe.test(text)) continue;
+      if (matchRe && !matchRe.test(text)) continue;
 
       const lines = text.split('\n');
       let i = 0;
@@ -75,7 +73,7 @@ export async function GET(req) {
           block.push({ text: lines[i].trim(), lineIndex: i });
           i++;
         }
-        if (isEverything || block.some(l => matchRe.test(l.text))) {
+        if (!matchRe || block.some(l => matchRe.test(l.text))) {
           block.forEach(l => journalEntries.push({ date: row.date, text: l.text, lineIndex: l.lineIndex }));
         }
       }
@@ -91,13 +89,13 @@ export async function GET(req) {
       const tasks = Array.isArray(row.data) ? row.data : [];
       tasks.forEach(task => {
         if (!task?.text) return;
-        if (isEverything || matchRe.test(task.text)) {
+        if (!matchRe || matchRe.test(task.text)) {
           taskEntries.push({ date: row.date, id: task.id, text: task.text, done: !!task.done });
         }
       });
     }
 
-    return Response.json({ journalEntries, taskEntries, isEverything });
+    return Response.json({ journalEntries, taskEntries, isEverything, isHealth });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }
