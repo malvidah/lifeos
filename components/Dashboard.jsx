@@ -4592,7 +4592,7 @@ function ChatFloat({date, token, userId, healthKey}) {
             </div>
 
             {/* Date */}
-            <span style={{ fontFamily: serif, fontSize: F.lg, color: "#C4A882", letterSpacing: "-0.02em" }}>
+            <span style={{ fontFamily: serif, fontSize: F.lg, color: C.accent, letterSpacing: "-0.02em" }}>
               {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>
