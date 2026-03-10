@@ -4834,6 +4834,12 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   const [entries, setEntries] = useState(null);
   const [pvTaskFilter, setPvTaskFilter] = useState('all');
 
+  // Collapse state for health project widgets (persisted)
+  const [mealsCollapsed,    toggleMeals]    = useCollapse('hpv:meals',    false);
+  const [activitiesCollapsed, toggleActivities] = useCollapse('hpv:activities', false);
+  const [tasksCollapsed,    toggleTasks]    = useCollapse('hpv:tasks',    false);
+  const [entriesCollapsed,  toggleEntries]  = useCollapse('hpv:entries',  false);
+
   useEffect(() => {
     if (!token) return;
     setEntries(null);
@@ -4889,7 +4895,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
       />
 
       {/* Meals */}
-      <Widget label="Meals" color={C.red} autoHeight
+      <Widget label="Meals" color={C.red} autoHeight collapsed={mealsCollapsed} onToggle={toggleMeals}
         headerRight={<span style={{display:'flex',gap:0}}>
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:50,textAlign:'center'}}>prot</span>
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
@@ -4899,7 +4905,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
       </Widget>
 
       {/* Activities */}
-      <Widget label="Activity" color={C.green} autoHeight
+      <Widget label="Activity" color={C.green} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
         headerRight={<span style={{display:'flex',gap:0}}>
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:60,textAlign:'center'}}>dist</span>
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:100,textAlign:'center'}}>pace</span>
@@ -4913,6 +4919,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
       <Widget
         label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
         color={C.blue} autoHeight
+        collapsed={tasksCollapsed} onToggle={toggleTasks}
         headerRight={<TaskFilterBtns filter={pvTaskFilter} setFilter={setPvTaskFilter}/>}
       >
         {entries === null ? (
@@ -4948,6 +4955,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
       <Widget
         label={journalEntries.length ? `Entries · ${journalEntries.length}` : 'Entries'}
         color={C.accent} autoHeight
+        collapsed={entriesCollapsed} onToggle={toggleEntries}
       >
         {entries === null ? (
           <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
@@ -5030,6 +5038,10 @@ function ProjectView({ project, token, userId, onBack }) {
   const [editingDesc, setEditingDesc]   = useState(false);
   const [descVal, setDescVal]           = useState('');
   const descRef = useRef(null);
+
+  // Per-project collapse state (persisted)
+  const [tasksCollapsed,   toggleTasks]   = useCollapse(`pv:${project}:tasks`,   false);
+  const [entriesCollapsed, toggleEntries] = useCollapse(`pv:${project}:entries`, false);
 
   const meta = useMemo(() => ((projectsMeta || {})[project] || {}), [projectsMeta, project]);
 
@@ -5275,6 +5287,7 @@ function ProjectView({ project, token, userId, onBack }) {
       <Widget
         label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
         color={C.blue} autoHeight
+        collapsed={tasksCollapsed} onToggle={toggleTasks}
         headerRight={<TaskFilterBtns filter={pvTaskFilter} setFilter={setPvTaskFilter}/>}
       >
         {entries === null ? (
@@ -5345,6 +5358,7 @@ function ProjectView({ project, token, userId, onBack }) {
           ? (project === '__everything__' ? `ALL ENTRIES · ${entries.journalEntries.length}` : `Entries · ${entries.journalEntries.length}`)
           : (project === '__everything__' ? 'ALL ENTRIES' : 'Entries')}
         color={C.accent} autoHeight
+        collapsed={entriesCollapsed} onToggle={toggleEntries}
         headerLeft={null}
       >
         {entries === null ? loadingCards
