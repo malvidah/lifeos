@@ -1144,10 +1144,10 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
           <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
         </div>
       </div>
-      {/* Vignette — hangs below the sticky bar */}
+      {/* Vignette — hangs just below the sticky bar, stops before projects strip */}
       <div style={{
         position:"absolute", top:"100%", left:0, right:0,
-        height:80, pointerEvents:"none", zIndex:98,
+        height:32, pointerEvents:"none", zIndex:98,
         background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`,
       }}/>
     </div>
@@ -6795,6 +6795,13 @@ export default function Dashboard() {
           )}
         </div>
         </div>
+
+      {/* Bottom vignette — fades content up into the AI bar */}
+      <div style={{
+        position:"fixed", bottom:0, left:0, right:0,
+        height:120, pointerEvents:"none", zIndex:96,
+        background:`linear-gradient(to top, ${C.bg} 0%, ${C.bg}99 35%, transparent 100%)`,
+      }}/>
 
       {/* Floating chat pill — hidden during search */}
       {!searchOpen && (
