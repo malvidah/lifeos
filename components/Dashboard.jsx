@@ -2870,7 +2870,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       <div style={{display:"flex",alignItems:"stretch",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none",
         borderBottom:expandedMetric?`1px solid ${C.border}`:"none",position:"relative"}} ref={el=>{
           if(!el) return;
-          const upd=()=>{const f=el.parentElement?.querySelector('.hs-fade');if(f)f.style.opacity=el.scrollWidth>el.clientWidth+2?'1':'0';};
+          const upd=()=>{const f=el.parentElement?.querySelector('.hs-fade');if(f){const atEnd=el.scrollLeft+el.clientWidth>=el.scrollWidth-2;f.style.opacity=(el.scrollWidth>el.clientWidth+2&&!atEnd)?'1':'0';}};
           el._hsCheck=upd; upd(); const ro=new ResizeObserver(upd); ro.observe(el);
           el.addEventListener('scroll',upd);
         }}>
@@ -2924,7 +2924,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         position:'absolute', right:0, top:0, bottom:0, width:40, pointerEvents:'none',
         background:`linear-gradient(to right, transparent, ${C.bg})`,
         display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:6,
-        opacity:0, transition:'opacity 0.2s', zIndex:1,
+        opacity:0, transition:'opacity 0.12s ease', zIndex:1,
       }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted}
           strokeWidth="2.5" strokeLinecap="round" opacity="0.5">
@@ -5044,11 +5044,15 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
   useEffect(() => {
     const el = pcScrollRef.current;
     if (!el) return;
-    const check = () => setPcFade(el.scrollWidth > el.clientWidth + 2);
+    const check = () => {
+      const hasOverflow = el.scrollWidth > el.clientWidth + 2;
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 2;
+      setPcFade(hasOverflow && !atEnd);
+    };
     check();
     const ro = new ResizeObserver(check);
     ro.observe(el);
-    el.addEventListener('scroll', check);
+    el.addEventListener('scroll', check, { passive: true });
     return () => { ro.disconnect(); el.removeEventListener('scroll', check); };
   }, [names.length]); // eslint-disable-line
 
@@ -5124,18 +5128,18 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
         );
       })}
       </div>
-      {pcFade && (
-        <div style={{
+      <div style={{
           position:'absolute', right:0, top:0, bottom:0, width:40, pointerEvents:'none',
           background:`linear-gradient(to right, transparent, ${C.bg})`,
           display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:6,
+          opacity: pcFade ? 1 : 0,
+          transition: 'opacity 0.12s ease',
         }}>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted}
             strokeWidth="2.5" strokeLinecap="round" opacity="0.5">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
         </div>
-      )}
     </div>
   );
 }
