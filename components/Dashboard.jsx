@@ -4233,20 +4233,31 @@ function ChatFloat({date, token, userId, healthKey}) {
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
 
-  // ── iOS keyboard: keep pill anchored to visualViewport bottom ──────────────
-  const [vvBottom, setVvBottom] = useState(0);
+  // ── iOS keyboard: track visual viewport with direct DOM ref (no React lag) ──
+  const outerRef = useRef(null);
   useEffect(() => {
     const vv = window.visualViewport;
     if (!vv) return;
+    let raf = null;
     const update = () => {
-      // Distance from visualViewport bottom to layout bottom
-      const offset = window.innerHeight - vv.offsetTop - vv.height;
-      setVvBottom(Math.max(0, Math.round(offset)));
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        if (!outerRef.current) return;
+        // On iOS ≥15 Safari, fixed elements already track the visual viewport
+        // so vv.offsetTop is 0 and height equals the visual height. The
+        // transform approach works regardless: if offset is 0, no shift happens.
+        const offset = Math.max(0, window.innerHeight - vv.offsetTop - vv.height);
+        outerRef.current.style.transform = offset > 0 ? `translateY(-${offset}px)` : '';
+      });
     };
     update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
-    return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update); };
+    vv.addEventListener('resize', update, { passive: true });
+    vv.addEventListener('scroll', update, { passive: true });
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, []);
   const [messages, setMessages] = useState([]); // [{role, content, actions, summary, isInsight}]
   const [insightLoading, setInsightLoading] = useState(false);
@@ -4590,14 +4601,14 @@ function ChatFloat({date, token, userId, healthKey}) {
 
       {/* Main bar + panel */}
       {/* Outer: full-width fixed anchor, centers the card */}
-      <div style={{
-        position: "fixed", bottom: vvBottom, left: 0, right: 0,
+      <div ref={outerRef} style={{
+        position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
         paddingLeft: 10, paddingRight: 10,
-        paddingBottom: vvBottom > 0 ? 8 : (expanded ? "max(10px, env(safe-area-inset-bottom, 10px))" : "env(safe-area-inset-bottom, 8px)"),
+        paddingBottom: expanded ? "max(10px, env(safe-area-inset-bottom, 10px))" : "env(safe-area-inset-bottom, 8px)",
         pointerEvents: "none",
-        transition: "padding-bottom 0.2s cubic-bezier(0.4,0,0.2,1)",
+        willChange: "transform",
       }}>
       {/* Inner card: glass pill collapsed / glass panel expanded */}
       <div style={{
@@ -4773,6 +4784,14 @@ function ChatFloat({date, token, userId, healthKey}) {
               value={input}
               onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+              onFocus={() => {
+                // Prevent iOS Safari from scrolling page to reveal focused input
+                // (the pill is already visible; we handle positioning ourselves)
+                requestAnimationFrame(() => {
+                  document.documentElement.scrollTop = 0;
+                  document.body.scrollTop = 0;
+                });
+              }}
               placeholder={busy ? "…" : "Ask or add anything…"}
               disabled={busy}
               rows={1}
