@@ -3063,6 +3063,66 @@ function Notes({date,userId,token}) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
       e.preventDefault(); document.execCommand('italic'); return;
     }
+    // Enter — intercept to prevent browser carrying span styles (chip bg/border)
+    // into the new line. We handle it manually: split text at caret, re-render.
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      const el = ceRef.current;
+      const sel = window.getSelection();
+      if (!sel || !sel.rangeCount) return;
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      // Get caret offset as plain-text position
+      const pre = range.cloneRange();
+      pre.selectNodeContents(el);
+      pre.setEnd(range.startContainer, range.startOffset);
+      const preText = pre.toString();
+      const fullText = domToText(el);
+      const caretPos = preText.length;
+      const before = fullText.slice(0, caretPos);
+      const after  = fullText.slice(caretPos);
+      const next = before + '\n' + after;
+      // Re-render cleanly — no inherited spans
+      skipSyncRef.current = false;
+      lastSyncedText.current = next;
+      setValue(next);
+      el.innerHTML = textToHtml(next);
+      // Place cursor at start of new line (caretPos + 1)
+      requestAnimationFrame(() => {
+        const newRange = document.createRange();
+        // Walk to find the text node at caretPos+1
+        let pos = 0, found = false;
+        function findPos(node) {
+          if (found) return;
+          if (node.nodeType === Node.TEXT_NODE) {
+            const len = node.textContent.length;
+            if (pos + len >= caretPos + 1) {
+              newRange.setStart(node, caretPos + 1 - pos);
+              newRange.collapse(true);
+              found = true;
+            } else { pos += len; }
+          } else { for (const c of node.childNodes) { if (!found) findPos(c); } }
+        }
+        // Simpler: re-serialize and count newlines
+        const lines = next.split('\n');
+        let lineIdx = 0, charCount = 0;
+        for (let i = 0; i < lines.length; i++) {
+          charCount += lines[i].length + 1; // +1 for 
+
+          if (charCount > caretPos) { lineIdx = i + 1; break; }
+        }
+        // Find the lineIdx-th block div in the contenteditable
+        const divs = el.querySelectorAll(':scope > div');
+        const targetDiv = divs[lineIdx] || divs[divs.length - 1];
+        if (targetDiv) {
+          newRange.selectNodeContents(targetDiv);
+          newRange.collapse(true);
+          sel.removeAllRanges();
+          sel.addRange(newRange);
+        }
+      });
+      return;
+    }
   }
 
   async function handlePaste(e) {
@@ -3103,17 +3163,49 @@ function Notes({date,userId,token}) {
   }
 
   async function handleDrop(e) {
+    // Must preventDefault synchronously — before any async — to stop browser default drop
+    e.preventDefault();
     const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
-    e.preventDefault();
     const url = await uploadImageFile(files[0], token);
     if (!url) return;
-    // Append at end
-    const text = domToText(ceRef.current);
-    const next = text + `\n[img:${url}]\n`;
-    lastSyncedText.current = next;
-    setValue(next, {skipHistory: true});
-    ceRef.current.innerHTML = textToHtml(next);
+    // Insert at drop position using caretPositionFromPoint / caretRangeFromPoint
+    const el = ceRef.current;
+    let insertRange = null;
+    if (document.caretRangeFromPoint) {
+      insertRange = document.caretRangeFromPoint(e.clientX, e.clientY);
+    } else if (document.caretPositionFromPoint) {
+      const cp = document.caretPositionFromPoint(e.clientX, e.clientY);
+      if (cp) {
+        insertRange = document.createRange();
+        insertRange.setStart(cp.offsetNode, cp.offset);
+        insertRange.collapse(true);
+      }
+    }
+    if (insertRange) {
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(insertRange);
+    }
+    // Now insert at current selection
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount) {
+      const range = sel.getRangeAt(0);
+      range.deleteContents();
+      const wrapper = document.createElement('div');
+      const img = document.createElement('img');
+      img.src = url; img.dataset.url = url;
+      img.style.cssText = 'max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:pointer';
+      img.contentEditable = 'false'; img.draggable = false;
+      wrapper.appendChild(img);
+      const after = document.createElement('div');
+      after.innerHTML = '<br>';
+      range.insertNode(after);
+      range.insertNode(wrapper);
+      range.setStartAfter(after);
+      range.collapse(true);
+      sel.removeAllRanges(); sel.addRange(range);
+    }
+    handleInput();
   }
 
   if (!loaded) return (
@@ -3138,6 +3230,15 @@ function Notes({date,userId,token}) {
       onDragOver={e => e.preventDefault()}
       onCompositionStart={() => { isComposingRef.current = true; }}
       onCompositionEnd={() => { isComposingRef.current = false; handleInput(); }}
+      onClick={e => {
+        // Image selection: click img → orange outline; click elsewhere → deselect
+        const allImgs = ceRef.current?.querySelectorAll('img') || [];
+        if (e.target.tagName === 'IMG') {
+          allImgs.forEach(img => { img.style.outline = img === e.target ? `2px solid ${C.orange}` : 'none'; });
+        } else {
+          allImgs.forEach(img => { img.style.outline = 'none'; });
+        }
+      }}
       data-placeholder="What's on your mind?"
       style={{
         fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
