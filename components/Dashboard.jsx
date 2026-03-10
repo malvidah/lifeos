@@ -4575,27 +4575,44 @@ function ChatFloat({date, token, userId, healthKey}) {
           {/* Spacer to clear the TopBar (safe-area + 10px padding + 52px pill + 10px padding) */}
           <div style={{ flexShrink: 0, height: "calc(env(safe-area-inset-top, 0px) + 72px)" }}/>
 
-          {/* Slim subheader: ← Day Lab AI · Premium   |   date */}
+          {/* AI header — chevron down to collapse, title, date */}
           <div style={{
             flexShrink: 0,
-            padding: "0 20px 10px",
-            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "16px 20px 24px",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 0,
           }}>
+            {/* Chevron down — collapse */}
             <button onClick={() => setExpanded(false)} style={{
               background: "none", border: "none", cursor: "pointer",
-              color: C.muted, display: "flex", alignItems: "center", gap: 6,
-              padding: "4px 0", fontFamily: mono, fontSize: 11, letterSpacing: "0.08em",
-              minHeight: 36, transition: "color 0.12s",
+              color: C.dim, display: "flex", alignItems: "center", justifyContent: "center",
+              width: 36, height: 36, borderRadius: 8,
+              transition: "color 0.15s, background 0.15s",
+              marginBottom: 12,
             }}
-            onMouseEnter={e => e.currentTarget.style.color = C.text}
-            onMouseLeave={e => e.currentTarget.style.color = C.muted}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="15 18 9 12 15 6"/>
+            onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.background = `${C.text}0e`; }}
+            onMouseLeave={e => { e.currentTarget.style.color = C.dim; e.currentTarget.style.background = "transparent"; }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
               </svg>
-              Day Lab AI{isPremiumUser ? " · Premium" : ""}
             </button>
-            <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim, letterSpacing: "-0.01em" }}>
-              {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+
+            {/* DAY LAB AI + Premium badge */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: C.text }}>
+                Day Lab AI
+              </span>
+              {isPremiumUser && (
+                <span style={{
+                  fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                  color: C.accent, background: `${C.accent}18`, border: `1px solid ${C.accent}40`,
+                  borderRadius: 4, padding: "2px 6px",
+                }}>Premium</span>
+              )}
+            </div>
+
+            {/* Date */}
+            <span style={{ fontFamily: serif, fontSize: F.lg, color: C.text, letterSpacing: "-0.02em", opacity: 0.75 }}>
+              {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>
 
