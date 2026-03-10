@@ -6543,10 +6543,10 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflow:activeProject?"hidden":mobile?"auto":"hidden", display:"flex", flexDirection:"column", alignItems:"stretch"}}>
+        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch"}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
-          overflow:activeProject?"hidden":mobile?"auto":"hidden",
+          overflowY:activeProject?"hidden":mobile?"auto":"auto",
           padding:activeProject?0:mobile?"6px 8px":10,
           paddingBottom:activeProject?0:mobile?200:0, display:"flex", flexDirection:"column", gap:activeProject?0:mobile?10:8}}>
 
@@ -6746,15 +6746,14 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div style={{display:"flex", gap:10,
-                  flex:"1 1 0", minHeight:0,
                   flexDirection:"row",
-                  alignItems:"stretch"}}>
+                  alignItems:"flex-start"}}>
 
                   {/* Left column: Journal */}
-                  <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
+                  <div style={{flex:"1 1 0", minWidth:0,
                     display:"flex", flexDirection:"column", gap:10,
-                    overflowY:"auto", paddingBottom:180}}>
-                    <div style={{flex:"1 1 auto", minHeight:320, display:"flex", flexDirection:"column"}}>
+                    paddingBottom:180}}>
+                    <div style={{minHeight:320, display:"flex", flexDirection:"column"}}>
                       <Widget label={leftWidget.label} color={leftWidget.color()}
                         collapsed={collapseMap[leftWidget.id]}
                         onToggle={toggleMap[leftWidget.id]}
@@ -6765,14 +6764,12 @@ export default function Dashboard() {
                   </div>
 
                   {/* Right widgets — column always */}
-                  <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
+                  <div style={{flex:"1 1 0", minWidth:0,
                     display:"flex", flexDirection:"column", gap:10,
-                    overflowY:"auto", paddingBottom:180}}>
+                    paddingBottom:180}}>
                     {rightWidgets.map(w=>(
                       <div key={w.id} style={{
-                        flex: collapseMap[w.id]?"0 0 auto":"1 1 auto",
-                        minHeight: collapseMap[w.id]?0:200,
-                        overflow:"hidden"}}>
+                        minHeight: collapseMap[w.id]?0:200}}>
                         <Widget label={w.label} color={w.color()}
                           collapsed={collapseMap[w.id]}
                           onToggle={toggleMap[w.id]}
