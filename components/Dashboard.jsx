@@ -3687,6 +3687,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
   const refs=useRef({});
   const skipBlurRef=useRef(false);
+  const suppressInputRef=useRef(false); // true while ref sets innerHTML to suppress spurious input event
   const longPressTimer=useRef(null);
   const [focusedId, setFocusedId] = useState(null);
   const [selMode, setSelMode] = useState(false);
@@ -3825,8 +3826,10 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   if (!el) return;
                   if (refs.current[row.id] === el) return; // guard: only init on genuine new mount
                   refs.current[row.id] = el;
+                  suppressInputRef.current = true; // innerHTML assignment may fire input event
                   el.innerHTML = chipHtml(row.text);
                   requestAnimationFrame(() => {
+                    suppressInputRef.current = false;
                     el.focus();
                     const range = document.createRange();
                     range.selectNodeContents(el);
@@ -3838,6 +3841,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                 contentEditable
                 suppressContentEditableWarning
                 onInput={e => {
+                  if (suppressInputRef.current) return; // fired by innerHTML init, not user
                   const text = e.currentTarget.textContent;
                   setRows(prev => (Array.isArray(prev)?prev:[]).map(r => r.id===row.id ? {...r,text} : r));
                 }}
