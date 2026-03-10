@@ -1127,7 +1127,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
         <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
           <span onClick={onGoToToday} style={{
             fontFamily:serif, fontSize:F.md, letterSpacing:"-0.02em",
-            color:C.text, cursor:onGoToToday?"pointer":"default",
+            color:"#C4A882", cursor:onGoToToday?"pointer":"default",
           }}>Day Lab</span>
         </div>
         <div style={{flex:1}}/>
@@ -4611,7 +4611,7 @@ function ChatFloat({date, token, userId, healthKey}) {
             </div>
 
             {/* Date */}
-            <span style={{ fontFamily: serif, fontSize: F.lg, color: C.text, letterSpacing: "-0.02em", opacity: 0.55 }}>
+            <span style={{ fontFamily: serif, fontSize: F.lg, color: "#C4A882", letterSpacing: "-0.02em" }}>
               {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>
