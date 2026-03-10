@@ -1041,7 +1041,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
             <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flex:1}}>
               Downloads
             </span>
-            <a href="/download/mac" style={{
+            <a href="https://github.com/malvidah/lifeos/releases/download/v1.0.2/Day.Lab-1.0.2-arm64.dmg" style={{
               display:"flex",alignItems:"center",gap:4,
               padding:"4px 9px",background:C.surface,
               border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
