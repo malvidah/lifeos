@@ -935,17 +935,29 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
           {divider}
 
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <a href="/about"
+            <button onClick={()=>window.location.reload()}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
-                textTransform:"uppercase",textDecoration:"none"}}>
-              Learn More
-            </a>
-            <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
-              style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                display:"flex",alignItems:"center",gap:6,
                 color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
-              Sign Out →
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              Refresh
             </button>
+            <div style={{display:"flex",alignItems:"center",gap:12}}>
+              <a href="/about"
+                style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                  color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
+                  textTransform:"uppercase",textDecoration:"none"}}>
+                Learn More
+              </a>
+              <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
+                style={{background:"none",border:"none",padding:0,cursor:"pointer",
+                  color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                Sign Out →
+              </button>
+            </div>
           </div>
 
         </div>
