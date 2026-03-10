@@ -1884,12 +1884,14 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:4,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
           {!collapsed && onCalViewChange&&<>
             <button onClick={()=>onCalViewChange('month')}
-              style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
-                padding:'3px 7px',borderRadius:4,cursor:'pointer',
+              style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
+                padding:'6px 12px',borderRadius:6,cursor:'pointer',
+                minHeight:34,minWidth:34,
                 background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>M</button>
             <button onClick={()=>onCalViewChange('day')}
-              style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
-                padding:'3px 7px',borderRadius:4,cursor:'pointer',
+              style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
+                padding:'6px 12px',borderRadius:6,cursor:'pointer',
+                minHeight:34,minWidth:34,
                 background:C.accent+'22',border:`1px solid ${C.accent}`,color:C.accent}}>D</button>
           </>}
         </div>
@@ -2264,12 +2266,14 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
             <div style={{marginLeft:'auto',display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
               {!collapsed && <>
               <button onClick={()=>onCalViewChange('month')}
-                style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
-                  padding:'3px 7px',borderRadius:4,cursor:'pointer',
+                style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
+                  padding:'6px 12px',borderRadius:6,cursor:'pointer',
+                  minHeight:34,minWidth:34,
                   background:C.accent+'22',border:`1px solid ${C.accent}`,color:C.accent}}>M</button>
               <button onClick={()=>onCalViewChange('day')}
-                style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
-                  padding:'3px 7px',borderRadius:4,cursor:'pointer',
+                style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
+                  padding:'6px 12px',borderRadius:6,cursor:'pointer',
+                  minHeight:34,minWidth:34,
                   background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>D</button>
               </>}
             </div>
@@ -2975,8 +2979,9 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
                   )}
                   {["12m","30d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
-                      style={{fontFamily:mono,fontSize:"9px",letterSpacing:"0.05em",
-                        padding:"2px 6px",borderRadius:4,cursor:"pointer",border:"none",
+                      style={{fontFamily:mono,fontSize:"10px",letterSpacing:"0.05em",
+                        padding:"6px 10px",borderRadius:6,cursor:"pointer",border:"none",
+                        minHeight:32,
                         background: trendRange===r ? m.color+"33" : "transparent",
                         color: trendRange===r ? m.color : C.dim,
                         transition:"background 0.15s,color 0.15s"}}>
@@ -3773,12 +3778,12 @@ function NewProjectTask({ project, onAdd }) {
 // ─── TaskFilterBtns ──────────────────────────────────────────────────────────
 function TaskFilterBtns({ filter, setFilter }) {
   const OpenIcon = () => (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="2" width="12" height="12" rx="2.5"/>
     </svg>
   );
   const DoneIcon = () => (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="2" width="12" height="12" rx="2.5"/>
       <polyline points="5,8.5 7,10.5 11,6"/>
     </svg>
@@ -3795,9 +3800,10 @@ function TaskFilterBtns({ filter, setFilter }) {
         return (
           <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }}
             style={{
-              fontFamily: mono, fontSize: '9px', letterSpacing: '0.06em',
-              padding: b.label ? '3px 7px' : '3px 6px',
-              borderRadius: 4, cursor: 'pointer',
+              fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em',
+              padding: b.label ? '6px 12px' : '6px 8px',
+              borderRadius: 6, cursor: 'pointer',
+              minHeight: 32,
               background: active ? C.accent+'22' : 'none',
               border: `1px solid ${active ? C.accent : C.border2}`,
               color: active ? C.accent : C.muted,
@@ -4226,6 +4232,22 @@ function ChatFloat({date, token, userId, healthKey}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
+  // ── iOS keyboard: keep pill anchored to visualViewport bottom ──────────────
+  const [vvBottom, setVvBottom] = useState(0);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => {
+      // Distance from visualViewport bottom to layout bottom
+      const offset = window.innerHeight - vv.offsetTop - vv.height;
+      setVvBottom(Math.max(0, Math.round(offset)));
+    };
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => { vv.removeEventListener('resize', update); vv.removeEventListener('scroll', update); };
+  }, []);
   const [messages, setMessages] = useState([]); // [{role, content, actions, summary, isInsight}]
   const [insightLoading, setInsightLoading] = useState(false);
   const generatedInsightKey = useRef(null); // "date:healthKey" — prevents double-generation
@@ -4569,11 +4591,11 @@ function ChatFloat({date, token, userId, healthKey}) {
       {/* Main bar + panel */}
       {/* Outer: full-width fixed anchor, centers the card */}
       <div style={{
-        position: "fixed", bottom: 0, left: 0, right: 0,
+        position: "fixed", bottom: vvBottom, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
         paddingLeft: 10, paddingRight: 10,
-        paddingBottom: expanded ? "max(10px, env(safe-area-inset-bottom, 10px))" : "env(safe-area-inset-bottom, 8px)",
+        paddingBottom: vvBottom > 0 ? 8 : (expanded ? "max(10px, env(safe-area-inset-bottom, 10px))" : "env(safe-area-inset-bottom, 8px)"),
         pointerEvents: "none",
         transition: "padding-bottom 0.2s cubic-bezier(0.4,0,0.2,1)",
       }}>
@@ -6552,14 +6574,15 @@ export default function Dashboard() {
                       }}
                       style={{
                         background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '6px 14px 6px 6px', display: 'flex', alignItems: 'center',
+                        padding: '8px 12px', display: 'flex', alignItems: 'center',
                         color: C.muted, flexShrink: 0, transition: 'color 0.15s',
+                        minWidth: 44, minHeight: 44, justifyContent: 'center',
                       }}
                       onMouseEnter={e => e.currentTarget.style.color = C.text}
                       onMouseLeave={e => e.currentTarget.style.color = C.muted}
                       aria-label="Search"
                     >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                       </svg>
                     </button>
