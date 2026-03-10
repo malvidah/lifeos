@@ -1122,7 +1122,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
         <span style={{
           fontFamily: blurweb,
           fontSize: 22,
-          letterSpacing: "0.22em",
+          letterSpacing: "normal",
           textTransform: "uppercase",
           color: theme === "light" ? "#6B5440" : "#D8CEC2",
           userSelect: "none",
