@@ -4761,17 +4761,43 @@ function HealthAllActivities({ token, userId }) {
   useEffect(() => {
     if (!token || !userId) return;
     const sb = createClient();
-    sb.from('entries').select('date, data')
-      .eq('user_id', userId).eq('type', 'activity')
-      .order('date', { ascending: false })
-      .then(({ data }) => {
-        // Pull from both 'activity' (manual) and 'workouts' (synced)
-        const rows = (data || []).flatMap(row => {
-          const items = Array.isArray(row.data) ? row.data : [];
-          return items.filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }));
-        });
-        setAllActs(rows);
+    Promise.all([
+      // Manual activity rows: {text, dist, pace, kcal}
+      sb.from('entries').select('date, data').eq('user_id', userId).eq('type', 'activity').order('date', { ascending: false }),
+      // Synced workout rows (Oura + Strava): {name, source, distance(km), calories, durationMins}
+      sb.from('entries').select('date, data').eq('user_id', userId).eq('type', 'workouts').order('date', { ascending: false }),
+    ]).then(([{ data: actData }, { data: wktData }]) => {
+      const manual = (actData || []).flatMap(row =>
+        (Array.isArray(row.data) ? row.data : []).filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }))
+      );
+      const synced = (wktData || []).flatMap(row =>
+        (Array.isArray(row.data) ? row.data : []).filter(r => r?.name?.trim()).map(r => ({
+          date: row.date,
+          text: r.name,
+          source: r.source,
+          dist: r.distance ? `${(r.distance * 0.621371).toFixed(2)}mi` : null,
+          pace: null, // pace not stored in workouts summary
+          kcal: r.calories || null,
+        }))
+      );
+      // Merge by date, synced first per date
+      const byDate = {};
+      [...synced, ...manual].forEach(r => {
+        if (!byDate[r.date]) byDate[r.date] = [];
+        byDate[r.date].push(r);
       });
+      // Flatten back to array sorted by date desc, deduped by text+date
+      const seen = new Set();
+      const rows = Object.entries(byDate)
+        .sort(([a], [b]) => b.localeCompare(a))
+        .flatMap(([date, items]) => items.filter(r => {
+          const key = `${date}:${r.text}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        }).map(r => ({ ...r, date })));
+      setAllActs(rows);
+    });
   }, [token, userId]);
 
   const KCOL=72, DCOL=60, PCOL=100;
@@ -4792,7 +4818,7 @@ function HealthAllActivities({ token, userId }) {
 
   return (
     <div>
-      {Object.entries(byDate).map(([date, rows], di) => {
+      {Object.entries(byDate).sort(([a],[b])=>b.localeCompare(a)).map(([date, rows], di) => {
         const totalKcal  = rows.reduce((s,r) => s+(r.kcal||0), 0);
         const distVals   = rows.map(r => parseDist(r.dist)).filter(Boolean);
         const totalDist  = distVals.length ? distVals.reduce((a,b)=>a+b,0) : 0;
@@ -4810,7 +4836,7 @@ function HealthAllActivities({ token, userId }) {
               </div>
             ))}
             {(totalKcal > 0 || totalDist > 0) && (
-              <div style={{display:'flex',alignItems:'center',gap:0,borderTop:`1px solid ${C.border}`,paddingTop:4,marginTop:2}}>
+              <div style={{display:'flex',alignItems:'center',gap:0,paddingTop:4,marginTop:2}}>
                 <div style={{flex:1}}/>
                 <div style={{width:DCOL,display:'flex',justifyContent:'center'}}>
                   {totalDist > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{totalDist.toFixed(1)}mi</span>}
