@@ -2921,6 +2921,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
 function Notes({date,userId,token}) {
   const {value,setValue,loaded} = useDbSave(date,"notes","",token,userId);
   const taRef = useRef(null);
+  const [selectedImgLine, setSelectedImgLine] = useState(null); // line index of selected [img:] or null
 
   // Auto-resize textarea whenever value changes
   useEffect(() => {
@@ -2929,6 +2930,9 @@ function Notes({date,userId,token}) {
     ta.style.height = "auto";
     ta.style.height = ta.scrollHeight + "px";
   }, [value, loaded]);
+
+  // Clear image selection when date changes
+  useEffect(() => { setSelectedImgLine(null); }, [date]);
 
   function wrapSelection(marker) {
     const ta = taRef.current;
@@ -2943,8 +2947,57 @@ function Notes({date,userId,token}) {
   }
 
   function handleKeyDown(e) {
-    if ((e.metaKey||e.ctrlKey) && e.key==="b") { e.preventDefault(); wrapSelection("**"); }
-    if ((e.metaKey||e.ctrlKey) && e.key==="i") { e.preventDefault(); wrapSelection("*"); }
+    if ((e.metaKey||e.ctrlKey) && e.key==="b") { e.preventDefault(); wrapSelection("**"); return; }
+    if ((e.metaKey||e.ctrlKey) && e.key==="i") { e.preventDefault(); wrapSelection("*"); return; }
+
+    if (e.key === "Backspace" || e.key === "Delete") {
+      // If an image is already selected → delete it
+      if (selectedImgLine !== null) {
+        e.preventDefault();
+        const lines = value.split("\n");
+        lines.splice(selectedImgLine, 1);
+        // Remove a trailing blank line left by the marker padding if present
+        if (selectedImgLine < lines.length && lines[selectedImgLine].trim() === "") {
+          lines.splice(selectedImgLine, 1);
+        }
+        setValue(lines.join("\n"), {skipHistory:true});
+        setSelectedImgLine(null);
+        requestAnimationFrame(() => { const t=taRef.current; if(t){t.style.height="auto";t.style.height=t.scrollHeight+"px";} });
+        return;
+      }
+
+      // Check if cursor is immediately after or before an [img:] line → select it first
+      const ta = taRef.current;
+      if (!ta) return;
+      const pos = ta.selectionStart;
+      const sel = ta.selectionEnd;
+      const lines = value.split("\n");
+      let charCount = 0;
+      for (let i = 0; i < lines.length; i++) {
+        const lineStart = charCount;
+        const lineEnd = charCount + lines[i].length;
+        const isImg = /^\[img:/.test(lines[i]);
+        // Cursor at end of img line, or at start of line after img line (backspace)
+        if (isImg && (pos === lineEnd || pos === lineEnd + 1 ||
+            (pos === lineStart && i > 0 && /^\[img:/.test(lines[i-1])))) {
+          e.preventDefault();
+          setSelectedImgLine(isImg ? i : i - 1);
+          return;
+        }
+        // Selected range covers an img line
+        if (isImg && sel > lineStart && pos <= lineEnd) {
+          e.preventDefault();
+          setSelectedImgLine(i);
+          return;
+        }
+        charCount += lines[i].length + 1;
+      }
+    }
+
+    // Any other key clears image selection
+    if (!["Shift","Meta","Control","Alt","ArrowLeft","ArrowRight","ArrowUp","ArrowDown"].includes(e.key)) {
+      setSelectedImgLine(null);
+    }
   }
 
   // Render markdown as React elements
@@ -2954,7 +3007,24 @@ function Notes({date,userId,token}) {
       // Image line
       if (/^\[img:/.test(line)) {
         const m = line.match(/^\[img:([^\]]+)\]/);
-        if (m) return <div key={i} style={{margin:"4px 0",lineHeight:0}}><img src={m[1]} alt="" style={{maxWidth:"100%",maxHeight:320,borderRadius:8,display:"block"}}/></div>;
+        if (m) {
+          const isSelected = selectedImgLine === i;
+          return (
+            <div key={i} style={{margin:"4px 0",lineHeight:0,pointerEvents:"auto",display:"inline-block"}}>
+              <img
+                src={m[1]} alt=""
+                onClick={e => { e.stopPropagation(); setSelectedImgLine(isSelected ? null : i); taRef.current?.focus(); }}
+                style={{
+                  maxWidth:"100%", maxHeight:320, borderRadius:8, display:"block",
+                  cursor:"pointer",
+                  outline: isSelected ? "2px solid #D08828" : "2px solid transparent",
+                  outlineOffset: 2,
+                  transition:"outline-color 0.15s",
+                }}
+              />
+            </div>
+          );
+        }
       }
       // Heading
       if (line.startsWith("# ")) {
