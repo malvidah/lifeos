@@ -5168,10 +5168,11 @@ function HealthAllActivities({ token, userId }) {
   );
 }
 // ─── HealthProjectView ───────────────────────────────────────────────────────
-function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresReady, startSync, endSync, onSelectDate }) {
+function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresReady, startSync, endSync, onSelectDate, taskFilter, setTaskFilter }) {
   const today = new Date().toISOString().slice(0, 10);
   const [entries, setEntries] = useState(null);
-  const [pvTaskFilter, setPvTaskFilter] = useState('all');
+  const pvTaskFilter = taskFilter;
+  const setPvTaskFilter = setTaskFilter;
   const [vw, setVw] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 800);
   useEffect(() => {
     const fn = () => setVw(window.innerWidth);
@@ -5400,13 +5401,14 @@ function EntryLine({ entry, date, editing, editText, onStartEdit, onChangeEdit, 
 }
 
 // ─── ProjectView ──────────────────────────────────────────────────────────────
-function ProjectView({ project, token, userId, onBack, onSelectDate }) {
+function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter }) {
   const { value: projectsMeta, setValue: setProjectsMeta } =
     useDbSave('global', 'projects', {}, token, userId);
 
   const [entries, setEntries] = useState(null); // null=loading, obj=loaded
   const [showCompleted, setShowCompleted] = useState(false);
-  const [pvTaskFilter, setPvTaskFilter] = useState('all');
+  const pvTaskFilter = taskFilter;
+  const setPvTaskFilter = setTaskFilter;
   const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}
   const [editingTask, setEditingTask]   = useState(null); // {date,id,text}
   const [editingDesc, setEditingDesc]   = useState(false);
@@ -6231,6 +6233,7 @@ export default function Dashboard() {
                         startSync={startSync}
                         endSync={endSync}
                         onSelectDate={d => { setActiveProject(null); setSelected(d); }}
+                        taskFilter={taskFilter} setTaskFilter={setTaskFilter}
                       />
                     ) : (
                       <ProjectView
@@ -6239,6 +6242,7 @@ export default function Dashboard() {
                         userId={userId}
                         onBack={() => setActiveProject(null)}
                         onSelectDate={d => { setActiveProject(null); setSelected(d); }}
+                        taskFilter={taskFilter} setTaskFilter={setTaskFilter}
                       />
                     )}
                   </div>
