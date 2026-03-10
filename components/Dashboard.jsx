@@ -1828,28 +1828,34 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         </div>
 
         {collapsed ? (
-          /* ── Collapsed: prev ← date → next centered ── */
-          <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
-            display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
-            <button onClick={e=>{e.stopPropagation();const d=new Date(selDate);d.setDate(d.getDate()-1);onSelect(toKey(d));}} style={{
-              background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
-              fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-              onMouseEnter={e=>e.currentTarget.style.color=C.text}
-              onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
-            <span style={{
-              fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-              color:toKey(selDate)===today?C.text:C.accent,
-              background:(toKey(selDate)===today?C.text:C.accent)+"1A",
-              borderRadius:6,padding:"4px 10px",
-            }}>
-              {selMonth} {selDate.getDate()}, {selYear}
-            </span>
-            <button onClick={e=>{e.stopPropagation();const d=new Date(selDate);d.setDate(d.getDate()+1);onSelect(toKey(d));}} style={{
-              background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
-              fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-              onMouseEnter={e=>e.currentTarget.style.color=C.text}
-              onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
-          </div>
+          /* ── Collapsed: prev ← period → next, respects calView ── */
+          (()=>{
+            const isMonth = calView === 'month';
+            const navStep = (d,dir) => { const n=new Date(d); isMonth?n.setMonth(n.getMonth()+dir):n.setDate(n.getDate()+dir); return n; };
+            const label = isMonth ? `${selMonth} ${selYear}` : `${selMonth} ${selDate.getDate()}, ${selYear}`;
+            const isToday = !isMonth && toKey(selDate) === today;
+            return (
+              <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
+                display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
+                <button onClick={e=>{e.stopPropagation();onSelect(toKey(navStep(selDate,-1)));}} style={{
+                  background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                  fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
+                <span style={{
+                  fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
+                  color:isToday?C.text:C.accent,
+                  background:(isToday?C.text:C.accent)+"1A",
+                  borderRadius:6,padding:"4px 10px",
+                }}>{label}</span>
+                <button onClick={e=>{e.stopPropagation();onSelect(toKey(navStep(selDate,+1)));}} style={{
+                  background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                  fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
+              </div>
+            );
+          })()
         ) : (
           /* ── Expanded: date centered, no arrows ── */
           <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
@@ -3013,7 +3019,7 @@ function Notes({date,userId,token}) {
       .replace(/(https?:\/\/[^\s<>"')]+)/g, '<a href="$1" target="_blank" rel="noreferrer" style="color:#C8820A;text-decoration:none;pointer-events:auto">$1</a>')
       .replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) => {
         const col = projectColor(tag);
-        return `<span style="color:${col}">${m}</span>`;
+        return `<span style="color:${col};background:${col}20;border:1px solid ${col}40;border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;line-height:1.6;vertical-align:middle;display:inline-block">${m}</span>`;
       });
   }
 
