@@ -5152,6 +5152,32 @@ function fmtDate(ds) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
+// ─── AddJournalLine — inline journal entry input for project/health view ──────
+function AddJournalLine({ project, onAdd, placeholder }) {
+  const [text, setText] = React.useState('');
+  const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
+  function commit() {
+    if (text.trim()) { onAdd(text.trim()); setText(''); }
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
+      <div style={{ width: 5, height: 5, flexShrink: 0, borderRadius: '50%',
+        background: col + '88', marginTop: 11 }}/>
+      <input
+        value={text}
+        onChange={e => setText(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
+        onBlur={commit}
+        placeholder={placeholder || (project && project !== '__everything__' && project !== '__health__'
+          ? 'Add a journal entry… #' + project + ' will be added'
+          : 'Add a journal entry…')}
+        style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none',
+          fontFamily: serif, fontSize: F.md, color: C.text, caretColor: col }}
+      />
+    </div>
+  );
+}
+
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
 function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
   const [allMeals, setAllMeals] = useState(null);
