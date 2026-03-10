@@ -555,11 +555,11 @@ function Ring({score,color,size=48}) {
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
-function Card({children,style={}}) {
+function Card({children,style={},fitContent=false}) {
   return (
     <div style={{
       background:C.card,borderRadius:R,border:`1px solid ${C.border}`,
-      overflow:"clip",height:"100%",
+      overflow:"clip",height:fitContent?"auto":"100%",
       display:"flex",flexDirection:"column",
       ...style,
     }}>{children}</div>
@@ -2770,7 +2770,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
   }
 
   return (
-    <Card style={collapsed?{height:"auto"}:{}}>
+    <Card fitContent={!onToggle} style={collapsed?{height:"auto"}:{}}>
       {/* Card header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
         borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
@@ -4706,25 +4706,51 @@ function HealthAllMeals({ token, userId }) {
         setAllMeals(rows);
       });
   }, [token, userId]);
-  if (!allMeals) return <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
+
+  const PROT_W = 50, ENRG_W = 72;
+  const colProtein  = {fontFamily:mono,fontSize:F.sm,color:C.blue,  flexShrink:0,width:PROT_W,textAlign:'center',whiteSpace:'nowrap'};
+  const colKcal     = {fontFamily:mono,fontSize:F.sm,color:C.orange,flexShrink:0,width:ENRG_W,textAlign:'center',whiteSpace:'nowrap'};
+  const colMutedP   = {fontFamily:mono,fontSize:F.sm,color:C.muted, flexShrink:0,width:PROT_W,textAlign:'center',whiteSpace:'nowrap'};
+  const colMutedE   = {fontFamily:mono,fontSize:F.sm,color:C.muted, flexShrink:0,width:ENRG_W,textAlign:'center',whiteSpace:'nowrap'};
+  const chipBase    = {fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',flexShrink:0,borderRadius:4,padding:'2px 8px',whiteSpace:'nowrap'};
+  const rowS        = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
+
+  if (!allMeals) return <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
   if (!allMeals.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No meals logged yet.</div>;
+
   const byDate = {};
   allMeals.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+
   return (
     <div>
-      {Object.entries(byDate).map(([date, rows], di) => (
-        <div key={date}>
-          {di > 0 && <div style={{height:1,background:C.border,margin:'10px 0'}}/>}
-          <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
-          {rows.map((r, i) => (
-            <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'2px 0',fontFamily:serif,fontSize:F.md,color:C.text}}>
-              <span style={{flex:1}}>{r.text}</span>
-              {r.kcal ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.kcal} kcal</span> : null}
-              {r.protein ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.accent,flexShrink:0}}>{r.protein}g</span> : null}
-            </div>
-          ))}
-        </div>
-      ))}
+      {Object.entries(byDate).map(([date, rows], di) => {
+        const totalKcal    = rows.reduce((s,r) => s+(r.kcal||0), 0);
+        const totalProtein = rows.reduce((s,r) => s+(r.protein||0), 0);
+        return (
+          <div key={date}>
+            {di > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
+            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4}}>{fmtDate(date)}</div>
+            {rows.map((r, i) => (
+              <div key={i} style={rowS}>
+                <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
+                <span style={r.protein ? colProtein : colMutedP}>{r.protein ? `${r.protein}g` : '—'}</span>
+                <span style={r.kcal    ? colKcal    : colMutedE}>{r.kcal    ? `${r.kcal}kcal` : '—'}</span>
+              </div>
+            ))}
+            {(totalKcal > 0 || totalProtein > 0) && (
+              <div style={{display:'flex',alignItems:'center',gap:0,borderTop:`1px solid ${C.border}`,paddingTop:4,marginTop:2}}>
+                <div style={{flex:1}}/>
+                <div style={{width:PROT_W,display:'flex',justifyContent:'center'}}>
+                  {totalProtein > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{totalProtein}g</span>}
+                </div>
+                <div style={{width:ENRG_W,display:'flex',justifyContent:'center'}}>
+                  {totalKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:C.orange}}>{totalKcal}kcal</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -4739,6 +4765,7 @@ function HealthAllActivities({ token, userId }) {
       .eq('user_id', userId).eq('type', 'activity')
       .order('date', { ascending: false })
       .then(({ data }) => {
+        // Pull from both 'activity' (manual) and 'workouts' (synced)
         const rows = (data || []).flatMap(row => {
           const items = Array.isArray(row.data) ? row.data : [];
           return items.filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }));
@@ -4746,25 +4773,57 @@ function HealthAllActivities({ token, userId }) {
         setAllActs(rows);
       });
   }, [token, userId]);
-  if (!allActs) return <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
+
+  const KCOL=72, DCOL=60, PCOL=100;
+  const colDist  = {fontFamily:mono,fontSize:F.sm,color:C.blue,   flexShrink:0,width:DCOL,textAlign:'center',whiteSpace:'nowrap'};
+  const colPace  = {fontFamily:mono,fontSize:F.sm,color:C.green,  flexShrink:0,width:PCOL,textAlign:'center',whiteSpace:'nowrap'};
+  const colKcal  = {fontFamily:mono,fontSize:F.sm,color:C.orange, flexShrink:0,width:KCOL,textAlign:'center',whiteSpace:'nowrap'};
+  const colMuted = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0,width:w,textAlign:'center',whiteSpace:'nowrap'});
+  const chipBase = {fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',flexShrink:0,borderRadius:4,padding:'2px 8px',whiteSpace:'nowrap'};
+  const rowS     = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
+
+  if (!allActs) return <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
   if (!allActs.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No activities logged yet.</div>;
+
   const byDate = {};
   allActs.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+
+  function parseDist(d){ const m=String(d||'').match(/[\d.]+/); return m?+m[0]:null; }
+
   return (
     <div>
-      {Object.entries(byDate).map(([date, rows], di) => (
-        <div key={date}>
-          {di > 0 && <div style={{height:1,background:C.border,margin:'10px 0'}}/>}
-          <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
-          {rows.map((r, i) => (
-            <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'2px 0',fontFamily:serif,fontSize:F.md,color:C.text}}>
-              <span style={{flex:1}}>{r.text}</span>
-              {r.dist ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.dist}</span> : null}
-              {r.kcal ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.kcal} kcal</span> : null}
-            </div>
-          ))}
-        </div>
-      ))}
+      {Object.entries(byDate).map(([date, rows], di) => {
+        const totalKcal  = rows.reduce((s,r) => s+(r.kcal||0), 0);
+        const distVals   = rows.map(r => parseDist(r.dist)).filter(Boolean);
+        const totalDist  = distVals.length ? distVals.reduce((a,b)=>a+b,0) : 0;
+        return (
+          <div key={date}>
+            {di > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
+            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4}}>{fmtDate(date)}</div>
+            {rows.map((r, i) => (
+              <div key={i} style={rowS}>
+                <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
+                <SourceBadge source={r.source}/>
+                <span style={r.dist ? colDist : colMuted(DCOL)}>{r.dist||''}</span>
+                <span style={r.pace ? colPace : colMuted(PCOL)}>{r.pace ? `${r.pace}/mi` : ''}</span>
+                <span style={r.kcal ? colKcal : colMuted(KCOL)}>{r.kcal ? `-${r.kcal}kcal` : ''}</span>
+              </div>
+            ))}
+            {(totalKcal > 0 || totalDist > 0) && (
+              <div style={{display:'flex',alignItems:'center',gap:0,borderTop:`1px solid ${C.border}`,paddingTop:4,marginTop:2}}>
+                <div style={{flex:1}}/>
+                <div style={{width:DCOL,display:'flex',justifyContent:'center'}}>
+                  {totalDist > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{totalDist.toFixed(1)}mi</span>}
+                </div>
+                <div style={{width:PCOL}}/>
+                <div style={{width:KCOL,display:'flex',justifyContent:'center'}}>
+                  {totalKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:C.orange}}>{totalKcal}kcal</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -4829,17 +4888,26 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
         collapsed={false} onToggle={null}
       />
 
-      {/* All Meals */}
-      <Card>
-        <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10, padding:'11px 14px 0' }}>All Meals</div>
-        <div style={{ padding:'8px 14px 14px' }}><HealthAllMeals token={token} userId={userId} /></div>
-      </Card>
+      {/* Meals */}
+      <Widget label="Meals" color={C.red} autoHeight
+        headerRight={<span style={{display:'flex',gap:0}}>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:50,textAlign:'center'}}>prot</span>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
+        </span>}
+      >
+        <HealthAllMeals token={token} userId={userId} />
+      </Widget>
 
-      {/* All Activities */}
-      <Card>
-        <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10, padding:'11px 14px 0' }}>All Activities</div>
-        <div style={{ padding:'8px 14px 14px' }}><HealthAllActivities token={token} userId={userId} /></div>
-      </Card>
+      {/* Activities */}
+      <Widget label="Activity" color={C.green} autoHeight
+        headerRight={<span style={{display:'flex',gap:0}}>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:60,textAlign:'center'}}>dist</span>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:100,textAlign:'center'}}>pace</span>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
+        </span>}
+      >
+        <HealthAllActivities token={token} userId={userId} />
+      </Widget>
 
       {/* Tasks */}
       <Widget
