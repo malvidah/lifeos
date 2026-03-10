@@ -3397,6 +3397,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
 
 function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={C.accent} showProtein/>;}
 function SourceBadge({source}) {
+  if (!source) return null;
   const isStrava = source === "strava";
   return (
     <span style={{
