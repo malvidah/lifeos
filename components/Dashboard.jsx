@@ -1096,8 +1096,8 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
   const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   return (
     <div style={{
-      paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
-      paddingLeft: 14, paddingRight: 14,
+      paddingTop: "calc(env(safe-area-inset-top, 0px) + 14px)",
+      paddingLeft: 18, paddingRight: 14,
       paddingBottom: 10,
       flexShrink: 0,
       position: "sticky", top: 0, zIndex: 100,
@@ -1105,24 +1105,13 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
     }}>
       {/* Pull-down overscroll patch */}
       <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.bg,zIndex:99}}/>
-      {/* Glass bar — card-level rounding */}
+      {/* Transparent row — no bar, no background */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",
-        height: 52,
-        display: "flex", alignItems: "center", gap: 12, position: "relative",
-        backdropFilter: "blur(20px) saturate(1.4)",
-        WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-        background: `${C.surface}dd`,
-        border: `1px solid ${C.border}`,
-        borderRadius: 16,
-        boxShadow: C.shadow,
-        padding: "0 8px 0 18px",
+        height: 40,
+        display: "flex", alignItems: "center", position: "relative",
         WebkitAppRegion: "drag",
       }}>
-        {/* Ghost left copy for centering balance */}
-        <div style={{flex:1,visibility:"hidden",pointerEvents:"none",display:"flex"}}>
-          <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
-        </div>
         {/* Day Lab — centered */}
         <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
           <span onClick={onGoToToday} style={{
@@ -4573,7 +4562,7 @@ function ChatFloat({date, token, userId, healthKey}) {
           animation: "fadeIn 0.15s ease",
         }}>
           {/* Spacer to clear the TopBar (safe-area + 10px padding + 52px pill + 10px padding) */}
-          <div style={{ flexShrink: 0, height: "calc(env(safe-area-inset-top, 0px) + 72px)" }}/>
+          <div style={{ flexShrink: 0, height: "calc(env(safe-area-inset-top, 0px) + 64px)" }}/>
 
           {/* AI header — chevron down to collapse, title, date */}
           <div style={{
