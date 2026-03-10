@@ -3810,11 +3810,13 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   </div>
                   {/* Actual textarea — transparent so overlay shows, but caret+selection are native */}
                   <textarea
+                    ref={el=>{if(el){el.style.height='0';el.style.height=el.scrollHeight+'px';}}}
                     autoFocus
                     value={row.text}
                     rows={1}
                     onChange={e=>{
                       const text=e.target.value;
+                      const el=e.target; el.style.height='0'; el.style.height=el.scrollHeight+'px';
                       setRows(prev=>(Array.isArray(prev)?prev:[]).map(r=>r.id===row.id?{...r,text}:r));
                     }}
                     onKeyDown={e=>{
