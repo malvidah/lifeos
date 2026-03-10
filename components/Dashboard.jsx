@@ -3716,9 +3716,9 @@ function TaskFilterBtns({ filter, setFilter }) {
     </svg>
   );
   const btns = [
-    { key: 'all',  label: 'ALL', icon: null },
     { key: 'open', label: null,  icon: <OpenIcon/> },
     { key: 'done', label: null,  icon: <DoneIcon/> },
+    { key: 'all',  label: 'ALL', icon: null },
   ];
   return (
     <div style={{ display:'flex', gap:4 }}>
