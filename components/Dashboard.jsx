@@ -2832,6 +2832,7 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   const {value:rows, setValue:setRows, loaded} = useDbSave(date, type, [mkRow()], token, userId);
   const {value:savedEstimates, setValue:setSavedEstimates, loaded:estimatesLoaded} = useDbSave(date, type+"_kcal", {}, token, userId);
   const estimating = useRef(new Set());
+  const failed = useRef(new Set());
   const refs = useRef({});
   const [tick, setTick] = useState(0);
 
@@ -2852,15 +2853,14 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   useEffect(() => {
     if (!token || !loaded) return;
     safe
-      .filter(r => r.text?.trim() && !r.kcal && !estimating.current.has(r.id))
+      .filter(r => r.text?.trim() && !r.kcal && !estimating.current.has(r.id) && !failed.current.has(r.id))
       .forEach(row => {
         estimating.current.add(row.id);
-        setTick(t => t+1);
         estimateNutrition(promptFn(row.text), token).then(result => {
           estimating.current.delete(row.id);
           if (result) setRows(prev => (Array.isArray(prev)?prev:safe).map(r =>
             r.id===row.id ? {...r, kcal:result.kcal||null, protein:result.protein||null} : r));
-          else setTick(t => t+1);
+          else failed.current.add(row.id);
         });
       });
   }, [safe.map(r=>r.id+r.text).join(","), loaded, token]); // eslint-disable-line
@@ -2869,14 +2869,13 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   useEffect(() => {
     if (!token || !loaded || !estimatesLoaded) return;
     merged
-      .filter(r => !r.kcal && r.text && !estimating.current.has(r.id))
+      .filter(r => !r.kcal && r.text && !estimating.current.has(r.id) && !failed.current.has(r.id))
       .forEach(row => {
         estimating.current.add(row.id);
-        setTick(t => t+1);
         estimateNutrition(promptFn(row.text), token).then(result => {
           estimating.current.delete(row.id);
           if (result) setSavedEstimates(prev => ({...(typeof prev==="object"&&prev?prev:{}), [row.id]:result}));
-          else setTick(t => t+1);
+          else failed.current.add(row.id);
         });
       });
   }, [syncedRows, loaded, estimatesLoaded, token]); // eslint-disable-line
@@ -2885,16 +2884,15 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
   useEffect(() => {
     if (!showProtein || !token || !loaded) return;
     safe
-      .filter(r => r.text?.trim() && r.kcal && !r.protein && !estimating.current.has(r.id))
+      .filter(r => r.text?.trim() && r.kcal && !r.protein && !estimating.current.has(r.id) && !failed.current.has(r.id))
       .forEach(row => {
         estimating.current.add(row.id);
-        setTick(t => t+1);
         estimateNutrition(promptFn(row.text), token).then(result => {
           estimating.current.delete(row.id);
           if (result?.protein) {
             setRows(prev => (Array.isArray(prev)?prev:safe).map(r =>
               r.id===row.id ? {...r, protein:result.protein, kcal:result.kcal||r.kcal} : r));
-          } else setTick(t => t+1);
+          } else failed.current.add(row.id);
         });
       });
   }, [loaded, token, showProtein]); // eslint-disable-line
@@ -3072,6 +3070,7 @@ function Activity({date,token,userId,stravaConnected}) {
   const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "activity", [mkRow()], token, userId);
   const {value:savedEstimates, setValue:setSavedEstimates, loaded:estLoaded} = useDbSave(date, "activity_kcal", {}, token, userId);
   const estimating = useRef(new Set());
+  const failed = useRef(new Set());
   const [tick, setTick] = useState(0);
   const safe = (Array.isArray(manualRows)&&manualRows.length ? manualRows : [mkRow()]).map(r => r.estimating ? {...r, estimating:false} : r);
   const refs = useRef({});
@@ -3115,13 +3114,12 @@ function Activity({date,token,userId,stravaConnected}) {
   // AI kcal estimation for manual rows with no kcal (e.g. added via voice/chat)
   useEffect(()=>{
     if(!token||!loaded)return;
-    safe.filter(r=>r.text?.trim()&&!r.kcal&&!estimating.current.has(r.id)).forEach(row=>{
+    safe.filter(r=>r.text?.trim()&&!r.kcal&&!estimating.current.has(r.id)&&!failed.current.has(r.id)).forEach(row=>{
       estimating.current.add(row.id);
-      setTick(t=>t+1);
       estimateNutrition(`Calories burned for: "${row.text}" for a typical adult. Return JSON: {"kcal":300}`, token).then(result=>{
         estimating.current.delete(row.id);
         if(result?.kcal) setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===row.id?{...r,kcal:result.kcal||null}:r));
-        else setTick(t=>t+1);
+        else failed.current.add(row.id);
       });
     });
   },[safe.map(r=>r.id+r.text).join(","),loaded,token]); // eslint-disable-line
@@ -3129,13 +3127,12 @@ function Activity({date,token,userId,stravaConnected}) {
   // AI kcal estimation for synced rows without native calories
   useEffect(()=>{
     if(!token||!loaded||!estLoaded)return;
-    mergedSynced.filter(r=>!r.kcal&&r.text&&!estimating.current.has(r.id)).forEach(row=>{
+    mergedSynced.filter(r=>!r.kcal&&r.text&&!estimating.current.has(r.id)&&!failed.current.has(r.id)).forEach(row=>{
       estimating.current.add(row.id);
-      setTick(t=>t+1);
       estimateNutrition(`Calories burned for: "${row.text}"${row.dist?` (${row.dist})`:""} for a typical adult. Return JSON: {"kcal":300}`, token).then(result=>{
         estimating.current.delete(row.id);
         if(result?.kcal) setSavedEstimates(prev=>({...(typeof prev==="object"&&prev?prev:{}), [row.id]:result}));
-        else setTick(t=>t+1);
+        else failed.current.add(row.id);
       });
     });
   },[syncedRows,loaded,estLoaded,token]); // eslint-disable-line
