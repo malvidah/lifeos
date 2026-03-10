@@ -38,19 +38,32 @@ export async function GET(req) {
 
     const tagRe = isEverything ? null : TAG_RE(project);
 
-    // Extract journal lines
+    // Extract journal entries using block-level grouping:
+    // Consecutive non-empty lines form a "block". If any line in the block
+    // contains the tag (or we're in Everything mode), include ALL lines of that block.
     const journalEntries = [];
     for (const row of notesRows || []) {
       const text = typeof row.data === 'string' ? row.data : '';
       if (!text.trim()) continue;
       if (!isEverything && !tagRe.test(text)) continue;
-      text.split('\n').forEach((line, lineIndex) => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        if (isEverything || tagRe.test(line)) {
-          journalEntries.push({ date: row.date, text: trimmed, lineIndex });
+
+      const lines = text.split('\n');
+      let i = 0;
+      while (i < lines.length) {
+        // Skip blank lines between blocks
+        if (!lines[i].trim()) { i++; continue; }
+        // Collect a block of consecutive non-empty lines
+        const blockStart = i;
+        const block = [];
+        while (i < lines.length && lines[i].trim()) {
+          block.push({ text: lines[i].trim(), lineIndex: i });
+          i++;
         }
-      });
+        // Include the entire block if: Everything mode, OR any line in the block has the tag
+        if (isEverything || block.some(l => tagRe.test(l.text))) {
+          block.forEach(l => journalEntries.push({ date: row.date, text: l.text, lineIndex: l.lineIndex }));
+        }
+      }
     }
 
     // Fetch tasks — for Everything fetch all, for tagged projects filter by tag

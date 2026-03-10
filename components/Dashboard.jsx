@@ -267,6 +267,14 @@ function useDbSave(date, type, empty, token, userId) {
         setRev(r => r + 1);
       }
     };
+    // Sync from sibling hook instances that wrote to the same cache key
+    const memHandler = (e) => {
+      if (e.detail?.key === cacheKey && e.detail.value !== live.current) {
+        live.current = e.detail.value;
+        _set(e.detail.value);
+      }
+    };
+    window.addEventListener('lifeos:mem-update', memHandler);
     window.addEventListener('lifeos:refresh', handler);
     // Restore snapshot (from undo of AI entry)
     const restoreHandler = (e) => {
@@ -276,7 +284,7 @@ function useDbSave(date, type, empty, token, userId) {
       }
     };
     window.addEventListener('lifeos:snapshot-restore', restoreHandler);
-    return () => { window.removeEventListener('lifeos:refresh', handler); window.removeEventListener('lifeos:snapshot-restore', restoreHandler); };
+    return () => { window.removeEventListener('lifeos:mem-update', memHandler); window.removeEventListener('lifeos:refresh', handler); window.removeEventListener('lifeos:snapshot-restore', restoreHandler); };
   }, [type, cacheKey]);
 
   // Fetch from DB whenever date/type/token/userId changes, or rev bumps (poll/visibility)
@@ -344,6 +352,8 @@ function useDbSave(date, type, empty, token, userId) {
     MEM[cacheKey] = next;
     DIRTY[cacheKey] = true;
     _set(next);
+    // Notify sibling hook instances with the same cacheKey
+    window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: next } }));
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => {
       dbSave(dateRef.current, type, live.current, token);
