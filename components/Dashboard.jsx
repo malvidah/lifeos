@@ -64,7 +64,9 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 // ─── Projects — tag parsing & rendering ──────────────────────────────────────
 function extractTags(text) {
   if (!text || typeof text !== 'string') return [];
-  const re = /#([A-Za-z][A-Za-z0-9]+)/g;
+  // Require a non-word char (space, punctuation, EOL) after the tag so
+  // partial words mid-typing don't create spurious projects
+  const re = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
   const tags = []; const seen = new Set(); let m;
   while ((m = re.exec(text)) !== null) {
     if (!seen.has(m[1])) { seen.add(m[1]); tags.push(m[1]); }
@@ -4239,16 +4241,45 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     return s;
   }, [notes, tasks]);
 
-  // Auto-create projects for new tags
+  // Auto-create/cleanup projects — debounced so partial mid-word tags are ignored.
+  // Also scans all MEM-cached entries to clean up stale auto-created tags.
   useEffect(() => {
     if (!projectsLoaded) return;
-    const meta = projectsMeta || {};
-    const newTags = [...todayTags].filter(t => !meta[t]);
-    if (!newTags.length) return;
-    const updated = { ...meta };
-    newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; });
-    setProjectsMeta(updated, { skipHistory: true });
-  }, [todayTags, projectsLoaded]); // eslint-disable-line
+    const timer = setTimeout(() => {
+      const meta = projectsMeta || {};
+
+      // Collect ALL tags referenced in any cached notes/tasks entry for this user
+      const allCachedTags = new Set();
+      for (const key of Object.keys(MEM)) {
+        if (!key.startsWith(`${userId}:`)) continue;
+        const parts = key.split(':');
+        const type = parts[parts.length - 1];
+        if (type === 'notes') {
+          extractTags(MEM[key] || '').forEach(t => allCachedTags.add(t));
+        } else if (type === 'tasks' && Array.isArray(MEM[key])) {
+          MEM[key].forEach(r => { if (r?.text) extractTags(r.text).forEach(t => allCachedTags.add(t)); });
+        }
+      }
+
+      const updated = { ...meta };
+      let changed = false;
+
+      // Add new tags from today
+      const newTags = [...todayTags].filter(t => !meta[t]);
+      newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; changed = true; });
+
+      // Remove stale auto-created tags: not in any cached content AND no description
+      for (const key of Object.keys(updated)) {
+        const hasDesc = !!(updated[key]?.description);
+        if (!hasDesc && !allCachedTags.has(key)) {
+          delete updated[key]; changed = true;
+        }
+      }
+
+      if (changed) setProjectsMeta(updated, { skipHistory: true });
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [todayTags, projectsLoaded, notes, tasks]); // eslint-disable-line
 
   const names = Object.keys(projectsMeta || {}).sort();
   if (!projectsLoaded || names.length === 0) return null;
