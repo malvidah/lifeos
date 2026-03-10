@@ -4687,7 +4687,7 @@ function ChatFloat({date, token, userId, healthKey}) {
         pointerEvents: "none",
       }}>
         <div style={{
-          width: "100%", maxWidth: 800,
+          width: "100%", maxWidth: 560,
           pointerEvents: "auto",
           display: "flex", flexDirection: "row", alignItems: "center",
           backdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
