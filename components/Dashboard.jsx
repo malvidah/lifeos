@@ -2962,190 +2962,156 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
 // Plain textarea with a transparent overlay that colorizes "# heading" lines.
 // Cmd+B / Cmd+I wrap selected text in ** / *.
 function Notes({date,userId,token}) {
-  const {value,setValue,loaded} = useDbSave(date,"notes","",token,userId);
-  const taRef = useRef(null);
-  const [selectedImgLine, setSelectedImgLine] = useState(null); // line index of selected [img:] or null
-  const pendingCursorRef = useRef(null); // cursor position to apply after next value update
-  const [focused, setFocused] = useState(false); // true while textarea has focus — chips vs spans
+  const {value, setValue, loaded} = useDbSave(date, 'notes', '', token, userId);
+  const ceRef = useRef(null);        // contenteditable div
+  const isComposingRef = useRef(false);
+  const skipSyncRef = useRef(false); // true while user is typing → don't overwrite DOM
 
-  // Auto-resize + apply pending cursor whenever value changes
-  useEffect(() => {
-    const ta = taRef.current;
-    if (!ta) return;
-    ta.style.height = "auto";
-    ta.style.height = ta.scrollHeight + "px";
-    if (pendingCursorRef.current !== null) {
-      const pos = pendingCursorRef.current;
-      pendingCursorRef.current = null;
-      // Defer one tick so the textarea value is fully committed
-      requestAnimationFrame(() => {
-        ta.setSelectionRange(pos, pos);
-        ta.focus();
-      });
+  // ── serialize DOM → plain text ──────────────────────────────────────────
+  function domToText(el) {
+    let out = '';
+    function walk(node) {
+      if (node.nodeType === Node.TEXT_NODE) { out += node.textContent; return; }
+      if (node.nodeName === 'IMG') { out += `[img:${node.dataset.url || node.src}]`; return; }
+      if (node.nodeName === 'BR') { out += '\n'; return; }
+      const isBlock = /^(DIV|P)$/.test(node.nodeName);
+      if (isBlock && out.length > 0 && !out.endsWith('\n')) out += '\n';
+      for (const child of node.childNodes) walk(child);
+      if (isBlock && !out.endsWith('\n')) out += '\n';
     }
-  }, [value, loaded]);
-
-  // Clear image selection when date changes
-  useEffect(() => { setSelectedImgLine(null); }, [date]);
-
-  function wrapSelection(marker) {
-    const ta = taRef.current;
-    if (!ta) return;
-    const {selectionStart:s, selectionEnd:e, value:v} = ta;
-    if (s === e) return;
-    setValue(v.slice(0,s) + marker + v.slice(s,e) + marker + v.slice(e));
-    requestAnimationFrame(() => {
-      ta.focus();
-      ta.setSelectionRange(s + marker.length, e + marker.length);
-    });
+    for (const child of el.childNodes) walk(child);
+    // trim single trailing newline that contenteditable always appends
+    return out.replace(/\n$/, '');
   }
 
-  // Move cursor off any [img:] line — always land on the line below it.
-  // Also tracks selectedImgLine so the image gets a selection outline.
-  function normalizeCursor(ta) {
-    if (!ta) return;
-    const val = ta.value;
-    const pos = ta.selectionStart;
-    const lines = val.split("\n");
-    let charCount = 0;
-    for (let i = 0; i < lines.length; i++) {
-      const lineStart = charCount;
-      const lineEnd = charCount + lines[i].length;
-      if (/^\[img:/.test(lines[i]) && pos >= lineStart && pos <= lineEnd) {
-        setSelectedImgLine(i);
-        const afterImg = lineEnd + 1;
-        const target = afterImg <= val.length ? afterImg : lineStart;
-        ta.setSelectionRange(target, target);
-        return;
-      }
-      charCount += lines[i].length + 1;
-    }
-    // Cursor is not on any img line — clear selection
-    setSelectedImgLine(null);
-  }
-
-  function handleKeyDown(e) {
-    if ((e.metaKey||e.ctrlKey) && e.key==="b") { e.preventDefault(); wrapSelection("**"); return; }
-    if ((e.metaKey||e.ctrlKey) && e.key==="i") { e.preventDefault(); wrapSelection("*"); return; }
-
-    if (e.key === "Backspace" || e.key === "Delete") {
-      // If already selected → delete it
-      if (selectedImgLine !== null) {
-        e.preventDefault();
-        const lines = value.split("\n");
-        lines.splice(selectedImgLine, 1);
-        const next = lines.join("\n");
-        // Place cursor at the same line index (now the line below the deleted img)
-        let charCount = 0;
-        for (let i = 0; i < Math.min(selectedImgLine, lines.length); i++) charCount += lines[i].length + 1;
-        pendingCursorRef.current = Math.min(charCount, next.length);
-        setValue(next, {undoLabel:"Delete image"});
-        setSelectedImgLine(null);
-        return;
-      }
-
-      const ta = taRef.current;
-      if (!ta) return;
-      const pos = ta.selectionStart;
-      const lines = value.split("\n");
-      // Build per-line start positions
-      let charCount = 0;
-      for (let i = 0; i < lines.length; i++) {
-        const lineStart = charCount;
-        // Cursor is at the start of this line, and the previous line is [img:]
-        if (e.key === "Backspace" && pos === lineStart && i > 0 && /^\[img:/.test(lines[i-1])) {
-          e.preventDefault();
-          setSelectedImgLine(i - 1);
-          return;
-        }
-        charCount += lines[i].length + 1;
-      }
-    }
-
-    // Arrow/Enter: normalize cursor after movement in case it landed on an [img:] line
-    if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Enter"].includes(e.key)) {
-      requestAnimationFrame(() => normalizeCursor(taRef.current));
-    }
-
-    // Any other printable key clears image selection
-    if (!["Shift","Meta","Control","Alt","ArrowLeft","ArrowRight","ArrowUp","ArrowDown","Backspace","Delete","Tab"].includes(e.key)) {
-      setSelectedImgLine(null);
-    }
-  }
-
-  // Render markdown as React elements
-  function renderContent(text) {
-    if (!text || !text.trim()) return null;
-    return text.split("\n").map((line, i) => {
-      // Image line
+  // ── deserialize plain text → innerHTML ──────────────────────────────────
+  function textToHtml(text) {
+    if (!text) return '<div><br></div>';
+    const lines = text.split('\n');
+    return lines.map(line => {
       if (/^\[img:/.test(line)) {
         const m = line.match(/^\[img:([^\]]+)\]/);
         if (m) {
-          const isSelected = selectedImgLine === i;
-          // Always show full image. pointerEvents:none so ALL clicks fall through to textarea.
-          // Image selection is handled by normalizeCursor detecting cursor on the img line.
-          return (
-            <div key={i} style={{margin:"4px 0",lineHeight:0,pointerEvents:"none",display:"inline-block"}}>
-              <img
-                src={m[1]} alt=""
-                style={{
-                  maxWidth:"100%", maxHeight:320, borderRadius:8, display:"block",
-                  outline: isSelected ? "2px solid #D08828" : "2px solid transparent",
-                  outlineOffset: 2,
-                  transition:"outline-color 0.15s",
-                }}
-              />
-            </div>
-          );
+          const url = m[1].replace(/"/g, '&quot;');
+          return `<div><img src="${url}" data-url="${url}" style="max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:default" contenteditable="false" draggable="false"/></div>`;
         }
       }
-      // Heading
-      if (line.startsWith("# ")) {
-        return <div key={i} style={{color:C.accent,fontFamily:serif,fontSize:F.md,lineHeight:"1.7"}}>{renderInline(line.slice(2))}</div>;
-      }
-      // Empty line
-      if (!line.trim()) {
-        return <div key={i} style={{height:"1.7em"}}>&nbsp;</div>;
-      }
-      // Normal
-      return <div key={i} style={{color:C.text,fontFamily:serif,fontSize:F.md,lineHeight:"1.7",pointerEvents:"none"}}>{renderInline(line)}</div>;
-    });
+      // Escape HTML then apply inline formatting spans
+      const escaped = line
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      const formatted = applyInlineSpans(escaped);
+      return `<div>${formatted || '<br>'}</div>`;
+    }).join('');
   }
 
-  function renderInline(text) {
-    // Combined: bold, italic, URLs, #tags
-    const re = /(\*\*(.+?)\*\*|\*(.+?)\*|https?:\/\/[^\s<>"')\]]+|#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9]))/g;
-    const parts = []; let last=0, m;
-    while ((m = re.exec(text)) !== null) {
-      if (m.index > last) parts.push(text.slice(last, m.index));
-      if (m[0].startsWith("**")) parts.push(<strong key={m.index}>{m[2]}</strong>);
-      else if (m[0].startsWith("*")) parts.push(<em key={m.index}>{m[3]}</em>);
-      else if (m[0].startsWith("http")) {
-        const url = m[0];
-        parts.push(<a key={m.index} href={url} target="_blank" rel="noreferrer"
-          style={{color:"#C8820A",textDecoration:"none",pointerEvents:"auto",transition:"color 0.15s"}}
-          onMouseEnter={e=>e.currentTarget.style.color="#F5A623"}
-          onMouseLeave={e=>e.currentTarget.style.color="#C8820A"}
-        >{url}</a>);
-      }
-      else {
-        if (focused) {
-          // While editing: colored span matching renderTaskInline — consistent with task edit mode
-          const col = projectColor(m[4].toLowerCase());
-          parts.push(<span key={m.index} style={{color:col,fontFamily:serif}}>{m[0]}</span>);
-        } else {
-          // While reading: full chip
-          parts.push(<TagChip key={m.index} name={m[4]}/>);
-        }
-      }
-      last = m.index + m[0].length;
+  // Apply bold/italic/URL/tag spans to an already-escaped line
+  function applyInlineSpans(escaped) {
+    // Patterns (all on escaped text)
+    return escaped
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
+      .replace(/(https?:\/\/[^\s<>"')]+)/g, '<a href="$1" target="_blank" rel="noreferrer" style="color:#C8820A;text-decoration:none;pointer-events:auto">$1</a>')
+      .replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) => {
+        const col = projectColor(tag);
+        return `<span style="color:${col}">${m}</span>`;
+      });
+  }
+
+  // ── sync text state → DOM (only when external value changes) ────────────
+  const lastSyncedText = useRef(null);
+  useEffect(() => {
+    if (!ceRef.current) return;
+    if (skipSyncRef.current) return;
+    const incoming = value || '';
+    if (incoming === lastSyncedText.current) return; // no real change
+    lastSyncedText.current = incoming;
+    ceRef.current.innerHTML = textToHtml(incoming);
+  }, [value, loaded]); // eslint-disable-line
+
+  // ── handle user input ────────────────────────────────────────────────────
+  function handleInput() {
+    if (isComposingRef.current) return;
+    skipSyncRef.current = true;
+    const text = domToText(ceRef.current);
+    lastSyncedText.current = text;
+    setValue(text, {skipHistory: true});
+    // Re-render inline spans without moving cursor
+    // (skip full innerHTML rebuild — would reset cursor position)
+    skipSyncRef.current = false;
+  }
+
+  function handleBlur() {
+    skipSyncRef.current = false;
+    const text = domToText(ceRef.current);
+    lastSyncedText.current = text;
+    setValue(text, {undoLabel: 'Edit notes'});
+    // Full re-render on blur to clean up any malformed spans
+    ceRef.current.innerHTML = textToHtml(text);
+  }
+
+  function handleKeyDown(e) {
+    // Cmd+B / Cmd+I — wrap selection
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
+      e.preventDefault(); document.execCommand('bold'); return;
     }
-    if (last < text.length) parts.push(text.slice(last));
-    return parts;
+    if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
+      e.preventDefault(); document.execCommand('italic'); return;
+    }
+  }
+
+  async function handlePaste(e) {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault();
+        const file = item.getAsFile();
+        if (!file) continue;
+        const url = await uploadImageFile(file, token);
+        if (!url) continue;
+        // Insert image block at current selection
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount) {
+          const range = sel.getRangeAt(0);
+          range.deleteContents();
+          // Build wrapper div with img
+          const wrapper = document.createElement('div');
+          const img = document.createElement('img');
+          img.src = url; img.dataset.url = url;
+          img.style.cssText = 'max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:default';
+          img.contentEditable = 'false'; img.draggable = false;
+          wrapper.appendChild(img);
+          const after = document.createElement('div');
+          after.innerHTML = '<br>';
+          range.insertNode(after);
+          range.insertNode(wrapper);
+          // Move cursor after the inserted content
+          range.setStartAfter(after);
+          range.collapse(true);
+          sel.removeAllRanges(); sel.addRange(range);
+        }
+        handleInput();
+        break;
+      }
+    }
+  }
+
+  async function handleDrop(e) {
+    const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+    if (!files.length) return;
+    e.preventDefault();
+    const url = await uploadImageFile(files[0], token);
+    if (!url) return;
+    // Append at end
+    const text = domToText(ceRef.current);
+    const next = text + `\n[img:${url}]\n`;
+    lastSyncedText.current = next;
+    setValue(next, {skipHistory: true});
+    ceRef.current.innerHTML = textToHtml(next);
   }
 
   if (!loaded) return (
-    <div style={{display:"flex",flexDirection:"column",gap:10,padding:"4px 0"}}>
+    <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
       <Shimmer width="80%" height={14}/>
       <Shimmer width="60%" height={14}/>
       <Shimmer width="70%" height={14}/>
@@ -3153,97 +3119,28 @@ function Notes({date,userId,token}) {
     </div>
   );
 
-  const baseTextStyle = {
-    fontFamily:serif, fontSize:F.md, lineHeight:"1.7",
-    whiteSpace:"pre-wrap", wordBreak:"break-word",
-  };
-
-  function autoResize(e) {
-    e.target.style.height = "auto";
-    e.target.style.height = e.target.scrollHeight + "px";
-    setValue(e.target.value, {skipHistory:true});
-  }
-
-  const minH = 80;
-  const sharedStyle = { ...baseTextStyle, padding:0, margin:0, minHeight:minH };
-
   return (
-    // Overlay approach: textarea in normal flow (sizes container); rendered div on top (pointer-events:none)
-    // No mode toggle → no layout shift on click. Cursor always visible via caretColor.
-    <div style={{ position:"relative", minHeight:minH, cursor:"text", display:"block", width:"100%" }}
-      onClick={() => { taRef.current?.focus(); requestAnimationFrame(() => normalizeCursor(taRef.current)); }}>
-      {/* Textarea — sizes the container, text is transparent so only cursor shows */}
-      <textarea
-        ref={taRef}
-        value={value}
-        onChange={e => { setValue(e.target.value, {skipHistory:true}); const t=e.target; t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }}
-        onFocus={() => setFocused(true)}
-        onBlur={() => { setFocused(false); setValue(v => v, {undoLabel:"Edit notes"}); }}
-        onSelect={() => normalizeCursor(taRef.current)}
-        onKeyDown={handleKeyDown}
-        placeholder=" "
-        onPaste={async e => {
-          const items = e.clipboardData?.items;
-          if (!items) return;
-          for (const item of items) {
-            if (item.type.startsWith("image/")) {
-              e.preventDefault();
-              const file = item.getAsFile();
-              if (!file) continue;
-              const url = await uploadImageFile(file, token);
-              if (!url) continue;
-              const ta = taRef.current;
-              const pos = ta.selectionStart;
-              const cur = ta.value;
-              const marker = `
-[img:${url}]
-`;
-              const next = cur.slice(0, pos) + marker + cur.slice(pos);
-              pendingCursorRef.current = pos + marker.length;
-              setValue(next, {skipHistory:true});
-              break;
-            }
-          }
-        }}
-        onDrop={async e => {
-          const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith("image/"));
-          if (!files.length) return;
-          e.preventDefault();
-          const url = await uploadImageFile(files[0], token);
-          if (!url) return;
-          const ta = taRef.current;
-          const cur = ta.value;
-          const marker = `
-[img:${url}]
-`;
-          const next = cur + marker;
-          pendingCursorRef.current = next.length;
-          setValue(next, {skipHistory:true});
-        }}
-        onDragOver={e => e.preventDefault()}
-        style={{
-          ...sharedStyle,
-          width:"100%", resize:"none", display:"block",
-          border:"none", outline:"none",
-          background:"transparent",
-          color:"transparent",
-          caretColor:C.accent,
-          overflow:"hidden",
-          position:"relative", zIndex:3,
-        }}
-      />
-      {/* Overlay — rendered chips + formatting. Pointer-events off so clicks reach textarea */}
-      <div style={{
-        ...sharedStyle,
-        position:"absolute", top:0, left:0, right:0,
-        color:C.text, pointerEvents:"none", zIndex:2,
-      }}>
-        {value && value.trim()
-          ? renderContent(value)
-          : <div style={{color:C.dim}}>What's on your mind?</div>
-        }
-      </div>
-    </div>
+    <div
+      ref={ceRef}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={handleInput}
+      onBlur={handleBlur}
+      onKeyDown={handleKeyDown}
+      onPaste={handlePaste}
+      onDrop={handleDrop}
+      onDragOver={e => e.preventDefault()}
+      onCompositionStart={() => { isComposingRef.current = true; }}
+      onCompositionEnd={() => { isComposingRef.current = false; handleInput(); }}
+      data-placeholder="What's on your mind?"
+      style={{
+        fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+        color: C.text, outline: 'none', cursor: 'text',
+        minHeight: 80, width: '100%',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        caretColor: C.accent,
+      }}
+    />
   );
 }
 
@@ -6085,6 +5982,7 @@ export default function Dashboard() {
         *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
         input::placeholder,textarea::placeholder{color:${C.dim};opacity:1;}
+        [contenteditable][data-placeholder]:empty::before{content:attr(data-placeholder);color:${C.dim};pointer-events:none;}
         .oura-token-input::placeholder{color:${C.dim};opacity:1;}
         a{text-decoration:none;}
         @media(max-width:768px){input,textarea,select{font-size:16px;}}
