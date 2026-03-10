@@ -4579,7 +4579,7 @@ function ChatFloat({date, token, userId, healthKey}) {
 
             {/* DAY LAB AI + Premium badge */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: C.text }}>
+              <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: C.dim }}>
                 Day Lab AI
               </span>
               {isPremiumUser && (
@@ -4592,7 +4592,7 @@ function ChatFloat({date, token, userId, healthKey}) {
             </div>
 
             {/* Date */}
-            <span style={{ fontFamily: serif, fontSize: F.lg, color: C.accent, letterSpacing: "-0.02em" }}>
+            <span style={{ fontFamily: serif, fontSize: F.lg, color: "#FFFFFF", letterSpacing: "-0.02em" }}>
               {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>
