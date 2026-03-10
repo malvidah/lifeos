@@ -3038,6 +3038,16 @@ function Notes({date,userId,token}) {
         const m = line.match(/^\[img:([^\]]+)\]/);
         if (m) {
           const isSelected = selectedImgLine === i;
+          // While focused (editing): show dim placeholder so textarea caret stays visible
+          if (focused) {
+            return (
+              <div key={i} style={{margin:"2px 0",lineHeight:"1.7",pointerEvents:"none",
+                color:C.dim,fontFamily:mono,fontSize:"11px",letterSpacing:"0.04em"}}>
+                [image]
+              </div>
+            );
+          }
+          // While blurred (reading): show full image
           return (
             <div key={i} style={{margin:"4px 0",lineHeight:0,pointerEvents:"auto",display:"inline-block"}}>
               <img
@@ -3046,7 +3056,6 @@ function Notes({date,userId,token}) {
                   e.stopPropagation();
                   setSelectedImgLine(isSelected ? null : i);
                   taRef.current?.focus();
-                  // Place cursor on the line below the image so typing starts there
                   let cc = 0;
                   const lines = value.split("\n");
                   for (let li = 0; li <= i && li < lines.length; li++) cc += lines[li].length + 1;
@@ -3752,9 +3761,21 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
   const visible = taskFilter==='open' ? open : taskFilter==='done' ? done : safe;
   function onKey(e,id,idx){
-    if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
+    if(e.key==="Enter"){
+      e.preventDefault();
+      const ta = refs.current[id];
+      const pos = ta ? ta.selectionStart : safe[idx].text.length;
+      const before = safe[idx].text.slice(0, pos);
+      const after  = safe[idx].text.slice(pos);
+      const row = mkRow();
+      const newRows = safe.map(r=>r.id===id?{...r,text:before}:r);
+      newRows.splice(idx+1,0,{...row,text:after});
+      setRows(newRows);
+      setTimeout(()=>{ const el=refs.current[row.id]; if(el){el.focus();el.setSelectionRange(0,0);} },30);
+    }
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);}
   }
+  function autoResizeTask(el){ if(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px"; } }
   if(!loaded) return (
     <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
       <Shimmer width="75%" height={13}/>
@@ -3782,20 +3803,23 @@ function Tasks({date,token,userId,taskFilter='all'}) {
               display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
             {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
           </button>
-          {/* Overlay approach: transparent input + chip render div on top */}
+          {/* Overlay: auto-grow textarea (transparent) + chip render div on top */}
           <div style={{ position:"relative", flex:1, lineHeight:1.7 }} onClick={() => refs.current[row.id]?.focus()}>
-            <input ref={el=>refs.current[row.id]=el} value={row.text}
-              onChange={e=>setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r))}
+            <textarea ref={el=>{ refs.current[row.id]=el; if(el) autoResizeTask(el); }} value={row.text}
+              rows={1}
+              onChange={e=>{ setRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value}:r)); autoResizeTask(e.target); }}
               onKeyDown={e=>onKey(e,row.id,idx)}
               placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=="done"?"Add a task…":""}
               style={{
                 background:"transparent",border:"none",outline:"none",padding:0,
-                width:"100%",lineHeight:1.7,
+                width:"100%",lineHeight:1.7,resize:"none",overflow:"hidden",
                 color:"transparent",
                 caretColor:row.done?C.muted:C.accent,
                 fontFamily:serif,fontSize:F.md,
                 textDecoration:row.done?"line-through":"none",
                 position:"relative",zIndex:1,
+                whiteSpace:"pre-wrap",wordBreak:"break-word",
+                display:"block",
               }}/>
             <div style={{
               position:"absolute",top:0,left:0,right:0,
@@ -3803,7 +3827,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
               color:row.done?C.muted:C.text,
               pointerEvents:"none",zIndex:2,
               textDecoration:row.done?"line-through":"none",
-              overflow:"hidden",whiteSpace:"nowrap",
+              whiteSpace:"pre-wrap",wordBreak:"break-word",
             }}>
               {row.text
                 ? renderWithTags(row.text)
@@ -5016,8 +5040,9 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingBottom:200 }}>
-      {/* Top nav strip */}
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px' }}>
+      {/* Top nav strip — sticky */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px',
+        position:'sticky', top:0, zIndex:10, background:C.bg, marginLeft:-10, marginRight:-10, paddingLeft:14, paddingRight:14 }}>
         <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:C.green+'99', flexShrink:0 }} aria-label="Back">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
@@ -5269,9 +5294,14 @@ function ProjectView({ project, token, userId, onBack }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingBottom: 200 }}>
 
-      {/* ── Top nav strip — back arrow + project name, bare like projects chip bar ── */}
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px' }}>
-        <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:_pcol+'99', flexShrink:0 }} aria-label="Back">
+      {/* ── Top nav strip — sticky, back arrow + project name ── */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px',
+        position:'sticky', top:0, zIndex:10, background:C.bg, marginLeft:-10, marginRight:-10, paddingLeft:14, paddingRight:14 }}>
+        <button onClick={async () => {
+          if (editingEntry) await saveJournalEdit(editingEntry.date, editingEntry.lineIndex, editingEntry.text);
+          if (editingDesc) { const updated = { ...(projectsMeta || {}), [project]: { ...meta, description: descVal } }; setProjectsMeta(updated, { skipHistory: true }); }
+          onBack();
+        }} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:_pcol+'99', flexShrink:0 }} aria-label="Back">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:_pcol }}>
