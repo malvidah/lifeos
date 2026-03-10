@@ -1103,7 +1103,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
   const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   return (
     <div style={{
-      paddingTop: "calc(env(safe-area-inset-top, 0px) + 14px)",
+      paddingTop: "calc(env(safe-area-inset-top, 0px) + 28px)",
       paddingLeft: 18, paddingRight: 14,
       paddingBottom: 10,
       flexShrink: 0,
@@ -4236,7 +4236,7 @@ function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
 // ─── Chat / QuickAdd ──────────────────────────────────────────────────────────
 // Collapsed: floating entry bar (quick commands, no history).
 // Expanded: full-height panel with conversation history, Q&A + entry actions.
-function ChatFloat({date, token, userId, healthKey}) {
+function ChatFloat({date, token, userId, healthKey, theme}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
@@ -6754,7 +6754,7 @@ export default function Dashboard() {
                   <div style={{flex:"1 1 0", minWidth:0, minHeight:0,
                     display:"flex", flexDirection:"column", gap:10,
                     overflowY:"auto", paddingBottom:180}}>
-                    <div style={{flex:"1 1 0", minHeight:0, display:"flex", flexDirection:"column"}}>
+                    <div style={{flex:"1 1 auto", minHeight:320, display:"flex", flexDirection:"column"}}>
                       <Widget label={leftWidget.label} color={leftWidget.color()}
                         collapsed={collapseMap[leftWidget.id]}
                         onToggle={toggleMap[leftWidget.id]}
@@ -6770,8 +6770,8 @@ export default function Dashboard() {
                     overflowY:"auto", paddingBottom:180}}>
                     {rightWidgets.map(w=>(
                       <div key={w.id} style={{
-                        flex: collapseMap[w.id]?"0 0 auto":"1 1 0",
-                        minHeight: collapseMap[w.id]?0:80,
+                        flex: collapseMap[w.id]?"0 0 auto":"1 1 auto",
+                        minHeight: collapseMap[w.id]?0:200,
                         overflow:"hidden"}}>
                         <Widget label={w.label} color={w.color()}
                           collapsed={collapseMap[w.id]}
@@ -6791,7 +6791,7 @@ export default function Dashboard() {
 
       {/* Floating chat pill — hidden during search */}
       {!searchOpen && (
-        <ChatFloat date={selected} token={token} userId={userId}
+        <ChatFloat date={selected} token={token} userId={userId} theme={theme}
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
       )}
     </div>
