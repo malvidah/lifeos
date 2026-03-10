@@ -1095,39 +1095,45 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
   }, [selected]);
   const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   return (
-    <div style={{background:`${C.surface}e8`, borderBottom:`1px solid ${C.border}50`,
-      backdropFilter:"blur(20px) saturate(1.4)", WebkitBackdropFilter:"blur(20px) saturate(1.4)",
+    <div style={{
       paddingTop: "env(safe-area-inset-top, 0px)",
-      height: "calc(44px + env(safe-area-inset-top, 0px))",
-      display:"flex",alignItems:"stretch",flexShrink:0,
-      position:"sticky",top:0,zIndex:100,
-      WebkitAppRegion:"drag",userSelect:"none"}}>
-      {/* Extend topbar color behind pull-down overscroll area */}
-      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.surface,zIndex:99}}/>
-      {/* Inner content: constrained to MAX_W, centered */}
+      paddingLeft: 12, paddingRight: 12,
+      paddingBottom: 8,
+      flexShrink: 0,
+      position: "sticky", top: 0, zIndex: 100,
+      WebkitAppRegion: "drag", userSelect: "none",
+    }}>
+      {/* Pull-down overscroll patch */}
+      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.bg,zIndex:99}}/>
+      {/* Glass pill */}
       <div style={{
-        flex:1, maxWidth:1100, margin:"0 auto", width:"100%",
-        padding:"0 16px 6px",
-        display:"flex", alignItems:"flex-end", gap:12, position:"relative",
-        WebkitAppRegion:"drag",
+        maxWidth: 1200, margin: "0 auto",
+        height: 44,
+        display: "flex", alignItems: "center", gap: 12, position: "relative",
+        backdropFilter: "blur(24px) saturate(1.8) brightness(1.04)",
+        WebkitBackdropFilter: "blur(24px) saturate(1.8) brightness(1.04)",
+        background: `${C.surface}bb`,
+        border: `1px solid ${C.border}70`,
+        borderRadius: 100,
+        boxShadow: `0 2px 18px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.07)`,
+        padding: "0 6px 0 16px",
+        WebkitAppRegion: "drag",
       }}>
-      {/* Left spacer on desktop so date centers properly */}
-      <div style={{flex:1,display:"flex",alignItems:"baseline",gap:7,
-        justifyContent:"flex-start",visibility:"hidden",pointerEvents:"none"}}>
-        <span style={{fontFamily:mono,fontSize:F.md}}>●</span>
-        <div style={{width:70}}/>
-      </div>
-      {/* Day Lab — centered, always */}
-      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
-        <span onClick={onGoToToday} style={{
-          fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
-          color:C.text, cursor:onGoToToday?"pointer":"default",
-        }}>Day Lab</span>
-      </div>
-      <div style={{flex:1}}/>
-      <div style={{WebkitAppRegion:"no-drag"}}>
-        <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
-      </div>
+        {/* Ghost left copy for centering balance */}
+        <div style={{flex:1,visibility:"hidden",pointerEvents:"none",display:"flex"}}>
+          <UserMenu session={{session}} token={{token}} userId={{userId}} theme={{theme}} onThemeChange={{onThemeChange}} stravaConnected={{stravaConnected}} onStravaChange={{onStravaChange}}/>
+        </div>
+        {/* Day Lab — centered */}
+        <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
+          <span onClick={{onGoToToday}} style={{
+            fontFamily:serif, fontSize:F.md, letterSpacing:"-0.02em",
+            color:C.text, cursor:onGoToToday?"pointer":"default",
+          }}>Day Lab</span>
+        </div>
+        <div style={{flex:1}}/>
+        <div style={{WebkitAppRegion:"no-drag"}}>
+          <UserMenu session={{session}} token={{token}} userId={{userId}} theme={{theme}} onThemeChange={{onThemeChange}} stravaConnected={{stravaConnected}} onStravaChange={{onStravaChange}}/>
+        </div>
       </div>
     </div>
   );
@@ -4566,70 +4572,63 @@ function ChatFloat({date, token, userId, healthKey}) {
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: "0 12px",
+        padding: expanded ? "0 12px" : "0 12px 12px",
         pointerEvents: "none",
+        transition: "padding 0.3s cubic-bezier(0.4,0,0.2,1)",
       }}>
-      {/* Inner card: constrained width, rounded top, floats above content */}
+      {/* Inner card: glass pill collapsed / glass panel expanded */}
       <div style={{
         width: "100%",
-        maxWidth: expanded ? 740 : 1100,
+        maxWidth: 800,
         pointerEvents: "auto",
         display: "flex", flexDirection: "column", alignItems: "stretch",
-        background: expanded ? C.surface : `${C.surface}ee`,
-        backdropFilter: "blur(20px) saturate(1.4)",
-        WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-        borderTop: `1px solid ${C.border}60`,
-        borderLeft: `1px solid ${C.border}40`,
-        borderRight: `1px solid ${C.border}40`,
-        borderRadius: "14px 14px 0 0",
-        boxShadow: expanded ? "0 -8px 40px rgba(0,0,0,0.45)" : "0 -4px 24px rgba(0,0,0,0.22)",
-        transition: "max-width 0.3s cubic-bezier(0.4,0,0.2,1)",
+        backdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
+        WebkitBackdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
+        background: expanded ? `${C.surface}f0` : `${C.surface}cc`,
+        border: `1px solid ${C.border}${expanded ? "80" : "70"}`,
+        borderRadius: expanded ? "20px 20px 0 0" : 100,
+        boxShadow: expanded
+          ? "0 -8px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05)"
+          : "0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
+        transition: "border-radius 0.3s cubic-bezier(0.4,0,0.2,1), max-width 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s ease",
+        overflow: "hidden",
       }}>
 
-        {/* ── Day Lab AI header — always pinned at top ── */}
-        <div style={{
-          width: "100%", maxWidth: 640, boxSizing: "border-box",
-          padding: "0 16px",
-          height: 44,
-          display: "flex", alignItems: "center", gap: 10,
-          flexShrink: 0,
-          cursor: "pointer",
-        }} onClick={() => { setExpanded(e => !e); if (!expanded) setTimeout(() => inputRef.current?.focus(), 380); }}>
-          {/* Chevron */}
-          <svg
-            width="13" height="13" viewBox="0 0 24 24" fill="none"
-            stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-            style={{
-              flexShrink: 0,
-              transition: "transform 0.35s cubic-bezier(0.4,0,0.2,1)",
-              transform: expanded ? "rotate(180deg)" : "rotate(0deg)",
-            }}>
-            <polyline points="18 15 12 9 6 15"/>
-          </svg>
-          {/* Label */}
-          <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
-            Day Lab AI
-          </span>
-          {/* Badge */}
-          {isPremiumUser ? (
-            <span style={{
-              fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-              color: "#b8860b", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)",
-              borderRadius: 4, padding: "2px 6px",
-            }}>✦ premium</span>
-          ) : chatLimitReached ? (
-            <span style={{
-              fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-              color: C.orange, background: `${C.orange}20`, border: `1px solid ${C.orange}40`,
-              borderRadius: 4, padding: "2px 6px",
-            }}>free · {chatQueryCount}/{FREE_CHAT_LIMIT} used</span>
-          ) : (
-            <span style={{
-              fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-              color: C.muted, background: `${C.text}0a`, borderRadius: 4, padding: "2px 6px",
-            }}>{chatQueryCount}/{FREE_CHAT_LIMIT} free</span>
-          )}
-        </div>
+        {/* ── Expanded-only top bar with label + chevron ── */}
+        {expanded && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "10px 20px 6px",
+            flexShrink: 0, cursor: "pointer",
+          }} onClick={() => setExpanded(false)}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+              stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ flexShrink:0, transform: "rotate(180deg)" }}>
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
+            <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.12em", textTransform: "uppercase" }}>
+              Day Lab AI
+            </span>
+            {isPremiumUser ? (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: "#b8860b", background: "rgba(212,175,55,0.15)", border: "1px solid rgba(212,175,55,0.4)",
+                borderRadius: 4, padding: "2px 6px",
+              }}>✦ premium</span>
+            ) : chatLimitReached ? (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: C.orange, background: `${C.orange}20`, border: `1px solid ${C.orange}40`,
+                borderRadius: 4, padding: "2px 6px",
+              }}>free · {chatQueryCount}/{FREE_CHAT_LIMIT} used</span>
+            ) : (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
+                color: C.muted, background: `${C.text}0a`, borderRadius: 4, padding: "2px 6px",
+              }}>{chatQueryCount}/{FREE_CHAT_LIMIT} free</span>
+            )}
+          </div>
+        )}
 
         {/* ── Expandable chat area ── */}
         {expanded && (
@@ -4750,22 +4749,25 @@ function ChatFloat({date, token, userId, healthKey}) {
           );
         })()}
 
-        {/* ── Input row ── */}
+        {/* ── Input row — fills pill width when collapsed, panel width when expanded ── */}
         <div style={{
           display: "flex", alignItems: "center", gap: 8,
-          width: "100%", maxWidth: 640,
-          padding: mobile ? "8px 10px 8px 12px" : "8px 10px 8px 14px",
-          paddingBottom: `max(${mobile ? "10px" : "8px"}, env(safe-area-inset-bottom, 8px))`,
+          width: "100%",
+          padding: expanded
+            ? (mobile ? "8px 16px 8px 20px" : "8px 14px 8px 20px")
+            : (mobile ? "7px 8px 7px 14px" : "7px 8px 7px 16px"),
+          paddingBottom: `max(${expanded ? (mobile ? "10px" : "8px") : (mobile ? "9px" : "9px")}, env(safe-area-inset-bottom, ${expanded ? "8px" : "9px"}))`,
           boxSizing: "border-box",
-        }}>
+          cursor: !expanded ? "text" : "default",
+        }} onClick={!expanded ? () => { setExpanded(true); setTimeout(() => inputRef.current?.focus(), 80); } : undefined}>
 
 
           {/* Text input */}
           <div style={{
             flex: 1,
-            background: C.well,
-            borderRadius: mobile ? 22 : 18,
-            padding: mobile ? "9px 12px 9px 16px" : "7px 10px 7px 14px",
+            background: expanded ? C.well : "transparent",
+            borderRadius: expanded ? (mobile ? 22 : 18) : 0,
+            padding: expanded ? (mobile ? "9px 12px 9px 16px" : "7px 10px 7px 14px") : "0",
             display: "flex", alignItems: "center", gap: 6,
           }}>
             <textarea
@@ -6542,7 +6544,7 @@ export default function Dashboard() {
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, minHeight:0, overflow:activeProject?"hidden":mobile?"auto":"hidden", display:"flex", flexDirection:"column", alignItems:"stretch"}}>
         <div style={{
-          flex:1, minHeight:0, maxWidth:1100, width:"100%", margin:"0 auto", alignSelf:"stretch",
+          flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           overflow:activeProject?"hidden":mobile?"auto":"hidden",
           padding:activeProject?0:mobile?"6px 8px":10,
           paddingBottom:activeProject?0:mobile?200:0, display:"flex", flexDirection:"column", gap:activeProject?0:mobile?10:8}}>
