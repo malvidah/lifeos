@@ -2415,7 +2415,7 @@ function fmtMinsField(val) {
 }
 
 
-function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,defaultExpandedMetric,onExpandedMetricChange,backAction}) {
+function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,backAction}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
@@ -2581,11 +2581,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
   ];
 
   // ── Trend panel state ──────────────────────────────────────────────────────
-  const [expandedMetric, setExpandedMetric] = useState(defaultExpandedMetric ?? null);  // controls trend
-  function setExpandedMetricWithCb(m) {
-    setExpandedMetricWithCb(m);
-    if (onExpandedMetricChange) onExpandedMetricChange(m);
-  }
+  const [expandedMetric, setExpandedMetric] = useState(null);  // controls trend
   const [breakdownMetric, setBreakdownMetric] = useState(null); // controls score breakdown
   const [trendRange,     setTrendRange]     = useState("30d"); // "30d" | "12m"
   const [trendData, setTrendData]           = useState({});
@@ -2817,7 +2813,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
           const isDimmed = expandedMetric && !isTrend;
           return (
             <div key={m.key}
-              onClick={()=>{ isTrend ? setExpandedMetric(null) : setExpandedMetricWithCb(m.key); }}
+              onClick={()=>{ isTrend ? setExpandedMetric(null) : setExpandedMetric(m.key); }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
                 boxSizing:"border-box", overflow:"hidden",
@@ -4693,23 +4689,92 @@ function fmtDate(ds) {
   return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
+// ─── HealthAllMeals ───────────────────────────────────────────────────────────
+function HealthAllMeals({ token, userId }) {
+  const [allMeals, setAllMeals] = useState(null);
+  useEffect(() => {
+    if (!token || !userId) return;
+    const sb = createClient();
+    sb.from('entries').select('date, data')
+      .eq('user_id', userId).eq('type', 'meals')
+      .order('date', { ascending: false })
+      .then(({ data }) => {
+        const rows = (data || []).flatMap(row => {
+          const items = Array.isArray(row.data) ? row.data : [];
+          return items.filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }));
+        });
+        setAllMeals(rows);
+      });
+  }, [token, userId]);
+  if (!allMeals) return <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
+  if (!allMeals.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No meals logged yet.</div>;
+  const byDate = {};
+  allMeals.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+  return (
+    <div>
+      {Object.entries(byDate).map(([date, rows], di) => (
+        <div key={date}>
+          {di > 0 && <div style={{height:1,background:C.border,margin:'10px 0'}}/>}
+          <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
+          {rows.map((r, i) => (
+            <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'2px 0',fontFamily:serif,fontSize:F.md,color:C.text}}>
+              <span style={{flex:1}}>{r.text}</span>
+              {r.kcal ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.kcal} kcal</span> : null}
+              {r.protein ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.accent,flexShrink:0}}>{r.protein}g</span> : null}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── HealthAllActivities ──────────────────────────────────────────────────────
+function HealthAllActivities({ token, userId }) {
+  const [allActs, setAllActs] = useState(null);
+  useEffect(() => {
+    if (!token || !userId) return;
+    const sb = createClient();
+    sb.from('entries').select('date, data')
+      .eq('user_id', userId).eq('type', 'activity')
+      .order('date', { ascending: false })
+      .then(({ data }) => {
+        const rows = (data || []).flatMap(row => {
+          const items = Array.isArray(row.data) ? row.data : [];
+          return items.filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }));
+        });
+        setAllActs(rows);
+      });
+  }, [token, userId]);
+  if (!allActs) return <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
+  if (!allActs.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No activities logged yet.</div>;
+  const byDate = {};
+  allActs.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
+  return (
+    <div>
+      {Object.entries(byDate).map(([date, rows], di) => (
+        <div key={date}>
+          {di > 0 && <div style={{height:1,background:C.border,margin:'10px 0'}}/>}
+          <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
+          {rows.map((r, i) => (
+            <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'2px 0',fontFamily:serif,fontSize:F.md,color:C.text}}>
+              <span style={{flex:1}}>{r.text}</span>
+              {r.dist ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.dist}</span> : null}
+              {r.kcal ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.kcal} kcal</span> : null}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── HealthProjectView ───────────────────────────────────────────────────────
 function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresReady, startSync, endSync }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [viewDate, setViewDate] = useState(today);
   const [entries, setEntries] = useState(null);
   const [pvTaskFilter, setPvTaskFilter] = useState('all');
 
-  // Persist last-used expanded metric across Health project views
-  const [expandedMetric, setExpandedMetric] = useState(() => {
-    try { return localStorage.getItem('health_expandedMetric') || 'sleep'; } catch { return 'sleep'; }
-  });
-  function handleMetricChange(m) {
-    setExpandedMetricWithCb(m);
-    try { localStorage.setItem('health_expandedMetric', m); } catch {}
-  }
-
-  // Load health journal+task entries
   useEffect(() => {
     if (!token) return;
     setEntries(null);
@@ -4720,91 +4785,9 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
     }).catch(() => setEntries({ journalEntries: [], taskEntries: [] }));
   }, [token]);
 
-  // All meals grouped by date
-  const AllMeals = useCallback(() => {
-    const [allMeals, setAllMeals] = useState(null);
-    useEffect(() => {
-      if (!token || !userId) return;
-      const sb = createClient();
-      sb.from('entries').select('date, data')
-        .eq('user_id', userId).eq('type', 'meals')
-        .order('date', { ascending: false })
-        .then(({ data }) => {
-          const rows = (data || []).flatMap(row => {
-            const items = Array.isArray(row.data) ? row.data : [];
-            return items.filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }));
-          });
-          setAllMeals(rows);
-        });
-    }, []);
-    if (!allMeals) return <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
-    if (!allMeals.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No meals logged yet.</div>;
-    // Group by date
-    const byDate = {};
-    allMeals.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
-    return (
-      <div>
-        {Object.entries(byDate).map(([date, rows], di) => (
-          <div key={date}>
-            {di > 0 && <div style={{height:1,background:C.border,margin:'10px 0'}}/>}
-            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
-            {rows.map((r, i) => (
-              <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'2px 0',fontFamily:serif,fontSize:F.md,color:C.text}}>
-                <span style={{flex:1}}>{r.text}</span>
-                {r.kcal ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.kcal} kcal</span> : null}
-                {r.protein ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.accent,flexShrink:0}}>{r.protein}g</span> : null}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  }, [token, userId]);
-
-  // All activities grouped by date
-  const AllActivities = useCallback(() => {
-    const [allActs, setAllActs] = useState(null);
-    useEffect(() => {
-      if (!token || !userId) return;
-      const sb = createClient();
-      sb.from('entries').select('date, data')
-        .eq('user_id', userId).eq('type', 'activity')
-        .order('date', { ascending: false })
-        .then(({ data }) => {
-          const rows = (data || []).flatMap(row => {
-            const items = Array.isArray(row.data) ? row.data : [];
-            return items.filter(r => r?.text?.trim()).map(r => ({ date: row.date, ...r }));
-          });
-          setAllActs(rows);
-        });
-    }, []);
-    if (!allActs) return <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>;
-    if (!allActs.length) return <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No activities logged yet.</div>;
-    const byDate = {};
-    allActs.forEach(r => { if (!byDate[r.date]) byDate[r.date] = []; byDate[r.date].push(r); });
-    return (
-      <div>
-        {Object.entries(byDate).map(([date, rows], di) => (
-          <div key={date}>
-            {di > 0 && <div style={{height:1,background:C.border,margin:'10px 0'}}/>}
-            <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6}}>{fmtDate(date)}</div>
-            {rows.map((r, i) => (
-              <div key={i} style={{display:'flex',alignItems:'baseline',gap:8,padding:'2px 0',fontFamily:serif,fontSize:F.md,color:C.text}}>
-                <span style={{flex:1}}>{r.text}</span>
-                {r.dist ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.dist}</span> : null}
-                {r.kcal ? <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0}}>{r.kcal} kcal</span> : null}
-              </div>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  }, [token, userId]);
-
   const taskEntries = entries?.taskEntries || [];
   const journalEntries = entries?.journalEntries || [];
   const openTasks = taskEntries.filter(t => !t.done);
-  const doneTasks = taskEntries.filter(t => t.done);
 
   const tasksByDate = useMemo(() => {
     if (!taskEntries.length) return [];
@@ -4828,35 +4811,34 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingBottom:200 }}>
-      {/* ── Top nav strip */}
+      {/* Top nav strip */}
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px' }}>
         <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:C.green+'99', flexShrink:0 }} aria-label="Back">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:C.green }}>Health</span>
       </div>
-      {/* Health strip — no collapse */}
+
+      {/* Health strip */}
       <HealthStrip
-        date={viewDate} token={token} userId={userId}
+        date={today} token={token} userId={userId}
         onHealthChange={onHealthChange || (()=>{})}
         onScoresReady={onScoresReady || (()=>{})}
         onSyncStart={startSync || (()=>{})}
         onSyncEnd={endSync || (()=>{})}
         collapsed={false} onToggle={null}
-        defaultExpandedMetric={expandedMetric}
-        onExpandedMetricChange={handleMetricChange}
       />
 
       {/* All Meals */}
       <Card>
-        <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>All Meals</div>
-        <AllMeals />
+        <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10, padding:'11px 14px 0' }}>All Meals</div>
+        <div style={{ padding:'8px 14px 14px' }}><HealthAllMeals token={token} userId={userId} /></div>
       </Card>
 
       {/* All Activities */}
       <Card>
-        <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10 }}>All Activities</div>
-        <AllActivities />
+        <div style={{ fontFamily:mono, fontSize:F.sm, color:C.muted, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:10, padding:'11px 14px 0' }}>All Activities</div>
+        <div style={{ padding:'8px 14px 14px' }}><HealthAllActivities token={token} userId={userId} /></div>
       </Card>
 
       {/* Tasks */}
@@ -4877,9 +4859,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                 {pvTaskFilter !== 'done' && open.map(task => (
                   <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0'}}>
                     <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.border2}`,background:'transparent'}}/>
-                    <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>
-                      {renderRichLine(task.text)}
-                    </div>
+                    <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{renderRichLine(task.text)}</div>
                   </div>
                 ))}
                 {pvTaskFilter !== 'open' && done.map(task => (
@@ -4887,12 +4867,9 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                     <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.accent}`,background:C.accent,display:'flex',alignItems:'center',justifyContent:'center'}}>
                       <span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>
                     </div>
-                    <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}>
-                      {renderRichLine(task.text)}
-                    </div>
+                    <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}>{renderRichLine(task.text)}</div>
                   </div>
                 ))}
-                {pvTaskFilter !== 'open' && done.length > 0 && <div style={{height:1,background:C.border,margin:'6px 0'}}/>}
               </div>
             ))}
           </div>
