@@ -102,8 +102,25 @@ function projectColor(name) {
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
 }
-function TagChip({ name, onClick, style={}, dimmed=false }) {
+function TagChip({ name, onClick, style={}, plain=false }) {
   const col = projectColor(name);
+  if (plain) {
+    // Project's own tag: just colored text at low opacity, no chip box. Full on hover.
+    return (
+      <span
+        onClick={onClick}
+        style={{
+          color: col, fontSize: '0.9em', fontFamily: serif,
+          opacity: 0.35,
+          cursor: onClick ? 'pointer' : 'default',
+          transition: 'opacity 0.15s',
+          ...style,
+        }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '0.35'}
+      >#{name}</span>
+    );
+  }
   return (
     <span
       onClick={onClick}
@@ -112,12 +129,11 @@ function TagChip({ name, onClick, style={}, dimmed=false }) {
         background: col + '20',
         border: `1px solid ${col}40`,
         borderRadius: 4, padding: '0 5px',
-        fontSize: '0.82em', color: dimmed ? col + '55' : col,
+        fontSize: '0.82em', color: col,
         fontFamily: mono, lineHeight: '1.6',
         flexShrink: 0, verticalAlign: 'middle',
         cursor: onClick ? 'pointer' : 'default',
         transition: 'opacity 0.15s',
-        opacity: dimmed ? 0.45 : 1,
         ...style,
       }}
     >#{name}</span>
@@ -129,8 +145,8 @@ function renderWithTags(text, dimTag=null) {
   const re = /#([A-Za-z][A-Za-z0-9]+)/g; let m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
-    const isDimmed = dimTag && m[1].toLowerCase() === dimTag.toLowerCase();
-    parts.push(<TagChip key={`c${m.index}`} name={m[1]} dimmed={isDimmed}/>);
+    const isOwn = dimTag && m[1].toLowerCase() === dimTag.toLowerCase();
+    parts.push(<TagChip key={`c${m.index}`} name={m[1]} plain={isOwn}/>);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
@@ -4288,6 +4304,50 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
   );
 }
 
+// ─── EntryLine — stable-height edit line for ProjectView ─────────────────────
+function EntryLine({ entry, date, editing, editText, onStartEdit, onChangeEdit, onSave, dimTag }) {
+  const taRef = useRef(null);
+  // When entering edit mode, focus + auto-size without a height flash
+  useEffect(() => {
+    if (editing && taRef.current) {
+      const ta = taRef.current;
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+      ta.focus();
+      // Place cursor at end
+      ta.selectionStart = ta.selectionEnd = ta.value.length;
+    }
+  }, [editing]);
+
+  const baseStyle = {
+    fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+    padding: '2px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+  };
+
+  if (editing) {
+    return (
+      <textarea
+        ref={taRef}
+        value={editText}
+        onChange={e => { onChangeEdit(e.target.value); const t=e.target; t.style.height='auto'; t.style.height=t.scrollHeight+'px'; }}
+        onBlur={onSave}
+        onKeyDown={e => { if (e.key==='Escape') e.target.blur(); }}
+        style={{
+          ...baseStyle,
+          width:'100%', border:'none', outline:'none', resize:'none', overflow:'hidden',
+          background:'transparent', color:C.text, caretColor:C.accent,
+          margin:0, display:'block', minHeight:'1.7em',
+        }}
+      />
+    );
+  }
+  return (
+    <div style={{ ...baseStyle, color:C.text, cursor:'text' }} onClick={onStartEdit}>
+      {renderWithTags(entry.text, dimTag)}
+    </div>
+  );
+}
+
 // ─── ProjectView ──────────────────────────────────────────────────────────────
 function ProjectView({ project, token, userId, onBack }) {
   const { value: projectsMeta, setValue: setProjectsMeta } =
@@ -4340,6 +4400,18 @@ function ProjectView({ project, token, userId, onBack }) {
   const taskEntries = entries?.taskEntries || [];
   const openTasks = taskEntries.filter(t => !t.done);
   const doneTasks = taskEntries.filter(t => t.done);
+
+  // Group tasks by date (oldest first)
+  const tasksByDate = useMemo(() => {
+    if (!taskEntries.length) return [];
+    const map = {};
+    taskEntries.forEach(t => {
+      if (!map[t.date]) map[t.date] = { open: [], done: [] };
+      if (t.done) map[t.date].done.push(t);
+      else map[t.date].open.push(t);
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [taskEntries]);
 
   function fmtDate(ds) {
     const d = new Date(ds + 'T12:00:00');
@@ -4412,9 +4484,10 @@ function ProjectView({ project, token, userId, onBack }) {
         <div style={{ flexShrink: 0 }}>
         <Card>
           {/* Back arrow + project name — tappable header row */}
+          {(() => { const pcol = projectColor(project); return (
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '11px 14px', borderBottom: `1px solid ${C.border}`,
+            padding: '11px 14px', borderBottom: `1px solid ${pcol}30`,
             flexShrink: 0,
           }}>
             <button
@@ -4422,7 +4495,7 @@ function ProjectView({ project, token, userId, onBack }) {
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', padding: '0 2px',
-                color: C.muted, flexShrink: 0,
+                color: pcol + '99', flexShrink: 0,
               }}
               aria-label="Back"
             >
@@ -4432,11 +4505,12 @@ function ProjectView({ project, token, userId, onBack }) {
             </button>
             <span style={{
               fontFamily: mono, fontSize: F.sm, letterSpacing: '0.05em',
-              textTransform: 'uppercase', color: C.text, flex: 1,
+              textTransform: 'uppercase', color: pcol, flex: 1,
             }}>
               {tagDisplayName(project)}
             </span>
           </div>
+          ); })()}
           {/* Description — click to edit */}
           <div style={{ padding: 16 }}>
             {editingDesc ? (
@@ -4507,52 +4581,56 @@ function ProjectView({ project, token, userId, onBack }) {
               {project === '__everything__' ? 'No journal entries yet.' : `No journal entries tagged #${project} yet.`}
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-              {journalByDate.map(([date, lines]) => (
-                <div key={date}>
-                  <div style={{
-                    fontFamily: mono, fontSize: 10, color: C.muted,
-                    letterSpacing: '0.06em', textTransform: 'uppercase',
-                    marginBottom: 7,
-                  }}>{fmtDate(date)}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {lines.map(entry => (
-                      <div key={`${date}-${entry.lineIndex}`}>
-                        {/* Simple show/hide editing — display div OR textarea, same dimensions */}
-                        {editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? (
-                          <textarea
-                            autoFocus
-                            value={editingEntry.text}
-                            onChange={e => { setEditingEntry(prev => ({...prev, text: e.target.value})); const t=e.target; t.style.height='auto'; t.style.height=t.scrollHeight+'px'; }}
-                            onFocus={e => { e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
-                            onBlur={async () => { await saveJournalEdit(date, entry.lineIndex, editingEntry.text); setEditingEntry(null); }}
-                            onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
-                            style={{
-                              width:'100%', border:'none', outline:'none', resize:'none', overflow:'hidden',
-                              background:'transparent', color:C.text, caretColor:C.accent,
-                              fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
-                              padding:'2px 0', margin:0, display:'block', minHeight:'1.7em',
-                            }}
-                          />
-                        ) : (
-                          <div
-                            style={{ fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.text, cursor:'text', padding:'2px 0', whiteSpace:'pre-wrap', wordBreak:'break-word' }}
-                            onClick={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
-                          >
-                            {renderWithTags(entry.text, project === '__everything__' ? null : project)}
-                          </div>
-                        )}
-                      </div>
-                    ))}
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              {journalByDate.map(([date, lines], dateIdx) => {
+                // Split lines into blocks: new block when lineIndex gap > 1
+                const blocks = [];
+                let cur = [];
+                lines.forEach((entry, i) => {
+                  if (i === 0 || entry.lineIndex === lines[i-1].lineIndex + 1) {
+                    cur.push(entry);
+                  } else {
+                    if (cur.length) blocks.push(cur);
+                    cur = [entry];
+                  }
+                });
+                if (cur.length) blocks.push(cur);
+                return (
+                  <div key={date}>
+                    <div style={{
+                      fontFamily: mono, fontSize: 10, color: C.muted,
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                      marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 8,
+                    }}>{fmtDate(date)}</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {blocks.map((block, bi) => (
+                        <div key={bi} style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                          {block.map(entry => (
+                            <EntryLine
+                              key={`${date}-${entry.lineIndex}`}
+                              entry={entry} date={date}
+                              editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
+                              editText={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? editingEntry.text : ''}
+                              onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
+                              onChangeEdit={t => setEditingEntry(prev => ({...prev, text: t}))}
+                              onSave={async () => { await saveJournalEdit(date, entry.lineIndex, editingEntry.text); setEditingEntry(null); }}
+                              dimTag={project === '__everything__' ? null : project}
+                            />
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                    {/* Thin separator after each date group */}
+                    <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 16, marginBottom: 4 }}/>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )
         }
       </Widget>
 
-      {/* Tasks */}
+      {/* Tasks — grouped by date with separators */}
       <Widget
         label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
         color={C.blue} autoHeight
@@ -4563,92 +4641,66 @@ function ProjectView({ project, token, userId, onBack }) {
           </div>
         ) : taskEntries.length === 0 ? (
           <div style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>
-            No tasks tagged #{project} yet.
+            {project === '__everything__' ? 'No tasks yet.' : `No tasks tagged #${project} yet.`}
           </div>
         ) : (
           <div>
-            {/* Open tasks */}
-            {openTasks.map(task => (
-              <div key={`${task.date}-${task.id}`}
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', minHeight: 28 }}
-              >
-                <button
-                  onClick={() => toggleTask(task.date, task.id, task.done)}
-                  style={{
-                    width: 15, height: 15, flexShrink: 0, borderRadius: 4, padding: 0, cursor: 'pointer',
-                    border: `1.5px solid ${C.border2}`, background: 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.15s',
-                  }}
-                />
-                {/* Simple show/hide editing for tasks */}
-                {editingTask?.date === task.date && editingTask?.id === task.id ? (
-                  <input
-                    autoFocus
-                    value={editingTask.text}
-                    onChange={e => setEditingTask(prev => ({...prev, text: e.target.value}))}
-                    onBlur={async () => { await saveTaskEdit(task.date, task.id, editingTask.text); setEditingTask(null); }}
-                    onKeyDown={e => { if (e.key === 'Enter' || e.key === 'Escape') e.target.blur(); }}
-                    style={{ background:'transparent', border:'none', outline:'none', padding:0, flex:1, lineHeight:'1.7', color:C.text, caretColor:C.accent, fontFamily:serif, fontSize:F.md }}
-                  />
-                ) : (
-                  <div
-                    onClick={() => setEditingTask({ date: task.date, id: task.id, text: task.text })}
-                    style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.text, cursor:'text' }}
-                  >
-                    {renderWithTags(task.text, project === '__everything__' ? null : project)}
-                  </div>
-                )}
-                <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, flexShrink: 0 }}>
-                  {fmtDate(task.date)}
-                </span>
-              </div>
-            ))}
-
-            {/* Completed tasks */}
-            {doneTasks.length > 0 && (
-              <div style={{ marginTop: openTasks.length ? 8 : 0 }}>
-                <button
-                  onClick={() => setShowCompleted(v => !v)}
-                  style={{
-                    background: 'none', border: 'none', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', gap: 4,
-                    padding: '4px 0',
-                    fontFamily: mono, fontSize: F.sm, color: C.dim,
-                    letterSpacing: '0.04em',
-                  }}
-                >
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                    {showCompleted
-                      ? <polyline points="18 15 12 9 6 15"/>
-                      : <polyline points="6 9 12 15 18 9"/>}
-                  </svg>
-                  {showCompleted ? 'Hide' : 'Show'} completed ({doneTasks.length})
-                </button>
-                {showCompleted && doneTasks.map(task => (
-                  <div key={`${task.date}-${task.id}`}
-                    style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', opacity: 0.35 }}
-                  >
-                    <button
-                      onClick={() => toggleTask(task.date, task.id, task.done)}
-                      style={{
-                        width: 15, height: 15, flexShrink: 0, borderRadius: 4, padding: 0, cursor: 'pointer',
-                        border: `1.5px solid ${C.accent}`, background: C.accent,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        transition: 'all 0.15s',
-                      }}
-                    >
-                      <span style={{ fontSize: 12, color: C.bg, lineHeight: 1 }}>✓</span>
-                    </button>
-                    <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: '1.7', color: C.muted, textDecoration: 'line-through' }}>
-                      {renderWithTags(task.text)}
-                    </div>
-                    <span style={{ fontFamily: mono, fontSize: 9, color: C.dim, flexShrink: 0 }}>
-                      {fmtDate(task.date)}
-                    </span>
+            {tasksByDate.map(([date, { open, done }], dateIdx) => (
+              <div key={date}>
+                <div style={{
+                  fontFamily: mono, fontSize: 10, color: C.muted,
+                  letterSpacing: '0.06em', textTransform: 'uppercase',
+                  marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6,
+                }}>{fmtDate(date)}</div>
+                {open.map(task => (
+                  <div key={task.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'3px 0', minHeight:26 }}>
+                    <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
+                      width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer',
+                      border:`1.5px solid ${C.border2}`, background:'transparent',
+                      display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
+                    }}/>
+                    {editingTask?.date === task.date && editingTask?.id === task.id ? (
+                      <input autoFocus value={editingTask.text}
+                        onChange={e => setEditingTask(prev => ({...prev, text: e.target.value}))}
+                        onBlur={async () => { await saveTaskEdit(task.date, task.id, editingTask.text); setEditingTask(null); }}
+                        onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') e.target.blur(); }}
+                        style={{ background:'transparent', border:'none', outline:'none', padding:0, flex:1, lineHeight:'1.7', color:C.text, caretColor:C.accent, fontFamily:serif, fontSize:F.md }}
+                      />
+                    ) : (
+                      <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}
+                        style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.text, cursor:'text' }}>
+                        {renderWithTags(task.text, project==='__everything__' ? null : project)}
+                      </div>
+                    )}
                   </div>
                 ))}
+                {done.length > 0 && showCompleted && done.map(task => (
+                  <div key={task.id} style={{ display:'flex', alignItems:'center', gap:10, padding:'3px 0', opacity:0.35 }}>
+                    <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
+                      width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer',
+                      border:`1.5px solid ${C.accent}`, background:C.accent,
+                      display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
+                    }}><span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span></button>
+                    <div style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.muted, textDecoration:'line-through' }}>
+                      {renderWithTags(task.text, project==='__everything__' ? null : project)}
+                    </div>
+                  </div>
+                ))}
+                {/* Separator */}
+                <div style={{ borderTop:`1px solid ${C.border}`, marginTop:12, marginBottom:4 }}/>
               </div>
+            ))}
+            {doneTasks.length > 0 && (
+              <button onClick={() => setShowCompleted(v => !v)} style={{
+                background:'none', border:'none', cursor:'pointer',
+                display:'flex', alignItems:'center', gap:4, padding:'4px 0',
+                fontFamily:mono, fontSize:F.sm, color:C.dim, letterSpacing:'0.04em',
+              }}>
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  {showCompleted ? <polyline points="18 15 12 9 6 15"/> : <polyline points="6 9 12 15 18 9"/>}
+                </svg>
+                {showCompleted ? 'Hide' : 'Show'} completed ({doneTasks.length})
+              </button>
             )}
           </div>
         )}
