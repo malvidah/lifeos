@@ -12,14 +12,27 @@ function getUserClient(req) {
   return { supabase, token };
 }
 
+// "BigThink" → "Big Think", "CuriosityLab" → "Curiosity Lab"
+function toDisplayName(name) {
+  return name
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
+}
+
 // Matches a line if it contains:
-//   1. #ProjectName (existing tag syntax)
-//   2. The project name as a plain word, case-insensitive (e.g. "work", "Work", "WORK")
-//      — word boundaries so "network" doesn't match "work"
+//   1. #ProjectName  (tag syntax)
+//   2. The raw camelCase name as a whole word: BigThink / bigthink / BIGTHINK
+//   3. The spaced display name as whole words: "Big Think" / "big think"
+//      Word boundaries prevent partial matches (network ≠ work)
 function makeMatchRe(name) {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // #Tag match OR plain word match (case-insensitive, word boundary)
-  return new RegExp(`#${escaped}(?![A-Za-z0-9])|\\b${escaped}\\b`, 'i');
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const display = toDisplayName(name);
+  const parts = [
+    `#${esc(name)}(?![A-Za-z0-9])`,
+    `\\b${esc(name)}\\b`,
+  ];
+  if (display !== name) parts.push(`\\b${esc(display)}\\b`);
+  return new RegExp(parts.join('|'), 'i');
 }
 
 export async function GET(req) {
@@ -37,7 +50,6 @@ export async function GET(req) {
   }
 
   try {
-    // Fetch all notes entries for this user
     const { data: notesRows, error: ne } = await supabase
       .from('entries').select('date, data')
       .eq('user_id', user.id).eq('type', 'notes')
@@ -46,9 +58,8 @@ export async function GET(req) {
 
     const matchRe = isEverything ? null : makeMatchRe(project);
 
-    // Extract journal entries using block-level grouping:
-    // Consecutive non-empty lines form a "block". If any line in the block
-    // matches (tag OR plain word), include ALL lines of that block.
+    // Block-level grouping: consecutive non-empty lines form a block.
+    // Include whole block if any line matches tag OR plain word OR spaced name.
     const journalEntries = [];
     for (const row of notesRows || []) {
       const text = typeof row.data === 'string' ? row.data : '';
@@ -70,7 +81,6 @@ export async function GET(req) {
       }
     }
 
-    // Fetch tasks
     const taskEntries = [];
     const { data: tasksRows, error: te } = await supabase
       .from('entries').select('date, data')
