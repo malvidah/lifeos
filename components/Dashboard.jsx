@@ -171,8 +171,7 @@ function renderWithTags(text, dimTag=null, onTagClick=null) {
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
     const isOwn = dimTag && m[1].toLowerCase() === dimTag.toLowerCase();
-    const _handleTag = !isOwn ? () => { if (onTagClick) onTagClick(m[1]); else if (typeof window !== 'undefined' && window.__lifeos_onTagClick) window.__lifeos_onTagClick(m[1]); } : undefined;
-    parts.push(<TagChip key={`c${m.index}`} name={m[1]} plain={isOwn} onClick={_handleTag}/>);
+    parts.push(<TagChip key={`c${m.index}`} name={m[1]} plain={isOwn}/>);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
@@ -225,8 +224,7 @@ function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0, onTagClick=n
     } else {
       // #tag
       const isOwn = dimTag && m[3].toLowerCase() === dimTag.toLowerCase();
-      const _handleTag2 = !isOwn ? () => { if (onTagClick) onTagClick(m[3]); else if (typeof window !== 'undefined' && window.__lifeos_onTagClick) window.__lifeos_onTagClick(m[3]); } : undefined;
-      parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={m[3]} plain={isOwn} onClick={_handleTag2}/>);
+      parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={m[3]} plain={isOwn}/>);
     }
     last = m.index + m[0].length;
   }
@@ -3750,7 +3748,7 @@ function NewProjectTask({ project, onAdd }) {
           if (e.key === 'Enter') { e.preventDefault(); commit(); }
         }}
         onBlur={commit}
-        placeholder={`Add a task… #${project} will be added`}
+        placeholder={`Add a task…`}
         style={{
           flex: 1, background: 'transparent', border: 'none', outline: 'none',
           fontFamily: serif, fontSize: F.md, color: C.text,
@@ -5106,7 +5104,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
         }}
         onMouseEnter={e => { e.currentTarget.style.background = C.green + '22'; e.currentTarget.style.color = C.green; }}
         onMouseLeave={e => { e.currentTarget.style.background = C.green + '11'; e.currentTarget.style.color = C.green + 'aa'; }}
-      >Health</button>
+      >HEALTH</button>
       {names.map(name => {
         const active = todayTags.has(name.toLowerCase());
         const col = projectColor(name);
@@ -5128,7 +5126,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
               e.currentTarget.style.opacity = active ? '1' : '0.35';
               e.currentTarget.style.color = active ? col : C.muted;
             }}
-          >{tagDisplayName(name)}</button>
+          >{name.toUpperCase()}</button>
         );
       })}
       </div>
@@ -5168,7 +5166,7 @@ function AddJournalLine({ project, onAdd, placeholder }) {
         onChange={e => setText(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
         onBlur={commit}
-        placeholder={placeholder || (project === '__health__' ? 'Add a health entry…' : 'Add a journal entry…')}
+        placeholder={placeholder || 'Add an entry…'}
         style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none',
           fontFamily: serif, fontSize: F.md, color: C.text, caretColor: col }}
       />
@@ -6137,18 +6135,6 @@ export default function Dashboard() {
   const [stravaConnected, setStravaConnected] = useState(false);
   const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
 
-  // Global tag click router — maps #TagName → project key
-  // #Health → '__health__', anything else → tag name as project key
-  useEffect(() => {
-    window.__lifeos_onTagClick = (tagName) => {
-      if (tagName.toLowerCase() === 'health') {
-        setActiveProject('__health__');
-      } else {
-        setActiveProject(tagName);
-      }
-    };
-    return () => { delete window.__lifeos_onTagClick; };
-  }, []);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
