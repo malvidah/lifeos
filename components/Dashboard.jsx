@@ -4729,7 +4729,7 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 
   if (!results || query.trim().length < 2) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-      <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: '0.12em' }}>type to search</span>
+      <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: '0.04em' }}>Type to search</span>
     </div>
   );
 
@@ -4750,46 +4750,63 @@ function SearchResults({ results, loading, query, onSelectDate }) {
   });
 
   return (
-    <div style={{ paddingBottom: 180, padding: '0 10px 180px' }}>
+    <div style={{ padding: '0 10px 180px' }}>
       {byDate.map(({ date, hits }) => {
-        // Group hits by type
         const byType = {};
         hits.forEach(h => { if (!byType[h.type]) byType[h.type] = []; byType[h.type].push(h); });
         const types = TYPE_ORDER.filter(t => byType[t]);
         return (
-          <div key={date} style={{ marginBottom: 16 }}>
-            {/* Date header — matches project view style, clickable */}
+          <div key={date} style={{ marginBottom: 20 }}>
+            {/* Date header */}
             <div
               onClick={() => onSelectDate && onSelectDate(date)}
               style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
-                color: C.muted, padding: '10px 4px 6px', cursor: 'pointer', display: 'inline-block',
+                color: C.muted, padding: '10px 2px 8px', cursor: 'pointer', display: 'inline-block',
                 transition: 'color 0.15s' }}
               onMouseEnter={e => e.currentTarget.style.color = C.text}
               onMouseLeave={e => e.currentTarget.style.color = C.muted}
             >{fmtDate(date)}</div>
 
+            {/* Per-type outlined card */}
             {types.map(type => (
-              <div key={type} style={{ marginBottom: 8 }}>
-                {/* Section label — matches widget header style */}
-                <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase',
-                  color: TYPE_COLOR[type] + 'bb', marginBottom: 4, paddingLeft: 2 }}>
+              <div key={type}
+                onClick={() => onSelectDate && onSelectDate(date)}
+                style={{
+                  marginBottom: 8, borderRadius: 10, cursor: 'pointer',
+                  border: `1px solid ${C.border}`,
+                  overflow: 'hidden',
+                  transition: 'border-color 0.15s, background 0.15s',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = C.surface;
+                  e.currentTarget.style.borderColor = C.border2;
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.borderColor = C.border;
+                }}
+              >
+                {/* Card header — type label */}
+                <div style={{
+                  fontFamily: mono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase',
+                  color: TYPE_COLOR[type] + 'cc', padding: '7px 12px 5px',
+                  borderBottom: `1px solid ${C.border}`,
+                }}>
                   {TYPE_SECTION[type]}
                 </div>
+                {/* Entries */}
                 {byType[type].map((hit, i) => (
-                  <div key={i}
-                    onClick={() => onSelectDate && onSelectDate(date)}
-                    style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '4px 2px',
-                      borderBottom: i < byType[type].length - 1 ? `1px solid ${C.border}` : 'none',
-                      cursor: 'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.background = C.border + '44'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                  >
+                  <div key={i} style={{
+                    display: 'flex', alignItems: 'flex-start', gap: 10,
+                    padding: '7px 12px',
+                    borderBottom: i < byType[type].length - 1 ? `1px solid ${C.border}` : 'none',
+                  }}>
                     {type === 'task' && (
-                      <div style={{ width:13, height:13, flexShrink:0, borderRadius:3, marginTop:5,
-                        border:`1.5px solid ${hit.done ? C.accent : C.border2}`,
-                        background: hit.done ? C.accent : 'transparent', display:'flex',
-                        alignItems:'center', justifyContent:'center' }}>
-                        {hit.done && <span style={{ fontSize:9, color:C.bg, lineHeight:1 }}>✓</span>}
+                      <div style={{ width: 13, height: 13, flexShrink: 0, borderRadius: 3, marginTop: 5,
+                        border: `1.5px solid ${hit.done ? C.accent : C.border2}`,
+                        background: hit.done ? C.accent : 'transparent',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {hit.done && <span style={{ fontSize: 9, color: C.bg, lineHeight: 1 }}>✓</span>}
                       </div>
                     )}
                     <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: 1.6,
@@ -4802,7 +4819,6 @@ function SearchResults({ results, loading, query, onSelectDate }) {
                 ))}
               </div>
             ))}
-            <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4 }}/>
           </div>
         );
       })}
