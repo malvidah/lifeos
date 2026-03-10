@@ -848,7 +848,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday}) {
+function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,stravaConnected,onStravaChange}) {
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
   const [isToday, setIsToday] = useState(false);
@@ -890,7 +890,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
-        <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+        <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
       </div>
     </div>
   );
@@ -4372,7 +4372,7 @@ export default function Dashboard() {
         @keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
-      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())}/>
+      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
