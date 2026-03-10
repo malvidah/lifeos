@@ -1828,16 +1828,14 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         </div>
 
         {collapsed ? (
-          /* ── Collapsed: prev ← period → next, respects calView ── */
+          /* ── Collapsed: always day nav — ‹ MAR 10, 2026 › ── */
           (()=>{
-            const isMonth = calView === 'month';
-            const navStep = (d,dir) => { const n=new Date(d); isMonth?n.setMonth(n.getMonth()+dir):n.setDate(n.getDate()+dir); return n; };
-            const label = isMonth ? `${selMonth} ${selYear}` : `${selMonth} ${selDate.getDate()}, ${selYear}`;
-            const isToday = !isMonth && toKey(selDate) === today;
+            const stepDay = (d,dir) => { const n=new Date(d); n.setDate(n.getDate()+dir); return n; };
+            const isToday = toKey(selDate) === today;
             return (
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
                 display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
-                <button onClick={e=>{e.stopPropagation();onSelect(toKey(navStep(selDate,-1)));}} style={{
+                <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,-1)));}} style={{
                   background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
                   fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
                   onMouseEnter={e=>e.currentTarget.style.color=C.text}
@@ -1847,8 +1845,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   color:isToday?C.text:C.accent,
                   background:(isToday?C.text:C.accent)+"1A",
                   borderRadius:6,padding:"4px 10px",
-                }}>{label}</span>
-                <button onClick={e=>{e.stopPropagation();onSelect(toKey(navStep(selDate,+1)));}} style={{
+                }}>{selMonth} {selDate.getDate()}, {selYear}</span>
+                <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,+1)));}} style={{
                   background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
                   fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
                   onMouseEnter={e=>e.currentTarget.style.color=C.text}
@@ -1871,9 +1869,9 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           </div>
         )}
 
-        {/* RIGHT: M/D toggle only */}
+        {/* RIGHT: M/D toggle — hidden when collapsed */}
         <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:4,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
-          {onCalViewChange&&<>
+          {!collapsed && onCalViewChange&&<>
             <button onClick={()=>onCalViewChange('month')}
               style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
                 padding:'3px 7px',borderRadius:4,cursor:'pointer',
@@ -2224,26 +2222,26 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
               <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
             </div>
             {collapsed ? (
-              /* Collapsed month: ‹ MAR 2026 › navigation */
+              /* Collapsed: always day nav — same as day view */
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
                 display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
-                <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setMonth(n.getMonth()-1);onSelect(toKey(n));}}
+                <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()-1);onSelect(toKey(n));}}
                   style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
                   onMouseEnter={e=>e.currentTarget.style.color=C.text}
                   onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
                 <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
-                  color:C.accent,background:C.accent+'1A',borderRadius:6,padding:'4px 10px'}}>
-                  {SEL_MONTHS[selDateObj.getMonth()].slice(0,3).toUpperCase()} {selDateObj.getFullYear()}
+                  color:pillColor,background:pillColor+'1A',borderRadius:6,padding:'4px 10px'}}>
+                  {selPillLabel}
                 </span>
-                <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setMonth(n.getMonth()+1);onSelect(toKey(n));}}
+                <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()+1);onSelect(toKey(n));}}
                   style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
                   onMouseEnter={e=>e.currentTarget.style.color=C.text}
                   onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
               </div>
             ) : (
-              /* Expanded month: selected date pill */
+              /* Expanded: selected date pill only */
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
                 <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
                   color:pillColor,background:pillColor+'1A',borderRadius:6,padding:'4px 10px'}}>
@@ -2251,8 +2249,9 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                 </span>
               </div>
             )}
-            {/* M/D toggle — right */}
+            {/* M/D toggle — right, hidden when collapsed */}
             <div style={{marginLeft:'auto',display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
+              {!collapsed && <>
               <button onClick={()=>onCalViewChange('month')}
                 style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
                   padding:'3px 7px',borderRadius:4,cursor:'pointer',
@@ -2261,6 +2260,7 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
                 style={{fontFamily:mono,fontSize:'9px',letterSpacing:'0.06em',
                   padding:'3px 7px',borderRadius:4,cursor:'pointer',
                   background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>D</button>
+              </>}
             </div>
           </div>
           {!collapsed&&<MonthView
@@ -5126,7 +5126,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
               e.currentTarget.style.opacity = active ? '1' : '0.35';
               e.currentTarget.style.color = active ? col : C.muted;
             }}
-          >{name.toUpperCase()}</button>
+          >{tagDisplayName(name).toUpperCase()}</button>
         );
       })}
       </div>
