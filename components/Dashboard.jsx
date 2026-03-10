@@ -2972,7 +2972,9 @@ function Notes({date,userId,token}) {
       const lineStart = charCount;
       const lineEnd = charCount + lines[i].length;
       if (/^\[img:/.test(lines[i]) && pos >= lineStart && pos <= lineEnd) {
-        const target = Math.min(lineEnd + 1, val.length);
+        // Try to go to next line; if last line, go to start of this line
+        const afterImg = lineEnd + 1;
+        const target = afterImg <= val.length ? afterImg : lineStart;
         ta.setSelectionRange(target, target);
         return;
       }
@@ -3144,7 +3146,7 @@ function Notes({date,userId,token}) {
   return (
     // Overlay approach: textarea in normal flow (sizes container); rendered div on top (pointer-events:none)
     // No mode toggle → no layout shift on click. Cursor always visible via caretColor.
-    <div style={{ position:"relative", minHeight:minH, cursor:"text" }}
+    <div style={{ position:"relative", minHeight:minH, cursor:"text", display:"block", width:"100%" }}
       onClick={() => { taRef.current?.focus(); requestAnimationFrame(() => normalizeCursor(taRef.current)); }}>
       {/* Textarea — sizes the container, text is transparent so only cursor shows */}
       <textarea
@@ -3771,9 +3773,30 @@ function Tasks({date,token,userId,taskFilter='all'}) {
       const newRows = safe.map(r=>r.id===id?{...r,text:before}:r);
       newRows.splice(idx+1,0,{...row,text:after});
       setRows(newRows);
-      setTimeout(()=>{ const el=refs.current[row.id]; if(el){el.focus();el.setSelectionRange(0,0);} },30);
+      setTimeout(()=>{ const el=refs.current[row.id]; if(el){el.focus();el.setSelectionRange(0,0);autoResizeTask(el);} },30);
     }
-    if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);}
+    if(e.key==="Backspace"){
+      const ta = refs.current[id];
+      const pos = ta ? ta.selectionStart : 0;
+      // At start of non-first task → merge text into end of previous task
+      if(pos===0 && idx>0){
+        e.preventDefault();
+        const prev = safe[idx-1];
+        const mergedText = prev.text + safe[idx].text;
+        const cursorPos = prev.text.length;
+        const newRows = safe.filter(r=>r.id!==id).map(r=>r.id===prev.id?{...r,text:mergedText}:r);
+        setRows(newRows);
+        setTimeout(()=>{
+          const el=refs.current[prev.id];
+          if(el){ el.focus(); el.setSelectionRange(cursorPos,cursorPos); autoResizeTask(el); }
+        },30);
+      } else if(safe[idx].text===""&&safe.length>1){
+        // Empty task, any position → delete row
+        e.preventDefault();
+        setRows(safe.filter(r=>r.id!==id));
+        if(safe[idx-1]) setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);
+      }
+    }
   }
   function autoResizeTask(el){ if(el){ el.style.height="auto"; el.style.height=el.scrollHeight+"px"; } }
   if(!loaded) return (
@@ -3786,7 +3809,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   return (
     <div style={{flex:1,overflow:"auto"}}>
       {visible.map((row,idx)=>(
-        <div key={row.id} style={{display:"flex",alignItems:"center",gap:10,padding:"4px 0",minHeight:28,
+        <div key={row.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"4px 0",minHeight:28,
           opacity:row.done?0.35:1,transition:"opacity 0.2s"}}>
           <button onClick={()=>{
               const wasDone = row.done;
@@ -3798,7 +3821,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                 redo: ()=>setRows(safe.map(r=>r.id===row.id?{...r,done:!wasDone}:r)),
               });
             }}
-            style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",
+            style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",marginTop:5,
               border:`1.5px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
               display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
             {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
@@ -5039,16 +5062,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   );
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingBottom:200 }}>
-      {/* Top nav strip — sticky */}
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px',
-        position:'sticky', top:0, zIndex:10, background:C.bg, marginLeft:-10, marginRight:-10, paddingLeft:14, paddingRight:14 }}>
-        <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:C.green+'99', flexShrink:0 }} aria-label="Back">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:C.green }}>Health</span>
-      </div>
-
+    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingTop:6, paddingBottom:200 }}>
       {/* Health strip — collapsible */}
       <HealthStrip
         date={today} token={token} userId={userId}
@@ -5292,22 +5306,7 @@ function ProjectView({ project, token, userId, onBack }) {
   const _pcol = project === '__everything__' ? C.accent : projectColor(project);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingBottom: 200 }}>
-
-      {/* ── Top nav strip — sticky, back arrow + project name ── */}
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 4px',
-        position:'sticky', top:0, zIndex:10, background:C.bg, marginLeft:-10, marginRight:-10, paddingLeft:14, paddingRight:14 }}>
-        <button onClick={async () => {
-          if (editingEntry) await saveJournalEdit(editingEntry.date, editingEntry.lineIndex, editingEntry.text);
-          if (editingDesc) { const updated = { ...(projectsMeta || {}), [project]: { ...meta, description: descVal } }; setProjectsMeta(updated, { skipHistory: true }); }
-          onBack();
-        }} style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:_pcol+'99', flexShrink:0 }} aria-label="Back">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:_pcol }}>
-          {project === '__everything__' ? 'ALL' : tagDisplayName(project)}
-        </span>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingTop: 6, paddingBottom: 200 }}>
 
       {/* Description — bare on background, no card chrome */}
       {project === '__everything__' ? null : (
@@ -5815,8 +5814,8 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflow:activeProject?"auto":mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
-          paddingBottom:activeProject?200:mobile?200:0, display:"flex", flexDirection:"column", gap:mobile?10:8}}>
+        <div style={{flex:1, minHeight:0, overflow:activeProject?"hidden":mobile?"auto":"hidden", padding:activeProject?0:mobile?"6px 8px":10,
+          paddingBottom:activeProject?0:mobile?200:0, display:"flex", flexDirection:"column", gap:activeProject?0:mobile?10:8}}>
 
           {/* Calendar + Health — hidden in project view */}
           {!activeProject && (
@@ -5838,23 +5837,47 @@ export default function Dashboard() {
 
           {/* Project view OR daily widgets */}
           {activeProject ? (
-            activeProject === '__health__' ? (
-              <HealthProjectView
-                token={token} userId={userId}
-                onBack={() => setActiveProject(null)}
-                onHealthChange={onHealthChange}
-                onScoresReady={onScoresReady}
-                startSync={startSync}
-                endSync={endSync}
-              />
-            ) : (
-            <ProjectView
-              project={activeProject}
-              token={token}
-              userId={userId}
-              onBack={() => setActiveProject(null)}
-            />
-            )
+            (() => {
+              const isHealth = activeProject === '__health__';
+              const pcol = isHealth ? C.green : projectColor(activeProject);
+              return (
+                <>
+                  {/* Fixed project header — outside scroll area */}
+                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'6px 14px',background:C.bg}}>
+                    <button
+                      onClick={async () => setActiveProject(null)}
+                      style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',padding:'0 2px',color:pcol+'99',flexShrink:0}}
+                      aria-label="Back"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    </button>
+                    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',color:pcol}}>
+                      {isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
+                    </span>
+                  </div>
+                  {/* Scrollable content */}
+                  <div style={{flex:1,minHeight:0,overflow:'auto'}}>
+                    {isHealth ? (
+                      <HealthProjectView
+                        token={token} userId={userId}
+                        onBack={() => setActiveProject(null)}
+                        onHealthChange={onHealthChange}
+                        onScoresReady={onScoresReady}
+                        startSync={startSync}
+                        endSync={endSync}
+                      />
+                    ) : (
+                      <ProjectView
+                        project={activeProject}
+                        token={token}
+                        userId={userId}
+                        onBack={() => setActiveProject(null)}
+                      />
+                    )}
+                  </div>
+                </>
+              );
+            })()
           ) : (
             <>
               {/* Projects nav strip — above Journal, only if projects exist */}
