@@ -3709,7 +3709,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const refs=useRef({});
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
-  const visible = taskFilter==='open' ? open : taskFilter==='done' ? done : [...open,...done];
+  const visible = taskFilter==='open' ? open : taskFilter==='done' ? done : safe;
   function onKey(e,id,idx){
     if(e.key==="Enter"){e.preventDefault();const row=mkRow();setRows([...safe.slice(0,idx+1),row,...safe.slice(idx+1)]);setTimeout(()=>refs.current[row.id]?.focus(),30);}
     if(e.key==="Backspace"&&safe[idx].text===""&&safe.length>1){e.preventDefault();setRows(safe.filter(r=>r.id!==id));if(safe[idx-1])setTimeout(()=>refs.current[safe[idx-1].id]?.focus(),30);}
