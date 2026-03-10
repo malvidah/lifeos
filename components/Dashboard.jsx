@@ -3837,12 +3837,12 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                 }}
                 onBlur={e => {
                   if (skipBlurRef.current) {
-                    // Enter/Backspace already committed the correct rows — skip overwrite
                     skipBlurRef.current = false;
-                  } else {
-                    const text = e.currentTarget.textContent;
-                    setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));
+                    return; // Enter/Backspace handled commit — don't touch focusedId either
                   }
+                  // onInput already saved every keystroke — no setRows needed here.
+                  // Reading textContent from a contenteditable with inline-block chip spans
+                  // is unreliable and was causing the doubling bug.
                   setTimeout(() => setFocusedId(prev => prev === row.id ? null : prev), 0);
                 }}
                 style={{
