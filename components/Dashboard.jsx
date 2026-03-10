@@ -4563,47 +4563,40 @@ function ChatFloat({date, token, userId, healthKey}) {
   const hasMic = !!(window?.SpeechRecognition || window?.webkitSpeechRecognition || navigator?.mediaDevices?.getUserMedia);
   return (
     <>
-      {/* ── Fullscreen AI overlay — covers everything incl TopBar ── */}
+      {/* ── AI chat view — sits below TopBar (zIndex 95), pill floats above at 97 ── */}
       {expanded && (
         <div style={{
-          position: "fixed", inset: 0, zIndex: 101,
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 95,
           background: C.bg,
           display: "flex", flexDirection: "column",
           animation: "fadeIn 0.15s ease",
         }}>
-          {/* Top bar: safe-area + back + date header */}
+          {/* Spacer to clear the TopBar (safe-area + 10px padding + 52px pill + 10px padding) */}
+          <div style={{ flexShrink: 0, height: "calc(env(safe-area-inset-top, 0px) + 72px)" }}/>
+
+          {/* Slim subheader: ← Day Lab AI · Premium   |   date */}
           <div style={{
             flexShrink: 0,
-            paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)",
-            paddingLeft: 20, paddingRight: 20, paddingBottom: 12,
-            display: "flex", flexDirection: "column", gap: 2,
+            padding: "0 20px 10px",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
-            <div style={{ display: "flex", alignItems: "center" }}>
-              {/* ghost spacer to balance chevron */}
-              <div style={{ width: 40 }}/>
-              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center" }}>
-                <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: "0.1em", textTransform: "uppercase" }}>
-                  Day Lab AI{isPremiumUser ? " · Premium" : ""}
-                </span>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => setExpanded(false)} style={{
-                    background: "none", border: "none", cursor: "pointer",
-                    color: C.muted, display: "flex", alignItems: "center",
-                    padding: 4, transition: "color 0.12s", flexShrink: 0,
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.color = C.text}
-                  onMouseLeave={e => e.currentTarget.style.color = C.muted}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="15 18 9 12 15 6"/>
-                    </svg>
-                  </button>
-                  <span style={{ fontFamily: serif, fontSize: F.lg, color: C.text, letterSpacing: "-0.02em" }}>
-                    {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-                  </span>
-                </div>
-              </div>
-              <div style={{ width: 40 }}/>
-            </div>
+            <button onClick={() => setExpanded(false)} style={{
+              background: "none", border: "none", cursor: "pointer",
+              color: C.muted, display: "flex", alignItems: "center", gap: 6,
+              padding: "4px 0", fontFamily: mono, fontSize: 11, letterSpacing: "0.08em",
+              minHeight: 36, transition: "color 0.12s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.color = C.text}
+            onMouseLeave={e => e.currentTarget.style.color = C.muted}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+              Day Lab AI{isPremiumUser ? " · Premium" : ""}
+            </button>
+            <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim, letterSpacing: "-0.01em" }}>
+              {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+            </span>
           </div>
 
           {/* Messages scroll area */}
@@ -4611,7 +4604,7 @@ function ChatFloat({date, token, userId, healthKey}) {
             flex: 1, overflowY: "auto", position: "relative",
             display: "flex", flexDirection: "column", alignItems: "center",
             padding: "0 10px",
-            paddingBottom: "calc(80px + max(20px, env(safe-area-inset-bottom, 20px)))",
+            paddingBottom: "calc(52px + max(28px, env(safe-area-inset-bottom, 28px)) + 24px)",
           }}>
             {/* Free tier vignette — sticky top overlay as limit approaches */}
             {!isPremiumUser && (chatQueryCount >= FREE_CHAT_LIMIT - 1 || chatLimitReached) && (
@@ -4690,7 +4683,8 @@ function ChatFloat({date, token, userId, healthKey}) {
             <div style={{
               flexShrink: 0,
               display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8,
-              padding: "8px 16px 12px",
+              padding: "8px 16px",
+              paddingBottom: "calc(52px + max(24px, env(safe-area-inset-bottom, 24px)) + 16px)",
             }}>
               {["How's my sleep?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
                 <button key={s} onClick={() => sendChat(s)}
