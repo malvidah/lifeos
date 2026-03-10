@@ -4699,18 +4699,23 @@ function ChatFloat({date, token, userId, healthKey}) {
           {messages.some(m => m.isInsight) && messages.filter(m => m.role === "user").length === 0 && (
             <div style={{
               flexShrink: 0,
-              display: "flex", flexWrap: "wrap", justifyContent: "center", gap: 8,
-              padding: "8px 16px",
-              paddingBottom: "calc(52px + max(24px, env(safe-area-inset-bottom, 24px)) + 16px)",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: 10,
+              padding: "24px 24px",
+              paddingBottom: "calc(52px + max(32px, env(safe-area-inset-bottom, 32px)) + 24px)",
             }}>
-              {["How's my sleep?", "Add oatmeal for breakfast", "What tasks are left?", "Log a 30 min run"].map(s => (
+              {["How's my sleep this week?", "Add oatmeal for breakfast", "What tasks are left today?", "Log a 30 min run"].map(s => (
                 <button key={s} onClick={() => sendChat(s)}
                   style={{
-                    background: `${C.accent}12`, border: `1px solid ${C.accent}28`,
-                    borderRadius: 20, padding: "7px 16px",
-                    fontFamily: mono, fontSize: 11, color: C.accent,
+                    background: `${C.accent}12`, border: `1px solid ${C.accent}30`,
+                    borderRadius: 100, padding: "11px 22px",
+                    fontFamily: mono, fontSize: F.sm, color: C.accent,
                     cursor: "pointer", letterSpacing: "0.04em",
-                  }}>{s}</button>
+                    width: "100%", maxWidth: 360, textAlign: "center",
+                    transition: "background 0.15s, border-color 0.15s",
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.background = `${C.accent}22`; e.currentTarget.style.borderColor = `${C.accent}55`; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = `${C.accent}12`; e.currentTarget.style.borderColor = `${C.accent}30`; }}
+                >{s}</button>
               ))}
             </div>
           )}
