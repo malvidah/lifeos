@@ -3681,7 +3681,7 @@ function TaskFilterBtns({ filter, setFilter }) {
       {btns.map(b => {
         const active = filter === b.key;
         return (
-          <button key={b.key} onClick={() => setFilter(b.key)}
+          <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }}
             style={{
               fontFamily: mono, fontSize: '9px', letterSpacing: '0.06em',
               padding: b.label ? '3px 7px' : '3px 6px',
