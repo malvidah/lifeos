@@ -770,7 +770,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
   const planBadge = planInfo === null ? null : planInfo.isPremium ? (
     <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid ${C.accent}30`,overflow:"hidden"}}>
       <div style={{padding:"10px 12px",textAlign:"center"}}>
-        <div style={{fontFamily:mono,fontSize:F.sm,color:C.accent,letterSpacing:"0.06em",textTransform:"uppercase"}}>Premium ✦</div>
+        <div style={{fontFamily:mono,fontSize:F.sm,color:C.accent,letterSpacing:"0.06em",textTransform:"uppercase"}}>Day Lab Premium ✦</div>
         <div style={{fontFamily:mono,fontSize:"10px",color:C.muted,marginTop:3}}>{planInfo.plan === 'yearly' ? 'Annual plan · $4/mo' : 'Monthly plan · $5/mo'}</div>
       </div>
       <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"7px 12px",background:"none",borderTop:`1px solid ${C.accent}20`,border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",textAlign:"center"}}>
@@ -1105,21 +1105,13 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
     }}>
       {/* Pull-down overscroll patch */}
       <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.bg,zIndex:99}}/>
-      {/* Transparent row — no bar, no background */}
+      {/* Transparent row — just user menu, far right */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",
         height: 40,
-        display: "flex", alignItems: "center", position: "relative",
+        display: "flex", alignItems: "center", justifyContent: "flex-end",
         WebkitAppRegion: "drag",
       }}>
-        {/* Day Lab — centered */}
-        <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
-          <span onClick={onGoToToday} style={{
-            fontFamily:serif, fontSize:F.md, letterSpacing:"-0.02em",
-            color:"#C4A882", cursor:onGoToToday?"pointer":"default",
-          }}>Day Lab</span>
-        </div>
-        <div style={{flex:1}}/>
         <div style={{WebkitAppRegion:"no-drag"}}>
           <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
         </div>
