@@ -1140,7 +1140,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
         transform: "translateY(-36px)",
         WebkitAppRegion: "drag",
       }}>
-        <div style={{WebkitAppRegion:"no-drag"}}>
+        <div style={{WebkitAppRegion:"no-drag", position:"relative", zIndex:101}}>
           <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
         </div>
       </div>
