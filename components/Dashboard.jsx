@@ -9,7 +9,7 @@ const THEMES = {
     // Direction: bg is medium-dark, surface is lighter, well is darkest
     bg:"#111110",      surface:"#1E1C1A",   card:"#1E1C1A",
     well:"#171614",    border:"#272422",    border2:"#333028",
-    text:"#D8CEC2",    muted:"#9A9088",     dim:"#6A6258",
+    text:"#EFDFC3",    muted:"#9A9088",     dim:"#6A6258",
     accent:"#D08828",
     green:"#4A9A68",   blue:"#4878A8",
     purple:"#8860B8",  red:"#B04840",       orange:"#D08828",
@@ -901,7 +901,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
           {/* Identity + refresh */}
           <div style={{...row,paddingBottom:2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontFamily:blurweb,fontSize:F.md,color:theme==="light"?"#6B5440":"#D8CEC2",letterSpacing:"0.04em"}}>{user?.user_metadata?.name||"—"}</div>
+              <div style={{fontFamily:blurweb,fontSize:F.md,color:theme==="light"?"#6B5440":"#EFDFC3",letterSpacing:"0.04em"}}>{user?.user_metadata?.name||"—"}</div>
               <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
             </div>
             <button
@@ -1124,7 +1124,7 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
           fontSize: 22,
           letterSpacing: "normal",
           textTransform: "uppercase",
-          color: theme === "light" ? "#6B5440" : "#D8CEC2",
+          color: theme === "light" ? "#6B5440" : "#EFDFC3",
           userSelect: "none",
           lineHeight: 1,
           pointerEvents: "none",
@@ -4619,7 +4619,7 @@ function ChatFloat({date, token, userId, healthKey, theme}) {
             </div>
 
             {/* Date */}
-            <span style={{ fontFamily: blurweb, fontSize: F.lg, color: theme === "light" ? "#6B5440" : "#D8CEC2", letterSpacing: "0.06em" }}>
+            <span style={{ fontFamily: blurweb, fontSize: F.lg, color: theme === "light" ? "#6B5440" : "#EFDFC3", letterSpacing: "0.06em" }}>
               {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>
