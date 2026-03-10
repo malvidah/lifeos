@@ -4739,7 +4739,9 @@ function SearchResults({ results, loading, query, onSelectDate }) {
     </div>
   );
 
-  // Group by date
+  // Group by date → then by type, preserving project-view card order
+  const TYPE_ORDER = ['task', 'journal', 'meal', 'activity'];
+  const TYPE_SECTION = { task: 'Tasks', journal: 'Journal', meal: 'Meals', activity: 'Activity' };
   const byDate = [];
   let lastDate = null;
   results.forEach(hit => {
@@ -4748,41 +4750,62 @@ function SearchResults({ results, loading, query, onSelectDate }) {
   });
 
   return (
-    <div style={{ paddingBottom: 180 }}>
-      {byDate.map(({ date, hits }) => (
-        <div key={date} style={{ marginBottom: 4 }}>
-          <div
-            onClick={() => onSelectDate && onSelectDate(date)}
-            style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase',
-              color: C.muted, padding: '12px 14px 4px', cursor: 'pointer', display: 'inline-block',
-              transition: 'color 0.15s' }}
-            onMouseEnter={e => e.currentTarget.style.color = C.text}
-            onMouseLeave={e => e.currentTarget.style.color = C.muted}
-          >{fmtDate(date)}</div>
-          <div style={{ background: C.surface, borderRadius: 10, overflow: 'hidden', margin: '0 0 0 0' }}>
-            {hits.map((hit, i) => (
-              <div key={i}
-                onClick={() => onSelectDate && onSelectDate(date)}
-                style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '8px 14px',
-                  borderBottom: i < hits.length - 1 ? `1px solid ${C.border}` : 'none',
-                  cursor: 'pointer', transition: 'background 0.1s' }}
-                onMouseEnter={e => e.currentTarget.style.background = C.border + '55'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                <span style={{ fontFamily: mono, fontSize: 8, letterSpacing: '0.08em', textTransform: 'uppercase',
-                  color: TYPE_COLOR[hit.type] + 'aa', flexShrink: 0, paddingTop: 4, width: 42 }}>
-                  {TYPE_LABEL[hit.type]}
-                </span>
-                <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: 1.6, color: C.text,
-                  whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                  {highlight(hit.text, query.trim())}
-                  {hit.done && <span style={{ color: C.muted, marginLeft: 5, fontSize: '0.85em' }}>✓</span>}
+    <div style={{ paddingBottom: 180, padding: '0 10px 180px' }}>
+      {byDate.map(({ date, hits }) => {
+        // Group hits by type
+        const byType = {};
+        hits.forEach(h => { if (!byType[h.type]) byType[h.type] = []; byType[h.type].push(h); });
+        const types = TYPE_ORDER.filter(t => byType[t]);
+        return (
+          <div key={date} style={{ marginBottom: 16 }}>
+            {/* Date header — matches project view style, clickable */}
+            <div
+              onClick={() => onSelectDate && onSelectDate(date)}
+              style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+                color: C.muted, padding: '10px 4px 6px', cursor: 'pointer', display: 'inline-block',
+                transition: 'color 0.15s' }}
+              onMouseEnter={e => e.currentTarget.style.color = C.text}
+              onMouseLeave={e => e.currentTarget.style.color = C.muted}
+            >{fmtDate(date)}</div>
+
+            {types.map(type => (
+              <div key={type} style={{ marginBottom: 8 }}>
+                {/* Section label — matches widget header style */}
+                <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase',
+                  color: TYPE_COLOR[type] + 'bb', marginBottom: 4, paddingLeft: 2 }}>
+                  {TYPE_SECTION[type]}
                 </div>
+                {byType[type].map((hit, i) => (
+                  <div key={i}
+                    onClick={() => onSelectDate && onSelectDate(date)}
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '4px 2px',
+                      borderBottom: i < byType[type].length - 1 ? `1px solid ${C.border}` : 'none',
+                      cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.background = C.border + '44'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    {type === 'task' && (
+                      <div style={{ width:13, height:13, flexShrink:0, borderRadius:3, marginTop:5,
+                        border:`1.5px solid ${hit.done ? C.accent : C.border2}`,
+                        background: hit.done ? C.accent : 'transparent', display:'flex',
+                        alignItems:'center', justifyContent:'center' }}>
+                        {hit.done && <span style={{ fontSize:9, color:C.bg, lineHeight:1 }}>✓</span>}
+                      </div>
+                    )}
+                    <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: 1.6,
+                      color: hit.done ? C.muted : C.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      textDecoration: hit.done ? 'line-through' : 'none',
+                      opacity: hit.done ? 0.5 : 1 }}>
+                      {highlight(hit.text, query.trim())}
+                    </div>
+                  </div>
+                ))}
               </div>
             ))}
+            <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 4 }}/>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -5420,8 +5443,10 @@ function ProjectView({ project, token, userId, onBack, onSelectDate }) {
   const tasksByDate = useMemo(() => {
     if (!taskEntries.length) return [];
     const map = {};
+    // Preserve DB order — do NOT split into open/done (that causes reorder on toggle)
     taskEntries.forEach(t => {
-      if (!map[t.date]) map[t.date] = { open: [], done: [] };
+      if (!map[t.date]) map[t.date] = { all: [], open: [], done: [] };
+      map[t.date].all.push(t);
       if (t.done) map[t.date].done.push(t);
       else map[t.date].open.push(t);
     });
@@ -5628,7 +5653,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate }) {
             {tasksByDate.filter(([, { open, done }]) =>
               pvTaskFilter === 'open' ? open.length > 0 :
               pvTaskFilter === 'done' ? done.length > 0 : true
-            ).map(([date, { open, done }], dateIdx) => (
+            ).map(([date, { all }], dateIdx) => (
               <div key={date}>
                 <div onClick={() => onSelectDate && (onBack(), onSelectDate(date))}
                   style={{
@@ -5636,51 +5661,50 @@ function ProjectView({ project, token, userId, onBack, onSelectDate }) {
                     letterSpacing: '0.06em', textTransform: 'uppercase',
                     marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6,
                     cursor: onSelectDate ? 'pointer' : 'default',
-                    display: 'inline-block',
-                    transition: 'color 0.15s',
+                    display: 'inline-block', transition: 'color 0.15s',
                   }}
                   onMouseEnter={e => { if (onSelectDate) e.currentTarget.style.color = C.text; }}
                   onMouseLeave={e => { if (onSelectDate) e.currentTarget.style.color = C.muted; }}
                 >{fmtDate(date)}</div>
-                {pvTaskFilter !== 'done' && open.map(task => (
-                  <div key={task.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0' }}>
+                {all
+                  .filter(task =>
+                    pvTaskFilter === 'open' ? !task.done :
+                    pvTaskFilter === 'done' ? task.done : true
+                  )
+                  .map(task => (
+                  <div key={task.id} style={{
+                    display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0',
+                    opacity: task.done ? 0.35 : 1, transition: 'opacity 0.2s',
+                  }}>
                     <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
                       width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
-                      border:`1.5px solid ${C.border2}`, background:'transparent',
+                      border:`1.5px solid ${task.done ? C.accent : C.border2}`,
+                      background: task.done ? C.accent : 'transparent',
                       display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
-                    }}/>
+                    }}>{task.done && <span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span>}</button>
                     {editingTask?.date === task.date && editingTask?.id === task.id ? (
                       <input autoFocus value={editingTask.text}
                         onChange={e => setEditingTask(prev => ({...prev, text: e.target.value}))}
                         onBlur={async () => { await saveTaskEdit(task.date, task.id, editingTask.text); setEditingTask(null); }}
                         onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') e.target.blur(); }}
-                        style={{ background:'transparent', border:'none', outline:'none', padding:0, flex:1, lineHeight:'1.7', color:C.text, caretColor:C.accent, fontFamily:serif, fontSize:F.md }}
+                        style={{ background:'transparent', border:'none', outline:'none', padding:0, flex:1, lineHeight:'1.7',
+                          color: task.done ? C.muted : C.text, caretColor:C.accent, fontFamily:serif, fontSize:F.md,
+                          textDecoration: task.done ? 'line-through' : 'none' }}
                       />
                     ) : (
                       <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}
-                        style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.text, cursor:'text', whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
+                        style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
+                          color: task.done ? C.muted : C.text, cursor:'text',
+                          textDecoration: task.done ? 'line-through' : 'none',
+                          whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
                         {renderRichLine(task.text, project==='__everything__' ? null : project)}
                       </div>
                     )}
                   </div>
                 ))}
-                {pvTaskFilter !== 'open' && done.map(task => (
-                  <div key={task.id} style={{ display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0', opacity:0.35 }}>
-                    <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
-                      width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
-                      border:`1.5px solid ${C.accent}`, background:C.accent,
-                      display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
-                    }}><span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span></button>
-                    <div style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7', color:C.muted, textDecoration:'line-through' }}>
-                      {renderRichLine(task.text, project==='__everything__' ? null : project)}
-                    </div>
-                  </div>
-                ))}
-                {/* Separator */}
                 <div style={{ borderTop:`1px solid ${C.border}`, marginTop:12, marginBottom:4 }}/>
               </div>
             ))}
-
           </div>
         )}
       </Widget>
@@ -6165,7 +6189,7 @@ export default function Dashboard() {
               return (
                 <>
                   {/* Fixed project header — outside scroll area */}
-                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'8px 14px',background:C.bg}}>
+                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'14px 14px 8px',background:C.bg}}>
                     <button
                       onClick={async () => setActiveProject(null)}
                       style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',padding:'0 2px',color:pcol+'99',flexShrink:0}}
