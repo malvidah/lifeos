@@ -2415,7 +2415,7 @@ function fmtMinsField(val) {
 }
 
 
-function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,defaultExpandedMetric,onExpandedMetricChange}) {
+function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,defaultExpandedMetric,onExpandedMetricChange,backAction}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
@@ -2778,10 +2778,13 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
       {/* Card header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
         borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
-        cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
-        {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
+        cursor:onToggle?"pointer":"default"}} onClick={backAction?undefined:onToggle}>
+        {backAction
+          ? <button onClick={backAction} style={{background:"none",border:"none",cursor:"pointer",color:C.green,padding:0,display:"flex",alignItems:"center",gap:4,fontFamily:mono,fontSize:F.sm,marginRight:2}}>←</button>
+          : onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>
+        }
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-          textTransform:"uppercase",color:C.muted,flex:1}}>Health</span>
+          textTransform:"uppercase",color:backAction?C.green:C.muted,flex:1}}>Health</span>
         {dataSource&&(
           <span style={{fontFamily:mono,fontSize:"10px",color:C.dim,
             border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px"}}>
@@ -4824,22 +4827,16 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   }, [journalEntries]);
 
   return (
-    <div style={{ flex:1, minHeight:0, overflow:'auto', padding:10, paddingBottom:200, display:'flex', flexDirection:'column', gap:10 }}>
-      {/* Back header */}
-      <div style={{ display:'flex', alignItems:'center', gap:8, paddingBottom:2 }}>
-        <button onClick={onBack} style={{ background:'none', border:'none', cursor:'pointer', color:C.green, fontFamily:mono, fontSize:F.sm, padding:0, display:'flex', alignItems:'center', gap:4 }}>
-          ← <span style={{ letterSpacing:'0.08em', textTransform:'uppercase' }}>Health</span>
-        </button>
-      </div>
-
-      {/* Health strip — always expanded */}
+    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingBottom:200 }}>
+      {/* Health strip — back arrow replaces chevron, no collapse */}
       <HealthStrip
         date={viewDate} token={token} userId={userId}
         onHealthChange={onHealthChange || (()=>{})}
         onScoresReady={onScoresReady || (()=>{})}
         onSyncStart={startSync || (()=>{})}
         onSyncEnd={endSync || (()=>{})}
-        collapsed={false} onToggle={()=>{}}
+        collapsed={false} onToggle={null}
+        backAction={onBack}
         defaultExpandedMetric={expandedMetric}
         onExpandedMetricChange={handleMetricChange}
       />
@@ -5676,8 +5673,8 @@ export default function Dashboard() {
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
-          paddingBottom:mobile?200:0, display:"flex", flexDirection:"column", gap:mobile?10:8}}>
+        <div style={{flex:1, minHeight:0, overflow:activeProject?"auto":mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
+          paddingBottom:activeProject?200:mobile?200:0, display:"flex", flexDirection:"column", gap:mobile?10:8}}>
 
           {/* Calendar + Health — hidden in project view */}
           {!activeProject && (
