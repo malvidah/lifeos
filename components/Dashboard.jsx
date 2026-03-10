@@ -4765,11 +4765,9 @@ function ChatFloat({date, token, userId, healthKey}) {
               style={{
                 flex: 1, background: "transparent", border: "none", outline: "none",
                 fontFamily: serif, fontSize: F.md, color: C.text,
-                padding: "0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
-                resize: "none", overflow: "auto", maxHeight: "120px",
-                // Extend tap area to fill the full pill height
-                margin: expanded ? "0" : "-14px -6px",
-                padding: expanded ? "0" : "14px 6px",
+                padding: "0", margin: "0", opacity: busy ? 0.5 : 1, lineHeight: 1.4,
+                resize: "none", overflow: "hidden", maxHeight: "120px",
+                display: "block",
               }}
             />
 
