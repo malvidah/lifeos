@@ -12,7 +12,15 @@ function getUserClient(req) {
   return { supabase, token };
 }
 
-const TAG_RE = (name) => new RegExp(`#${name}(?![A-Za-z0-9])`, 'i');
+// Matches a line if it contains:
+//   1. #ProjectName (existing tag syntax)
+//   2. The project name as a plain word, case-insensitive (e.g. "work", "Work", "WORK")
+//      — word boundaries so "network" doesn't match "work"
+function makeMatchRe(name) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // #Tag match OR plain word match (case-insensitive, word boundary)
+  return new RegExp(`#${escaped}(?![A-Za-z0-9])|\\b${escaped}\\b`, 'i');
+}
 
 export async function GET(req) {
   const { supabase } = getUserClient(req);
@@ -36,37 +44,33 @@ export async function GET(req) {
       .order('date', { ascending: true });
     if (ne) throw ne;
 
-    const tagRe = isEverything ? null : TAG_RE(project);
+    const matchRe = isEverything ? null : makeMatchRe(project);
 
     // Extract journal entries using block-level grouping:
     // Consecutive non-empty lines form a "block". If any line in the block
-    // contains the tag (or we're in Everything mode), include ALL lines of that block.
+    // matches (tag OR plain word), include ALL lines of that block.
     const journalEntries = [];
     for (const row of notesRows || []) {
       const text = typeof row.data === 'string' ? row.data : '';
       if (!text.trim()) continue;
-      if (!isEverything && !tagRe.test(text)) continue;
+      if (!isEverything && !matchRe.test(text)) continue;
 
       const lines = text.split('\n');
       let i = 0;
       while (i < lines.length) {
-        // Skip blank lines between blocks
         if (!lines[i].trim()) { i++; continue; }
-        // Collect a block of consecutive non-empty lines
-        const blockStart = i;
         const block = [];
         while (i < lines.length && lines[i].trim()) {
           block.push({ text: lines[i].trim(), lineIndex: i });
           i++;
         }
-        // Include the entire block if: Everything mode, OR any line in the block has the tag
-        if (isEverything || block.some(l => tagRe.test(l.text))) {
+        if (isEverything || block.some(l => matchRe.test(l.text))) {
           block.forEach(l => journalEntries.push({ date: row.date, text: l.text, lineIndex: l.lineIndex }));
         }
       }
     }
 
-    // Fetch tasks — for Everything fetch all, for tagged projects filter by tag
+    // Fetch tasks
     const taskEntries = [];
     const { data: tasksRows, error: te } = await supabase
       .from('entries').select('date, data')
@@ -77,7 +81,7 @@ export async function GET(req) {
       const tasks = Array.isArray(row.data) ? row.data : [];
       tasks.forEach(task => {
         if (!task?.text) return;
-        if (isEverything || tagRe.test(task.text)) {
+        if (isEverything || matchRe.test(task.text)) {
           taskEntries.push({ date: row.date, id: task.id, text: task.text, done: !!task.done });
         }
       });
