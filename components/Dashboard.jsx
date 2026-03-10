@@ -4572,9 +4572,10 @@ function ChatFloat({date, token, userId, healthKey}) {
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: `0 10px max(${expanded ? "10px" : "6px"}, calc(env(safe-area-inset-bottom, 0px) + 2px))`,
+        paddingLeft: 10, paddingRight: 10,
+        paddingBottom: expanded ? "max(10px, env(safe-area-inset-bottom, 10px))" : "env(safe-area-inset-bottom, 8px)",
         pointerEvents: "none",
-        transition: "padding 0.2s cubic-bezier(0.4,0,0.2,1)",
+        transition: "padding-bottom 0.2s cubic-bezier(0.4,0,0.2,1)",
       }}>
       {/* Inner card: glass pill collapsed / glass panel expanded */}
       <div style={{
@@ -4729,8 +4730,8 @@ function ChatFloat({date, token, userId, healthKey}) {
           width: "100%",
           padding: expanded
             ? (mobile ? "8px 16px 8px 20px" : "8px 14px 8px 20px")
-            : (mobile ? "7px 8px 7px 14px" : "7px 8px 7px 16px"),
-          paddingBottom: expanded ? (mobile ? "10px" : "8px") : (mobile ? "9px" : "9px"),
+            : (mobile ? "6px 8px 6px 14px" : "6px 8px 6px 16px"),
+          paddingBottom: expanded ? (mobile ? "10px" : "8px") : "6px",
           boxSizing: "border-box",
           cursor: !expanded ? "text" : "default",
         }} onClick={!expanded ? () => { setExpanded(true); setTimeout(() => inputRef.current?.focus(), 80); } : undefined}>
