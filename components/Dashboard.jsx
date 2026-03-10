@@ -4928,7 +4928,10 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
           <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>No health tasks yet.</div>
         ) : (
           <div>
-            {tasksByDate.map(([date, { open, done }], dateIdx) => (
+            {tasksByDate.filter(([, { open, done }]) =>
+              pvTaskFilter === 'open' ? open.length > 0 :
+              pvTaskFilter === 'done' ? done.length > 0 : true
+            ).map(([date, { open, done }], dateIdx) => (
               <div key={date}>
                 <div style={{fontFamily:mono,fontSize:10,color:C.muted,letterSpacing:'0.06em',textTransform:'uppercase',marginTop:dateIdx===0?0:4,marginBottom:6}}>{fmtDate(date)}</div>
                 {pvTaskFilter !== 'done' && open.map(task => (
@@ -5302,7 +5305,10 @@ function ProjectView({ project, token, userId, onBack }) {
           )
         ) : (
           <div>
-            {tasksByDate.map(([date, { open, done }], dateIdx) => (
+            {tasksByDate.filter(([, { open, done }]) =>
+              pvTaskFilter === 'open' ? open.length > 0 :
+              pvTaskFilter === 'done' ? done.length > 0 : true
+            ).map(([date, { open, done }], dateIdx) => (
               <div key={date}>
                 <div style={{
                   fontFamily: mono, fontSize: 10, color: C.muted,
