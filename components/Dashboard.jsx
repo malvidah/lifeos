@@ -1096,9 +1096,9 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
   const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   return (
     <div style={{
-      paddingTop: "env(safe-area-inset-top, 0px)",
-      paddingLeft: 12, paddingRight: 12,
-      paddingBottom: 8,
+      paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+      paddingLeft: 14, paddingRight: 14,
+      paddingBottom: 10,
       flexShrink: 0,
       position: "sticky", top: 0, zIndex: 100,
       WebkitAppRegion: "drag", userSelect: "none",
@@ -1121,18 +1121,18 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
       }}>
         {/* Ghost left copy for centering balance */}
         <div style={{flex:1,visibility:"hidden",pointerEvents:"none",display:"flex"}}>
-          <UserMenu session={{session}} token={{token}} userId={{userId}} theme={{theme}} onThemeChange={{onThemeChange}} stravaConnected={{stravaConnected}} onStravaChange={{onStravaChange}}/>
+          <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
         </div>
         {/* Day Lab — centered */}
         <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
-          <span onClick={{onGoToToday}} style={{
+          <span onClick={onGoToToday} style={{
             fontFamily:serif, fontSize:F.md, letterSpacing:"-0.02em",
             color:C.text, cursor:onGoToToday?"pointer":"default",
           }}>Day Lab</span>
         </div>
         <div style={{flex:1}}/>
         <div style={{WebkitAppRegion:"no-drag"}}>
-          <UserMenu session={{session}} token={{token}} userId={{userId}} theme={{theme}} onThemeChange={{onThemeChange}} stravaConnected={{stravaConnected}} onStravaChange={{onStravaChange}}/>
+          <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
         </div>
       </div>
     </div>
@@ -4572,9 +4572,9 @@ function ChatFloat({date, token, userId, healthKey}) {
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
-        padding: expanded ? "0 12px" : "0 12px 12px",
+        padding: expanded ? "0 12px 14px" : "0 12px 12px",
         pointerEvents: "none",
-        transition: "padding 0.3s cubic-bezier(0.4,0,0.2,1)",
+        transition: "padding 0.2s cubic-bezier(0.4,0,0.2,1)",
       }}>
       {/* Inner card: glass pill collapsed / glass panel expanded */}
       <div style={{
@@ -4586,11 +4586,11 @@ function ChatFloat({date, token, userId, healthKey}) {
         WebkitBackdropFilter: "blur(28px) saturate(1.8) brightness(1.04)",
         background: expanded ? `${C.surface}f0` : `${C.surface}cc`,
         border: `1px solid ${C.border}${expanded ? "80" : "70"}`,
-        borderRadius: expanded ? "20px 20px 0 0" : 100,
+        borderRadius: 20,
         boxShadow: expanded
-          ? "0 -8px 48px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.05)"
+          ? "0 8px 48px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06)"
           : "0 4px 28px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.07)",
-        transition: "border-radius 0.3s cubic-bezier(0.4,0,0.2,1), max-width 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s ease",
+        transition: "max-width 0.18s cubic-bezier(0.4,0,0.2,1), box-shadow 0.18s ease",
         overflow: "hidden",
       }}>
 
@@ -4721,33 +4721,7 @@ function ChatFloat({date, token, userId, healthKey}) {
           </div>
         )}
 
-        {/* ── Collapsed insight preview ── */}
-        {!expanded && (() => {
-          const insight = messages.find(m => m.isInsight);
-          if (!insight && !insightLoading) return null;
-          const preview = insight?.content ? insight.content.split("\n")[0].slice(0, 110) + (insight.content.length > 110 ? "…" : "") : null;
-          return (
-            <div onClick={() => setExpanded(true)} style={{
-              width: "100%", maxWidth: 640, boxSizing: "border-box",
-              padding: "8px 20px 2px", cursor: "pointer",
-            }}>
-              {preview ? (
-                <div style={{
-                  fontFamily: mono, fontSize: 12, color: C.text, lineHeight: 1.6, letterSpacing: "0.02em",
-                  opacity: 0.7,
-                  borderLeft: `2px solid ${C.accent}60`,
-                  paddingLeft: 10,
-                }}>
-                  {preview}
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <Shimmer width="60%" height={11} />
-                </div>
-              )}
-            </div>
-          );
-        })()}
+
 
         {/* ── Input row — fills pill width when collapsed, panel width when expanded ── */}
         <div style={{
