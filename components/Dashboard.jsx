@@ -3068,7 +3068,11 @@ function Notes({date,userId,token}) {
           onMouseLeave={e=>e.currentTarget.style.color="#C8820A"}
         >{url}</a>);
       }
-      else parts.push(<TagChip key={m.index} name={m[4]}/>);
+      else {
+        // Zero-padding colored span — width must match raw "#TagName" text in textarea
+        const col = projectColor(m[4]);
+        parts.push(<span key={m.index} style={{color:col,fontFamily:serif}}>{m[0]}</span>);
+      }
       last = m.index + m[0].length;
     }
     if (last < text.length) parts.push(text.slice(last));
