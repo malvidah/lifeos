@@ -3207,7 +3207,7 @@ function Notes({date,userId,token}) {
           color:"transparent",
           caretColor:C.accent,
           overflow:"hidden",
-          position:"relative", zIndex:1,
+          position:"relative", zIndex:3,
         }}
       />
       {/* Overlay — rendered chips + formatting. Pointer-events off so clicks reach textarea */}
