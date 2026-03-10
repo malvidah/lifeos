@@ -782,10 +782,26 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
           boxShadow:C.shadow,overflowY:"auto",maxHeight:"85vh",
         }}>
 
-          {/* Identity */}
-          <div style={{...row,paddingBottom:2}}>
-            <div style={{fontFamily:serif,fontSize:F.md,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
-            <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
+          {/* Identity + refresh */}
+          <div style={{...row,paddingBottom:2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div>
+              <div style={{fontFamily:serif,fontSize:F.md,color:C.text}}>{user?.user_metadata?.name||"—"}</div>
+              <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
+            </div>
+            <button
+              onClick={()=>window.location.reload()}
+              title="Refresh"
+              style={{background:"none",border:"none",cursor:"pointer",padding:6,borderRadius:6,
+                color:C.dim,display:"flex",alignItems:"center",justifyContent:"center",
+                flexShrink:0,transition:"background 0.15s, color 0.15s"}}
+              onMouseEnter={e=>{e.currentTarget.style.background=C.border2;e.currentTarget.style.color=C.text;}}
+              onMouseLeave={e=>{e.currentTarget.style.background="none";e.currentTarget.style.color=C.dim;}}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+            </button>
           </div>
           {divider}
           {planBadge}
@@ -935,29 +951,17 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
           {divider}
 
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <button onClick={()=>window.location.reload()}
+            <a href="/about"
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                display:"flex",alignItems:"center",gap:6,
+                color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
+                textTransform:"uppercase",textDecoration:"none"}}>
+              Learn More
+            </a>
+            <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
+              style={{background:"none",border:"none",padding:0,cursor:"pointer",
                 color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 4 23 10 17 10"/>
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-              </svg>
-              Refresh
+              Sign Out →
             </button>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <a href="/about"
-                style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                  color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
-                  textTransform:"uppercase",textDecoration:"none"}}>
-                Learn More
-              </a>
-              <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
-                style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                  color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
-                Sign Out →
-              </button>
-            </div>
           </div>
 
         </div>
@@ -4253,42 +4257,17 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     return s;
   }, [notes, tasks]);
 
-  // Auto-create/cleanup projects — debounced so partial mid-word tags are ignored.
-  // Also scans all MEM-cached entries to clean up stale auto-created tags.
+  // Auto-create projects from today's tags — debounced so partial mid-word tags are ignored.
+  // Never auto-delete: projects from other days aren't in MEM cache on fresh load.
   useEffect(() => {
     if (!projectsLoaded) return;
     const timer = setTimeout(() => {
       const meta = projectsMeta || {};
-
-      // Collect ALL tags referenced in any cached notes/tasks entry for this user
-      const allCachedTags = new Set();
-      for (const key of Object.keys(MEM)) {
-        if (!key.startsWith(`${userId}:`)) continue;
-        const parts = key.split(':');
-        const type = parts[parts.length - 1];
-        if (type === 'notes') {
-          extractTags(MEM[key] || '').forEach(t => allCachedTags.add(t));
-        } else if (type === 'tasks' && Array.isArray(MEM[key])) {
-          MEM[key].forEach(r => { if (r?.text) extractTags(r.text).forEach(t => allCachedTags.add(t)); });
-        }
-      }
-
-      const updated = { ...meta };
-      let changed = false;
-
-      // Add new tags from today
       const newTags = [...todayTags].filter(t => !meta[t]);
-      newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; changed = true; });
-
-      // Remove stale auto-created tags: not in any cached content AND no description
-      for (const key of Object.keys(updated)) {
-        const hasDesc = !!(updated[key]?.description);
-        if (!hasDesc && !allCachedTags.has(key)) {
-          delete updated[key]; changed = true;
-        }
-      }
-
-      if (changed) setProjectsMeta(updated, { skipHistory: true });
+      if (!newTags.length) return;
+      const updated = { ...meta };
+      newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; });
+      setProjectsMeta(updated, { skipHistory: true });
     }, 800);
     return () => clearTimeout(timer);
   }, [todayTags, projectsLoaded, notes, tasks]); // eslint-disable-line
