@@ -5813,7 +5813,6 @@ export default function Dashboard() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
-  const { results: srResults, loading: srLoading } = useSearch(searchQuery, token, userId);
 
 
   useEffect(()=>{
@@ -5842,6 +5841,7 @@ export default function Dashboard() {
 
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
+  const { results: srResults, loading: srLoading } = useSearch(searchQuery, token, userId);
 
   // Expose token to native iOS layer (Swift reads this for HealthKit sync)
   // @supabase/ssr uses cookies not localStorage, so we bridge it manually
