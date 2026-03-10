@@ -899,7 +899,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,stravaConnected,onStravaChange,activeProject,onBackFromProject}) {
+function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,stravaConnected,onStravaChange}) {
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
   const [isToday, setIsToday] = useState(false);
@@ -932,29 +932,12 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
         <span style={{fontFamily:mono,fontSize:F.md}}>●</span>
         <div style={{width:70}}/>
       </div>
-      {/* Center: project back nav or Day Lab title */}
-      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag",display:"flex",alignItems:"center",gap:8}}>
-        {activeProject ? (
-          <button
-            onClick={onBackFromProject}
-            style={{
-              background:"none",border:"none",cursor:"pointer",
-              display:"flex",alignItems:"center",gap:6,padding:"2px 4px",
-              fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",color:C.text,
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.2" strokeLinecap="round">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-            <span style={{color:C.muted,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase"}}>Back</span>
-            <span style={{color:C.text,fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em"}}>{activeProject === '__everything__' ? 'Everything' : `#${activeProject}`}</span>
-          </button>
-        ) : (
-          <span onClick={onGoToToday} style={{
-            fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
-            color:C.text, cursor:onGoToToday?"pointer":"default",
-          }}>Day Lab</span>
-        )}
+      {/* Day Lab — centered, always */}
+      <div style={{position:"absolute",left:"50%",transform:"translateX(-50%)",WebkitAppRegion:"no-drag"}}>
+        <span onClick={onGoToToday} style={{
+          fontFamily:serif,fontSize:F.md,letterSpacing:"-0.02em",
+          color:C.text, cursor:onGoToToday?"pointer":"default",
+        }}>Day Lab</span>
       </div>
       <div style={{flex:1}}/>
       <div style={{WebkitAppRegion:"no-drag"}}>
@@ -4358,49 +4341,80 @@ function ProjectView({ project, token, userId, onBack }) {
       display: 'flex', flexDirection: 'column', gap: 10,
     }}>
 
-      {/* Overview — hidden for Everything */}
-      {project !== '__everything__' && <Widget label="Overview" color={C.accent} autoHeight>
-        {editingDesc ? (
-          <textarea
-            ref={descRef}
-            value={descVal}
-            onChange={e => { setDescVal(e.target.value); e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
-            onBlur={() => {
-              setEditingDesc(false);
-              const updated = { ...(projectsMeta || {}), [project]: { ...meta, description: descVal } };
-              setProjectsMeta(updated, { skipHistory: true });
-            }}
-            onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
-            style={{
-              width: '100%', border: 'none', outline: 'none', background: 'transparent',
-              color: C.text, fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-              resize: 'none', minHeight: 60, padding: 0, caretColor: C.accent,
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              minHeight: 44, cursor: 'text',
-              fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-              color: meta.description ? C.text : C.dim,
-              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-            }}
-            onClick={() => {
-              setDescVal(meta.description || '');
-              setEditingDesc(true);
-              setTimeout(() => {
-                if (descRef.current) {
-                  descRef.current.focus();
-                  descRef.current.style.height = 'auto';
-                  descRef.current.style.height = descRef.current.scrollHeight + 'px';
-                }
-              }, 10);
-            }}
-          >
-            {meta.description || 'Add a project description…'}
+      {/* Overview — hidden for Everything. Custom header: ← ProjectName + description */}
+      {project !== '__everything__' && (
+        <Card>
+          {/* Back arrow + project name — tappable header row */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '11px 14px', borderBottom: `1px solid ${C.border}`,
+            flexShrink: 0,
+          }}>
+            <button
+              onClick={onBack}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', padding: '0 2px',
+                color: C.muted, flexShrink: 0,
+              }}
+              aria-label="Back"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <span style={{
+              fontFamily: serif, fontSize: F.md, letterSpacing: '-0.01em',
+              color: C.text, flex: 1,
+            }}>
+              {project === '__everything__' ? 'Everything' : project}
+            </span>
           </div>
-        )}
-      </Widget>}
+          {/* Description — click to edit */}
+          <div style={{ padding: 16 }}>
+            {editingDesc ? (
+              <textarea
+                ref={descRef}
+                value={descVal}
+                onChange={e => { setDescVal(e.target.value); e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
+                onBlur={() => {
+                  setEditingDesc(false);
+                  const updated = { ...(projectsMeta || {}), [project]: { ...meta, description: descVal } };
+                  setProjectsMeta(updated, { skipHistory: true });
+                }}
+                onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
+                style={{
+                  width: '100%', border: 'none', outline: 'none', background: 'transparent',
+                  color: C.text, fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+                  resize: 'none', minHeight: 60, padding: 0, caretColor: C.accent,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  minHeight: 44, cursor: 'text',
+                  fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+                  color: meta.description ? C.text : C.dim,
+                  whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                }}
+                onClick={() => {
+                  setDescVal(meta.description || '');
+                  setEditingDesc(true);
+                  setTimeout(() => {
+                    if (descRef.current) {
+                      descRef.current.focus();
+                      descRef.current.style.height = 'auto';
+                      descRef.current.style.height = descRef.current.scrollHeight + 'px';
+                    }
+                  }, 10);
+                }}
+              >
+                {meta.description || 'Add a project description…'}
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Journal Entries */}
       <Widget
@@ -4859,7 +4873,7 @@ export default function Dashboard() {
         @keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
-      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected} activeProject={activeProject} onBackFromProject={()=>setActiveProject(null)}/>
+      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
         <div style={{flex:1, minHeight:0, overflow:mobile?"auto":"hidden", padding:mobile?"6px 8px":10,
