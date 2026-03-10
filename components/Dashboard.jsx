@@ -33,8 +33,15 @@ const THEMES = {
 };
 // C is set at render time via setTheme — default dark
 let C = THEMES.dark;
-const serif = "Georgia, 'Times New Roman', serif";
-const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
+const serif   = "Georgia, 'Times New Roman', serif";
+const mono    = "'SF Mono', 'Fira Code', ui-monospace, monospace";
+const blurweb = "'BlurWeb', sans-serif";
+if (typeof document !== "undefined" && !document.getElementById("blurweb-face")) {
+  const _s = document.createElement("style");
+  _s.id = "blurweb-face";
+  _s.textContent = "@font-face { font-family: 'BlurWeb'; src: url('/fonts/BlurWeb-Medium.ttf') format('truetype'); font-weight: normal; font-style: normal; font-display: swap; }";
+  document.head.appendChild(_s);
+}
 const F     = { lg:18, md:15, sm:12 }; // 3 sizes only
 
 // ─── Responsive hook ──────────────────────────────────────────────────────────
@@ -1105,11 +1112,31 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
     }}>
       {/* Pull-down overscroll patch */}
       <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.bg,zIndex:99}}/>
-      {/* Transparent row — just user menu, far right */}
+      {/* DAY LAB wordmark — full-width centered */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",
-        height: 40,
-        display: "flex", alignItems: "center", justifyContent: "flex-end",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        paddingBottom: 6,
+        WebkitAppRegion: "drag",
+      }}>
+        <span style={{
+          fontFamily: blurweb,
+          fontSize: 30,
+          letterSpacing: "0.24em",
+          textTransform: "uppercase",
+          color: theme === "light" ? "#6B5440" : "#D8CEC2",
+          userSelect: "none",
+          lineHeight: 1,
+          pointerEvents: "none",
+        }}>DAY LAB</span>
+      </div>
+
+      {/* User menu — overlaid far right, same vertical band */}
+      <div style={{
+        maxWidth: 1200, margin: "0 auto",
+        height: 0,
+        display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+        transform: "translateY(-36px)",
         WebkitAppRegion: "drag",
       }}>
         <div style={{WebkitAppRegion:"no-drag"}}>
