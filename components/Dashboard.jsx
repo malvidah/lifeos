@@ -3686,6 +3686,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const mkRow=()=>({id:Date.now(),text:"",done:false});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
   const refs=useRef({});
+  const skipBlurRef=useRef(false); // set true on Enter/Backspace so onBlur doesn't clobber the split
   const [focusedId, setFocusedId] = useState(null);
   const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
   const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
@@ -3799,6 +3800,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   };
                   if (e.key === 'Enter') {
                     e.preventDefault();
+                    skipBlurRef.current = true; // onBlur must not overwrite the split
                     const caretOffset = getOffset();
                     const before = text.slice(0, caretOffset);
                     const after  = text.slice(caretOffset);
@@ -3816,6 +3818,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                     const prevRow = safe[idx - 1];
                     if (caretOffset === 0 && idx > 0) {
                       e.preventDefault();
+                      skipBlurRef.current = true;
                       const mergedText = prevRow.text + text;
                       setRows(prev => {
                         const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
@@ -3824,6 +3827,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                       setFocusedId(prevRow.id);
                     } else if (text === '' && safe.length > 1) {
                       e.preventDefault();
+                      skipBlurRef.current = true;
                       setRows(prev => (Array.isArray(prev) ? prev : []).filter(r => r.id !== row.id));
                       setFocusedId(safe[idx - 1]?.id ?? null);
                     }
@@ -3832,11 +3836,13 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   }
                 }}
                 onBlur={e => {
-                  // Save text on blur using functional updater
-                  const text = e.currentTarget.textContent;
-                  setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));
-                  // Defer focusedId clear so that concurrent setFocusedId(newRow.id) from
-                  // Enter/Backspace (which fires before blur) wins via functional check
+                  if (skipBlurRef.current) {
+                    // Enter/Backspace already committed the correct rows — skip overwrite
+                    skipBlurRef.current = false;
+                  } else {
+                    const text = e.currentTarget.textContent;
+                    setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));
+                  }
                   setTimeout(() => setFocusedId(prev => prev === row.id ? null : prev), 0);
                 }}
                 style={{
