@@ -4857,6 +4857,7 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
   const [ty, setTy] = useState(0);
   const [scale, setScale] = useState(1);
   const [hovered, setHovered] = useState(null);
+  const [graphCollapsed, setGraphCollapsed] = useState(false);
   const containerRef = useRef(null);
   const dragStart = useRef(null);
 
@@ -4951,7 +4952,8 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
       var maxY = Math.max.apply(null, allY) + 40;
       var gW = maxX - minX;
       var gH = maxY - minY;
-      var newScale = Math.min(0.95, Math.min(rect.width / gW, rect.height / gH));
+      // Tight fit — no arbitrary cap, fills available space
+      var newScale = Math.min(rect.width / gW, rect.height / gH) * 0.92;
       setScale(newScale);
       setTx(rect.width / 2 - ((minX + maxX) / 2) * newScale);
       setTy(rect.height / 2 - ((minY + maxY) / 2) * newScale);
@@ -4991,18 +4993,21 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
     <div style={{ display:'flex', flexDirection:'column', background:C.bg }}>
       {/* ── Graph card ── */}
       <div style={{ margin:'52px 10px 0', background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, overflow:'hidden' }}>
-        {/* Card header */}
-        <div style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 14px 8px', borderBottom:`1px solid ${C.border}` }}>
-          <span style={{ fontFamily:mono, fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:C.muted }}>
+        {/* Card header — matches Widget style */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 14px',
+          borderBottom:graphCollapsed?'none':`1px solid ${C.border}`, flexShrink:0, cursor:'pointer' }}
+          onClick={() => setGraphCollapsed(c => !c)}>
+          <ChevronBtn collapsed={graphCollapsed} onToggle={e => { e.stopPropagation(); setGraphCollapsed(c => !c); }}/>
+          <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em', textTransform:'uppercase', color:C.muted, flex:1 }}>
             Project Graph
           </span>
-          <span style={{ fontFamily:mono, fontSize:9, color:C.dim, marginLeft:4 }}>
+          {!graphCollapsed && <span style={{ fontFamily:mono, fontSize:9, color:C.dim }}>
             {(allTags||[]).length + 1} projects · scroll to zoom · drag to pan
-          </span>
+          </span>}
         </div>
 
         {/* Canvas */}
-        <div ref={containerRef}
+        {!graphCollapsed && <div ref={containerRef}
           style={{ height:400, position:'relative', overflow:'hidden', cursor:'grab' }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
@@ -5015,6 +5020,13 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
         )}
         {ready && (
           <svg width="100%" height="100%" style={{ display:'block' }}>
+            <defs>
+              <pattern id="dotgrid" x={tx % (24 * scale)} y={ty % (24 * scale)}
+                width={24 * scale} height={24 * scale} patternUnits="userSpaceOnUse">
+                <circle cx={12 * scale} cy={12 * scale} r={Math.max(0.6, scale * 0.7)} fill={C.border2} opacity="0.7"/>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#dotgrid)"/>
             <g transform={`translate(${tx},${ty}) scale(${scale})`}>
               {edgeAlpha > 0 && edges.map((edge, i) => {
                 const na = nodes[edge.si]; const nb = nodes[edge.ti];
@@ -5084,7 +5096,7 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
             </button>
           ))}
         </div>
-      </div>
+      </div>}
       </div>{/* end graph card */}
 
       {/* ── All entries + tasks — inline below graph card ── */}
