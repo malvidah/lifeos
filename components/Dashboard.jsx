@@ -5288,7 +5288,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
       if (!map[t.date]) map[t.date] = { open: [], done: [] };
       if (t.done) map[t.date].done.push(t); else map[t.date].open.push(t);
     });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
   }, [taskEntries]);
 
   const journalByDate = useMemo(() => {
@@ -5311,8 +5311,8 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
       {entries === null ? (
         <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
       ) : (() => {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const otherDates = tasksByDate.filter(([d]) => d !== todayStr);
+        const todayStr = todayKey(); // local date — matches addNewTask and day view
+        const otherDates = tasksByDate.filter(([d]) => d !== todayStr).sort(([a],[b]) => b.localeCompare(a));
         const todayEntry = tasksByDate.find(([d]) => d === todayStr);
         const allDates = todayEntry
           ? [[todayStr, todayEntry[1]], ...otherDates]
@@ -5381,7 +5381,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
       {entries === null ? (
         <div style={{display:'flex',flexDirection:'column',gap:8}}><Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/></div>
       ) : (() => {
-        const todayStr = new Date().toISOString().slice(0, 10);
+        const todayStr = todayKey(); // local date — matches day view
         const otherDates = journalByDate.filter(([d]) => d !== todayStr);
         const todayLines = journalByDate.find(([d]) => d === todayStr)?.[1] || [];
         const allDates = [[todayStr, todayLines], ...otherDates];
@@ -5680,7 +5680,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
 
   async function addNewJournal(text) {
     if (!text.trim() || project === '__everything__') return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayKey();
     const entryText = text.trim().endsWith(`#${project}`)
       ? text.trim()
       : `${text.trim()} #${project}`;
@@ -5810,8 +5810,8 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
             <NewProjectTask project={project} onAdd={addNewTask} />
           )
         ) : (() => {
-          const todayStr = new Date().toISOString().slice(0, 10);
-          const otherDates = tasksByDate.filter(([d]) => d !== todayStr);
+          const todayStr = todayKey();
+          const otherDates = tasksByDate.filter(([d]) => d !== todayStr).sort(([a],[b]) => b.localeCompare(a));
           const todayEntry = tasksByDate.find(([d]) => d === todayStr);
           const allDates = todayEntry
             ? [[todayStr, todayEntry[1]], ...otherDates]
@@ -5903,7 +5903,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
       >
         {entries === null ? loadingCards
           : (() => {
-            const today = new Date().toISOString().slice(0, 10);
+            const today = todayKey();
             const otherDates = journalByDate.filter(([d]) => d !== today);
             const todayLines = journalByDate.find(([d]) => d === today)?.[1] || [];
             const allDates = [[today, todayLines], ...otherDates];
