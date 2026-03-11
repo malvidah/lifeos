@@ -6581,7 +6581,7 @@ export default function Dashboard() {
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:"calc(env(safe-area-inset-top, 0px) + 68px)"}}>
+        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:0}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           overflowY:activeProject?"hidden":mobile?"auto":"auto",
