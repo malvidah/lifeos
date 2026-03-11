@@ -3047,6 +3047,12 @@ function Notes({date,userId,token}) {
           return `<div><img src="${url}" data-url="${url}" style="max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:default" contenteditable="false" draggable="false"/></div>`;
         }
       }
+      // If line contains [img:...] anywhere, extract and render it (handles partial corruption)
+      const imgAnywhere = line.match(/\[img:(https?:\/\/[^\]]+)\]/);
+      if (imgAnywhere) {
+        const url = imgAnywhere[1].replace(/"/g, '&quot;');
+        return `<div><img src="${url}" data-url="${url}" style="max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:default" contenteditable="false" draggable="false"/></div>`;
+      }
       // Escape HTML then apply inline formatting spans
       const escaped = line
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -3061,7 +3067,7 @@ function Notes({date,userId,token}) {
     return escaped
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
-      .replace(/(https?:\/\/[^\s<>"')]+)/g, '<a href="$1" target="_blank" rel="noreferrer" style="color:#C8820A;text-decoration:none;pointer-events:auto">$1</a>')
+      .replace(/(?<!\[img:)(https?:\/\/[^\s<>"')\]]+)(?![^\[]*\])/g, '<a href="$1" target="_blank" rel="noreferrer" style="color:#C8820A;text-decoration:none;pointer-events:auto">$1</a>')
       .replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) => {
         const col = projectColor(tag);
         return `<span style="color:${col};background:${col}20;border:1px solid ${col}40;border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;line-height:1.6;vertical-align:middle;display:inline-block">${m}</span>`;
