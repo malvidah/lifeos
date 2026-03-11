@@ -6110,6 +6110,25 @@ export default function Dashboard() {
 
   useEffect(injectBlurWebFont, []);
 
+  // CURSOR DIAGNOSTIC — logs what element is stealing cursor. Remove when fixed.
+  useEffect(() => {
+    const probe = (e) => {
+      const el = document.elementFromPoint(e.clientX, e.clientY);
+      if (!el) return;
+      let cur = el;
+      while (cur) {
+        const computed = window.getComputedStyle(cur).cursor;
+        if (computed === 'pointer') {
+          console.log('[CURSOR] pointer from:', cur.tagName, cur.className, cur.id, cur);
+          break;
+        }
+        cur = cur.parentElement;
+      }
+    };
+    window.addEventListener('mousemove', probe, { passive: true });
+    return () => window.removeEventListener('mousemove', probe);
+  }, []);
+
   useEffect(()=>{
     const supabase=createClient();
     const code=new URLSearchParams(window.location.search).get("code");
