@@ -5912,6 +5912,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                       onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
                       onSave={async (text) => { await saveJournalEdit(date, entry.lineIndex, text); setEditingEntry(null); }}
                       dimTag={project === '__everything__' ? null : project}
+                      theme={theme}
                     />
                   ))}
                 </div>
