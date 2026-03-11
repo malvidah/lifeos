@@ -1102,12 +1102,13 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
   }, [selected]);
   const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   return (
-    <div style={{
+    <div className="topbar-wrapper" style={{
       paddingTop: "calc(env(safe-area-inset-top, 0px) + 28px)",
       paddingLeft: 18, paddingRight: 14,
       paddingBottom: 10,
       flexShrink: 0,
       position: "sticky", top: 0, zIndex: 100,
+      background: C.bg,
       WebkitAppRegion: "drag", userSelect: "none",
     }}>
       {/* Pull-down overscroll patch */}
@@ -6556,6 +6557,8 @@ export default function Dashboard() {
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
         html,body{height:100%;overflow:hidden;background:${C.bg} !important;}
         @media(max-width:768px){html,body{overflow:auto;height:auto;}}
+        @media(max-width:768px){.topbar-wrapper{position:fixed !important;top:0;left:0;right:0;z-index:100;}}
+        @media(max-width:768px){.content-scroll{padding-top:calc(env(safe-area-inset-top, 0px) + 80px) !important;}}
         ::-webkit-scrollbar{display:none;}
         *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
@@ -6572,16 +6575,16 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
-      {/* Vignette — fixed, low z-index so menus/dropdowns always render above */}
+      {/* Vignette — covers TopBar zone, fades into content below */}
       <div style={{
-        position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 68px)", left:0, right:0,
-        height:80, pointerEvents:"none", zIndex:50,
-        background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`,
+        position:"fixed", top:0, left:0, right:0,
+        height:"calc(env(safe-area-inset-top, 0px) + 120px)", pointerEvents:"none", zIndex:50,
+        background:`linear-gradient(to bottom, ${C.bg} 0%, ${C.bg} calc(env(safe-area-inset-top, 0px) + 68px), transparent 100%)`,
       }}/>
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:"calc(env(safe-area-inset-top, 0px) + 68px)"}}>
+        <div className="content-scroll" style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:"calc(env(safe-area-inset-top, 0px) + 68px)"}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           overflowY:activeProject?"hidden":mobile?"auto":"auto",
