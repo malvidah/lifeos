@@ -3701,6 +3701,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                 <DayLabEditor
                   key={`e${row.id}`}
                   value={row.text}
+                  autoFocus
                   singleLine
                   textColor={row.done ? C.muted : C.text}
                   mutedColor={C.dim}
@@ -3712,7 +3713,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   }}
                   onEnterSplit={({before, after}) => {
                     skipBlurRef.current = true;
-                    const newRow = {id: Date.now(), text: after, done: false};
+                    const newRow = {id: crypto.randomUUID(), text: after, done: false};
                     setRows(prev => {
                       const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
                       const nr = ps.map(r => r.id === row.id ? {...r, text: before} : r);
@@ -3721,6 +3722,21 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                     });
                     setFocusedId(newRow.id);
                   }}
+                  onBackspaceEmpty={idx > 0 ? () => {
+                    // Merge this row's text onto the end of the previous row, delete this row
+                    skipBlurRef.current = true;
+                    const thisText = row.text || '';
+                    setRows(prev => {
+                      const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
+                      const prevRow = ps[idx - 1];
+                      if (!prevRow) return ps;
+                      const merged = (prevRow.text || '') + thisText;
+                      return ps
+                        .map(r => r.id === prevRow.id ? {...r, text: merged} : r)
+                        .filter(r => r.id !== row.id);
+                    });
+                    setFocusedId(visible[idx - 1]?.id ?? null);
+                  } : undefined}
                   style={{
                     minHeight: '1.7em', width: '100%',
                     textDecoration: row.done ? 'line-through' : 'none',

@@ -164,9 +164,11 @@ export function DayLabEditor({
   onBlur,
   onEnterCommit,
   onEnterSplit,
+  onBackspaceEmpty,
   onImageUpload,
   placeholder,
   singleLine = false,
+  autoFocus = false,
   style,
   color = '#D08828',
   textColor,
@@ -175,17 +177,19 @@ export function DayLabEditor({
 }) {
   useEffect(injectEditorStyles, []);
 
-  const lastExternalValue = useRef(value);
-  const editorRef         = useRef(null);
-  const onBlurRef         = useRef(onBlur);
-  const onEnterCommitRef  = useRef(onEnterCommit);
-  const onEnterSplitRef   = useRef(onEnterSplit);
-  const onImageUploadRef  = useRef(onImageUpload);
+  const lastExternalValue   = useRef(value);
+  const editorRef           = useRef(null);
+  const onBlurRef           = useRef(onBlur);
+  const onEnterCommitRef    = useRef(onEnterCommit);
+  const onEnterSplitRef     = useRef(onEnterSplit);
+  const onBackspaceEmptyRef = useRef(onBackspaceEmpty);
+  const onImageUploadRef    = useRef(onImageUpload);
 
-  useEffect(() => { onBlurRef.current        = onBlur; },        [onBlur]);
-  useEffect(() => { onEnterCommitRef.current  = onEnterCommit; }, [onEnterCommit]);
-  useEffect(() => { onEnterSplitRef.current   = onEnterSplit; },  [onEnterSplit]);
-  useEffect(() => { onImageUploadRef.current  = onImageUpload; }, [onImageUpload]);
+  useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
+  useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
+  useEffect(() => { onEnterSplitRef.current      = onEnterSplit; },     [onEnterSplit]);
+  useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
+  useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
 
   textColor  = textColor  || '#D8CEC2';
   mutedColor = mutedColor || '#6A6258';
@@ -203,9 +207,18 @@ export function DayLabEditor({
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
     ],
     content: { type: 'doc', content: textToContent(value || '') },
+    autofocus: autoFocus ? 'end' : false,
     editable,
     editorProps: {
       handleKeyDown(view, e) {
+        if (e.key === 'Backspace' && singleLine && onBackspaceEmptyRef.current) {
+          const text = docToText(view.state.doc.toJSON());
+          if (!text) {
+            e.preventDefault();
+            onBackspaceEmptyRef.current();
+            return true;
+          }
+        }
         if (e.key === 'Enter' && !e.shiftKey && singleLine) {
           e.preventDefault();
           const text = docToText(view.state.doc.toJSON());
