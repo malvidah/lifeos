@@ -6574,9 +6574,9 @@ export default function Dashboard() {
 
       {/* Vignette — fixed, low z-index so menus/dropdowns always render above */}
       <div style={{
-        position:"fixed", top:0, left:0, right:0,
-        height:110, pointerEvents:"none", zIndex:50,
-        background:`linear-gradient(to bottom, ${C.bg} 0%, ${C.bg}88 50%, transparent 100%)`,
+        position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 68px)", left:0, right:0,
+        height:80, pointerEvents:"none", zIndex:50,
+        background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`,
       }}/>
 
 
