@@ -6737,10 +6737,6 @@ export default function Dashboard() {
               padding:mobile?"6px 8px":10, paddingTop:10,
               paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:mobile?10:8}}>
-              {/* Sticky vignette — content renders behind it via marginBottom:-48 */}
-              <div style={{position:"sticky",top:0,height:48,marginBottom:-38,flexShrink:0,
-                pointerEvents:"none",zIndex:10,
-                background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
               {/* ── NavBar ── */}
               <NavBar
                 activeProject={null}
@@ -6851,10 +6847,6 @@ export default function Dashboard() {
                 <>
                   {/* Scrollable content */}
                   <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:10,boxSizing:'border-box'}}>
-                    {/* Sticky vignette — content renders behind it via marginBottom:-48 */}
-                    <div style={{position:'sticky',top:0,height:48,marginBottom:-38,flexShrink:0,
-                      pointerEvents:'none',zIndex:10,
-                      background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
                     {/* NavBar — unified, in scroll flow */}
                     <NavBar
                       activeProject={activeProject}
