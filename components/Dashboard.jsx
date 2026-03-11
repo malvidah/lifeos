@@ -6356,24 +6356,6 @@ export default function Dashboard() {
   const [googleToken,setGoogleToken] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
-  const [graphData, setGraphData] = useState(null); // {allTags, connections, recency} — loaded on first graph open
-
-  // Load graph data when user opens the graph view
-  useEffect(() => {
-    if (activeProject !== '__graph__' || !token) return;
-    if (graphData) return; // already loaded
-    Promise.all([
-      fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('/api/tag-connections', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([tags, conns]) => {
-      setGraphData({
-        allTags: Array.isArray(tags.tags) ? tags.tags : [],
-        connections: Array.isArray(conns.connections) ? conns.connections : [],
-        recency: conns.recency || {},
-      });
-    }).catch(() => setGraphData({ allTags: [], connections: [], recency: {} }));
-  }, [activeProject, token]); // eslint-disable-line
-
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
@@ -6409,6 +6391,23 @@ export default function Dashboard() {
 
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
+
+  // Graph data — declared HERE so token is already defined (avoids TDZ in minified bundle)
+  const [graphData, setGraphData] = useState(null);
+  useEffect(() => {
+    if (activeProject !== '__graph__' || !token) return;
+    if (graphData) return;
+    Promise.all([
+      fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('/api/tag-connections', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(function(res) {
+      setGraphData({
+        allTags: Array.isArray(res[0].tags) ? res[0].tags : [],
+        connections: Array.isArray(res[1].connections) ? res[1].connections : [],
+        recency: res[1].recency || {},
+      });
+    }).catch(function() { setGraphData({ allTags: [], connections: [], recency: {} }); });
+  }, [activeProject, token]); // eslint-disable-line
   const { results: srResults, loading: srLoading } = useSearch(searchQuery, token, userId);
 
   // Expose token to native iOS layer (Swift reads this for HealthKit sync)
