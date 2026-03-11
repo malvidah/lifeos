@@ -3088,12 +3088,9 @@ function Notes({date,userId,token}) {
   // ── handle user input ────────────────────────────────────────────────────
   function handleInput() {
     if (isComposingRef.current) return;
-    skipSyncRef.current = true;
-    const text = domToText(ceRef.current);
-    lastSyncedText.current = text;
-    setValue(text, {skipHistory: true});
-    skipSyncRef.current = false;
-    // Chips render on blur — no live re-render to avoid cursor jumping
+    // Only update the ref — no setValue, no React re-render, no cursor jump.
+    // setValue fires on blur so state stays in sync.
+    lastSyncedText.current = domToText(ceRef.current);
   }
 
   function handleBlur() {
@@ -3930,10 +3927,12 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                         requestAnimationFrame(()=>{try{el.setSelectionRange(cp,cp);}catch(_){}});
                       }
                     }}
-                    value={row.text}
+                    defaultValue={row.text}
                     onChange={e=>{
-                      const text=e.target.value;
                       const el=e.target; el.style.height='0'; el.style.height=el.scrollHeight+'px';
+                    }}
+                    onBlur={e=>{
+                      const text=e.target.value;
                       setRows(prev=>(Array.isArray(prev)?prev:[]).map(r=>r.id===row.id?{...r,text}:r));
                     }}
                     onKeyDown={e=>{
@@ -5780,9 +5779,9 @@ function EntryLine({ entry, date, editing, editText, onStartEdit, onChangeEdit, 
     return (
       <textarea
         ref={taRef}
-        value={editText}
-        onChange={e => { onChangeEdit(e.target.value); const t=e.target; t.style.height='auto'; t.style.height=t.scrollHeight+'px'; }}
-        onBlur={onSave}
+        defaultValue={editText}
+        onChange={e => { const t=e.target; t.style.height='auto'; t.style.height=t.scrollHeight+'px'; }}
+        onBlur={e => { onChangeEdit(e.target.value); onSave(); }}
         onKeyDown={e => { if (e.key==='Escape') e.target.blur(); }}
         style={{
           ...baseStyle,
