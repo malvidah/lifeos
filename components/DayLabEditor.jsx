@@ -30,7 +30,8 @@ function injectEditorStyles() {
   const s = document.createElement('style');
   s.id = 'daylab-editor-styles';
   s.textContent = `
-    .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
+    .dl-editor { cursor: text; }
+    .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; cursor: text; }
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid #D08828; border-radius: 8px; }
