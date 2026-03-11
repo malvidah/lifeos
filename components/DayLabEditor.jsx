@@ -30,8 +30,10 @@ function injectEditorStyles() {
   const s = document.createElement('style');
   s.id = 'daylab-editor-styles';
   s.textContent = `
-    .dl-editor { cursor: text; }
-    .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; cursor: text; }
+    .dl-editor { cursor: text !important; }
+    .dl-editor * { cursor: text !important; }
+    .dl-editor a, .dl-editor a * { cursor: pointer !important; }
+    .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid #D08828; border-radius: 8px; }
@@ -306,6 +308,7 @@ export function DayLabEditor({
       color: textColor, caretColor: color,
       '--dl-muted': mutedColor,
       ...style,
+      cursor: 'text',  // always override — parent style spread cannot clobber this
     }}>
       <EditorContent editor={editor} />
     </div>

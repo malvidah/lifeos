@@ -6110,23 +6110,18 @@ export default function Dashboard() {
 
   useEffect(injectBlurWebFont, []);
 
-  // CURSOR DIAGNOSTIC — logs what element is stealing cursor. Remove when fixed.
+  // CURSOR DIAGNOSTIC v2 — logs computed cursor of topmost element. Remove when fixed.
   useEffect(() => {
     const probe = (e) => {
       const el = document.elementFromPoint(e.clientX, e.clientY);
       if (!el) return;
-      let cur = el;
-      while (cur) {
-        const computed = window.getComputedStyle(cur).cursor;
-        if (computed === 'pointer') {
-          console.log('[CURSOR] pointer from:', cur.tagName, cur.className, cur.id, cur);
-          break;
-        }
-        cur = cur.parentElement;
+      const computed = window.getComputedStyle(el).cursor;
+      if (computed !== 'auto') {
+        console.log('[CURSOR]', computed, 'on:', el.tagName, el.className.toString().slice(0,60), el);
       }
     };
-    window.addEventListener('mousemove', probe, { passive: true });
-    return () => window.removeEventListener('mousemove', probe);
+    window.addEventListener('mousemove', probe, { passive: true, capture: true });
+    return () => window.removeEventListener('mousemove', probe, { capture: true });
   }, []);
 
   useEffect(()=>{
@@ -6351,15 +6346,14 @@ export default function Dashboard() {
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        html,body{height:100%;overflow:hidden;background:${C.bg} !important;cursor:default;}
+        html,body{height:100%;overflow:hidden;background:${C.bg} !important;}
         @media(max-width:768px){html,body{overflow:hidden;height:100%;}}
         ::-webkit-scrollbar{display:none;}
         *{scrollbar-width:none;-ms-overflow-style:none;}
-        button{border-radius:0;cursor:pointer;}
-        a{cursor:pointer;}
-        input,textarea{cursor:text;}
-        [contenteditable="true"]{cursor:text;}
-        .dl-editor,.dl-editor .ProseMirror{cursor:text;}
+        button{border-radius:0;}
+        input,textarea{cursor:text !important;}
+        .dl-editor,.dl-editor *{cursor:text !important;}
+        .dl-editor a,.dl-editor a *{cursor:pointer !important;}
         input::placeholder,textarea::placeholder{color:${C.dim};opacity:1;}
         [contenteditable][data-placeholder]:empty::before{content:attr(data-placeholder);color:${C.dim};pointer-events:none;}
         .oura-token-input::placeholder{color:${C.dim};opacity:1;}
