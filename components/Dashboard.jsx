@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
+import { DayLabEditor } from './DayLabEditor.jsx';
 import { createClient } from "../lib/supabase.js";
 
 
@@ -3014,56 +3015,6 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
 // Cmd+B / Cmd+I wrap selected text in ** / *.
 function Notes({date,userId,token}) {
   const {value, setValue, loaded} = useDbSave(date, 'notes', '', token, userId);
-  const [focused, setFocused] = useState(false);
-  const taRef   = useRef(null);
-  const localRef = useRef(''); // tracks textarea value without re-renders
-
-  // Sync external value into localRef when it arrives / changes
-  useEffect(() => { localRef.current = value || ''; }, [value]);
-
-  function enterEdit() {
-    setFocused(true);
-    requestAnimationFrame(() => {
-      if (!taRef.current) return;
-      taRef.current.value = localRef.current;
-      autosize(taRef.current);
-      taRef.current.focus();
-    });
-  }
-
-  function autosize(el) {
-    el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
-  }
-
-  function onBlur() {
-    const text = taRef.current?.value ?? '';
-    localRef.current = text;
-    setValue(text, {undoLabel: 'Edit notes'});
-    setFocused(false);
-  }
-
-  async function onPaste(e) {
-    for (const item of Array.from(e.clipboardData?.items || [])) {
-      if (!item.type.startsWith('image/')) continue;
-      e.preventDefault();
-      const file = item.getAsFile();
-      if (!file) return;
-      const url = await uploadImageFile(file, token);
-      if (!url || !taRef.current) return;
-      insertAtCursor(taRef.current, `\n[img:${url}]\n`);
-      return;
-    }
-  }
-
-  async function onDrop(e) {
-    e.preventDefault();
-    const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
-    if (!files.length) return;
-    const url = await uploadImageFile(files[0], token);
-    if (!url || !taRef.current) return;
-    insertAtCursor(taRef.current, `\n[img:${url}]\n`);
-  }
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
@@ -3073,44 +3024,14 @@ function Notes({date,userId,token}) {
     </div>
   );
 
-  // ── Preview ──────────────────────────────────────────────────────────────
-  if (!focused) {
-    const text = localRef.current || value || '';
-    return (
-      <div
-        onClick={enterEdit}
-        style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',cursor:'text',
-          color:text?C.text:C.dim,minHeight:80,wordBreak:'break-word'}}
-      >
-        {text
-          ? text.split('\n').map((line,i) => (
-              <div key={i} style={{minHeight:'1.7em'}}>
-                {renderRichLine(line) || <br/>}
-              </div>
-            ))
-          : "What's on your mind?"
-        }
-      </div>
-    );
-  }
-
-  // ── Edit textarea ────────────────────────────────────────────────────────
   return (
-    <textarea
-      ref={taRef}
-      defaultValue={localRef.current}
-      onBlur={onBlur}
-      onPaste={onPaste}
-      onDrop={onDrop}
-      onDragOver={e => e.preventDefault()}
-      onInput={e => autosize(e.target)}
-      style={{
-        width:'100%', minHeight:80, background:'transparent', border:'none',
-        outline:'none', resize:'none', overflow:'hidden',
-        fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
-        color:C.text, caretColor:C.accent,
-        wordBreak:'break-word', padding:0, margin:0,
-      }}
+    <DayLabEditor
+      value={value || ''}
+      onBlur={text => setValue(text, {undoLabel: 'Edit notes'})}
+      onImageUpload={file => uploadImageFile(file, token)}
+      placeholder="What's on your mind?"
+      color={C.accent}
+      style={{minHeight: 80, width: '100%'}}
     />
   );
 }
@@ -3768,99 +3689,37 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   {row.text?renderWithTags(row.text):null}
                 </div>
               ):isEditing?(
-                /* EDIT MODE — textarea+overlay pattern.
-                   textarea: controlled value, transparent text, handles all input natively.
-                   overlay: renders chips visually, pointer-events:none.
-                   No innerHTML↔React reconciliation conflict possible. */
-                <div key={`e${row.id}`} style={{position:'relative',minHeight:'1.7em'}}>
-                  {/* Chip overlay — visual only */}
-                  <div aria-hidden="true" style={{
-                    position:'absolute',top:0,left:0,right:0,bottom:0,
-                    fontFamily:serif,fontSize:F.md,lineHeight:1.7,
-                    color:row.done?C.muted:C.text,
-                    textDecoration:row.done?'line-through':'none',
-                    whiteSpace:'pre-wrap',wordBreak:'break-word',
-                    pointerEvents:'none',
-                    // transparent text — chip spans will supply their own color
-                    // non-chip text needs to be invisible so textarea text shows through
-                    // we use color:transparent on wrapper but chip spans override
-                  }}>
-                    {renderWithTags(row.text)}
-                  </div>
-                  {/* Actual textarea — transparent so overlay shows, but caret+selection are native */}
-                  <textarea
-                    ref={el=>{
-                      if(el){
-                        el.style.height='0';
-                        el.style.height=el.scrollHeight+'px';
-                        el.focus();
-                        const cp=clickCaretRef.current??row.text.length;
-                        clickCaretRef.current=null;
-                        requestAnimationFrame(()=>{try{el.setSelectionRange(cp,cp);}catch(_){}});
-                      }
-                    }}
-                    defaultValue={row.text}
-                    onInput={e=>{ const el=e.target; el.style.height='0'; el.style.height=el.scrollHeight+'px'; }}
-                    onBlur={e=>{
-                      if(skipBlurRef.current){skipBlurRef.current=false;return;}
-                      const text=e.target.value;
-                      setRows(prev=>(Array.isArray(prev)?prev:[]).map(r=>r.id===row.id?{...r,text}:r));
-                      setTimeout(()=>setFocusedId(prev=>prev===row.id?null:prev),0);
-                    }}
-                    onKeyDown={e=>{
-                      if(e.key==='Enter'){
-                        e.preventDefault();
-                        skipBlurRef.current=true;
-                        const pos=e.target.selectionStart;
-                        const cur=e.target.value;
-                        const before=cur.slice(0,pos);
-                        const after=cur.slice(pos);
-                        const newRow={id:Date.now(),text:after,done:false};
-                        setRows(prev=>{
-                          const ps=Array.isArray(prev)&&prev.length?prev:[mkRow()];
-                          const nr=ps.map(r=>r.id===row.id?{...r,text:before}:r);
-                          nr.splice(idx+1,0,newRow);
-                          return nr;
-                        });
-                        setFocusedId(newRow.id);
-                      } else if(e.key==='Backspace'){
-                        const pos=e.target.selectionStart;
-                        const prevRow=safe[idx-1];
-                        const cur=e.target.value;
-                        if(pos===0&&e.target.selectionEnd===0&&idx>0){
-                          e.preventDefault();
-                          skipBlurRef.current=true;
-                          setRows(prev=>{
-                            const ps=Array.isArray(prev)&&prev.length?prev:[mkRow()];
-                            return ps.filter(r=>r.id!==row.id).map(r=>r.id===prevRow.id?{...r,text:prevRow.text+cur}:r);
-                          });
-                          setFocusedId(prevRow.id);
-                        } else if(cur===''&&safe.length>1){
-                          e.preventDefault();
-                          skipBlurRef.current=true;
-                          setRows(prev=>(Array.isArray(prev)?prev:[]).filter(r=>r.id!==row.id));
-                          setFocusedId(safe[idx-1]?.id??null);
-                        }
-                      } else if(e.key==='Escape'){
-                        e.target.blur();
-                      }
-                    }}
-                    style={{
-                      position:'relative',zIndex:1,
-                      display:'block',width:'100%',
-                      fontFamily:serif,fontSize:F.md,lineHeight:1.7,
-                      color:'transparent',caretColor:row.done?C.muted:C.accent,
-                      textDecoration:row.done?'line-through':'none',
-                      background:'transparent',border:'none',outline:'none',
-                      resize:'none',overflow:'hidden',padding:0,margin:0,
-                      whiteSpace:'pre-wrap',wordBreak:'break-word',
-                      boxSizing:'border-box',
-                    }}
-                    data-placeholder={idx===0&&visible.length===1&&!row.text&&taskFilter!=='done'?'Add a task…':''}
-                  />
-                </div>
+                /* EDIT MODE — TipTap DayLabEditor */
+                <DayLabEditor
+                  key={`e${row.id}`}
+                  value={row.text}
+                  singleLine
+                  color={row.done ? C.muted : C.accent}
+                  onBlur={text => {
+                    if (skipBlurRef.current) { skipBlurRef.current = false; return; }
+                    setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));
+                    setTimeout(() => setFocusedId(prev => prev === row.id ? null : prev), 0);
+                  }}
+                  onEnterSplit={({before, after}) => {
+                    skipBlurRef.current = true;
+                    const newRow = {id: Date.now(), text: after, done: false};
+                    setRows(prev => {
+                      const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
+                      const nr = ps.map(r => r.id === row.id ? {...r, text: before} : r);
+                      nr.splice(idx + 1, 0, newRow);
+                      return nr;
+                    });
+                    setFocusedId(newRow.id);
+                  }}
+                  style={{
+                    minHeight: '1.7em', width: '100%',
+                    textDecoration: row.done ? 'line-through' : 'none',
+                    opacity: row.done ? 0.5 : 1,
+                  }}
+                  placeholder={idx === 0 && visible.length === 1 && !row.text && taskFilter !== 'done' ? 'Add a task…' : ''}
+                />
               ):(
-                /* VIEW MODE — fresh DOM node guaranteed by key change from edit mode */
+                /* VIEW MODE */
                 <div key={`v${row.id}`}
                   onPointerDown={e=>{
                     e._taskDownX=e.clientX;e._taskDownY=e.clientY;
@@ -5627,36 +5486,17 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
 
 // ─── EntryLine — stable-height edit line for ProjectView ─────────────────────
 function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
-  const taRef = useRef(null);
-
-  useEffect(() => {
-    if (editing && taRef.current) {
-      const ta = taRef.current;
-      ta.style.height = 'auto';
-      ta.style.height = ta.scrollHeight + 'px';
-      ta.focus();
-      ta.selectionStart = ta.selectionEnd = ta.value.length;
-    }
-  }, [editing]);
-
-  const baseStyle = {
-    fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-    padding: '2px 0', wordBreak: 'break-word',
-  };
+  const baseStyle = { fontFamily: serif, fontSize: F.md, lineHeight: '1.7', padding: '2px 0', wordBreak: 'break-word' };
 
   if (editing) {
     return (
-      <textarea
-        ref={taRef}
-        defaultValue={entry.text}
-        onBlur={e => onSave(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
-        onInput={e => { const t=e.target; t.style.height='auto'; t.style.height=t.scrollHeight+'px'; }}
-        style={{
-          ...baseStyle, width:'100%', border:'none', outline:'none',
-          resize:'none', overflow:'hidden', background:'transparent',
-          color:C.text, caretColor:C.accent, margin:0, display:'block', minHeight:'1.7em',
-        }}
+      <DayLabEditor
+        value={entry.text}
+        onBlur={text => onSave(text)}
+        placeholder=""
+        singleLine
+        color={C.accent}
+        style={{ width: '100%', minHeight: '1.7em' }}
       />
     );
   }
