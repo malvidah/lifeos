@@ -6110,23 +6110,57 @@ export default function Dashboard() {
 
   useEffect(injectBlurWebFont, []);
 
-  // CURSOR DIAGNOSTIC v3 — checks ALL elements at point, not just topmost
+  // CURSOR DIAGNOSTIC v4
   useEffect(() => {
-    let last = '';
-    const probe = (e) => {
-      // Check every element in the z-stack at this point
-      const all = document.elementsFromPoint(e.clientX, e.clientY);
-      const summary = all.slice(0, 8).map(el => {
-        const c = window.getComputedStyle(el).cursor;
-        return `${el.tagName}${el.className?'.'+el.className.toString().slice(0,20):''} [${c}]`;
-      }).join(' > ');
-      if (summary !== last) {
-        console.log('[STACK]', summary);
-        last = summary;
+    // 1. Check for iframes
+    const iframes = document.querySelectorAll('iframe');
+    console.log('[CURSOR-DIAG] iframes:', iframes.length, [...iframes].map(f => f.src || f.id || 'no-src'));
+
+    // 2. Watch for any DOM element getting cursor set dynamically
+    const mo = new MutationObserver(muts => {
+      for (const m of muts) {
+        if (m.type === 'attributes' && m.attributeName === 'style') {
+          const el = m.target;
+          if (el.style && el.style.cursor) {
+            console.log('[CURSOR-DIAG] dynamic cursor set:', el.style.cursor, 'on', el.tagName, el.className?.toString?.().slice(0,40), el);
+          }
+        }
+        if (m.type === 'childList') {
+          for (const node of m.addedNodes) {
+            if (node.nodeType === 1) {
+              const c = node.style?.cursor;
+              if (c) console.log('[CURSOR-DIAG] node added with cursor:', c, node.tagName, node.className?.toString?.().slice(0,40));
+              // Check if it's a style tag
+              if (node.tagName === 'STYLE') {
+                console.log('[CURSOR-DIAG] STYLE TAG ADDED:', node.textContent.slice(0,200));
+              }
+            }
+          }
+        }
       }
+    });
+    mo.observe(document.documentElement, { subtree: true, attributes: true, attributeFilter: ['style'], childList: true });
+
+    // 3. Throttled mousemove — show full computed cursor including pseudo-elements
+    let last = '', t = 0;
+    const probe = (e) => {
+      if (Date.now() - t < 200) return;
+      t = Date.now();
+      const all = document.elementsFromPoint(e.clientX, e.clientY);
+      const summary = all.slice(0, 6).map(el => {
+        const c = window.getComputedStyle(el).cursor;
+        const tag = el.tagName + (el.id ? '#'+el.id : '') + (el.className?.toString?.()?.trim() ? '.'+el.className.toString().trim().split(' ')[0] : '');
+        return `${tag}[${c}]`;
+      }).join('>');
+      if (summary !== last) { console.log('[STACK]', summary); last = summary; }
     };
     window.addEventListener('mousemove', probe, { passive: true });
-    return () => window.removeEventListener('mousemove', probe);
+
+    // 4. Check if document.body or html has cursor set
+    console.log('[CURSOR-DIAG] body cursor:', document.body.style.cursor, '| html cursor:', document.documentElement.style.cursor);
+    console.log('[CURSOR-DIAG] computed body:', window.getComputedStyle(document.body).cursor, '| computed html:', window.getComputedStyle(document.documentElement).cursor);
+
+    return () => { window.removeEventListener('mousemove', probe); mo.disconnect(); };
   }, []);
 
 
