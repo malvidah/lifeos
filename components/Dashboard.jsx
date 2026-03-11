@@ -4933,6 +4933,19 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
       }
     }
 
+    // Normalize all node coords into a fixed 600×400 box so doFit always works
+    {
+      const xs = nodes.map(nd => nd.x), ys = nodes.map(nd => nd.y);
+      const mnX = Math.min(...xs), mxX = Math.max(...xs);
+      const mnY = Math.min(...ys), mxY = Math.max(...ys);
+      const spanX = mxX - mnX || 1, spanY = mxY - mnY || 1;
+      const BOX_W = 600, BOX_H = 400;
+      nodes.forEach(nd => {
+        nd.x = ((nd.x - mnX) / spanX - 0.5) * BOX_W;
+        nd.y = ((nd.y - mnY) / spanY - 0.5) * BOX_H;
+      });
+    }
+
     graphRef.current = { nodes, edges };
     setReady(true);
 
@@ -6677,7 +6690,7 @@ export default function Dashboard() {
 
           {/* ── Projects strip — above scroll, matches project-view header pattern ── */}
           {!activeProject && (
-            <div style={{ flexShrink:0, background:C.bg, zIndex:49 }}>
+            <div style={{ flexShrink:0, background:C.bg, zIndex:51, position:'relative' }}>
                               {/* ── Projects strip ↔ Search pill (crossfade) ── */}
                 <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible' }}>
                   {/* Projects bar — fades out when search open */}
@@ -6883,7 +6896,7 @@ export default function Dashboard() {
               return (
                 <>
                   {/* Fixed project header — outside scroll area */}
-                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'14px 14px 8px',background:C.bg}}>
+                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'14px 14px 8px',background:C.bg,position:'relative',zIndex:51}}>
                     <button
                       onClick={async () => setActiveProject(null)}
                       style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',padding:'0 2px',color:pcol+'99',flexShrink:0}}
