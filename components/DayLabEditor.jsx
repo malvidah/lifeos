@@ -191,8 +191,8 @@ export function DayLabEditor({
   useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
   useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
 
-  textColor  = textColor  || '#D8CEC2';
-  mutedColor = mutedColor || '#6A6258';
+  textColor  = textColor  || 'inherit';
+  mutedColor = mutedColor || '#9A9088';
 
   const editor = useEditor({
     extensions: [

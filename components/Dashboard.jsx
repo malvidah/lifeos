@@ -6226,9 +6226,12 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
           <DayLabEditor
             key={project}
             value={projectNotes || ''}
-            onChange={val => setProjectNotes(val, { skipHistory: true })}
+            onBlur={text => setProjectNotes(text, { skipHistory: true })}
             placeholder="Add project notes, description, or overview…"
-            token={token}
+            textColor={C.text}
+            mutedColor={C.dim}
+            color={C.accent}
+            style={{ minHeight: 80, width: '100%' }}
           />
         </Widget>
       )}
