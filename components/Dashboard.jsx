@@ -4849,208 +4849,236 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 
 
 // ─── ProjectGraphView ─────────────────────────────────────────────────────────
-function ProjectGraphView({ allTags, connections, recency, onSelectProject, onBack }) {
-  const svgRef = useRef(null);
-  const stateRef = useRef(null); // {nodes, edges, transform, drag}
+function ProjectGraphView({ allTags, connections, onSelectProject, onBack }) {
+  // Nodes and edges built once from props
+  const graphRef = useRef(null); // {nodes, edges}
+  const [ready, setReady] = useState(false);
+  const [tx, setTx] = useState(0);
+  const [ty, setTy] = useState(0);
+  const [scale, setScale] = useState(1);
+  const [hovered, setHovered] = useState(null);
+  const containerRef = useRef(null);
+  const dragStart = useRef(null);
 
-  // Build node + edge lists once
-  const { nodes: initNodes, edges: initEdges } = useMemo(() => {
-    const tagList = ['__health__', ...allTags];
-    const idxOf = Object.fromEntries(tagList.map((t, i) => [t.toLowerCase(), i]));
-    idxOf['__health__'] = 0;
+  // Build graph + run force simulation in effect (never during render/hydration)
+  useEffect(() => {
+    const tagList = ['__health__', ...(allTags || [])];
+    const lower = tagList.map(t => t.toLowerCase());
+    const idxOf = {};
+    lower.forEach((t, i) => { idxOf[t] = i; });
 
-    const W = 800, H = 600;
-    const nodes = tagList.map((name, i) => ({
-      id: name,
-      label: name === '__health__' ? 'HEALTH' : tagDisplayName(name).toUpperCase(),
-      color: name === '__health__' ? C.green : projectColor(name),
-      x: (Math.random() - 0.5) * W * 0.7,
-      y: (Math.random() - 0.5) * H * 0.7,
-      vx: 0, vy: 0,
-      r: 22,
-    }));
-
-    // Edge: only include pairs where both tags exist
+    const deg = new Array(tagList.length).fill(0);
     const edges = [];
-    for (const c of connections) {
-      const si = idxOf[c.source], ti = idxOf[c.target];
+    for (const c of (connections || [])) {
+      const si = idxOf[c.source];
+      const ti = idxOf[c.target];
       if (si == null || ti == null) continue;
-      edges.push({ si, ti, weight: Math.min(c.weight, 10) });
+      const w = Math.min(c.weight, 10);
+      edges.push({ si, ti, w });
+      deg[si]++;
+      deg[ti]++;
     }
-
-    // Degree — scale node radius
-    const deg = new Array(nodes.length).fill(0);
-    edges.forEach(e => { deg[e.si]++; deg[e.ti]++; });
     const maxDeg = Math.max(1, ...deg);
-    nodes.forEach((n, i) => { n.r = 16 + (deg[i] / maxDeg) * 14; });
 
-    // Run force simulation synchronously before first render
-    const K = Math.sqrt((600 * 500) / Math.max(nodes.length, 1)) * 1.1;
-    for (let iter = 0; iter < 300; iter++) {
-      const alpha = Math.pow(1 - iter / 300, 2);
-      // Repulsion
-      for (let i = 0; i < nodes.length; i++) {
-        for (let j = i + 1; j < nodes.length; j++) {
-          const dx = nodes[j].x - nodes[i].x || 0.01;
-          const dy = nodes[j].y - nodes[i].y || 0.01;
-          const d2 = dx * dx + dy * dy;
-          const d = Math.sqrt(d2) || 1;
-          const f = (K * K / d) * alpha * 0.6;
-          nodes[i].vx -= (dx / d) * f;
-          nodes[i].vy -= (dy / d) * f;
-          nodes[j].vx += (dx / d) * f;
-          nodes[j].vy += (dy / d) * f;
+    // Radial initial positions (no Math.random = deterministic, safe for hydration)
+    const n = tagList.length;
+    const nodes = tagList.map((name, i) => {
+      const angle = (i / n) * Math.PI * 2;
+      const radius = 180 + (deg[i] / maxDeg) * 80;
+      return {
+        id: name,
+        label: name === '__health__' ? 'HEALTH' : tagDisplayName(name).toUpperCase(),
+        color: name === '__health__' ? C.green : projectColor(name),
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        vx: 0, vy: 0,
+        r: 16 + (deg[i] / maxDeg) * 14,
+      };
+    });
+
+    // Force simulation
+    const K = Math.sqrt((700 * 700) / Math.max(n, 1)) * 0.9;
+    for (let iter = 0; iter < 280; iter++) {
+      const alpha = (1 - iter / 280) * (1 - iter / 280);
+      // Repulsion between all pairs
+      for (let a = 0; a < nodes.length; a++) {
+        for (let b = a + 1; b < nodes.length; b++) {
+          const na = nodes[a]; const nb = nodes[b];
+          let ddx = nb.x - na.x || 0.1; let ddy = nb.y - na.y || 0.1;
+          const dd = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+          const ff = (K * K / dd) * alpha * 0.5;
+          na.vx -= (ddx / dd) * ff; na.vy -= (ddy / dd) * ff;
+          nb.vx += (ddx / dd) * ff; nb.vy += (ddy / dd) * ff;
         }
       }
-      // Springs
-      for (const e of edges) {
-        const a = nodes[e.si], b = nodes[e.ti];
-        const dx = b.x - a.x, dy = b.y - a.y;
-        const d = Math.sqrt(dx * dx + dy * dy) || 1;
-        const rest = K * (1.2 - e.weight * 0.04);
-        const f = (d - rest) * 0.25 * alpha;
-        a.vx += (dx / d) * f; a.vy += (dy / d) * f;
-        b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+      // Spring attraction along edges
+      for (const edge of edges) {
+        const na = nodes[edge.si]; const nb = nodes[edge.ti];
+        let ddx = nb.x - na.x; let ddy = nb.y - na.y;
+        const dd = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
+        const rest = K * (1.1 - edge.w * 0.04);
+        const ff = (dd - rest) * 0.2 * alpha;
+        na.vx += (ddx / dd) * ff; na.vy += (ddy / dd) * ff;
+        nb.vx -= (ddx / dd) * ff; nb.vy -= (ddy / dd) * ff;
       }
-      // Gravity
-      nodes.forEach(n => { n.vx -= n.x * 0.015 * alpha; n.vy -= n.y * 0.015 * alpha; });
-      // Integrate
-      nodes.forEach(n => { n.x += n.vx * 0.45; n.y += n.vy * 0.45; n.vx *= 0.75; n.vy *= 0.75; });
+      // Gravity toward center
+      for (const node of nodes) {
+        node.vx -= node.x * 0.012 * alpha;
+        node.vy -= node.y * 0.012 * alpha;
+        node.x += node.vx * 0.4;
+        node.y += node.vy * 0.4;
+        node.vx *= 0.7;
+        node.vy *= 0.7;
+      }
     }
 
-    return { nodes, edges };
-  }, [allTags, connections]); // eslint-disable-line
+    graphRef.current = { nodes, edges };
 
-  // Render to SVG
-  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
-  const [hover, setHover] = useState(null);
-  const dragRef = useRef(null);
-  const containerRef = useRef(null);
+    // Fit to container
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      const minX = Math.min(...nodes.map(nd => nd.x - nd.r));
+      const maxX = Math.max(...nodes.map(nd => nd.x + nd.r));
+      const minY = Math.min(...nodes.map(nd => nd.y - nd.r));
+      const maxY = Math.max(...nodes.map(nd => nd.y + nd.r));
+      const gW = maxX - minX + 80;
+      const gH = maxY - minY + 80;
+      const newScale = Math.min(1.1, Math.min(rect.width / gW, rect.height / gH));
+      setTx(rect.width / 2 - ((minX + maxX) / 2) * newScale);
+      setTy(rect.height / 2 - ((minY + maxY) / 2) * newScale);
+      setScale(newScale);
+    }
+    setReady(true);
+  }, []); // eslint-disable-line
 
-  // Fit graph on mount
-  useEffect(() => {
-    if (!containerRef.current || initNodes.length === 0) return;
-    const { width, height } = containerRef.current.getBoundingClientRect();
-    const minX = Math.min(...initNodes.map(n => n.x - n.r));
-    const maxX = Math.max(...initNodes.map(n => n.x + n.r));
-    const minY = Math.min(...initNodes.map(n => n.y - n.r));
-    const maxY = Math.max(...initNodes.map(n => n.y + n.r));
-    const gW = maxX - minX + 80, gH = maxY - minY + 80;
-    const scale = Math.min(1.2, Math.min(width / gW, height / gH));
-    setTransform({
-      x: width / 2 - ((minX + maxX) / 2) * scale,
-      y: height / 2 - ((minY + maxY) / 2) * scale,
-      scale,
-    });
-  }, [initNodes]);
+  const PILL_SCALE = 0.85;
+  const edgeAlpha = Math.max(0, Math.min(1, (scale - 0.2) / 0.4));
 
-  const PILL_THRESHOLD = 0.85;
-
-  const onWheel = (e) => {
+  function handleWheel(e) {
     e.preventDefault();
+    if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const delta = -e.deltaY * 0.001;
-    setTransform(t => {
-      const ns = Math.max(0.15, Math.min(3, t.scale * (1 + delta)));
-      const ratio = ns / t.scale;
-      return { x: mx - (mx - t.x) * ratio, y: my - (my - t.y) * ratio, scale: ns };
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.12 : 0.89;
+    setScale(prev => {
+      const next = Math.max(0.12, Math.min(3, prev * factor));
+      setTx(px => mx - (mx - px) * (next / prev));
+      setTy(py => my - (my - py) * (next / prev));
+      return next;
     });
-  };
+  }
 
-  const onMouseDown = (e) => {
+  function handleMouseDown(e) {
     if (e.target.closest('[data-node]')) return;
-    dragRef.current = { sx: e.clientX, sy: e.clientY, tx: transform.x, ty: transform.y };
-  };
-  const onMouseMove = (e) => {
-    if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.sx, dy = e.clientY - dragRef.current.sy;
-    setTransform(t => ({ ...t, x: dragRef.current.tx + dx, y: dragRef.current.ty + dy }));
-  };
-  const onMouseUp = () => { dragRef.current = null; };
+    dragStart.current = { cx: e.clientX, cy: e.clientY, ox: tx, oy: ty };
+  }
+  function handleMouseMove(e) {
+    if (!dragStart.current) return;
+    setTx(dragStart.current.ox + e.clientX - dragStart.current.cx);
+    setTy(dragStart.current.oy + e.clientY - dragStart.current.cy);
+  }
+  function handleMouseUp() { dragStart.current = null; }
 
-  const edgeOpacity = Math.max(0, Math.min(1, (transform.scale - 0.2) / 0.4));
+  const { nodes, edges } = graphRef.current || { nodes: [], edges: [] };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:C.bg }}>
       {/* Header */}
-      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '14px 14px 10px' }}>
+      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'14px 14px 10px' }}>
         <button onClick={onBack}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0 2px', color: C.accent + '99', flexShrink: 0 }}>
+          style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:C.accent+'99', flexShrink:0 }}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.accent }}>ALL PROJECTS</span>
-        <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, marginLeft: 4 }}>{allTags.length + 1} projects · scroll to zoom · drag to pan</span>
-        <div style={{ flex: 1 }}/>
+        <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:C.accent }}>ALL PROJECTS</span>
+        <span style={{ fontFamily:mono, fontSize:10, color:C.dim, marginLeft:4 }}>{(allTags||[]).length + 1} projects · scroll to zoom · drag to pan</span>
+        <div style={{ flex:1 }}/>
         <button onClick={() => onSelectProject('__everything__')}
-          style={{ background: C.accent + '11', border: `1px solid ${C.accent}33`, borderRadius: 20, padding: '2px 10px',
-            fontFamily: mono, fontSize: F.sm, color: C.accent + 'aa', cursor: 'pointer', letterSpacing: '0.03em', lineHeight: '1.8' }}>
+          style={{ background:C.accent+'11', border:`1px solid ${C.accent}33`, borderRadius:20, padding:'2px 10px',
+            fontFamily:mono, fontSize:F.sm, color:C.accent+'aa', cursor:'pointer', letterSpacing:'0.03em', lineHeight:'1.8' }}>
           ALL ENTRIES ↗
         </button>
       </div>
 
-      {/* Graph canvas */}
-      <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: dragRef.current ? 'grabbing' : 'grab' }}
-        onWheel={onWheel} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-        <svg width="100%" height="100%" style={{ display: 'block' }}>
-          <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`}>
-            {/* Edges */}
-            {edgeOpacity > 0 && initEdges.map((e, i) => {
-              const a = initNodes[e.si], b = initNodes[e.ti];
-              return (
-                <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-                  stroke={a.color} strokeWidth={Math.max(0.5, e.weight * 0.4)}
-                  strokeOpacity={edgeOpacity * 0.18 * Math.min(1, e.weight / 2)} />
-              );
-            })}
-            {/* Nodes */}
-            {initNodes.map((n, i) => {
-              const isPill = transform.scale >= PILL_THRESHOLD;
-              const isHovered = hover === i;
-              const col = n.color;
-              const pw = n.label.length * 7.5 + 28;
-              return (
-                <g key={n.id} data-node="1" transform={`translate(${n.x},${n.y})`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => onSelectProject(n.id)}
-                  onMouseEnter={() => setHover(i)}
-                  onMouseLeave={() => setHover(null)}>
-                  {isPill ? (
-                    <>
-                      <rect x={-pw/2} y={-14} width={pw} height={28} rx={14}
-                        fill={isHovered ? col + '33' : col + '18'}
-                        stroke={isHovered ? col : col + '66'}
-                        strokeWidth={isHovered ? 1.5 : 1}/>
-                      <text x={0} y={5} textAnchor="middle"
-                        style={{ fontFamily: mono, fontSize: 11, fill: isHovered ? col : col + 'cc',
-                          letterSpacing: '0.06em', pointerEvents: 'none', userSelect: 'none' }}>
-                        {n.label}
-                      </text>
-                    </>
-                  ) : (
-                    <>
-                      <circle r={n.r} fill={isHovered ? col + '33' : col + '18'}
-                        stroke={isHovered ? col : col + '55'} strokeWidth={isHovered ? 2 : 1.5}/>
-                      {transform.scale >= 0.35 && (
-                        <text y={n.r + 12} textAnchor="middle"
-                          style={{ fontFamily: mono, fontSize: 10 / transform.scale * 0.5,
-                            fill: col + 'aa', pointerEvents: 'none', userSelect: 'none' }}>
-                          {n.label.slice(0, 8)}{n.label.length > 8 ? '…' : ''}
+      {/* Canvas */}
+      <div ref={containerRef}
+        style={{ flex:1, position:'relative', overflow:'hidden', cursor:'grab' }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}>
+        {!ready && (
+          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
+            fontFamily:mono, fontSize:F.sm, color:C.dim }}>Laying out graph…</div>
+        )}
+        {ready && (
+          <svg width="100%" height="100%" style={{ display:'block' }}>
+            <g transform={`translate(${tx},${ty}) scale(${scale})`}>
+              {edgeAlpha > 0 && edges.map((edge, i) => {
+                const na = nodes[edge.si]; const nb = nodes[edge.ti];
+                if (!na || !nb) return null;
+                return (
+                  <line key={i}
+                    x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}
+                    stroke={na.color}
+                    strokeWidth={Math.max(0.4, edge.w * 0.35)}
+                    strokeOpacity={edgeAlpha * 0.15 * Math.min(1, edge.w / 2)} />
+                );
+              })}
+              {nodes.map((node, i) => {
+                const isPill = scale >= PILL_SCALE;
+                const isHov = hovered === i;
+                const col = node.color;
+                const pw = node.label.length * 7.2 + 26;
+                return (
+                  <g key={node.id} data-node="1"
+                    transform={`translate(${node.x},${node.y})`}
+                    style={{ cursor:'pointer' }}
+                    onClick={() => onSelectProject(node.id)}
+                    onMouseEnter={() => setHovered(i)}
+                    onMouseLeave={() => setHovered(null)}>
+                    {isPill ? (
+                      <>
+                        <rect x={-pw/2} y={-13} width={pw} height={26} rx={13}
+                          fill={isHov ? col+'33' : col+'18'}
+                          stroke={isHov ? col : col+'55'}
+                          strokeWidth={isHov ? 1.5 : 1} />
+                        <text x={0} y={4} textAnchor="middle"
+                          style={{ fontFamily:mono, fontSize:10.5, fill:isHov ? col : col+'cc',
+                            letterSpacing:'0.06em', pointerEvents:'none', userSelect:'none' }}>
+                          {node.label}
                         </text>
-                      )}
-                    </>
-                  )}
-                </g>
-              );
-            })}
-          </g>
-        </svg>
-        {/* Zoom controls */}
-        <div style={{ position: 'absolute', bottom: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {[{label:'+', d:1.25},{label:'−',d:0.8}].map(({label,d}) => (
-            <button key={label} onClick={() => setTransform(t => ({ ...t, scale: Math.max(0.15, Math.min(3, t.scale * d)) }))}
-              style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 6,
-                color: C.muted, fontFamily: mono, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      </>
+                    ) : (
+                      <>
+                        <circle r={node.r}
+                          fill={isHov ? col+'33' : col+'18'}
+                          stroke={isHov ? col : col+'55'}
+                          strokeWidth={isHov ? 2 : 1.5} />
+                        {scale >= 0.32 && (
+                          <text y={node.r + 11} textAnchor="middle"
+                            style={{ fontFamily:mono, fontSize:Math.max(8, 9 / scale),
+                              fill:col+'99', pointerEvents:'none', userSelect:'none' }}>
+                            {node.label.length > 9 ? node.label.slice(0,8)+'…' : node.label}
+                          </text>
+                        )}
+                      </>
+                    )}
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+        )}
+        {/* Zoom buttons */}
+        <div style={{ position:'absolute', bottom:16, right:16, display:'flex', flexDirection:'column', gap:4 }}>
+          {[{label:'+',f:1.25},{label:'−',f:0.8}].map(({label,f}) => (
+            <button key={label}
+              onClick={() => setScale(prev => Math.max(0.12, Math.min(3, prev * f)))}
+              style={{ width:30, height:30, background:C.surface, border:`1px solid ${C.border2}`, borderRadius:6,
+                color:C.muted, fontFamily:mono, fontSize:16, cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center' }}>
               {label}
             </button>
           ))}
@@ -5059,6 +5087,7 @@ function ProjectGraphView({ allTags, connections, recency, onSelectProject, onBa
     </div>
   );
 }
+
 
 // ─── ProjectsCard ─────────────────────────────────────────────────────────────
 // Source of truth: #tags present in the DB (notes + tasks). projectsMeta is
@@ -6759,7 +6788,7 @@ export default function Dashboard() {
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
                     </button>
                     <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',color:pcol}}>
-                      {isGraph ? 'All Projects' : isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
+                      {isGraph ? 'ALL' : isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
                     </span>
                   </div>
                   {/* Scrollable content */}
