@@ -4933,22 +4933,30 @@ function ProjectGraphView({ allTags, connections, onSelectProject, onBack }) {
     }
 
     graphRef.current = { nodes, edges };
+    setReady(true);
 
-    // Fit to container
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const minX = Math.min(...nodes.map(nd => nd.x - nd.r));
-      const maxX = Math.max(...nodes.map(nd => nd.x + nd.r));
-      const minY = Math.min(...nodes.map(nd => nd.y - nd.r));
-      const maxY = Math.max(...nodes.map(nd => nd.y + nd.r));
-      const gW = maxX - minX + 80;
-      const gH = maxY - minY + 80;
-      const newScale = Math.min(1.1, Math.min(rect.width / gW, rect.height / gH));
+    // Fit after paint — defer so containerRef has real dimensions
+    function doFit() {
+      if (!containerRef.current) return;
+      var rect = containerRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        requestAnimationFrame(doFit);
+        return;
+      }
+      var allX = nodes.map(function(nd) { return nd.x; });
+      var allY = nodes.map(function(nd) { return nd.y; });
+      var minX = Math.min.apply(null, allX) - 40;
+      var maxX = Math.max.apply(null, allX) + 40;
+      var minY = Math.min.apply(null, allY) - 40;
+      var maxY = Math.max.apply(null, allY) + 40;
+      var gW = maxX - minX;
+      var gH = maxY - minY;
+      var newScale = Math.min(0.95, Math.min(rect.width / gW, rect.height / gH));
+      setScale(newScale);
       setTx(rect.width / 2 - ((minX + maxX) / 2) * newScale);
       setTy(rect.height / 2 - ((minY + maxY) / 2) * newScale);
-      setScale(newScale);
     }
-    setReady(true);
+    requestAnimationFrame(doFit);
   }, []); // eslint-disable-line
 
   const PILL_SCALE = 0.85;
@@ -4980,26 +4988,36 @@ function ProjectGraphView({ allTags, connections, onSelectProject, onBack }) {
   const { nodes, edges } = graphRef.current || { nodes: [], edges: [] };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:C.bg }}>
-      {/* Header */}
-      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:8, padding:'14px 14px 10px' }}>
-        <button onClick={onBack}
-          style={{ background:'none', border:'none', cursor:'pointer', display:'flex', alignItems:'center', padding:'0 2px', color:C.accent+'99', flexShrink:0 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.08em', textTransform:'uppercase', color:C.accent }}>ALL PROJECTS</span>
-        <span style={{ fontFamily:mono, fontSize:10, color:C.dim, marginLeft:4 }}>{(allTags||[]).length + 1} projects · scroll to zoom · drag to pan</span>
-        <div style={{ flex:1 }}/>
+    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:C.bg, overflow:'auto' }}>
+      {/* Quick-access cards at top */}
+      <div style={{ flexShrink:0, display:'flex', gap:8, padding:'10px 14px 0' }}>
         <button onClick={() => onSelectProject('__everything__')}
-          style={{ background:C.accent+'11', border:`1px solid ${C.accent}33`, borderRadius:20, padding:'2px 10px',
-            fontFamily:mono, fontSize:F.sm, color:C.accent+'aa', cursor:'pointer', letterSpacing:'0.03em', lineHeight:'1.8' }}>
-          ALL ENTRIES ↗
+          style={{ flex:1, background:C.accent+'0e', border:`1px solid ${C.accent}22`, borderRadius:10, padding:'10px 14px',
+            cursor:'pointer', textAlign:'left', transition:'background 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.background=C.accent+'1a'}
+          onMouseLeave={e => e.currentTarget.style.background=C.accent+'0e'}>
+          <div style={{ fontFamily:mono, fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:C.accent+'99', marginBottom:3 }}>All Journals</div>
+          <div style={{ fontFamily:serif, fontSize:F.md, color:C.text }}>Every entry, all projects</div>
+        </button>
+        <button onClick={() => onSelectProject('__everything__')}
+          style={{ flex:1, background:C.blue+'0e', border:`1px solid ${C.blue}22`, borderRadius:10, padding:'10px 14px',
+            cursor:'pointer', textAlign:'left', transition:'background 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.background=C.blue+'1a'}
+          onMouseLeave={e => e.currentTarget.style.background=C.blue+'0e'}>
+          <div style={{ fontFamily:mono, fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:C.blue+'99', marginBottom:3 }}>All Tasks</div>
+          <div style={{ fontFamily:serif, fontSize:F.md, color:C.text }}>Open tasks across projects</div>
         </button>
       </div>
 
+      {/* Graph hint */}
+      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'10px 14px 6px' }}>
+        <span style={{ fontFamily:mono, fontSize:10, color:C.dim }}>{(allTags||[]).length + 1} projects · scroll to zoom · drag to pan</span>
+      </div>
+
+      {/* Graph canvas */}
       {/* Canvas */}
       <div ref={containerRef}
-        style={{ flex:1, position:'relative', overflow:'hidden', cursor:'grab' }}
+        style={{ height:480, flexShrink:0, position:'relative', overflow:'hidden', cursor:'grab' }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -5166,91 +5184,92 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     return () => { ro.disconnect(); el.removeEventListener('scroll', check); };
   }, [names.length]); // eslint-disable-line
 
-  if (allTags === null || names.length === 0) return null;
+  if (allTags === null) return null;
+
+  // Package icon SVG (grid of dots)
+  const PackageIcon = (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/>
+      <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+      <line x1="12" y1="22.08" x2="12" y2="12"/>
+    </svg>
+  );
 
   return (
-    <div style={{ position:'relative', padding:'4px 0' }}>
+    <div style={{ position:'relative', display:'flex', alignItems:'center', gap:0, padding:'4px 0' }}>
+      {/* Package icon — opens graph/projects view */}
+      <button
+        onClick={() => onSelectProject('__graph__')}
+        title="All Projects"
+        style={{
+          background:'none', border:'none', cursor:'pointer',
+          padding:'4px 8px 4px 14px', color:C.dim, flexShrink:0,
+          display:'flex', alignItems:'center', opacity:0.5,
+          transition:'opacity 0.15s, color 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.color=C.accent; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity='0.5'; e.currentTarget.style.color=C.dim; }}
+      >{PackageIcon}</button>
+
+      {/* Divider */}
+      <div style={{width:1, height:16, background:C.border2, flexShrink:0, marginRight:6}}/>
+
+      {/* Scrollable chips */}
       <div
         ref={pcScrollRef}
         style={{
-          display: 'flex', alignItems: 'center', flexWrap: 'nowrap', gap: 6,
-          padding: '4px 14px', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none',
+          display:'flex', alignItems:'center', flexWrap:'nowrap', gap:6,
+          padding:'4px 0', overflowX:'auto', scrollbarWidth:'none', msOverflowStyle:'none',
+          flex:1, minWidth:0,
         }}
       >
-      <span style={{
-        fontFamily: mono, fontSize: 9, letterSpacing: '0.1em',
-        textTransform: 'uppercase', color: C.dim, flexShrink: 0, paddingRight: 2,
-      }}>Projects</span>
-      {/* Health — always-visible built-in project */}
-      <button
-        onClick={() => onSelectProject('__health__')}
-        style={{
-          background: C.green + '11',
-          border: `1px solid ${C.green}33`,
-          borderRadius: 20, padding: '2px 10px',
-          fontFamily: mono, fontSize: F.sm, color: C.green + 'aa',
-          cursor: 'pointer', transition: 'all 0.15s',
-          letterSpacing: '0.03em', lineHeight: '1.8',
-          whiteSpace: 'nowrap', flexShrink: 0,
-        }}
-        onMouseEnter={e => { e.currentTarget.style.background = C.green + '22'; e.currentTarget.style.color = C.green; }}
-        onMouseLeave={e => { e.currentTarget.style.background = C.green + '11'; e.currentTarget.style.color = C.green + 'aa'; }}
-      >HEALTH</button>
-      {/* Recent tags */}
-      {names.map(name => {
-        const active = todayTags.has(name.toLowerCase());
-        const col = projectColor(name);
-        return (
-          <button
-            key={name}
-            onClick={() => onSelectProject(name)}
-            style={{
-              background: active ? col + '22' : 'transparent',
-              border: `1px solid ${active ? col + '55' : C.border2}`,
-              borderRadius: 20, padding: '2px 10px',
-              fontFamily: mono, fontSize: F.sm, color: active ? col : C.muted,
-              cursor: 'pointer', opacity: active ? 1 : 0.35,
-              transition: 'opacity 0.15s, color 0.15s',
-              letterSpacing: '0.03em', lineHeight: '1.8',
-              whiteSpace: 'nowrap', flexShrink: 0,
-            }}
-            onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = col; }}
-            onMouseLeave={e => {
-              e.currentTarget.style.opacity = active ? '1' : '0.35';
-              e.currentTarget.style.color = active ? col : C.muted;
-            }}
-          >{tagDisplayName(name).toUpperCase()}</button>
-        );
-      })}
-      {/* ALL — opens graph view */}
-      <button
-        onClick={() => onSelectProject('__graph__')}
-        style={{
-          background: 'transparent',
-          border: `1px solid ${C.border2}`,
-          borderRadius: 20, padding: '2px 10px',
-          fontFamily: mono, fontSize: F.sm, color: C.dim,
-          cursor: 'pointer', opacity: 0.6,
-          transition: 'opacity 0.15s, color 0.15s, border-color 0.15s',
-          letterSpacing: '0.03em', lineHeight: '1.8',
-          whiteSpace: 'nowrap', flexShrink: 0,
-        }}
-        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = C.accent; e.currentTarget.style.borderColor = C.accent + '55'; }}
-        onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = C.dim; e.currentTarget.style.borderColor = C.border2; }}
-      >{pcHasMore ? `+${_pcSorted.length - 6} ALL ···` : 'ALL ···'}</button>
+        {/* Health — always first */}
+        <button
+          onClick={() => onSelectProject('__health__')}
+          style={{
+            background: C.green + '11', border:`1px solid ${C.green}33`,
+            borderRadius:20, padding:'2px 10px',
+            fontFamily:mono, fontSize:F.sm, color:C.green+'aa',
+            cursor:'pointer', transition:'all 0.15s',
+            letterSpacing:'0.03em', lineHeight:'1.8',
+            whiteSpace:'nowrap', flexShrink:0,
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background=C.green+'22'; e.currentTarget.style.color=C.green; }}
+          onMouseLeave={e => { e.currentTarget.style.background=C.green+'11'; e.currentTarget.style.color=C.green+'aa'; }}
+        >HEALTH</button>
+
+        {/* Recent project chips */}
+        {names.map(name => {
+          const active = todayTags.has(name.toLowerCase());
+          const col = projectColor(name);
+          return (
+            <button
+              key={name}
+              onClick={() => onSelectProject(name)}
+              style={{
+                background: active ? col+'22' : 'transparent',
+                border:`1px solid ${active ? col+'55' : C.border2}`,
+                borderRadius:20, padding:'2px 10px',
+                fontFamily:mono, fontSize:F.sm, color: active ? col : C.muted,
+                cursor:'pointer', opacity: active ? 1 : 0.35,
+                transition:'opacity 0.15s, color 0.15s',
+                letterSpacing:'0.03em', lineHeight:'1.8',
+                whiteSpace:'nowrap', flexShrink:0,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.color=col; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity=active?'1':'0.35'; e.currentTarget.style.color=active?col:C.muted; }}
+            >{tagDisplayName(name).toUpperCase()}</button>
+          );
+        })}
       </div>
+
+      {/* Right fade */}
       <div style={{
-          position:'absolute', right:0, top:0, bottom:0, width:40, pointerEvents:'none',
-          background:`linear-gradient(to right, transparent, ${C.bg})`,
-          display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:6,
-          opacity: pcFade ? 1 : 0,
-          transition: 'opacity 0.12s ease',
-        }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted}
-            strokeWidth="2.5" strokeLinecap="round" opacity="0.5">
-            <polyline points="9 18 15 12 9 6"/>
-          </svg>
-        </div>
+        position:'absolute', right:0, top:0, bottom:0, width:32, pointerEvents:'none',
+        background:`linear-gradient(to right, transparent, ${C.bg})`,
+        opacity: pcFade ? 1 : 0, transition:'opacity 0.12s ease',
+      }}/>
     </div>
   );
 }
