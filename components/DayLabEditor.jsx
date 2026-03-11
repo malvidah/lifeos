@@ -207,18 +207,9 @@ export function DayLabEditor({
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
     ],
     content: { type: 'doc', content: textToContent(value || '') },
-    autofocus: autoFocus ? 'end' : false,
     editable,
     editorProps: {
       handleKeyDown(view, e) {
-        if (e.key === 'Backspace' && singleLine && onBackspaceEmptyRef.current) {
-          const text = docToText(view.state.doc.toJSON());
-          if (!text) {
-            e.preventDefault();
-            onBackspaceEmptyRef.current();
-            return true;
-          }
-        }
         if (e.key === 'Enter' && !e.shiftKey && singleLine) {
           e.preventDefault();
           const text = docToText(view.state.doc.toJSON());
@@ -271,6 +262,31 @@ export function DayLabEditor({
   });
 
   useEffect(() => { editorRef.current = editor; }, [editor]);
+
+  // Imperatively focus cursor to end on mount — more reliable than TipTap's autofocus option
+  useEffect(() => {
+    if (!editor || !autoFocus) return;
+    // Defer one tick so the DOM is painted and React has finished its commit
+    const id = setTimeout(() => editor.commands.focus('end'), 0);
+    return () => clearTimeout(id);
+  }, [editor, autoFocus]);
+
+  // Capture-phase keydown on the editor DOM: fires before ProseMirror, so we see
+  // state as it was BEFORE any key processing — required for reliable empty check
+  useEffect(() => {
+    if (!editor || !singleLine) return;
+    const dom = editor.view.dom;
+    const handler = (e) => {
+      if (e.key !== 'Backspace' || !onBackspaceEmptyRef.current) return;
+      const text = docToText(editor.view.state.doc.toJSON());
+      if (text) return; // not empty — let ProseMirror handle normally
+      e.preventDefault();
+      e.stopPropagation();
+      onBackspaceEmptyRef.current();
+    };
+    dom.addEventListener('keydown', handler, true); // capture phase
+    return () => dom.removeEventListener('keydown', handler, true);
+  }, [editor, singleLine]);
 
   // Sync external value only when editor is not focused
   useEffect(() => {
