@@ -6673,16 +6673,12 @@ export default function Dashboard() {
         <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:0}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
-          overflowY:activeProject?"hidden":mobile?"auto":"auto",
-          padding:activeProject?0:mobile?"6px 8px":10,
-          paddingTop:activeProject?0:52,
-          paddingBottom:activeProject?0:mobile?200:0, display:"flex", flexDirection:"column", gap:activeProject?0:mobile?10:8}}>
+          display:"flex", flexDirection:"column", overflow:"hidden"}}>
 
-          {/* Calendar + Health + Search — hidden in project view */}
-          {!activeProject && (() => {
-            return (
-              <>
-                {/* ── Projects strip ↔ Search pill (crossfade) ── */}
+          {/* ── Projects strip — above scroll, matches project-view header pattern ── */}
+          {!activeProject && (
+            <div style={{ flexShrink:0, background:C.bg, zIndex:49 }}>
+                              {/* ── Projects strip ↔ Search pill (crossfade) ── */}
                 <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible' }}>
                   {/* Projects bar — fades out when search open */}
                   <div style={{
@@ -6774,8 +6770,21 @@ export default function Dashboard() {
                     </div>
                   </div>
                 </div>
+            </div>
+          )}
 
-                {/* Cal + Health — hidden during search */}
+          {/* ── Daily scroll — calendar, health, widgets ── */}
+          {!activeProject && (
+            <div style={{
+              flex:1, minHeight:0, overflowY:"auto",
+              padding:mobile?"6px 8px":10, paddingTop:0,
+              paddingBottom:mobile?200:0,
+              display:"flex", flexDirection:"column", gap:mobile?10:8}}>
+              {/* Top vignette — at top of scroll content */}
+              <div style={{position:"sticky",top:0,height:48,marginBottom:-48,
+                pointerEvents:"none",zIndex:10,
+                background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
+                              {/* Cal + Health — hidden during search */}
                 {!searchOpen && (
                   <>
                     <div style={{flexShrink:0}}>
@@ -6791,12 +6800,82 @@ export default function Dashboard() {
                     </div>
                   </>
                 )}
-              </>
-            );
-          })()}
+              {/* Search results or widgets */}
+              {searchOpen ? (
+                <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease' }}>
+                  <SearchResults
+                    results={srResults}
+                    loading={srLoading}
+                    query={searchQuery}
+                    onSelectDate={d => { setSearchOpen(false); setSearchQuery(''); setSelected(d); }}
+                  />
+                </div>
+              ) : (
+                <>
+              {/* Widgets — row on wide, flat stack on narrow */}
+              {mobile ? (
+                <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
+                  <Widget label={leftWidget.label} color={leftWidget.color()}
+                    collapsed={collapseMap[leftWidget.id]}
+                    onToggle={toggleMap[leftWidget.id]}
+                    headerRight={leftWidget.headerRight?.()} autoHeight>
+                    <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
+                  </Widget>
+                  {rightWidgets.map(w=>(
+                    <Widget key={w.id} label={w.label} color={w.color()}
+                      collapsed={collapseMap[w.id]}
+                      onToggle={toggleMap[w.id]}
+                      headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
+                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
+                    </Widget>
+                  ))}
+                </div>
+              ) : (
+                <div style={{display:"flex", gap:10,
+                  flexDirection:"row",
+                  alignItems:"stretch"}}>
 
-          {/* Project view OR daily widgets */}
-          {activeProject ? (
+                  {/* Left column: Journal — stretches to match right col height */}
+                  <div style={{flex:"1 1 0", minWidth:0,
+                    display:"flex", flexDirection:"column", gap:10,
+                    paddingBottom:180}}>
+                    <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
+                      <Widget label={leftWidget.label} color={leftWidget.color()}
+                        collapsed={collapseMap[leftWidget.id]}
+                        onToggle={toggleMap[leftWidget.id]}
+                        headerRight={leftWidget.headerRight?.()}>
+                        <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
+                      </Widget>
+                    </div>
+                  </div>
+
+                  {/* Right widgets — column always; last card stretches to fill */}
+                  <div style={{flex:"1 1 0", minWidth:0,
+                    display:"flex", flexDirection:"column", gap:10,
+                    paddingBottom:180}}>
+                    {rightWidgets.map((w, i)=>(
+                      <div key={w.id} style={{
+                        display:"flex", flexDirection:"column",
+                        flex: (!collapseMap[w.id] && i === rightWidgets.length - 1) ? 1 : "0 0 auto",
+                        minHeight: collapseMap[w.id]?0:200}}>
+                        <Widget label={w.label} color={w.color()}
+                          collapsed={collapseMap[w.id]}
+                          onToggle={toggleMap[w.id]}
+                          headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
+                          <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
+                        </Widget>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+            </div>
+          )}
+
+          {/* ── Project view ── */}
+          {activeProject && (
             (() => {
               const isGraph  = activeProject === '__graph__';
               const isHealth = activeProject === '__health__';
@@ -6862,77 +6941,8 @@ export default function Dashboard() {
                 </>
               );
             })()
-          ) : searchOpen ? (
-            /* ── Search results — replace widgets while searching ── */
-            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease' }}>
-              <SearchResults
-                results={srResults}
-                loading={srLoading}
-                query={searchQuery}
-                onSelectDate={d => { setSearchOpen(false); setSearchQuery(''); setSelected(d); }}
-              />
-            </div>
-          ) : (
-            <>
-              {/* Widgets — row on wide, flat stack on narrow */}
-              {mobile ? (
-                <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
-                  <Widget label={leftWidget.label} color={leftWidget.color()}
-                    collapsed={collapseMap[leftWidget.id]}
-                    onToggle={toggleMap[leftWidget.id]}
-                    headerRight={leftWidget.headerRight?.()} autoHeight>
-                    <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
-                  </Widget>
-                  {rightWidgets.map(w=>(
-                    <Widget key={w.id} label={w.label} color={w.color()}
-                      collapsed={collapseMap[w.id]}
-                      onToggle={toggleMap[w.id]}
-                      headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
-                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
-                    </Widget>
-                  ))}
-                </div>
-              ) : (
-                <div style={{display:"flex", gap:10,
-                  flexDirection:"row",
-                  alignItems:"stretch"}}>
-
-                  {/* Left column: Journal — stretches to match right col height */}
-                  <div style={{flex:"1 1 0", minWidth:0,
-                    display:"flex", flexDirection:"column", gap:10,
-                    paddingBottom:180}}>
-                    <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
-                      <Widget label={leftWidget.label} color={leftWidget.color()}
-                        collapsed={collapseMap[leftWidget.id]}
-                        onToggle={toggleMap[leftWidget.id]}
-                        headerRight={leftWidget.headerRight?.()}>
-                        <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
-                      </Widget>
-                    </div>
-                  </div>
-
-                  {/* Right widgets — column always; last card stretches to fill */}
-                  <div style={{flex:"1 1 0", minWidth:0,
-                    display:"flex", flexDirection:"column", gap:10,
-                    paddingBottom:180}}>
-                    {rightWidgets.map((w, i)=>(
-                      <div key={w.id} style={{
-                        display:"flex", flexDirection:"column",
-                        flex: (!collapseMap[w.id] && i === rightWidgets.length - 1) ? 1 : "0 0 auto",
-                        minHeight: collapseMap[w.id]?0:200}}>
-                        <Widget label={w.label} color={w.color()}
-                          collapsed={collapseMap[w.id]}
-                          onToggle={toggleMap[w.id]}
-                          headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
-                          <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
-                        </Widget>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
           )}
+
         </div>
         </div>
 
