@@ -32,8 +32,7 @@ function injectEditorStyles() {
   s.textContent = `
     .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
-    .dl-editor[data-theme="dark"]  .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); color: #6A6258; pointer-events: none; float: left; height: 0; }
-    .dl-editor[data-theme="light"] .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); color: #9A8878; pointer-events: none; float: left; height: 0; }
+    .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid #D08828; border-radius: 8px; }
   `;
   document.head.appendChild(s);
@@ -170,7 +169,8 @@ export function DayLabEditor({
   singleLine = false,
   style,
   color = '#D08828',
-  theme = 'dark',
+  textColor,
+  mutedColor,
   editable = true,
 }) {
   useEffect(injectEditorStyles, []);
@@ -187,7 +187,8 @@ export function DayLabEditor({
   useEffect(() => { onEnterSplitRef.current   = onEnterSplit; },  [onEnterSplit]);
   useEffect(() => { onImageUploadRef.current  = onImageUpload; }, [onImageUpload]);
 
-  const textColor = theme === 'light' ? '#3D3028' : '#D8CEC2';
+  textColor  = textColor  || '#D8CEC2';
+  mutedColor = mutedColor || '#6A6258';
 
   const editor = useEditor({
     extensions: [
@@ -270,9 +271,11 @@ export function DayLabEditor({
   useEffect(() => { editor?.setEditable(editable); }, [editable, editor]);
 
   return (
-    <div className="dl-editor" data-theme={theme} style={{
+    <div className="dl-editor" style={{
       fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-      color: textColor, caretColor: color, ...style,
+      color: textColor, caretColor: color,
+      '--dl-muted': mutedColor,
+      ...style,
     }}>
       <EditorContent editor={editor} />
     </div>

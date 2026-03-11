@@ -3030,6 +3030,8 @@ function Notes({date,userId,token}) {
       onBlur={text => setValue(text, {undoLabel: 'Edit notes'})}
       onImageUpload={file => uploadImageFile(file, token)}
       placeholder="What's on your mind?"
+      textColor={C.text}
+      mutedColor={C.dim}
       color={C.accent}
       style={{minHeight: 80, width: '100%'}}
     />
@@ -3694,6 +3696,8 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   key={`e${row.id}`}
                   value={row.text}
                   singleLine
+                  textColor={row.done ? C.muted : C.text}
+                  mutedColor={C.dim}
                   color={row.done ? C.muted : C.accent}
                   onBlur={text => {
                     if (skipBlurRef.current) { skipBlurRef.current = false; return; }
@@ -5495,6 +5499,8 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
         onBlur={text => onSave(text)}
         placeholder=""
         singleLine
+        textColor={C.text}
+        mutedColor={C.dim}
         color={C.accent}
         style={{ width: '100%', minHeight: '1.7em' }}
       />
