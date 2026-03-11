@@ -6581,7 +6581,7 @@ export default function Dashboard() {
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch"}}>
+        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:"calc(env(safe-area-inset-top, 0px) + 68px)"}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           overflowY:activeProject?"hidden":mobile?"auto":"auto",
@@ -6593,7 +6593,7 @@ export default function Dashboard() {
             return (
               <>
                 {/* ── Projects strip ↔ Search pill (crossfade) ── */}
-                <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible' }}>
+                <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible', zIndex: 60 }}>
                   {/* Projects bar — fades out when search open */}
                   <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
