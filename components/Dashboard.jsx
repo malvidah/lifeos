@@ -6674,16 +6674,16 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
-      {/* Vignette — short soft fade just below the TopBar */}
+      {/* Vignette — covers TopBar bottom + strip/header area, fades into content */}
       <div style={{
         position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 58px)", left:0, right:0,
-        height:48, pointerEvents:"none", zIndex:50,
-        background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`,
+        height: activeProject ? 48 : 112, pointerEvents:"none", zIndex:48,
+        background:`linear-gradient(to bottom, ${C.bg} 0%, ${C.bg} ${activeProject ? "20%" : "55%"}, transparent 100%)`,
       }}/>
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:0}}>
+        <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch"}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           display:"flex", flexDirection:"column", overflow:"hidden"}}>
@@ -6790,7 +6790,7 @@ export default function Dashboard() {
           {!activeProject && (
             <div style={{
               flex:1, minHeight:0, overflowY:"auto",
-              padding:mobile?"6px 8px":10, paddingTop:0,
+              padding:mobile?"6px 8px":10, paddingTop:48,
               paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:mobile?10:8}}>
               {/* Top vignette — at top of scroll content */}
