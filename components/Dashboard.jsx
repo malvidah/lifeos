@@ -6574,7 +6574,7 @@ export default function Dashboard() {
 
       {/* Vignette — short soft fade just below the TopBar */}
       <div style={{
-        position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 68px)", left:0, right:0,
+        position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 58px)", left:0, right:0,
         height:48, pointerEvents:"none", zIndex:50,
         background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`,
       }}/>
