@@ -3088,45 +3088,12 @@ function Notes({date,userId,token}) {
   // ── handle user input ────────────────────────────────────────────────────
   function handleInput() {
     if (isComposingRef.current) return;
-    const el = ceRef.current;
-    const text = domToText(el);
-    lastSyncedText.current = text;
     skipSyncRef.current = true;
+    const text = domToText(ceRef.current);
+    lastSyncedText.current = text;
     setValue(text, {skipHistory: true});
     skipSyncRef.current = false;
-    // Live re-render chips/spans while preserving caret position
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) { el.innerHTML = textToHtml(text); return; }
-    // Save caret as char offset in plain text
-    const pre = sel.getRangeAt(0).cloneRange();
-    pre.selectNodeContents(el);
-    pre.setEnd(sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset);
-    const preEl = document.createElement('div');
-    preEl.appendChild(pre.cloneContents());
-    const caretOffset = domToText(preEl).length;
-    // Re-render
-    el.innerHTML = textToHtml(text);
-    // Restore caret
-    requestAnimationFrame(() => {
-      let pos = 0;
-      function findNode(node) {
-        if (node.nodeType === Node.TEXT_NODE) {
-          if (pos + node.length >= caretOffset) {
-            const r = document.createRange();
-            r.setStart(node, caretOffset - pos);
-            r.collapse(true);
-            sel.removeAllRanges();
-            sel.addRange(r);
-            return true;
-          }
-          pos += node.length;
-        } else {
-          for (const c of node.childNodes) if (findNode(c)) return true;
-        }
-        return false;
-      }
-      findNode(el);
-    });
+    // Chips render on blur — no live re-render to avoid cursor jumping
   }
 
   function handleBlur() {
