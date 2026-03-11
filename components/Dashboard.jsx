@@ -4957,16 +4957,13 @@ function ProjectGraphView({ allTags, connections, onSelectProject, onBack }) {
   function handleWheel(e) {
     e.preventDefault();
     if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
-    const factor = e.deltaY < 0 ? 1.12 : 0.89;
-    setScale(prev => {
-      const next = Math.max(0.12, Math.min(3, prev * factor));
-      setTx(px => mx - (mx - px) * (next / prev));
-      setTy(py => my - (my - py) * (next / prev));
-      return next;
-    });
+    var rect = containerRef.current.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    var my = e.clientY - rect.top;
+    var factor = e.deltaY < 0 ? 1.12 : 0.89;
+    setScale(function(prev) { return Math.max(0.12, Math.min(3, prev * factor)); });
+    setTx(function(prev) { return mx - (mx - prev) * factor; });
+    setTy(function(prev) { return my - (my - prev) * factor; });
   }
 
   function handleMouseDown(e) {
@@ -5119,11 +5116,13 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     Promise.all([
       fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
       fetch('/api/tag-connections', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(([tags, conns]) => {
-      setAllTags(Array.isArray(tags.tags) ? tags.tags : []);
-      setConnections(Array.isArray(conns.connections) ? conns.connections : []);
-      setRecency(conns.recency || {});
-    }).catch(() => setAllTags([]));
+    ]).then(function(results) {
+      var tagsRes = results[0];
+      var connsRes = results[1];
+      setAllTags(Array.isArray(tagsRes.tags) ? tagsRes.tags : []);
+      setConnections(Array.isArray(connsRes.connections) ? connsRes.connections : []);
+      setRecency(connsRes.recency || {});
+    }).catch(function() { setAllTags([]); });
   }, [token]); // eslint-disable-line
 
   // Re-fetch when today's notes/tasks change (new tag added or deleted)
@@ -5139,19 +5138,16 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
   }, [todayTags, token]); // eslint-disable-line
 
   // Sort by recency, show top 6 in strip
-  const STRIP_MAX = 6;
-  const sortedNames = useMemo(() => {
+  const _pcSorted = useMemo(function() {
     if (!allTags) return [];
-    return [...allTags].sort((a, b) => {
-      const ra = recency[a.toLowerCase()] || '0';
-      const rb = recency[b.toLowerCase()] || '0';
-      return rb.localeCompare(ra);
+    return allTags.slice().sort(function(a, b) {
+      var ra = recency[a.toLowerCase()] || '0';
+      var rb = recency[b.toLowerCase()] || '0';
+      return rb < ra ? -1 : rb > ra ? 1 : 0;
     });
   }, [allTags, recency]); // eslint-disable-line
-  const recentNames = sortedNames.slice(0, STRIP_MAX);
-  const hasMore = sortedNames.length > STRIP_MAX;
-
-  const names = recentNames;
+  var names = _pcSorted.slice(0, 6);
+  var pcHasMore = _pcSorted.length > 6;
 
   const pcScrollRef = useRef(null);
   const [pcFade, setPcFade] = useState(false);
@@ -5241,7 +5237,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
         }}
         onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = C.accent; e.currentTarget.style.borderColor = C.accent + '55'; }}
         onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = C.dim; e.currentTarget.style.borderColor = C.border2; }}
-      >{hasMore ? `+${sortedNames.length - STRIP_MAX} ALL ···` : 'ALL ···'}</button>
+      >{pcHasMore ? `+${_pcSorted.length - 6} ALL ···` : 'ALL ···'}</button>
       </div>
       <div style={{
           position:'absolute', right:0, top:0, bottom:0, width:40, pointerEvents:'none',
