@@ -723,6 +723,11 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
   const [ouraConnected,setOuraConnected]=useState(false);
+  const [garminConnected,setGarminConnected]=useState(false);
+  const [garminEmail,setGarminEmail]=useState("");
+  const [garminPassword,setGarminPassword]=useState("");
+  const [garminError,setGarminError]=useState("");
+  const [garminLoading,setGarminLoading]=useState(false);
   const setStravaConnected = onStravaChange;
   const [appleHealthHasData,setAppleHealthHasData]=useState(false);
   const [claudeConnected,setClaudeConnected]=useState(false);
@@ -742,6 +747,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
     if(!token||!open)return;
     dbLoad("global","settings",token).then(d=>{
       if(d?.ouraToken){setOuraKey(d.ouraToken);setOuraConnected(true);}
+      if(d?.garminTokens?.oauth1){setGarminConnected(true);}
     }).catch(()=>{});
     // Fetch plan status
     const _sbPlan = createClient();
@@ -880,6 +886,30 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
     window.location.href="/api/strava-connect";
   }
 
+  async function connectGarmin() {
+    if (!garminEmail.trim() || !garminPassword.trim()) return;
+    setGarminLoading(true); setGarminError("");
+    try {
+      const r = await fetch("/api/garmin-auth", {
+        method:"POST",
+        headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
+        body:JSON.stringify({email:garminEmail.trim(),password:garminPassword}),
+      });
+      const d = await r.json();
+      if (!r.ok || d.error) {
+        setGarminError(d.error === "invalid_credentials" ? "Wrong email or password" : "Connection failed. Try again.");
+      } else {
+        setGarminConnected(true); setGarminEmail(""); setGarminPassword("");
+      }
+    } catch { setGarminError("Connection failed. Try again."); }
+    setGarminLoading(false);
+  }
+
+  async function disconnectGarmin() {
+    await fetch("/api/garmin-auth", {method:"DELETE",headers:{Authorization:`Bearer ${token}`}});
+    setGarminConnected(false); setGarminEmail(""); setGarminPassword(""); setGarminError("");
+  }
+
   async function disconnectStrava() {
     // disconnect immediately
     const sb = createClient();
@@ -962,6 +992,39 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
                   style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
                     borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
                     padding:"5px 7px",boxSizing:"border-box",width:0}}/>
+              )}
+            </IntegrationRow>
+          </div>
+
+          {divider}
+
+          {/* Garmin */}
+          <div style={row}>
+            <IntegrationRow
+              label="Garmin"
+              connected={garminConnected}
+              onToggleOn={garminEmail.trim() && garminPassword.trim() && !garminLoading ? connectGarmin : ()=>{}}
+              onToggleOff={disconnectGarmin}
+              pendingToggle={!garminConnected && !!garminEmail.trim() && !!garminPassword.trim()}
+            >
+              {!garminConnected && (
+                <div style={{display:"flex",flexDirection:"column",gap:4,flex:1,minWidth:0}}>
+                  <input type="email" value={garminEmail}
+                    onChange={e=>setGarminEmail(e.target.value)}
+                    placeholder="Garmin email"
+                    style={{background:C.surface,border:`1px solid ${C.border2}`,
+                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                      padding:"5px 7px",width:"100%",boxSizing:"border-box"}}/>
+                  <input type="password" value={garminPassword}
+                    onChange={e=>setGarminPassword(e.target.value)}
+                    onKeyDown={e=>e.key==="Enter"&&connectGarmin()}
+                    placeholder="Garmin password"
+                    style={{background:C.surface,border:`1px solid ${C.border2}`,
+                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                      padding:"5px 7px",width:"100%",boxSizing:"border-box"}}/>
+                  {garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>Connecting…</span>}
+                  {garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:C.red}}>{garminError}</span>}
+                </div>
               )}
             </IntegrationRow>
           </div>
@@ -2517,7 +2580,23 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     onSyncStart("oura");
     cachedOuraFetch(date, token, userId).then(async data=>{
         if(data.error==="no_token") {
-          // No Oura — fall back to Apple Health data synced from iOS app
+          // No Oura — try Garmin first, then fall back to Apple Health
+          const garminData = await fetch(`/api/garmin?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({}));
+          if(garminData && !garminData.error && Object.keys(garminData).length > 0) {
+            setH(p=>({...p,
+              sleepHrs:       garminData.sleepHrs        ?? "",
+              sleepEff:       garminData.sleepQuality     ?? "",
+              hrv:            garminData.hrv              ?? "",
+              rhr:            garminData.rhr              ?? "",
+              activeCalories: garminData.activeCalories   ?? "",
+              totalCalories:  garminData.totalCalories    ?? "",
+              steps:          garminData.steps            ?? "",
+              activeMinutes:  garminData.activeMinutes    ?? "",
+            }));
+            setDataSource("garmin");
+            onSyncEnd("oura"); return;
+          }
+          // No Garmin either — fall back to Apple Health data synced from iOS app
           const sb = createClient(); // singleton — already imported at top
           const {data:row} = await sb.from("entries").select("data")
             .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
@@ -2863,7 +2942,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
         {dataSource&&(
           <span style={{fontFamily:mono,fontSize:"10px",color:C.dim,
             border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px"}}>
-            {dataSource==="both"?"Oura + Apple Health":dataSource==="apple"?"Apple Health":"Oura"}
+            {dataSource==="both"?"Oura + Apple Health":dataSource==="apple"?"Apple Health":dataSource==="garmin"?"Garmin":"Oura"}
           </span>
         )}
         {showBadge&&(
