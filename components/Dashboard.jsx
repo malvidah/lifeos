@@ -3123,11 +3123,14 @@ function Notes({date,userId,token}) {
       if (!sel || !sel.rangeCount) return;
       const range = sel.getRangeAt(0);
       range.deleteContents();
-      // Get caret offset as plain-text position
+      // Get caret offset using domToText so newlines from <div> blocks are counted consistently
       const pre = range.cloneRange();
       pre.selectNodeContents(el);
       pre.setEnd(range.startContainer, range.startOffset);
-      const preText = pre.toString();
+      const preFragment = pre.cloneContents();
+      const tempDiv = document.createElement('div');
+      tempDiv.appendChild(preFragment);
+      const preText = domToText(tempDiv);
       const fullText = domToText(el);
       const caretPos = preText.length;
       const before = fullText.slice(0, caretPos);
