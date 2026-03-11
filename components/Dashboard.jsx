@@ -6632,7 +6632,7 @@ export default function Dashboard() {
 
           {/* ── Projects strip — above scroll, matches project-view header pattern ── */}
           {!activeProject && (
-            <div style={{ flexShrink:0, background:C.bg, zIndex:51, position:'relative' }}>
+            <div style={{ flexShrink:0, background:C.bg, zIndex:51, position:'relative', paddingTop:20 }}>
                               {/* ── Projects strip ↔ Search pill (crossfade) ── */}
                 <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible' }}>
                   {/* Projects bar — fades out when search open */}
@@ -6838,7 +6838,7 @@ export default function Dashboard() {
               return (
                 <>
                   {/* Fixed project header — outside scroll area */}
-                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'14px 14px 8px',background:C.bg,position:'relative',zIndex:51}}>
+                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'34px 14px 8px',background:C.bg,position:'relative',zIndex:51}}>
                     <button
                       onClick={async () => setActiveProject(null)}
                       style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',padding:'0 2px',color:pcol+'99',flexShrink:0}}
@@ -6849,6 +6849,18 @@ export default function Dashboard() {
                     <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',color:pcol}}>
                       {isGraph ? 'ALL PROJECTS' : isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
                     </span>
+                    <div style={{flex:1}}/>
+                    <button
+                      onClick={() => { setActiveProject(null); setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); }}
+                      style={{background:'none',border:'none',cursor:'pointer',padding:'8px 12px',display:'flex',alignItems:'center',color:C.muted,flexShrink:0,minWidth:44,minHeight:44,justifyContent:'center',transition:'color 0.15s'}}
+                      onMouseEnter={e => e.currentTarget.style.color = C.text}
+                      onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                      aria-label="Search"
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      </svg>
+                    </button>
                   </div>
                   {/* Scrollable content */}
                   <div style={{flex:1,minHeight:0,overflow:'auto'}}>
