@@ -6110,6 +6110,25 @@ export default function Dashboard() {
 
   useEffect(injectBlurWebFont, []);
 
+  // CURSOR DIAGNOSTIC v3 — checks ALL elements at point, not just topmost
+  useEffect(() => {
+    let last = '';
+    const probe = (e) => {
+      // Check every element in the z-stack at this point
+      const all = document.elementsFromPoint(e.clientX, e.clientY);
+      const summary = all.slice(0, 8).map(el => {
+        const c = window.getComputedStyle(el).cursor;
+        return `${el.tagName}${el.className?'.'+el.className.toString().slice(0,20):''} [${c}]`;
+      }).join(' > ');
+      if (summary !== last) {
+        console.log('[STACK]', summary);
+        last = summary;
+      }
+    };
+    window.addEventListener('mousemove', probe, { passive: true });
+    return () => window.removeEventListener('mousemove', probe);
+  }, []);
+
 
   useEffect(()=>{
     const supabase=createClient();
