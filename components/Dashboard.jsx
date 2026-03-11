@@ -5188,7 +5188,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
 
   // Package icon SVG (grid of dots)
   const PackageIcon = (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/>
       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
       <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
@@ -5198,22 +5198,19 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
 
   return (
     <div style={{ position:'relative', display:'flex', alignItems:'center', gap:0, padding:'4px 0' }}>
-      {/* Package icon — opens graph/projects view */}
+      {/* Package icon — opens graph/projects view. Same size/style as search icon. */}
       <button
         onClick={() => onSelectProject('__graph__')}
         title="All Projects"
         style={{
           background:'none', border:'none', cursor:'pointer',
-          padding:'4px 8px 4px 14px', color:C.dim, flexShrink:0,
-          display:'flex', alignItems:'center', opacity:0.5,
-          transition:'opacity 0.15s, color 0.15s',
+          padding:'8px 12px', display:'flex', alignItems:'center',
+          color:C.muted, flexShrink:0, transition:'color 0.15s',
+          minWidth:44, minHeight:44, justifyContent:'center',
         }}
-        onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.color=C.accent; }}
-        onMouseLeave={e => { e.currentTarget.style.opacity='0.5'; e.currentTarget.style.color=C.dim; }}
+        onMouseEnter={e => e.currentTarget.style.color=C.text}
+        onMouseLeave={e => e.currentTarget.style.color=C.muted}
       >{PackageIcon}</button>
-
-      {/* Divider */}
-      <div style={{width:1, height:16, background:C.border2, flexShrink:0, marginRight:6}}/>
 
       {/* Scrollable chips */}
       <div
@@ -5224,7 +5221,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
           flex:1, minWidth:0,
         }}
       >
-        {/* Health — always first */}
+        {/* Health — pinned, always first */}
         <button
           onClick={() => onSelectProject('__health__')}
           style={{
@@ -5238,6 +5235,9 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
           onMouseEnter={e => { e.currentTarget.style.background=C.green+'22'; e.currentTarget.style.color=C.green; }}
           onMouseLeave={e => { e.currentTarget.style.background=C.green+'11'; e.currentTarget.style.color=C.green+'aa'; }}
         >HEALTH</button>
+
+        {/* Divider between pinned and recent */}
+        {names.length > 0 && <div style={{width:1, height:14, background:C.border2, flexShrink:0, margin:'0 2px'}}/>}
 
         {/* Recent project chips */}
         {names.map(name => {
