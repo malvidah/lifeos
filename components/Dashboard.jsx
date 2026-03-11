@@ -6586,6 +6586,7 @@ export default function Dashboard() {
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           overflowY:activeProject?"hidden":mobile?"auto":"auto",
           padding:activeProject?0:mobile?"6px 8px":10,
+          paddingTop:activeProject?0:52,
           paddingBottom:activeProject?0:mobile?200:0, display:"flex", flexDirection:"column", gap:activeProject?0:mobile?10:8}}>
 
           {/* Calendar + Health + Search — hidden in project view */}
@@ -6593,7 +6594,7 @@ export default function Dashboard() {
             return (
               <>
                 {/* ── Projects strip ↔ Search pill (crossfade) ── */}
-                <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible', zIndex: 60 }}>
+                <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible' }}>
                   {/* Projects bar — fades out when search open */}
                   <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
