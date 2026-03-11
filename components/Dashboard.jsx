@@ -2282,13 +2282,13 @@ function CalStrip({selected, onSelect, events, setEvents, healthDots, token, col
               {!collapsed && <>
               <button onClick={()=>onCalViewChange('month')}
                 style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
-                  padding:'6px 12px',borderRadius:6,cursor:'pointer',
-                  minHeight:34,minWidth:34,
+                  padding:'3px 8px',borderRadius:4,cursor:'pointer',
+                  minHeight:22,minWidth:22,
                   background:C.accent+'22',border:`1px solid ${C.accent}`,color:C.accent}}>M</button>
               <button onClick={()=>onCalViewChange('day')}
                 style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
-                  padding:'6px 12px',borderRadius:6,cursor:'pointer',
-                  minHeight:34,minWidth:34,
+                  padding:'3px 8px',borderRadius:4,cursor:'pointer',
+                  minHeight:22,minWidth:22,
                   background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>D</button>
               </>}
             </div>
@@ -5657,19 +5657,21 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   // Add a brand-new task to today's date with the project tag appended
   async function addNewTask(text) {
     if (!text.trim() || project === '__everything__') return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = todayKey(); // local date — avoids UTC midnight mismatch with day view
     const taskText = text.trim().endsWith(`#${project}`)
       ? text.trim()
       : `${text.trim()} #${project}`;
     const current = await dbLoad(today, 'tasks', token);
     const existing = Array.isArray(current) ? current : [];
-    const newTask = { id: Date.now(), text: taskText, done: false };
+    const newTask = { id: crypto.randomUUID(), text: taskText, done: false };
     const updated = [...existing, newTask];
     await dbSave(today, 'tasks', updated, token);
-    MEM[`${userId}:${today}:tasks`] = updated;
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+    const cacheKey = `${userId}:${today}:tasks`;
+    MEM[cacheKey] = updated;
+    // Notify day-view Tasks hook directly so it shows without re-fetching
+    window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: updated } }));
     registerNewTags(taskText);
-    // Append to local entries so it appears immediately
+    // Append to local project-view entries so it appears immediately here too
     setEntries(prev => prev ? {
       ...prev,
       taskEntries: [...(prev.taskEntries || []), { date: today, id: newTask.id, text: taskText, done: false }],
