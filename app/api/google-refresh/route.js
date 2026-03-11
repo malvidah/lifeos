@@ -1,18 +1,6 @@
 // Exchanges a Google refresh token for a new access token
 import { createClient } from '@supabase/supabase-js';
-
-function getUserClient(req) {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '').trim();
-  if (!token) return { supabase: null };
-  return {
-    supabase: createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    )
-  };
-}
+import { getUserClient } from '../_lib/google.js';
 
 export async function POST(req) {
   const { supabase } = getUserClient(req);

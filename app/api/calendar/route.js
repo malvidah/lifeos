@@ -1,20 +1,7 @@
 // Fetches Google Calendar events server-side.
 // Reads Google token from DB, auto-refreshes if expired, no client token needed.
 
-import { createClient } from '@supabase/supabase-js';
-
-function getUserClient(req) {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '').trim();
-  if (!token) return { supabase: null };
-  return {
-    supabase: createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    )
-  };
-}
+import { getUserClient, refreshGoogleToken, saveGoogleToken, buildGCalEventBody } from '../_lib/google.js';
 
 function fmtTime(dateTime, tz) {
   if (!dateTime) return "all day";
@@ -44,22 +31,6 @@ function zoomUrl(event) {
   const desc = event.description || "";
   const match = (loc + " " + desc).match(/https?:\/\/([\w.-]*zoom\.us|meet\.google\.com)\/\S+/);
   return match ? match[0].split('"')[0].split("'")[0] : null;
-}
-
-async function refreshGoogleToken(refreshToken) {
-  const r = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-  const data = await r.json();
-  if (!r.ok || !data.access_token) return null;
-  return data.access_token;
 }
 
 async function fetchGCalEvents(accessToken, start, end) {
@@ -105,10 +76,7 @@ export async function POST(request) {
       const newToken = await refreshGoogleToken(refreshToken);
       if (newToken) {
         // Save refreshed token to DB
-        await supabase.from('entries').upsert(
-          { date: '0000-00-00', type: 'google_token', data: { token: newToken, refreshToken }, user_id: user.id, updated_at: new Date().toISOString() },
-          { onConflict: 'date,type,user_id' }
-        );
+        await saveGoogleToken(supabase, user.id, newToken, refreshToken);
         accessToken = newToken;
         result = await fetchGCalEvents(newToken, start, end);
       }

@@ -45,8 +45,7 @@ export async function POST(request) {
   const notesByDate = {};
   for (const r of rows) {
     if (!notesByDate[r.date]) notesByDate[r.date] = [];
-    const text = r.data?.rows?.map(row => row.text || '').filter(Boolean).join(' ') ||
-                 r.data?.content || r.data?.text || '';
+    const text = typeof r.data === 'string' ? r.data : (r.data?.text || '');
     if (text.trim()) notesByDate[r.date].push(text.trim());
   }
 

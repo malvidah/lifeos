@@ -11,7 +11,7 @@ import { useEffect, useRef } from 'react';
 // ── Constants (kept in sync with Dashboard.jsx) ───────────────────────────────
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
-export const F = { lg: 18, md: 15, sm: 12 };
+const F = { lg: 18, md: 15, sm: 12 };
 
 const PROJECT_PALETTE = [
   '#C17B4A', '#7A9E6E', '#6B8EB8', '#A07AB0',

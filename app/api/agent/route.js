@@ -1,25 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
+import { refreshGoogleToken, saveGoogleToken } from '../_lib/google.js';
 import { rateLimit } from '../_lib/rateLimit.js';
 
 const SERVICE = () => createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
-
-async function refreshGoogleToken(refreshToken) {
-  const r = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-  const d = await r.json();
-  return (!r.ok || !d.access_token) ? null : d.access_token;
-}
 
 export async function POST(request) {
   try {
@@ -84,7 +70,7 @@ export async function POST(request) {
 
         if (payload.add) {
           const items = Array.isArray(payload.add) ? payload.add : [payload.add];
-          const newRows = items.map(t => ({ id: Date.now() + Math.random(), text: t, done: false }));
+          const newRows = items.map(t => ({ id: crypto.randomUUID(), text: t, done: false }));
           await svc.from('entries').upsert(
             { date: targetDate, type: 'tasks', data: [...cleaned, ...newRows], user_id: userId, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }
@@ -140,7 +126,7 @@ export async function POST(request) {
         const current = Array.isArray(existing?.data) ? existing.data : [];
         if (payload.add) {
           const items = Array.isArray(payload.add) ? payload.add : [payload.add];
-          const newRows = items.map(t => ({ id: Date.now() + Math.random(), text: t, kcal: null }));
+          const newRows = items.map(t => ({ id: crypto.randomUUID(), text: t, kcal: null }));
           await svc.from('entries').upsert(
             { date: targetDate, type, data: [...current.filter(r => r.text?.trim()), ...newRows], user_id: userId, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }

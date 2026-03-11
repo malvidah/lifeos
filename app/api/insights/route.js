@@ -137,23 +137,34 @@ export async function POST(request) {
         today.health = { sleepScore: +sleep || '', readinessScore: +readiness || '' };
     }
 
+    // Fetch last 7 days in parallel — one query is cleaner but
+    // the existing per-date structure is kept to avoid changing downstream logic.
+    const recentDates = Array.from({ length: 7 }, (_, i) => dateOffset(date, -(i + 1)));
+    const recentResults = await Promise.all(
+      recentDates.map(d =>
+        supabase.from('entries').select('type, data').eq('date', d).eq('user_id', user.id)
+      )
+    );
     const recentDays = [];
-    for (let i = 1; i <= 7; i++) {
-      const d = dateOffset(date, -i);
-      const { data: rows } = await supabase.from('entries')
-        .select('type, data').eq('date', d).eq('user_id', user.id);
+    for (let i = 0; i < recentDates.length; i++) {
+      const { data: rows } = recentResults[i];
       if (!rows?.length) continue;
-      const day = { date: d };
+      const day = { date: recentDates[i] };
       for (const row of rows) day[row.type] = row.data;
       recentDays.push(day);
     }
 
+    const lastYearDates = [dateOffset(date, -366), dateOffset(date, -365), dateOffset(date, -364)];
+    const lastYearResults = await Promise.all(
+      lastYearDates.map(d =>
+        supabase.from('entries').select('type, data').eq('date', d).eq('user_id', user.id)
+      )
+    );
     const lastYearDays = [];
-    for (const d of [dateOffset(date, -366), dateOffset(date, -365), dateOffset(date, -364)]) {
-      const { data: rows } = await supabase.from('entries')
-        .select('type, data').eq('date', d).eq('user_id', user.id);
+    for (let i = 0; i < lastYearDates.length; i++) {
+      const { data: rows } = lastYearResults[i];
       if (!rows?.length) continue;
-      const day = { date: d };
+      const day = { date: lastYearDates[i] };
       for (const row of rows) day[row.type] = row.data;
       lastYearDays.push(day);
     }

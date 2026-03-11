@@ -33,15 +33,21 @@ const THEMES = {
   },
 };
 // C is set at render time via setTheme — default dark
+// NOTE: C is intentionally a mutable module-level variable that is reassigned
+// synchronously at the top of every render in Dashboard() via `C = THEMES[theme]`.
+// This works because Dashboard is a single-instance client component (no SSR,
+// no concurrent rendering). If this ever moves to SSR or concurrent mode, refactor
+// to React context or pass C as a prop through the component tree.
 let C = THEMES.dark;
 const serif   = "Georgia, 'Times New Roman', serif";
 const mono    = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 const blurweb = "'BlurWeb', sans-serif";
-if (typeof document !== "undefined" && !document.getElementById("blurweb-face")) {
-  const _s = document.createElement("style");
-  _s.id = "blurweb-face";
-  _s.textContent = "@font-face { font-family: 'BlurWeb'; src: url('/fonts/BlurWeb-Medium.ttf') format('truetype'); font-weight: normal; font-style: normal; font-display: swap; }";
-  document.head.appendChild(_s);
+function injectBlurWebFont() {
+  if (typeof document === "undefined" || document.getElementById("blurweb-face")) return;
+  const s = document.createElement("style");
+  s.id = "blurweb-face";
+  s.textContent = "@font-face { font-family: 'BlurWeb'; src: url('/fonts/BlurWeb-Medium.ttf') format('truetype'); font-weight: normal; font-style: normal; font-display: swap; }";
+  document.head.appendChild(s);
 }
 const F     = { lg:18, md:15, sm:12 }; // 3 sizes only
 
@@ -5918,7 +5924,6 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                       onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
                       onSave={async (text) => { await saveJournalEdit(date, entry.lineIndex, text); setEditingEntry(null); }}
                       dimTag={project === '__everything__' ? null : project}
-                      theme={theme}
                     />
                   ))}
                 </div>
@@ -6005,6 +6010,8 @@ export default function Dashboard() {
     document.body.style.background = C.bg;
     document.documentElement.style.colorScheme = theme === "light" ? "light" : "dark";
   },[theme]);
+
+  useEffect(injectBlurWebFont, []);
 
   useEffect(()=>{
     const supabase=createClient();

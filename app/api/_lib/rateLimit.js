@@ -1,6 +1,8 @@
-// Simple in-memory rate limiter. Resets on cold start, good enough for
-// serverless where each instance handles one request at a time.
-// For high traffic, swap this map for a Redis/Upstash store.
+// Simple in-memory rate limiter.
+// ⚠️  IMPORTANT: On Vercel, each serverless function is isolated — a user hitting
+// different routes simultaneously bypasses the per-route limit, and cold starts
+// reset all counts. This is acceptable for low-traffic personal use.
+// For production multi-user enforcement, swap the Map for Redis/Upstash Edge Store.
 
 const counts = new Map(); // key -> { count, resetAt }
 

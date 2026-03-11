@@ -1,34 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
+import { getUserClient, refreshGoogleToken } from '../_lib/google.js';
 import { isPremium } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
-
-function getUserClient(req) {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '').trim();
-  if (!token) return { supabase: null };
-  return {
-    supabase: createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    )
-  };
-}
-
-async function refreshGoogleToken(refreshToken) {
-  const r = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-  const data = await r.json();
-  return (!r.ok || !data.access_token) ? null : data.access_token;
-}
 
 export async function POST(request) {
   try {
@@ -171,7 +144,7 @@ ${contextSnippet}`;
 
         if (action.entries?.length) {
           const cleaned = current.filter(r => r.text?.trim());
-          const newRows = action.entries.map(text => ({ id: Date.now() + Math.random(), text, kcal: null, protein: null }));
+          const newRows = action.entries.map(text => ({ id: crypto.randomUUID(), text, kcal: null, protein: null }));
           await supabase.from('entries').upsert(
             { date, type: 'meals', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }
@@ -208,7 +181,7 @@ ${contextSnippet}`;
 
         if (action.entries?.length) {
           const cleaned = current.filter(r => r.text?.trim());
-          const newRows = action.entries.map(e => ({ id: Date.now() + Math.random(), text: typeof e === 'string' ? e : e.text, done: false }));
+          const newRows = action.entries.map(e => ({ id: crypto.randomUUID(), text: typeof e === 'string' ? e : e.text, done: false }));
           await supabase.from('entries').upsert(
             { date, type: 'tasks', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }
@@ -245,7 +218,7 @@ ${contextSnippet}`;
 
         if (action.entries?.length) {
           const cleaned = current.filter(r => r.text?.trim());
-          const newRows = action.entries.map(text => ({ id: Date.now() + Math.random(), text, kcal: null }));
+          const newRows = action.entries.map(text => ({ id: crypto.randomUUID(), text, kcal: null }));
           await supabase.from('entries').upsert(
             { date, type: 'activity', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }

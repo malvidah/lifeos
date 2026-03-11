@@ -84,8 +84,6 @@ export async function GET(request) {
       { headers: { Authorization: `Bearer ${tokens.access_token}` } }
     );
     const activities = await r.json();
-    console.log('[strava] date:', date, 'window:', new Date(dayStart*1000).toISOString(), '->', new Date(dayEnd*1000).toISOString());
-    console.log('[strava] raw activities:', JSON.stringify(activities?.map?.(a => ({ id: a.id, name: a.name, start_date: a.start_date, start_date_local: a.start_date_local })) ?? activities));
     if (!Array.isArray(activities)) return Response.json({ error: activities.message || 'strava_error', raw: activities }, { status: 500 });
 
     const result = activities.map(a => ({
@@ -109,7 +107,7 @@ export async function GET(request) {
       if (!a.startTime) return true; // keep if no time info
       return a.startTime.slice(0, 10) === date;
     });
-    return Response.json({ activities: filtered, _debug: { window: [new Date(dayStart*1000).toISOString(), new Date(dayEnd*1000).toISOString()], total: result.length, filtered: filtered.length, allDates: result.map(a => a.startTime) } });
+    return Response.json({ activities: filtered });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
   }

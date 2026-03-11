@@ -1,16 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
+import { getUserClient } from '../_lib/google.js';
 
-function getUserClient(req) {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '').trim();
-  if (!token) return { supabase: null };
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { global: { headers: { Authorization: `Bearer ${token}` } } }
-  );
-  return { supabase };
-}
 
 // Score a tag key: prefer more interior uppercase letters (better camelCase)
 // e.g. 'DayLab' scores higher than 'DayLAb' or 'daylab'
