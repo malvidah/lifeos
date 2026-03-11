@@ -1161,7 +1161,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,stravaConnected,onStravaChange}) {
+function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,onGoHome,stravaConnected,onStravaChange}) {
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
   const [isToday, setIsToday] = useState(false);
@@ -1186,23 +1186,28 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
     }}>
       {/* Pull-down overscroll patch */}
       <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.bg,zIndex:99}}/>
-      {/* DAY LAB wordmark — full-width centered */}
+      {/* DAY LAB wordmark — full-width centered, click = go home */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",
         display: "flex", alignItems: "center", justifyContent: "center",
         paddingBottom: 6,
         WebkitAppRegion: "drag",
       }}>
-        <span style={{
-          fontFamily: blurweb,
-          fontSize: 22,
-          letterSpacing: "normal",
-          textTransform: "uppercase",
-          color: theme === "light" ? "#6B5440" : "#EFDFC3",
-          userSelect: "none",
-          lineHeight: 1,
-          pointerEvents: "none",
-        }}>DAY LAB</span>
+        <button onClick={onGoHome} style={{
+          background: "none", border: "none", padding: 0, cursor: "pointer",
+          WebkitAppRegion: "no-drag",
+        }}>
+          <span style={{
+            fontFamily: blurweb,
+            fontSize: 22,
+            letterSpacing: "normal",
+            textTransform: "uppercase",
+            color: theme === "light" ? "#6B5440" : "#EFDFC3",
+            userSelect: "none",
+            lineHeight: 1,
+            display: "block",
+          }}>DAY LAB</span>
+        </button>
       </div>
 
       {/* User menu — overlaid far right, same vertical band */}
@@ -6672,7 +6677,7 @@ export default function Dashboard() {
         @keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
-      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* Vignette — covers TopBar bottom + strip/header area, fades into content */}
       <div style={{
@@ -6790,11 +6795,11 @@ export default function Dashboard() {
           {!activeProject && (
             <div style={{
               flex:1, minHeight:0, overflowY:"auto",
-              padding:mobile?"6px 8px":10, paddingTop:48,
+              padding:mobile?"6px 8px":10, paddingTop:0,
               paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:mobile?10:8}}>
               {/* Top vignette — at top of scroll content */}
-              <div style={{position:"sticky",top:0,height:48,marginBottom:-48,
+              <div style={{position:"sticky",top:0,height:48,flexShrink:0,
                 pointerEvents:"none",zIndex:10,
                 background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
                               {/* Cal + Health — hidden during search */}
@@ -6911,7 +6916,7 @@ export default function Dashboard() {
                   {/* Scrollable content */}
                   <div style={{flex:1,minHeight:0,overflow:'auto'}}>
                     {/* Top vignette — matches daily view */}
-                    <div style={{position:'sticky',top:0,height:48,marginBottom:-48,
+                    <div style={{position:'sticky',top:0,height:48,flexShrink:0,
                       pointerEvents:'none',zIndex:10,
                       background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
                     {isGraph ? (
