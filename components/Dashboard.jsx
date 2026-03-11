@@ -4849,7 +4849,7 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 
 
 // ─── ProjectGraphView ─────────────────────────────────────────────────────────
-function ProjectGraphView({ allTags, connections, onSelectProject, onBack }) {
+function ProjectGraphView({ allTags, connections, onSelectProject, token, userId, taskFilter, setTaskFilter }) {
   // Nodes and edges built once from props
   const graphRef = useRef(null); // {nodes, edges}
   const [ready, setReady] = useState(false);
@@ -4988,36 +4988,22 @@ function ProjectGraphView({ allTags, connections, onSelectProject, onBack }) {
   const { nodes, edges } = graphRef.current || { nodes: [], edges: [] };
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', height:'100%', background:C.bg, overflow:'auto' }}>
-      {/* Quick-access cards at top */}
-      <div style={{ flexShrink:0, display:'flex', gap:8, padding:'10px 14px 0' }}>
-        <button onClick={() => onSelectProject('__everything__')}
-          style={{ flex:1, background:C.accent+'0e', border:`1px solid ${C.accent}22`, borderRadius:10, padding:'10px 14px',
-            cursor:'pointer', textAlign:'left', transition:'background 0.15s' }}
-          onMouseEnter={e => e.currentTarget.style.background=C.accent+'1a'}
-          onMouseLeave={e => e.currentTarget.style.background=C.accent+'0e'}>
-          <div style={{ fontFamily:mono, fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:C.accent+'99', marginBottom:3 }}>All Journals</div>
-          <div style={{ fontFamily:serif, fontSize:F.md, color:C.text }}>Every entry, all projects</div>
-        </button>
-        <button onClick={() => onSelectProject('__everything__')}
-          style={{ flex:1, background:C.blue+'0e', border:`1px solid ${C.blue}22`, borderRadius:10, padding:'10px 14px',
-            cursor:'pointer', textAlign:'left', transition:'background 0.15s' }}
-          onMouseEnter={e => e.currentTarget.style.background=C.blue+'1a'}
-          onMouseLeave={e => e.currentTarget.style.background=C.blue+'0e'}>
-          <div style={{ fontFamily:mono, fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:C.blue+'99', marginBottom:3 }}>All Tasks</div>
-          <div style={{ fontFamily:serif, fontSize:F.md, color:C.text }}>Open tasks across projects</div>
-        </button>
-      </div>
+    <div style={{ display:'flex', flexDirection:'column', background:C.bg }}>
+      {/* ── Graph card ── */}
+      <div style={{ margin:'52px 10px 0', background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, overflow:'hidden' }}>
+        {/* Card header */}
+        <div style={{ display:'flex', alignItems:'center', gap:6, padding:'10px 14px 8px', borderBottom:`1px solid ${C.border}` }}>
+          <span style={{ fontFamily:mono, fontSize:10, letterSpacing:'0.08em', textTransform:'uppercase', color:C.muted }}>
+            Project Graph
+          </span>
+          <span style={{ fontFamily:mono, fontSize:9, color:C.dim, marginLeft:4 }}>
+            {(allTags||[]).length + 1} projects · scroll to zoom · drag to pan
+          </span>
+        </div>
 
-      {/* Graph hint */}
-      <div style={{ flexShrink:0, display:'flex', alignItems:'center', gap:6, padding:'10px 14px 6px' }}>
-        <span style={{ fontFamily:mono, fontSize:10, color:C.dim }}>{(allTags||[]).length + 1} projects · scroll to zoom · drag to pan</span>
-      </div>
-
-      {/* Graph canvas */}
-      {/* Canvas */}
-      <div ref={containerRef}
-        style={{ height:480, flexShrink:0, position:'relative', overflow:'hidden', cursor:'grab' }}
+        {/* Canvas */}
+        <div ref={containerRef}
+          style={{ height:400, position:'relative', overflow:'hidden', cursor:'grab' }}
         onWheel={handleWheel}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
@@ -5099,6 +5085,19 @@ function ProjectGraphView({ allTags, connections, onSelectProject, onBack }) {
           ))}
         </div>
       </div>
+      </div>{/* end graph card */}
+
+      {/* ── All entries + tasks — inline below graph card ── */}
+      <ProjectView
+        project="__everything__"
+        token={token}
+        userId={userId}
+        onBack={() => {}}
+        onSelectDate={() => {}}
+        taskFilter={taskFilter}
+        setTaskFilter={setTaskFilter}
+        topPad={10}
+      />
     </div>
   );
 }
@@ -5833,7 +5832,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   );
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingTop:6, paddingBottom:200,
+    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingTop:52, paddingBottom:200,
       maxWidth:1200, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
       {/* Health strip — collapsible */}
       <HealthStrip
@@ -5897,7 +5896,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
 }
 
 // ─── ProjectView ──────────────────────────────────────────────────────────────
-function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter }) {
+function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter, topPad=52 }) {
   const { value: projectsMeta, setValue: setProjectsMeta } =
     useDbSave('global', 'projects', {}, token, userId);
 
@@ -6084,7 +6083,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const _pcol = project === '__everything__' ? C.accent : projectColor(project);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingTop: 6, paddingBottom: 200 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingTop: topPad, paddingBottom: 200 }}>
 
       {/* Description — bare on background, no card chrome */}
       {project === '__everything__' ? null : (
@@ -6802,23 +6801,25 @@ export default function Dashboard() {
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
                     </button>
                     <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',color:pcol}}>
-                      {isGraph ? 'ALL' : isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
+                      {isGraph ? 'ALL PROJECTS' : isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
                     </span>
                   </div>
                   {/* Scrollable content */}
                   <div style={{flex:1,minHeight:0,overflow:'auto'}}>
                     {/* Top vignette — matches daily view */}
-                    {!isGraph && <div style={{position:'sticky',top:0,height:48,marginBottom:-48,
+                    <div style={{position:'sticky',top:0,height:48,marginBottom:-48,
                       pointerEvents:'none',zIndex:10,
-                      background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>}
+                      background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
                     {isGraph ? (
                       graphData ? (
                         <ProjectGraphView
                           allTags={graphData.allTags}
                           connections={graphData.connections}
-                          recency={graphData.recency}
                           onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
-                          onBack={() => setActiveProject(null)}
+                          token={token}
+                          userId={userId}
+                          taskFilter={taskFilter}
+                          setTaskFilter={setTaskFilter}
                         />
                       ) : (
                         <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',
