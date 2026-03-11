@@ -5126,7 +5126,6 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
         onSelectDate={() => {}}
         taskFilter={taskFilter}
         setTaskFilter={setTaskFilter}
-        topPad={10}
       />
     </div>
   );
@@ -5862,7 +5861,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   );
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingTop:52, paddingBottom:200,
+    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingBottom:200,
       maxWidth:1200, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
       {/* Health strip — collapsible */}
       <HealthStrip
@@ -5926,7 +5925,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
 }
 
 // ─── ProjectView ──────────────────────────────────────────────────────────────
-function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter, topPad=52 }) {
+function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter }) {
   const { value: projectsMeta, setValue: setProjectsMeta } =
     useDbSave('global', 'projects', {}, token, userId);
 
@@ -6113,7 +6112,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const _pcol = project === '__everything__' ? C.accent : projectColor(project);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingTop: topPad, paddingBottom: 200 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingBottom: 200 }}>
 
       {/* Description — bare on background, no card chrome */}
       {project === '__everything__' ? null : (
