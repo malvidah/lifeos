@@ -6340,9 +6340,6 @@ export default function Dashboard() {
         ::-webkit-scrollbar{display:none;}
         *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
-        input,textarea{cursor:text !important;}
-        .dl-editor,.dl-editor *{cursor:text !important;}
-        .dl-editor a,.dl-editor a *{cursor:pointer !important;}
         input::placeholder,textarea::placeholder{color:${C.dim};opacity:1;}
         [contenteditable][data-placeholder]:empty::before{content:attr(data-placeholder);color:${C.dim};pointer-events:none;}
         .oura-token-input::placeholder{color:${C.dim};opacity:1;}
@@ -6365,7 +6362,7 @@ export default function Dashboard() {
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:0, WebkitAppRegion:"no-drag"}}>
+        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:0}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           overflowY:activeProject?"hidden":mobile?"auto":"auto",
