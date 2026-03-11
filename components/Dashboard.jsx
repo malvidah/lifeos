@@ -5935,11 +5935,13 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const setPvTaskFilter = setTaskFilter;
   const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}
   const [editingTask, setEditingTask]   = useState(null); // {date,id,text}
-  const [editingDesc, setEditingDesc]   = useState(false);
-  const [descVal, setDescVal]           = useState('');
-  const descRef = useRef(null);
+
+  // Project notes — stored as type:'project-notes', keyed by project name (safe from daily journal type:'notes')
+  const { value: projectNotes, setValue: setProjectNotes } =
+    useDbSave(project || '__none__', 'project-notes', '', token, userId);
 
   // Per-project collapse state (persisted)
+  const [notesCollapsed,   toggleNotes]   = useCollapse(`pv:${project}:notes`,   false);
   const [tasksCollapsed,   toggleTasks]   = useCollapse(`pv:${project}:tasks`,   false);
   const [entriesCollapsed, toggleEntries] = useCollapse(`pv:${project}:entries`, false);
 
@@ -6114,87 +6116,23 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingBottom: 200 }}>
 
-      {/* Description — bare on background, no card chrome */}
-      {project === '__everything__' ? null : (
-        <div style={{ padding: '0 4px' }}>
-          {editingDesc ? (
-            <textarea
-              ref={descRef}
-              value={descVal}
-              onChange={e => { setDescVal(e.target.value); e.target.style.height='auto'; e.target.style.height=e.target.scrollHeight+'px'; }}
-              onBlur={() => {
-                setEditingDesc(false);
-                const updated = { ...(projectsMeta || {}), [project]: { ...meta, description: descVal } };
-                setProjectsMeta(updated, { skipHistory: true });
-              }}
-              onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
-              onPaste={async e => {
-                const items = e.clipboardData?.items;
-                if (!items) return;
-                for (const item of items) {
-                  if (item.type.startsWith('image/')) {
-                    e.preventDefault();
-                    const file = item.getAsFile();
-                    if (!file) continue;
-                    const url = await uploadImageFile(file, token);
-                    if (!url) continue;
-                    const ta = descRef.current;
-                    const pos = ta.selectionStart;
-                    const marker = `\n[img:${url}]\n`;
-                    const next = descVal.slice(0, pos) + marker + descVal.slice(pos);
-                    setDescVal(next);
-                    requestAnimationFrame(() => { ta.style.height='auto'; ta.style.height=ta.scrollHeight+'px'; });
-                    break;
-                  }
-                }
-              }}
-              onDrop={async e => {
-                const files = Array.from(e.dataTransfer?.files||[]).filter(f=>f.type.startsWith('image/'));
-                if (!files.length) return;
-                e.preventDefault();
-                const url = await uploadImageFile(files[0], token);
-                if (!url) return;
-                const marker = `\n[img:${url}]\n`;
-                setDescVal(v => v + marker);
-                setTimeout(() => { const ta=descRef.current; if(ta){ta.style.height='auto';ta.style.height=ta.scrollHeight+'px';} }, 50);
-              }}
-              onDragOver={e => e.preventDefault()}
-              style={{
-                width: '100%', border: 'none', outline: 'none', background: 'transparent',
-                color: C.text, fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-                resize: 'none', minHeight: 40, padding: 0, caretColor: C.accent,
-              }}
-            />
-          ) : (
-            <div
-              style={{
-                cursor: 'text', fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-                color: meta.description ? C.text : C.dim,
-                whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              }}
-              onClick={() => {
-                setDescVal(meta.description || '');
-                setEditingDesc(true);
-                setTimeout(() => {
-                  if (descRef.current) {
-                    descRef.current.focus();
-                    descRef.current.style.height = 'auto';
-                    descRef.current.style.height = descRef.current.scrollHeight + 'px';
-                  }
-                }, 10);
-              }}
-            >
-              {meta.description
-                ? meta.description.split('\n').map((line, i) => {
-                    const imgM = line.match(/^\[img:([^\]]+)\]$/);
-                    if (imgM) return <div key={i} style={{margin:'4px 0',lineHeight:0}}><img src={imgM[1]} alt="" style={{maxWidth:'100%',maxHeight:320,borderRadius:8,display:'block'}}/></div>;
-                    return <div key={i} style={{lineHeight:'1.7'}}>{renderRichLine(line)}</div>;
-                  })
-                : 'Add a project description…'
-              }
-            </div>
-          )}
-        </div>
+      {/* Notes card — project overview/description/notes, stored as type:'project-notes' */}
+      {project !== '__everything__' && (
+        <Widget
+          label="Notes"
+          color={C.muted}
+          autoHeight
+          collapsed={notesCollapsed}
+          onToggle={toggleNotes}
+        >
+          <DayLabEditor
+            key={project}
+            value={projectNotes || ''}
+            onChange={val => setProjectNotes(val, { skipHistory: true })}
+            placeholder="Add project notes, description, or overview…"
+            token={token}
+          />
+        </Widget>
       )}
 
       {/* Tasks — grouped by date with separators */}
