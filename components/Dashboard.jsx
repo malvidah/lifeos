@@ -6572,11 +6572,11 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
-      {/* Vignette — covers TopBar zone, fades into content below */}
+      {/* Vignette — short soft fade just below the TopBar */}
       <div style={{
-        position:"fixed", top:0, left:0, right:0,
-        height:"calc(env(safe-area-inset-top, 0px) + 120px)", pointerEvents:"none", zIndex:50,
-        background:`linear-gradient(to bottom, ${C.bg} 0%, ${C.bg} calc(env(safe-area-inset-top, 0px) + 68px), transparent 100%)`,
+        position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 68px)", left:0, right:0,
+        height:48, pointerEvents:"none", zIndex:50,
+        background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`,
       }}/>
 
 
