@@ -50,9 +50,6 @@
                         ]
                     }
                 ]
-            },
-            "notarize": {
-                "teamId": "AZ65YJVYKM"
             }
         },
         "dmg": {
@@ -91,6 +88,7 @@
                 "repo": "lifeos",
                 "releaseType": "release"
             }
-        ]
+        ],
+        "afterSign": "notarize.js"
     }
 }
