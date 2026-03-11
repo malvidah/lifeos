@@ -6714,11 +6714,11 @@ export default function Dashboard() {
 
       <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
-      {/* Vignette — fixed, bleeds 20px into TopBar bottom edge, fades content below */}
+      {/* Vignette — fixed, same on every page */}
       <div style={{
         position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 38px)", left:0, right:0,
-        height: activeProject ? 68 : 132, pointerEvents:"none", zIndex:48,
-        background:`linear-gradient(to bottom, ${C.bg} 0%, ${C.bg} ${activeProject ? "15%" : "45%"}, transparent 100%)`,
+        height:80, pointerEvents:"none", zIndex:48,
+        background:`linear-gradient(to bottom, ${C.bg} 0%, ${C.bg} 30%, transparent 100%)`,
       }}/>
 
 
