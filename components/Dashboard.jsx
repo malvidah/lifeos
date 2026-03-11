@@ -3014,202 +3014,55 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
 // Cmd+B / Cmd+I wrap selected text in ** / *.
 function Notes({date,userId,token}) {
   const {value, setValue, loaded} = useDbSave(date, 'notes', '', token, userId);
-  const ceRef = useRef(null);        // contenteditable div
-  const isComposingRef = useRef(false);
-  const skipSyncRef = useRef(false); // true while user is typing → don't overwrite DOM
+  const [focused, setFocused] = useState(false);
+  const taRef   = useRef(null);
+  const localRef = useRef(''); // tracks textarea value without re-renders
 
-  // ── serialize DOM → plain text ──────────────────────────────────────────
-  function domToText(el) {
-    let out = '';
-    function walk(node) {
-      if (node.nodeType === Node.TEXT_NODE) { out += node.textContent; return; }
-      if (node.nodeName === 'IMG') { out += `[img:${node.dataset.url || node.src}]`; return; }
-      if (node.nodeName === 'BR') { out += '\n'; return; }
-      const isBlock = /^(DIV|P)$/.test(node.nodeName);
-      if (isBlock && out.length > 0 && !out.endsWith('\n')) out += '\n';
-      for (const child of node.childNodes) walk(child);
-      if (isBlock && !out.endsWith('\n')) out += '\n';
-    }
-    for (const child of el.childNodes) walk(child);
-    // trim single trailing newline that contenteditable always appends
-    return out.replace(/\n$/, '');
+  // Sync external value into localRef when it arrives / changes
+  useEffect(() => { localRef.current = value || ''; }, [value]);
+
+  function enterEdit() {
+    setFocused(true);
+    requestAnimationFrame(() => {
+      if (!taRef.current) return;
+      taRef.current.value = localRef.current;
+      autosize(taRef.current);
+      taRef.current.focus();
+    });
   }
 
-  // ── deserialize plain text → innerHTML ──────────────────────────────────
-  function textToHtml(text) {
-    if (!text) return '<div><br></div>';
-    const lines = text.split('\n');
-    return lines.map(line => {
-      if (/^\[img:/.test(line)) {
-        const m = line.match(/^\[img:([^\]]+)\]/);
-        if (m) {
-          const url = m[1].replace(/"/g, '&quot;');
-          return `<div><img src="${url}" data-url="${url}" style="max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:default" contenteditable="false" draggable="false"/></div>`;
-        }
-      }
-      // If line contains [img:...] anywhere, extract and render it (handles partial corruption)
-      const imgAnywhere = line.match(/\[img:(https?:\/\/[^\]]+)\]/);
-      if (imgAnywhere) {
-        const url = imgAnywhere[1].replace(/"/g, '&quot;');
-        return `<div><img src="${url}" data-url="${url}" style="max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:default" contenteditable="false" draggable="false"/></div>`;
-      }
-      // Escape HTML then apply inline formatting spans
-      const escaped = line
-        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      const formatted = applyInlineSpans(escaped);
-      return `<div>${formatted || '<br>'}</div>`;
-    }).join('');
+  function autosize(el) {
+    el.style.height = 'auto';
+    el.style.height = el.scrollHeight + 'px';
   }
 
-  // Apply bold/italic/URL/tag spans to an already-escaped line
-  function applyInlineSpans(escaped) {
-    // Patterns (all on escaped text)
-    return escaped
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
-      .replace(/(?<!\[img:)(https?:\/\/[^\s<>"')\]]+)(?![^\[]*\])/g, '<a href="$1" target="_blank" rel="noreferrer" style="color:#C8820A;text-decoration:none;pointer-events:auto">$1</a>')
-      .replace(/#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g, (m, tag) => {
-        const col = projectColor(tag);
-        return `<span style="color:${col};background:${col}20;border:1px solid ${col}40;border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;line-height:1.6;vertical-align:middle;display:inline-block">${m}</span>`;
-      });
-  }
-
-  // ── sync text state → DOM (only when external value changes) ────────────
-  const lastSyncedText = useRef(null);
-  useEffect(() => {
-    if (!ceRef.current) return;
-    if (skipSyncRef.current) return;
-    const incoming = value || '';
-    if (incoming === lastSyncedText.current) return; // no real change
-    lastSyncedText.current = incoming;
-    ceRef.current.innerHTML = textToHtml(incoming);
-  }, [value, loaded]); // eslint-disable-line
-
-  // ── handle user input ────────────────────────────────────────────────────
-  function handleInput() {
-    if (isComposingRef.current) return;
-    // Only update the ref — no setValue, no React re-render, no cursor jump.
-    // setValue fires on blur so state stays in sync.
-    lastSyncedText.current = domToText(ceRef.current);
-  }
-
-  function handleBlur() {
-    skipSyncRef.current = false;
-    const text = domToText(ceRef.current);
-    lastSyncedText.current = text;
+  function onBlur() {
+    const text = taRef.current?.value ?? '';
+    localRef.current = text;
     setValue(text, {undoLabel: 'Edit notes'});
-    // Full re-render on blur to clean up any malformed spans
-    ceRef.current.innerHTML = textToHtml(text);
+    setFocused(false);
   }
 
-  function handleKeyDown(e) {
-    // Cmd+B / Cmd+I — wrap selection
-    if ((e.metaKey || e.ctrlKey) && e.key === 'b') {
-      e.preventDefault(); document.execCommand('bold'); return;
-    }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
-      e.preventDefault(); document.execCommand('italic'); return;
-    }
-    // Enter — let browser handle natively so multiple blank lines work fine.
-    // On next tick, if the new line inherited a styled span, unwrap it.
-    if (e.key === 'Enter' && !e.shiftKey) {
-      requestAnimationFrame(() => {
-        const s = window.getSelection();
-        if (!s || !s.rangeCount) return;
-        const n = s.getRangeAt(0).startContainer;
-        const p = n.nodeType === Node.TEXT_NODE ? n.parentNode : n;
-        // If caret landed inside a chip/link span, unwrap it
-        if (p && p !== ceRef.current && (p.nodeName === 'SPAN' || p.nodeName === 'A')) {
-          const frag = document.createDocumentFragment();
-          while (p.firstChild) frag.appendChild(p.firstChild);
-          p.parentNode.replaceChild(frag, p);
-        }
-      });
-      // fall through — browser inserts new <div> naturally
+  async function onPaste(e) {
+    for (const item of Array.from(e.clipboardData?.items || [])) {
+      if (!item.type.startsWith('image/')) continue;
+      e.preventDefault();
+      const file = item.getAsFile();
+      if (!file) return;
+      const url = await uploadImageFile(file, token);
+      if (!url || !taRef.current) return;
+      insertAtCursor(taRef.current, `\n[img:${url}]\n`);
+      return;
     }
   }
 
-  async function handlePaste(e) {
-    const items = e.clipboardData?.items;
-    if (!items) return;
-    for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
-        const file = item.getAsFile();
-        if (!file) continue;
-        const url = await uploadImageFile(file, token);
-        if (!url) continue;
-        // Insert image block at current selection
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount) {
-          const range = sel.getRangeAt(0);
-          range.deleteContents();
-          // Build wrapper div with img
-          const wrapper = document.createElement('div');
-          const img = document.createElement('img');
-          img.src = url; img.dataset.url = url;
-          img.style.cssText = 'max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:default';
-          img.contentEditable = 'false'; img.draggable = false;
-          wrapper.appendChild(img);
-          const after = document.createElement('div');
-          after.innerHTML = '<br>';
-          range.insertNode(after);
-          range.insertNode(wrapper);
-          // Move cursor after the inserted content
-          range.setStartAfter(after);
-          range.collapse(true);
-          sel.removeAllRanges(); sel.addRange(range);
-        }
-        handleInput();
-        break;
-      }
-    }
-  }
-
-  async function handleDrop(e) {
-    // Must preventDefault synchronously — before any async — to stop browser default drop
+  async function onDrop(e) {
     e.preventDefault();
     const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
     if (!files.length) return;
     const url = await uploadImageFile(files[0], token);
-    if (!url) return;
-    // Insert at drop position using caretPositionFromPoint / caretRangeFromPoint
-    const el = ceRef.current;
-    let insertRange = null;
-    if (document.caretRangeFromPoint) {
-      insertRange = document.caretRangeFromPoint(e.clientX, e.clientY);
-    } else if (document.caretPositionFromPoint) {
-      const cp = document.caretPositionFromPoint(e.clientX, e.clientY);
-      if (cp) {
-        insertRange = document.createRange();
-        insertRange.setStart(cp.offsetNode, cp.offset);
-        insertRange.collapse(true);
-      }
-    }
-    if (insertRange) {
-      const sel = window.getSelection();
-      sel.removeAllRanges(); sel.addRange(insertRange);
-    }
-    // Now insert at current selection
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount) {
-      const range = sel.getRangeAt(0);
-      range.deleteContents();
-      const wrapper = document.createElement('div');
-      const img = document.createElement('img');
-      img.src = url; img.dataset.url = url;
-      img.style.cssText = 'max-width:100%;max-height:320px;border-radius:8px;display:block;margin:4px 0;cursor:pointer';
-      img.contentEditable = 'false'; img.draggable = false;
-      wrapper.appendChild(img);
-      const after = document.createElement('div');
-      after.innerHTML = '<br>';
-      range.insertNode(after);
-      range.insertNode(wrapper);
-      range.setStartAfter(after);
-      range.collapse(true);
-      sel.removeAllRanges(); sel.addRange(range);
-    }
-    handleInput();
+    if (!url || !taRef.current) return;
+    insertAtCursor(taRef.current, `\n[img:${url}]\n`);
   }
 
   if (!loaded) return (
@@ -3217,43 +3070,62 @@ function Notes({date,userId,token}) {
       <Shimmer width="80%" height={14}/>
       <Shimmer width="60%" height={14}/>
       <Shimmer width="70%" height={14}/>
-      <Shimmer width="40%" height={14}/>
     </div>
   );
 
-  return (
-    <div
-      ref={ceRef}
-      contentEditable
-      suppressContentEditableWarning
-      onInput={handleInput}
-      onBlur={handleBlur}
-      onKeyDown={handleKeyDown}
-      onPaste={handlePaste}
-      onDrop={handleDrop}
-      onDragOver={e => e.preventDefault()}
-      onCompositionStart={() => { isComposingRef.current = true; }}
-      onCompositionEnd={() => { isComposingRef.current = false; handleInput(); }}
-      onClick={e => {
-        // Image selection: click img → orange outline; click elsewhere → deselect
-        const allImgs = ceRef.current?.querySelectorAll('img') || [];
-        if (e.target.tagName === 'IMG') {
-          allImgs.forEach(img => { img.style.outline = img === e.target ? `2px solid ${C.orange}` : 'none'; });
-        } else {
-          allImgs.forEach(img => { img.style.outline = 'none'; });
+  // ── Preview ──────────────────────────────────────────────────────────────
+  if (!focused) {
+    const text = localRef.current || value || '';
+    return (
+      <div
+        onClick={enterEdit}
+        style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',cursor:'text',
+          color:text?C.text:C.dim,minHeight:80,wordBreak:'break-word'}}
+      >
+        {text
+          ? text.split('\n').map((line,i) => (
+              <div key={i} style={{minHeight:'1.7em'}}>
+                {renderRichLine(line) || <br/>}
+              </div>
+            ))
+          : "What's on your mind?"
         }
-      }}
-      data-placeholder="What's on your mind?"
+      </div>
+    );
+  }
+
+  // ── Edit textarea ────────────────────────────────────────────────────────
+  return (
+    <textarea
+      ref={taRef}
+      defaultValue={localRef.current}
+      onBlur={onBlur}
+      onPaste={onPaste}
+      onDrop={onDrop}
+      onDragOver={e => e.preventDefault()}
+      onInput={e => autosize(e.target)}
       style={{
-        fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-        color: C.text, outline: 'none', cursor: 'text',
-        minHeight: 80, width: '100%',
-        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        caretColor: C.accent,
+        width:'100%', minHeight:80, background:'transparent', border:'none',
+        outline:'none', resize:'none', overflow:'hidden',
+        fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
+        color:C.text, caretColor:C.accent,
+        wordBreak:'break-word', padding:0, margin:0,
       }}
     />
   );
 }
+
+// Helper: insert text at textarea cursor position
+function insertAtCursor(ta, text) {
+  const start = ta.selectionStart;
+  const end   = ta.selectionEnd;
+  const val   = ta.value;
+  ta.value = val.slice(0, start) + text + val.slice(end);
+  ta.selectionStart = ta.selectionEnd = start + text.length;
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+}
+
 
 // ─── RowList ─────────────────────────────────────────────────────────────────
 // syncedRows: live from API, may have native kcal (Strava) or need estimation (Oura)
@@ -3928,20 +3800,21 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                       }
                     }}
                     defaultValue={row.text}
-                    onChange={e=>{
-                      const el=e.target; el.style.height='0'; el.style.height=el.scrollHeight+'px';
-                    }}
+                    onInput={e=>{ const el=e.target; el.style.height='0'; el.style.height=el.scrollHeight+'px'; }}
                     onBlur={e=>{
+                      if(skipBlurRef.current){skipBlurRef.current=false;return;}
                       const text=e.target.value;
                       setRows(prev=>(Array.isArray(prev)?prev:[]).map(r=>r.id===row.id?{...r,text}:r));
+                      setTimeout(()=>setFocusedId(prev=>prev===row.id?null:prev),0);
                     }}
                     onKeyDown={e=>{
                       if(e.key==='Enter'){
                         e.preventDefault();
                         skipBlurRef.current=true;
                         const pos=e.target.selectionStart;
-                        const before=row.text.slice(0,pos);
-                        const after=row.text.slice(pos);
+                        const cur=e.target.value;
+                        const before=cur.slice(0,pos);
+                        const after=cur.slice(pos);
                         const newRow={id:Date.now(),text:after,done:false};
                         setRows(prev=>{
                           const ps=Array.isArray(prev)&&prev.length?prev:[mkRow()];
@@ -3953,15 +3826,16 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                       } else if(e.key==='Backspace'){
                         const pos=e.target.selectionStart;
                         const prevRow=safe[idx-1];
+                        const cur=e.target.value;
                         if(pos===0&&e.target.selectionEnd===0&&idx>0){
                           e.preventDefault();
                           skipBlurRef.current=true;
                           setRows(prev=>{
                             const ps=Array.isArray(prev)&&prev.length?prev:[mkRow()];
-                            return ps.filter(r=>r.id!==row.id).map(r=>r.id===prevRow.id?{...r,text:prevRow.text+row.text}:r);
+                            return ps.filter(r=>r.id!==row.id).map(r=>r.id===prevRow.id?{...r,text:prevRow.text+cur}:r);
                           });
                           setFocusedId(prevRow.id);
-                        } else if(row.text===''&&safe.length>1){
+                        } else if(cur===''&&safe.length>1){
                           e.preventDefault();
                           skipBlurRef.current=true;
                           setRows(prev=>(Array.isArray(prev)?prev:[]).filter(r=>r.id!==row.id));
@@ -3970,10 +3844,6 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                       } else if(e.key==='Escape'){
                         e.target.blur();
                       }
-                    }}
-                    onBlur={()=>{
-                      if(skipBlurRef.current){skipBlurRef.current=false;return;}
-                      setTimeout(()=>setFocusedId(prev=>prev===row.id?null:prev),0);
                     }}
                     style={{
                       position:'relative',zIndex:1,
@@ -5756,44 +5626,42 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
 }
 
 // ─── EntryLine — stable-height edit line for ProjectView ─────────────────────
-function EntryLine({ entry, date, editing, editText, onStartEdit, onChangeEdit, onSave, dimTag }) {
+function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   const taRef = useRef(null);
-  // When entering edit mode, focus + auto-size without a height flash
+
   useEffect(() => {
     if (editing && taRef.current) {
       const ta = taRef.current;
       ta.style.height = 'auto';
       ta.style.height = ta.scrollHeight + 'px';
       ta.focus();
-      // Place cursor at end
       ta.selectionStart = ta.selectionEnd = ta.value.length;
     }
   }, [editing]);
 
   const baseStyle = {
     fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-    padding: '2px 0', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+    padding: '2px 0', wordBreak: 'break-word',
   };
 
   if (editing) {
     return (
       <textarea
         ref={taRef}
-        defaultValue={editText}
-        onChange={e => { const t=e.target; t.style.height='auto'; t.style.height=t.scrollHeight+'px'; }}
-        onBlur={e => { onChangeEdit(e.target.value); onSave(); }}
-        onKeyDown={e => { if (e.key==='Escape') e.target.blur(); }}
+        defaultValue={entry.text}
+        onBlur={e => onSave(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Escape') e.target.blur(); }}
+        onInput={e => { const t=e.target; t.style.height='auto'; t.style.height=t.scrollHeight+'px'; }}
         style={{
-          ...baseStyle,
-          width:'100%', border:'none', outline:'none', resize:'none', overflow:'hidden',
-          background:'transparent', color:C.text, caretColor:C.accent,
-          margin:0, display:'block', minHeight:'1.7em',
+          ...baseStyle, width:'100%', border:'none', outline:'none',
+          resize:'none', overflow:'hidden', background:'transparent',
+          color:C.text, caretColor:C.accent, margin:0, display:'block', minHeight:'1.7em',
         }}
       />
     );
   }
   return (
-    <div style={{ ...baseStyle, color:C.text, cursor:'text' }} onClick={onStartEdit}>
+    <div style={{ ...baseStyle, color:C.text, cursor:'text', whiteSpace:'pre-wrap' }} onClick={onStartEdit}>
       {renderRichLine(entry.text, dimTag)}
     </div>
   );
@@ -6201,10 +6069,8 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                       key={`${date}-${entry.lineIndex}`}
                       entry={entry} date={date}
                       editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
-                      editText={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex ? editingEntry.text : ''}
                       onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
-                      onChangeEdit={t => setEditingEntry(prev => ({...prev, text: t}))}
-                      onSave={async () => { await saveJournalEdit(date, entry.lineIndex, editingEntry.text); setEditingEntry(null); }}
+                      onSave={async (text) => { await saveJournalEdit(date, entry.lineIndex, text); setEditingEntry(null); }}
                       dimTag={project === '__everything__' ? null : project}
                     />
                   ))}
