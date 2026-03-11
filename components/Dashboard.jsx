@@ -1102,13 +1102,12 @@ function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,on
   }, [selected]);
   const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   return (
-    <div className="topbar-wrapper" style={{
+    <div style={{
       paddingTop: "calc(env(safe-area-inset-top, 0px) + 28px)",
       paddingLeft: 18, paddingRight: 14,
       paddingBottom: 10,
       flexShrink: 0,
       position: "sticky", top: 0, zIndex: 100,
-      background: C.bg,
       WebkitAppRegion: "drag", userSelect: "none",
     }}>
       {/* Pull-down overscroll patch */}
@@ -6552,13 +6551,11 @@ export default function Dashboard() {
   const [leftWidget,...rightWidgets] = WIDGETS;
 
   return (
-    <div style={{background:C.bg,height:mobile?"auto":"100vh",minHeight:mobile?"100vh":undefined,color:C.text,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+    <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
         html,body{height:100%;overflow:hidden;background:${C.bg} !important;}
-        @media(max-width:768px){html,body{overflow:auto;height:auto;}}
-        @media(max-width:768px){.topbar-wrapper{position:fixed !important;top:0;left:0;right:0;z-index:100;}}
-        @media(max-width:768px){.content-scroll{padding-top:calc(env(safe-area-inset-top, 0px) + 80px) !important;}}
+        @media(max-width:768px){html,body{overflow:hidden;height:100%;}}
         ::-webkit-scrollbar{display:none;}
         *{scrollbar-width:none;-ms-overflow-style:none;}
         button{border-radius:0;}
@@ -6584,7 +6581,7 @@ export default function Dashboard() {
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div className="content-scroll" style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:"calc(env(safe-area-inset-top, 0px) + 68px)"}}>
+        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:"calc(env(safe-area-inset-top, 0px) + 68px)"}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           overflowY:activeProject?"hidden":mobile?"auto":"auto",
