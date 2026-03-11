@@ -41,9 +41,6 @@
             "gatekeeperAssess": false,
             "entitlements": "assets/entitlements.mac.plist",
             "entitlementsInherit": "assets/entitlements.mac.plist",
-            "notarize": {
-                "teamId": "AZ65YJVYKM"
-            },
             "extendInfo": {
                 "CFBundleURLTypes": [
                     {
