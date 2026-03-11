@@ -6332,11 +6332,15 @@ export default function Dashboard() {
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-        html,body{height:100%;overflow:hidden;background:${C.bg} !important;}
+        html,body{height:100%;overflow:hidden;background:${C.bg} !important;cursor:default;}
         @media(max-width:768px){html,body{overflow:hidden;height:100%;}}
         ::-webkit-scrollbar{display:none;}
         *{scrollbar-width:none;-ms-overflow-style:none;}
-        button{border-radius:0;}
+        button{border-radius:0;cursor:pointer;}
+        a{cursor:pointer;}
+        input,textarea{cursor:text;}
+        [contenteditable="true"]{cursor:text;}
+        .dl-editor,.dl-editor .ProseMirror{cursor:text;}
         input::placeholder,textarea::placeholder{color:${C.dim};opacity:1;}
         [contenteditable][data-placeholder]:empty::before{content:attr(data-placeholder);color:${C.dim};pointer-events:none;}
         .oura-token-input::placeholder{color:${C.dim};opacity:1;}
@@ -6359,7 +6363,7 @@ export default function Dashboard() {
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:0}}>
+        <div style={{flex:1, minHeight:0, overflowY:activeProject?"hidden":mobile?"auto":"auto", display:"flex", flexDirection:"column", alignItems:"stretch", paddingTop:0, WebkitAppRegion:"no-drag"}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           overflowY:activeProject?"hidden":mobile?"auto":"auto",
