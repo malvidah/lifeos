@@ -6916,7 +6916,7 @@ export default function Dashboard() {
                   {/* Scrollable content */}
                   <div style={{flex:1,minHeight:0,overflow:'auto'}}>
                     {/* Top vignette — matches daily view */}
-                    <div style={{position:'sticky',top:0,height:48,flexShrink:0,
+                    <div style={{position:'sticky',top:0,height:48,marginBottom:-48,flexShrink:0,
                       pointerEvents:'none',zIndex:10,
                       background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
                     {isGraph ? (
