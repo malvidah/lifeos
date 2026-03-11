@@ -6110,19 +6110,6 @@ export default function Dashboard() {
 
   useEffect(injectBlurWebFont, []);
 
-  // CURSOR DIAGNOSTIC v2 — logs computed cursor of topmost element. Remove when fixed.
-  useEffect(() => {
-    const probe = (e) => {
-      const el = document.elementFromPoint(e.clientX, e.clientY);
-      if (!el) return;
-      const computed = window.getComputedStyle(el).cursor;
-      if (computed !== 'auto') {
-        console.log('[CURSOR]', computed, 'on:', el.tagName, el.className.toString().slice(0,60), el);
-      }
-    };
-    window.addEventListener('mousemove', probe, { passive: true, capture: true });
-    return () => window.removeEventListener('mousemove', probe, { capture: true });
-  }, []);
 
   useEffect(()=>{
     const supabase=createClient();
