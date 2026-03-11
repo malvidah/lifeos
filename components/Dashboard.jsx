@@ -5959,7 +5959,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   );
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingBottom:200,
+    <div style={{ display:'flex', flexDirection:'column', gap:10, paddingBottom:200,
       maxWidth:1200, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
       {/* Health strip — collapsible */}
       <HealthStrip
@@ -6212,7 +6212,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const _pcol = project === '__everything__' ? C.accent : projectColor(project);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 10, paddingBottom: 200 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
 
       {/* Notes card — project overview/description/notes, stored as type:'project-notes' */}
       {project !== '__everything__' && (
@@ -6734,11 +6734,11 @@ export default function Dashboard() {
           {!activeProject && (
             <div style={{
               flex:1, minHeight:0, overflowY:"auto",
-              padding:mobile?"6px 8px":10, paddingTop:0,
+              padding:mobile?"6px 8px":10, paddingTop:10,
               paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:mobile?10:8}}>
               {/* Sticky vignette — content renders behind it via marginBottom:-48 */}
-              <div style={{position:"sticky",top:0,height:48,marginBottom:-48,flexShrink:0,
+              <div style={{position:"sticky",top:0,height:48,marginBottom:-38,flexShrink:0,
                 pointerEvents:"none",zIndex:10,
                 background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
               {/* ── NavBar ── */}
@@ -6850,9 +6850,9 @@ export default function Dashboard() {
               return (
                 <>
                   {/* Scrollable content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto'}}>
+                  <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:10,boxSizing:'border-box'}}>
                     {/* Sticky vignette — content renders behind it via marginBottom:-48 */}
-                    <div style={{position:'sticky',top:0,height:48,marginBottom:-48,flexShrink:0,
+                    <div style={{position:'sticky',top:0,height:48,marginBottom:-38,flexShrink:0,
                       pointerEvents:'none',zIndex:10,
                       background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
                     {/* NavBar — unified, in scroll flow */}
