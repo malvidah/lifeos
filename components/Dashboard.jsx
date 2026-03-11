@@ -4848,6 +4848,218 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 }
 
 
+// ─── ProjectGraphView ─────────────────────────────────────────────────────────
+function ProjectGraphView({ allTags, connections, recency, onSelectProject, onBack }) {
+  const svgRef = useRef(null);
+  const stateRef = useRef(null); // {nodes, edges, transform, drag}
+
+  // Build node + edge lists once
+  const { nodes: initNodes, edges: initEdges } = useMemo(() => {
+    const tagList = ['__health__', ...allTags];
+    const idxOf = Object.fromEntries(tagList.map((t, i) => [t.toLowerCase(), i]));
+    idxOf['__health__'] = 0;
+
+    const W = 800, H = 600;
+    const nodes = tagList.map((name, i) => ({
+      id: name,
+      label: name === '__health__' ? 'HEALTH' : tagDisplayName(name).toUpperCase(),
+      color: name === '__health__' ? C.green : projectColor(name),
+      x: (Math.random() - 0.5) * W * 0.7,
+      y: (Math.random() - 0.5) * H * 0.7,
+      vx: 0, vy: 0,
+      r: 22,
+    }));
+
+    // Edge: only include pairs where both tags exist
+    const edges = [];
+    for (const c of connections) {
+      const si = idxOf[c.source], ti = idxOf[c.target];
+      if (si == null || ti == null) continue;
+      edges.push({ si, ti, weight: Math.min(c.weight, 10) });
+    }
+
+    // Degree — scale node radius
+    const deg = new Array(nodes.length).fill(0);
+    edges.forEach(e => { deg[e.si]++; deg[e.ti]++; });
+    const maxDeg = Math.max(1, ...deg);
+    nodes.forEach((n, i) => { n.r = 16 + (deg[i] / maxDeg) * 14; });
+
+    // Run force simulation synchronously before first render
+    const K = Math.sqrt((600 * 500) / Math.max(nodes.length, 1)) * 1.1;
+    for (let iter = 0; iter < 300; iter++) {
+      const alpha = Math.pow(1 - iter / 300, 2);
+      // Repulsion
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[j].x - nodes[i].x || 0.01;
+          const dy = nodes[j].y - nodes[i].y || 0.01;
+          const d2 = dx * dx + dy * dy;
+          const d = Math.sqrt(d2) || 1;
+          const f = (K * K / d) * alpha * 0.6;
+          nodes[i].vx -= (dx / d) * f;
+          nodes[i].vy -= (dy / d) * f;
+          nodes[j].vx += (dx / d) * f;
+          nodes[j].vy += (dy / d) * f;
+        }
+      }
+      // Springs
+      for (const e of edges) {
+        const a = nodes[e.si], b = nodes[e.ti];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.sqrt(dx * dx + dy * dy) || 1;
+        const rest = K * (1.2 - e.weight * 0.04);
+        const f = (d - rest) * 0.25 * alpha;
+        a.vx += (dx / d) * f; a.vy += (dy / d) * f;
+        b.vx -= (dx / d) * f; b.vy -= (dy / d) * f;
+      }
+      // Gravity
+      nodes.forEach(n => { n.vx -= n.x * 0.015 * alpha; n.vy -= n.y * 0.015 * alpha; });
+      // Integrate
+      nodes.forEach(n => { n.x += n.vx * 0.45; n.y += n.vy * 0.45; n.vx *= 0.75; n.vy *= 0.75; });
+    }
+
+    return { nodes, edges };
+  }, [allTags, connections]); // eslint-disable-line
+
+  // Render to SVG
+  const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
+  const [hover, setHover] = useState(null);
+  const dragRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Fit graph on mount
+  useEffect(() => {
+    if (!containerRef.current || initNodes.length === 0) return;
+    const { width, height } = containerRef.current.getBoundingClientRect();
+    const minX = Math.min(...initNodes.map(n => n.x - n.r));
+    const maxX = Math.max(...initNodes.map(n => n.x + n.r));
+    const minY = Math.min(...initNodes.map(n => n.y - n.r));
+    const maxY = Math.max(...initNodes.map(n => n.y + n.r));
+    const gW = maxX - minX + 80, gH = maxY - minY + 80;
+    const scale = Math.min(1.2, Math.min(width / gW, height / gH));
+    setTransform({
+      x: width / 2 - ((minX + maxX) / 2) * scale,
+      y: height / 2 - ((minY + maxY) / 2) * scale,
+      scale,
+    });
+  }, [initNodes]);
+
+  const PILL_THRESHOLD = 0.85;
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    const rect = containerRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const delta = -e.deltaY * 0.001;
+    setTransform(t => {
+      const ns = Math.max(0.15, Math.min(3, t.scale * (1 + delta)));
+      const ratio = ns / t.scale;
+      return { x: mx - (mx - t.x) * ratio, y: my - (my - t.y) * ratio, scale: ns };
+    });
+  };
+
+  const onMouseDown = (e) => {
+    if (e.target.closest('[data-node]')) return;
+    dragRef.current = { sx: e.clientX, sy: e.clientY, tx: transform.x, ty: transform.y };
+  };
+  const onMouseMove = (e) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.sx, dy = e.clientY - dragRef.current.sy;
+    setTransform(t => ({ ...t, x: dragRef.current.tx + dx, y: dragRef.current.ty + dy }));
+  };
+  const onMouseUp = () => { dragRef.current = null; };
+
+  const edgeOpacity = Math.max(0, Math.min(1, (transform.scale - 0.2) / 0.4));
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: C.bg }}>
+      {/* Header */}
+      <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, padding: '14px 14px 10px' }}>
+        <button onClick={onBack}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '0 2px', color: C.accent + '99', flexShrink: 0 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: C.accent }}>ALL PROJECTS</span>
+        <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, marginLeft: 4 }}>{allTags.length + 1} projects · scroll to zoom · drag to pan</span>
+        <div style={{ flex: 1 }}/>
+        <button onClick={() => onSelectProject('__everything__')}
+          style={{ background: C.accent + '11', border: `1px solid ${C.accent}33`, borderRadius: 20, padding: '2px 10px',
+            fontFamily: mono, fontSize: F.sm, color: C.accent + 'aa', cursor: 'pointer', letterSpacing: '0.03em', lineHeight: '1.8' }}>
+          ALL ENTRIES ↗
+        </button>
+      </div>
+
+      {/* Graph canvas */}
+      <div ref={containerRef} style={{ flex: 1, position: 'relative', overflow: 'hidden', cursor: dragRef.current ? 'grabbing' : 'grab' }}
+        onWheel={onWheel} onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
+        <svg width="100%" height="100%" style={{ display: 'block' }}>
+          <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`}>
+            {/* Edges */}
+            {edgeOpacity > 0 && initEdges.map((e, i) => {
+              const a = initNodes[e.si], b = initNodes[e.ti];
+              return (
+                <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+                  stroke={a.color} strokeWidth={Math.max(0.5, e.weight * 0.4)}
+                  strokeOpacity={edgeOpacity * 0.18 * Math.min(1, e.weight / 2)} />
+              );
+            })}
+            {/* Nodes */}
+            {initNodes.map((n, i) => {
+              const isPill = transform.scale >= PILL_THRESHOLD;
+              const isHovered = hover === i;
+              const col = n.color;
+              const pw = n.label.length * 7.5 + 28;
+              return (
+                <g key={n.id} data-node="1" transform={`translate(${n.x},${n.y})`}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => onSelectProject(n.id)}
+                  onMouseEnter={() => setHover(i)}
+                  onMouseLeave={() => setHover(null)}>
+                  {isPill ? (
+                    <>
+                      <rect x={-pw/2} y={-14} width={pw} height={28} rx={14}
+                        fill={isHovered ? col + '33' : col + '18'}
+                        stroke={isHovered ? col : col + '66'}
+                        strokeWidth={isHovered ? 1.5 : 1}/>
+                      <text x={0} y={5} textAnchor="middle"
+                        style={{ fontFamily: mono, fontSize: 11, fill: isHovered ? col : col + 'cc',
+                          letterSpacing: '0.06em', pointerEvents: 'none', userSelect: 'none' }}>
+                        {n.label}
+                      </text>
+                    </>
+                  ) : (
+                    <>
+                      <circle r={n.r} fill={isHovered ? col + '33' : col + '18'}
+                        stroke={isHovered ? col : col + '55'} strokeWidth={isHovered ? 2 : 1.5}/>
+                      {transform.scale >= 0.35 && (
+                        <text y={n.r + 12} textAnchor="middle"
+                          style={{ fontFamily: mono, fontSize: 10 / transform.scale * 0.5,
+                            fill: col + 'aa', pointerEvents: 'none', userSelect: 'none' }}>
+                          {n.label.slice(0, 8)}{n.label.length > 8 ? '…' : ''}
+                        </text>
+                      )}
+                    </>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+        </svg>
+        {/* Zoom controls */}
+        <div style={{ position: 'absolute', bottom: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {[{label:'+', d:1.25},{label:'−',d:0.8}].map(({label,d}) => (
+            <button key={label} onClick={() => setTransform(t => ({ ...t, scale: Math.max(0.15, Math.min(3, t.scale * d)) }))}
+              style={{ width: 30, height: 30, background: C.surface, border: `1px solid ${C.border2}`, borderRadius: 6,
+                color: C.muted, fontFamily: mono, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── ProjectsCard ─────────────────────────────────────────────────────────────
 // Source of truth: #tags present in the DB (notes + tasks). projectsMeta is
 // metadata-only (description). No tag in DB = no project button, period.
@@ -4869,14 +5081,20 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
 
   // Tags that actually exist anywhere in the DB — fetched from /api/all-tags
   const [allTags, setAllTags] = useState(null); // null=loading
+  const [connections, setConnections] = useState([]);
+  const [recency, setRecency] = useState({});
   const fetchedRef = useRef(false);
   useEffect(() => {
     if (!token || fetchedRef.current) return;
     fetchedRef.current = true;
-    fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => setAllTags(Array.isArray(d.tags) ? d.tags : []))
-      .catch(() => setAllTags([]));
+    Promise.all([
+      fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('/api/tag-connections', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([tags, conns]) => {
+      setAllTags(Array.isArray(tags.tags) ? tags.tags : []);
+      setConnections(Array.isArray(conns.connections) ? conns.connections : []);
+      setRecency(conns.recency || {});
+    }).catch(() => setAllTags([]));
   }, [token]); // eslint-disable-line
 
   // Re-fetch when today's notes/tasks change (new tag added or deleted)
@@ -4891,7 +5109,20 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
       .catch(() => {});
   }, [todayTags, token]); // eslint-disable-line
 
-  const names = allTags || [];
+  // Sort by recency, show top 6 in strip
+  const STRIP_MAX = 6;
+  const sortedNames = useMemo(() => {
+    if (!allTags) return [];
+    return [...allTags].sort((a, b) => {
+      const ra = recency[a.toLowerCase()] || '0';
+      const rb = recency[b.toLowerCase()] || '0';
+      return rb.localeCompare(ra);
+    });
+  }, [allTags, recency]); // eslint-disable-line
+  const recentNames = sortedNames.slice(0, STRIP_MAX);
+  const hasMore = sortedNames.length > STRIP_MAX;
+
+  const names = recentNames;
 
   const pcScrollRef = useRef(null);
   const [pcFade, setPcFade] = useState(false);
@@ -4925,22 +5156,6 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
         fontFamily: mono, fontSize: 9, letterSpacing: '0.1em',
         textTransform: 'uppercase', color: C.dim, flexShrink: 0, paddingRight: 2,
       }}>Projects</span>
-      {/* ALL card — always first, lighter amber tint */}
-      <button
-        onClick={() => onSelectProject('__everything__')}
-        style={{
-          background: C.accent + '11',
-          border: `1px solid ${C.accent}33`,
-          borderRadius: 20, padding: '2px 10px',
-          fontFamily: mono, fontSize: F.sm, color: C.accent + 'aa',
-          cursor: 'pointer', opacity: 1,
-          transition: 'opacity 0.15s, color 0.15s, background 0.15s',
-          letterSpacing: '0.03em', lineHeight: '1.8',
-          whiteSpace: 'nowrap', flexShrink: 0,
-        }}
-        onMouseEnter={e => { e.currentTarget.style.background = C.accent + '22'; e.currentTarget.style.color = C.accent; }}
-        onMouseLeave={e => { e.currentTarget.style.background = C.accent + '11'; e.currentTarget.style.color = C.accent + 'aa'; }}
-      >ALL</button>
       {/* Health — always-visible built-in project */}
       <button
         onClick={() => onSelectProject('__health__')}
@@ -4956,6 +5171,7 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
         onMouseEnter={e => { e.currentTarget.style.background = C.green + '22'; e.currentTarget.style.color = C.green; }}
         onMouseLeave={e => { e.currentTarget.style.background = C.green + '11'; e.currentTarget.style.color = C.green + 'aa'; }}
       >HEALTH</button>
+      {/* Recent tags */}
       {names.map(name => {
         const active = todayTags.has(name.toLowerCase());
         const col = projectColor(name);
@@ -4981,6 +5197,22 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
           >{tagDisplayName(name).toUpperCase()}</button>
         );
       })}
+      {/* ALL — opens graph view */}
+      <button
+        onClick={() => onSelectProject('__graph__')}
+        style={{
+          background: 'transparent',
+          border: `1px solid ${C.border2}`,
+          borderRadius: 20, padding: '2px 10px',
+          fontFamily: mono, fontSize: F.sm, color: C.dim,
+          cursor: 'pointer', opacity: 0.6,
+          transition: 'opacity 0.15s, color 0.15s, border-color 0.15s',
+          letterSpacing: '0.03em', lineHeight: '1.8',
+          whiteSpace: 'nowrap', flexShrink: 0,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.color = C.accent; e.currentTarget.style.borderColor = C.accent + '55'; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.color = C.dim; e.currentTarget.style.borderColor = C.border2; }}
+      >{hasMore ? `+${sortedNames.length - STRIP_MAX} ALL ···` : 'ALL ···'}</button>
       </div>
       <div style={{
           position:'absolute', right:0, top:0, bottom:0, width:40, pointerEvents:'none',
@@ -5557,7 +5789,8 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   );
 
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingTop:6, paddingBottom:200 }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:10, padding:10, paddingTop:6, paddingBottom:200,
+      maxWidth:1200, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
       {/* Health strip — collapsible */}
       <HealthStrip
         date={today} token={token} userId={userId}
@@ -5568,16 +5801,16 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
         collapsed={healthCollapsed} onToggle={toggleHealth}
       />
 
-      {/* Wide: two-column layout; narrow: single column */}
+      {/* Wide: two-column layout 50/50; narrow: single column */}
       {wide ? (
         <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, alignItems:'start' }}>
           {/* Left col: Tasks, Entries */}
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, minWidth:0 }}>
             {tasksWidget}
             {entriesWidget}
           </div>
           {/* Right col: Meals, Activity */}
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+          <div style={{ display:'flex', flexDirection:'column', gap:10, minWidth:0 }}>
             {mealsWidget}
             {activitiesWidget}
           </div>
@@ -6098,6 +6331,23 @@ export default function Dashboard() {
   const [googleToken,setGoogleToken] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
+  const [graphData, setGraphData] = useState(null); // {allTags, connections, recency} — loaded on first graph open
+
+  // Load graph data when user opens the graph view
+  useEffect(() => {
+    if (activeProject !== '__graph__' || !token) return;
+    if (graphData) return; // already loaded
+    Promise.all([
+      fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+      fetch('/api/tag-connections', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
+    ]).then(([tags, conns]) => {
+      setGraphData({
+        allTags: Array.isArray(tags.tags) ? tags.tags : [],
+        connections: Array.isArray(conns.connections) ? conns.connections : [],
+        recency: conns.recency || {},
+      });
+    }).catch(() => setGraphData({ allTags: [], connections: [], recency: {} }));
+  }, [activeProject, token]); // eslint-disable-line
 
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -6494,8 +6744,9 @@ export default function Dashboard() {
           {/* Project view OR daily widgets */}
           {activeProject ? (
             (() => {
+              const isGraph  = activeProject === '__graph__';
               const isHealth = activeProject === '__health__';
-              const pcol = isHealth ? C.green : projectColor(activeProject);
+              const pcol = isHealth ? C.green : isGraph ? C.accent : projectColor(activeProject);
               return (
                 <>
                   {/* Fixed project header — outside scroll area */}
@@ -6508,12 +6759,29 @@ export default function Dashboard() {
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
                     </button>
                     <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',color:pcol}}>
-                      {isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
+                      {isGraph ? 'All Projects' : isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
                     </span>
                   </div>
                   {/* Scrollable content */}
                   <div style={{flex:1,minHeight:0,overflow:'auto'}}>
-                    {isHealth ? (
+                    {/* Top vignette — matches daily view */}
+                    {!isGraph && <div style={{position:'sticky',top:0,height:48,marginBottom:-48,
+                      pointerEvents:'none',zIndex:10,
+                      background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>}
+                    {isGraph ? (
+                      graphData ? (
+                        <ProjectGraphView
+                          allTags={graphData.allTags}
+                          connections={graphData.connections}
+                          recency={graphData.recency}
+                          onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
+                          onBack={() => setActiveProject(null)}
+                        />
+                      ) : (
+                        <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',
+                          fontFamily:mono,fontSize:F.sm,color:C.dim}}>Loading graph…</div>
+                      )
+                    ) : isHealth ? (
                       <HealthProjectView
                         token={token} userId={userId}
                         onBack={() => setActiveProject(null)}
