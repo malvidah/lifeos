@@ -6630,103 +6630,7 @@ export default function Dashboard() {
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           display:"flex", flexDirection:"column", overflow:"hidden"}}>
 
-          {/* ── Projects strip — above scroll, matches project-view header pattern ── */}
-          {!activeProject && (
-            <div style={{ flexShrink:0, background:C.bg, zIndex:51, position:'relative', paddingTop:20 }}>
-                              {/* ── Projects strip ↔ Search pill (crossfade) ── */}
-                <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible' }}>
-                  {/* Projects bar — fades out when search open */}
-                  <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    opacity: searchOpen ? 0 : 1,
-                    pointerEvents: searchOpen ? 'none' : 'auto',
-                    transition: 'opacity 0.18s ease',
-                    display: 'flex', alignItems: 'center',
-                  }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setSearchOpen(true);
-                        setTimeout(() => searchInputRef.current?.focus(), 60);
-                      }}
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '8px 12px', display: 'flex', alignItems: 'center',
-                        color: C.muted, flexShrink: 0, transition: 'color 0.15s',
-                        minWidth: 44, minHeight: 44, justifyContent: 'center',
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.color = C.text}
-                      onMouseLeave={e => e.currentTarget.style.color = C.muted}
-                      aria-label="Search"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                      </svg>
-                    </button>
-                  </div>
 
-                  {/* Search pill — fades in when search open */}
-                  <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-                    opacity: searchOpen ? 1 : 0,
-                    pointerEvents: searchOpen ? 'auto' : 'none',
-                    transition: 'opacity 0.18s ease',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    padding: '0 10px',
-                  }}>
-                    <div style={{
-                      width: '100%', maxWidth: 560,
-                      display: 'flex', alignItems: 'center', gap: 8,
-                      backdropFilter: 'blur(20px) saturate(1.4)',
-                      WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-                      background: `${C.surface}ee`,
-                      border: `1px solid ${C.border}`,
-                      borderRadius: 100,
-                      padding: '0 18px',
-                      height: 52,
-                      boxShadow: C.shadow,
-                    }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                      </svg>
-                      <input
-                        ref={searchInputRef}
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        onKeyDown={e => {
-                          if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
-                        }}
-                        placeholder="Search"
-                        style={{
-                          flex: 1, background: 'transparent', border: 'none', outline: 'none',
-                          fontFamily: serif, fontSize: F.md, color: C.text, caretColor: C.accent,
-                        }}
-                      />
-                      {srLoading && (
-                        <span style={{ fontFamily: mono, fontSize: 8, color: C.muted, letterSpacing: '0.12em', flexShrink: 0 }}>…</span>
-                      )}
-                      <button
-                        onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
-                        style={{
-                          background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
-                          color: C.muted, display: 'flex', alignItems: 'center', flexShrink: 0,
-                          transition: 'color 0.12s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = C.text}
-                        onMouseLeave={e => e.currentTarget.style.color = C.muted}
-                        aria-label="Close search"
-                      >
-                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-            </div>
-          )}
 
           {/* ── Daily scroll — calendar, health, widgets ── */}
           {!activeProject && (
@@ -6739,6 +6643,100 @@ export default function Dashboard() {
               <div style={{position:"sticky",top:0,height:48,flexShrink:0,
                 pointerEvents:"none",zIndex:10,
                 background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
+              {/* ── Projects strip ↔ Search pill (in scroll flow) ── */}
+              {/* ── Projects strip ↔ Search pill (crossfade) ── */}
+              <div style={{ position: 'relative', flexShrink: 0, height: 52, overflow: 'visible' }}>
+                {/* Projects bar — fades out when search open */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                  opacity: searchOpen ? 0 : 1,
+                  pointerEvents: searchOpen ? 'none' : 'auto',
+                  transition: 'opacity 0.18s ease',
+                  display: 'flex', alignItems: 'center',
+                }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ProjectsCard date={selected} token={token} userId={userId} onSelectProject={setActiveProject}/>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSearchOpen(true);
+                      setTimeout(() => searchInputRef.current?.focus(), 60);
+                    }}
+                    style={{
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      padding: '8px 12px', display: 'flex', alignItems: 'center',
+                      color: C.muted, flexShrink: 0, transition: 'color 0.15s',
+                      minWidth: 44, minHeight: 44, justifyContent: 'center',
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = C.text}
+                    onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                    aria-label="Search"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Search pill — fades in when search open */}
+                <div style={{
+                  position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                  opacity: searchOpen ? 1 : 0,
+                  pointerEvents: searchOpen ? 'auto' : 'none',
+                  transition: 'opacity 0.18s ease',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 10px',
+                }}>
+                  <div style={{
+                    width: '100%', maxWidth: 560,
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    backdropFilter: 'blur(20px) saturate(1.4)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                    background: `${C.surface}ee`,
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 100,
+                    padding: '0 18px',
+                    height: 52,
+                    boxShadow: C.shadow,
+                  }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                      <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                    <input
+                      ref={searchInputRef}
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Escape') { setSearchOpen(false); setSearchQuery(''); }
+                      }}
+                      placeholder="Search"
+                      style={{
+                        flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                        fontFamily: serif, fontSize: F.md, color: C.text, caretColor: C.accent,
+                      }}
+                    />
+                    {srLoading && (
+                      <span style={{ fontFamily: mono, fontSize: 8, color: C.muted, letterSpacing: '0.12em', flexShrink: 0 }}>…</span>
+                    )}
+                    <button
+                      onClick={() => { setSearchOpen(false); setSearchQuery(''); }}
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
+                        color: C.muted, display: 'flex', alignItems: 'center', flexShrink: 0,
+                        transition: 'color 0.12s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = C.text}
+                      onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                      aria-label="Close search"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
                               {/* Cal + Health — hidden during search */}
                 {!searchOpen && (
                   <>
@@ -6837,37 +6835,37 @@ export default function Dashboard() {
               const pcol = isHealth ? C.green : isGraph ? C.accent : projectColor(activeProject);
               return (
                 <>
-                  {/* Fixed project header — outside scroll area */}
-                  <div style={{flexShrink:0,display:'flex',alignItems:'center',gap:8,padding:'34px 14px 8px',background:C.bg,position:'relative',zIndex:51}}>
-                    <button
-                      onClick={async () => setActiveProject(null)}
-                      style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',padding:'0 2px',color:pcol+'99',flexShrink:0}}
-                      aria-label="Back"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-                    </button>
-                    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',color:pcol}}>
-                      {isGraph ? 'ALL PROJECTS' : isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
-                    </span>
-                    <div style={{flex:1}}/>
-                    <button
-                      onClick={() => { setActiveProject(null); setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); }}
-                      style={{background:'none',border:'none',cursor:'pointer',padding:'8px 12px',display:'flex',alignItems:'center',color:C.muted,flexShrink:0,minWidth:44,minHeight:44,justifyContent:'center',transition:'color 0.15s'}}
-                      onMouseEnter={e => e.currentTarget.style.color = C.text}
-                      onMouseLeave={e => e.currentTarget.style.color = C.muted}
-                      aria-label="Search"
-                    >
-                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                        <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                      </svg>
-                    </button>
-                  </div>
-                  {/* Scrollable content */}
+                  {/* Scrollable content — header lives inside scroll flow */}
                   <div style={{flex:1,minHeight:0,overflow:'auto'}}>
-                    {/* Top vignette — matches daily view */}
-                    <div style={{position:'sticky',top:0,height:48,marginBottom:-48,flexShrink:0,
+                    {/* Top vignette — sticky at top */}
+                    <div style={{position:'sticky',top:0,height:48,flexShrink:0,
                       pointerEvents:'none',zIndex:10,
                       background:`linear-gradient(to bottom, ${C.bg} 0%, transparent 100%)`}}/>
+                    {/* Project header — in scroll flow, below vignette */}
+                    <div style={{display:'flex',alignItems:'center',gap:8,padding:'14px 14px 8px'}}>
+                      <button
+                        onClick={async () => setActiveProject(null)}
+                        style={{background:'none',border:'none',cursor:'pointer',display:'flex',alignItems:'center',padding:'0 2px',color:pcol+'99',flexShrink:0}}
+                        aria-label="Back"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                      </button>
+                      <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',color:pcol}}>
+                        {isGraph ? 'ALL PROJECTS' : isHealth ? 'Health' : activeProject === '__everything__' ? 'ALL' : tagDisplayName(activeProject)}
+                      </span>
+                      <div style={{flex:1}}/>
+                      <button
+                        onClick={() => { setActiveProject(null); setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); }}
+                        style={{background:'none',border:'none',cursor:'pointer',padding:'8px 12px',display:'flex',alignItems:'center',color:C.muted,flexShrink:0,minWidth:44,minHeight:44,justifyContent:'center',transition:'color 0.15s'}}
+                        onMouseEnter={e => e.currentTarget.style.color = C.text}
+                        onMouseLeave={e => e.currentTarget.style.color = C.muted}
+                        aria-label="Search"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                        </svg>
+                      </button>
+                    </div>
                     {isGraph ? (
                       graphData ? (
                         <ProjectGraphView
