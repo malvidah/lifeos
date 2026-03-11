@@ -50,6 +50,14 @@
                         ]
                     }
                 ]
+            },
+            "notarize": {
+                "notarytool": {
+                    "keychainProfile": false,
+                    "appleApiKey": "${APPLE_API_KEY}",
+                    "appleApiKeyId": "${APPLE_API_KEY_ID}",
+                    "appleApiIssuer": "${APPLE_API_ISSUER}"
+                }
             }
         },
         "dmg": {
