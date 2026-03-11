@@ -1894,13 +1894,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           {!collapsed && onCalViewChange&&<>
             <button onClick={()=>onCalViewChange('month')}
               style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
-                padding:'6px 12px',borderRadius:6,cursor:'pointer',
-                minHeight:34,minWidth:34,
+                padding:'3px 8px',borderRadius:4,cursor:'pointer',
+                minHeight:22,minWidth:22,
                 background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>M</button>
             <button onClick={()=>onCalViewChange('day')}
               style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
-                padding:'6px 12px',borderRadius:6,cursor:'pointer',
-                minHeight:34,minWidth:34,
+                padding:'3px 8px',borderRadius:4,cursor:'pointer',
+                minHeight:22,minWidth:22,
                 background:C.accent+'22',border:`1px solid ${C.accent}`,color:C.accent}}>D</button>
           </>}
         </div>
@@ -3561,9 +3561,9 @@ function TaskFilterBtns({ filter, setFilter }) {
           <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }}
             style={{
               fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em',
-              padding: b.label ? '6px 12px' : '6px 8px',
-              borderRadius: 6, cursor: 'pointer',
-              minHeight: 32,
+              padding: b.label ? '3px 8px' : '3px 6px',
+              borderRadius: 4, cursor: 'pointer',
+              minHeight: 22,
               background: active ? C.accent+'22' : 'none',
               border: `1px solid ${active ? C.accent : C.border2}`,
               color: active ? C.accent : C.muted,

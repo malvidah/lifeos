@@ -4,7 +4,8 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { Extension, Node } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Plugin, PluginKey, DecorationSet, Decoration } from '@tiptap/pm/state';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { DecorationSet, Decoration } from '@tiptap/pm/view';
 import { useEffect, useRef } from 'react';
 
 // ── Constants (kept in sync with Dashboard.jsx) ───────────────────────────────
