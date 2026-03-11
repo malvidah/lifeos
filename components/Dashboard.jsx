@@ -3114,68 +3114,22 @@ function Notes({date,userId,token}) {
     if ((e.metaKey || e.ctrlKey) && e.key === 'i') {
       e.preventDefault(); document.execCommand('italic'); return;
     }
-    // Enter — intercept to prevent browser carrying span styles (chip bg/border)
-    // into the new line. We handle it manually: split text at caret, re-render.
+    // Enter — let browser handle natively so multiple blank lines work fine.
+    // On next tick, if the new line inherited a styled span, unwrap it.
     if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      const el = ceRef.current;
-      const sel = window.getSelection();
-      if (!sel || !sel.rangeCount) return;
-      const range = sel.getRangeAt(0);
-      range.deleteContents();
-      // Get caret offset using domToText so newlines from <div> blocks are counted consistently
-      const pre = range.cloneRange();
-      pre.selectNodeContents(el);
-      pre.setEnd(range.startContainer, range.startOffset);
-      const preFragment = pre.cloneContents();
-      const tempDiv = document.createElement('div');
-      tempDiv.appendChild(preFragment);
-      const preText = domToText(tempDiv);
-      const fullText = domToText(el);
-      const caretPos = preText.length;
-      const before = fullText.slice(0, caretPos);
-      const after  = fullText.slice(caretPos);
-      const next = before + '\n' + after;
-      // Re-render cleanly — no inherited spans
-      skipSyncRef.current = false;
-      lastSyncedText.current = next;
-      setValue(next);
-      el.innerHTML = textToHtml(next);
-      // Place cursor at start of new line (caretPos + 1)
       requestAnimationFrame(() => {
-        const newRange = document.createRange();
-        // Walk to find the text node at caretPos+1
-        let pos = 0, found = false;
-        function findPos(node) {
-          if (found) return;
-          if (node.nodeType === Node.TEXT_NODE) {
-            const len = node.textContent.length;
-            if (pos + len >= caretPos + 1) {
-              newRange.setStart(node, caretPos + 1 - pos);
-              newRange.collapse(true);
-              found = true;
-            } else { pos += len; }
-          } else { for (const c of node.childNodes) { if (!found) findPos(c); } }
-        }
-        // Simpler: re-serialize and count newlines
-        const lines = next.split('\n');
-        let lineIdx = 0, charCount = 0;
-        for (let i = 0; i < lines.length; i++) {
-          charCount += lines[i].length + 1; // +1 for 
-
-          if (charCount > caretPos) { lineIdx = i + 1; break; }
-        }
-        // Find the lineIdx-th block div in the contenteditable
-        const divs = el.querySelectorAll(':scope > div');
-        const targetDiv = divs[lineIdx] || divs[divs.length - 1];
-        if (targetDiv) {
-          newRange.selectNodeContents(targetDiv);
-          newRange.collapse(true);
-          sel.removeAllRanges();
-          sel.addRange(newRange);
+        const s = window.getSelection();
+        if (!s || !s.rangeCount) return;
+        const n = s.getRangeAt(0).startContainer;
+        const p = n.nodeType === Node.TEXT_NODE ? n.parentNode : n;
+        // If caret landed inside a chip/link span, unwrap it
+        if (p && p !== ceRef.current && (p.nodeName === 'SPAN' || p.nodeName === 'A')) {
+          const frag = document.createDocumentFragment();
+          while (p.firstChild) frag.appendChild(p.firstChild);
+          p.parentNode.replaceChild(frag, p);
         }
       });
-      return;
+      // fall through — browser inserts new <div> naturally
     }
   }
 
