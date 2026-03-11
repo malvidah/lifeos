@@ -1,9 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { getUserClient } from '../_lib/google.js';
 
-
-// Score a tag key: prefer more interior uppercase letters (better camelCase)
-// e.g. 'DayLab' scores higher than 'DayLAb' or 'daylab'
 function camelScore(s) {
   let score = 0;
   for (let i = 1; i < s.length; i++) {
@@ -13,6 +10,9 @@ function camelScore(s) {
 }
 
 const TAG_RE = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
+
+// Tags that are represented by built-in projects — excluded from the user-tag list
+const BUILTIN_LOWER = new Set(['health']);
 
 export async function GET(req) {
   const { supabase } = getUserClient(req);
@@ -32,6 +32,7 @@ export async function GET(req) {
 
     const consider = (tag) => {
       const lower = tag.toLowerCase();
+      if (BUILTIN_LOWER.has(lower)) return; // skip — handled by __health__ built-in
       const cur = best.get(lower);
       if (!cur || camelScore(tag) > camelScore(cur)) best.set(lower, tag);
     };

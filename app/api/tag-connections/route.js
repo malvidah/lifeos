@@ -2,11 +2,17 @@ import { getUserClient } from '../_lib/google.js';
 
 const TAG_RE = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
 
+// Normalize a tag key: map built-in aliases to their canonical id
+function canonical(lower) {
+  if (lower === 'health') return '__health__';
+  return lower;
+}
+
 function tagsIn(text) {
   const s = new Set();
   TAG_RE.lastIndex = 0;
   let m;
-  while ((m = TAG_RE.exec(text)) !== null) s.add(m[1].toLowerCase());
+  while ((m = TAG_RE.exec(text)) !== null) s.add(canonical(m[1].toLowerCase()));
   return s;
 }
 
@@ -25,7 +31,7 @@ export async function GET(req) {
     const coMap = new Map();
     const recency = new Map();
 
-    // Group all tags by date first
+    // Group all tags by date (canonical keys)
     const byDate = new Map();
     for (const row of notesR.data || []) {
       const tags = tagsIn(typeof row.data === 'string' ? row.data : '');
