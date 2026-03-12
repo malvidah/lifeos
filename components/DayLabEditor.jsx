@@ -6,6 +6,8 @@ import { Extension, Node } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DecorationSet, Decoration } from '@tiptap/pm/view';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import {
   useEffect, useRef, useState,
   forwardRef, useImperativeHandle,
@@ -386,6 +388,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onNoteClick,
   placeholder,
   singleLine   = false,
+  taskMode     = false,
   autoFocus    = false,
   style,
   color        = ACCENT,
@@ -494,6 +497,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ProjectTagNode,
       NoteLinkNode,
       ...(singleLine ? [] : [ImageBlock]),
+      ...(taskMode ? [
+        TaskList,
+        TaskItem.configure({ nested: false }),
+      ] : []),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
       // [ → note link
@@ -547,7 +554,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       }),
     ],
 
-    content: { type: 'doc', content: textToContent(value || '') },
+    content: taskMode
+      ? (value || '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>')
+      : { type: 'doc', content: textToContent(value || '') },
     editable,
 
     editorProps: {
@@ -641,7 +650,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
 
     onBlur({ editor }) {
-      onBlurRef.current?.(docToText(editor.getJSON()));
+      onBlurRef.current?.(taskMode ? editor.getHTML() : docToText(editor.getJSON()));
     },
   });
 
@@ -673,15 +682,19 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
     if (!editor.isFocused) {
-      editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });
+      if (taskMode) {
+        editor.commands.setContent(value || '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>');
+      } else {
+        editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });
+      }
     }
-  }, [value, editor]);
+  }, [value, editor]); // eslint-disable-line
 
   useEffect(() => { editor?.setEditable(editable); }, [editable, editor]);
 
   return (
     <>
-      <div className="dl-editor" style={{
+      <div className={`dl-editor${taskMode ? ' dl-tasks' : ''}`} style={{
         fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
         color: textColor, caretColor: color,
         '--dl-muted': mutedColor,

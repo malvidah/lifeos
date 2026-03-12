@@ -3700,199 +3700,94 @@ function TaskFilterBtns({ filter, setFilter }) {
   );
 }
 
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+// Stores as HTML string (like journal). Old format [{id,text,done}] auto-migrates.
+// Filter works via CSS: data-task-filter on wrapper hides checked/unchecked items.
+function migrateTasksToHtml(raw) {
+  if (!raw || typeof raw === 'string') return raw || '';
+  if (!Array.isArray(raw)) return '';
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const items = raw.filter(r => r.text).map(r =>
+    `<li data-type="taskItem" data-checked="${r.done?'true':'false'}"><p>${esc(r.text)}</p></li>`
+  ).join('');
+  return items ? `<ul data-type="taskList">${items}</ul>` : '';
+}
+
 function Tasks({date,token,userId,taskFilter='all'}) {
-  const mkRow=()=>({id:Date.now(),text:"",done:false});
-  const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
+  const {value,setValue,loaded} = useDbSave(date,'tasks','',token,userId);
   const taskProjectNames = useContext(ProjectNamesContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
-  const skipBlurRef=useRef(false);
-  const longPressTimer=useRef(null);
-  const clickCaretRef=useRef(null);
-  const [focusedId, setFocusedId] = useState(null);
-  const [selMode, setSelMode] = useState(false);
-  const [selIds, setSelIds] = useState(new Set());
-  const safe=Array.isArray(rows)&&rows.length?rows:[mkRow()];
-  const open=safe.filter(r=>!r.done),done=safe.filter(r=>r.done);
-  const visible = taskFilter==='open' ? open : taskFilter==='done' ? done : safe;
+  const {navigateToProject,navigateToNote,createNoteGlobally} = useContext(NavigationContext);
+  const {notes:ctxNotes,onCreateNote:ctxOnCreateNote} = useContext(NoteContext);
+  const handleCreateNote = ctxOnCreateNote || createNoteGlobally;
 
-  function enterSelMode(id) { setSelMode(true); setSelIds(new Set([id])); setFocusedId(null); }
-  function exitSelMode() { setSelMode(false); setSelIds(new Set()); }
-  function toggleSel(id) {
-    setSelIds(prev => {
-      const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id);
-      if (n.size===0) setSelMode(false);
-      return n;
-    });
-  }
-  function bulkDone(val) {
-    setRows(prev=>(Array.isArray(prev)?prev:[]).map(r=>selIds.has(r.id)?{...r,done:val}:r));
-    exitSelMode();
-  }
-  function bulkDelete() {
-    setRows(prev=>(Array.isArray(prev)?prev:[]).filter(r=>!selIds.has(r.id)));
-    exitSelMode();
-  }
+  // Migrate old [{id,text,done}] array format to HTML on first load
+  const htmlValue = useMemo(() => {
+    if (Array.isArray(value)) return migrateTasksToHtml(value);
+    return value || '';
+  }, [value]);
 
-  if(!loaded) return (
-    <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
+  if (!loaded) return (
+    <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}>
       <Shimmer width="75%" height={13}/><Shimmer width="55%" height={13}/><Shimmer width="65%" height={13}/>
     </div>
   );
 
   return (
-    <div style={{flex:1,overflow:"auto"}}>
-      {selMode&&(
-        <div style={{display:'flex',alignItems:'center',gap:8,padding:'4px 2px 8px',
-          borderBottom:`1px solid ${C.border}`,marginBottom:6}}>
-          <span style={{fontFamily:mono,fontSize:10,color:C.muted,flex:1}}>{selIds.size} selected</span>
-          <button onClick={()=>bulkDone(true)} style={{fontFamily:mono,fontSize:9,letterSpacing:'0.05em',
-            padding:'3px 8px',borderRadius:4,cursor:'pointer',
-            background:C.accent+'22',border:`1px solid ${C.accent}40`,color:C.accent}}>Done</button>
-          <button onClick={()=>bulkDone(false)} style={{fontFamily:mono,fontSize:9,letterSpacing:'0.05em',
-            padding:'3px 8px',borderRadius:4,cursor:'pointer',
-            background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>Reopen</button>
-          <button onClick={bulkDelete} style={{fontFamily:mono,fontSize:9,letterSpacing:'0.05em',
-            padding:'3px 8px',borderRadius:4,cursor:'pointer',
-            background:C.red+'22',border:`1px solid ${C.red}40`,color:C.red}}>Delete</button>
-          <button onClick={exitSelMode} style={{fontFamily:mono,fontSize:11,padding:'2px 6px',
-            borderRadius:4,cursor:'pointer',background:'none',border:`1px solid ${C.border2}`,color:C.muted,lineHeight:1}}>✕</button>
-        </div>
-      )}
-
-      {visible.map((row,idx)=>{
-        const isSel=selIds.has(row.id);
-        const isEditing=focusedId===row.id&&!selMode;
-        return (
-          <div key={row.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"4px 0",minHeight:28,
-            opacity:row.done&&!selMode?0.35:1,transition:"opacity 0.2s",
-            background:isSel?C.accent+'15':'transparent',borderRadius:isSel?6:0}}>
-
-            {/* Checkbox / selection bubble */}
-            {selMode?(
-              <div onClick={()=>toggleSel(row.id)}
-                style={{width:15,height:15,flexShrink:0,borderRadius:4,marginTop:5,cursor:'pointer',
-                  border:`1.5px solid ${isSel?C.accent:C.border2}`,background:isSel?C.accent:'transparent',
-                  display:'flex',alignItems:'center',justifyContent:'center',transition:'all 0.15s'}}>
-                {isSel&&<span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>}
-              </div>
-            ):(
-              <button onClick={()=>{
-                  const wasDone=row.done;
-                  setRows(safe.map(r=>r.id===row.id?{...r,done:!r.done}:r));
-                  pushHistory({
-                    label:wasDone?`Uncomplete "${row.text}"`:` Complete "${row.text}"`,
-                    undo:()=>setRows(safe.map(r=>r.id===row.id?{...r,done:wasDone}:r)),
-                    redo:()=>setRows(safe.map(r=>r.id===row.id?{...r,done:!wasDone}:r)),
-                  });
-                }}
-                style={{width:15,height:15,flexShrink:0,borderRadius:4,padding:0,cursor:"pointer",marginTop:5,
-                  border:`1.5px solid ${row.done?C.accent:C.border2}`,background:row.done?C.accent:"transparent",
-                  display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s"}}>
-                {row.done&&<span style={{fontSize:12,color:C.bg,lineHeight:1}}>✓</span>}
-              </button>
-            )}
-
-            {/* Text area — key changes edit↔view so React always creates a fresh DOM node,
-                preventing reconciliation from merging our manually-set innerHTML with
-                React-rendered children (which caused the doubling bug) */}
-            <div style={{flex:1,minWidth:0,minHeight:'1.7em',lineHeight:1.7}}
-              onTouchStart={selMode?undefined:()=>{
-                longPressTimer.current=setTimeout(()=>{longPressTimer.current=null;enterSelMode(row.id);},500);
-              }}
-              onTouchMove={()=>{clearTimeout(longPressTimer.current);longPressTimer.current=null;}}
-              onTouchEnd={()=>{clearTimeout(longPressTimer.current);longPressTimer.current=null;}}
-            >
-              {selMode?(
-                <div key={`s${row.id}`} onClick={()=>toggleSel(row.id)}
-                  style={{fontFamily:serif,fontSize:F.md,lineHeight:1.7,color:row.done?C.muted:C.text,
-                    textDecoration:row.done?'line-through':'none',whiteSpace:'pre-wrap',wordBreak:'break-word',
-                    cursor:'pointer',minHeight:'1.7em',userSelect:'none'}}>
-                  {row.text ? <RichLine text={row.text}/> : null}
-                </div>
-              ):isEditing?(
-                /* EDIT MODE — TipTap DayLabEditor */
-                <DayLabEditor
-                  key={`e${row.id}`}
-                  value={row.text}
-                  autoFocus
-                  singleLine
-                  projectNames={taskProjectNames}
-                  textColor={row.done ? C.muted : C.text}
-                  mutedColor={C.dim}
-                  color={row.done ? C.muted : C.accent}
-                  onProjectClick={name => navigateToProject(name)}
-                  onNoteClick={name => navigateToNote(name)}
-                  onBlur={text => {
-                    if (skipBlurRef.current) { skipBlurRef.current = false; return; }
-                    setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));
-                    setTimeout(() => setFocusedId(prev => prev === row.id ? null : prev), 0);
-                  }}
-                  onEnterSplit={({before, after}) => {
-                    skipBlurRef.current = true;
-                    const newRow = {id: crypto.randomUUID(), text: after, done: false};
-                    setRows(prev => {
-                      const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
-                      const nr = ps.map(r => r.id === row.id ? {...r, text: before} : r);
-                      nr.splice(idx + 1, 0, newRow);
-                      return nr;
-                    });
-                    setFocusedId(newRow.id);
-                  }}
-                  onBackspaceEmpty={idx > 0 ? () => {
-                    // Merge this row's text onto the end of the previous row, delete this row
-                    skipBlurRef.current = true;
-                    const thisText = row.text || '';
-                    setRows(prev => {
-                      const ps = Array.isArray(prev) && prev.length ? prev : [mkRow()];
-                      const prevRow = ps[idx - 1];
-                      if (!prevRow) return ps;
-                      const merged = (prevRow.text || '') + thisText;
-                      return ps
-                        .map(r => r.id === prevRow.id ? {...r, text: merged} : r)
-                        .filter(r => r.id !== row.id);
-                    });
-                    setFocusedId(visible[idx - 1]?.id ?? null);
-                  } : undefined}
-                  style={{
-                    minHeight: '1.7em', width: '100%',
-                    textDecoration: row.done ? 'line-through' : 'none',
-                    opacity: row.done ? 0.5 : 1,
-                  }}
-                  placeholder={idx === 0 && visible.length === 1 && !row.text && taskFilter !== 'done' ? 'Add a task…' : ''}
-                />
-              ):(
-                /* VIEW MODE */
-                <div key={`v${row.id}`}
-                  onPointerDown={e=>{
-                    e._taskDownX=e.clientX;e._taskDownY=e.clientY;
-                    try {
-                      let range=null;
-                      if(document.caretRangeFromPoint) range=document.caretRangeFromPoint(e.clientX,e.clientY);
-                      else if(document.caretPositionFromPoint){const cp=document.caretPositionFromPoint(e.clientX,e.clientY);if(cp){range=document.createRange();range.setStart(cp.offsetNode,cp.offset);}}
-                      if(range){
-                        let pos=0,found=false;
-                        function walkNodes(node){if(found)return;if(node.nodeType===Node.TEXT_NODE){if(node===range.startContainer){pos+=range.startOffset;found=true;return;}pos+=node.textContent.length;}else{for(const c of node.childNodes)walkNodes(c);}}
-                        walkNodes(e.currentTarget);
-                        clickCaretRef.current=found?pos:null;
-                      }
-                    }catch(_){clickCaretRef.current=null;}
-                  }}
-                  onPointerUp={e=>{
-                    const dx=e.clientX-(e._taskDownX??e.clientX),dy=e.clientY-(e._taskDownY??e.clientY);
-                    if(Math.sqrt(dx*dx+dy*dy)<5)setFocusedId(row.id);
-                  }}
-                  onContextMenu={e=>{e.preventDefault();enterSelMode(row.id);}}
-                  style={{fontFamily:serif,fontSize:F.md,lineHeight:1.7,
-                    color:row.done?C.muted:C.text,textDecoration:row.done?'line-through':'none',
-                    whiteSpace:'pre-wrap',wordBreak:'break-word',
-                    cursor:'text',minHeight:'1.7em',userSelect:'text'}}>
-                  {row.text ? <RichLine text={row.text}/> : (idx===0&&open.length===1&&taskFilter!=='done'?<span style={{color:C.dim}}>Add a task…</span>:null)}
-                </div>
-              )}
-            </div>
-          </div>
-        );
-      })}
+    <div data-task-filter={taskFilter} style={{flex:1}}>
+      <style>{`
+        /* Task list chrome */
+        .dl-tasks ul[data-type="taskList"] { list-style:none; padding:0; margin:0; }
+        .dl-tasks li[data-type="taskItem"] {
+          display:flex; align-items:flex-start; gap:10px; padding:4px 0;
+        }
+        .dl-tasks li[data-type="taskItem"] > label {
+          display:flex; align-items:center; flex-shrink:0; margin-top:4px; cursor:pointer;
+        }
+        .dl-tasks li[data-type="taskItem"] > label > input[type="checkbox"] {
+          appearance:none; -webkit-appearance:none;
+          width:15px; height:15px; border-radius:4px; flex-shrink:0;
+          border:1.5px solid ${C.border2}; background:transparent; cursor:pointer;
+          transition:all 0.15s; position:relative; margin:0;
+        }
+        .dl-tasks li[data-type="taskItem"] > label > input[type="checkbox"]:checked {
+          background:${C.blue}; border-color:${C.blue};
+        }
+        .dl-tasks li[data-type="taskItem"] > label > input[type="checkbox"]:checked::after {
+          content:''; position:absolute;
+          left:3px; top:1px; width:5px; height:9px;
+          border:1.5px solid #111; border-top:none; border-left:none;
+          transform:rotate(45deg);
+        }
+        .dl-tasks li[data-type="taskItem"][data-checked="true"] > div {
+          text-decoration:line-through; opacity:0.35;
+        }
+        /* Filter */
+        [data-task-filter="open"] .dl-tasks li[data-type="taskItem"][data-checked="true"] { display:none; }
+        [data-task-filter="done"] .dl-tasks li[data-type="taskItem"][data-checked="false"] { display:none; }
+        /* Paragraph inside task item — no extra margin */
+        .dl-tasks li[data-type="taskItem"] > div > p { margin:0; }
+        /* Placeholder only when truly empty */
+        .dl-tasks .is-empty::before {
+          content: attr(data-placeholder);
+          color: ${C.dim}; pointer-events:none; float:left; height:0;
+          font-family: ${serif}; font-size: ${F.md}px;
+        }
+      `}</style>
+      <DayLabEditor
+        taskMode
+        value={htmlValue}
+        onBlur={html => setValue(html)}
+        noteNames={ctxNotes}
+        projectNames={taskProjectNames}
+        onCreateNote={handleCreateNote}
+        onProjectClick={name => navigateToProject(name)}
+        onNoteClick={name => navigateToNote(name)}
+        placeholder="Add a task…"
+        textColor={C.text}
+        mutedColor={C.dim}
+        color={C.blue}
+        style={{minHeight:40,width:'100%'}}
+      />
     </div>
   );
 }
