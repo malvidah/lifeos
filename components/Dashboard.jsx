@@ -221,7 +221,7 @@ function DashboardInner() {
     const start=toKey(shift(new Date(),-30));
     const end=toKey(shift(new Date(),60));
 
-    const fetchCal=()=>api.post("/api/calendar",{start,end,tz},token)
+    const fetchCal=()=>api.get(`/api/calendar?start=${start}&end=${end}&tz=${encodeURIComponent(tz)}`,token)
       .then(d=>{
         if(d?.events) setEvents(prev=>({...prev,...d.events}));
         if(d?.googleToken) setGoogleToken(d.googleToken);
