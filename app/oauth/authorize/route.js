@@ -62,7 +62,7 @@ export async function GET(request) {
     code_challenge_method: searchParams.get('code_challenge_method') || 'S256',
     response_type: searchParams.get('response_type'),
     resource: searchParams.get('resource') || '',
-    scope: searchParams.get('scope') || 'dayloop',
+    scope: searchParams.get('scope') || 'daylab',
   };
 
   if (!params.client_id || !params.redirect_uri || params.response_type !== 'code') {

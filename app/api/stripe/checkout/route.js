@@ -24,9 +24,9 @@ export async function POST(request) {
     if (!priceId) return Response.json({ error: 'Price not configured' }, { status: 503 });
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-    const origin = request.headers.get('origin') || `https://${request.headers.get('host') || 'dayloop.me'}`;
+    const origin = request.headers.get('origin') || `https://${request.headers.get('host') || 'daylab.me'}`;
 
-    // Embedded mode — stays on dayloop.me, no redirect to stripe.com
+    // Embedded mode — stays on daylab.me, no redirect to stripe.com
     const session = await stripe.checkout.sessions.create({
       ui_mode: 'embedded',
       mode: 'subscription',
