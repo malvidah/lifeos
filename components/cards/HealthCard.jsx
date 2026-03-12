@@ -6,7 +6,7 @@ import { toKey, todayKey, shift } from "@/lib/dates";
 import { useDbSave, dbLoad } from "@/lib/db";
 import { cachedOuraFetch, _ouraCache } from "@/lib/ouraCache";
 import { createClient } from "@/lib/supabase";
-import { Ring, Card, Shimmer, ChevronBtn, InfoTip } from "../ui/primitives.jsx";
+import { Ring, Card, CardHeader, Shimmer, InfoTip } from "../ui/primitives.jsx";
 import { fmtMins, fmtMinsField, sportEmoji } from "@/lib/workouts";
 import { api } from "@/lib/api";
 
@@ -384,32 +384,39 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     );
   }
 
+  const backBtn = backAction && (
+    <button onClick={backAction} style={{background:"none",border:"none",cursor:"pointer",
+      color:C.green,padding:0,display:"flex",alignItems:"center",gap:4,
+      fontFamily:mono,fontSize:F.sm,marginRight:2}}>←</button>
+  );
+  const headerBadges = (
+    <>
+      {dataSource&&(
+        <span style={{fontFamily:mono,fontSize:"10px",color:C.dim,
+          border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px"}}>
+          {dataSource==="both"?"Oura + Apple Health":dataSource==="apple"?"Apple Health":dataSource==="garmin"?"Garmin":"Oura"}
+        </span>
+      )}
+      {showBadge&&(
+        <span title={`Scores calibrating — ${calibDays}/14 days of data. Currently using health guidelines as reference.`}
+          style={{fontFamily:mono,fontSize:"10px",color:C.muted,background:"rgba(255,255,255,0.06)",
+            borderRadius:4,padding:"1px 6px",cursor:"default"}}>
+          Calibrating…
+        </span>
+      )}
+    </>
+  );
+
   return (
     <Card fitContent={!onToggle} style={collapsed?{height:"auto"}:{}}>
-      {/* Card header */}
-      <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
-        borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
-        cursor:onToggle?"pointer":"default"}} onClick={backAction?undefined:onToggle}>
-        {backAction
-          ? <button onClick={backAction} style={{background:"none",border:"none",cursor:"pointer",color:C.green,padding:0,display:"flex",alignItems:"center",gap:4,fontFamily:mono,fontSize:F.sm,marginRight:2}}>←</button>
-          : onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>
-        }
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-          textTransform:"uppercase",color:backAction?C.green:C.muted,flex:1}}>Health</span>
-        {dataSource&&(
-          <span style={{fontFamily:mono,fontSize:"10px",color:C.dim,
-            border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px"}}>
-            {dataSource==="both"?"Oura + Apple Health":dataSource==="apple"?"Apple Health":dataSource==="garmin"?"Garmin":"Oura"}
-          </span>
-        )}
-        {showBadge&&(
-          <span title={`Scores calibrating — ${calibDays}/14 days of data. Currently using health guidelines as reference.`}
-            style={{fontFamily:mono,fontSize:"10px",color:C.muted,background:"rgba(255,255,255,0.06)",
-              borderRadius:4,padding:"1px 6px",cursor:"default"}}>
-            Calibrating…
-          </span>
-        )}
-      </div>
+      <CardHeader
+        label="Health"
+        labelColor={backAction ? C.green : undefined}
+        collapsed={collapsed}
+        onToggle={backAction ? undefined : onToggle}
+        headerLeft={backBtn}
+        headerRight={headerBadges}
+      />
       {/* Apple Health connect prompt — iOS only, shown when not yet authorized */}
       {hkStatus==="not_determined"&&!collapsed&&(
         <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`}}>

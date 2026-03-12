@@ -42,10 +42,27 @@ export function Ring({score,color,size=48}) {
   );
 }
 
+// CardHeader — standalone header row for cards that need flush content below
+// (bare Card + CardHeader lets the body be edge-to-edge with no content padding).
+export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft, headerRight }) {
+  const { C } = useTheme();
+  return (
+    <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
+      borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
+      cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
+      {headerLeft}
+      {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
+      <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+        textTransform:"uppercase",color:labelColor||C.muted,flex:1}}>{label}</span>
+      {!collapsed && headerRight}
+    </div>
+  );
+}
+
 // Card — bare box when no label, full panel with header when label is provided
 export function Card({
   children, style={}, fitContent=false,
-  label, slim, collapsed, onToggle, headerRight, headerLeft, autoHeight,
+  label, labelColor, slim, collapsed, onToggle, headerRight, headerLeft, autoHeight,
 }) {
   const { C } = useTheme();
 
@@ -75,7 +92,7 @@ export function Card({
           {headerLeft}
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-            textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
+            textTransform:"uppercase",color:labelColor||C.muted,flex:1}}>{label}</span>
           {!collapsed && headerRight}
         </div>
         {!collapsed&&(
