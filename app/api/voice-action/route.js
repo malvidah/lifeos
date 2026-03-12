@@ -59,8 +59,8 @@ NOT supported: strava, oura, health metrics
 Action formats:
 {"type":"meals","entries":["salmon 400kcal","green salad"]}
 {"type":"tasks","entries":[{"text":"call dentist","done":false}]}
-{"type":"notes","append":"felt good today"}
-{"type":"activity","entries":["30 min run"]}
+{"type":"journal","append":"felt good today"}
+{"type":"workouts","entries":["30 min run"]}
 {"type":"meals","edit":{"find":"salmon","replace":"salmon tacos"}}
 {"type":"tasks","delete":"call dentist"}
 {"type":"calendar","events":[{"title":"Lunch with Sarah","startTime":"12:00","endTime":"13:00","allDay":false}]}
@@ -124,16 +124,16 @@ ${contextSnippet}`;
       const { type } = action;
 
       // ── NOTES ──────────────────────────────────────────────────────────────
-      if (type === 'notes' && action.append) {
+      if ((type === 'notes' || type === 'journal') && action.append) {
         const { data: existing } = await supabase.from('entries').select('data')
-          .eq('date', date).eq('type', 'notes').eq('user_id', user.id).maybeSingle();
+          .eq('date', date).eq('type', 'journal').eq('user_id', user.id).maybeSingle();
         const current = existing?.data || '';
         const updated = current ? current + '\n\n' + action.append : action.append;
         await supabase.from('entries').upsert(
-          { date, type: 'notes', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
+          { date, type: 'journal', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
           { onConflict: 'date,type,user_id' }
         );
-        results.push({ type: 'notes', count: 1 });
+        results.push({ type: 'journal', count: 1 });
       }
 
       // ── MEALS ──────────────────────────────────────────────────────────────
@@ -211,19 +211,19 @@ ${contextSnippet}`;
       }
 
       // ── ACTIVITY ───────────────────────────────────────────────────────────
-      if (type === 'activity') {
+      if (type === 'activity' || type === 'workouts') {
         const { data: existing } = await supabase.from('entries').select('data')
-          .eq('date', date).eq('type', 'activity').eq('user_id', user.id).maybeSingle();
+          .eq('date', date).eq('type', 'workouts').eq('user_id', user.id).maybeSingle();
         const current = Array.isArray(existing?.data) ? existing.data : [];
 
         if (action.entries?.length) {
           const cleaned = current.filter(r => r.text?.trim());
           const newRows = action.entries.map(text => ({ id: crypto.randomUUID(), text, kcal: null }));
           await supabase.from('entries').upsert(
-            { date, type: 'activity', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
+            { date, type: 'workouts', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }
           );
-          results.push({ type: 'activity', count: newRows.length });
+          results.push({ type: 'workouts', count: newRows.length });
         }
         if (action.edit) {
           const updated = current.map(r =>
@@ -232,18 +232,18 @@ ${contextSnippet}`;
               : r
           );
           await supabase.from('entries').upsert(
-            { date, type: 'activity', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
+            { date, type: 'workouts', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }
           );
-          results.push({ type: 'activity', count: 1 });
+          results.push({ type: 'workouts', count: 1 });
         }
         if (action.delete) {
           const updated = current.filter(r => !r.text?.toLowerCase().includes(action.delete.toLowerCase()));
           await supabase.from('entries').upsert(
-            { date, type: 'activity', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
+            { date, type: 'workouts', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }
           );
-          results.push({ type: 'activity', count: 1 });
+          results.push({ type: 'workouts', count: 1 });
         }
       }
 

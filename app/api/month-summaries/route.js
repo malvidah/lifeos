@@ -28,7 +28,7 @@ export async function POST(request) {
   const { data: rows } = await supabase.from('entries')
     .select('date, type, data')
     .eq('user_id', user.id)
-    .in('type', ['notes', 'journal'])
+    .in('type', ['journal'])
     .gte('date', startDate)
     .lte('date', endDate);
 

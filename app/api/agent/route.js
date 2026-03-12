@@ -98,21 +98,21 @@ export async function POST(request) {
       }
 
       // notes
-      if (type === 'notes') {
+      if (type === 'notes' || type === 'journal') {
         const { data: existing } = await svc.from('entries').select('data')
-          .eq('date', targetDate).eq('type', 'notes').eq('user_id', userId).maybeSingle();
+          .eq('date', targetDate).eq('type', 'journal').eq('user_id', userId).maybeSingle();
         if (payload.append) {
           const current = existing?.data || '';
           const updated = current ? current + '\n\n' + payload.append : payload.append;
           await svc.from('entries').upsert(
-            { date: targetDate, type: 'notes', data: updated, user_id: userId, updated_at: new Date().toISOString() },
+            { date: targetDate, type: 'journal', data: updated, user_id: userId, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }
           );
           return Response.json({ ok: true, action: 'appended' });
         }
         if (payload.set !== undefined) {
           await svc.from('entries').upsert(
-            { date: targetDate, type: 'notes', data: payload.set, user_id: userId, updated_at: new Date().toISOString() },
+            { date: targetDate, type: 'journal', data: payload.set, user_id: userId, updated_at: new Date().toISOString() },
             { onConflict: 'date,type,user_id' }
           );
           return Response.json({ ok: true, action: 'set' });
@@ -120,7 +120,7 @@ export async function POST(request) {
       }
 
       // meals / activity — add rows
-      if (type === 'meals' || type === 'activity') {
+      if (type === 'meals' || type === 'activity' || type === 'workouts') {
         const { data: existing } = await svc.from('entries').select('data')
           .eq('date', targetDate).eq('type', type).eq('user_id', userId).maybeSingle();
         const current = Array.isArray(existing?.data) ? existing.data : [];

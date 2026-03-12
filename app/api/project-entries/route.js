@@ -57,7 +57,7 @@ export async function GET(req) {
   try {
     const { data: notesRows, error: ne } = await supabase
       .from('entries').select('date, data')
-      .eq('user_id', user.id).eq('type', 'notes')
+      .eq('user_id', user.id).eq('type', 'journal')
       .order('date', { ascending: true });
     if (ne) throw ne;
 

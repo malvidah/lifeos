@@ -2767,7 +2767,7 @@ function HealthCard({date,token,userId,onHealthChange,onScoresReady,onSyncStart,
     {key:"readiness",label:"Readiness",color:C.green, score:scores?.readiness?.score,
       fields:[{label:"HRV",value:h.hrv,unit:"ms",ck:"hrv"},{label:"RHR",value:h.rhr,unit:"bpm",ck:"rhr"}],
       sparkline:scores?.readiness?.sparkline},
-    {key:"activity", label:"Workouts", color:C.accent,score:scores?.activity?.score,
+    {key:"workouts", label:"Workouts", color:C.accent,score:scores?.activity?.score,
       fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",ck:"steps"},{label:"Active",value:h.activeMinutes,unit:"min",ck:"activeMinutes"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
@@ -3136,7 +3136,7 @@ function HealthCard({date,token,userId,onHealthChange,onScoresReady,onSyncStart,
 // Plain textarea with a transparent overlay that colorizes "# heading" lines.
 // Cmd+B / Cmd+I wrap selected text in ** / *.
 function JournalEditor({date,userId,token}) {
-  const {value, setValue, loaded} = useDbSave(date, 'notes', '', token, userId);
+  const {value, setValue, loaded} = useDbSave(date, 'journal', '', token, userId);
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
@@ -3421,7 +3421,7 @@ function isRun(w) { return (w.sport||w.type||w.name||"").toLowerCase().match(/ru
 function WorkoutsCard({date,token,userId,stravaConnected}) {
   const [syncedRows, setSyncedRows] = useState([]);
   const mkRow = () => ({id:Date.now(), text:"", dist:null, pace:null, kcal:null});
-  const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "activity", [mkRow()], token, userId);
+  const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "workouts", [mkRow()], token, userId);
   const {value:savedEstimates, setValue:setSavedEstimates, loaded:estLoaded} = useDbSave(date, "activity_kcal", {}, token, userId);
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
@@ -4719,7 +4719,7 @@ function useSearch(query, token, userId) {
     try {
       const sb = createClient();
       await sb.auth.setSession({ access_token: token, refresh_token: '' });
-      const types = ['notes', 'tasks', 'meals', 'activity', 'workouts'];
+      const types = ['journal', 'tasks', 'meals', 'workouts'];
       const rows = await Promise.all(
         types.map(t => sb.from('entries').select('date, data, type')
           .eq('user_id', userId).eq('type', t).order('date', { ascending: false }).limit(400)
@@ -4748,13 +4748,13 @@ function useSearch(query, token, userId) {
       activityR.forEach(row => {
         (Array.isArray(row.data) ? row.data : []).forEach(act => {
           if (act?.text?.toLowerCase().includes(qL))
-            hits.push({ type: 'activity', date: row.date, text: act.text });
+            hits.push({ type: 'workouts', date: row.date, text: act.text });
         });
       });
       workoutsR.forEach(row => {
         (Array.isArray(row.data) ? row.data : []).forEach(w => {
           const t = w?.name || w?.text || '';
-          if (t.toLowerCase().includes(qL)) hits.push({ type: 'activity', date: row.date, text: t });
+          if (t.toLowerCase().includes(qL)) hits.push({ type: 'workouts', date: row.date, text: t });
         });
       });
       hits.sort((a, b) => b.date.localeCompare(a.date));
@@ -5171,7 +5171,7 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
 // Source of truth: #tags present in the DB (notes + tasks). projectsMeta is
 // metadata-only (description). No tag in DB = no project button, period.
 function ProjectsCard({ date, token, userId, onSelectProject }) {
-  const { value: notes } = useDbSave(date, 'notes', '', token, userId);
+  const { value: notes } = useDbSave(date, 'journal', '', token, userId);
   const { value: tasks }  = useDbSave(date, 'tasks', [], token, userId);
   // projectsMeta is metadata-only (descriptions). NOT source of truth for project existence.
   const { value: projectsMeta } = useDbSave('global', 'projects', {}, token, userId);
@@ -5616,7 +5616,7 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
       // Synced workouts (already normalized: {id,text,source,dist,pace,kcal})
       sb.from('entries').select('date, data').eq('user_id', userId).eq('type', 'workouts').order('date', { ascending: false }),
       // Manual activity rows: {id,text,dist,pace,kcal}
-      sb.from('entries').select('date, data').eq('user_id', userId).eq('type', 'activity').order('date', { ascending: false }),
+      sb.from('entries').select('date, data').eq('user_id', userId).eq('type', 'workouts').order('date', { ascending: false }),
     ]).then(([{ data: wktData }, { data: actData }]) => {
       const seen = new Set();
       const all = [];
@@ -5674,12 +5674,12 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
     const text = actAddText.trim();
     if (!text) return;
     setActAddText('');
-    const current = await dbLoad(todayStr, 'activity', token);
+    const current = await dbLoad(todayStr, 'workouts', token);
     const existing = Array.isArray(current) ? current.filter(r => r.text) : [];
     const newRow = { id: Date.now(), text, dist: null, pace: null, kcal: null };
-    await dbSave(todayStr, 'activity', [...existing, newRow], token);
-    MEM[`${userId}:${todayStr}:activity`] = [...existing, newRow];
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['activity'] } }));
+    await dbSave(todayStr, 'workouts', [...existing, newRow], token);
+    MEM[`${userId}:${todayStr}:workouts`] = [...existing, newRow];
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['workouts'] } }));
     setRows(prev => [...(prev || []), { date: todayStr, ...newRow }]);
     estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token)
       .then(result => {
@@ -5950,13 +5950,13 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                   {isToday && (
                     <AddJournalLine project="__health__" onAdd={async text => {
                       const entryText = text.trim().toLowerCase().includes('{health}') ? text.trim() : text.trim() + ' {health}';
-                      const current = await dbLoad(todayStr, 'notes', token);
+                      const current = await dbLoad(todayStr, 'journal', token);
                       const existing = (typeof current === 'string' ? current : '') || '';
                       const updated = existing ? existing.trimEnd() + "\n" + entryText : entryText;
                       const newLineIndex = updated.split("\n").lastIndexOf(entryText);
-                      await dbSave(todayStr, 'notes', updated, token);
-                      MEM[`${userId}:${todayStr}:notes`] = updated;
-                      window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['notes'] } }));
+                      await dbSave(todayStr, 'journal', updated, token);
+                      MEM[`${userId}:${todayStr}:journal`] = updated;
+                      window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
                       setEntries(prev => prev ? {
                         ...prev,
                         journalEntries: [...(prev.journalEntries||[]), { date: todayStr, lineIndex: newLineIndex, text: entryText }],
@@ -6127,7 +6127,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   };
 
   // Per-project collapse state (persisted)
-  const [notesCollapsed,   toggleNotes]   = useCollapse(`pv:${project}:notes`,   false);
+  const [notesCollapsed,   toggleNotes]   = useCollapse(`pv:${project}:journal`,   false);
   const [tasksCollapsed,   toggleTasks]   = useCollapse(`pv:${project}:tasks`,   false);
   const [entriesCollapsed, toggleEntries] = useCollapse(`pv:${project}:entries`, false);
 
@@ -6198,15 +6198,15 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   }
 
   async function saveJournalEdit(date, lineIndex, newText) {
-    const current = await dbLoad(date, 'notes', token);
+    const current = await dbLoad(date, 'journal', token);
     if (current === null) return;
     const lines = (current || '').split('\n');
     lines[lineIndex] = newText;
     const updated = lines.join('\n');
-    await dbSave(date, 'notes', updated, token);
+    await dbSave(date, 'journal', updated, token);
     // Update module-level cache so daily view reflects immediately
-    MEM[`${userId}:${date}:notes`] = updated;
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['notes'] } }));
+    MEM[`${userId}:${date}:journal`] = updated;
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
     registerNewTags(newText);
     setEntries(prev => prev ? {
       ...prev,
@@ -6253,7 +6253,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
     const today = todayKey(); // local date — avoids UTC midnight mismatch with day view
     const taskText = text.trim().endsWith(`#${project}`)
       ? text.trim()
-      : `${text.trim()} #${project}`;
+      : `${text.trim()} {${project.toLowerCase()}}`;
     const current = await dbLoad(today, 'tasks', token);
     const existing = Array.isArray(current) ? current : [];
     const newTask = { id: crypto.randomUUID(), text: taskText, done: false };
@@ -6276,14 +6276,14 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
     const today = todayKey();
     const entryText = text.trim().endsWith(`#${project}`)
       ? text.trim()
-      : `${text.trim()} #${project}`;
-    const current = await dbLoad(today, 'notes', token);
+      : `${text.trim()} {${project.toLowerCase()}}`;
+    const current = await dbLoad(today, 'journal', token);
     const existing = (typeof current === 'string' ? current : '') || '';
     const updated = existing ? existing.trimEnd() + '\n' + entryText : entryText;
     const newLineIndex = updated.split('\n').lastIndexOf(entryText);
-    await dbSave(today, 'notes', updated, token);
-    MEM[`${userId}:${today}:notes`] = updated;
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['notes'] } }));
+    await dbSave(today, 'journal', updated, token);
+    MEM[`${userId}:${today}:journal`] = updated;
+    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
     registerNewTags(entryText);
     setEntries(prev => prev ? {
       ...prev,
@@ -6551,10 +6551,10 @@ const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
-  {id:"notes",    label:"Journal",  color:()=>C.accent, Comp:JournalEditor},
+  {id:"journal",    label:"Journal",  color:()=>C.accent, Comp:JournalEditor},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
   {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals,    headerRight:()=>MEALS_HDR},
-  {id:"activity", label:"Workouts", color:()=>C.green,  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
+  {id:"workouts", label:"Workouts", color:()=>C.green,  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
 ];
 const FULL_IDS = ["cal","health"];
 
@@ -6711,7 +6711,7 @@ export default function Dashboard() {
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
-  const [actCollapsed,    toggleAct]      = useCollapse("activity",false);
+  const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
   const collapseMap = {notes:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,activity:actCollapsed};
   const toggleMap   = {notes:toggleNotes,  tasks:toggleTasks,  meals:toggleMeals,  activity:toggleAct};
 

@@ -121,8 +121,8 @@ When adding data, embed an actions block in your reply:
 Action formats:
 - Add meals: {"type":"meals","entries":["salmon 400kcal","green salad"]}
 - Add tasks: {"type":"tasks","entries":[{"text":"call dentist","done":false}]}
-- Add note: {"type":"notes","append":"text to append"}
-- Add activity: {"type":"activity","entries":["30 min run"]}
+- Add note: {"type":"journal","append":"text to append"}
+- Add activity: {"type":"workouts","entries":["30 min run"]}
 - Edit meal: {"type":"meals","edit":{"find":"salmon","replace":"salmon tacos"}}
 - Delete: {"type":"tasks","delete":"call dentist"} or {"type":"meals","delete":"text"}
 - Complete task: {"type":"tasks","complete":"task text"}
@@ -168,16 +168,16 @@ You can combine a reply and an actions block in the same response. Default calen
         for (const action of actions) {
           const { type } = action;
 
-          if (type === 'notes' && action.append) {
+          if ((type === 'notes' || type === 'journal') && action.append) {
             const { data: existing } = await supabase.from('entries').select('data')
-              .eq('date', date).eq('type', 'notes').eq('user_id', user.id).maybeSingle();
+              .eq('date', date).eq('type', 'journal').eq('user_id', user.id).maybeSingle();
             const current = existing?.data || '';
             const updated = current ? current + '\n\n' + action.append : action.append;
             await supabase.from('entries').upsert(
-              { date, type: 'notes', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
+              { date, type: 'journal', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
               { onConflict: 'date,type,user_id' }
             );
-            executedActions.push({ type: 'notes' });
+            executedActions.push({ type: 'journal' });
           }
 
           if (type === 'meals') {
@@ -258,18 +258,18 @@ You can combine a reply and an actions block in the same response. Default calen
             }
           }
 
-          if (type === 'activity') {
+          if (type === 'activity' || type === 'workouts') {
             const { data: existing } = await supabase.from('entries').select('data')
-              .eq('date', date).eq('type', 'activity').eq('user_id', user.id).maybeSingle();
+              .eq('date', date).eq('type', 'workouts').eq('user_id', user.id).maybeSingle();
             const current = Array.isArray(existing?.data) ? existing.data : [];
             if (action.entries?.length) {
               const cleaned = current.filter(r => r.text?.trim());
               const newRows = action.entries.map(text => ({ id: crypto.randomUUID(), text, kcal: null }));
               await supabase.from('entries').upsert(
-                { date, type: 'activity', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
+                { date, type: 'workouts', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
                 { onConflict: 'date,type,user_id' }
               );
-              executedActions.push({ type: 'activity', count: newRows.length });
+              executedActions.push({ type: 'workouts', count: newRows.length });
             }
           }
 

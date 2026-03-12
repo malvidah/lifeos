@@ -79,7 +79,7 @@ export async function POST(request) {
     }
 
     const rows = Object.entries(byDate).map(([date, workouts]) => ({
-      user_id: user.id, date, type: "activity",
+      user_id: user.id, date, type: "workouts",
       data: { workouts },
       updated_at: new Date().toISOString(),
     }));
