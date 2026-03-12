@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment, createContext, useContext } from "react";
-import { DayLabEditor, NoteLinker } from './DayLabEditor.jsx';
+import { DayLabEditor } from './DayLabEditor.jsx';
 import { createClient } from "../lib/supabase.js";
 
 
@@ -3120,11 +3120,11 @@ function Notes({date,userId,token}) {
 
   const { notes: ctxNotes } = useContext(NoteContext);
   return (
-    <NoteLinker
-      noteNames={ctxNotes}
+    <DayLabEditor
       value={value || ''}
       onBlur={text => setValue(text, {undoLabel: 'Edit notes'})}
       onImageUpload={file => uploadImageFile(file, token)}
+      noteNames={ctxNotes}
       placeholder="What's on your mind?"
       textColor={C.text}
       mutedColor={C.dim}
@@ -5311,68 +5311,9 @@ function fmtDate(ds) {
 }
 
 
-// ─── Note context — provides available note names to all editors ──────────────
-// ProjectView/HealthProjectView populate this; all DayLabEditor wrappers read it.
+
+// ─── NoteContext — passes project note names to editors for {note} autocomplete
 const NoteContext = createContext({ notes: [] });
-
-// ─── renderWithNoteLinks — renders {NoteName} chips inline ───────────────────
-function renderWithNoteLinks(text, noteNames, onNoteClick) {
-  if (!text || !noteNames?.length) return text;
-  const RE = /\{([^}]{1,40})\}/g;
-  const parts = [];
-  let last = 0, m, i = 0;
-  while ((m = RE.exec(text)) !== null) {
-    if (m.index > last) parts.push(<span key={i++}>{text.slice(last, m.index)}</span>);
-    const name = m[1];
-    const isNote = noteNames.some(n => n.toLowerCase() === name.toLowerCase());
-    parts.push(
-      <span key={i++}
-        onClick={isNote && onNoteClick ? () => onNoteClick(name) : undefined}
-        style={{
-          display: 'inline-block', padding: '0 5px', borderRadius: 4,
-          background: isNote ? 'rgba(154,144,136,0.18)' : 'transparent',
-          color: isNote ? 'inherit' : 'inherit',
-          cursor: isNote ? 'pointer' : 'default',
-          fontFamily: isNote ? "'SF Mono','Fira Code',ui-monospace,monospace" : 'inherit',
-          fontSize: isNote ? '0.85em' : 'inherit',
-          letterSpacing: isNote ? '0.04em' : 'inherit',
-          textDecoration: isNote ? 'underline dotted' : 'none',
-        }}
-      >{isNote ? `{${name}}` : `{${name}}`}</span>
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(<span key={i++}>{text.slice(last)}</span>);
-  return parts;
-}
-
-// ─── NoteAutocomplete — floating dropdown shown while typing {... ─────────────
-function NoteAutocomplete({ query, notes, onSelect, onDismiss, anchorRef }) {
-  const filtered = notes.filter(n => n.toLowerCase().includes(query.toLowerCase()));
-  if (!filtered.length) return null;
-  return (
-    <div style={{
-      position: 'absolute', zIndex: 200, background: 'var(--dl-surface, #1E1C1A)',
-      border: '1px solid var(--dl-border, #272422)', borderRadius: 8,
-      boxShadow: '0 4px 20px rgba(0,0,0,0.3)', padding: '4px 0',
-      minWidth: 160, maxWidth: 280, maxHeight: 180, overflowY: 'auto',
-    }}>
-      {filtered.map((name, i) => (
-        <button key={i} onMouseDown={e => { e.preventDefault(); onSelect(name); }}
-          style={{
-            display: 'block', width: '100%', background: 'none', border: 'none',
-            textAlign: 'left', padding: '5px 12px', cursor: 'pointer',
-            fontFamily: "'SF Mono','Fira Code',ui-monospace,monospace",
-            fontSize: 12, color: 'var(--dl-text, #EFDFC3)',
-            letterSpacing: '0.05em',
-          }}
-          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
-          onMouseLeave={e => e.currentTarget.style.background = 'none'}
-        >{name}</button>
-      ))}
-    </div>
-  );
-}
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 // Unified nav bar — lives in scroll flow, right below the sticky vignette.
@@ -6101,34 +6042,49 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const [editingTask, setEditingTask]   = useState(null); // {date,id,text}
 
   // Notes card — multi-note store per project (type:'project-notes', keyed by project name)
-  // Shape: { notes: [{id,name,content}], activeId: string|null }
+  // Shape: { notes: [{id, content, updatedAt}], activeId }
+  // Note NAME is always the first line of content — no separate name field.
   const NOTES_EMPTY = { notes: [], activeId: null };
   const { value: notesStore, setValue: setNotesStore } =
     useDbSave(project || '__none__', 'project-notes', NOTES_EMPTY, token, userId);
   const notesList   = Array.isArray(notesStore?.notes) ? notesStore.notes : [];
   const activeNoteId = notesStore?.activeId ?? notesList[0]?.id ?? null;
   const activeNote  = notesList.find(n => n.id === activeNoteId) ?? notesList[0] ?? null;
+  // Derive note name from first line of content
+  const noteName = (note) => (note?.content || '').split('\n')[0].trim() || 'Untitled';
+  // Sorted by most recent first for the left panel
+  const sortedNotes = [...notesList].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  // All current note names (for {note} autocomplete)
+  const allNoteNames = notesList.map(noteName).filter(Boolean);
 
-  const addNote = () => {
+  const addNote = (initialName = '') => {
     const id = `note_${Date.now()}`;
-    const name = `Note ${notesList.length + 1}`;
-    const updated = { notes: [...notesList, { id, name, content: '' }], activeId: id };
+    const content = initialName || '';
+    const updated = { notes: [...notesList, { id, content, updatedAt: Date.now() }], activeId: id };
     setNotesStore(updated, { skipHistory: true });
   };
   const selectNote = (id) => {
     setNotesStore({ ...notesStore, activeId: id }, { skipHistory: true });
   };
-  const updateNoteContent = (id, content) => {
-    const updated = { ...notesStore, notes: notesList.map(n => n.id === id ? { ...n, content } : n) };
-    setNotesStore(updated, { skipHistory: true });
-  };
-  const updateNoteName = (id, name) => {
-    const updated = { ...notesStore, notes: notesList.map(n => n.id === id ? { ...n, name } : n) };
-    setNotesStore(updated, { skipHistory: true });
+  const updateNoteContent = (id, newContent) => {
+    const oldNote = notesList.find(n => n.id === id);
+    const oldName = noteName(oldNote);
+    const newName = (newContent || '').split('\n')[0].trim() || 'Untitled';
+    // If name changed, update {oldName} references in all other notes
+    let updatedNotes = notesList.map(n => {
+      if (n.id === id) return { ...n, content: newContent, updatedAt: Date.now() };
+      if (oldName !== newName && n.content) {
+        const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const updated = n.content.replace(new RegExp('\\{' + escaped + '\\}', 'g'), '{' + newName + '}');
+        return updated !== n.content ? { ...n, content: updated } : n;
+      }
+      return n;
+    });
+    setNotesStore({ ...notesStore, notes: updatedNotes }, { skipHistory: true });
   };
   const deleteNote = (id) => {
     const remaining = notesList.filter(n => n.id !== id);
-    const newActive = remaining.find(n => n.id !== id)?.id ?? remaining[0]?.id ?? null;
+    const newActive = remaining[0]?.id ?? null;
     setNotesStore({ notes: remaining, activeId: newActive }, { skipHistory: true });
   };
 
@@ -6304,76 +6260,73 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   );
 
   const _pcol = project === '__everything__' ? C.accent : projectColor(project);
-  const noteNamesForContext = notesList.map(n => n.name);
+  const noteNamesForContext = allNoteNames;
 
   return (
     <NoteContext.Provider value={{ notes: noteNamesForContext }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
 
-      {/* Notes card — tabbed named notes, 2/3 editor + 1/3 tabs */}
+      {/* Notes card — left 1/3: note list sorted by recency; right 2/3: editor */}
       {project !== '__everything__' && (
         <Widget
           label="Notes"
           color={C.muted}
           collapsed={notesCollapsed}
           onToggle={toggleNotes}
+          headerRight={
+            <button onClick={() => addNote()} style={{ background:'none', border:'none', cursor:'pointer', padding:'4px 8px', fontFamily:mono, fontSize:F.sm, color:C.dim, letterSpacing:'0.06em', display:'flex', alignItems:'center', gap:4 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              note
+            </button>
+          }
         >
-          <div style={{ display: 'flex', minHeight: 220 }}>
-            {/* Editor — 2/3 width */}
-            <div style={{ flex: 2, minWidth: 0, borderRight: `1px solid ${C.border}`, paddingRight: 12 }}>
-              {notesList.length === 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, padding: '8px 0' }}>
-                  <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim }}>No notes yet.</span>
-                  <button onClick={addNote} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', fontFamily: mono, fontSize: F.sm, color: C.muted, cursor: 'pointer', letterSpacing: '0.06em' }}>+ New note</button>
+          <div style={{ display: 'flex', gap: 0, minHeight: 200 }}>
+            {/* Left: note list — 1/3 width, sorted by most recent */}
+            <div style={{ width: '33%', flexShrink: 0, borderRight: `1px solid ${C.border}`, paddingRight: 10, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', maxHeight: 400 }}>
+              {sortedNotes.length === 0 ? (
+                <div style={{ fontFamily: serif, fontSize: F.sm, color: C.dim, padding: '4px 0' }}>No notes yet.<br/>Use the + button or type <span style={{ fontFamily: mono }}>{'{Note Name}'}</span> in any editor.</div>
+              ) : sortedNotes.map(note => (
+                <div key={note.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <button
+                    onClick={() => selectNote(note.id)}
+                    style={{
+                      flex: 1, minWidth: 0, background: note.id === activeNoteId ? C.well : 'none',
+                      border: note.id === activeNoteId ? `1px solid ${C.border}` : '1px solid transparent',
+                      borderRadius: 6, padding: '5px 8px', textAlign: 'left', cursor: 'pointer',
+                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.04em',
+                      color: note.id === activeNoteId ? C.text : C.muted,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      transition: 'all 0.12s',
+                    }}
+                  >{noteName(note)}</button>
+                  <button
+                    onClick={() => { if (window.confirm(`Delete "${noteName(note)}"?`)) deleteNote(note.id); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: C.dim, fontSize: 10, lineHeight: 1, flexShrink: 0, opacity: 0.5 }}
+                    title="Delete note"
+                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+                  >×</button>
                 </div>
+              ))}
+            </div>
+            {/* Right: editor — 2/3 width. First line = note name. */}
+            <div style={{ flex: 1, minWidth: 0, paddingLeft: 12 }}>
+              {notesList.length === 0 ? (
+                <div style={{ fontFamily: serif, fontSize: F.md, color: C.dim, padding: '4px 0' }}>Select or create a note.</div>
               ) : activeNote ? (
-                <NoteLinker
+                <DayLabEditor
                   key={activeNote.id}
-                  noteNames={notesList.filter(n => n.id !== activeNote.id).map(n => n.name)}
                   value={activeNote.content || ''}
                   onBlur={text => updateNoteContent(activeNote.id, text)}
-                  placeholder="Start writing…"
+                  placeholder='Note name (first line)…'
+                  noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
+                  onCreateNote={name => addNote(name)}
                   textColor={C.text}
                   mutedColor={C.dim}
                   color={C.muted}
                   style={{ minHeight: 180, width: '100%' }}
                 />
               ) : null}
-            </div>
-            {/* Tabs — 1/3 width */}
-            <div style={{ flex: 1, minWidth: 0, paddingLeft: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              {notesList.map(note => (
-                <div key={note.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <button
-                    onClick={() => selectNote(note.id)}
-                    style={{
-                      flex: 1, minWidth: 0, background: note.id === activeNoteId ? `${C.surface}` : 'none',
-                      border: note.id === activeNoteId ? `1px solid ${C.border}` : '1px solid transparent',
-                      borderRadius: 6, padding: '4px 8px', textAlign: 'left', cursor: 'pointer',
-                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.05em',
-                      color: note.id === activeNoteId ? C.text : C.muted,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      transition: 'all 0.12s',
-                    }}
-                    onDoubleClick={() => {
-                      const newName = window.prompt('Rename note:', note.name);
-                      if (newName?.trim()) updateNoteName(note.id, newName.trim());
-                    }}
-                    title={`${note.name} (double-click to rename)`}
-                  >
-                    {note.name}
-                  </button>
-                  <button
-                    onClick={() => { if (window.confirm(`Delete "${note.name}"?`)) deleteNote(note.id); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: C.dim, fontSize: 11, lineHeight: 1, flexShrink: 0 }}
-                    title="Delete note"
-                  >×</button>
-                </div>
-              ))}
-              <button
-                onClick={addNote}
-                style={{ marginTop: 4, background: 'none', border: `1px dashed ${C.border}`, borderRadius: 6, padding: '3px 8px', fontFamily: mono, fontSize: F.sm, color: C.dim, cursor: 'pointer', textAlign: 'left', letterSpacing: '0.05em' }}
-              >+ note</button>
             </div>
           </div>
         </Widget>

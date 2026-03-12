@@ -6,7 +6,8 @@ import { Extension, Node } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DecorationSet, Decoration } from '@tiptap/pm/view';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { Suggestion } from '@tiptap/suggestion';
 
 // ── Constants (kept in sync with Dashboard.jsx) ───────────────────────────────
 const serif = "Georgia, 'Times New Roman', serif";
@@ -39,7 +40,6 @@ function injectEditorStyles() {
 }
 
 // ── HashTag decoration plugin ─────────────────────────────────────────────────
-// Visual only — text stays as `#Word` in doc. Zero serialisation overhead.
 const HashTagExtension = Extension.create({
   name: 'hashtag',
   addProseMirrorPlugins() {
@@ -75,7 +75,7 @@ const URLExtension = Extension.create({
       props: {
         decorations(state) {
           const decos = [];
-          const re = /(?<!\[img:)(https?:\/\/[^\s<>"')\]]+)/g;
+          const re = /(?<!\[img:)(https?:\/\/[^\s<>"')]+)/g;
           state.doc.descendants((node, pos) => {
             if (!node.isText) return;
             let m; re.lastIndex = 0;
@@ -92,6 +92,84 @@ const URLExtension = Extension.create({
     })];
   },
 });
+
+// ── NoteLink decoration plugin ────────────────────────────────────────────────
+// {Note Name} stays as plain text; this plugin adds visual styling only.
+// noteNamesRef: React ref to string[] so it stays fresh without recreating plugin.
+function createNoteLinkExtension(noteNamesRef) {
+  return Extension.create({
+    name: 'noteLink',
+    addProseMirrorPlugins() {
+      return [new Plugin({
+        key: new PluginKey('noteLink'),
+        props: {
+          decorations(state) {
+            const names = noteNamesRef.current;
+            if (!names || !names.length) return DecorationSet.empty;
+            const decos = [];
+            // Build a regex that matches any {known name}
+            const escaped = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+            const re = new RegExp(`\\{(${escaped.join('|')})\\}`, 'g');
+            state.doc.descendants((node, pos) => {
+              if (!node.isText) return;
+              let m; re.lastIndex = 0;
+              while ((m = re.exec(node.text)) !== null) {
+                decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
+                  style: `color:#9A9088;background:rgba(154,144,136,0.12);border:1px solid rgba(154,144,136,0.25);border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;line-height:1.6;vertical-align:middle;display:inline-block;cursor:pointer`,
+                  class: 'dl-note-link',
+                }));
+              }
+            });
+            return DecorationSet.create(state.doc, decos);
+          },
+        },
+      })];
+    },
+  });
+}
+
+// ── NoteLinkSuggestion Extension ──────────────────────────────────────────────
+// Uses @tiptap/suggestion to trigger on `{`, shows dropdown, inserts {name}.
+// renderRef: React ref to { onStart, onUpdate, onExit, onKeyDown } callbacks.
+function createNoteLinkSuggestion(noteNamesRef, renderRef, onCreateNote) {
+  return Extension.create({
+    name: 'noteLinkSuggestion',
+    addProseMirrorPlugins() {
+      const editor = this.editor;
+      return [
+        Suggestion({
+          editor,
+          char: '{',
+          allowSpaces: true,
+          allowedPrefixes: null,
+          items: ({ query }) => {
+            const names = noteNamesRef.current || [];
+            const q = query.toLowerCase();
+            const matches = names.filter(n => n.toLowerCase().includes(q));
+            // If query is non-empty and no exact match, offer "Create {query}" option
+            if (q && !names.some(n => n.toLowerCase() === q)) {
+              matches.push(`__create__:${query}`);
+            }
+            return matches;
+          },
+          command: ({ editor, range, props }) => {
+            const isCreate = typeof props === 'string' && props.startsWith('__create__:');
+            const name = isCreate ? props.slice('__create__:'.length) : props;
+            // Delete the {query text and insert {name}
+            editor.chain().focus().deleteRange(range).insertContent(`{${name}}`).run();
+            if (isCreate && onCreateNote) onCreateNote(name);
+          },
+          render: () => ({
+            onStart: p => renderRef.current?.onStart?.(p),
+            onUpdate: p => renderRef.current?.onUpdate?.(p),
+            onExit:   p => renderRef.current?.onExit?.(p),
+            onKeyDown: p => renderRef.current?.onKeyDown?.(p) ?? false,
+          }),
+        }),
+      ];
+    },
+  });
+}
 
 // ── ImageBlock node ───────────────────────────────────────────────────────────
 const ImageBlock = Node.create({
@@ -153,11 +231,12 @@ export function textToContent(text) {
 //   onEnterCommit   — (text) => void — singleLine: Enter commits + clears editor
 //   onEnterSplit    — ({before,after}) => void — singleLine: Enter splits at caret
 //   onImageUpload   — async (File) => url — enables image paste/drop
+//   noteNames       — string[] — enables {note} autocomplete + decoration
+//   onCreateNote    — (name) => void — called when user creates note via {name}
 //   placeholder     — string
 //   singleLine      — boolean: suppress multiline Enter
 //   style           — style object for outer wrapper
 //   color           — caret/accent colour (default #D08828)
-//   theme           — 'light' | 'dark'
 //   editable        — boolean (default true)
 export function DayLabEditor({
   value,
@@ -166,6 +245,8 @@ export function DayLabEditor({
   onEnterSplit,
   onBackspaceEmpty,
   onImageUpload,
+  noteNames,
+  onCreateNote,
   placeholder,
   singleLine = false,
   autoFocus = false,
@@ -177,6 +258,7 @@ export function DayLabEditor({
 }) {
   useEffect(injectEditorStyles, []);
 
+  // Refs for callbacks — avoids stale closures in TipTap plugins
   const lastExternalValue   = useRef(value);
   const editorRef           = useRef(null);
   const onBlurRef           = useRef(onBlur);
@@ -184,15 +266,72 @@ export function DayLabEditor({
   const onEnterSplitRef     = useRef(onEnterSplit);
   const onBackspaceEmptyRef = useRef(onBackspaceEmpty);
   const onImageUploadRef    = useRef(onImageUpload);
+  const noteNamesRef        = useRef(noteNames || []);
+  const onCreateNoteRef     = useRef(onCreateNote);
 
   useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
   useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
   useEffect(() => { onEnterSplitRef.current      = onEnterSplit; },     [onEnterSplit]);
   useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
   useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
+  useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
+  useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
+
+  // ── Suggestion dropdown state ────────────────────────────────────────────
+  const [suggState, setSuggState] = useState(null); // null | { items, selectedIndex, clientRect, command }
+  const suggStateRef = useRef(null);
+  useEffect(() => { suggStateRef.current = suggState; }, [suggState]);
+
+  // renderRef bridges TipTap suggestion lifecycle → React state
+  const renderRef = useRef({
+    onStart(props) {
+      setSuggState({
+        items: props.items,
+        selectedIndex: 0,
+        clientRect: props.clientRect,
+        command: props.command,
+      });
+    },
+    onUpdate(props) {
+      setSuggState(s => s ? {
+        ...s,
+        items: props.items,
+        selectedIndex: 0,
+        clientRect: props.clientRect,
+        command: props.command,
+      } : null);
+    },
+    onExit() { setSuggState(null); },
+    onKeyDown({ event }) {
+      const s = suggStateRef.current;
+      if (!s) return false;
+      if (event.key === 'ArrowDown') {
+        setSuggState(prev => ({ ...prev, selectedIndex: (prev.selectedIndex + 1) % Math.max(prev.items.length, 1) }));
+        return true;
+      }
+      if (event.key === 'ArrowUp') {
+        setSuggState(prev => ({ ...prev, selectedIndex: (prev.selectedIndex - 1 + Math.max(prev.items.length, 1)) % Math.max(prev.items.length, 1) }));
+        return true;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        const item = s.items[s.selectedIndex];
+        if (item != null) { s.command(item); setSuggState(null); }
+        return true;
+      }
+      if (event.key === 'Escape') { setSuggState(null); return true; }
+      return false;
+    },
+  });
 
   textColor  = textColor  || 'inherit';
   mutedColor = mutedColor || '#9A9088';
+
+  // Build extensions once — note: noteNamesRef and renderRef are stable refs
+  const noteLinkDecoration = useRef(createNoteLinkExtension(noteNamesRef));
+  const noteLinkSuggestion = useRef(null);
+  if (noteNames !== undefined && noteLinkSuggestion.current === null) {
+    // Will be set after editor is available, below
+  }
 
   const editor = useEditor({
     extensions: [
@@ -203,8 +342,15 @@ export function DayLabEditor({
       }),
       HashTagExtension,
       URLExtension,
+      noteLinkDecoration.current,
       ...(singleLine ? [] : [ImageBlock]),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
+      // Suggestion extension — only added when noteNames prop is provided
+      ...(noteNames !== undefined ? [createNoteLinkSuggestion(
+        noteNamesRef,
+        renderRef,
+        name => onCreateNoteRef.current?.(name),
+      )] : []),
     ],
     content: { type: 'doc', content: textToContent(value || '') },
     editable,
@@ -263,32 +409,27 @@ export function DayLabEditor({
 
   useEffect(() => { editorRef.current = editor; }, [editor]);
 
-  // Imperatively focus cursor to end on mount — more reliable than TipTap's autofocus option
   useEffect(() => {
     if (!editor || !autoFocus) return;
-    // Defer one tick so the DOM is painted and React has finished its commit
     const id = setTimeout(() => editor.commands.focus('end'), 0);
     return () => clearTimeout(id);
   }, [editor, autoFocus]);
 
-  // Capture-phase keydown on the editor DOM: fires before ProseMirror, so we see
-  // state as it was BEFORE any key processing — required for reliable empty check
   useEffect(() => {
     if (!editor || !singleLine) return;
     const dom = editor.view.dom;
     const handler = (e) => {
       if (e.key !== 'Backspace' || !onBackspaceEmptyRef.current) return;
       const text = docToText(editor.view.state.doc.toJSON());
-      if (text) return; // not empty — let ProseMirror handle normally
+      if (text) return;
       e.preventDefault();
       e.stopPropagation();
       onBackspaceEmptyRef.current();
     };
-    dom.addEventListener('keydown', handler, true); // capture phase
+    dom.addEventListener('keydown', handler, true);
     return () => dom.removeEventListener('keydown', handler, true);
   }, [editor, singleLine]);
 
-  // Sync external value only when editor is not focused
   useEffect(() => {
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
@@ -299,107 +440,54 @@ export function DayLabEditor({
 
   useEffect(() => { editor?.setEditable(editable); }, [editable, editor]);
 
-  return (
-    <div className="dl-editor" style={{
-      fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
-      color: textColor, caretColor: color,
-      '--dl-muted': mutedColor,
-      ...style,
-    }}>
-      <EditorContent editor={editor} />
-    </div>
-  );
-}
-
-// ── NoteLinker ────────────────────────────────────────────────────────────────
-// Wraps DayLabEditor and adds {note name} autocomplete support.
-// Pass noteNames={['Note 1','Note 2']} to enable.
-import { useState as _useState, useRef as _useRef } from 'react';
-
-export function NoteLinker({ noteNames = [], onNoteClick, wrapperStyle, ...editorProps }) {
-  const [acQuery, setAcQuery]   = _useState(null); // null = closed, string = open
-  const [acPos,   setAcPos]     = _useState({ top: 0, left: 0 });
-  const wrapRef                 = _useRef(null);
-
-  // Intercept keystrokes via a capturing listener on the wrapper div
-  function handleKeyDown(e) {
-    if (!noteNames.length) return;
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return;
-    const range = sel.getRangeAt(0);
-
-    if (e.key === '{') {
-      // Anchor dropdown below cursor
-      const rect = range.getBoundingClientRect();
-      const wrect = wrapRef.current?.getBoundingClientRect() || { top: 0, left: 0 };
-      setAcPos({ top: rect.bottom - wrect.top + 4, left: rect.left - wrect.left });
-      setAcQuery('');
-      return;
-    }
-    if (acQuery !== null) {
-      if (e.key === 'Escape') { setAcQuery(null); return; }
-      if (e.key === 'Backspace' && acQuery.length === 0) { setAcQuery(null); return; }
-      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
-        setAcQuery(q => q + e.key);
-      }
-    }
-  }
-
-  function handleKeyUp(e) {
-    // If user typed } or space, close dropdown
-    if (acQuery !== null && (e.key === '}' || e.key === ' ')) setAcQuery(null);
-  }
-
-  function insertNote(name) {
-    setAcQuery(null);
-    // Find the { that opened the autocomplete and replace through current caret
-    const sel = window.getSelection();
-    if (!sel || !sel.rangeCount) return;
-    const range = sel.getRangeAt(0);
-    const node  = range.startContainer;
-    if (node.nodeType !== Node.TEXT_NODE) return;
-    const text  = node.textContent;
-    const caretPos = range.startOffset;
-    const bracePos = text.lastIndexOf('{', caretPos - 1);
-    if (bracePos === -1) return;
-    // Replace from { through typed query chars with full {name}
-    node.textContent = text.slice(0, bracePos) + `{${name}}` + text.slice(caretPos);
-    // Move caret to end of inserted text
-    const newRange = document.createRange();
-    newRange.setStart(node, bracePos + name.length + 2);
-    newRange.collapse(true);
-    sel.removeAllRanges();
-    sel.addRange(newRange);
-    // Fire input event so TipTap syncs
-    node.parentElement?.dispatchEvent(new Event('input', { bubbles: true }));
-  }
+  // ── Suggestion dropdown position ─────────────────────────────────────────
+  const [dropPos, setDropPos] = useState({ top: 0, left: 0 });
+  const wrapRef = useRef(null);
+  useEffect(() => {
+    if (!suggState?.clientRect) return;
+    const rect = suggState.clientRect();
+    if (!rect || !wrapRef.current) return;
+    const wrect = wrapRef.current.getBoundingClientRect();
+    setDropPos({ top: rect.bottom - wrect.top + 4, left: rect.left - wrect.left });
+  }, [suggState]);
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative', ...wrapperStyle }}
-      onKeyDown={handleKeyDown} onKeyUp={handleKeyUp}>
-      <DayLabEditor {...editorProps} />
-      {acQuery !== null && (
-        <div style={{ position: 'absolute', top: acPos.top, left: acPos.left, zIndex: 200,
-          background: '#1E1C1A', border: '1px solid #272422', borderRadius: 8,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.35)', padding: '4px 0',
-          minWidth: 160, maxWidth: 260, maxHeight: 180, overflowY: 'auto' }}>
-          {noteNames
-            .filter(n => n.toLowerCase().includes(acQuery.toLowerCase()))
-            .map((name, i) => (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div className="dl-editor" style={{
+        fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
+        color: textColor, caretColor: color,
+        '--dl-muted': mutedColor,
+        ...style,
+      }}>
+        <EditorContent editor={editor} />
+      </div>
+
+      {/* Note link suggestion dropdown */}
+      {suggState && suggState.items.length > 0 && (
+        <div style={{
+          position: 'absolute', top: dropPos.top, left: dropPos.left, zIndex: 300,
+          background: 'var(--dl-surface, #1E1C1A)',
+          border: '1px solid var(--dl-border, #272422)',
+          borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.35)',
+          padding: '4px 0', minWidth: 180, maxWidth: 280, maxHeight: 200, overflowY: 'auto',
+        }}>
+          {suggState.items.map((item, i) => {
+            const isCreate = typeof item === 'string' && item.startsWith('__create__:');
+            const label = isCreate ? `+ Create "${item.slice('__create__:'.length)}"` : item;
+            return (
               <button key={i}
-                onMouseDown={e => { e.preventDefault(); insertNote(name); }}
-                style={{ display: 'block', width: '100%', background: 'none', border: 'none',
-                  textAlign: 'left', padding: '5px 12px', cursor: 'pointer',
-                  fontFamily: "'SF Mono','Fira Code',ui-monospace,monospace",
-                  fontSize: 12, color: '#EFDFC3', letterSpacing: '0.05em' }}
-                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'none'}
-              >{name}</button>
-            ))}
-          {!noteNames.filter(n => n.toLowerCase().includes(acQuery.toLowerCase())).length && (
-            <div style={{ padding: '5px 12px', fontFamily: "'SF Mono','Fira Code',monospace",
-              fontSize: 12, color: '#6A6258' }}>No notes</div>
-          )}
+                onMouseDown={e => { e.preventDefault(); suggState.command(item); setSuggState(null); }}
+                style={{
+                  display: 'block', width: '100%', background: i === suggState.selectedIndex
+                    ? 'rgba(255,255,255,0.07)' : 'none',
+                  border: 'none', textAlign: 'left', padding: '5px 12px', cursor: 'pointer',
+                  fontFamily: mono, fontSize: 12, letterSpacing: '0.05em',
+                  color: isCreate ? '#9A9088' : '#EFDFC3',
+                }}
+                onMouseEnter={() => setSuggState(s => s ? { ...s, selectedIndex: i } : s)}
+              >{label}</button>
+            );
+          })}
         </div>
       )}
     </div>
