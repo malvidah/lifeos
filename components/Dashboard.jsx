@@ -3704,6 +3704,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const mkRow=()=>({id:Date.now(),text:"",done:false});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
   const taskProjectNames = useContext(ProjectNamesContext);
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   const skipBlurRef=useRef(false);
   const longPressTimer=useRef(null);
   const clickCaretRef=useRef(null);
@@ -3819,6 +3820,8 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   textColor={row.done ? C.muted : C.text}
                   mutedColor={C.dim}
                   color={row.done ? C.muted : C.accent}
+                  onProjectClick={name => navigateToProject(name)}
+                  onNoteClick={name => navigateToNote(name)}
                   onBlur={text => {
                     if (skipBlurRef.current) { skipBlurRef.current = false; return; }
                     setRows(prev => (Array.isArray(prev) ? prev : []).map(r => r.id === row.id ? {...r, text} : r));

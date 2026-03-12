@@ -573,15 +573,24 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               { type: 'doc', content: [{ type: 'paragraph' }] }
             ), 0);
           } else if (onEnterSplitRef.current) {
-            // Calculate char position before split
+            // Serialize the doc split at the cursor position.
+            // We cannot walk only text nodes — atom nodes (projectTag, noteLink) serialize
+            // as multi-char tokens ({name}, [name]) and a text-only walk gives the wrong offset.
+            // Instead: slice the PM doc at `from`, serialize each half independently.
             const { from } = view.state.selection;
-            let cp = 0;
-            view.state.doc.descendants((node, nodePos) => {
-              if (!node.isText) return;
-              if (from > nodePos + node.text.length) cp += node.text.length;
-              else if (from > nodePos)               cp += from - nodePos;
-            });
-            onEnterSplitRef.current({ before: text.slice(0, cp), after: text.slice(cp) });
+            const doc = view.state.doc;
+            // The paragraph is the only block; its content spans pos 1..doc.content.size-1
+            // Clamp: cursor can be at position 1 (before all content) up to doc.content.size-1
+            const paraStart = 1;
+            const paraEnd   = doc.content.size - 1;
+            const splitAt   = Math.max(paraStart, Math.min(from, paraEnd));
+
+            // Build left doc: paragraph with content [paraStart, splitAt)
+            const leftContent  = doc.cut(paraStart, splitAt);
+            const rightContent = doc.cut(splitAt, paraEnd);
+            const before = docToText({ type: 'doc', content: leftContent.content.size  ? [{ type: 'paragraph', content: leftContent.content.toJSON()  }] : [{ type: 'paragraph' }] });
+            const after  = docToText({ type: 'doc', content: rightContent.content.size ? [{ type: 'paragraph', content: rightContent.content.toJSON() }] : [{ type: 'paragraph' }] });
+            onEnterSplitRef.current({ before, after });
           }
           return true;
         }
