@@ -6,8 +6,6 @@ import { Extension, Node } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DecorationSet, Decoration } from '@tiptap/pm/view';
-import TaskList from '@tiptap/extension-task-list';
-import TaskItem from '@tiptap/extension-task-item';
 import {
   useEffect, useLayoutEffect, useRef, useState,
   forwardRef, useImperativeHandle,
@@ -44,43 +42,6 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
-  `;
-  document.head.appendChild(s);
-}
-
-function injectTaskStyles() {
-  if (typeof document === 'undefined') return;
-  const existing = document.getElementById('daylab-task-styles');
-  if (existing) existing.remove();
-  const s = document.createElement('style');
-  s.id = 'daylab-task-styles';
-  s.textContent = `
-    .dl-tasks .ProseMirror li[data-type="taskItem"] > label {
-      display: flex; align-items: center; flex-shrink: 0;
-      margin-top: 0.3em; cursor: pointer; user-select: none;
-    }
-    .dl-tasks .ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"] {
-      appearance: none; -webkit-appearance: none;
-      width: 15px; height: 15px; border-radius: 4px; flex-shrink: 0;
-      border: 1.5px solid #333028; background: transparent; cursor: pointer;
-      transition: background 0.15s, border-color 0.15s; position: relative; margin: 0;
-    }
-    .dl-tasks .ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"]:checked {
-      background: #4878A8; border-color: #4878A8;
-    }
-    .dl-tasks .ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"]:checked::after {
-      content: ''; position: absolute;
-      left: 3px; top: 1px; width: 5px; height: 9px;
-      border: 1.5px solid #111110; border-top: none; border-left: none;
-      transform: rotate(45deg);
-    }
-    .dl-tasks .ProseMirror li[data-type="taskItem"] > div { flex: 1; min-width: 0; }
-    .dl-tasks .ProseMirror li[data-type="taskItem"] > div > p { margin: 0; }
-    .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"] > div {
-      text-decoration: line-through; opacity: 0.35;
-    }
-    [data-task-filter="open"] .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"]  { display: none !important; }
-    [data-task-filter="done"] .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="false"] { display: none !important; }
   `;
   document.head.appendChild(s);
 }
@@ -186,25 +147,6 @@ const URLExtension = Extension.create({
           });
           return DecorationSet.create(state.doc, decos);
         },
-      },
-    })];
-  },
-});
-
-// TaskGuard: appendTransaction plugin — ensures doc always has exactly one taskList root.
-// appendTransaction fires AFTER the transaction is applied (unlike keyboard shortcuts).
-const TaskGuard = Extension.create({
-  name: 'taskGuard',
-  addProseMirrorPlugins() {
-    return [new Plugin({
-      key: new PluginKey('taskGuard'),
-      appendTransaction(_transactions, _oldState, newState) {
-        if (newState.doc.firstChild?.type.name === 'taskList') return null;
-        const { schema } = newState;
-        const taskList = schema.nodes.taskList.create(null, [
-          schema.nodes.taskItem.create({ checked: false }, [schema.nodes.paragraph.create()]),
-        ]);
-        return newState.tr.replaceWith(0, newState.doc.content.size, taskList);
       },
     })];
   },
@@ -397,7 +339,7 @@ function SuggestionDropdown({ state, onSelect }) {
 //   value, onBlur, onEnterCommit, onEnterSplit, onBackspaceEmpty
 //   onImageUpload, noteNames, projectNames
 //   onProjectClick, onNoteClick
-//   placeholder, singleLine, taskMode, autoFocus
+//   placeholder, singleLine, autoFocus
 //   style, color, textColor, mutedColor, editable
 
 export const DayLabEditor = forwardRef(function DayLabEditor({
@@ -415,7 +357,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onCreateProject,   // (name) — called when /p creates a new project
   placeholder,
   singleLine   = false,
-  taskMode     = false,
   autoFocus    = false,
   style,
   color        = ACCENT,
@@ -424,7 +365,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   editable     = true,
 }, ref) {
   useEffect(injectEditorStyles, []);
-  useEffect(() => { if (taskMode) injectTaskStyles(); }, [taskMode]);
 
   // Stable refs — avoid stale closures in TipTap plugins
   const editorRef           = useRef(null);
@@ -440,7 +380,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onNoteClickRef      = useRef(onNoteClick);
   const onCreateNoteRef     = useRef(onCreateNote);
   const onCreateProjectRef  = useRef(onCreateProject);
-  const taskModeRef         = useRef(taskMode);
 
   useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
   useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
@@ -453,7 +392,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
   useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
   useEffect(() => { onCreateProjectRef.current   = onCreateProject; },  [onCreateProject]);
-  useEffect(() => { taskModeRef.current          = taskMode; },         [taskMode]);
 
   useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.commands.focus('end'),
@@ -528,14 +466,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ProjectTagNode,
       NoteLinkNode,
       ...(singleLine ? [] : [ImageBlock]),
-      ...(taskMode ? [
-        TaskList.configure({ HTMLAttributes: { style: 'list-style:none;padding:0;margin:0;' } }),
-        TaskItem.configure({
-          nested: false,
-          HTMLAttributes: { style: 'display:flex;align-items:flex-start;gap:10px;padding:3px 0;' },
-        }),
-        TaskGuard,
-      ] : []),
+
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
       // Unified slash command: /p → project chip, /n → note chip
@@ -606,9 +537,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       }),
     ],
 
-    content: taskMode
-      ? (value || '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>')
-      : { type: 'doc', content: textToContent(value || '') },
+    content: { type: 'doc', content: textToContent(value || '') },
     editable,
 
     editorProps: {
@@ -622,9 +551,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           // so TipTap's onBlur never fires. Without this explicit flush the useDbSave
           // 200ms debounce timer never executes and the entry is lost on unmount.
           if (onBlurRef.current && editorRef.current) {
-            const serialised = taskModeRef.current
-              ? editorRef.current.getHTML()
-              : docToText(editorRef.current.getJSON());
+            const serialised = docToText(editorRef.current.getJSON());
             // Call onBlur synchronously — this writes to MEM and starts the 200ms
             // debounce timer. We then also fire a synthetic blur on the DOM element
             // so any outer focus-tracking (useDbSave DIRTY flag etc.) sees the blur.
@@ -638,9 +565,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         if (noteEl && onNoteClickRef.current) {
           // Same flush before navigating to a note
           if (onBlurRef.current && editorRef.current) {
-            const serialised = taskModeRef.current
-              ? editorRef.current.getHTML()
-              : docToText(editorRef.current.getJSON());
+            const serialised = docToText(editorRef.current.getJSON());
             onBlurRef.current(serialised);
             editorRef.current.view?.dom?.blur();
           }
@@ -701,7 +626,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
 
     onBlur({ editor }) {
-      onBlurRef.current?.(taskMode ? editor.getHTML() : docToText(editor.getJSON()));
+      onBlurRef.current?.(docToText(editor.getJSON()));
     },
   });
 
@@ -724,7 +649,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       const ed = editorRef.current;
       if (!ed || ed.isDestroyed || !onBlurRef.current) return;
       try {
-        const text = taskModeRef.current ? ed.getHTML() : docToText(ed.getJSON());
+        const text = docToText(ed.getJSON());
         onBlurRef.current(text);
       } catch (_) { /* editor already destroyed — ignore */ }
     };
@@ -749,11 +674,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
     if (!editor.isFocused) {
-      if (taskMode) {
-        editor.commands.setContent(value || '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>');
-      } else {
-        editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });
-      }
+      editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });
     }
   }, [value, editor]); // eslint-disable-line
 
@@ -761,7 +682,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
   return (
     <>
-      <div className={`dl-editor${taskMode ? ' dl-tasks' : ''}`} style={{
+      <div className="dl-editor" style={{
         fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
         color: textColor, caretColor: color,
         '--dl-muted': mutedColor,

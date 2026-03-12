@@ -3589,7 +3589,7 @@ function TaskFilterBtns({ filter, setFilter }) {
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 // Stores as HTML string (like journal). Old format [{id,text,done}] auto-migrates.
-// Filter works via CSS: data-task-filter on wrapper hides checked/unchecked items.
+// Old [{id,text,done}] JSON is converted to HTML on read; the HTML stores checked state.
 function migrateTasksToHtml(raw) {
   if (!raw || typeof raw === 'string') return raw || '';
   if (!Array.isArray(raw)) return '';
@@ -3629,16 +3629,62 @@ function tasksToHtml(tasks) {
   return items ? `<ul data-type="taskList">${items}</ul>` : '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>';
 }
 
-function Tasks({date,token,userId,taskFilter='all'}) {
-  const {value,setValue,loaded} = useDbSave(date,'tasks','',token,userId);
+// ── Shared task checkbox button — used in both day view and project view ──────
+function TaskCheckbox({ done, onToggle }) {
+  return (
+    <button
+      onClick={onToggle}
+      style={{
+        width: 15, height: 15, flexShrink: 0, borderRadius: 4, padding: 0,
+        cursor: 'pointer', marginTop: 4,
+        border: `1.5px solid ${done ? C.blue : C.border2}`,
+        background: done ? C.blue : 'transparent',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        transition: 'all 0.15s',
+      }}
+    >
+      {done && (
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke={C.bg} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="1.5,5 4,7.5 8.5,2"/>
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function Tasks({date, token, userId, taskFilter='all'}) {
+  const {value, setValue, loaded} = useDbSave(date, 'tasks', '', token, userId);
   const taskProjectNames = useContext(ProjectNamesContext);
-  const {navigateToProject,navigateToNote} = useContext(NavigationContext);
-  const {notes:ctxNotes} = useContext(NoteContext);
-  // Migrate old [{id,text,done}] array format to HTML on first load
-  const htmlValue = useMemo(() => {
-    if (Array.isArray(value)) return migrateTasksToHtml(value);
-    return value || '';
+  const {navigateToProject, navigateToNote} = useContext(NavigationContext);
+  const {notes: ctxNotes} = useContext(NoteContext);
+  const [editingId, setEditingId] = useState(null);
+  const [editingText, setEditingText] = useState('');
+
+  // Parse tasks from either storage format
+  const tasks = useMemo(() => {
+    if (Array.isArray(value)) return migrateTasksToHtml(value) ? clientParseTasks(migrateTasksToHtml(value)) : [];
+    return clientParseTasks(value || '');
   }, [value]);
+
+  const saveTasks = (updated) => setValue(tasksToHtml(updated));
+
+  const toggle = (id) => saveTasks(tasks.map(t => t.id === id ? {...t, done: !t.done} : t));
+
+  const saveEdit = (id, text) => {
+    if (!text.trim()) { saveTasks(tasks.filter(t => t.id !== id)); }
+    else { saveTasks(tasks.map(t => t.id === id ? {...t, text: text.trim()} : t)); }
+    setEditingId(null);
+  };
+
+  const addTask = (text) => {
+    if (!text.trim()) return;
+    saveTasks([...tasks, {id: crypto.randomUUID(), text: text.trim(), done: false}]);
+  };
+
+  const filtered = tasks.filter(t =>
+    taskFilter === 'open' ? !t.done :
+    taskFilter === 'done' ? t.done : true
+  );
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}>
@@ -3646,25 +3692,68 @@ function Tasks({date,token,userId,taskFilter='all'}) {
     </div>
   );
 
-  // CSS filter: DayLabEditor injects [data-task-filter="open/done"] selectors with
-  // !important, which beats TipTap's HTMLAttributes inline display:flex on every <li>.
-  // Setting data-task-filter on the wrapper is all that's needed — no JS DOM walking.
   return (
-    <div data-task-filter={taskFilter} style={{flex:1}}>
-      <DayLabEditor
-        taskMode
-        value={htmlValue}
-        onBlur={html => setValue(html)}
-        noteNames={ctxNotes}
-        projectNames={taskProjectNames}
-        onProjectClick={name => navigateToProject(name)}
-        onNoteClick={name => navigateToNote(name)}
-        placeholder="Add a task…"
-        textColor={C.text}
-        mutedColor={C.dim}
-        color={C.blue}
-        style={{minHeight:40,width:'100%'}}
-      />
+    <div style={{display:'flex', flexDirection:'column', gap:0}}>
+      {/* Add new task row — hidden when filter is done-only */}
+      {taskFilter !== 'done' && (
+        <div style={{display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0', marginBottom:4}}>
+          <TaskCheckbox done={false} onToggle={() => {}} />
+          <DayLabEditor
+            singleLine
+            placeholder="Add a task…"
+            projectNames={taskProjectNames}
+            noteNames={ctxNotes}
+            textColor={C.text}
+            mutedColor={C.dim}
+            color={C.blue}
+            style={{flex:1, padding:0, minHeight:'1.7em'}}
+            onProjectClick={name => navigateToProject(name)}
+            onNoteClick={name => navigateToNote(name)}
+            onEnterCommit={addTask}
+            onBlur={text => { if (text.trim()) addTask(text.trim()); }}
+          />
+        </div>
+      )}
+      {filtered.length === 0 && taskFilter !== 'all' && (
+        <div style={{fontFamily:mono, fontSize:F.sm, color:C.dim, padding:'4px 0'}}>
+          {taskFilter === 'open' ? 'No open tasks.' : 'No completed tasks.'}
+        </div>
+      )}
+      {filtered.map(task => (
+        <div key={task.id} style={{
+          display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0',
+        }}>
+          <TaskCheckbox done={task.done} onToggle={() => toggle(task.id)} />
+          {editingId === task.id ? (
+            <DayLabEditor
+              autoFocus singleLine
+              value={editingText}
+              textColor={task.done ? C.muted : C.text}
+              mutedColor={C.dim}
+              color={C.blue}
+              style={{flex:1, padding:0, minHeight:'1.7em',
+                textDecoration: task.done ? 'line-through' : 'none'}}
+              projectNames={taskProjectNames}
+              noteNames={ctxNotes}
+              onProjectClick={name => navigateToProject(name)}
+              onNoteClick={name => navigateToNote(name)}
+              onBlur={text => saveEdit(task.id, text)}
+              onEnterCommit={text => saveEdit(task.id, text)}
+            />
+          ) : (
+            <div
+              onClick={() => { setEditingId(task.id); setEditingText(task.text); }}
+              style={{flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
+                color: task.done ? C.muted : C.text, cursor:'text',
+                textDecoration: task.done ? 'line-through' : 'none',
+                opacity: task.done ? 0.45 : 1,
+                whiteSpace:'pre-wrap', wordBreak:'break-word'}}
+            >
+              <RichLine text={task.text} />
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -5947,10 +6036,13 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
     });
     setNotesStore({ ...notesStore, notes: updatedNotes }, { skipHistory: true });
 
-    // Propagate rename to every journal entry that references [oldName]
+    // Propagate rename to all DB entries that reference [oldName]
+    // Journal entries store links as plain text [name], tasks store as TipTap HTML data-note-link="name"
     if (oldName !== newName && token) {
       const esc2 = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const sb = createClient();
+
+      // ── Journal entries: replace [oldName] → [newName] in plain text ──
       sb.from('entries').select('date, data').eq('type', 'journal')
         .then(({ data: rows }) => {
           if (!rows) return;
@@ -5958,31 +6050,53 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
           rows.forEach(row => {
             const text = typeof row.data === 'string' ? row.data : null;
             if (!text || !text.includes('[' + oldName + ']')) return;
-            const linkRe  = new RegExp('\\[' + esc2 + '\\]', 'g');
-            const updated = text.replace(linkRe, '[' + newName + ']');
+            const updated = text.replace(new RegExp('\\[' + esc2 + '\\]', 'g'), '[' + newName + ']');
             dbSave(row.date, 'journal', updated, token);
-            // Patch in-memory cache so open journal editors see the new name immediately
             const cacheKey = userId + ':' + row.date + ':journal';
             if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated;
-            // Notify sibling useDbSave hook instances (day-view JournalEditor)
             window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: updated } }));
             anyChanged = true;
           });
-          // Trigger a refresh so any open journal editors re-render with new chip labels
-          if (anyChanged) {
-            window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
-          }
+          if (anyChanged) window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
         });
 
-      // Update this project view's local entries state so all displayed chips update immediately
-      const linkRe2 = new RegExp('\\[' + esc2 + '\\]', 'g');
-      const patchText = t => t.includes('[' + oldName + ']') ? t.replace(linkRe2, '[' + newName + ']') : t;
+      // ── Task entries: replace data-note-link attribute + inner text in TipTap HTML ──
+      // Stored HTML: <span data-note-link="NAME" style="...">NAME</span>
+      const escHtml = oldName.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const newHtml = newName.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      // Matches the full span element with exact attribute value
+      const noteSpanRe = new RegExp(
+        'data-note-link="' + escHtml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"([^>]*)>' +
+        escHtml.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '<\\/span>',
+        'g'
+      );
+      const replaceNoteSpan = s => s.replace(noteSpanRe, 'data-note-link="' + newHtml + '"$1>' + newHtml + '</span>');
+
+      sb.from('entries').select('date, data').eq('type', 'tasks')
+        .then(({ data: rows }) => {
+          if (!rows) return;
+          rows.forEach(row => {
+            const html = typeof row.data === 'string' ? row.data : null;
+            if (!html || !html.includes('data-note-link="' + escHtml + '"')) return;
+            const updated = replaceNoteSpan(html);
+            dbSave(row.date, 'tasks', updated, token);
+            const cacheKey = userId + ':' + row.date + ':tasks';
+            if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated;
+            window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: updated } }));
+          });
+        });
+
+      // ── Patch local project entries state immediately (no reload needed) ──
+      const patchJournal = t => t.includes('[' + oldName + ']')
+        ? t.replace(new RegExp('\\[' + esc2 + '\\]', 'g'), '[' + newName + ']') : t;
+      const patchTask = t => t.includes('[' + oldName + ']')
+        ? t.replace(new RegExp('\\[' + esc2 + '\\]', 'g'), '[' + newName + ']') : t;
       setEntries(prev => {
         if (!prev) return prev;
         return {
           ...prev,
-          journalEntries: prev.journalEntries.map(e => ({ ...e, text: patchText(e.text) })),
-          taskEntries:    prev.taskEntries.map(t    => ({ ...t, text: patchText(t.text) })),
+          journalEntries: prev.journalEntries.map(e => ({ ...e, text: patchJournal(e.text) })),
+          taskEntries:    prev.taskEntries.map(t    => ({ ...t, text: patchTask(t.text)    })),
         };
       });
     }
@@ -6296,25 +6410,18 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
             return (
               <div key={task.id} style={{
                 display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0',
-                opacity: task.done ? 0.35 : 1, transition: 'opacity 0.2s',
               }}>
-                <button onClick={() => toggleTask(task.date, task.id, task.done)} style={{
-                  width:15, height:15, flexShrink:0, borderRadius:4, padding:0, cursor:'pointer', marginTop:4,
-                  border:`1.5px solid ${task.done ? C.accent : C.border2}`,
-                  background: task.done ? C.accent : 'transparent',
-                  display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
-                }}>{task.done && <span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span>}</button>
+                <TaskCheckbox done={task.done} onToggle={() => toggleTask(task.date, task.id, task.done)} />
                 {editingTask?.date === task.date && editingTask?.id === task.id ? (
                   <DayLabEditor
-                    autoFocus
-                    singleLine
+                    autoFocus singleLine
                     value={editingTask.text}
                     textColor={task.done ? C.muted : C.text}
                     mutedColor={C.dim}
-                    color={C.accent}
+                    color={C.blue}
                     style={{ flex: 1, padding: 0, minHeight: '1.7em',
                       textDecoration: task.done ? 'line-through' : 'none',
-                      opacity: task.done ? 0.7 : 1 }}
+                      opacity: task.done ? 0.6 : 1 }}
                     onBlur={async text => { await saveTaskEdit(task.date, task.id, text); setEditingTask(null); }}
                     onEnterCommit={async text => { await saveTaskEdit(task.date, task.id, text); setEditingTask(null); }}
                   />
@@ -6323,6 +6430,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                     style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
                       color: task.done ? C.muted : C.text, cursor:'text',
                       textDecoration: task.done ? 'line-through' : 'none',
+                      opacity: task.done ? 0.45 : 1,
                       whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
                     <RichLine text={task.text} dimTag={project==='__everything__' ? null : project}/>
                   </div>
