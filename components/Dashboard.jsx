@@ -3054,13 +3054,9 @@ function JournalEditor({date,userId,token}) {
     </div>
   );
 
-  const { notes: ctxNotes, onCreateNote: ctxOnCreateNote } = useContext(NoteContext);
+  const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
-  const { navigateToProject, navigateToNote, createNoteGlobally } = useContext(NavigationContext);
-  // In day-view there's no NoteContext.Provider, so ctxOnCreateNote is null.
-  // Fall back to createNoteGlobally — when called with { silent: true } from chip creation,
-  // it registers the note without navigating. Click handlers pass { silent: false } (default).
-  const handleCreateNote = ctxOnCreateNote || createNoteGlobally;
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   return (
     <DayLabEditor
       value={value || ''}
@@ -3068,7 +3064,6 @@ function JournalEditor({date,userId,token}) {
       onImageUpload={file => uploadImageFile(file, token)}
       noteNames={ctxNotes}
       projectNames={ctxProjects}
-      onCreateNote={handleCreateNote}
       onProjectClick={name => navigateToProject(name)}
       onNoteClick={name => navigateToNote(name)}
       placeholder="What's on your mind?"
@@ -3606,9 +3601,8 @@ function migrateTasksToHtml(raw) {
 function Tasks({date,token,userId,taskFilter='all'}) {
   const {value,setValue,loaded} = useDbSave(date,'tasks','',token,userId);
   const taskProjectNames = useContext(ProjectNamesContext);
-  const {navigateToProject,navigateToNote,createNoteGlobally} = useContext(NavigationContext);
-  const {notes:ctxNotes,onCreateNote:ctxOnCreateNote} = useContext(NoteContext);
-  const handleCreateNote = ctxOnCreateNote || createNoteGlobally; // silent-aware via { silent: true }
+  const {navigateToProject,navigateToNote} = useContext(NavigationContext);
+  const {notes:ctxNotes} = useContext(NoteContext);
   const wrapperRef = useRef(null);
 
   // Migrate old [{id,text,done}] array format to HTML on first load
@@ -3656,7 +3650,6 @@ function Tasks({date,token,userId,taskFilter='all'}) {
         onBlur={html => setValue(html)}
         noteNames={ctxNotes}
         projectNames={taskProjectNames}
-        onCreateNote={handleCreateNote}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
         placeholder="Add a task…"
@@ -5101,8 +5094,8 @@ function fmtDate(ds) {
 
 
 
-// ─── NoteContext — passes project note names + onCreateNote to editors
-const NoteContext = createContext({ notes: [], onCreateNote: null });
+// ─── NoteContext — provides note names to editors for /n suggestions
+const NoteContext = createContext({ notes: [] });
 // ─── ProjectNamesContext — passes known project names to editors for {tag} autocomplete
 const ProjectNamesContext = createContext([]);
 // ─── NavigationContext — lets editors navigate to projects or notes on chip click
@@ -5213,10 +5206,6 @@ function AddJournalLine({ project, onAdd, placeholder }) {
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxNotes    = useContext(NoteContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
-  // Silent create: register note in list without navigating away
-  const handleCreateNote = ctxNotes.onCreateNote
-    ? (name) => ctxNotes.onCreateNote(name)
-    : null;
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
       <DayLabEditor
@@ -5224,7 +5213,6 @@ function AddJournalLine({ project, onAdd, placeholder }) {
         placeholder={placeholder || 'Add an entry…'}
         projectNames={ctxProjects}
         noteNames={ctxNotes.notes}
-        onCreateNote={handleCreateNote}
         textColor={C.text}
         mutedColor={C.dim}
         color={col}
@@ -6096,7 +6084,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const noteNamesForContext = allNoteNames;
 
   return (
-    <NoteContext.Provider value={{ notes: noteNamesForContext, onCreateNote: addNote }}>
+    <NoteContext.Provider value={{ notes: noteNamesForContext }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
 
       {/* Notes card — left 1/3: note list sorted by recency; right 2/3: editor */}
@@ -6154,7 +6142,6 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                   placeholder='Note name (first line)…'
                   noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
                   projectNames={pvProjectNames}
-                  onCreateNote={name => addNote(name)}
                   textColor={C.text}
                   mutedColor={C.dim}
                   color={C.muted}
@@ -6650,23 +6637,6 @@ export default function Dashboard() {
         setActiveProject('__everything__');
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('lifeos:go-to-note', { detail: { name } }));
-        }, 120);
-      },
-      // Called when user creates a [new note] chip from the day-view journal.
-      // Navigates to __everything__ and creates the note there.
-      // Called when user creates a new [note] chip.
-      // silent=true: just register the note, don't navigate (chip was created inline).
-      // silent=false (default, e.g. clicking a chip for a non-existent note): navigate.
-      createNoteGlobally: (name, { silent = false } = {}) => {
-        if (silent) {
-          // Register the note without navigating — fires create-note which ProjectView
-          // handles by adding it to the notes list, but only if already on __everything__.
-          window.dispatchEvent(new CustomEvent('lifeos:create-note', { detail: { name, silent: true } }));
-          return;
-        }
-        setActiveProject('__everything__');
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('lifeos:create-note', { detail: { name } }));
         }, 120);
       },
     }}>

@@ -381,7 +381,7 @@ function SuggestionDropdown({ state, onSelect }) {
 //
 // Props:
 //   value, onBlur, onEnterCommit, onEnterSplit, onBackspaceEmpty
-//   onImageUpload, noteNames, projectNames, onCreateNote
+//   onImageUpload, noteNames, projectNames
 //   onProjectClick, onNoteClick
 //   placeholder, singleLine, taskMode, autoFocus
 //   style, color, textColor, mutedColor, editable
@@ -395,7 +395,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onImageUpload,
   noteNames,
   projectNames,
-  onCreateNote,
   onProjectClick,
   onNoteClick,
   placeholder,
@@ -421,7 +420,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onImageUploadRef    = useRef(onImageUpload);
   const noteNamesRef        = useRef(noteNames || []);
   const projectNamesRef     = useRef(projectNames || []);
-  const onCreateNoteRef     = useRef(onCreateNote);
   const onProjectClickRef   = useRef(onProjectClick);
   const onNoteClickRef      = useRef(onNoteClick);
 
@@ -432,7 +430,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
   useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
-  useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
   useEffect(() => { onProjectClickRef.current    = onProjectClick; },   [onProjectClick]);
   useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
 
@@ -444,6 +441,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   // can read the current state in the same event tick (useState is async).
   const [sugg, setSugg] = useState(null);
   const suggRef = useRef(null);
+  // Blocks handleClick for 150ms after chip insertion so the trailing mouse-click
+  // event (from dropdown selection) does not immediately navigate away.
+  const justInsertedRef = useRef(false);
 
   const renderRef = useRef({
     onStart(props, key) {
@@ -546,6 +546,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           return [];
         },
         commandFn: ({ editor, range, name }) => {
+          justInsertedRef.current = true;
+          setTimeout(() => { justInsertedRef.current = false; }, 150);
           if (name.startsWith('__project__:')) {
             const pName = name.slice(12);
             editor.chain().focus().deleteRange(range).insertContent([
@@ -553,20 +555,14 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               { type: 'text', text: ' ' },
             ]).run();
           } else {
-            // Insert note chip. Do NOT navigate — navigation only fires on chip click.
-            // If this is a new note name, call onCreateNote to register it silently
-            // in the note list (so it appears in future /n suggestions), but do NOT
-            // call createNoteGlobally which would navigate away from the current view.
-            const isCreate = name.startsWith('__create__:');
-            const noteName = isCreate ? name.slice(11) : name.slice(9); // __note__:=9
+            // Insert note chip. Chip creation never navigates — only an explicit click does.
+            // New notes are created lazily when the user clicks the chip (lifeos:go-to-note
+            // handler calls addNote if the note doesn't exist yet).
+            const noteName = name.startsWith('__create__:') ? name.slice(11) : name.slice(9);
             editor.chain().focus().deleteRange(range).insertContent([
               { type: 'noteLink', attrs: { name: noteName } },
               { type: 'text', text: ' ' },
             ]).run();
-            // Only call onCreateNote if it's a context-scoped handler (not createNoteGlobally).
-            // createNoteGlobally navigates — that should only happen on explicit chip click.
-            // We signal this with a flag the caller can check.
-            if (isCreate) onCreateNoteRef.current?.(noteName, { silent: true });
           }
         },
       }),
@@ -579,6 +575,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
     editorProps: {
       handleClick(view, pos, event) {
+        // Skip navigation if a chip was just inserted (dropdown mouse-click leaks a click event)
+        if (justInsertedRef.current) return false;
         const t = event.target;
         const projectEl = t.closest?.('[data-project-tag]');
         if (projectEl && onProjectClickRef.current) {
