@@ -575,7 +575,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           if (name.startsWith('__project__:') || name.startsWith('__create_project__:')) {
             // Existing project: "__project__:name"  |  New project: "__create_project__:name"
             const isNew = name.startsWith('__create_project__:');
-            const pName = (isNew ? name.slice(18) : name.slice(12)).toLowerCase();
+            const pName = (isNew ? name.slice(19) : name.slice(12)).toLowerCase();
             editor.chain().focus().deleteRange(range).insertContent([
               { type: 'projectTag', attrs: { name: pName } },
               { type: 'text', text: ' ' },
