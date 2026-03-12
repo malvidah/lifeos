@@ -1,23 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-function getUserClient(req) {
-  const auth = req.headers.get('authorization') || '';
-  const token = auth.replace('Bearer ', '').trim();
-  if (!token) return { supabase: null };
-  return {
-    supabase: createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    ), token
-  };
-}
-
-async function getSettings(supabase, userId) {
-  const { data } = await supabase.from('entries').select('data')
-    .eq('type', 'settings').eq('date', 'global').eq('user_id', userId).maybeSingle();
-  return data?.data || {};
-}
+import { withAuth } from '../_lib/auth.js';
 
 async function getStravaTokens(supabase, userId) {
   const { data } = await supabase.from('entries').select('data')
@@ -32,30 +13,20 @@ async function saveStravaTokens(supabase, userId, tokens) {
   );
 }
 
-async function refreshToken(clientId, clientSecret, refreshToken) {
+async function refreshStravaToken(clientId, clientSecret, refreshToken) {
   const r = await fetch('https://www.strava.com/oauth/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-    }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, grant_type: 'refresh_token', refresh_token: refreshToken }),
   });
   return r.json();
 }
 
-export async function GET(request) {
-  const { searchParams } = new URL(request.url);
-  const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
+export const GET = withAuth(async (req, { supabase, user }) => {
+  const date = new URL(req.url).searchParams.get('date') || new Date().toISOString().split('T')[0];
 
-  const { supabase } = getUserClient(request);
-  if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
-
-  const settings = await getSettings(supabase, user.id);
+  const { data: settingsRow } = await supabase.from('entries').select('data')
+    .eq('type', 'settings').eq('date', 'global').eq('user_id', user.id).maybeSingle();
+  const settings = settingsRow?.data || {};
   const clientId = settings.stravaClientId || process.env.STRAVA_CLIENT_ID;
   const clientSecret = settings.stravaClientSecret || process.env.STRAVA_CLIENT_SECRET;
   if (!clientId || !clientSecret) return Response.json({ activities: [] });
@@ -63,52 +34,32 @@ export async function GET(request) {
   let tokens = await getStravaTokens(supabase, user.id);
   if (!tokens) return Response.json({ activities: [] });
 
-  // Refresh if expired (with 5min buffer)
+  // Refresh if expired (5min buffer)
   if (tokens.expires_at && Date.now() / 1000 > tokens.expires_at - 300) {
-    const fresh = await refreshToken(clientId, clientSecret, tokens.refresh_token);
+    const fresh = await refreshStravaToken(clientId, clientSecret, tokens.refresh_token);
     if (fresh.access_token) {
       tokens = { ...tokens, access_token: fresh.access_token, refresh_token: fresh.refresh_token || tokens.refresh_token, expires_at: fresh.expires_at };
       await saveStravaTokens(supabase, user.id, tokens);
     }
   }
 
-  try {
-    // Anchor on noon of the requested date in UTC, then span ±14h to cover any local timezone.
-    // This ensures the full calendar day is covered regardless of local offset (up to UTC±14).
-    const noon = Math.floor(new Date(date + 'T12:00:00Z').getTime() / 1000);
-    const dayStart = noon - 14 * 3600;
-    const dayEnd   = noon + 14 * 3600;
+  // Span ±14h from noon to cover any local timezone
+  const noon = Math.floor(new Date(date + 'T12:00:00Z').getTime() / 1000);
+  const r = await fetch(
+    `https://www.strava.com/api/v3/athlete/activities?after=${noon - 14*3600}&before=${noon + 14*3600}&per_page=20`,
+    { headers: { Authorization: `Bearer ${tokens.access_token}` } }
+  );
+  const activities = await r.json();
+  if (!Array.isArray(activities)) return Response.json({ error: activities.message || 'strava_error' }, { status: 500 });
 
-    const r = await fetch(
-      `https://www.strava.com/api/v3/athlete/activities?after=${dayStart}&before=${dayEnd}&per_page=20`,
-      { headers: { Authorization: `Bearer ${tokens.access_token}` } }
-    );
-    const activities = await r.json();
-    if (!Array.isArray(activities)) return Response.json({ error: activities.message || 'strava_error', raw: activities }, { status: 500 });
+  const result = activities.map(a => ({
+    id: a.id, name: a.name, type: a.type, sport: a.sport_type,
+    duration: a.moving_time, distance: a.distance ? +(a.distance / 1000).toFixed(2) : null,
+    calories: a.calories || null, elevGain: a.total_elevation_gain ? Math.round(a.total_elevation_gain) : null,
+    avgHr: a.average_heartrate ? Math.round(a.average_heartrate) : null,
+    avgSpeed: a.average_speed || null, maxHr: a.max_heartrate ? Math.round(a.max_heartrate) : null,
+    kudos: a.kudos_count, startTime: a.start_date_local,
+  })).filter(a => !a.startTime || a.startTime.slice(0, 10) === date);
 
-    const result = activities.map(a => ({
-      id: a.id,
-      name: a.name,
-      type: a.type,
-      sport: a.sport_type,
-      duration: a.moving_time,          // seconds
-      distance: a.distance ? +(a.distance / 1000).toFixed(2) : null,  // km
-      calories: a.calories || null,
-      elevGain: a.total_elevation_gain ? Math.round(a.total_elevation_gain) : null,
-      avgHr: a.average_heartrate ? Math.round(a.average_heartrate) : null,
-      avgSpeed: a.average_speed || null,   // m/s
-      maxHr: a.max_heartrate ? Math.round(a.max_heartrate) : null,
-      kudos: a.kudos_count,
-      startTime: a.start_date_local,
-    }));
-
-    // Filter to only activities whose local date matches the requested date
-    const filtered = result.filter(a => {
-      if (!a.startTime) return true; // keep if no time info
-      return a.startTime.slice(0, 10) === date;
-    });
-    return Response.json({ activities: filtered });
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 });
-  }
-}
+  return Response.json({ activities: result });
+});

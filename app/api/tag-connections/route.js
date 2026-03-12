@@ -1,13 +1,10 @@
-import { getUserClient } from '../_lib/google.js';
+import { withAuth } from '../_lib/auth.js';
 import { parseTasks } from '../_lib/parseTasks.js';
 
-// New format: {projectname}  Legacy: #ProjectName
 const TAG_RE_NEW    = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
 const TAG_RE_LEGACY = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
 
-function canonical(lower) {
-  return lower === 'health' ? '__health__' : lower;
-}
+function canonical(lower) { return lower === 'health' ? '__health__' : lower; }
 
 function tagsIn(text) {
   const s = new Set();
@@ -20,62 +17,43 @@ function tagsIn(text) {
   return s;
 }
 
-export async function GET(req) {
-  const { supabase } = getUserClient(req);
-  if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
+export const GET = withAuth(async (req, { supabase, user }) => {
+  const [journalR, tasksR] = await Promise.all([
+    supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'journal'),
+    supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'tasks'),
+  ]);
 
-  const { data: { user }, error } = await supabase.auth.getUser();
-  if (error || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+  const coMap = new Map(), recency = new Map(), byDate = new Map();
 
-  try {
-    const [journalR, tasksR] = await Promise.all([
-      supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'journal'),
-      supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'tasks'),
-    ]);
-
-    const coMap   = new Map();
-    const recency = new Map();
-    const byDate  = new Map();
-
-    for (const row of (journalR.data || [])) {
-      const tags = tagsIn(typeof row.data === 'string' ? row.data : '');
-      const existing = byDate.get(row.date) || new Set();
-      tags.forEach(t => existing.add(t));
-      byDate.set(row.date, existing);
-    }
-
-    // parseTasks handles both old [{id,text,done}] and new TipTap HTML format
-    for (const row of (tasksR.data || [])) {
-      const tags = new Set();
-      for (const task of parseTasks(row.data)) {
-        tagsIn(task.text).forEach(t => tags.add(t));
-      }
-      const existing = byDate.get(row.date) || new Set();
-      tags.forEach(t => existing.add(t));
-      byDate.set(row.date, existing);
-    }
-
-    for (const [date, tags] of byDate) {
-      const arr = [...tags];
-      for (const t of arr) {
-        if (!recency.has(t) || date > recency.get(t)) recency.set(t, date);
-      }
-      for (let i = 0; i < arr.length; i++) {
-        for (let j = i + 1; j < arr.length; j++) {
-          const key = [arr[i], arr[j]].sort().join('|');
-          coMap.set(key, (coMap.get(key) || 0) + 1);
-        }
-      }
-    }
-
-    const connections = [];
-    for (const [key, weight] of coMap) {
-      const [source, target] = key.split('|');
-      connections.push({ source, target, weight });
-    }
-
-    return Response.json({ connections, recency: Object.fromEntries(recency) });
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 });
+  for (const row of (journalR.data || [])) {
+    const tags = tagsIn(typeof row.data === 'string' ? row.data : '');
+    const existing = byDate.get(row.date) || new Set();
+    tags.forEach(t => existing.add(t));
+    byDate.set(row.date, existing);
   }
-}
+
+  for (const row of (tasksR.data || [])) {
+    const tags = new Set();
+    for (const task of parseTasks(row.data)) tagsIn(task.text).forEach(t => tags.add(t));
+    const existing = byDate.get(row.date) || new Set();
+    tags.forEach(t => existing.add(t));
+    byDate.set(row.date, existing);
+  }
+
+  for (const [date, tags] of byDate) {
+    const arr = [...tags];
+    for (const t of arr) if (!recency.has(t) || date > recency.get(t)) recency.set(t, date);
+    for (let i = 0; i < arr.length; i++)
+      for (let j = i + 1; j < arr.length; j++) {
+        const key = [arr[i], arr[j]].sort().join('|');
+        coMap.set(key, (coMap.get(key) || 0) + 1);
+      }
+  }
+
+  const connections = [];
+  for (const [key, weight] of coMap) {
+    const [source, target] = key.split('|');
+    connections.push({ source, target, weight });
+  }
+  return Response.json({ connections, recency: Object.fromEntries(recency) });
+});
