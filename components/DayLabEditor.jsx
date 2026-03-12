@@ -356,7 +356,7 @@ function SuggestionDropdown({ state, onSelect }) {
 
   if (!state?.items.length || typeof document === 'undefined') return null;
 
-  const isProject = state.key === 'project';
+  const isSlash = state.key === 'slash';
 
   return createPortal(
     <div style={{
@@ -366,12 +366,20 @@ function SuggestionDropdown({ state, onSelect }) {
       padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
       {state.items.map((item, i) => {
-        const isCreate = typeof item === 'string' && item.startsWith('__create__:');
-        const rawLabel = isCreate ? item.slice(11) : item;
-        const label    = isCreate ? `+ Create "${rawLabel}"`
-                       : isProject ? rawLabel.toUpperCase()
-                       : rawLabel;
-        const col = isProject && !isCreate ? projectColor(rawLabel) : null;
+        const isHint        = isSlash && item.startsWith('__hint__:');
+        const isProject     = isSlash && item.startsWith('__project__:');
+        const isNote        = isSlash && item.startsWith('__note__:');
+        const isNoteCreate  = isSlash && item.startsWith('__note_create__:');
+        const rawLabel = isHint       ? item.slice(9)
+                       : isProject    ? item.slice(12)
+                       : isNote       ? item.slice(9)
+                       : isNoteCreate ? item.slice(16)
+                       : item;
+        const label = isHint       ? `/${rawLabel} …`
+                    : isNoteCreate ? `+ Create "${rawLabel}"`
+                    : isProject    ? rawLabel.toUpperCase()
+                    : rawLabel;
+        const col = isProject ? projectColor(rawLabel) : null;
         const selected = i === state.selectedIndex;
         return (
           <button
@@ -383,8 +391,8 @@ function SuggestionDropdown({ state, onSelect }) {
               padding: '7px 14px', cursor: 'pointer',
               background: selected ? 'rgba(255,255,255,0.09)' : 'transparent',
               fontFamily: mono, fontSize: 12,
-              letterSpacing: isProject && !isCreate ? '0.08em' : '0.04em',
-              color: isCreate ? '#9A9088' : col || '#EFDFC3',
+              letterSpacing: isProject ? '0.08em' : '0.04em',
+              color: isHint || isNoteCreate ? '#9A9088' : col || '#EFDFC3',
               transition: 'background 0.08s',
             }}
           >{label}</button>
@@ -570,53 +578,58 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ] : []),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
-      // [ → note link
+      // / → slash command: /p[roject] <name> or /n[ote] <name>
       createSuggestion({
-        char: '[',
-        suggKey: 'note',
+        char: '/',
+        suggKey: 'slash',
         renderRef,
         itemsFn: (query) => {
-          const names = noteNamesRef.current || [];
-          const q     = query.toLowerCase().replace(/\s/g, '');
-          const matches = names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
-          const qTrim   = query.trim();
-          if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
-            matches.push(`__create__:${qTrim}`);
+          const q = query.trim();
+          const lower = q.toLowerCase();
+          const projectPrefix = ['project ', 'p '].find(p => lower.startsWith(p));
+          const notePrefix    = ['note ', 'n '].find(p => lower.startsWith(p));
+          if (projectPrefix) {
+            const nameQ = q.slice(projectPrefix.length).toLowerCase().replace(/\s/g, '');
+            return (projectNamesRef.current || [])
+              .filter(n => n.toLowerCase().replace(/\s/g, '').includes(nameQ))
+              .map(n => `__project__:${n}`);
           }
-          return matches;
+          if (notePrefix) {
+            const nameQ = q.slice(notePrefix.length);
+            const nameLower = nameQ.toLowerCase().replace(/\s/g, '');
+            const matches = (noteNamesRef.current || [])
+              .filter(n => n.toLowerCase().replace(/\s/g, '').includes(nameLower))
+              .map(n => `__note__:${n}`);
+            const trimmed = nameQ.trim();
+            if (trimmed && !(noteNamesRef.current || []).some(n => n.toLowerCase() === trimmed.toLowerCase()))
+              matches.push(`__note_create__:${trimmed}`);
+            return matches;
+          }
+          // Show command hints while user is still typing the prefix
+          const hints = [];
+          if (!q || 'project'.startsWith(lower) || lower === 'p') hints.push('__hint__:project');
+          if (!q || 'note'.startsWith(lower)    || lower === 'n') hints.push('__hint__:note');
+          return hints;
         },
         commandFn: ({ editor, range, name }) => {
-          const isCreate  = name.startsWith('__create__:');
-          const noteName  = isCreate ? name.slice(11) : name;
-          editor.chain().focus()
-            .deleteRange(range)
-            .insertContent([
+          if (name.startsWith('__project__:')) {
+            const pName = name.slice(12);
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'projectTag', attrs: { name: pName.toLowerCase() } },
+              { type: 'text', text: ' ' },
+            ]).run();
+          } else if (name.startsWith('__note__:') || name.startsWith('__note_create__:')) {
+            const isCreate = name.startsWith('__note_create__:');
+            const noteName = isCreate ? name.slice(16) : name.slice(9);
+            editor.chain().focus().deleteRange(range).insertContent([
               { type: 'noteLink', attrs: { name: noteName } },
               { type: 'text', text: ' ' },
-            ])
-            .run();
-          if (isCreate) onCreateNoteRef.current?.(noteName);
-        },
-      }),
-
-      // { → project tag
-      createSuggestion({
-        char: '{',
-        suggKey: 'project',
-        renderRef,
-        itemsFn: (query) => {
-          const names = projectNamesRef.current || [];
-          const q     = query.toLowerCase().replace(/\s/g, '');
-          return names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
-        },
-        commandFn: ({ editor, range, name }) => {
-          editor.chain().focus()
-            .deleteRange(range)
-            .insertContent([
-              { type: 'projectTag', attrs: { name: name.toLowerCase() } },
-              { type: 'text', text: ' ' },
-            ])
-            .run();
+            ]).run();
+            if (isCreate) onCreateNoteRef.current?.(noteName);
+          } else if (name.startsWith('__hint__:')) {
+            const kind = name.slice(9);
+            editor.chain().focus().deleteRange(range).insertContent(`/${kind} `).run();
+          }
         },
       }),
     ],
@@ -647,7 +660,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         // If a suggestion dropdown is open, let the suggestion plugin handle Enter/Tab/]/}
         // The suggestion plugin's onKeyDown fires AFTER editorProps.handleKeyDown in TipTap,
         // so we must defer to it by not consuming those keys when a suggestion is active.
-        if (suggRef.current && (e.key === 'Enter' || e.key === 'Tab' || e.key === ']' || e.key === '}')) {
+        if (suggRef.current && (e.key === 'Enter' || e.key === 'Tab')) {
           return false;
         }
 

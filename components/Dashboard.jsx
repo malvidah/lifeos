@@ -3719,12 +3719,33 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const {navigateToProject,navigateToNote,createNoteGlobally} = useContext(NavigationContext);
   const {notes:ctxNotes,onCreateNote:ctxOnCreateNote} = useContext(NoteContext);
   const handleCreateNote = ctxOnCreateNote || createNoteGlobally;
+  const wrapperRef = useRef(null);
 
   // Migrate old [{id,text,done}] array format to HTML on first load
   const htmlValue = useMemo(() => {
     if (Array.isArray(value)) return migrateTasksToHtml(value);
     return value || '';
   }, [value]);
+
+  // Apply filter directly to DOM — more reliable than CSS attribute selectors
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const apply = () => {
+      el.querySelectorAll('li[data-type="taskItem"]').forEach(li => {
+        const checked = li.getAttribute('data-checked') === 'true';
+        let show = true;
+        if (taskFilter === 'open' && checked)  show = false;
+        if (taskFilter === 'done' && !checked) show = false;
+        li.style.display = show ? 'flex' : 'none';
+      });
+    };
+    apply();
+    // Re-apply on any DOM mutation (checkbox clicks update data-checked)
+    const obs = new MutationObserver(apply);
+    obs.observe(el, { attributes: true, subtree: true, attributeFilter: ['data-checked'] });
+    return () => obs.disconnect();
+  }, [taskFilter, loaded]);
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}>
@@ -3733,7 +3754,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   );
 
   return (
-    <div data-task-filter={taskFilter} style={{flex:1}}>
+    <div ref={wrapperRef} style={{flex:1}}>
       <DayLabEditor
         taskMode
         value={htmlValue}
