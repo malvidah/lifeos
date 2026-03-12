@@ -310,3 +310,98 @@ export function DayLabEditor({
     </div>
   );
 }
+
+// ── NoteLinker ────────────────────────────────────────────────────────────────
+// Wraps DayLabEditor and adds {note name} autocomplete support.
+// Pass noteNames={['Note 1','Note 2']} to enable.
+import { useState as _useState, useRef as _useRef } from 'react';
+
+export function NoteLinker({ noteNames = [], onNoteClick, wrapperStyle, ...editorProps }) {
+  const [acQuery, setAcQuery]   = _useState(null); // null = closed, string = open
+  const [acPos,   setAcPos]     = _useState({ top: 0, left: 0 });
+  const wrapRef                 = _useRef(null);
+
+  // Intercept keystrokes via a capturing listener on the wrapper div
+  function handleKeyDown(e) {
+    if (!noteNames.length) return;
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+
+    if (e.key === '{') {
+      // Anchor dropdown below cursor
+      const rect = range.getBoundingClientRect();
+      const wrect = wrapRef.current?.getBoundingClientRect() || { top: 0, left: 0 };
+      setAcPos({ top: rect.bottom - wrect.top + 4, left: rect.left - wrect.left });
+      setAcQuery('');
+      return;
+    }
+    if (acQuery !== null) {
+      if (e.key === 'Escape') { setAcQuery(null); return; }
+      if (e.key === 'Backspace' && acQuery.length === 0) { setAcQuery(null); return; }
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        setAcQuery(q => q + e.key);
+      }
+    }
+  }
+
+  function handleKeyUp(e) {
+    // If user typed } or space, close dropdown
+    if (acQuery !== null && (e.key === '}' || e.key === ' ')) setAcQuery(null);
+  }
+
+  function insertNote(name) {
+    setAcQuery(null);
+    // Find the { that opened the autocomplete and replace through current caret
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount) return;
+    const range = sel.getRangeAt(0);
+    const node  = range.startContainer;
+    if (node.nodeType !== Node.TEXT_NODE) return;
+    const text  = node.textContent;
+    const caretPos = range.startOffset;
+    const bracePos = text.lastIndexOf('{', caretPos - 1);
+    if (bracePos === -1) return;
+    // Replace from { through typed query chars with full {name}
+    node.textContent = text.slice(0, bracePos) + `{${name}}` + text.slice(caretPos);
+    // Move caret to end of inserted text
+    const newRange = document.createRange();
+    newRange.setStart(node, bracePos + name.length + 2);
+    newRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(newRange);
+    // Fire input event so TipTap syncs
+    node.parentElement?.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative', ...wrapperStyle }}
+      onKeyDown={handleKeyDown} onKeyUp={handleKeyUp}>
+      <DayLabEditor {...editorProps} />
+      {acQuery !== null && (
+        <div style={{ position: 'absolute', top: acPos.top, left: acPos.left, zIndex: 200,
+          background: '#1E1C1A', border: '1px solid #272422', borderRadius: 8,
+          boxShadow: '0 4px 20px rgba(0,0,0,0.35)', padding: '4px 0',
+          minWidth: 160, maxWidth: 260, maxHeight: 180, overflowY: 'auto' }}>
+          {noteNames
+            .filter(n => n.toLowerCase().includes(acQuery.toLowerCase()))
+            .map((name, i) => (
+              <button key={i}
+                onMouseDown={e => { e.preventDefault(); insertNote(name); }}
+                style={{ display: 'block', width: '100%', background: 'none', border: 'none',
+                  textAlign: 'left', padding: '5px 12px', cursor: 'pointer',
+                  fontFamily: "'SF Mono','Fira Code',ui-monospace,monospace",
+                  fontSize: 12, color: '#EFDFC3', letterSpacing: '0.05em' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'none'}
+              >{name}</button>
+            ))}
+          {!noteNames.filter(n => n.toLowerCase().includes(acQuery.toLowerCase())).length && (
+            <div style={{ padding: '5px 12px', fontFamily: "'SF Mono','Fira Code',monospace",
+              fontSize: 12, color: '#6A6258' }}>No notes</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

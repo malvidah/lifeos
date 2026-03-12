@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "react";
-import { DayLabEditor } from './DayLabEditor.jsx';
+import { useState, useEffect, useRef, useCallback, useMemo, Fragment, createContext, useContext } from "react";
+import { DayLabEditor, NoteLinker } from './DayLabEditor.jsx';
 import { createClient } from "../lib/supabase.js";
 
 
@@ -604,7 +604,7 @@ function Card({children,style={},fitContent=false}) {
 
 
 
-// ─── Widget card ─────────────────────────────────────────────────────────────
+// ─── Card (Widget) ───────────────────────────────────────────────────────────
 function Widget({label,color,children,slim,collapsed,onToggle,headerRight,headerLeft,autoHeight}) {
   const useAutoHeight = autoHeight || (!onToggle && !collapsed);
   return (
@@ -1160,7 +1160,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
   );
 }
 
-// ─── TopBar ───────────────────────────────────────────────────────────────────
+// ─── Header ──────────────────────────────────────────────────────────────────
 function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,onGoHome,stravaConnected,onStravaChange}) {
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
@@ -1707,7 +1707,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   );
 }
 
-// ─── CalStrip ─────────────────────────────────────────────────────────────────
+// ─── Calendar card ──────────────────────────────────────────────────────────
 // Single epoch: Jan 1 2026. All offsets are integer days from this point.
 const MONTHS_FULL = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
@@ -2533,7 +2533,7 @@ function Shimmer({width="100%", height=14, style={}}) {
   );
 }
 
-// ─── HealthStrip ──────────────────────────────────────────────────────────────
+// ─── Health card ────────────────────────────────────────────────────────────
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",activeMinutes:"",resilienceScore:"",stressMins:"",recoveryMins:""};
 
 const SPORT_EMOJI = {
@@ -2739,7 +2739,7 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
     {key:"readiness",label:"Readiness",color:C.green, score:scores?.readiness?.score,
       fields:[{label:"HRV",value:h.hrv,unit:"ms",ck:"hrv"},{label:"RHR",value:h.rhr,unit:"bpm",ck:"rhr"}],
       sparkline:scores?.readiness?.sparkline},
-    {key:"activity", label:"Activity", color:C.accent,score:scores?.activity?.score,
+    {key:"activity", label:"Workouts", color:C.accent,score:scores?.activity?.score,
       fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",ck:"steps"},{label:"Active",value:h.activeMinutes,unit:"min",ck:"activeMinutes"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
@@ -3118,8 +3118,10 @@ function Notes({date,userId,token}) {
     </div>
   );
 
+  const { notes: ctxNotes } = useContext(NoteContext);
   return (
-    <DayLabEditor
+    <NoteLinker
+      noteNames={ctxNotes}
       value={value || ''}
       onBlur={text => setValue(text, {undoLabel: 'Edit notes'})}
       onImageUpload={file => uploadImageFile(file, token)}
@@ -4733,7 +4735,7 @@ function useSearch(query, token, userId) {
 
 // ─── SearchResults: renders result blocks with keyword highlight ──────────────
 function SearchResults({ results, loading, query, onSelectDate }) {
-  const TYPE_LABEL = { journal: 'Journal', task: 'Task', meal: 'Meal', activity: 'Activity' };
+  const TYPE_LABEL = { journal: 'Journal', task: 'Task', meal: 'Meal', activity: 'Workout' };
   const TYPE_COLOR = { journal: C.accent, task: C.accent, meal: C.red, activity: C.blue };
 
   function highlight(text, q) {
@@ -4767,7 +4769,7 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 
   // Group by date → then by type, preserving project-view card order
   const TYPE_ORDER = ['task', 'journal', 'meal', 'activity'];
-  const TYPE_SECTION = { task: 'Tasks', journal: 'Journal', meal: 'Meals', activity: 'Activity' };
+  const TYPE_SECTION = { task: 'Tasks', journal: 'Journal', meal: 'Meals', activity: 'Workouts' };
   const byDate = [];
   let lastDate = null;
   results.forEach(hit => {
@@ -4853,7 +4855,7 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 }
 
 
-// ─── ProjectGraphView ─────────────────────────────────────────────────────────
+// ─── MapCard (ProjectGraphView) ────────────────────────────────────────────────
 function ProjectGraphView({ allTags, connections, onSelectProject, token, userId, taskFilter, setTaskFilter }) {
   // Nodes and edges built once from props
   const graphRef = useRef(null); // {nodes, edges}
@@ -5308,7 +5310,71 @@ function fmtDate(ds) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-// ─── NavBar ──────────────────────────────────────────────────────────────────
+
+// ─── Note context — provides available note names to all editors ──────────────
+// ProjectView/HealthProjectView populate this; all DayLabEditor wrappers read it.
+const NoteContext = createContext({ notes: [] });
+
+// ─── renderWithNoteLinks — renders {NoteName} chips inline ───────────────────
+function renderWithNoteLinks(text, noteNames, onNoteClick) {
+  if (!text || !noteNames?.length) return text;
+  const RE = /\{([^}]{1,40})\}/g;
+  const parts = [];
+  let last = 0, m, i = 0;
+  while ((m = RE.exec(text)) !== null) {
+    if (m.index > last) parts.push(<span key={i++}>{text.slice(last, m.index)}</span>);
+    const name = m[1];
+    const isNote = noteNames.some(n => n.toLowerCase() === name.toLowerCase());
+    parts.push(
+      <span key={i++}
+        onClick={isNote && onNoteClick ? () => onNoteClick(name) : undefined}
+        style={{
+          display: 'inline-block', padding: '0 5px', borderRadius: 4,
+          background: isNote ? 'rgba(154,144,136,0.18)' : 'transparent',
+          color: isNote ? 'inherit' : 'inherit',
+          cursor: isNote ? 'pointer' : 'default',
+          fontFamily: isNote ? "'SF Mono','Fira Code',ui-monospace,monospace" : 'inherit',
+          fontSize: isNote ? '0.85em' : 'inherit',
+          letterSpacing: isNote ? '0.04em' : 'inherit',
+          textDecoration: isNote ? 'underline dotted' : 'none',
+        }}
+      >{isNote ? `{${name}}` : `{${name}}`}</span>
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) parts.push(<span key={i++}>{text.slice(last)}</span>);
+  return parts;
+}
+
+// ─── NoteAutocomplete — floating dropdown shown while typing {... ─────────────
+function NoteAutocomplete({ query, notes, onSelect, onDismiss, anchorRef }) {
+  const filtered = notes.filter(n => n.toLowerCase().includes(query.toLowerCase()));
+  if (!filtered.length) return null;
+  return (
+    <div style={{
+      position: 'absolute', zIndex: 200, background: 'var(--dl-surface, #1E1C1A)',
+      border: '1px solid var(--dl-border, #272422)', borderRadius: 8,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.3)', padding: '4px 0',
+      minWidth: 160, maxWidth: 280, maxHeight: 180, overflowY: 'auto',
+    }}>
+      {filtered.map((name, i) => (
+        <button key={i} onMouseDown={e => { e.preventDefault(); onSelect(name); }}
+          style={{
+            display: 'block', width: '100%', background: 'none', border: 'none',
+            textAlign: 'left', padding: '5px 12px', cursor: 'pointer',
+            fontFamily: "'SF Mono','Fira Code',ui-monospace,monospace",
+            fontSize: 12, color: 'var(--dl-text, #EFDFC3)',
+            letterSpacing: '0.05em',
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.07)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'none'}
+        >{name}</button>
+      ))}
+    </div>
+  );
+}
+
+// ─── Nav ────────────────────────────────────────────────────────────────────
 // Unified nav bar — lives in scroll flow, right below the sticky vignette.
 // Home mode: [package icon + project chips] → [search icon]
 // Project mode: [← chevron + project name] → [search icon]
@@ -5947,7 +6013,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
   );
 
   const activitiesWidget = (
-    <Widget label="Activity" color={C.green} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
+    <Widget label="Workouts" color={C.green} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
       headerRight={<span style={{display:'flex',gap:0}}>
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:60,textAlign:'center'}}>dist</span>
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:100,textAlign:'center'}}>pace</span>
@@ -6034,9 +6100,37 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}
   const [editingTask, setEditingTask]   = useState(null); // {date,id,text}
 
-  // Project notes — stored as type:'project-notes', keyed by project name (safe from daily journal type:'notes')
-  const { value: projectNotes, setValue: setProjectNotes } =
-    useDbSave(project || '__none__', 'project-notes', '', token, userId);
+  // Notes card — multi-note store per project (type:'project-notes', keyed by project name)
+  // Shape: { notes: [{id,name,content}], activeId: string|null }
+  const NOTES_EMPTY = { notes: [], activeId: null };
+  const { value: notesStore, setValue: setNotesStore } =
+    useDbSave(project || '__none__', 'project-notes', NOTES_EMPTY, token, userId);
+  const notesList   = Array.isArray(notesStore?.notes) ? notesStore.notes : [];
+  const activeNoteId = notesStore?.activeId ?? notesList[0]?.id ?? null;
+  const activeNote  = notesList.find(n => n.id === activeNoteId) ?? notesList[0] ?? null;
+
+  const addNote = () => {
+    const id = `note_${Date.now()}`;
+    const name = `Note ${notesList.length + 1}`;
+    const updated = { notes: [...notesList, { id, name, content: '' }], activeId: id };
+    setNotesStore(updated, { skipHistory: true });
+  };
+  const selectNote = (id) => {
+    setNotesStore({ ...notesStore, activeId: id }, { skipHistory: true });
+  };
+  const updateNoteContent = (id, content) => {
+    const updated = { ...notesStore, notes: notesList.map(n => n.id === id ? { ...n, content } : n) };
+    setNotesStore(updated, { skipHistory: true });
+  };
+  const updateNoteName = (id, name) => {
+    const updated = { ...notesStore, notes: notesList.map(n => n.id === id ? { ...n, name } : n) };
+    setNotesStore(updated, { skipHistory: true });
+  };
+  const deleteNote = (id) => {
+    const remaining = notesList.filter(n => n.id !== id);
+    const newActive = remaining.find(n => n.id !== id)?.id ?? remaining[0]?.id ?? null;
+    setNotesStore({ notes: remaining, activeId: newActive }, { skipHistory: true });
+  };
 
   // Per-project collapse state (persisted)
   const [notesCollapsed,   toggleNotes]   = useCollapse(`pv:${project}:notes`,   false);
@@ -6210,29 +6304,78 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   );
 
   const _pcol = project === '__everything__' ? C.accent : projectColor(project);
+  const noteNamesForContext = notesList.map(n => n.name);
 
   return (
+    <NoteContext.Provider value={{ notes: noteNamesForContext }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
 
-      {/* Notes card — project overview/description/notes, stored as type:'project-notes' */}
+      {/* Notes card — tabbed named notes, 2/3 editor + 1/3 tabs */}
       {project !== '__everything__' && (
         <Widget
           label="Notes"
           color={C.muted}
-          autoHeight
           collapsed={notesCollapsed}
           onToggle={toggleNotes}
         >
-          <DayLabEditor
-            key={project}
-            value={projectNotes || ''}
-            onBlur={text => setProjectNotes(text, { skipHistory: true })}
-            placeholder="Add project notes, description, or overview…"
-            textColor={C.text}
-            mutedColor={C.dim}
-            color={C.accent}
-            style={{ minHeight: 80, width: '100%' }}
-          />
+          <div style={{ display: 'flex', minHeight: 220 }}>
+            {/* Editor — 2/3 width */}
+            <div style={{ flex: 2, minWidth: 0, borderRight: `1px solid ${C.border}`, paddingRight: 12 }}>
+              {notesList.length === 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, padding: '8px 0' }}>
+                  <span style={{ fontFamily: serif, fontSize: F.md, color: C.dim }}>No notes yet.</span>
+                  <button onClick={addNote} style={{ background: 'none', border: `1px solid ${C.border}`, borderRadius: 6, padding: '4px 10px', fontFamily: mono, fontSize: F.sm, color: C.muted, cursor: 'pointer', letterSpacing: '0.06em' }}>+ New note</button>
+                </div>
+              ) : activeNote ? (
+                <NoteLinker
+                  key={activeNote.id}
+                  noteNames={notesList.filter(n => n.id !== activeNote.id).map(n => n.name)}
+                  value={activeNote.content || ''}
+                  onBlur={text => updateNoteContent(activeNote.id, text)}
+                  placeholder="Start writing…"
+                  textColor={C.text}
+                  mutedColor={C.dim}
+                  color={C.muted}
+                  style={{ minHeight: 180, width: '100%' }}
+                />
+              ) : null}
+            </div>
+            {/* Tabs — 1/3 width */}
+            <div style={{ flex: 1, minWidth: 0, paddingLeft: 10, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {notesList.map(note => (
+                <div key={note.id} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <button
+                    onClick={() => selectNote(note.id)}
+                    style={{
+                      flex: 1, minWidth: 0, background: note.id === activeNoteId ? `${C.surface}` : 'none',
+                      border: note.id === activeNoteId ? `1px solid ${C.border}` : '1px solid transparent',
+                      borderRadius: 6, padding: '4px 8px', textAlign: 'left', cursor: 'pointer',
+                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.05em',
+                      color: note.id === activeNoteId ? C.text : C.muted,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      transition: 'all 0.12s',
+                    }}
+                    onDoubleClick={() => {
+                      const newName = window.prompt('Rename note:', note.name);
+                      if (newName?.trim()) updateNoteName(note.id, newName.trim());
+                    }}
+                    title={`${note.name} (double-click to rename)`}
+                  >
+                    {note.name}
+                  </button>
+                  <button
+                    onClick={() => { if (window.confirm(`Delete "${note.name}"?`)) deleteNote(note.id); }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: C.dim, fontSize: 11, lineHeight: 1, flexShrink: 0 }}
+                    title="Delete note"
+                  >×</button>
+                </div>
+              ))}
+              <button
+                onClick={addNote}
+                style={{ marginTop: 4, background: 'none', border: `1px dashed ${C.border}`, borderRadius: 6, padding: '3px 8px', fontFamily: mono, fontSize: F.sm, color: C.dim, cursor: 'pointer', textAlign: 'left', letterSpacing: '0.05em' }}
+              >+ note</button>
+            </div>
+          </div>
         </Widget>
       )}
 
@@ -6405,6 +6548,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
         }
       </Widget>
     </div>
+    </NoteContext.Provider>
   );
 }
 
@@ -6418,7 +6562,7 @@ const WIDGETS = [
   {id:"notes",    label:"Journal",  color:()=>C.accent, Comp:Notes},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
   {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals,    headerRight:()=>MEALS_HDR},
-  {id:"activity", label:"Activity", color:()=>C.green,  Comp:Activity, headerRight:()=>ACT_HDR},
+  {id:"activity", label:"Workouts", color:()=>C.green,  Comp:Activity, headerRight:()=>ACT_HDR},
 ];
 const FULL_IDS = ["cal","health"];
 
@@ -6733,7 +6877,7 @@ export default function Dashboard() {
 
 
 
-          {/* ── Daily scroll — calendar, health, widgets ── */}
+          {/* ── Day View scroll — calendar, health, cards ── */}
           {!activeProject && (
             <div style={{
               flex:1, minHeight:0, overflowY:"auto",
