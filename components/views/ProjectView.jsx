@@ -142,8 +142,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             const updated = text.replace(new RegExp('\\[' + esc2 + '\\]', 'g'), '[' + newName + ']');
             dbSave(row.date, 'journal', updated, token);
             const cacheKey = userId + ':' + row.date + ':journal';
-            if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated;
-            window.dispatchEvent(new CustomEvent('daylab:mem-update', { detail: { key: cacheKey, value: updated } }));
+            if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated; // Zustand proxy notifies all subscribers
             anyChanged = true;
           });
           if (anyChanged) window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
@@ -170,8 +169,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             const updated = replaceNoteSpan(html);
             dbSave(row.date, 'tasks', updated, token);
             const cacheKey = userId + ':' + row.date + ':tasks';
-            if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated;
-            window.dispatchEvent(new CustomEvent('daylab:mem-update', { detail: { key: cacheKey, value: updated } }));
+            if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated; // Zustand proxy notifies all subscribers
           });
         });
 
@@ -350,9 +348,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const updated = [...existing, newTask];
     await dbSave(today, 'tasks', updated, token);
     const cacheKey = `${userId}:${today}:tasks`;
-    MEM[cacheKey] = updated;
-    // Notify day-view Tasks hook directly so it shows without re-fetching
-    window.dispatchEvent(new CustomEvent('daylab:mem-update', { detail: { key: cacheKey, value: updated } }));
+    MEM[cacheKey] = updated; // Zustand proxy notifies all subscribers
     registerNewTags(taskText);
     // Append to local project-view entries so it appears immediately here too
     setEntries(prev => prev ? {
