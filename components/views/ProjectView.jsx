@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, Fragment, useContext
 import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
+import { api } from "@/lib/api";
 import { extractTags, tagDisplayName } from "@/lib/tags";
 import { useDbSave, dbLoad, dbSave, MEM } from "@/lib/db";
 import { useCollapse } from "@/lib/hooks";
@@ -236,10 +237,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   useEffect(() => {
     if (!token || !project) return;
     setEntries(null);
-    fetch(`/api/project-entries?project=${encodeURIComponent(project)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.json())
+    api.get(`/api/project-entries?project=${encodeURIComponent(project)}`, token)
       .then(d => {
         if (d.error) { setEntries({ journalEntries: [], taskEntries: [] }); return; }
         // Auto-delete project if it has no entries AND was previously registered in

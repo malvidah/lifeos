@@ -8,6 +8,7 @@ import { fmtMins, sportEmoji } from "@/lib/formatting";
 import { cachedOuraFetch } from "@/lib/ouraCache";
 import { RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
+import { api } from "@/lib/api";
 
 export function SourceBadge({source}) {
   if (!source) return null;
@@ -90,7 +91,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     setSyncedRows([]);
     Promise.all([
       cachedOuraFetch(date, token, userId),
-      fetch(`/api/strava?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({})),
+      api.get(`/api/strava?date=${date}`, token).then(d => d ?? {}),
     ]).then(([ouraData, stravaData])=>{
       const merged = mergeWorkouts(ouraData.workouts||[], stravaData.activities||[]);
       const rows = merged.map(w=>({
@@ -108,8 +109,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
           id:r.id, text:r.text, source:r.source,
           dist:r.dist||null, pace:r.pace||null, kcal:r.kcal||null,
         }));
-        fetch('/api/entries',{method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-          body:JSON.stringify({date,type:'workouts',data:summary})}).catch(()=>{});
+        api.post('/api/entries', {date, type:'workouts', data:summary}, token).catch(()=>{});
       }
     });
   },[date,token,userId,stravaConnected]); // eslint-disable-line

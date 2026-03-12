@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { mono, F, injectBlurWebFont, projectColor } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { todayKey, toKey, shift } from "@/lib/dates";
 import { tagDisplayName } from "@/lib/tags";
 import { bustOuraCache } from "@/lib/ouraCache";
@@ -72,9 +73,8 @@ function DashboardInner() {
   const [allProjectNames, setAllProjectNames] = useState([]);
   useEffect(() => {
     if (!token) return;
-    fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => { if (Array.isArray(d.tags)) setAllProjectNames(d.tags); })
+    api.get('/api/all-tags', token)
+      .then(d => { if (Array.isArray(d?.tags)) setAllProjectNames(d.tags); })
       .catch(() => {});
   }, [token]); // eslint-disable-line
 
@@ -95,15 +95,15 @@ function DashboardInner() {
     if (activeProject !== '__graph__' || !token) return;
     if (graphData) return;
     Promise.all([
-      fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('/api/tag-connections', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(function(res) {
+      api.get('/api/all-tags', token),
+      api.get('/api/tag-connections', token),
+    ]).then(([tagsRes, connsRes]) => {
       setGraphData({
-        allTags: Array.isArray(res[0].tags) ? res[0].tags : [],
-        connections: Array.isArray(res[1].connections) ? res[1].connections : [],
-        recency: res[1].recency || {},
+        allTags: Array.isArray(tagsRes?.tags) ? tagsRes.tags : [],
+        connections: Array.isArray(connsRes?.connections) ? connsRes.connections : [],
+        recency: connsRes?.recency || {},
       });
-    }).catch(function() { setGraphData({ allTags: [], connections: [], recency: {} }); });
+    }).catch(() => { setGraphData({ allTags: [], connections: [], recency: {} }); });
   }, [activeProject, token]); // eslint-disable-line
   const { results: srResults, loading: srLoading } = useSearch(searchQuery, token, userId);
 
@@ -148,13 +148,8 @@ function DashboardInner() {
     const key = `scores_backfill_done:${userId}`;
     if (sessionStorage.getItem(key)) return; // already ran this session
     sessionStorage.setItem(key, '1');
-    fetch('/api/scores-backfill', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({}),
-    })
-      .then(r => r.json())
-      .then(d => { if (d.scored > 0) console.log(`[daylab] backfilled ${d.scored} score entries`); })
+    api.post('/api/scores-backfill', {}, token)
+      .then(d => { if (d?.scored > 0) console.log(`[daylab] backfilled ${d.scored} score entries`); })
       .catch(() => {}); // silent — never block the UI
   }, [token, userId]); // eslint-disable-line
 
@@ -226,10 +221,7 @@ function DashboardInner() {
     const start=toKey(shift(new Date(),-30));
     const end=toKey(shift(new Date(),60));
 
-    const fetchCal=()=>fetch("/api/calendar",{method:"POST",
-      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-      body:JSON.stringify({start,end,tz})})
-      .then(r=>r.ok?r.json():null)
+    const fetchCal=()=>api.post("/api/calendar",{start,end,tz},token)
       .then(d=>{
         if(d?.events) setEvents(prev=>({...prev,...d.events}));
         if(d?.googleToken) setGoogleToken(d.googleToken);
@@ -241,9 +233,7 @@ function DashboardInner() {
 
     // On fresh login, save the provider token first, then fetch
     if(sessionGoogleToken){
-      fetch("/api/google-token",{method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-        body:JSON.stringify({googleToken:sessionGoogleToken,refreshToken:sessionRefreshToken})})
+      api.post("/api/google-token",{googleToken:sessionGoogleToken,refreshToken:sessionRefreshToken},token)
         .then(()=>fetchCal()).catch(()=>fetchCal());
     } else {
       fetchCal();

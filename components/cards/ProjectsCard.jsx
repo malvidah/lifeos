@@ -8,6 +8,7 @@ import { useDbSave } from "@/lib/db";
 import { useNavigation } from "@/lib/contexts";
 import { Card, Ring, TagChip } from "../ui/primitives.jsx";
 import { TaskFilterBtns } from "../widgets/Tasks.jsx";
+import { api } from "@/lib/api";
 
 const TAGS_CACHE = { tags: null, connections: [], recency: {} };
 
@@ -44,17 +45,15 @@ export default function ProjectsCard({ date, token, userId, onSelectProject }) {
     if (!token || fetchedRef.current) return;
     fetchedRef.current = true;
     Promise.all([
-      fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-      fetch('/api/tag-connections', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json()),
-    ]).then(function(results) {
-      var tagsRes = results[0];
-      var connsRes = results[1];
-      const tags = Array.isArray(tagsRes.tags) ? tagsRes.tags : [];
-      const conns = Array.isArray(connsRes.connections) ? connsRes.connections : [];
-      const rec = connsRes.recency || {};
+      api.get('/api/all-tags', token),
+      api.get('/api/tag-connections', token),
+    ]).then(([tagsRes, connsRes]) => {
+      const tags = Array.isArray(tagsRes?.tags) ? tagsRes.tags : [];
+      const conns = Array.isArray(connsRes?.connections) ? connsRes.connections : [];
+      const rec = connsRes?.recency || {};
       TAGS_CACHE.tags = tags; TAGS_CACHE.connections = conns; TAGS_CACHE.recency = rec;
       setAllTagsRaw(tags); setConnections(conns); setRecency(rec);
-    }).catch(function() { setAllTagsRaw([]); });
+    }).catch(() => { setAllTagsRaw([]); });
   }, [token]); // eslint-disable-line
 
   // Re-fetch when today's notes/tasks change (new tag added or deleted)
@@ -63,9 +62,8 @@ export default function ProjectsCard({ date, token, userId, onSelectProject }) {
     const key = todayTags ? [...todayTags].sort().join(',') : '';
     if (key === prevTagsKey.current || !token) return;
     prevTagsKey.current = key;
-    fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.json())
-      .then(d => setAllTags(Array.isArray(d.tags) ? d.tags : []))
+    api.get('/api/all-tags', token)
+      .then(d => setAllTags(Array.isArray(d?.tags) ? d.tags : []))
       .catch(() => {});
   }, [todayTags, token]); // eslint-disable-line
 

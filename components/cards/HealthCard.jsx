@@ -7,37 +7,9 @@ import { useDbSave, dbLoad, MEM, DIRTY } from "@/lib/db";
 import { cachedOuraFetch, _ouraCache } from "@/lib/ouraCache";
 import { createClient } from "@/lib/supabase";
 import { Card, Ring, Widget, Shimmer, ChevronBtn, InfoTip } from "../ui/primitives.jsx";
+import { fmtMins, fmtMinsField, sportEmoji } from "@/lib/formatting";
 
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",activeMinutes:"",resilienceScore:"",stressMins:"",recoveryMins:""};
-
-const SPORT_EMOJI = {
-  Run:"🏃",Ride:"🚴",Swim:"🏊",Walk:"🚶",Hike:"🥾",
-  WeightTraining:"🏋️",Yoga:"🧘",Workout:"💪",
-  VirtualRide:"🚴",VirtualRun:"🏃",Soccer:"⚽",
-  Rowing:"🚣",Kayaking:"🛶",Surfing:"🏄",
-  Snowboard:"🏂",AlpineSki:"⛷️",NordicSki:"⛷️",
-  default:"🏅",
-};
-function sportEmoji(type){
-  if(!type)return SPORT_EMOJI.default;
-  const k=Object.keys(SPORT_EMOJI).find(k=>k.toLowerCase()===type.toLowerCase().replace(/_/g,""));
-  return SPORT_EMOJI[k]||SPORT_EMOJI.default;
-}
-
-function fmtMins(val) {
-  const m = parseInt(val)||0;
-  if (!m) return "—";
-  if (m < 60) return `${m}m`;
-  const h = Math.floor(m/60), rem = m%60;
-  return rem ? `${h}h ${rem}m` : `${h}h`;
-}
-function fmtMinsField(val) {
-  const m = parseInt(val)||0;
-  if (!m) return {value:"—", unit:""};
-  if (m < 60) return {value:String(m), unit:"m"};
-  const h = Math.floor(m/60), rem = m%60;
-  return rem ? {value:`${h}h ${rem}`, unit:"m"} : {value:String(h), unit:"h"};
-}
 
 
 export default function HealthCard({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,backAction}) {
@@ -65,7 +37,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     cachedOuraFetch(date, token, userId).then(async data=>{
         if(data.error==="no_token") {
           // No Oura — try Garmin first, then fall back to Apple Health
-          const garminData = await fetch(`/api/garmin?date=${date}`,{headers:{Authorization:`Bearer ${token}`}}).then(r=>r.json()).catch(()=>({}));
+          const garminData = await api.get(`/api/garmin?date=${date}`, token).catch(() => ({})) ?? {};
           if(garminData && !garminData.error && Object.keys(garminData).length > 0) {
             setH(p=>({...p,
               sleepHrs:       garminData.sleepHrs        ?? "",
@@ -171,15 +143,15 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     if(h.rhr)            p.set('rhr',            h.rhr);
     if(h.steps)          p.set('steps',          h.steps);
     if(h.activeMinutes)  p.set('activeMinutes',  h.activeMinutes);
-    fetch(`/api/scores?${p}`,{signal:ctrl.signal,headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(d=>{
-        if(!d.error){
+    api.get(`/api/scores?${p}`, token)
+      .then(d => {
+        if (d && !d.error) {
           setScores(d);
-          if(d.sleep?.score != null || d.readiness?.score != null || d.activity?.score != null || d.recovery?.score != null){
+          if (d.sleep?.score != null || d.readiness?.score != null || d.activity?.score != null || d.recovery?.score != null) {
             onScoresReady(date, d);
           }
         }
-      }).catch(e=>{ if(e.name!=='AbortError') console.warn('scores fetch',e); });
+      }).catch(e => { if (e.name !== 'AbortError') console.warn('scores fetch', e); });
     return ()=>ctrl.abort();
   },[date,token,scoreFingerprint,loaded]); // eslint-disable-line
 

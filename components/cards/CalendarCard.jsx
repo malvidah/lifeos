@@ -6,6 +6,7 @@ import { serif, mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey, shift, dayOffset, offsetToDate, keyToDayNum, MONTHS_FULL, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { useIsMobile } from "@/lib/hooks";
 import { Card, NavBtn, ChevronBtn } from "../ui/primitives.jsx";
+import { api } from "@/lib/api";
 
 const BIG_EVENT_KEYWORDS = /birthday|bday|anniversary|wedding|graduation|party|trip|camping|hike|concert|festival|game.?night|board.?game|vacation|holiday|travel|flight|conference|retreat|summit|christm|thanksgiv|new.?year|halloween|passover|hanukkah|diwali|eid|week.?off|day.?off|surgery|date.?night|show|performance|recital|marathon|race|gala|ceremony|opening.?night|potluck|picnic|reunion|sleepover|road.?trip/i;
 
@@ -202,12 +203,8 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
       const key = `${yr}-${mo}`;
       if (summaryCache[key] !== undefined) return;
       setSummaryCache(prev => ({ ...prev, [key]: null }));
-      fetch('/api/month-summaries', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ year: yr, month: mo }),
-      }).then(r => r.json()).then(d => {
-        if (d.summaries) setSummaries(prev => ({ ...prev, ...d.summaries }));
+      api.post('/api/month-summaries', { year: yr, month: mo }, token).then(d => {
+        if (d?.summaries) setSummaries(prev => ({ ...prev, ...d.summaries }));
         setSummaryCache(prev => ({ ...prev, [key]: true }));
       }).catch(() => {});
     });
@@ -939,28 +936,20 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
     setSaving(true); setSaveErr('');
     try {
       if (isNew) {
-        const res = await fetch('/api/calendar-create', {
-          method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-          body: JSON.stringify({title:form.title.trim(),date:selected,
-            startTime:form.allDay?'':form.startTime,endTime:form.allDay?'':form.endTime,
-            allDay:form.allDay,tz}),
-        });
-        const data = await res.json();
-        if (!res.ok||data.error){ setSaveErr(data.error||'Failed'); setSaving(false); return; }
+        const data = await api.post('/api/calendar-create', {title:form.title.trim(),date:selected,
+          startTime:form.allDay?'':form.startTime,endTime:form.allDay?'':form.endTime,
+          allDay:form.allDay,tz}, token);
+        if (!data||data.error){ setSaveErr(data?.error||'Failed'); setSaving(false); return; }
         setEvents(prev=>({...prev,[selected]:[...(prev[selected]||[]),
           {id:data.eventId,title:form.title.trim(),
            time:form.allDay?'all day':to12h(form.startTime),
            endTime:form.allDay?null:to12h(form.endTime),allDay:form.allDay,color:'#B8A882'}]}));
         closePanel();
       } else {
-        const res = await fetch('/api/calendar-update', {
-          method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-          body: JSON.stringify({eventId:active.id,title:form.title.trim(),date:selected,
-            startTime:form.allDay?'':form.startTime,endTime:form.allDay?'':form.endTime,
-            allDay:form.allDay,tz}),
-        });
-        const data = await res.json();
-        if (!res.ok||data.error){ setSaveErr(data.error||'Failed'); setSaving(false); return; }
+        const data = await api.post('/api/calendar-update', {eventId:active.id,title:form.title.trim(),date:selected,
+          startTime:form.allDay?'':form.startTime,endTime:form.allDay?'':form.endTime,
+          allDay:form.allDay,tz}, token);
+        if (!data||data.error){ setSaveErr(data?.error||'Failed'); setSaving(false); return; }
         const updated = {...active,title:form.title.trim(),
           time:form.allDay?'all day':to12h(form.startTime),
           endTime:form.allDay?null:to12h(form.endTime),allDay:form.allDay};
@@ -974,39 +963,28 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
   async function deleteEvent() {
     if (!active?.id||deleting) return;
     setDeleting(true);
-    const snapshot = {...active}; // capture before deletion
+    const snapshot = {...active};
     const dateSnap = selected;
     try {
-      const res = await fetch('/api/calendar-delete', {
-        method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-        body: JSON.stringify({eventId:active.id}),
-      });
-      if (res.ok) {
+      const data = await api.post('/api/calendar-delete', {eventId:active.id}, token);
+      if (data !== null) {
         setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).filter(e=>e.id!==active.id)}));
         closePanel();
-        // Push undo entry — re-create the event
         pushHistory({
           label: `Delete "${snapshot.title}"`,
           undo: async () => {
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const r = await fetch('/api/calendar-create', {
-              method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-              body: JSON.stringify({title:snapshot.title, date:dateSnap,
-                startTime: snapshot.allDay?'':toHHMM(snapshot.time),
-                endTime: snapshot.allDay?'':toHHMM(snapshot.endTime),
-                allDay:snapshot.allDay||snapshot.time==='all day', tz}),
-            });
-            const d = await r.json();
-            if (r.ok && d.eventId) {
+            const d = await api.post('/api/calendar-create', {title:snapshot.title, date:dateSnap,
+              startTime: snapshot.allDay?'':toHHMM(snapshot.time),
+              endTime: snapshot.allDay?'':toHHMM(snapshot.endTime),
+              allDay:snapshot.allDay||snapshot.time==='all day', tz}, token);
+            if (d?.eventId) {
               const restored = {...snapshot, id:d.eventId};
               setEvents(prev=>({...prev,[dateSnap]:[...(prev[dateSnap]||[]).filter(e=>e.id!==snapshot.id&&e.id!==d.eventId), restored]}));
             }
           },
           redo: async () => {
-            await fetch('/api/calendar-delete', {
-              method:'POST', headers:{'Content-Type':'application/json',Authorization:`Bearer ${token}`},
-              body: JSON.stringify({eventId:snapshot.id}),
-            });
+            await api.post('/api/calendar-delete', {eventId:snapshot.id}, token);
             setEvents(prev=>({...prev,[dateSnap]:(prev[dateSnap]||[]).filter(e=>e.id!==snapshot.id)}));
           },
         });

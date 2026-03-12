@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, useMemo, Fragment } from "rea
 import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT } from "@/lib/dates";
+import { api } from "@/lib/api";
 import { tagDisplayName } from "@/lib/tags";
 import { Card, Widget, Ring, ChevronBtn, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { fmtMins, sportEmoji } from "@/lib/formatting";
@@ -349,11 +350,9 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
   useEffect(() => {
     if (!token) return;
     setEntries(null);
-    fetch('/api/project-entries?project=__health__', {
-      headers: { Authorization: `Bearer ${token}` },
-    }).then(r => r.json()).then(d => {
-      setEntries(d.error ? { journalEntries: [], taskEntries: [] } : d);
-    }).catch(() => setEntries({ journalEntries: [], taskEntries: [] }));
+    api.get('/api/project-entries?project=__health__', token)
+      .then(d => setEntries(!d || d.error ? { journalEntries: [], taskEntries: [] } : d))
+      .catch(() => setEntries({ journalEntries: [], taskEntries: [] }));
   }, [token]);
 
   const taskEntries = entries?.taskEntries || [];

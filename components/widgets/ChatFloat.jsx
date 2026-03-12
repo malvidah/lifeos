@@ -3,6 +3,7 @@ import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, blurweb } from "@/lib/tokens";
 import { toKey, todayKey, fmtDate } from "@/lib/dates";
+import { api } from "@/lib/api";
 import { dbLoad, dbSave, MEM, DIRTY, pushHistory } from "@/lib/db";
 import { useIsMobile } from "@/lib/hooks";
 import { DayLabLoader, Widget, Shimmer } from "../ui/primitives.jsx";
@@ -52,15 +53,10 @@ export function InsightsCard({date, token, userId, healthKey, collapsed, onToggl
       if (cached?.text && !isBadCache(cached.text, cached, currentHealthKey) && age < 12 * 60 * 60 * 1000) {
         setText(cleanInsight(cached.text)); setBusy(false); return;
       }
-      const res = await fetch("/api/insights", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ date, healthKey: currentHealthKey }),
-      });
-      const data = await res.json();
-      if (data.tier === "free") { setIsFree(true); setFreeUsage({ count: data.usageCount, limit: data.limit }); }
-      else if (data.insight) setText(cleanInsight(data.insight));
-      else if (data.error) setError(data.error);
+      const data = await api.post("/api/insights", { date, healthKey: currentHealthKey }, token);
+      if (data?.tier === "free") { setIsFree(true); setFreeUsage({ count: data.usageCount, limit: data.limit }); }
+      else if (data?.insight) setText(cleanInsight(data.insight));
+      else if (data?.error) setError(data.error);
     } catch (e) { setError(e.message); }
     setBusy(false);
   }
@@ -235,14 +231,9 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
         if (!stale) {
           text = cached.text;
         } else {
-          const res = await fetch("/api/insights", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ date, healthKey }),
-          });
-          const data = await res.json();
-          if (data.insight) text = data.insight;
-          else if (data.tier === "free") text = "Upgrade to Premium to unlock daily AI insights, voice entry, and chat.";
+          const data = await api.post("/api/insights", { date, healthKey }, token);
+          if (data?.insight) text = data.insight;
+          else if (data?.tier === "free") text = "Upgrade to Premium to unlock daily AI insights, voice entry, and chat.";
         }
         if (text) {
           const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
@@ -289,14 +280,9 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
             reader.onload = () => res(reader.result.split(",")[1]);
             reader.readAsDataURL(blob);
           });
-          const resp = await fetch("/api/transcribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ audio: base64, mimeType }),
-          });
-          const data = await resp.json();
-          if (data.text) setInput(prev => prev ? prev + " " + data.text : data.text);
-          else logMicError(data.error || "Could not transcribe");
+          const data = await api.post("/api/transcribe", { audio: base64, mimeType }, token);
+          if (data?.text) setInput(prev => prev ? prev + " " + data.text : data.text);
+          else logMicError(data?.error || "Could not transcribe");
         } catch (e) { logMicError("Transcription failed"); }
         setTranscribing(false);
       };
@@ -399,13 +385,8 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
     setBusy(true);
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const res = await fetch("/api/voice-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ text: userText, date, tz }),
-      });
-      const data = await res.json();
-      if (data.ok && data.results?.length > 0) {
+      const data = await api.post("/api/voice-action", { text: userText, date, tz }, token);
+      if (data?.ok && data.results?.length > 0) {
         dispatchRefresh(data.results.map(r => r.type), data.summary);
         logToChat(userText, data.summary || "Done");
       } else if (data.tier === "free") {
@@ -438,17 +419,12 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
 
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
-          date,
-          tz,
-        }),
-      });
-      const data = await res.json();
-      if (data.error) {
+      const data = await api.post("/api/chat", {
+        messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
+        date,
+        tz,
+      }, token);
+      if (data?.error) {
         setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: `Error: ${data.error}` }));
       } else {
         const assistantMsg = { role: "assistant", content: data.reply, actions: data.actions, summary: data.summary };
