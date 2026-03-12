@@ -584,23 +584,30 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               { type: 'doc', content: [{ type: 'paragraph' }] }
             ), 0);
           } else if (onEnterSplitRef.current) {
-            // Serialize the doc split at the cursor position.
-            // We cannot walk only text nodes — atom nodes (projectTag, noteLink) serialize
-            // as multi-char tokens ({name}, [name]) and a text-only walk gives the wrong offset.
-            // Instead: slice the PM doc at `from`, serialize each half independently.
+            // Split the paragraph at the cursor using ProseMirror Fragment.cut.
+            //
+            // `from` is an absolute doc position. The singleLine doc is always:
+            //   doc(0) → paragraph(1) → ...content... → paragraph-close → doc-close
+            // Position 1 is the start of paragraph content, so the content offset
+            // within the paragraph = from - 1.
+            //
+            // IMPORTANT: do NOT use doc.cut(1, from) — that calls Fragment.cut(1, from)
+            // on doc.content, which cuts *into* the paragraph's first child at offset 1
+            // and drops its first character. Use para.content.cut(0, offset) instead.
             const { from } = view.state.selection;
-            const doc = view.state.doc;
-            // The paragraph is the only block; its content spans pos 1..doc.content.size-1
-            // Clamp: cursor can be at position 1 (before all content) up to doc.content.size-1
-            const paraStart = 1;
-            const paraEnd   = doc.content.size - 1;
-            const splitAt   = Math.max(paraStart, Math.min(from, paraEnd));
+            const para   = view.state.doc.child(0);           // the only paragraph
+            const offset = Math.min(from - 1, para.content.size); // clamp to [0, size]
+            const clampedOffset = Math.max(0, offset);
 
-            // Build left doc: paragraph with content [paraStart, splitAt)
-            const leftContent  = doc.cut(paraStart, splitAt);
-            const rightContent = doc.cut(splitAt, paraEnd);
-            const before = docToText({ type: 'doc', content: leftContent.content.size  ? [{ type: 'paragraph', content: leftContent.content.toJSON()  }] : [{ type: 'paragraph' }] });
-            const after  = docToText({ type: 'doc', content: rightContent.content.size ? [{ type: 'paragraph', content: rightContent.content.toJSON() }] : [{ type: 'paragraph' }] });
+            const leftFrag  = para.content.cut(0, clampedOffset);
+            const rightFrag = para.content.cut(clampedOffset);
+
+            const toDoc = (frag) => ({
+              type: 'doc',
+              content: [{ type: 'paragraph', content: frag.toJSON() ?? [] }],
+            });
+            const before = docToText(toDoc(leftFrag));
+            const after  = docToText(toDoc(rightFrag));
             onEnterSplitRef.current({ before, after });
           }
           return true;
