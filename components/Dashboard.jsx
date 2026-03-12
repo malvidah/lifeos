@@ -5147,31 +5147,46 @@ const ProjectNamesContext = createContext([]);
 const NavigationContext = createContext({ navigateToProject: () => {}, navigateToNote: () => {} });
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
-// Unified nav bar — lives in scroll flow, right below the sticky vignette.
-// Home mode: [package icon + project chips] → [search icon]
-// Project mode: [← chevron + project name] → [search icon]
+// Unified nav bar — lives in scroll flow, inside each scroll container.
+// Both modes share identical outer shell (height:48, no padding) so the search
+// button lands at exactly the same pixel on every page.
+// Home:    [all-projects icon | project chips ···] [search icon]
+// Project: [← back] [PROJECT NAME ············] [search icon]
 function NavBar({ activeProject, searchOpen, setSearchOpen, searchQuery, setSearchQuery,
                   searchInputRef, srLoading, date, token, userId, onSelectProject,
                   onBack, tagDisplayName, projectColor }) {
 
   const openSearch = () => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); };
 
-  const SearchIcon = (onClick, extraStyle) => (
+  // Shared search button — identical style/size on every page
+  const SearchBtn = ({ onClick }) => (
     <button onClick={onClick}
-      style={{background:'none',border:'none',cursor:'pointer',padding:'8px 12px',
-        display:'flex',alignItems:'center',color:C.muted,flexShrink:0,
-        minWidth:44,minHeight:44,justifyContent:'center',transition:'color 0.15s',
-        ...(extraStyle||{})}}
+      style={{background:'none',border:'none',cursor:'pointer',
+        display:'flex',alignItems:'center',justifyContent:'center',
+        color:C.muted, flexShrink:0,
+        width:44, height:48,
+        transition:'color 0.15s'}}
       onMouseEnter={e=>e.currentTarget.style.color=C.text}
       onMouseLeave={e=>e.currentTarget.style.color=C.muted}
       aria-label="Search">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
       </svg>
     </button>
   );
 
-  // ── Project view ──
+  // Shared outer shell — both modes render this exact wrapper so layout is identical
+  const Shell = ({ children }) => (
+    <div style={{
+      display:'flex', alignItems:'center', flexShrink:0,
+      height:48, overflow:'visible',
+      position:'relative', // needed for home view's absolute-positioned crossfade children
+    }}>
+      {children}
+    </div>
+  );
+
+  // ── Project / health / graph view ──
   if (activeProject) {
     const isGraph  = activeProject === '__graph__';
     const isHealth = activeProject === '__health__';
@@ -5181,26 +5196,30 @@ function NavBar({ activeProject, searchOpen, setSearchOpen, searchQuery, setSear
                 : activeProject === '__everything__' ? 'ALL'
                 : tagDisplayName(activeProject);
     return (
-      <div style={{display:'flex',alignItems:'center',gap:8,padding:'14px 14px 8px',flexShrink:0}}>
+      <Shell>
+        {/* Back button — same left-edge as the all-projects icon on home */}
         <button onClick={onBack}
-          style={{background:'none',border:'none',cursor:'pointer',display:'flex',
-            alignItems:'center',padding:'0 2px',color:pcol+'99',flexShrink:0}}
+          style={{background:'none',border:'none',cursor:'pointer',
+            display:'flex',alignItems:'center',justifyContent:'center',
+            color:pcol+'99', flexShrink:0,
+            width:36, height:48}}
           aria-label="Back">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.2" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',textTransform:'uppercase',color:pcol}}>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.08em',
+          textTransform:'uppercase',color:pcol, flex:1, minWidth:0,
+          whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>
           {label}
         </span>
-        <div style={{flex:1}}/>
-        {SearchIcon(() => { onBack(); openSearch(); })}
-      </div>
+        <SearchBtn onClick={() => { onBack(); openSearch(); }} />
+      </Shell>
     );
   }
 
   // ── Home view: strip + search crossfade ──
   return (
-    <div style={{position:'relative',flexShrink:0,height:52,overflow:'visible'}}>
+    <Shell>
       {/* Projects bar — fades out when search open */}
       <div style={{position:'absolute',top:0,left:0,right:0,bottom:0,
         opacity:searchOpen?0:1,pointerEvents:searchOpen?'none':'auto',
@@ -5208,7 +5227,7 @@ function NavBar({ activeProject, searchOpen, setSearchOpen, searchQuery, setSear
         <div style={{flex:1,minWidth:0}}>
           <ProjectsCard date={date} token={token} userId={userId} onSelectProject={onSelectProject}/>
         </div>
-        {SearchIcon(openSearch)}
+        <SearchBtn onClick={openSearch} />
       </div>
       {/* Search pill — fades in when search open */}
       <div style={{position:'absolute',top:0,left:0,right:0,bottom:0,
@@ -5240,7 +5259,7 @@ function NavBar({ activeProject, searchOpen, setSearchOpen, searchQuery, setSear
           </button>
         </div>
       </div>
-    </div>
+    </Shell>
   );
 }
 
@@ -6798,8 +6817,8 @@ export default function Dashboard() {
               padding:10, paddingTop:0,
               paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:mobile?10:8}}>
-              {/* 50px breathing room under the top-bar vignette */}
-              <div style={{height:50,flexShrink:0}}/>
+              {/* 25px breathing room under the top-bar vignette */}
+              <div style={{height:25,flexShrink:0}}/>
               {/* NavBar — in scroll flow, same component on every page */}
               <NavBar
                 activeProject={activeProject}
@@ -6911,8 +6930,8 @@ export default function Dashboard() {
                 <>
                   {/* Scrollable content */}
                   <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:0,boxSizing:'border-box'}}>
-                    {/* 50px breathing room + NavBar in scroll flow — same component as home view */}
-                    <div style={{height:50}}/>
+                    {/* 25px breathing room + NavBar in scroll flow — same component as home view */}
+                    <div style={{height:25}}/>
                     <NavBar
                       activeProject={activeProject}
                       searchOpen={searchOpen} setSearchOpen={setSearchOpen}
