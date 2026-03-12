@@ -5,7 +5,8 @@ import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { toKey, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { extractTags } from "@/lib/tags";
 import { useNavigation } from "@/lib/contexts";
-import { TagChip } from "../ui/primitives.jsx";
+import { createClient } from "@/lib/supabase";
+import { TagChip, Card } from "../ui/primitives.jsx";
 
 export function useSearch(query, token, userId) {
   const [results, setResults] = useState(null); // null=idle, []=empty, [...]=hits

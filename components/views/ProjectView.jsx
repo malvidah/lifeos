@@ -4,9 +4,11 @@ import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { extractTags, tagDisplayName } from "@/lib/tags";
-import { useDbSave, dbLoad } from "@/lib/db";
+import { useDbSave, dbLoad, dbSave, MEM } from "@/lib/db";
+import { useCollapse } from "@/lib/hooks";
+import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
-import { Card, Widget, Ring, ChevronBtn, TagChip, RichLine } from "../ui/primitives.jsx";
+import { Card, Widget, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 import { TaskFilterBtns } from "../widgets/Tasks.jsx";
 

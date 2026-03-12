@@ -1,4 +1,5 @@
 "use client";
+import { pushHistory } from "@/lib/db";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R } from "@/lib/tokens";

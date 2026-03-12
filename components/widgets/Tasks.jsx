@@ -1,8 +1,10 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, useContext, Fragment } from "react";
 import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
+import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
+import { RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 
 function NewProjectTask({ project, onAdd }) {

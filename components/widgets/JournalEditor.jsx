@@ -1,8 +1,10 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, useContext, Fragment } from "react";
 import { useTheme } from "@/lib/theme";
 import { mono, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
+import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
+import { RichLine, Shimmer } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile } from "@/lib/images";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 
@@ -224,4 +226,4 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
 }
 
 export function Meals({date,token,userId}) { const { C } = useTheme(); return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={C.accent} showProtein/>; }
-export { ProjectNamesContext } from "@/lib/contexts";
+

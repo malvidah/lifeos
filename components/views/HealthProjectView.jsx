@@ -4,8 +4,11 @@ import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT } from "@/lib/dates";
 import { tagDisplayName } from "@/lib/tags";
-import { Card, Widget, Ring, ChevronBtn } from "../ui/primitives.jsx";
+import { Card, Widget, Ring, ChevronBtn, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { fmtMins, sportEmoji } from "@/lib/formatting";
+import { dbLoad, dbSave, MEM } from "@/lib/db";
+import { useCollapse } from "@/lib/hooks";
+import { createClient } from "@/lib/supabase";
 import HealthCard from "../cards/HealthCard.jsx";
 
 function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
