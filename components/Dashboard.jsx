@@ -1153,7 +1153,7 @@ function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onSt
 }
 
 // ─── Header ──────────────────────────────────────────────────────────────────
-function TopBar({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,onGoHome,stravaConnected,onStravaChange}) {
+function Header({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,onGoHome,stravaConnected,onStravaChange}) {
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
   const [isToday, setIsToday] = useState(false);
@@ -2106,7 +2106,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     </div>
   );
 }
-function CalStrip({selected, onSelect, events, setEvents, healthDots, token, collapsed, onToggle, calView, onCalViewChange}) {
+function CalendarCard({selected, onSelect, events, setEvents, healthDots, token, collapsed, onToggle, calView, onCalViewChange}) {
   const mobile = useIsMobile();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -2558,7 +2558,7 @@ function fmtMinsField(val) {
 }
 
 
-function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,backAction}) {
+function HealthCard({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,backAction}) {
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
@@ -3095,11 +3095,11 @@ function HealthStrip({date,token,userId,onHealthChange,onScoresReady,onSyncStart
   );
 }
 
-// ─── Notes ────────────────────────────────────────────────────────────────────
+// ─── Journal ────────────────────────────────────────────────────────────────────
 
 // Plain textarea with a transparent overlay that colorizes "# heading" lines.
 // Cmd+B / Cmd+I wrap selected text in ** / *.
-function Notes({date,userId,token}) {
+function JournalEditor({date,userId,token}) {
   const {value, setValue, loaded} = useDbSave(date, 'notes', '', token, userId);
 
   if (!loaded) return (
@@ -3382,7 +3382,7 @@ function calcPace(w) {
 }
 function isRun(w) { return (w.sport||w.type||w.name||"").toLowerCase().match(/run|jog/); }
 
-function Activity({date,token,userId,stravaConnected}) {
+function WorkoutsCard({date,token,userId,stravaConnected}) {
   const [syncedRows, setSyncedRows] = useState([]);
   const mkRow = () => ({id:Date.now(), text:"", dist:null, pace:null, kcal:null});
   const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "activity", [mkRow()], token, userId);
@@ -4852,8 +4852,8 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 }
 
 
-// ─── Map card (ProjectGraphView) ───────────────────────────────────────────────
-function ProjectGraphView({ allTags, connections, onSelectProject, token, userId, taskFilter, setTaskFilter }) {
+// ─── Map card ───────────────────────────────────────────────
+function MapCard({ allTags, connections, onSelectProject, token, userId, taskFilter, setTaskFilter }) {
   // Nodes and edges built once from props
   const graphRef = useRef(null); // {nodes, edges}
   const [ready, setReady] = useState(false);
@@ -5968,7 +5968,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
     <div style={{ display:'flex', flexDirection:'column', gap:10, paddingBottom:200,
       maxWidth:1200, width:'100%', margin:'0 auto', boxSizing:'border-box' }}>
       {/* Health strip — collapsible */}
-      <HealthStrip
+      <HealthCard
         date={today} token={token} userId={userId}
         onHealthChange={onHealthChange || (()=>{})}
         onScoresReady={onScoresReady || (()=>{})}
@@ -5985,7 +5985,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
             {tasksWidget}
             {entriesWidget}
           </div>
-          {/* Right col: Meals, Activity */}
+          {/* Right col: Meals, Workouts */}
           <div style={{ display:'flex', flexDirection:'column', gap:10, minWidth:0 }}>
             {mealsWidget}
             {activitiesWidget}
@@ -6515,10 +6515,10 @@ const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
-  {id:"notes",    label:"Journal",  color:()=>C.accent, Comp:Notes},
+  {id:"notes",    label:"Journal",  color:()=>C.accent, Comp:JournalEditor},
   {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
   {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals,    headerRight:()=>MEALS_HDR},
-  {id:"activity", label:"Workouts", color:()=>C.green,  Comp:Activity, headerRight:()=>ACT_HDR},
+  {id:"activity", label:"Workouts", color:()=>C.green,  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
 ];
 const FULL_IDS = ["cal","health"];
 
@@ -6826,7 +6826,7 @@ export default function Dashboard() {
         @keyframes fadeInUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
       `}</style>
 
-      <TopBar session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+      <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* Vignette — fixed, same on every page */}
       <div style={{
@@ -6865,13 +6865,13 @@ export default function Dashboard() {
                 {!searchOpen && (
                   <>
                     <div style={{flexShrink:0}}>
-                      <CalStrip selected={selected} onSelect={setSelected}
+                      <CalendarCard selected={selected} onSelect={setSelected}
                         events={events} setEvents={setEvents} healthDots={healthDots}
                         token={token} collapsed={calCollapsed} onToggle={toggleCal}
                         calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
                     </div>
                     <div style={{flexShrink:0}}>
-                      <HealthStrip date={selected} token={token} userId={userId}
+                      <HealthCard date={selected} token={token} userId={userId}
                         onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
                         collapsed={healthCollapsed} onToggle={toggleHealth}/>
                     </div>
@@ -6974,7 +6974,7 @@ export default function Dashboard() {
                     />
                     {isGraph ? (
                       graphData ? (
-                        <ProjectGraphView
+                        <MapCard
                           allTags={graphData.allTags}
                           connections={graphData.connections}
                           onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
