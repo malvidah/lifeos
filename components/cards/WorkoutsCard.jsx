@@ -120,7 +120,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     if(!token||!loaded||!estLoaded)return;
     mergedSynced.filter(r=>!r.kcal&&r.text&&!estimating.current.has(r.id)&&!failed.current.has(r.id)).forEach(row=>{
       estimating.current.add(row.id);
-      estimateNutrition(`Calories burned for: "${row.text}"${row.dist?` (${row.dist})":""} for a typical adult. Return JSON: {"kcal":300}", token).then(result=>{
+      estimateNutrition(`Calories burned for: "${row.text}"${row.dist?` (${row.dist})`:""} for a typical adult. Return JSON: {"kcal":300}`, token).then(result=>{
         estimating.current.delete(row.id);
         if(result?.kcal) setSavedEstimates(prev=>({...(typeof prev==="object"&&prev?prev:{}), [row.id]:result}));
         else failed.current.add(row.id);
