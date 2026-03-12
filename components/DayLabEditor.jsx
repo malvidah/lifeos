@@ -291,7 +291,9 @@ export function textToContent(text) {
 }
 
 // ── Custom suggestion match — supports spaces in multi-word names ─────────────
-function makeCustomFindSuggestionMatch(char, { startOfLineOnly = false } = {}) {
+// Finds the trigger char preceded by whitespace or at position 0.
+// Supports multi-word queries (allowSpaces: true in Suggestion config).
+function makeCustomFindSuggestionMatch(char) {
   return function ({ $position }) {
     const nodeBefore = $position.nodeBefore;
     if (!nodeBefore?.isText) return null;
@@ -307,13 +309,6 @@ function makeCustomFindSuggestionMatch(char, { startOfLineOnly = false } = {}) {
     }
     if (charIdx === -1) return null;
 
-    // For slash: only trigger if "/" is the very first char in the paragraph
-    // (charIdx 0 in this text node AND no content before this node in the parent)
-    if (startOfLineOnly) {
-      if (charIdx !== 0) return null;
-      if ($position.parentOffset - nodeText.length > 0) return null;
-    }
-
     const from  = nodeStart + charIdx;
     const to    = $position.pos;
     const query = nodeText.slice(charIdx + 1);
@@ -322,7 +317,7 @@ function makeCustomFindSuggestionMatch(char, { startOfLineOnly = false } = {}) {
 }
 
 // ── Suggestion extension factory ──────────────────────────────────────────────
-function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey, startOfLineOnly = false }) {
+function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
   return Extension.create({
     name: `suggestion_${suggKey}`,
     addProseMirrorPlugins() {
@@ -332,7 +327,7 @@ function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey, startO
         char,
         allowSpaces: true,
         allowedPrefixes: null,
-        findSuggestionMatch: makeCustomFindSuggestionMatch(char, { startOfLineOnly }),
+        findSuggestionMatch: makeCustomFindSuggestionMatch(char),
         pluginKey: new PluginKey(`suggestion_${suggKey}`),
         items: ({ query }) => itemsFn(query),
         command: ({ editor, range, props }) => commandFn({ editor, range, name: props }),
@@ -363,7 +358,8 @@ function SuggestionDropdown({ state, onSelect }) {
 
   if (!state?.items.length || typeof document === 'undefined') return null;
 
-  const isSlash = state.key === 'slash';
+  const isProject = state.key === 'project';
+  const isNote    = state.key === 'note';
 
   return createPortal(
     <div style={{
@@ -373,20 +369,12 @@ function SuggestionDropdown({ state, onSelect }) {
       padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
       {state.items.map((item, i) => {
-        const isHint        = isSlash && item.startsWith('__hint__:');
-        const isProject     = isSlash && item.startsWith('__project__:');
-        const isNote        = isSlash && item.startsWith('__note__:');
-        const isNoteCreate  = isSlash && item.startsWith('__note_create__:');
-        const rawLabel = isHint       ? item.slice(9)
-                       : isProject    ? item.slice(12)
-                       : isNote       ? item.slice(9)
-                       : isNoteCreate ? item.slice(16)
-                       : item;
-        const label = isHint       ? `/${rawLabel} …`
-                    : isNoteCreate ? `+ Create "${rawLabel}"`
-                    : isProject    ? rawLabel.toUpperCase()
-                    : rawLabel;
-        const col = isProject ? projectColor(rawLabel) : null;
+        const isCreate = item.startsWith('__create__:');
+        const rawLabel = isCreate ? item.slice(11) : item;
+        const label    = isCreate ? `+ Create "${rawLabel}"`
+                       : isProject ? rawLabel.toUpperCase()
+                       : rawLabel;
+        const col = isProject && !isCreate ? projectColor(rawLabel) : null;
         const selected = i === state.selectedIndex;
         return (
           <button
@@ -398,8 +386,8 @@ function SuggestionDropdown({ state, onSelect }) {
               padding: '7px 14px', cursor: 'pointer',
               background: selected ? 'rgba(255,255,255,0.09)' : 'transparent',
               fontFamily: mono, fontSize: 12,
-              letterSpacing: isProject ? '0.08em' : '0.04em',
-              color: isHint || isNoteCreate ? '#9A9088' : col || '#EFDFC3',
+              letterSpacing: isProject && !isCreate ? '0.08em' : '0.04em',
+              color: isCreate ? '#9A9088' : col || '#EFDFC3',
               transition: 'background 0.08s',
             }}
           >{label}</button>
@@ -587,59 +575,47 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ] : []),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
-      // / → slash command: /p[roject] <name> or /n[ote] <name>
+      // @ → project tag  (@ is on main mobile keyboard, no ambiguity)
       createSuggestion({
-        char: '/',
-        suggKey: 'slash',
-        startOfLineOnly: true,
+        char: '@',
+        suggKey: 'project',
         renderRef,
         itemsFn: (query) => {
-          const q = query.trim();
-          const lower = q.toLowerCase();
-          const projectPrefix = ['project ', 'p '].find(p => lower.startsWith(p));
-          const notePrefix    = ['note ', 'n '].find(p => lower.startsWith(p));
-          if (projectPrefix) {
-            const nameQ = q.slice(projectPrefix.length).toLowerCase().replace(/\s/g, '');
-            return (projectNamesRef.current || [])
-              .filter(n => n.toLowerCase().replace(/\s/g, '').includes(nameQ))
-              .map(n => `__project__:${n}`);
-          }
-          if (notePrefix) {
-            const nameQ = q.slice(notePrefix.length);
-            const nameLower = nameQ.toLowerCase().replace(/\s/g, '');
-            const matches = (noteNamesRef.current || [])
-              .filter(n => n.toLowerCase().replace(/\s/g, '').includes(nameLower))
-              .map(n => `__note__:${n}`);
-            const trimmed = nameQ.trim();
-            if (trimmed && !(noteNamesRef.current || []).some(n => n.toLowerCase() === trimmed.toLowerCase()))
-              matches.push(`__note_create__:${trimmed}`);
-            return matches;
-          }
-          // Show command hints while user is still typing the prefix
-          const hints = [];
-          if (!q || 'project'.startsWith(lower) || lower === 'p') hints.push('__hint__:project');
-          if (!q || 'note'.startsWith(lower)    || lower === 'n') hints.push('__hint__:note');
-          return hints;
+          const q = query.toLowerCase().replace(/\s/g, '');
+          return (projectNamesRef.current || [])
+            .filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
         },
         commandFn: ({ editor, range, name }) => {
-          if (name.startsWith('__project__:')) {
-            const pName = name.slice(12);
-            editor.chain().focus().deleteRange(range).insertContent([
-              { type: 'projectTag', attrs: { name: pName.toLowerCase() } },
-              { type: 'text', text: ' ' },
-            ]).run();
-          } else if (name.startsWith('__note__:') || name.startsWith('__note_create__:')) {
-            const isCreate = name.startsWith('__note_create__:');
-            const noteName = isCreate ? name.slice(16) : name.slice(9);
-            editor.chain().focus().deleteRange(range).insertContent([
-              { type: 'noteLink', attrs: { name: noteName } },
-              { type: 'text', text: ' ' },
-            ]).run();
-            if (isCreate) onCreateNoteRef.current?.(noteName);
-          } else if (name.startsWith('__hint__:')) {
-            const kind = name.slice(9);
-            editor.chain().focus().deleteRange(range).insertContent(`/${kind} `).run();
+          editor.chain().focus().deleteRange(range).insertContent([
+            { type: 'projectTag', attrs: { name: name.toLowerCase() } },
+            { type: 'text', text: ' ' },
+          ]).run();
+        },
+      }),
+
+      // # → note link  (# is on main mobile keyboard)
+      createSuggestion({
+        char: '#',
+        suggKey: 'note',
+        renderRef,
+        itemsFn: (query) => {
+          const names = noteNamesRef.current || [];
+          const q     = query.toLowerCase().replace(/\s/g, '');
+          const matches = names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
+          const qTrim   = query.trim();
+          if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+            matches.push(`__create__:${qTrim}`);
           }
+          return matches;
+        },
+        commandFn: ({ editor, range, name }) => {
+          const isCreate = name.startsWith('__create__:');
+          const noteName = isCreate ? name.slice(11) : name;
+          editor.chain().focus().deleteRange(range).insertContent([
+            { type: 'noteLink', attrs: { name: noteName } },
+            { type: 'text', text: ' ' },
+          ]).run();
+          if (isCreate) onCreateNoteRef.current?.(noteName);
         },
       }),
     ],

@@ -3737,7 +3737,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
         let show = true;
         if (taskFilter === 'open' && checked)  show = false;
         if (taskFilter === 'done' && !checked) show = false;
-        li.style.display = show ? '' : 'none';
+        li.style.display = show ? 'flex' : 'none';
       });
     };
     // rAF: TipTap renders asynchronously — wait one frame before first apply
