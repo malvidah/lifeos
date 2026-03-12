@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useContext, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, useContext, useMemo, Fragment } from "react";
 import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
