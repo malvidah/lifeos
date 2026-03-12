@@ -3110,7 +3110,7 @@ function Notes({date,userId,token}) {
     </div>
   );
 
-  const { notes: ctxNotes } = useContext(NoteContext);
+  const { notes: ctxNotes, onCreateNote: ctxOnCreateNote } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
   return (
     <DayLabEditor
@@ -3119,6 +3119,7 @@ function Notes({date,userId,token}) {
       onImageUpload={file => uploadImageFile(file, token)}
       noteNames={ctxNotes}
       projectNames={ctxProjects}
+      onCreateNote={ctxOnCreateNote}
       placeholder="What's on your mind?"
       textColor={C.text}
       mutedColor={C.dim}
@@ -5308,8 +5309,8 @@ function fmtDate(ds) {
 
 
 
-// ─── NoteContext — passes project note names to editors for {note} autocomplete
-const NoteContext = createContext({ notes: [] });
+// ─── NoteContext — passes project note names + onCreateNote to editors
+const NoteContext = createContext({ notes: [], onCreateNote: null });
 // ─── ProjectNamesContext — passes known project names to editors for #tag autocomplete
 const ProjectNamesContext = createContext([]);
 
@@ -6264,7 +6265,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const noteNamesForContext = allNoteNames;
 
   return (
-    <NoteContext.Provider value={{ notes: noteNamesForContext }}>
+    <NoteContext.Provider value={{ notes: noteNamesForContext, onCreateNote: addNote }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
 
       {/* Notes card — left 1/3: note list sorted by recency; right 2/3: editor */}

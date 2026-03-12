@@ -162,14 +162,49 @@ const URLExtension = Extension.create({
   },
 });
 
+// ── Custom findSuggestionMatch ────────────────────────────────────────────────
+// The default TipTap matcher closes on space when items don't match because it
+// compares "Big " (with trailing space) against "BigThink" which fails.
+// This custom matcher:
+//   1. Walks backward through the current paragraph's text node to find the
+//      last trigger char at a word-boundary position (preceded by whitespace or
+//      at the very start of the node).
+//   2. Returns everything from that char to the cursor as the match — including
+//      any spaces the user has typed — so the query fed to itemsFn may contain
+//      spaces.  itemsFn normalises by stripping spaces before comparing.
+//   3. Never returns null just because the query contains a space, so TipTap
+//      never collapses the suggestion while the trigger char is still present.
+function makeCustomFindSuggestionMatch(char) {
+  return function customFind({ $position }) {
+    const nodeBefore = $position.nodeBefore;
+    if (!nodeBefore?.isText) return null;
+    const nodeText = nodeBefore.text;
+    const nodeStart = $position.pos - nodeBefore.nodeSize;
+
+    // Walk backward to find last occurrence of char at a word-boundary
+    let charIdx = -1;
+    for (let i = nodeText.length - 1; i >= 0; i--) {
+      if (nodeText[i] === char) {
+        const prev = i > 0 ? nodeText[i - 1] : ' ';
+        if (/\s/.test(prev) || i === 0) { charIdx = i; break; }
+      }
+    }
+    if (charIdx === -1) return null;
+
+    const from  = nodeStart + charIdx;
+    const to    = $position.pos;
+    const query = nodeText.slice(charIdx + 1);
+    return { range: { from, to }, query, text: char + query };
+  };
+}
+
 // ── Suggestion factory ────────────────────────────────────────────────────────
 // char          — trigger character (e.g. '@' or '/')
-// allowSpaces   — true: spaces don't close the dropdown (for multi-word names)
 // itemsFn       — (query: string) => string[]
 // commandFn     — ({ editor, range, name: string }) => void
 // renderRef     — shared renderRef from DayLabEditor
 // suggKey       — unique string for PluginKey
-function createSuggestion({ char, allowSpaces, itemsFn, commandFn, renderRef, suggKey }) {
+function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
   return Extension.create({
     name: `suggestion_${suggKey}`,
     addProseMirrorPlugins() {
@@ -177,8 +212,9 @@ function createSuggestion({ char, allowSpaces, itemsFn, commandFn, renderRef, su
       return [Suggestion({
         editor,
         char,
-        allowSpaces: allowSpaces ?? true,
+        allowSpaces: true,
         allowedPrefixes: null,
+        findSuggestionMatch: makeCustomFindSuggestionMatch(char),
         pluginKey: new PluginKey(`suggestion_${suggKey}`),
         items: ({ query }) => itemsFn(query),
         command: ({ editor, range, props }) => commandFn({ editor, range, name: props }),
@@ -357,7 +393,16 @@ export function DayLabEditor({
   useEffect(() => { onEnterSplitRef.current      = onEnterSplit; },     [onEnterSplit]);
   useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
   useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
-  useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
+  useEffect(() => {
+    noteNamesRef.current = noteNames || [];
+    // Force ProseMirror to recompute decorations so newly inserted @links render
+    // immediately — the decoration plugin reads noteNamesRef but PM only reruns
+    // decorations on state changes, so we dispatch a no-op meta transaction.
+    if (editorRef.current?.view) {
+      const { view } = editorRef.current;
+      view.dispatch(view.state.tr.setMeta('forceRedecorate', true));
+    }
+  }, [noteNames]);
   useEffect(() => { projectNamesRef.current      = projectNames || []; },[projectNames]);
   useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
 
@@ -429,16 +474,17 @@ export function DayLabEditor({
       // @ → note link autocomplete
       createSuggestion({
         char: '@',
-        allowSpaces: true,
         suggKey: 'note',
         renderRef,
         itemsFn: (query) => {
           const names = noteNamesRef.current || [];
-          const q = query.toLowerCase();
-          const matches = names.filter(n => n.toLowerCase().includes(q));
+          // Normalise: strip spaces before comparing so "my note" matches "MyNote"
+          const q = query.toLowerCase().replace(/\s/g, '');
+          const matches = names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
           // Offer "create" when query non-empty and no exact match
-          if (q && !names.some(n => n.toLowerCase() === q)) {
-            matches.push(`__create__:${query}`);
+          const qTrim = query.trim();
+          if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+            matches.push(`__create__:${qTrim}`);
           }
           return matches;
         },
@@ -454,13 +500,13 @@ export function DayLabEditor({
       // / → project tag autocomplete (stores as #project name in text)
       createSuggestion({
         char: '/',
-        allowSpaces: true,
         suggKey: 'project',
         renderRef,
         itemsFn: (query) => {
           const names = projectNamesRef.current || [];
-          const q = query.toLowerCase();
-          return names.filter(n => n.toLowerCase().includes(q));
+          // Strip spaces from both sides so "/Big T" matches "BigThink"
+          const q = query.toLowerCase().replace(/\s/g, '');
+          return names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
         },
         commandFn: ({ editor, range, name }) => {
           // Delete the / + query, insert #project name
