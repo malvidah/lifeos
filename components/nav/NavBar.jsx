@@ -17,11 +17,11 @@ export default function NavBar(props) {
     <button onClick={onClick}
       style={{background:'none',border:'none',cursor:'pointer',
         display:'flex',alignItems:'center',justifyContent:'center',
-        color:C.muted, flexShrink:0,
+        color:"var(--dl-muted)", flexShrink:0,
         width:44, height:48,
         transition:'color 0.15s'}}
-      onMouseEnter={e=>e.currentTarget.style.color=C.text}
-      onMouseLeave={e=>e.currentTarget.style.color=C.muted}
+      onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}
       aria-label="Search">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
         <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -90,22 +90,22 @@ export default function NavBar(props) {
         justifyContent:'center',padding:'0 10px'}}>
         <div style={{width:'100%',maxWidth:560,display:'flex',alignItems:'center',gap:8,
           backdropFilter:'blur(20px) saturate(1.4)',WebkitBackdropFilter:'blur(20px) saturate(1.4)',
-          background:`${C.surface}ee`,border:`1px solid ${C.border}`,borderRadius:100,
-          padding:'0 18px',height:52,boxShadow:C.shadow}}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0}}>
+          background:`${C.surface}ee`,border:"1px solid var(--dl-border)",borderRadius:100,
+          padding:'0 18px',height:52,boxShadow:"var(--dl-shadow)"}}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-muted)" strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0}}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input ref={searchInputRef} value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}
             onKeyDown={e=>{if(e.key==='Escape'){setSearchOpen(false);setSearchQuery('');}}}
             placeholder="Search"
             style={{flex:1,background:'transparent',border:'none',outline:'none',
-              fontFamily:serif,fontSize:F.md,color:C.text,caretColor:C.accent}}/>
-          {srLoading && <span style={{fontFamily:mono,fontSize:8,color:C.muted,letterSpacing:'0.12em',flexShrink:0}}>…</span>}
+              fontFamily:serif,fontSize:F.md,color:"var(--dl-text)",caretColor:"var(--dl-accent)"}}/>
+          {srLoading && <span style={{fontFamily:mono,fontSize:8,color:"var(--dl-muted)",letterSpacing:'0.12em',flexShrink:0}}>…</span>}
           <button onClick={()=>{setSearchOpen(false);setSearchQuery('');}}
             style={{background:'none',border:'none',cursor:'pointer',padding:'0 2px',
-              color:C.muted,display:'flex',alignItems:'center',flexShrink:0,transition:'color 0.12s'}}
-            onMouseEnter={e=>e.currentTarget.style.color=C.text}
-            onMouseLeave={e=>e.currentTarget.style.color=C.muted}
+              color:"var(--dl-muted)",display:'flex',alignItems:'center',flexShrink:0,transition:'color 0.12s'}}
+            onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+            onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}
             aria-label="Close search">
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>

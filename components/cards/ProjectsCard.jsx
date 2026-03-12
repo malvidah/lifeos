@@ -133,11 +133,11 @@ export default function ProjectsCard({ date, token, userId, onSelectProject }) {
         style={{
           background:'none', border:'none', cursor:'pointer',
           padding:'8px 12px', display:'flex', alignItems:'center',
-          color:C.muted, flexShrink:0, transition:'color 0.15s',
+          color:"var(--dl-muted)", flexShrink:0, transition:'color 0.15s',
           minWidth:44, minHeight:44, justifyContent:'center',
         }}
-        onMouseEnter={e => e.currentTarget.style.color=C.text}
-        onMouseLeave={e => e.currentTarget.style.color=C.muted}
+        onMouseEnter={e => e.currentTarget.style.color="var(--dl-text)"}
+        onMouseLeave={e => e.currentTarget.style.color="var(--dl-muted)"}
       >{PackageIcon}</button>
 
       {/* Scrollable chips */}
@@ -160,12 +160,12 @@ export default function ProjectsCard({ date, token, userId, onSelectProject }) {
             letterSpacing:'0.03em', lineHeight:'1.8',
             whiteSpace:'nowrap', flexShrink:0,
           }}
-          onMouseEnter={e => { e.currentTarget.style.background=C.green+'22'; e.currentTarget.style.color=C.green; }}
+          onMouseEnter={e => { e.currentTarget.style.background=C.green+'22'; e.currentTarget.style.color="var(--dl-green)"; }}
           onMouseLeave={e => { e.currentTarget.style.background=C.green+'11'; e.currentTarget.style.color=C.green+'aa'; }}
         >HEALTH</button>
 
         {/* Divider between pinned and recent */}
-        {names.length > 0 && <div style={{width:1, height:14, background:C.border2, flexShrink:0, margin:'0 2px'}}/>}
+        {names.length > 0 && <div style={{width:1, height:14, background:"var(--dl-border2)", flexShrink:0, margin:'0 2px'}}/>}
 
         {/* Recent project chips */}
         {names.map(name => {
@@ -179,14 +179,14 @@ export default function ProjectsCard({ date, token, userId, onSelectProject }) {
                 background: active ? col+'22' : 'transparent',
                 border:`1px solid ${active ? col+'55' : C.border2}`,
                 borderRadius:20, padding:'2px 10px',
-                fontFamily:mono, fontSize:F.sm, color: active ? col : C.muted,
+                fontFamily:mono, fontSize:F.sm, color: active ? col : "var(--dl-muted)",
                 cursor:'pointer', opacity: active ? 1 : 0.35,
                 transition:'opacity 0.15s, color 0.15s',
                 letterSpacing:'0.03em', lineHeight:'1.8',
                 whiteSpace:'nowrap', flexShrink:0,
               }}
               onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.color=col; }}
-              onMouseLeave={e => { e.currentTarget.style.opacity=active?'1':'0.35'; e.currentTarget.style.color=active?col:C.muted; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity=active?'1':'0.35'; e.currentTarget.style.color=active?col:"var(--dl-muted)"; }}
             >{tagDisplayName(name).toUpperCase()}</button>
           );
         })}
@@ -195,7 +195,7 @@ export default function ProjectsCard({ date, token, userId, onSelectProject }) {
       {/* Right fade */}
       <div style={{
         position:'absolute', right:0, top:0, bottom:0, width:32, pointerEvents:'none',
-        background:`linear-gradient(to right, transparent, ${C.bg})`,
+        background:"linear-gradient(to right, transparent, var(--dl-bg))",
         opacity: pcFade ? 1 : 0, transition:'opacity 0.12s ease',
       }}/>
     </div>

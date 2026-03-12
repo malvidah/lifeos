@@ -91,29 +91,29 @@ export function InsightsCard({date, token, userId, healthKey, collapsed, onToggl
   }, [date, token, userId, healthKey]); // eslint-disable-line
 
   return (
-    <Widget label="Insights" color={C.muted} slim collapsed={collapsed} onToggle={onToggle}>
+    <Widget label="Insights" color={"var(--dl-muted)"} slim collapsed={collapsed} onToggle={onToggle}>
       {/* Fixed responsive height — content scrolls inside, no scrollbar visible */}
       <div style={{ height: "clamp(80px, 10vh, 120px)", overflowY: "auto", scrollbarWidth: "none" }}>
         <div style={{ opacity: busy && !text ? 0 : 1, transition: "opacity 0.3s ease" }}>
           {error && (
-            <div style={{ fontFamily: mono, fontSize:F.md, color: C.red, lineHeight: 1.6 }}>{error}</div>
+            <div style={{ fontFamily: mono, fontSize:F.md, color: "var(--dl-red)", lineHeight: 1.6 }}>{error}</div>
           )}
           {isFree ? (
             <div>
-              <div style={{ fontFamily: mono, fontSize: 13, color: C.muted, lineHeight: 1.6, marginBottom: 12 }}>
+              <div style={{ fontFamily: mono, fontSize: 13, color: "var(--dl-muted)", lineHeight: 1.6, marginBottom: 12 }}>
                 You've used {freeUsage?.count ?? 10} of {freeUsage?.limit ?? 10} free AI insights.
               </div>
-              <div style={{ fontFamily: mono, fontSize: 12, color: C.dim, lineHeight: 1.7, marginBottom: 14 }}>
+              <div style={{ fontFamily: mono, fontSize: 12, color: "var(--dl-dim)", lineHeight: 1.7, marginBottom: 14 }}>
                 Upgrade to Premium for unlimited insights, voice entry, and chat with your health data.
               </div>
               <button onClick={() => window.location.href = "/upgrade"} style={{
-                background: C.accent, border: "none", borderRadius: 6, padding: "8px 18px",
-                cursor: "pointer", fontFamily: mono, fontSize: F.sm, color: C.bg,
+                background: "var(--dl-accent)", border: "none", borderRadius: 6, padding: "8px 18px",
+                cursor: "pointer", fontFamily: mono, fontSize: F.sm, color: "var(--dl-bg)",
                 letterSpacing: "0.08em", textTransform: "uppercase",
               }}>Upgrade to Premium →</button>
             </div>
           ) : text ? (
-            <div style={{ fontFamily: mono, fontSize:13, color: C.dim, lineHeight: 1.75, whiteSpace: "pre-line" }}>
+            <div style={{ fontFamily: mono, fontSize:13, color: "var(--dl-dim)", lineHeight: 1.75, whiteSpace: "pre-line" }}>
               {text}
             </div>
           ) : busy ? (
@@ -457,7 +457,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
         <div style={{
           position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
           zIndex: 95,
-          background: C.bg,
+          background: "var(--dl-bg)",
           display: "flex", flexDirection: "column",
           animation: "fadeIn 0.15s ease",
         }}>
@@ -473,13 +473,13 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
             {/* Chevron down — collapse */}
             <button onClick={() => setExpanded(false)} style={{
               background: "none", border: "none", cursor: "pointer",
-              color: C.dim, display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--dl-dim)", display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, borderRadius: 8,
               transition: "color 0.15s, background 0.15s",
               marginBottom: 12,
             }}
-            onMouseEnter={e => { e.currentTarget.style.color = C.text; e.currentTarget.style.background = `${C.text}0e`; }}
-            onMouseLeave={e => { e.currentTarget.style.color = C.dim; e.currentTarget.style.background = "transparent"; }}>
+            onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-text)"; e.currentTarget.style.background = `${C.text}0e`; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-dim)"; e.currentTarget.style.background = "transparent"; }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
@@ -487,13 +487,13 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
 
             {/* DAY LAB AI + Premium badge */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: C.dim }}>
+              <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--dl-dim)" }}>
                 Day Lab AI
               </span>
               {isPremiumUser && (
                 <span style={{
                   fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                  color: C.accent, background: `${C.accent}18`, border: `1px solid ${C.accent}40`,
+                  color: "var(--dl-accent)", background: `${C.accent}18`, border: `1px solid ${C.accent}40`,
                   borderRadius: 4, padding: "2px 6px",
                 }}>Premium</span>
               )}
@@ -521,14 +521,14 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                 display: "flex", flexDirection: "column", alignItems: "center", gap: 8,
                 pointerEvents: chatLimitReached ? "auto" : "none",
               }}>
-                <span style={{ fontFamily: mono, fontSize: 11, color: C.muted, letterSpacing: "0.08em" }}>
+                <span style={{ fontFamily: mono, fontSize: 11, color: "var(--dl-muted)", letterSpacing: "0.08em" }}>
                   {chatLimitReached
                     ? `${FREE_CHAT_LIMIT}/${FREE_CHAT_LIMIT} FREE MESSAGES USED`
                     : `${chatQueryCount}/${FREE_CHAT_LIMIT} free messages`}
                 </span>
                 {chatLimitReached && (
                   <button onClick={() => window.location.href = "/upgrade"} style={{
-                    background: C.accent, border: "none", borderRadius: 10,
+                    background: "var(--dl-accent)", border: "none", borderRadius: 10,
                     padding: "9px 22px", cursor: "pointer",
                     fontFamily: mono, fontSize: 11, color: "#fff",
                     letterSpacing: "0.08em", textTransform: "uppercase",
@@ -553,20 +553,20 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                       maxWidth: "72%",
                       padding: "10px 16px",
                       borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                      background: msg.role === "user" ? C.accent : `${C.text}0e`,
-                      color: msg.role === "user" ? "#fff" : C.text,
+                      background: msg.role === "user" ? "var(--dl-accent)" : `${C.text}0e`,
+                      color: msg.role === "user" ? "#fff" : "var(--dl-text)",
                       fontFamily: msg.role === "user" ? serif : mono,
                       fontSize: msg.role === "user" ? F.md : 13,
                       lineHeight: 1.55,
                       letterSpacing: msg.role === "user" ? 0 : "0.02em",
                     }}>
                       {msg.content === null
-                        ? <DayLabLoader size={28} color={C.dim}/>
+                        ? <DayLabLoader size={28} color={"var(--dl-dim)"}/>
                         : msg.content}
                     </div>
                     {msg.actions?.length > 0 && msg.summary && (
                       <div style={{
-                        fontSize: 11, fontFamily: mono, color: C.green,
+                        fontSize: 11, fontFamily: mono, color: "var(--dl-green)",
                         background: `${C.green}15`, border: `1px solid ${C.green}30`,
                         borderRadius: 12, padding: "3px 10px", letterSpacing: "0.04em",
                       }}>✓ {msg.summary}</div>
@@ -584,7 +584,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                           style={{
                             background: `${C.accent}12`, border: `1px solid ${C.accent}30`,
                             borderRadius: 100, padding: "10px 20px",
-                            fontFamily: mono, fontSize: F.sm, color: C.accent,
+                            fontFamily: mono, fontSize: F.sm, color: "var(--dl-accent)",
                             cursor: "pointer", letterSpacing: "0.04em",
                             whiteSpace: "nowrap",
                             transition: "background 0.15s, border-color 0.15s",
@@ -600,7 +600,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
 
               {insightLoading && messages.length === 0 && (
                 <div style={{ padding: "8px 2px" }}>
-                  <DayLabLoader size={32} color={C.dim}/>
+                  <DayLabLoader size={32} color={"var(--dl-dim)"}/>
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -625,11 +625,11 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
           display: "flex", flexDirection: "row", alignItems: "center",
           backdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
-          background: expanded ? C.surface : `${C.surface}ee`,
-          border: `1px solid ${C.border}`,
+          background: expanded ? "var(--dl-surface)" : `${C.surface}ee`,
+          border: "1px solid var(--dl-border)",
           borderRadius: 100,
           minHeight: 52,
-          boxShadow: C.shadow,
+          boxShadow: "var(--dl-shadow)",
           overflow: "hidden",
           cursor: !expanded ? "pointer" : "default",
           transition: "box-shadow 0.18s ease",
@@ -660,7 +660,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                 rows={1}
                 style={{
                   flex: 1, background: "transparent", border: "none", outline: "none",
-                  fontFamily: serif, fontSize: F.md, color: C.text,
+                  fontFamily: serif, fontSize: F.md, color: "var(--dl-text)",
                   padding: "0", margin: "0", opacity: (busy || (expanded && chatLimitReached && !isPremiumUser)) ? 0.4 : 1,
                   lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px",
                   display: "block",
@@ -670,7 +670,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
               {/* Send or mic */}
               {input.trim() ? (
                 <button onClick={send} disabled={busy} style={{
-                  background: C.accent, border: "none", borderRadius: "50%",
+                  background: "var(--dl-accent)", border: "none", borderRadius: "50%",
                   width: 32, height: 32, cursor: busy ? "default" : "pointer",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
@@ -689,11 +689,11 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                   flexShrink: 0, transition: "background 0.2s",
                 }}>
                   {transcribing ? (
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", border: `1.5px solid ${C.accent}`, borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/>
                   ) : listening ? (
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: C.red, boxShadow: `0 0 0 3px ${C.red}30`, animation: "pulse 1.2s ease-in-out infinite" }}/>
+                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--dl-red)", boxShadow: `0 0 0 3px ${C.red}30`, animation: "pulse 1.2s ease-in-out infinite" }}/>
                   ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={"var(--dl-muted)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <rect x="9" y="2" width="6" height="11" rx="3"/>
                       <path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/>
                     </svg>

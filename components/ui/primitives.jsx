@@ -1,19 +1,17 @@
 "use client";
 import { useState, useRef, Fragment } from "react";
-import { useTheme } from "@/lib/theme";
 import { mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { useNavigation } from "@/lib/contexts";
 
 export function ChevronBtn({collapsed, onToggle, style={}}) {
-  const { C } = useTheme();
   return (
     <button onClick={onToggle} style={{
       background:"none",border:"none",cursor:"pointer",padding:"2px 4px",
-      color:C.dim,display:"flex",alignItems:"center",justifyContent:"center",
+      color:"var(--dl-dim)",display:"flex",alignItems:"center",justifyContent:"center",
       flexShrink:0,transition:"color 0.15s",...style,
     }}
-      onMouseEnter={e=>e.currentTarget.style.color=C.muted}
-      onMouseLeave={e=>e.currentTarget.style.color=C.dim}>
+      onMouseEnter={e=>e.currentTarget.style.color="var(--dl-muted)"}
+      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-dim)"}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
         {collapsed ? <polyline points="6 9 12 15 18 9"/> : <polyline points="18 15 12 9 6 15"/>}
       </svg>
@@ -22,7 +20,6 @@ export function ChevronBtn({collapsed, onToggle, style={}}) {
 }
 
 export function Ring({score,color,size=48}) {
-  const { C } = useTheme();
   const r=(size-7)/2, circ=2*Math.PI*r;
   const val=parseFloat(score)||0;
   const pct=Math.min(val/100,1);
@@ -35,7 +32,7 @@ export function Ring({score,color,size=48}) {
         strokeDasharray={`${pct*circ} ${circ}`}
         style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%",transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:score?color:C.dim,fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
+        style={{fill:score?color:"var(--dl-dim)",fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
         {score||"—"}
       </text>
     </svg>
@@ -43,10 +40,9 @@ export function Ring({score,color,size=48}) {
 }
 
 export function Card({children,style={},fitContent=false}) {
-  const { C } = useTheme();
   return (
     <div style={{
-      background:C.card,borderRadius:R,border:`1px solid ${C.border}`,
+      background:"var(--dl-card)",borderRadius:R,border:"1px solid var(--dl-border)",
       overflow:"clip",height:fitContent?"auto":"100%",
       display:"flex",flexDirection:"column",...style,
     }}>{children}</div>
@@ -54,18 +50,17 @@ export function Card({children,style={},fitContent=false}) {
 }
 
 export function Widget({label,color,children,slim,collapsed,onToggle,headerRight,headerLeft,autoHeight}) {
-  const { C } = useTheme();
   const useAutoHeight = autoHeight || (!onToggle && !collapsed);
   return (
     <div style={slim ? {} : {flex:useAutoHeight?"0 0 auto":1,display:"flex",flexDirection:"column"}}>
       <Card style={(collapsed || useAutoHeight) ? {height:"auto"} : {flex:1}}>
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
-          borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
+          borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0,
           cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
           {headerLeft}
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-            textTransform:"uppercase",color:C.muted,flex:1}}>{label}</span>
+            textTransform:"uppercase",color:"var(--dl-muted)",flex:1}}>{label}</span>
           {!collapsed && headerRight}
         </div>
         {!collapsed&&(
@@ -77,7 +72,6 @@ export function Widget({label,color,children,slim,collapsed,onToggle,headerRight
 }
 
 export function InfoTip({text}) {
-  const { C } = useTheme();
   const [show,setShow]=useState(false);
   const [above,setAbove]=useState(false);
   const btnRef=useRef(null);
@@ -89,15 +83,15 @@ export function InfoTip({text}) {
     <span style={{position:"relative",display:"inline-flex",alignItems:"center"}}>
       <button ref={btnRef} onMouseEnter={handleShow} onMouseLeave={()=>setShow(false)}
         onFocus={handleShow} onBlur={()=>setShow(false)}
-        style={{width:14,height:14,borderRadius:"50%",border:`1px solid ${C.border2}`,
+        style={{width:14,height:14,borderRadius:"50%",border:"1px solid var(--dl-border2)",
           background:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",
-          color:C.dim,fontFamily:mono,fontSize:F.sm,lineHeight:1,flexShrink:0}}
+          color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,lineHeight:1,flexShrink:0}}
         aria-label="More info">i</button>
       {show&&(
         <div style={{position:"absolute",...(above?{bottom:"calc(100% + 6px)"}:{top:"calc(100% + 6px)"}),
-          right:"-4px",background:C.card,border:`1px solid ${C.border2}`,borderRadius:6,
-          padding:"8px 10px",width:190,fontFamily:mono,fontSize:F.sm,color:C.muted,lineHeight:1.5,
-          zIndex:500,boxShadow:C.shadow,pointerEvents:"none",whiteSpace:"normal"}}>
+          right:"-4px",background:"var(--dl-card)",border:"1px solid var(--dl-border2)",borderRadius:6,
+          padding:"8px 10px",width:190,fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",lineHeight:1.5,
+          zIndex:500,boxShadow:"var(--dl-shadow)",pointerEvents:"none",whiteSpace:"normal"}}>
           {text}
         </div>
       )}
@@ -106,10 +100,9 @@ export function InfoTip({text}) {
 }
 
 export function IntegrationToggle({on, onOn, onOff, pending}) {
-  const { C } = useTheme();
   const bg = on ? `rgba(196,168,130,0.15)` : pending ? `rgba(208,136,40,0.18)` : `rgba(155,107,58,0.08)`;
-  const dot = on ? C.accent : pending ? C.accent : C.dim;
-  const borderColor = pending ? `${C.accent}70` : C.border2;
+  const dot = on ? "var(--dl-accent)" : pending ? "var(--dl-accent)" : "var(--dl-dim)";
+  const borderColor = pending ? "color-mix(in srgb, var(--dl-accent) 44%, transparent)" : "var(--dl-border2)";
   return (
     <button onClick={on ? onOff : onOn} style={{
       background:bg,border:`1px solid ${borderColor}`,borderRadius:20,cursor:"pointer",
@@ -121,38 +114,35 @@ export function IntegrationToggle({on, onOn, onOff, pending}) {
 }
 
 export function IntegrationRow({label, subtitle, connected, onToggleOn, onToggleOff, children, pendingToggle}) {
-  const { C } = useTheme();
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:1}}>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flexShrink:0}}>{label}</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-muted)",flexShrink:0}}>{label}</span>
         {children}
         <div style={{marginLeft:"auto",flexShrink:0}}>
           <IntegrationToggle on={connected} onOn={onToggleOn} onOff={onToggleOff} pending={pendingToggle}/>
         </div>
       </div>
-      {subtitle&&(<div style={{fontFamily:mono,fontSize:9,color:C.dim,letterSpacing:"0.03em",marginTop:3}}>— {subtitle}</div>)}
+      {subtitle&&(<div style={{fontFamily:mono,fontSize:9,color:"var(--dl-dim)",letterSpacing:"0.03em",marginTop:3}}>— {subtitle}</div>)}
     </div>
   );
 }
 
 export function Shimmer({width="100%", height=14, style={}}) {
-  const { C } = useTheme();
   return (
     <div style={{width,height,borderRadius:4,
-      background:`linear-gradient(90deg, ${C.border} 25%, ${C.border2} 50%, ${C.border} 75%)`,
+      background:"linear-gradient(90deg, var(--dl-border) 25%, var(--dl-border2) 50%, var(--dl-border) 75%)",
       backgroundSize:"200% 100%",animation:"shimmer 1.4s infinite",...style}}/>
   );
 }
 
 export function NavBtn({onClick,title,children}) {
-  const { C } = useTheme();
   return (
     <button onClick={onClick} title={title} style={{
-      background:'none',border:'none',cursor:'pointer',color:C.muted,
+      background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",
       fontFamily:mono,fontSize:F.md,lineHeight:1,padding:'3px 5px',borderRadius:4,transition:'color 0.1s'}}
-      onMouseEnter={e=>e.currentTarget.style.color=C.text}
-      onMouseLeave={e=>e.currentTarget.style.color=C.muted}>
+      onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>
       {children}
     </button>
   );

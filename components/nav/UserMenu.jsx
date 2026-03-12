@@ -75,40 +75,40 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
   },[open]);
 
   const row={padding:"0 16px"};
-  const divider=<div style={{height:1,background:C.border,margin:"10px 0"}}/>;
+  const divider=<div style={{height:1,background:"var(--dl-border)",margin:"10px 0"}}/>;
   const FREE_LIMIT = 10;
   const planBadge = planInfo === null ? null : planInfo.isPremium ? (
     <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid ${C.accent}30`,overflow:"hidden"}}>
       <div style={{padding:"10px 12px",textAlign:"center"}}>
-        <div style={{fontFamily:mono,fontSize:F.sm,color:C.accent,letterSpacing:"0.06em",textTransform:"uppercase"}}>Premium ✦</div>
-        <div style={{fontFamily:mono,fontSize:"10px",color:C.muted,marginTop:3}}>{planInfo.plan === 'yearly' ? 'Annual plan · $4/mo' : 'Monthly plan · $5/mo'}</div>
+        <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-accent)",letterSpacing:"0.06em",textTransform:"uppercase"}}>Premium ✦</div>
+        <div style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)",marginTop:3}}>{planInfo.plan === 'yearly' ? 'Annual plan · $4/mo' : 'Monthly plan · $5/mo'}</div>
       </div>
-      <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"7px 12px",background:"none",borderTop:`1px solid ${C.accent}20`,border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:C.muted,letterSpacing:"0.08em",textTransform:"uppercase",textAlign:"center"}}>
+      <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"7px 12px",background:"none",borderTop:`1px solid ${C.accent}20`,border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)",letterSpacing:"0.08em",textTransform:"uppercase",textAlign:"center"}}>
         Manage Plan →
       </button>
     </div>
   ) : (
-    <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid ${C.border}`,overflow:"hidden"}}>
+    <div style={{margin:"0 12px 10px",borderRadius:6,border:"1px solid var(--dl-border)",overflow:"hidden"}}>
       <div style={{padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
-          <div style={{fontFamily:mono,fontSize:F.sm,color:C.muted,letterSpacing:"0.06em",textTransform:"uppercase"}}>Free plan</div>
-          <div style={{fontFamily:mono,fontSize:"10px",color:C.dim,marginTop:2}}>{planInfo.insightCount}/{FREE_LIMIT} AI insights used</div>
+          <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",letterSpacing:"0.06em",textTransform:"uppercase"}}>Free plan</div>
+          <div style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-dim)",marginTop:2}}>{planInfo.insightCount}/{FREE_LIMIT} AI insights used</div>
         </div>
         <div style={{width:32,height:32,position:"relative"}}>
           <svg viewBox="0 0 32 32" style={{width:32,height:32,transform:"rotate(-90deg)"}}>
-            <circle cx="16" cy="16" r="12" fill="none" stroke={C.border} strokeWidth="3"/>
-            <circle cx="16" cy="16" r="12" fill="none" stroke={C.accent} strokeWidth="3"
+            <circle cx="16" cy="16" r="12" fill="none" stroke={"var(--dl-border)"} strokeWidth="3"/>
+            <circle cx="16" cy="16" r="12" fill="none" stroke={"var(--dl-accent)"} strokeWidth="3"
               strokeDasharray={`${Math.min(planInfo.insightCount/FREE_LIMIT,1)*75.4} 75.4`}
               strokeLinecap="round"/>
           </svg>
         </div>
       </div>
-      <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"8px 12px",background:C.accent,border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:C.bg,letterSpacing:"0.1em",textTransform:"uppercase",textAlign:"center"}}>
+      <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"8px 12px",background:"var(--dl-accent)",border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:"var(--dl-bg)",letterSpacing:"0.1em",textTransform:"uppercase",textAlign:"center"}}>
         Upgrade to Premium →
       </button>
     </div>
   );
-  const connBtn = (color=C.green) => ({width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",background:"none",border:`1px solid ${color}`,borderRadius:5,color:color,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"});
+  const connBtn = (color="var(--dl-green)") => ({width:"100%",padding:"7px",textAlign:"center",boxSizing:"border-box",background:"none",border:`1px solid ${color}`,borderRadius:5,color:color,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",cursor:"pointer"});
   // Use the module-level singleton — avoids spawning new GoTrueClient instances
 
   async function connectOura() {
@@ -196,25 +196,25 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
     <div ref={ref} style={{position:"relative"}}>
       <button onClick={()=>setOpen(o=>!o)} style={{
         width:32,height:32,borderRadius:"50%",padding:0,cursor:"pointer",
-        border:`1.5px solid ${C.border2}`,background:avatar?"transparent":C.surface,
+        border:"1.5px solid var(--dl-border2)",background:avatar?"transparent":"var(--dl-surface)",
         overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
         {avatar?<img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
-          :<span style={{fontFamily:mono,fontSize:F.sm,color:C.muted}}>{initials}</span>}
+          :<span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)"}}>{initials}</span>}
       </button>
 
       {open&&(
         <div style={{
           position:"absolute",top:40,right:0,width:272,zIndex:300,
-          background:C.card,border:`1px solid ${C.border2}`,borderRadius:R,
+          background:"var(--dl-card)",border:"1px solid var(--dl-border2)",borderRadius:R,
           padding:"14px 0",display:"flex",flexDirection:"column",
-          boxShadow:C.shadow,overflowY:"auto",maxHeight:"85vh",
+          boxShadow:"var(--dl-shadow)",overflowY:"auto",maxHeight:"85vh",
         }}>
 
           {/* Identity + refresh */}
           <div style={{...row,paddingBottom:2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
               <div style={{fontFamily:blurweb,fontSize:F.md,color:theme==="light"?"#6B5440":"#EFDFC3",letterSpacing:"0.04em"}}>{user?.user_metadata?.name||"—"}</div>
-              <div style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:2}}>{user?.email}</div>
+              <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)",marginTop:2}}>{user?.email}</div>
             </div>
             <button
               onClick={()=>window.location.reload()}
@@ -222,7 +222,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
               style={{background:"none",border:"none",cursor:"pointer",padding:6,borderRadius:6,
                 display:"flex",alignItems:"center",justifyContent:"center",
                 flexShrink:0,opacity:0.4,transition:"opacity 0.15s, background 0.15s"}}
-              onMouseEnter={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.background=C.border2;}}
+              onMouseEnter={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.background="var(--dl-border2)";}}
               onMouseLeave={e=>{e.currentTarget.style.opacity="0.4";e.currentTarget.style.background="none";}}
             >
               <svg width="18" height="18" viewBox="0 0 1500 1500" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -266,8 +266,8 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
                     placeholder="Token"
                     className="oura-token-input"
                     autoComplete="current-password"
-                    style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
-                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                    style={{flex:1,minWidth:0,background:"var(--dl-surface)",border:"1px solid var(--dl-border2)",
+                      borderRadius:5,outline:"none",color:"var(--dl-text)",fontFamily:mono,fontSize:F.sm,
                       padding:"5px 7px",boxSizing:"border-box",width:0}}/>
                 </form>
               )}
@@ -291,18 +291,18 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
                     onChange={e=>setGarminEmail(e.target.value)}
                     placeholder="Garmin email"
                     autoComplete="username"
-                    style={{background:C.surface,border:`1px solid ${C.border2}`,
-                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                    style={{background:"var(--dl-surface)",border:"1px solid var(--dl-border2)",
+                      borderRadius:5,outline:"none",color:"var(--dl-text)",fontFamily:mono,fontSize:F.sm,
                       padding:"5px 7px",width:"100%",boxSizing:"border-box"}}/>
                   <input type="password" value={garminPassword}
                     onChange={e=>setGarminPassword(e.target.value)}
                     placeholder="Garmin password"
                     autoComplete="current-password"
-                    style={{background:C.surface,border:`1px solid ${C.border2}`,
-                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                    style={{background:"var(--dl-surface)",border:"1px solid var(--dl-border2)",
+                      borderRadius:5,outline:"none",color:"var(--dl-text)",fontFamily:mono,fontSize:F.sm,
                       padding:"5px 7px",width:"100%",boxSizing:"border-box"}}/>
-                  {garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>Connecting…</span>}
-                  {garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:C.red}}>{garminError}</span>}
+                  {garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)"}}>Connecting…</span>}
+                  {garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-red)"}}>{garminError}</span>}
                 </form>
               )}
             </IntegrationRow>
@@ -325,28 +325,28 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
 
           {/* Claude */}          <div style={row}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted}}>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-muted)"}}>
                 Claude MCP
               </span>
               {!claudeConnected && (
                 <a href="https://claude.ai/settings/connectors?modal=add-custom-connector"
                   target="_blank" rel="noreferrer"
-                  style={{fontFamily:mono,fontSize:F.sm,color:C.dim,textDecoration:"none",letterSpacing:"0.02em"}}>
+                  style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)",textDecoration:"none",letterSpacing:"0.02em"}}>
                   add →
                 </a>
               )}
               {claudeConnected && (
-                <span style={{fontFamily:mono,fontSize:F.sm,color:C.green}}>✓</span>
+                <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-green)"}}>✓</span>
               )}
             </div>
             <div style={{
               display:"flex",alignItems:"center",gap:6,
-              background:C.surface,border:`1px solid ${C.border2}`,
+              background:"var(--dl-surface)",border:"1px solid var(--dl-border2)",
               borderRadius:5,padding:"6px 8px",
             }}>
               <span style={{flex:1,fontFamily:mono,fontSize:F.sm,
                 userSelect:"all",letterSpacing:"0.02em",overflow:"hidden",
-                textOverflow:"ellipsis",whiteSpace:"nowrap",color:C.muted}}>
+                textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--dl-muted)"}}>
                 {window.location.origin}/mcp
               </span>
               <button
@@ -356,7 +356,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
                 }}
                 title="Copy URL"
                 style={{background:"none",border:"none",cursor:"pointer",
-                  color:urlCopied?C.green:C.dim,padding:0,flexShrink:0,
+                  color:urlCopied?"var(--dl-green)":"var(--dl-dim)",padding:0,flexShrink:0,
                   display:"flex",alignItems:"center",lineHeight:1}}>
                 {urlCopied
                   ? <span style={{fontSize:11}}>✓</span>
@@ -370,16 +370,16 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
 
           {/* Theme */}
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:C.muted}}>
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:"var(--dl-muted)"}}>
               {theme==="dark"?"Dark":"Light"} Mode
             </span>
             <button onClick={()=>onThemeChange(t=>t==="dark"?"light":"dark")}
               style={{
                 background:theme==="dark"?"rgba(196,168,130,0.15)":"rgba(155,107,58,0.12)",
-                border:`1px solid ${C.border2}`,borderRadius:20,cursor:"pointer",
+                border:"1px solid var(--dl-border2)",borderRadius:20,cursor:"pointer",
                 padding:3,display:"flex",alignItems:"center",width:40,height:22,
                 justifyContent:theme==="dark"?"flex-end":"flex-start"}}>
-              <div style={{width:14,height:14,borderRadius:"50%",background:C.accent,transition:"all 0.2s"}}/>
+              <div style={{width:14,height:14,borderRadius:"50%",background:"var(--dl-accent)",transition:"all 0.2s"}}/>
             </button>
           </div>
 
@@ -387,14 +387,14 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
 
           {/* Downloads — label + small buttons inline */}
           <div style={{...row,display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:C.muted,flex:1}}>
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-muted)",flex:1}}>
               Downloads
             </span>
             <a href="https://github.com/malvidah/lifeos/releases/download/v1.0.2/Day.Lab-1.0.2-arm64.dmg" style={{
               display:"flex",alignItems:"center",gap:4,
-              padding:"4px 9px",background:C.surface,
-              border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
-              color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
+              padding:"4px 9px",background:"var(--dl-surface)",
+              border:"1px solid var(--dl-border2)",borderRadius:5,textDecoration:"none",
+              color:"var(--dl-muted)",fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -403,9 +403,9 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
             </a>
             <a href="/download/ios" style={{
               display:"flex",alignItems:"center",gap:4,
-              padding:"4px 9px",background:C.surface,
-              border:`1px solid ${C.border2}`,borderRadius:5,textDecoration:"none",
-              color:C.muted,fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
+              padding:"4px 9px",background:"var(--dl-surface)",
+              border:"1px solid var(--dl-border2)",borderRadius:5,textDecoration:"none",
+              color:"var(--dl-muted)",fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/>
               </svg>
@@ -418,13 +418,13 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <a href="/about"
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
+                color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
                 textTransform:"uppercase",textDecoration:"none"}}>
               Learn More
             </a>
             <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                color:C.dim,fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
               Sign Out →
             </button>
           </div>

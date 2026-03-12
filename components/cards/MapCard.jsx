@@ -162,14 +162,14 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
     <Card style={{ height: 'auto' }}>
       {/* Header */}
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 14px',
-        borderBottom: graphCollapsed ? 'none' : `1px solid ${C.border}`,
+        borderBottom: graphCollapsed ? 'none' : "1px solid var(--dl-border)",
         flexShrink:0, cursor:'pointer' }}
         onClick={() => setGraphCollapsed(c => !c)}>
         <ChevronBtn collapsed={graphCollapsed} onToggle={e => { e.stopPropagation(); setGraphCollapsed(c => !c); }}/>
         <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
-          textTransform:'uppercase', color:C.muted, flex:1 }}>Map</span>
+          textTransform:'uppercase', color:"var(--dl-muted)", flex:1 }}>Map</span>
         {!graphCollapsed && (
-          <span style={{ fontFamily:mono, fontSize:9, color:C.dim }}>
+          <span style={{ fontFamily:mono, fontSize:9, color:"var(--dl-dim)" }}>
             {(allTags||[]).length + 1} projects · pinch/scroll to zoom
           </span>
         )}
@@ -188,7 +188,7 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
           {!ready && (
             <div style={{ position:'absolute', inset:0, display:'flex',
               alignItems:'center', justifyContent:'center',
-              fontFamily:mono, fontSize:F.sm, color:C.dim }}>
+              fontFamily:mono, fontSize:F.sm, color:"var(--dl-dim)" }}>
               Laying out graph…
             </div>
           )}
@@ -198,7 +198,7 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
                 <pattern id="dotgrid" x={tx % (24 * scale)} y={ty % (24 * scale)}
                   width={24 * scale} height={24 * scale} patternUnits="userSpaceOnUse">
                   <circle cx={12 * scale} cy={12 * scale}
-                    r={Math.max(0.6, scale * 0.7)} fill={C.border2} opacity="0.7"/>
+                    r={Math.max(0.6, scale * 0.7)} fill="var(--dl-border2)" opacity="0.7"/>
                 </pattern>
               </defs>
               <rect width="100%" height="100%" fill="url(#dotgrid)"/>
@@ -264,9 +264,9 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
             {[{label:'+',f:1.25},{label:'−',f:0.8}].map(({label,f}) => (
               <button key={label}
                 onClick={() => setScale(prev => Math.max(0.12, Math.min(3, prev * f)))}
-                style={{ width:30, height:30, background:C.surface,
-                  border:`1px solid ${C.border2}`, borderRadius:6,
-                  color:C.muted, fontFamily:mono, fontSize:16, cursor:'pointer',
+                style={{ width:30, height:30, background:"var(--dl-surface)",
+                  border:"1px solid var(--dl-border2)", borderRadius:6,
+                  color:"var(--dl-muted)", fontFamily:mono, fontSize:16, cursor:'pointer',
                   display:'flex', alignItems:'center', justifyContent:'center' }}>
                 {label}
               </button>

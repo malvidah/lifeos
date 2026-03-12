@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey, shift } from "@/lib/dates";
 import { useDbSave, dbLoad, MEM, DIRTY } from "@/lib/db";
@@ -12,9 +11,7 @@ import { api } from "@/lib/api";
 
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",activeMinutes:"",resilienceScore:"",stressMins:"",recoveryMins:""};
 
-
 export default function HealthCard({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,backAction}) {
-  const { C } = useTheme();
   const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
@@ -100,7 +97,6 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
       }).catch(()=>{}).finally(()=>onSyncEnd("oura"));
   },[date,loaded,token]); // eslint-disable-line
 
-
   const purple = "#8B6BB5";
 
   // ── Computed scores from /api/scores ──────────────────────────────────────
@@ -181,13 +177,13 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   const showBadge = calibDays > 0 && calibDays < 14;
 
   const metrics=[
-    {key:"sleep",    label:"Sleep",    color:C.blue,  score:scores?.sleep?.score,
+    {key:"sleep",    label:"Sleep",    color:"var(--dl-blue)",  score:scores?.sleep?.score,
       fields:[{label:"Hours",value:h.sleepHrs,unit:"h",ck:"sleepHrs"},{label:"Effic.",value:h.sleepEff,unit:"%",ck:"efficiency"}],
       sparkline:scores?.sleep?.sparkline},
-    {key:"readiness",label:"Readiness",color:C.green, score:scores?.readiness?.score,
+    {key:"readiness",label:"Readiness",color:"var(--dl-green)", score:scores?.readiness?.score,
       fields:[{label:"HRV",value:h.hrv,unit:"ms",ck:"hrv"},{label:"RHR",value:h.rhr,unit:"bpm",ck:"rhr"}],
       sparkline:scores?.readiness?.sparkline},
-    {key:"workouts", label:"Workouts", color:C.accent,score:scores?.activity?.score,
+    {key:"workouts", label:"Workouts", color:"var(--dl-accent)",score:scores?.activity?.score,
       fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",ck:"steps"},{label:"Active",value:h.activeMinutes,unit:"min",ck:"activeMinutes"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
@@ -259,7 +255,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     if (!data || trendLoading) {
       return (
         <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>{trendLoading ? 'loading…' : '—'}</span>
+          <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-dim)" }}>{trendLoading ? 'loading…' : '—'}</span>
         </div>
       );
     }
@@ -269,7 +265,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     for (let i = -span; i <= 0; i++) days.push(toKey(shift(anchorDate, i)));
     const vals = days.map(d => data[d]?.[metricKey] ?? null);
     const pts = vals.map((v, i) => v != null ? { v, i } : null).filter(Boolean);
-    if (pts.length < 2) return <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: C.dim }}>not enough data</span></div>;
+    if (pts.length < 2) return <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-dim)" }}>not enough data</span></div>;
 
     const W = 600, H = 80;
     const mn = Math.max(0, Math.min(...pts.map(p => p.v)) - 5);
@@ -373,7 +369,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                 position: 'absolute',
                 left: `${leftPct}%`,
                 transform,
-                fontFamily: mono, fontSize: '9px', color: C.dim,
+                fontFamily: mono, fontSize: '9px', color: "var(--dl-dim)",
                 letterSpacing: '0.04em', lineHeight: 1,
               }}>{t.label}</div>
             );
@@ -388,23 +384,23 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     <Card fitContent={!onToggle} style={collapsed?{height:"auto"}:{}}>
       {/* Card header */}
       <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
-        borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
+        borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0,
         cursor:onToggle?"pointer":"default"}} onClick={backAction?undefined:onToggle}>
         {backAction
-          ? <button onClick={backAction} style={{background:"none",border:"none",cursor:"pointer",color:C.green,padding:0,display:"flex",alignItems:"center",gap:4,fontFamily:mono,fontSize:F.sm,marginRight:2}}>←</button>
+          ? <button onClick={backAction} style={{background:"none",border:"none",cursor:"pointer",color:"var(--dl-green)",padding:0,display:"flex",alignItems:"center",gap:4,fontFamily:mono,fontSize:F.sm,marginRight:2}}>←</button>
           : onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>
         }
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-          textTransform:"uppercase",color:backAction?C.green:C.muted,flex:1}}>Health</span>
+          textTransform:"uppercase",color:backAction?"var(--dl-green)":"var(--dl-muted)",flex:1}}>Health</span>
         {dataSource&&(
-          <span style={{fontFamily:mono,fontSize:"10px",color:C.dim,
-            border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 5px"}}>
+          <span style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-dim)",
+            border:"1px solid var(--dl-border)",borderRadius:4,padding:"1px 5px"}}>
             {dataSource==="both"?"Oura + Apple Health":dataSource==="apple"?"Apple Health":dataSource==="garmin"?"Garmin":"Oura"}
           </span>
         )}
         {showBadge&&(
           <span title={`Scores calibrating — ${calibDays}/14 days of data. Currently using health guidelines as reference.`}
-            style={{fontFamily:mono,fontSize:"10px",color:C.muted,background:"rgba(255,255,255,0.06)",
+            style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)",background:"rgba(255,255,255,0.06)",
               borderRadius:4,padding:"1px 6px",cursor:"default"}}>
             Calibrating…
           </span>
@@ -412,9 +408,9 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
       </div>
       {/* Apple Health connect prompt — iOS only, shown when not yet authorized */}
       {hkStatus==="not_determined"&&!collapsed&&(
-        <div style={{padding:"8px 14px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{padding:"8px 14px",borderBottom:"1px solid var(--dl-border)"}}>
           <button onClick={connectAppleHealth}
-            style={{fontFamily:mono,fontSize:F.sm,color:C.blue,background:"none",border:`1px solid ${C.blue}`,
+            style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-blue)",background:"none",border:"1px solid var(--dl-blue)",
               borderRadius:6,cursor:"pointer",padding:"5px 12px",letterSpacing:"0.03em",opacity:0.9}}>
             Connect
           </button>
@@ -423,7 +419,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
       {/* Metrics row */}
       {!collapsed&&<div style={{position:"relative"}}>
       <div style={{display:"flex",alignItems:"stretch",overflowX:"auto",scrollbarWidth:"none",msOverflowStyle:"none",
-        borderBottom:expandedMetric?`1px solid ${C.border}`:"none",position:"relative"}} ref={el=>{
+        borderBottom:expandedMetric?"1px solid var(--dl-border)":"none",position:"relative"}} ref={el=>{
           if(!el) return;
           const upd=()=>{const f=el.parentElement?.querySelector('.hs-fade');if(f){const atEnd=el.scrollLeft+el.clientWidth>=el.scrollWidth-2;f.style.opacity=(el.scrollWidth>el.clientWidth+2&&!atEnd)?'1':'0';}};
           el._hsCheck=upd; upd(); const ro=new ResizeObserver(upd); ro.observe(el);
@@ -436,7 +432,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
             <div key={m.key}
               onClick={()=>{ isTrend ? setExpandedMetric(null) : setExpandedMetric(m.key); }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
-                borderRight:mi<metrics.length-1?`1px solid ${C.border}`:"none",
+                borderRight:mi<metrics.length-1?"1px solid var(--dl-border)":"none",
                 boxSizing:"border-box", overflow:"hidden",
                 padding:"12px 14px",cursor:"pointer",
                 background: isTrend ? m.color+"0D" : "transparent",
@@ -458,10 +454,10 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                   {m.fields.map(f=>{
                     const sub = f.ck ? (scores?.[m.key]?.contributors?.[f.ck] ?? null) : null;
                     const hasVal = f.value && f.value !== "—" && f.value !== "";
-                    const fc = !hasVal ? C.dim : sub == null ? C.dim : sub >= 70 ? C.green : sub < 45 ? C.red : C.muted;
+                    const fc = !hasVal ? "var(--dl-dim)" : sub == null ? "var(--dl-dim)" : sub >= 70 ? "var(--dl-green)" : sub < 45 ? "var(--dl-red)" : "var(--dl-muted)";
                     return (
                       <div key={f.label}>
-                        <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:C.dim,marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
+                        <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:"var(--dl-dim)",marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
                         <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                           <span style={{fontFamily:serif,fontSize:F.md,color:fc}}>{f.value||"—"}</span>
                           {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:fc,opacity:0.7}}>{f.unit}</span>}
@@ -477,17 +473,16 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
       </div>
       <div className="hs-fade" style={{
         position:'absolute', right:0, top:0, bottom:0, width:40, pointerEvents:'none',
-        background:`linear-gradient(to right, transparent, ${C.bg})`,
+        background:"linear-gradient(to right, transparent, var(--dl-bg))",
         display:'flex', alignItems:'center', justifyContent:'flex-end', paddingRight:6,
         opacity:0, transition:'opacity 0.12s ease', zIndex:1,
       }}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted}
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={"var(--dl-muted)"}
           strokeWidth="2.5" strokeLinecap="round" opacity="0.5">
           <polyline points="9 18 15 12 9 6"/>
         </svg>
       </div>
       </div>}
-
 
       {/* ── Trend panel — always rendered at fixed height to prevent layout shift ── */}
       {!collapsed && (() => {
@@ -504,7 +499,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
           : null;
         return (
           <div style={{
-            borderTop: expandedMetric ? `1px solid ${C.border}` : 'none',
+            borderTop: expandedMetric ? "1px solid var(--dl-border)" : 'none',
             maxHeight: expandedMetric ? 160 : 0,
             overflow: 'hidden',
             opacity: expandedMetric ? 1 : 0,
@@ -519,14 +514,14 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                     trend
                   </span>
                   {date !== todayKey() && (
-                    <span style={{fontFamily:mono,fontSize:"9px",color:C.dim}}>
+                    <span style={{fontFamily:mono,fontSize:"9px",color:"var(--dl-dim)"}}>
                       to {new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
                     </span>
                   )}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   {avgVal != null && (
-                    <span style={{fontFamily:mono,fontSize:"10px",color:C.dim}}>avg {avgVal}</span>
+                    <span style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-dim)"}}>avg {avgVal}</span>
                   )}
                   {["12m","30d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
@@ -534,7 +529,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                         padding:"6px 10px",borderRadius:6,cursor:"pointer",border:"none",
                         minHeight:32,
                         background: trendRange===r ? m.color+"33" : "transparent",
-                        color: trendRange===r ? m.color : C.dim,
+                        color: trendRange===r ? m.color : "var(--dl-dim)",
                         transition:"background 0.15s,color 0.15s"}}>
                       {r.toUpperCase()}
                     </button>

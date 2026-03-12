@@ -1,12 +1,10 @@
 "use client";
 import { useState, useEffect } from "react";
-import { useTheme } from "@/lib/theme";
 import { mono, F, blurweb } from "@/lib/tokens";
 import { toKey, todayKey, DAYS_SHORT, MONTHS_SHORT } from "@/lib/dates";
 import UserMenu from "./UserMenu.jsx";
 
 export default function Header({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,onGoHome,stravaConnected,onStravaChange}) {
-  const { C } = useTheme();
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
   const [isToday, setIsToday] = useState(false);
@@ -30,7 +28,7 @@ export default function Header({session,token,userId,syncStatus,theme,onThemeCha
       WebkitAppRegion: "drag", userSelect: "none",
     }}>
       {/* Pull-down overscroll patch */}
-      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:C.bg,zIndex:99}}/>
+      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:"var(--dl-bg)",zIndex:99}}/>
       {/* DAY LAB wordmark — full-width centered, click = go home */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",
