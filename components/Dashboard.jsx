@@ -6774,25 +6774,26 @@ export default function Dashboard() {
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           display:"flex", flexDirection:"column", overflow:"hidden"}}>
 
-          {/* ── NavBar — single instance, above all scroll areas, consistent position on every page ── */}
-          <NavBar
-            activeProject={activeProject}
-            searchOpen={searchOpen} setSearchOpen={setSearchOpen}
-            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-            searchInputRef={searchInputRef} srLoading={srLoading}
-            date={selected} token={token} userId={userId}
-            onSelectProject={setActiveProject}
-            onBack={() => setActiveProject(null)}
-            tagDisplayName={tagDisplayName} projectColor={projectColor}
-          />
-
           {/* ── Day View scroll — calendar, health, cards ── */}
           {!activeProject && (
             <div style={{
               flex:1, minHeight:0, overflowY:"auto",
-              padding:10, paddingTop:4,
+              padding:10, paddingTop:0,
               paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:mobile?10:8}}>
+              {/* 50px breathing room under the top-bar vignette */}
+              <div style={{height:50,flexShrink:0}}/>
+              {/* NavBar — in scroll flow, same component on every page */}
+              <NavBar
+                activeProject={activeProject}
+                searchOpen={searchOpen} setSearchOpen={setSearchOpen}
+                searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                searchInputRef={searchInputRef} srLoading={srLoading}
+                date={selected} token={token} userId={userId}
+                onSelectProject={setActiveProject}
+                onBack={() => setActiveProject(null)}
+                tagDisplayName={tagDisplayName} projectColor={projectColor}
+              />
                               {/* Cal + Health — hidden during search */}
                 {!searchOpen && (
                   <>
@@ -6892,7 +6893,19 @@ export default function Dashboard() {
               return (
                 <>
                   {/* Scrollable content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:4,boxSizing:'border-box'}}>
+                  <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:0,boxSizing:'border-box'}}>
+                    {/* 50px breathing room + NavBar in scroll flow — same component as home view */}
+                    <div style={{height:50}}/>
+                    <NavBar
+                      activeProject={activeProject}
+                      searchOpen={searchOpen} setSearchOpen={setSearchOpen}
+                      searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+                      searchInputRef={searchInputRef} srLoading={srLoading}
+                      date={selected} token={token} userId={userId}
+                      onSelectProject={setActiveProject}
+                      onBack={() => setActiveProject(null)}
+                      tagDisplayName={tagDisplayName} projectColor={projectColor}
+                    />
                     {isGraph ? (
                       <div style={{display:'flex',flexDirection:'column',gap:10}}>
                         {graphData ? (
