@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/lib/theme";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
-import { ChevronBtn } from "../ui/primitives.jsx";
+import { Card, ChevronBtn } from "../ui/primitives.jsx";
 
 export function MapCard({ allTags, connections, onSelectProject, token, userId, taskFilter, setTaskFilter }) {
   const { C } = useTheme();
