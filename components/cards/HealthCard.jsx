@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey, shift } from "@/lib/dates";
-import { useDbSave, dbLoad, MEM, DIRTY } from "@/lib/db";
+import { useDbSave, dbLoad } from "@/lib/db";
 import { cachedOuraFetch, _ouraCache } from "@/lib/ouraCache";
 import { createClient } from "@/lib/supabase";
 import { Ring, Card, Shimmer, ChevronBtn, InfoTip } from "../ui/primitives.jsx";
