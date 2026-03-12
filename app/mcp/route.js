@@ -1,17 +1,17 @@
 /**
- * Day Loop — Remote MCP Server
+ * Day Lab — Remote MCP Server
  * Implements MCP Protocol 2025-06-18 (Streamable HTTP transport)
  * Auth: Bearer token (dl_... personal token) passed via Authorization header
  *
  * Claude.ai setup: Settings → Connectors → Add custom connector
- *   URL: https://dayloop.me/mcp
+ *   URL: https://daylab.me/mcp
  *   Advanced: paste your dl_... token as Bearer token
  */
 
 import { createClient } from '@supabase/supabase-js';
 
 const PROTOCOL_VERSION = '2025-06-18';
-const SERVER_INFO = { name: 'dayloop', version: '1.0.0' };
+const SERVER_INFO = { name: 'daylab', version: '1.0.0' };
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
 const SERVICE = () => createClient(
@@ -19,7 +19,7 @@ const SERVICE = () => createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const getResourceUrl = (req) => `https://${req.headers.get('host') || 'dayloop.me'}`;
+const getResourceUrl = (req) => `https://${req.headers.get('host') || 'daylab.me'}`;
 // `${getResourceUrl(request)}/.well-known/oauth-protected-resource` derived per-request
 
 function unauthorizedResponse(msg = 'Authentication required') {
@@ -70,7 +70,7 @@ async function resolveUser(request) {
 const TOOLS = [
   {
     name: 'get_today',
-    description: 'Read all data for a specific date from Day Loop (tasks, meals, notes, activity). Defaults to today if no date given.',
+    description: 'Read all data for a specific date from Day Lab (tasks, meals, notes, activity). Defaults to today if no date given.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -80,7 +80,7 @@ const TOOLS = [
   },
   {
     name: 'add_task',
-    description: 'Add one or more tasks to Day Loop for a specific date.',
+    description: 'Add one or more tasks to Day Lab for a specific date.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -96,7 +96,7 @@ const TOOLS = [
   },
   {
     name: 'complete_task',
-    description: 'Mark a task as done or undone in Day Loop.',
+    description: 'Mark a task as done or undone in Day Lab.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -109,7 +109,7 @@ const TOOLS = [
   },
   {
     name: 'add_note',
-    description: 'Append text to the notes section of Day Loop for a date.',
+    description: 'Append text to the notes section of Day Lab for a date.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -121,7 +121,7 @@ const TOOLS = [
   },
   {
     name: 'add_meal',
-    description: 'Log one or more meals or food items to Day Loop.',
+    description: 'Log one or more meals or food items to Day Lab.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -137,7 +137,7 @@ const TOOLS = [
   },
   {
     name: 'add_calendar_event',
-    description: 'Add an event to the user\'s Google Calendar via Day Loop.',
+    description: 'Add an event to the user\'s Google Calendar via Day Lab.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -252,7 +252,7 @@ async function executeTool(name, input, userId) {
       if (d.access_token) accessToken = d.access_token;
     }
 
-    if (!accessToken) return { error: 'Google Calendar not connected. Please connect via Day Loop settings.' };
+    if (!accessToken) return { error: 'Google Calendar not connected. Please connect via Day Lab settings.' };
 
     const evDate = input.date || today;
     let eventBody;

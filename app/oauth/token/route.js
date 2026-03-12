@@ -26,6 +26,36 @@ async function sha256base64url(str) {
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
+async function mintTokenPair(userId, clientId, { resource, deleteOldRefresh } = {}) {
+  const accessToken = 'dla_' + randomHex(32);
+  const refreshToken = 'dlr_' + randomHex(32);
+  const now = Date.now();
+  const accessExpires = new Date(now + ACCESS_TOKEN_TTL * 1000).toISOString();
+  const refreshExpires = new Date(now + REFRESH_TOKEN_TTL * 1000).toISOString();
+  const db = svc();
+  const ops = [
+    db.from('entries').upsert({
+      date: `oauth_token:${accessToken}`,
+      type: 'oauth_token',
+      user_id: userId,
+      data: { access_token: accessToken, refresh_token: refreshToken, client_id: clientId, access_expires_at: accessExpires, refresh_expires_at: refreshExpires, ...(resource != null && { resource }) },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'date,type,user_id' }),
+    db.from('entries').upsert({
+      date: `oauth_refresh:${refreshToken}`,
+      type: 'oauth_refresh',
+      user_id: userId,
+      data: { access_token: accessToken, client_id: clientId, refresh_expires_at: refreshExpires },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'date,type,user_id' }),
+  ];
+  if (deleteOldRefresh) {
+    ops.push(db.from('entries').delete().eq('date', `oauth_refresh:${deleteOldRefresh}`).eq('type', 'oauth_refresh'));
+  }
+  await Promise.all(ops);
+  return { accessToken, refreshToken };
+}
+
 function tokenError(error, description, status = 400) {
   return Response.json({ error, error_description: description }, {
     status,
@@ -105,49 +135,14 @@ export async function POST(request) {
     }).eq('date', `oauth_code:${code}`).eq('type', 'oauth_code');
 
     const userId = codeRow.user_id;
-    const accessToken = 'dla_' + randomHex(32);
-    const refreshToken = 'dlr_' + randomHex(32);
-    const now = Date.now();
-    const accessExpires = new Date(now + ACCESS_TOKEN_TTL * 1000).toISOString();
-    const refreshExpires = new Date(now + REFRESH_TOKEN_TTL * 1000).toISOString();
-
-    // Store tokens
-    await svc().from('entries').upsert(
-      {
-        date: `oauth_token:${accessToken}`,
-        type: 'oauth_token',
-        user_id: userId,
-        data: {
-          access_token: accessToken,
-          refresh_token: refreshToken,
-          client_id,
-          access_expires_at: accessExpires,
-          refresh_expires_at: refreshExpires,
-          resource: codeData.resource,
-        },
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'date,type,user_id' }
-    );
-
-    // Also index by refresh token for fast lookup
-    await svc().from('entries').upsert(
-      {
-        date: `oauth_refresh:${refreshToken}`,
-        type: 'oauth_refresh',
-        user_id: userId,
-        data: { access_token: accessToken, client_id, refresh_expires_at: refreshExpires },
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'date,type,user_id' }
-    );
+    const { accessToken, refreshToken } = await mintTokenPair(userId, client_id, { resource: codeData.resource });
 
     return Response.json({
       access_token: accessToken,
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL,
       refresh_token: refreshToken,
-      scope: 'dayloop',
+      scope: 'daylab',
     }, { headers: cors() });
   }
 
@@ -168,44 +163,8 @@ export async function POST(request) {
     }
 
     const userId = refreshRow.user_id;
-    const newAccessToken = 'dla_' + randomHex(32);
-    const newRefreshToken = 'dlr_' + randomHex(32);
-    const now = Date.now();
-    const accessExpires = new Date(now + ACCESS_TOKEN_TTL * 1000).toISOString();
-    const refreshExpires = new Date(now + REFRESH_TOKEN_TTL * 1000).toISOString();
-
-    // Store new access token
-    await svc().from('entries').upsert(
-      {
-        date: `oauth_token:${newAccessToken}`,
-        type: 'oauth_token',
-        user_id: userId,
-        data: {
-          access_token: newAccessToken,
-          refresh_token: newRefreshToken,
-          client_id: refreshRow.data.client_id,
-          access_expires_at: accessExpires,
-          refresh_expires_at: refreshExpires,
-        },
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'date,type,user_id' }
-    );
-
-    // Rotate refresh token (invalidate old one)
-    await svc().from('entries').delete()
-      .eq('date', `oauth_refresh:${refresh_token}`)
-      .eq('type', 'oauth_refresh');
-
-    await svc().from('entries').upsert(
-      {
-        date: `oauth_refresh:${newRefreshToken}`,
-        type: 'oauth_refresh',
-        user_id: userId,
-        data: { access_token: newAccessToken, client_id: refreshRow.data.client_id, refresh_expires_at: refreshExpires },
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'date,type,user_id' }
+    const { accessToken: newAccessToken, refreshToken: newRefreshToken } = await mintTokenPair(
+      userId, refreshRow.data.client_id, { deleteOldRefresh: refresh_token }
     );
 
     return Response.json({
@@ -213,7 +172,7 @@ export async function POST(request) {
       token_type: 'Bearer',
       expires_in: ACCESS_TOKEN_TTL,
       refresh_token: newRefreshToken,
-      scope: 'dayloop',
+      scope: 'daylab',
     }, { headers: cors() });
   }
 

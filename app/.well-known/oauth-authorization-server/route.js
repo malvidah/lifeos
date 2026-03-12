@@ -1,7 +1,7 @@
 // RFC8414 — OAuth 2.0 Authorization Server Metadata
 // Claude reads this to know where to register, authorize, and get tokens
 export async function GET(request) {
-  const base = `https://${request.headers.get('host') || 'dayloop.me'}`;
+  const base = `https://${request.headers.get('host') || 'daylab.me'}`;
   return Response.json({
     issuer: base,
     authorization_endpoint: `${base}/oauth/authorize`,
@@ -11,7 +11,7 @@ export async function GET(request) {
     grant_types_supported: ['authorization_code', 'refresh_token'],
     code_challenge_methods_supported: ['S256'],
     token_endpoint_auth_methods_supported: ['none'],
-    scopes_supported: ['dayloop'],
+    scopes_supported: ['daylab'],
     subject_types_supported: ['public'],
     // RFC8707 resource indicators
     resource_indicators_supported: true,
