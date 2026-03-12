@@ -12,22 +12,10 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Suggestion } from '@tiptap/suggestion';
+import { serif, mono, F, projectColor, CHIP_TOKENS, THEMES } from '@/lib/tokens';
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const serif = "Georgia, 'Times New Roman', serif";
-const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
-const F = { lg: 18, md: 15, sm: 12 };
-const ACCENT = '#D08828';
+const ACCENT = THEMES.dark.accent;
 const WARM   = '#C8A87A';
-
-const PROJECT_PALETTE = [
-  '#C17B4A', '#7A9E6E', '#6B8EB8', '#A07AB0',
-  '#B08050', '#5E9E8A', '#B06878', '#8A8A50',
-];
-export function projectColor(name) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
 }
 
 // ── CSS injection ─────────────────────────────────────────────────────────────
@@ -45,23 +33,6 @@ function injectEditorStyles() {
   `;
   document.head.appendChild(s);
 }
-
-// ── Chip style tokens — shared with Dashboard's read-only TagChip/NoteChip ───
-export const CHIP_TOKENS = {
-  project: (col) => ({
-    display: 'inline-block', verticalAlign: 'middle',
-    color: col, background: col + '22', borderRadius: '5px',
-    padding: '1px 7px', fontFamily: mono, fontSize: '11px',
-    letterSpacing: '0.08em', lineHeight: '1.65',
-    textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0,
-  }),
-  note: {
-    display: 'inline-block', verticalAlign: 'middle',
-    color: ACCENT, background: ACCENT + '1a', borderRadius: '5px',
-    padding: '1px 6px', fontFamily: serif, fontSize: '14px',
-    lineHeight: '1.65', whiteSpace: 'nowrap', flexShrink: 0,
-  },
-};
 
 // ── TipTap custom nodes ───────────────────────────────────────────────────────
 
