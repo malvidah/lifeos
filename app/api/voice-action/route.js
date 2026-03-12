@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { getUserClient, refreshGoogleToken } from '../_lib/google.js';
 import { isPremium } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
+import { parseTasks } from '../_lib/parseTasks.js';
 
 export async function POST(request) {
   try {
@@ -37,7 +38,7 @@ export async function POST(request) {
 
     const snapshot = [];
     if (today.meals?.length) snapshot.push(`Current meals: ${today.meals.filter(r=>r.text?.trim()).map(r=>r.text).join(', ')}`);
-    if (today.tasks?.length) snapshot.push(`Current tasks: ${today.tasks.filter(r=>r.text?.trim()).map(r=>r.text).join(', ')}`);
+    if (today.tasks) { const tasks = parseTasks(today.tasks); if (tasks.length) snapshot.push(`Current tasks: ${tasks.filter(r=>r.text?.trim()).map(r=>r.text).join(', ')}`); }
     if (today.activity?.length) snapshot.push(`Current activity: ${today.activity.filter(r=>r.text?.trim()).map(r=>r.text).join(', ')}`);
     if (today.notes) snapshot.push(`Current notes: ${String(today.notes).slice(0, 300)}`);
 

@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { getUserClient, refreshGoogleToken } from '../_lib/google.js';
 import { rateLimit } from '../_lib/rateLimit.js';
+import { parseTasks } from '../_lib/parseTasks.js';
 
 export async function POST(request) {
   try {
@@ -79,8 +80,9 @@ export async function POST(request) {
         );
         if (texts.length) lines.push(`${tag} activity: ${texts.join(', ')}`);
       }
-      if (data.tasks?.length) {
-        const texts = data.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
+      if (data.tasks) {
+        const tasks = parseTasks(data.tasks);
+        const texts = tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
         if (texts.length) lines.push(`${tag} tasks: ${texts.join(', ')}`);
       }
       if (data.notes) lines.push(`${tag} notes: ${String(data.notes).slice(0, 300)}`);

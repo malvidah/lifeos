@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { isPremium, ANTHROPIC_KEY } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
+import { parseTasks } from '../_lib/parseTasks.js';
 
 const CACHE_VERSION = 8;
 const FREE_LIMIT    = 10;   // free users get this many total insight generations
@@ -59,9 +60,10 @@ function formatDay(date, entries) {
     if (ms.length) parts.push(`meals: ${ms.join(', ')}`);
   }
 
-  if (entries.tasks?.length) {
-    const done = entries.tasks.filter(r => r.done  && r.text?.trim()).map(r => r.text);
-    const todo = entries.tasks.filter(r => !r.done && r.text?.trim()).map(r => r.text);
+  if (entries.tasks) {
+    const tasks = parseTasks(entries.tasks);
+    const done = tasks.filter(r => r.done  && r.text?.trim()).map(r => r.text);
+    const todo = tasks.filter(r => !r.done && r.text?.trim()).map(r => r.text);
     if (done.length) parts.push(`done: ${done.join(', ')}`);
     if (todo.length) parts.push(`todo: ${todo.join(', ')}`);
   }
@@ -103,10 +105,10 @@ export async function POST(request) {
     const { data: cached } = await supabase.from('entries')
       .select('data, updated_at').eq('type', 'insights').eq('date', date)
       .eq('user_id', user.id).maybeSingle();
-    if (cached?.data?.insight) {
+    if (cached?.data?.text) {
       const age = Date.now() - new Date(cached.updated_at).getTime();
       if (age < 24 * 60 * 60 * 1000) {
-        return Response.json({ insight: cached.data.insight, cached: true });
+        return Response.json({ insight: cached.data.text, cached: true });
       }
     }
 
