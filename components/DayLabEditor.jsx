@@ -426,26 +426,37 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   }), []); // eslint-disable-line
 
   // ── Suggestion dropdown state ─────────────────────────────────────────────
+  // suggRef is updated SYNCHRONOUSLY in onStart/onUpdate/onExit so that
+  // editorProps.handleKeyDown can check it in the same event tick.
+  // (useState + useEffect would be async — the ref would lag one render behind,
+  //  causing Enter to fire the singleLine split while the dropdown is open.)
   const [sugg, setSugg] = useState(null);
-  const suggRef = useRef(null);
-  useEffect(() => { suggRef.current = sugg; }, [sugg]);
+  const suggRef = useRef(null);   // kept in sync synchronously below
 
   const renderRef = useRef({
     onStart(props, key) {
-      setSugg({
+      const s = {
         key, items: props.items, selectedIndex: 0,
         clientRect: props.clientRect, command: props.command,
-        setIndex: i => setSugg(s => s ? { ...s, selectedIndex: i } : s),
-      });
+        setIndex: i => setSugg(p => p ? { ...p, selectedIndex: i } : p),
+      };
+      suggRef.current = s;
+      setSugg(s);
     },
     onUpdate(props, key) {
-      setSugg(s => !s || s.key !== key ? s : {
-        ...s, items: props.items, selectedIndex: 0,
-        clientRect: props.clientRect, command: props.command,
+      setSugg(s => {
+        if (!s || s.key !== key) return s;
+        const next = { ...s, items: props.items, selectedIndex: 0,
+          clientRect: props.clientRect, command: props.command };
+        suggRef.current = next;
+        return next;
       });
     },
     onExit(_, key) {
-      setSugg(s => s?.key === key ? null : s);
+      setSugg(s => {
+        if (s?.key === key) { suggRef.current = null; return null; }
+        return s;
+      });
     },
     onKeyDown({ event }, key) {
       const s = suggRef.current;
