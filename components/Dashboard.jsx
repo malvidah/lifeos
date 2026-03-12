@@ -3634,38 +3634,11 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const taskProjectNames = useContext(ProjectNamesContext);
   const {navigateToProject,navigateToNote} = useContext(NavigationContext);
   const {notes:ctxNotes} = useContext(NoteContext);
-  const wrapperRef = useRef(null);
-
   // Migrate old [{id,text,done}] array format to HTML on first load
   const htmlValue = useMemo(() => {
     if (Array.isArray(value)) return migrateTasksToHtml(value);
     return value || '';
   }, [value]);
-
-  // Apply filter directly to DOM
-  useEffect(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
-    const apply = () => {
-      el.querySelectorAll('li[data-type="taskItem"]').forEach(li => {
-        const checked = li.getAttribute('data-checked') === 'true';
-        let show = true;
-        if (taskFilter === 'open' && checked)  show = false;
-        if (taskFilter === 'done' && !checked) show = false;
-        li.style.display = show ? 'flex' : 'none';
-      });
-    };
-    // rAF: TipTap renders asynchronously — wait one frame before first apply
-    const raf = requestAnimationFrame(apply);
-    const obs = new MutationObserver(apply);
-    obs.observe(el, {
-      subtree: true,
-      childList: true,           // catches TipTap replacing whole <li> nodes
-      attributes: true,
-      attributeFilter: ['data-checked'],
-    });
-    return () => { cancelAnimationFrame(raf); obs.disconnect(); };
-  }, [taskFilter, loaded]);
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}>
@@ -3673,8 +3646,11 @@ function Tasks({date,token,userId,taskFilter='all'}) {
     </div>
   );
 
+  // CSS filter: DayLabEditor injects [data-task-filter="open/done"] selectors with
+  // !important, which beats TipTap's HTMLAttributes inline display:flex on every <li>.
+  // Setting data-task-filter on the wrapper is all that's needed — no JS DOM walking.
   return (
-    <div ref={wrapperRef} style={{flex:1}}>
+    <div data-task-filter={taskFilter} style={{flex:1}}>
       <DayLabEditor
         taskMode
         value={htmlValue}
@@ -4947,6 +4923,9 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
   );
 }
 
+// Module-level cache: survives ProjectsCard mount/unmount so the nav never flashes empty.
+const TAGS_CACHE = { tags: null, connections: [], recency: {} };
+
 // ─── ProjectsCard ─────────────────────────────────────────────────────────────
 // Source of truth: #tags present in the DB (notes + tasks). projectsMeta is
 // metadata-only (description). No tag in DB = no project button, period.
@@ -4966,11 +4945,18 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     return s;
   }, [notes, tasks]);
 
-  // Tags that actually exist anywhere in the DB — fetched from /api/all-tags
-  const [allTags, setAllTags] = useState(null); // null=loading
-  const [connections, setConnections] = useState([]);
-  const [recency, setRecency] = useState({});
-  const fetchedRef = useRef(false);
+  // Tags that actually exist anywhere in the DB — fetched from /api/all-tags.
+  // TAGS_CACHE is module-level so it persists across ProjectsCard mount/unmount cycles,
+  // preventing the nav flash that happened when allTags started null every mount.
+  const [allTags, setAllTagsRaw] = useState(() => TAGS_CACHE.tags);
+  const [connections, setConnections] = useState(() => TAGS_CACHE.connections);
+  const [recency, setRecency] = useState(() => TAGS_CACHE.recency);
+  const setAllTags = (v) => {
+    const tags = typeof v === 'function' ? v(allTags) : v;
+    TAGS_CACHE.tags = tags;
+    setAllTagsRaw(tags);
+  };
+  const fetchedRef = useRef(!!TAGS_CACHE.tags); // skip fetch if cache is warm
   useEffect(() => {
     if (!token || fetchedRef.current) return;
     fetchedRef.current = true;
@@ -4980,10 +4966,12 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     ]).then(function(results) {
       var tagsRes = results[0];
       var connsRes = results[1];
-      setAllTags(Array.isArray(tagsRes.tags) ? tagsRes.tags : []);
-      setConnections(Array.isArray(connsRes.connections) ? connsRes.connections : []);
-      setRecency(connsRes.recency || {});
-    }).catch(function() { setAllTags([]); });
+      const tags = Array.isArray(tagsRes.tags) ? tagsRes.tags : [];
+      const conns = Array.isArray(connsRes.connections) ? connsRes.connections : [];
+      const rec = connsRes.recency || {};
+      TAGS_CACHE.tags = tags; TAGS_CACHE.connections = conns; TAGS_CACHE.recency = rec;
+      setAllTagsRaw(tags); setConnections(conns); setRecency(rec);
+    }).catch(function() { setAllTagsRaw([]); });
   }, [token]); // eslint-disable-line
 
   // Re-fetch when today's notes/tasks change (new tag added or deleted)
@@ -5041,7 +5029,9 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
     return () => { ro.disconnect(); el.removeEventListener('scroll', check); };
   }, [names.length]); // eslint-disable-line
 
-  if (allTags === null) return null;
+  // allTags null only on absolute first load before fetch completes (TAGS_CACHE is empty)
+  // Return an empty strip rather than null so layout doesn't collapse
+  if (allTags === null) return <div style={{height:48}}/>; // same height as Shell
 
   // Package icon SVG (grid of dots)
   const PackageIcon = (
@@ -6816,7 +6806,7 @@ export default function Dashboard() {
               flex:1, minHeight:0, overflowY:"auto",
               padding:10, paddingTop:0,
               paddingBottom:mobile?200:0,
-              display:"flex", flexDirection:"column", gap:mobile?10:8}}>
+              display:"flex", flexDirection:"column", gap:8}}>
               {/* 25px breathing room under the top-bar vignette */}
               <div style={{height:25,flexShrink:0}}/>
               {/* NavBar — in scroll flow, same component on every page */}
@@ -6929,9 +6919,10 @@ export default function Dashboard() {
               return (
                 <>
                   {/* Scrollable content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:0,boxSizing:'border-box'}}>
+                  <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:0,boxSizing:'border-box',
+                    display:'flex',flexDirection:'column',gap:8}}>
                     {/* 25px breathing room + NavBar in scroll flow — same component as home view */}
-                    <div style={{height:25}}/>
+                    <div style={{height:25,flexShrink:0}}/>
                     <NavBar
                       activeProject={activeProject}
                       searchOpen={searchOpen} setSearchOpen={setSearchOpen}
