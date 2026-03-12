@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment, createContext, useContext } from "react";
-import { DayLabEditor } from './DayLabEditor.jsx';
+import { DayLabEditor, CHIP_TOKENS, projectColor as _projectColor } from './DayLabEditor.jsx';
 import { createClient } from "../lib/supabase.js";
 
 
@@ -113,72 +113,27 @@ function tagDisplayName(name) {
   return spaced.replace(/\b\w/g, c => c.toUpperCase());
 }
 // Pastel accent palette for project chips — warm tones that fit the dark theme
-const PROJECT_PALETTE = [
-  '#C17B4A', // warm terracotta
-  '#7A9E6E', // sage green
-  '#6B8EB8', // dusty blue
-  '#A07AB0', // muted lavender
-  '#B08050', // warm sand
-  '#5E9E8A', // teal
-  '#B06878', // dusty rose
-  '#8A8A50', // olive
-];
-// Deterministic color from project name (stable across sessions)
-function projectColor(name) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
-}
-function TagChip({ name, onClick, style={}, plain=false }) {
-  const col = projectColor(name);
-  const base = {
-    display:'inline-flex', alignItems:'center',
-    background: col + '18',
-    border: `1.5px solid ${col}55`,
-    borderRadius: 999, padding: '0 7px',
-    fontSize: '0.78em', letterSpacing: '0.08em',
-    textTransform: 'uppercase',
-    fontFamily: mono, lineHeight: '1.65',
-    flexShrink: 0, verticalAlign: 'middle',
-  };
-  if (plain) {
-    return (
-      <span style={{ ...base, color: col, opacity: 0.4, cursor: 'default', ...style }}>
-        {name}
-      </span>
-    );
-  }
+// projectColor and CHIP_TOKENS are imported from DayLabEditor — single source of truth
+const projectColor = _projectColor;
+
+// TagChip and NoteChip are the read-only counterparts to TipTap's ProjectTagNode/NoteLinkNode.
+// Their styles come directly from CHIP_TOKENS — identical to what TipTap renders.
+function TagChip({ name, onClick, plain = false }) {
   return (
-    <span
-      onClick={onClick}
-      style={{
-        ...base, color: col,
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'opacity 0.15s',
-        ...style,
-      }}
-    >{name}</span>
+    <span onClick={onClick} style={{
+      ...CHIP_TOKENS.project(projectColor(name)),
+      cursor: onClick ? 'pointer' : 'default',
+      opacity: plain ? 0.4 : 1,
+    }}>{name.toUpperCase()}</span>
   );
 }
-// Orange inline chip for [note name] links in read-mode
+
 function NoteChip({ name, onClick }) {
-  const ACCENT = '#D08828';
   return (
-    <span
-      onClick={onClick}
-      style={{
-        display:'inline-flex', alignItems:'center',
-        color: ACCENT,
-        background: ACCENT + '18',
-        border: `1.5px solid ${ACCENT}55`,
-        borderRadius: 999, padding: '0 7px',
-        fontSize: '0.82em', letterSpacing: '0.04em',
-        fontFamily: "Georgia, 'Times New Roman', serif",
-        lineHeight: '1.65', flexShrink: 0, verticalAlign: 'middle',
-        cursor: onClick ? 'pointer' : 'default',
-        transition: 'opacity 0.15s',
-      }}
-    >[{name}]</span>
+    <span onClick={onClick} style={{
+      ...CHIP_TOKENS.note,
+      cursor: onClick ? 'pointer' : 'default',
+    }}>{name}</span>
   );
 }
 // Edit-mode tag renderer: {project} pills + [note] chips (no legacy # here — edit views show migrated text)
@@ -197,6 +152,18 @@ function renderTaskInline(text) {
   }
   if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
   return parts.length ? parts : text;
+}
+
+// RichLine — renders stored text with chips and links, NavigationContext-aware.
+// Use this everywhere instead of calling renderRichLine() directly.
+// It is the read-only counterpart to DayLabEditor — same visual output, no editing.
+function RichLine({ text, dimTag = null }) {
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+  if (!text) return null;
+  return <>{renderRichLine(text, dimTag,
+    (name) => navigateToProject(name),
+    (name) => navigateToNote(name),
+  )}</>;
 }
 
 function renderWithTags(text, dimTag=null, onTagClick=null) {
@@ -220,14 +187,14 @@ const URL_RE = /https?:\/\/[^\s<>"')\]]+/g;
 const IMG_RE = /\[img:(https?:\/\/[^\]]+|data:[^\]]+)\]/g;
 
 // Split text by images first, then render each text segment with URLs+tags
-function renderRichLine(text, dimTag=null, onTagClick=null) {
+function renderRichLine(text, dimTag=null, onTagClick=null, onNoteClick=null) {
   if (!text) return null;
   const parts = [];
   let last = 0;
   const re = new RegExp(IMG_RE.source, 'g'); let m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) {
-      parts.push(<span key={`t${last}`}>{renderTextWithLinksAndTags(text.slice(last, m.index), dimTag, last, onTagClick)}</span>);
+      parts.push(<span key={`t${last}`}>{renderTextWithLinksAndTags(text.slice(last, m.index), dimTag, last, onTagClick, onNoteClick)}</span>);
     }
     parts.push(
       <div key={`img${m.index}`} style={{ margin: '6px 0', lineHeight: 0 }}>
@@ -236,13 +203,12 @@ function renderRichLine(text, dimTag=null, onTagClick=null) {
     );
     last = m.index + m[0].length;
   }
-  if (last < text.length) parts.push(<span key={`e${last}`}>{renderTextWithLinksAndTags(text.slice(last), dimTag, last, onTagClick)}</span>);
-  return parts.length ? parts : renderTextWithLinksAndTags(text, dimTag, 0, onTagClick);
+  if (last < text.length) parts.push(<span key={`e${last}`}>{renderTextWithLinksAndTags(text.slice(last), dimTag, last, onTagClick, onNoteClick)}</span>);
+  return parts.length ? parts : renderTextWithLinksAndTags(text, dimTag, 0, onTagClick, onNoteClick);
 }
 
-function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0, onTagClick=null) {
+function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0, onTagClick=null, onNoteClick=null) {
   if (!text) return null;
-  // Combined: URLs | {project} new | #Tag legacy | [note link]
   const combined = /(https?:\/\/[^\s<>"')\]]+)|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|(#[A-Za-z][A-Za-z0-9]+(?![A-Za-z0-9]))|\[([^\]]+)\]/g;
   const parts = []; let last = 0; let m;
   while ((m = combined.exec(text)) !== null) {
@@ -261,12 +227,11 @@ function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0, onTagClick=n
       const isOwn = dimTag && name === dimTag.toLowerCase();
       parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={name} plain={isOwn} onClick={onTagClick ? () => onTagClick(name) : undefined}/>);
     } else if (m[3]) {
-      // Legacy #Tag — normalize to lowercase
       const name = m[3].slice(1).toLowerCase();
       const isOwn = dimTag && name === dimTag.toLowerCase();
-      parts.push(<TagChip key={`${keyOffset}lc${m.index}`} name={name} plain={isOwn}/>);
+      parts.push(<TagChip key={`${keyOffset}lc${m.index}`} name={name} plain={isOwn} onClick={onTagClick ? () => onTagClick(name) : undefined}/>);
     } else if (m[4]) {
-      parts.push(<NoteChip key={`${keyOffset}n${m.index}`} name={m[4]}/>);
+      parts.push(<NoteChip key={`${keyOffset}n${m.index}`} name={m[4]} onClick={onNoteClick ? () => onNoteClick(m[4]) : undefined}/>);
     }
     last = m.index + m[0].length;
   }
@@ -3314,9 +3279,8 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
         {merged.map(row => (
           <div key={row.id} style={rowStyle}>
-            <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,
-              overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",flex:1,minWidth:0}}>
-              {row.text}
+            <span style={{lineHeight:1.7,flex:1,minWidth:0}}>
+              <RichLine text={row.text}/>
             </span>
             <SourceBadge source={row.source}/>
             {showProtein && (
@@ -3595,9 +3559,8 @@ function WorkoutsCard({date,token,userId,stravaConnected}) {
         {mergedSynced.map(row=>(
           <div key={row.id} style={rowS}>
             <span style={{display:"flex",alignItems:"center",gap:6,flex:1,minWidth:0,overflow:"hidden"}}>
-              <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,
-                overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                {row.text}
+              <span style={{lineHeight:1.7,flex:1,minWidth:0}}>
+                <RichLine text={row.text}/>
               </span>
               <SourceBadge source={row.source}/>
             </span>
@@ -3843,7 +3806,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   style={{fontFamily:serif,fontSize:F.md,lineHeight:1.7,color:row.done?C.muted:C.text,
                     textDecoration:row.done?'line-through':'none',whiteSpace:'pre-wrap',wordBreak:'break-word',
                     cursor:'pointer',minHeight:'1.7em',userSelect:'none'}}>
-                  {row.text?renderWithTags(row.text):null}
+                  {row.text ? <RichLine text={row.text}/> : null}
                 </div>
               ):isEditing?(
                 /* EDIT MODE — TipTap DayLabEditor */
@@ -3920,10 +3883,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                     color:row.done?C.muted:C.text,textDecoration:row.done?'line-through':'none',
                     whiteSpace:'pre-wrap',wordBreak:'break-word',
                     cursor:'text',minHeight:'1.7em',userSelect:'text'}}>
-                  {row.text
-                    ?renderWithTags(row.text)
-                    :(idx===0&&open.length===1&&taskFilter!=='done'?<span style={{color:C.dim}}>Add a task…</span>:null)
-                  }
+                  {row.text ? <RichLine text={row.text}/> : (idx===0&&open.length===1&&taskFilter!=='done'?<span style={{color:C.dim}}>Add a task…</span>:null)}
                 </div>
               )}
             </div>
@@ -5925,7 +5885,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                   {pvTaskFilter !== 'done' && open.map(task => (
                     <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0'}}>
                       <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.border2}`,background:'transparent'}}/>
-                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{renderRichLine(task.text)}</div>
+                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}><RichLine text={task.text}/></div>
                     </div>
                   ))}
                   {pvTaskFilter !== 'open' && done.map(task => (
@@ -5933,7 +5893,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                       <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.accent}`,background:C.accent,display:'flex',alignItems:'center',justifyContent:'center'}}>
                         <span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>
                       </div>
-                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}>{renderRichLine(task.text)}</div>
+                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}><RichLine text={task.text}/></div>
                     </div>
                   ))}
                   {dateIdx < allDates.length - 1 && <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,marginBottom:4}}/>}
@@ -5995,7 +5955,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                   )}
                   {lines.map((entry, i) => (
                     <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
-                      {renderRichLine(entry.text)}
+                      <RichLine text={entry.text}/>
                     </div>
                   ))}
                 </div>
@@ -6091,7 +6051,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   }
   return (
     <div style={{ ...baseStyle, color:C.text, cursor:'text', whiteSpace:'pre-wrap' }} onClick={onStartEdit}>
-      {renderRichLine(entry.text, dimTag)}
+      <RichLine text={entry.text} dimTag={dimTag}/>
     </div>
   );
 }
@@ -6476,7 +6436,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                       color: task.done ? C.muted : C.text, cursor:'text',
                       textDecoration: task.done ? 'line-through' : 'none',
                       whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
-                    {renderRichLine(task.text, project==='__everything__' ? null : project)}
+                    <RichLine text={task.text} dimTag={project==='__everything__' ? null : project}/>
                   </div>
                 )}
               </div>

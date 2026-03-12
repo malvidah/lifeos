@@ -47,6 +47,30 @@ function injectEditorStyles() {
   document.head.appendChild(s);
 }
 
+export const CHIP_TOKENS = {
+  project: (col) => ({
+    display: 'inline-block', verticalAlign: 'middle',
+    color: col,
+    background: col + '22',
+    borderRadius: '5px',
+    padding: '1px 7px',
+    fontFamily: mono, fontSize: '11px',
+    letterSpacing: '0.08em', lineHeight: '1.65',
+    textTransform: 'uppercase',
+    whiteSpace: 'nowrap', flexShrink: 0,
+  }),
+  note: {
+    display: 'inline-block', verticalAlign: 'middle',
+    color: ACCENT,
+    background: ACCENT + '1a',
+    borderRadius: '5px',
+    padding: '1px 6px',
+    fontFamily: serif, fontSize: '14px',
+    lineHeight: '1.65',
+    whiteSpace: 'nowrap', flexShrink: 0,
+  },
+};
+
 // ── ProjectTag — inline atom node ─────────────────────────────────────────────
 // Stored in plain-text as `{projectname}` (lowercase).
 // Rendered directly as a colored pill. No CSS tricks — the node IS the pill.
@@ -68,22 +92,9 @@ const ProjectTagNode = Node.create({
     const col  = projectColor(name);
     return ['span', {
       'data-project-tag': name,
-      style: [
-        `color:${col}`,
-        `background:${col}1e`,
-        `border:1.5px solid ${col}66`,
-        `border-radius:5px`,
-        `padding:0 7px`,
-        `font-family:${mono}`,
-        `font-size:11px`,
-        `letter-spacing:0.08em`,
-        `line-height:1.65`,
-        `display:inline-block`,
-        `vertical-align:middle`,
-        `cursor:pointer`,
-        `user-select:none`,
-        `white-space:nowrap`,
-      ].join(';'),
+      style: Object.entries({ ...CHIP_TOKENS.project(col), cursor: 'pointer', userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
     }, name.toUpperCase()];
   },
 });
@@ -108,19 +119,9 @@ const NoteLinkNode = Node.create({
     const name = node.attrs.name || '';
     return ['span', {
       'data-note-link': name,
-      style: [
-        `color:${ACCENT}`,
-        `background:${ACCENT}1a`,
-        `border-radius:5px`,
-        `padding:0 6px`,
-        `font-family:${serif}`,
-        `font-size:14px`,
-        `display:inline-block`,
-        `vertical-align:middle`,
-        `cursor:pointer`,
-        `user-select:none`,
-        `white-space:nowrap`,
-      ].join(';'),
+      style: Object.entries({ ...CHIP_TOKENS.note, cursor: 'pointer', userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
     }, name];
   },
 });
