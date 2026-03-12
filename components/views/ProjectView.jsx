@@ -18,6 +18,7 @@ import { TaskFilterBtns } from "../widgets/Tasks.jsx";
 // button lands at exactly the same pixel on every page.
 // Home:    [all-projects icon | project chips ···] [search icon]
 function AddJournalLine({ project, onAdd, placeholder }) {
+  const { C } = useTheme();
   const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxNotes    = useContext(NoteContext);

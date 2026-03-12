@@ -8,6 +8,7 @@ import { RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 
 function NewProjectTask({ project, onAdd }) {
+  const { C } = useTheme();
   const col = projectColor(project);
   const ctxProjects = useContext(ProjectNamesContext);
 
@@ -73,6 +74,7 @@ function tasksToHtml(tasks) {
 
 // ── Shared task checkbox button — used in both day view and project view ──────
 function TaskCheckbox({ done, onToggle }) {
+  const { C } = useTheme();
   return (
     <button
       onClick={onToggle}
