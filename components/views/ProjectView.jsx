@@ -5,6 +5,7 @@ import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib
 import { api } from "@/lib/api";
 import { extractTags, tagDisplayName } from "@/lib/tags";
 import { useDbSave, dbLoad, dbSave, MEM } from "@/lib/db";
+import { useProjects } from "@/lib/useProjects";
 import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
@@ -52,6 +53,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   const { value: projectsMeta, setValue: setProjectsMeta } =
     useDbSave('global', 'projects', {}, token, userId);
+
+  // Track project recency — updates last_active whenever the user opens a project view
+  const { updateProject } = useProjects(token);
+  useEffect(() => {
+    if (!project || project.startsWith('__') || !token) return;
+    updateProject(project, { last_active: todayKey() });
+  }, [project, token]); // eslint-disable-line
 
   const [entries, setEntries] = useState(null); // null=loading, obj=loaded
   const pvTaskFilter = taskFilter;

@@ -2,6 +2,8 @@
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import TaskList from '@tiptap/extension-task-list';
+import TaskItem from '@tiptap/extension-task-item';
 import { Extension, Node } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -327,12 +329,14 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onCreateProject,   // (name) — called when /p creates a new project
   placeholder,
   singleLine   = false,
+  taskList     = false,
   autoFocus    = false,
   style,
   color        = ACCENT,
   textColor,
   mutedColor,
   editable     = true,
+  onUpdate,
 }, ref) {
   useEffect(injectEditorStyles, []);
 
@@ -350,6 +354,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onNoteClickRef      = useRef(onNoteClick);
   const onCreateNoteRef     = useRef(onCreateNote);
   const onCreateProjectRef  = useRef(onCreateProject);
+  const onUpdateRef         = useRef(onUpdate);
+  const taskListRef         = useRef(taskList);
 
   useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
   useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
@@ -362,6 +368,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
   useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
   useEffect(() => { onCreateProjectRef.current   = onCreateProject; },  [onCreateProject]);
+  useEffect(() => { onUpdateRef.current          = onUpdate; },         [onUpdate]);
 
   useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.commands.focus('end'),
@@ -436,6 +443,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ProjectTagNode,
       NoteLinkNode,
       ...(singleLine ? [] : [ImageBlock]),
+      ...(taskList ? [TaskList, TaskItem.configure({ nested: false })] : []),
 
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
@@ -507,7 +515,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       }),
     ],
 
-    content: { type: 'doc', content: textToContent(value || '') },
+    content: taskList ? (value || '') : { type: 'doc', content: textToContent(value || '') },
     editable,
 
     editorProps: {
@@ -596,7 +604,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
 
     onBlur({ editor }) {
-      onBlurRef.current?.(docToText(editor.getJSON()));
+      if (!taskListRef.current) onBlurRef.current?.(docToText(editor.getJSON()));
+    },
+
+    onUpdate({ editor }) {
+      if (taskListRef.current) onUpdateRef.current?.(editor.getHTML());
     },
   });
 
@@ -617,10 +629,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => {
     return () => {
       const ed = editorRef.current;
-      if (!ed || ed.isDestroyed || !onBlurRef.current) return;
+      if (!ed || ed.isDestroyed) return;
       try {
-        const text = docToText(ed.getJSON());
-        onBlurRef.current(text);
+        if (taskListRef.current) {
+          onUpdateRef.current?.(ed.getHTML());
+        } else if (onBlurRef.current) {
+          onBlurRef.current(docToText(ed.getJSON()));
+        }
       } catch (_) { /* editor already destroyed — ignore */ }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -644,7 +659,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
     if (!editor.isFocused) {
-      editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });
+      if (taskList) {
+        editor.commands.setContent(value || '');
+      } else {
+        editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });
+      }
     }
   }, [value, editor]); // eslint-disable-line
 
