@@ -10,7 +10,7 @@ import { bustOuraCache } from "@/lib/ouraCache";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
 import { NavigationContext, ProjectNamesContext } from "@/lib/contexts";
-import { Widget, Card } from "./ui/primitives.jsx";
+import { Card } from "./ui/primitives.jsx";
 import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
@@ -85,8 +85,8 @@ function DashboardInner() {
       if (!name) return;
       setAllProjectNames(prev => prev.includes(name) ? prev : [...prev, name]);
     };
-    window.addEventListener('lifeos:create-project', handler);
-    return () => window.removeEventListener('lifeos:create-project', handler);
+    window.addEventListener('daylab:create-project', handler);
+    return () => window.removeEventListener('daylab:create-project', handler);
   }, []); // eslint-disable-line
 
   // Graph data — declared HERE so token is already defined (avoids TDZ in minified bundle)
@@ -157,7 +157,7 @@ function DashboardInner() {
   useEffect(() => {
     const handler = () => {
       setSelected(todayKey());
-      window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: {} }));
+      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: {} }));
     };
     window.addEventListener('daylabRefresh', handler);
     return () => window.removeEventListener('daylabRefresh', handler);
@@ -211,8 +211,8 @@ function DashboardInner() {
         fetchCalRef.current();
       }
     };
-    window.addEventListener('lifeos:refresh', handler);
-    return ()=>window.removeEventListener('lifeos:refresh', handler);
+    window.addEventListener('daylab:refresh', handler);
+    return ()=>window.removeEventListener('daylab:refresh', handler);
   }, []);
   useEffect(()=>{
     if(!token)return;
@@ -318,7 +318,7 @@ function DashboardInner() {
         // Navigating to __everything__ directly showed an orphaned bare list with no map.
         setActiveProject('__graph__');
         setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('lifeos:go-to-note', { detail: { name } }));
+          window.dispatchEvent(new CustomEvent('daylab:go-to-note', { detail: { name } }));
         }, 150);
       },
     }}>
@@ -392,19 +392,19 @@ function DashboardInner() {
               {/* Widgets — row on wide, flat stack on narrow */}
               {mobile ? (
                 <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
-                  <Widget label={leftWidget.label} color={leftWidget.color()}
+                  <Card label={leftWidget.label} color={leftWidget.color()}
                     collapsed={collapseMap[leftWidget.id]}
                     onToggle={toggleMap[leftWidget.id]}
                     headerRight={leftWidget.headerRight?.()} autoHeight>
                     <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
-                  </Widget>
+                  </Card>
                   {rightWidgets.map(w=>(
-                    <Widget key={w.id} label={w.label} color={w.color()}
+                    <Card key={w.id} label={w.label} color={w.color()}
                       collapsed={collapseMap[w.id]}
                       onToggle={toggleMap[w.id]}
                       headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
                       <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
-                    </Widget>
+                    </Card>
                   ))}
                 </div>
               ) : (
@@ -417,12 +417,12 @@ function DashboardInner() {
                     display:"flex", flexDirection:"column", gap:10,
                     paddingBottom:180}}>
                     <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
-                      <Widget label={leftWidget.label} color={leftWidget.color()}
+                      <Card label={leftWidget.label} color={leftWidget.color()}
                         collapsed={collapseMap[leftWidget.id]}
                         onToggle={toggleMap[leftWidget.id]}
                         headerRight={leftWidget.headerRight?.()}>
                         <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
-                      </Widget>
+                      </Card>
                     </div>
                   </div>
 
@@ -435,12 +435,12 @@ function DashboardInner() {
                         display:"flex", flexDirection:"column",
                         flex: (!collapseMap[w.id] && i === rightWidgets.length - 1) ? 1 : "0 0 auto",
                         minHeight: collapseMap[w.id]?0:200}}>
-                        <Widget label={w.label} color={w.color()}
+                        <Card label={w.label} color={w.color()}
                           collapsed={collapseMap[w.id]}
                           onToggle={toggleMap[w.id]}
                           headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
                           <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
-                        </Widget>
+                        </Card>
                       </div>
                     ))}
                   </div>

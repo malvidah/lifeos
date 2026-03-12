@@ -9,40 +9,10 @@ import { useDbSave, dbLoad, dbSave, MEM } from "@/lib/db";
 import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
-import { Card, Widget, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
+import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 import { TaskFilterBtns, NewProjectTask, TaskCheckbox } from "../widgets/Tasks.jsx";
-
-// ─── Nav ────────────────────────────────────────────────────────────────────
-// Unified nav bar — lives in scroll flow, inside each scroll container.
-// Both modes share identical outer shell (height:48, no padding) so the search
-// button lands at exactly the same pixel on every page.
-// Home:    [all-projects icon | project chips ···] [search icon]
-export function AddJournalLine({ project, onAdd, placeholder }) {
-  const { C } = useTheme();
-  const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
-  const ctxProjects = useContext(ProjectNamesContext);
-  const ctxNotes    = useContext(NoteContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
-      <DayLabEditor
-        singleLine
-        placeholder={placeholder || 'Add an entry…'}
-        projectNames={ctxProjects}
-        noteNames={ctxNotes.notes}
-        textColor={C.text}
-        mutedColor={C.dim}
-        color={col}
-        style={{ flex: 1, padding: 0 }}
-        onProjectClick={name => navigateToProject(name)}
-        onNoteClick={name => navigateToNote(name)}
-        onEnterCommit={text => { if (text.trim()) onAdd(text.trim()); }}
-        onBlur={text => { if (text.trim()) onAdd(text.trim()); }}
-      />
-    </div>
-  );
-}
+import { AddJournalLine } from "../widgets/JournalEditor.jsx";
 
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
 function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
@@ -132,11 +102,11 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const createHandler = (e) => {
       addNote(e.detail?.name || '');
     };
-    window.addEventListener('lifeos:go-to-note', goHandler);
-    window.addEventListener('lifeos:create-note', createHandler);
+    window.addEventListener('daylab:go-to-note', goHandler);
+    window.addEventListener('daylab:create-note', createHandler);
     return () => {
-      window.removeEventListener('lifeos:go-to-note', goHandler);
-      window.removeEventListener('lifeos:create-note', createHandler);
+      window.removeEventListener('daylab:go-to-note', goHandler);
+      window.removeEventListener('daylab:create-note', createHandler);
     };
   }, [notesList]); // eslint-disable-line
   const updateNoteContent = (id, newContent) => {
@@ -173,10 +143,10 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             dbSave(row.date, 'journal', updated, token);
             const cacheKey = userId + ':' + row.date + ':journal';
             if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated;
-            window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: updated } }));
+            window.dispatchEvent(new CustomEvent('daylab:mem-update', { detail: { key: cacheKey, value: updated } }));
             anyChanged = true;
           });
-          if (anyChanged) window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
+          if (anyChanged) window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
         });
 
       // ── Task entries: replace data-note-link attribute + inner text in TipTap HTML ──
@@ -201,7 +171,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             dbSave(row.date, 'tasks', updated, token);
             const cacheKey = userId + ':' + row.date + ':tasks';
             if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated;
-            window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: updated } }));
+            window.dispatchEvent(new CustomEvent('daylab:mem-update', { detail: { key: cacheKey, value: updated } }));
           });
         });
 
@@ -306,7 +276,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     await dbSave(date, 'journal', updated, token);
     // Update module-level cache so daily view reflects immediately
     MEM[`${userId}:${date}:journal`] = updated;
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
     registerNewTags(newText);
     setEntries(prev => prev ? {
       ...prev,
@@ -333,7 +303,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const html = tasksToHtml(updated);
     await dbSave(date, 'tasks', html, token);
     MEM[`${userId}:${date}:tasks`] = html;
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'] } }));
     setEntries(prev => prev ? {
       ...prev,
       taskEntries: prev.taskEntries.map(t =>
@@ -357,7 +327,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const html = tasksToHtml(updated);
     await dbSave(date, 'tasks', html, token);
     MEM[`${userId}:${date}:tasks`] = html;
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'] } }));
     registerNewTags(newText);
     setEntries(prev => prev ? {
       ...prev,
@@ -382,7 +352,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const cacheKey = `${userId}:${today}:tasks`;
     MEM[cacheKey] = updated;
     // Notify day-view Tasks hook directly so it shows without re-fetching
-    window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: updated } }));
+    window.dispatchEvent(new CustomEvent('daylab:mem-update', { detail: { key: cacheKey, value: updated } }));
     registerNewTags(taskText);
     // Append to local project-view entries so it appears immediately here too
     setEntries(prev => prev ? {
@@ -403,7 +373,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const newLineIndex = updated.split('\n').lastIndexOf(entryText);
     await dbSave(today, 'journal', updated, token);
     MEM[`${userId}:${today}:journal`] = updated;
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
     registerNewTags(entryText);
     setEntries(prev => prev ? {
       ...prev,
@@ -426,7 +396,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
 
       {/* Notes card — left 1/3: note list sorted by recency; right 2/3: editor */}
       {true && (
-        <Widget
+        <Card
           label="Notes"
           color={C.muted}
           collapsed={notesCollapsed}
@@ -494,11 +464,11 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               ) : null}
             </div>
           </div>
-        </Widget>
+        </Card>
       )}
 
       {/* Tasks — all projects and specific projects */}
-      <Widget
+      <Card
         label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
         color={C.blue} autoHeight
         collapsed={tasksCollapsed} onToggle={toggleTasks}
@@ -594,10 +564,10 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             </div>
           );
         })()}
-      </Widget>
+      </Card>
 
       {/* Journal Entries */}
-      <Widget
+      <Card
         label={entries?.journalEntries?.length ? `Journal · ${entries.journalEntries.length}` : 'Journal'}
         color={C.accent} autoHeight
         collapsed={entriesCollapsed} onToggle={toggleEntries}
@@ -661,7 +631,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             );
           })()
         }
-      </Widget>
+      </Card>
     </div>
     </NoteContext.Provider>
   );

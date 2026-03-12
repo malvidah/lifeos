@@ -42,23 +42,33 @@ export function Ring({score,color,size=48}) {
   );
 }
 
-export function Card({children,style={},fitContent=false}) {
+// Card — bare box when no label, full panel with header when label is provided
+export function Card({
+  children, style={}, fitContent=false,
+  label, slim, collapsed, onToggle, headerRight, headerLeft, autoHeight,
+}) {
   const { C } = useTheme();
-  return (
-    <div style={{
-      background:C.card,borderRadius:R,border:`1px solid ${C.border}`,
-      overflow:"clip",height:fitContent?"auto":"100%",
-      display:"flex",flexDirection:"column",...style,
-    }}>{children}</div>
-  );
-}
 
-export function Widget({label,color,children,slim,collapsed,onToggle,headerRight,headerLeft,autoHeight}) {
-  const { C } = useTheme();
+  // Bare box mode (no label)
+  if (!label) {
+    return (
+      <div style={{
+        background:C.card,borderRadius:R,border:`1px solid ${C.border}`,
+        overflow:"clip",height:fitContent?"auto":"100%",
+        display:"flex",flexDirection:"column",...style,
+      }}>{children}</div>
+    );
+  }
+
+  // Panel mode (with label — header + collapsible content)
   const useAutoHeight = autoHeight || (!onToggle && !collapsed);
   return (
     <div style={slim ? {} : {flex:useAutoHeight?"0 0 auto":1,display:"flex",flexDirection:"column"}}>
-      <Card style={(collapsed || useAutoHeight) ? {height:"auto"} : {flex:1}}>
+      <div style={{
+        background:C.card,borderRadius:R,border:`1px solid ${C.border}`,overflow:"clip",
+        display:"flex",flexDirection:"column",
+        ...((collapsed || useAutoHeight) ? {height:"auto"} : {flex:1}),
+      }}>
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
           borderBottom:collapsed?"none":`1px solid ${C.border}`,flexShrink:0,
           cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
@@ -71,7 +81,7 @@ export function Widget({label,color,children,slim,collapsed,onToggle,headerRight
         {!collapsed&&(
           <div style={slim ? {padding:"14px 16px"} : {flex:1,overflow:"auto",padding:16,minHeight:0}}>{children}</div>
         )}
-      </Card>
+      </div>
     </div>
   );
 }
@@ -213,4 +223,17 @@ export function RichLine({ text, dimTag = null }) {
   }
   if (last < text.length) parts.push(<Fragment key={k++}>{text.slice(last)}</Fragment>);
   return <>{parts.length ? parts : text}</>;
+}
+
+export function SourceBadge({source}) {
+  if (!source) return null;
+  const isStrava = source === "strava";
+  return (
+    <span style={{
+      fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", textTransform:"uppercase",
+      color: isStrava ? "#FC4C02" : "#B8A882",
+      border: `1px solid ${isStrava ? "#FC4C02" : "#B8A882"}`,
+      borderRadius:3, padding:"1px 4px", flexShrink:0, opacity:0.8,
+    }}>{isStrava ? "Strava" : "Oura"}</span>
+  );
 }
