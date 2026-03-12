@@ -14,8 +14,8 @@ import { Suggestion } from '@tiptap/suggestion';
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 const F = { lg: 18, md: 15, sm: 12 };
-const ACCENT = '#D08828';   // @note link colour
-const WARM   = '#C8A87A';   // URL colour — warmer than body text
+const ACCENT = '#D08828';
+const WARM   = '#C8A87A';
 
 const PROJECT_PALETTE = [
   '#C17B4A', '#7A9E6E', '#6B8EB8', '#A07AB0',
@@ -25,6 +25,18 @@ export function projectColor(name) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
+}
+
+// ── Hex → rgba helper ─────────────────────────────────────────────────────────
+function hexAlpha(hex, alpha) {
+  // Expand shorthand (#abc → #aabbcc)
+  const full = hex.length === 4
+    ? '#' + hex[1]+hex[1]+hex[2]+hex[2]+hex[3]+hex[3]
+    : hex;
+  const r = parseInt(full.slice(1,3),16);
+  const g = parseInt(full.slice(3,5),16);
+  const b = parseInt(full.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
 }
 
 // ── Base styles ───────────────────────────────────────────────────────────────
@@ -38,6 +50,53 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
+
+    /* Project tag chip — hides raw {text}, shows ::before pill */
+    .dl-project-tag {
+      font-size: 0 !important;
+      display: inline-block;
+      vertical-align: middle;
+      cursor: pointer;
+      line-height: 0;
+    }
+    .dl-project-tag::before {
+      content: attr(data-label);
+      display: inline-block;
+      font-size: 11px;
+      font-family: ${mono};
+      letter-spacing: 0.08em;
+      line-height: 1.65;
+      vertical-align: middle;
+      padding: 0 7px;
+      border-radius: 999px;
+      color: var(--tag-color);
+      background: var(--tag-bg);
+      border: 1.5px solid var(--tag-border);
+      cursor: pointer;
+    }
+
+    /* Note link chip — hides raw [text], shows ::before in accent */
+    .dl-note-link {
+      font-size: 0 !important;
+      display: inline-block;
+      vertical-align: middle;
+      cursor: pointer;
+      line-height: 0;
+    }
+    .dl-note-link::before {
+      content: attr(data-label);
+      display: inline-block;
+      font-size: 14px;
+      font-family: ${serif};
+      letter-spacing: 0;
+      line-height: 1.65;
+      vertical-align: middle;
+      padding: 0 5px;
+      border-radius: 999px;
+      color: ${ACCENT};
+      background: ${hexAlpha(ACCENT, 0.1)};
+      cursor: pointer;
+    }
   `;
   document.head.appendChild(s);
 }
@@ -45,9 +104,8 @@ function injectEditorStyles() {
 // Escape a string for use in a RegExp
 function reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
-// ── Decoration: [note name] → orange chip ────────────────────────────────────
-// Text stored as `[note name]`, decorated in accent orange.
-// Also matches known note names specifically to avoid false positives.
+// ── Decoration: [note name] → clean note chip ─────────────────────────────────
+// Text stored as `[note name]`, displayed as clean "note name" chip via ::before CSS.
 function createNoteLinkDecoration(noteNamesRef) {
   return Extension.create({
     name: 'noteLinkDecoration',
@@ -57,18 +115,22 @@ function createNoteLinkDecoration(noteNamesRef) {
         props: {
           decorations(state) {
             const decos = [];
-            // Match any [bracketed text] — display as note chip regardless of known names
-            // (a note may have been created mid-session before noteNamesRef updates)
             const re = /\[([^\]]+)\]/g;
             state.doc.descendants((node, pos) => {
               if (!node.isText) return;
               let m; re.lastIndex = 0;
               while ((m = re.exec(node.text)) !== null) {
-                decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                  style: `color:${ACCENT};font-family:${serif};cursor:pointer;` +
-                    `background:${ACCENT}18;border-radius:999px;padding:0 5px;`,
-                  class: 'dl-note-link',
-                }));
+                const noteName = m[1];
+                decos.push(Decoration.inline(
+                  pos + m.index,
+                  pos + m.index + m[0].length,
+                  {
+                    nodeName: 'span',
+                    class: 'dl-note-link',
+                    'data-name': noteName,       // stored value — for navigation
+                    'data-label': noteName,       // display value — shown by ::before
+                  }
+                ));
               }
             });
             return DecorationSet.create(state.doc, decos);
@@ -79,9 +141,9 @@ function createNoteLinkDecoration(noteNamesRef) {
   });
 }
 
-// ── Decoration: {projectname} → uppercase pill ────────────────────────────────
-// Text stored as `{projectname}` (lowercase, no spaces, curly braces).
-// Also decorates legacy #ProjectName for backward compat during migration window.
+// ── Decoration: {projectname} → clean project pill ───────────────────────────
+// Text stored as `{projectname}` (lowercase). Displayed as "PROJECT NAME" pill via ::before CSS.
+// Legacy #ProjectName also decorated during migration window.
 function createProjectTagDecoration(projectNamesRef) {
   return Extension.create({
     name: 'projectTagDecoration',
@@ -91,11 +153,17 @@ function createProjectTagDecoration(projectNamesRef) {
         props: {
           decorations(state) {
             const decos = [];
-            const pillStyle = (col) =>
-              `color:${col};background:${col}18;border:1.5px solid ${col}55;` +
-              `border-radius:999px;padding:0 7px;font-family:${mono};font-size:0.78em;` +
-              `letter-spacing:0.08em;text-transform:uppercase;line-height:1.65;` +
-              `vertical-align:middle;display:inline-block;cursor:pointer`;
+
+            const makeAttrs = (storedName, displayLabel) => {
+              const col = projectColor(storedName);
+              return {
+                nodeName: 'span',
+                class: 'dl-project-tag',
+                'data-name': storedName,           // lowercase stored name — for navigation
+                'data-label': displayLabel,         // display label — shown by ::before
+                style: `--tag-color:${col};--tag-bg:${hexAlpha(col,0.12)};--tag-border:${hexAlpha(col,0.4)}`,
+              };
+            };
 
             // New format: {projectname}
             const reNew = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
@@ -103,21 +171,29 @@ function createProjectTagDecoration(projectNamesRef) {
               if (!node.isText) return;
               let m; reNew.lastIndex = 0;
               while ((m = reNew.exec(node.text)) !== null) {
-                decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                  style: pillStyle(projectColor(m[1])),
-                }));
+                const stored  = m[1];                         // e.g. "big think"
+                const display = stored.toUpperCase();          // e.g. "BIG THINK"
+                decos.push(Decoration.inline(
+                  pos + m.index,
+                  pos + m.index + m[0].length,
+                  makeAttrs(stored, display)
+                ));
               }
             });
 
-            // Legacy format: #ProjectName (shown during migration window)
+            // Legacy format: #ProjectName
             const reLegacy = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
             state.doc.descendants((node, pos) => {
               if (!node.isText) return;
               let m; reLegacy.lastIndex = 0;
               while ((m = reLegacy.exec(node.text)) !== null) {
-                decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                  style: pillStyle(projectColor(m[1].toLowerCase())),
-                }));
+                const stored  = m[1].toLowerCase();
+                const display = m[1].toUpperCase();
+                decos.push(Decoration.inline(
+                  pos + m.index,
+                  pos + m.index + m[0].length,
+                  makeAttrs(stored, display)
+                ));
               }
             });
 
@@ -157,17 +233,6 @@ const URLExtension = Extension.create({
 });
 
 // ── Custom findSuggestionMatch ────────────────────────────────────────────────
-// Keeps the dropdown open through spaces so multi-word names work.
-// Triggers: [ for notes (closes on ] or Enter), { for projects (closes on } or Enter).
-// This custom matcher:
-//   1. Walks backward through the current paragraph's text node to find the
-//      last trigger char at a word-boundary position (preceded by whitespace or
-//      at the very start of the node).
-//   2. Returns everything from that char to the cursor as the match — including
-//      any spaces the user has typed — so the query fed to itemsFn may contain
-//      spaces.  itemsFn normalises by stripping spaces before comparing.
-//   3. Never returns null just because the query contains a space, so TipTap
-//      never collapses the suggestion while the trigger char is still present.
 function makeCustomFindSuggestionMatch(char) {
   return function customFind({ $position }) {
     const nodeBefore = $position.nodeBefore;
@@ -175,7 +240,6 @@ function makeCustomFindSuggestionMatch(char) {
     const nodeText = nodeBefore.text;
     const nodeStart = $position.pos - nodeBefore.nodeSize;
 
-    // Walk backward to find last occurrence of char at a word-boundary
     let charIdx = -1;
     for (let i = nodeText.length - 1; i >= 0; i--) {
       if (nodeText[i] === char) {
@@ -193,11 +257,6 @@ function makeCustomFindSuggestionMatch(char) {
 }
 
 // ── Suggestion factory ────────────────────────────────────────────────────────
-// char          — trigger character (e.g. '@' or '/')
-// itemsFn       — (query: string) => string[]
-// commandFn     — ({ editor, range, name: string }) => void
-// renderRef     — shared renderRef from DayLabEditor
-// suggKey       — unique string for PluginKey
 function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
   return Extension.create({
     name: `suggestion_${suggKey}`,
@@ -276,8 +335,7 @@ export function textToContent(text) {
   });
 }
 
-// ── Suggestion dropdown — portalled to document.body for no scroll clipping ───
-// Uses position:fixed + viewport coords from TipTap's clientRect(). z-index:9999.
+// ── Suggestion dropdown ───────────────────────────────────────────────────────
 function SuggestionDropdown({ state, onSelect }) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
@@ -285,7 +343,6 @@ function SuggestionDropdown({ state, onSelect }) {
     if (!state?.clientRect) return;
     const rect = state.clientRect();
     if (!rect) return;
-    // Clamp to viewport so it doesn't go off-screen
     const left = Math.min(rect.left, window.innerWidth - 280);
     const top  = rect.bottom + 4;
     setPos({ top, left: Math.max(4, left) });
@@ -293,6 +350,8 @@ function SuggestionDropdown({ state, onSelect }) {
 
   if (!state || !state.items.length) return null;
   if (typeof document === 'undefined') return null;
+
+  const isProject = state.key === 'project';
 
   const dropdown = (
     <div style={{
@@ -306,8 +365,13 @@ function SuggestionDropdown({ state, onSelect }) {
     }}>
       {state.items.map((item, i) => {
         const isCreate = typeof item === 'string' && item.startsWith('__create__:');
-        const label    = isCreate ? `+ Create "${item.slice(11)}"` : item;
+        const rawLabel = isCreate ? item.slice(11) : item;
+        // Projects show ALL CAPS; notes show as-is (lowercase)
+        const label = isCreate
+          ? `+ Create "${rawLabel}"`
+          : isProject ? rawLabel.toUpperCase() : rawLabel;
         const selected = i === state.selectedIndex;
+        const col = isProject && !isCreate ? projectColor(rawLabel) : null;
         return (
           <button
             key={i}
@@ -317,8 +381,8 @@ function SuggestionDropdown({ state, onSelect }) {
               display: 'block', width: '100%', border: 'none', textAlign: 'left',
               padding: '7px 14px', cursor: 'pointer',
               background: selected ? 'rgba(255,255,255,0.09)' : 'transparent',
-              fontFamily: mono, fontSize: 12, letterSpacing: '0.04em',
-              color: isCreate ? '#9A9088' : '#EFDFC3',
+              fontFamily: mono, fontSize: 12, letterSpacing: isProject ? '0.08em' : '0.04em',
+              color: isCreate ? '#9A9088' : col || '#EFDFC3',
               transition: 'background 0.08s',
             }}
           >{label}</button>
@@ -338,9 +402,11 @@ function SuggestionDropdown({ state, onSelect }) {
 //   onEnterSplit    — singleLine: Enter splits at caret
 //   onBackspaceEmpty— singleLine: Backspace when empty
 //   onImageUpload   — async (File) => url
-//   noteNames       — string[] — enables @note autocomplete + decoration
-//   projectNames    — string[] — enables / project autocomplete + multi-word decoration
-//   onCreateNote    — (name) => void — called when @new-note created
+//   noteNames       — string[] — enables [ note autocomplete + decoration
+//   projectNames    — string[] — enables { project autocomplete + decoration
+//   onCreateNote    — (name) => void
+//   onProjectClick  — (storedName: string) => void — called when project chip clicked
+//   onNoteClick     — (noteName: string) => void   — called when note chip clicked
 //   placeholder     — string
 //   singleLine      — boolean
 //   autoFocus       — boolean
@@ -359,6 +425,8 @@ export function DayLabEditor({
   noteNames,
   projectNames,
   onCreateNote,
+  onProjectClick,
+  onNoteClick,
   placeholder,
   singleLine = false,
   autoFocus = false,
@@ -370,42 +438,42 @@ export function DayLabEditor({
 }) {
   useEffect(injectEditorStyles, []);
 
-  // Stable callback refs — avoids stale closures in TipTap plugins
-  const editorRef           = useRef(null);
-  const lastExternalValue   = useRef(value);
-  const onBlurRef           = useRef(onBlur);
-  const onEnterCommitRef    = useRef(onEnterCommit);
-  const onEnterSplitRef     = useRef(onEnterSplit);
-  const onBackspaceEmptyRef = useRef(onBackspaceEmpty);
-  const onImageUploadRef    = useRef(onImageUpload);
-  const noteNamesRef        = useRef(noteNames || []);
-  const projectNamesRef     = useRef(projectNames || []);
-  const onCreateNoteRef     = useRef(onCreateNote);
+  // Stable callback refs
+  const editorRef            = useRef(null);
+  const lastExternalValue    = useRef(value);
+  const onBlurRef            = useRef(onBlur);
+  const onEnterCommitRef     = useRef(onEnterCommit);
+  const onEnterSplitRef      = useRef(onEnterSplit);
+  const onBackspaceEmptyRef  = useRef(onBackspaceEmpty);
+  const onImageUploadRef     = useRef(onImageUpload);
+  const noteNamesRef         = useRef(noteNames || []);
+  const projectNamesRef      = useRef(projectNames || []);
+  const onCreateNoteRef      = useRef(onCreateNote);
+  const onProjectClickRef    = useRef(onProjectClick);
+  const onNoteClickRef       = useRef(onNoteClick);
 
-  useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
-  useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
-  useEffect(() => { onEnterSplitRef.current      = onEnterSplit; },     [onEnterSplit]);
-  useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
-  useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
+  useEffect(() => { onBlurRef.current          = onBlur; },           [onBlur]);
+  useEffect(() => { onEnterCommitRef.current    = onEnterCommit; },    [onEnterCommit]);
+  useEffect(() => { onEnterSplitRef.current     = onEnterSplit; },     [onEnterSplit]);
+  useEffect(() => { onBackspaceEmptyRef.current = onBackspaceEmpty; }, [onBackspaceEmpty]);
+  useEffect(() => { onImageUploadRef.current    = onImageUpload; },    [onImageUpload]);
   useEffect(() => {
     noteNamesRef.current = noteNames || [];
-    // Force ProseMirror to recompute decorations so newly inserted @links render
-    // immediately — the decoration plugin reads noteNamesRef but PM only reruns
-    // decorations on state changes, so we dispatch a no-op meta transaction.
     if (editorRef.current?.view) {
       const { view } = editorRef.current;
       view.dispatch(view.state.tr.setMeta('forceRedecorate', true));
     }
   }, [noteNames]);
-  useEffect(() => { projectNamesRef.current      = projectNames || []; },[projectNames]);
-  useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
+  useEffect(() => { projectNamesRef.current     = projectNames || []; }, [projectNames]);
+  useEffect(() => { onCreateNoteRef.current     = onCreateNote; },     [onCreateNote]);
+  useEffect(() => { onProjectClickRef.current   = onProjectClick; },   [onProjectClick]);
+  useEffect(() => { onNoteClickRef.current      = onNoteClick; },      [onNoteClick]);
 
-  // ── Suggestion state — one active dropdown at a time ─────────────────────
+  // ── Suggestion state ──────────────────────────────────────────────────────
   const [sugg, setSugg]   = useState(null);
   const suggRef           = useRef(null);
   useEffect(() => { suggRef.current = sugg; }, [sugg]);
 
-  // renderRef bridges TipTap suggestion lifecycle → React state
   const renderRef = useRef({
     onStart(props, key) {
       setSugg({
@@ -439,7 +507,6 @@ export function DayLabEditor({
         const item = s.items[s.selectedIndex];
         if (item != null) {
           s.command(item); setSugg(null);
-          // Prevent ] or } from being inserted — the commandFn already adds the closing char
           event.preventDefault();
         }
         return true;
@@ -452,7 +519,6 @@ export function DayLabEditor({
   textColor  = textColor  || 'inherit';
   mutedColor = mutedColor || '#9A9088';
 
-  // Build decoration extensions once per editor instance (stable refs)
   const noteLinkDeco   = useRef(createNoteLinkDecoration(noteNamesRef));
   const projectTagDeco = useRef(createProjectTagDecoration(projectNamesRef));
 
@@ -469,7 +535,7 @@ export function DayLabEditor({
       ...(singleLine ? [] : [ImageBlock]),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
-      // [ → note link autocomplete; ] or Enter commits; stores as [note name]
+      // [ → note link autocomplete
       createSuggestion({
         char: '[',
         suggKey: 'note',
@@ -492,7 +558,7 @@ export function DayLabEditor({
         },
       }),
 
-      // { → project tag autocomplete; } or Enter commits; stores as {projectname} (lowercase)
+      // { → project tag autocomplete
       createSuggestion({
         char: '{',
         suggKey: 'project',
@@ -503,7 +569,6 @@ export function DayLabEditor({
           return names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
         },
         commandFn: ({ editor, range, name }) => {
-          // Store lowercase — {bigthink}, not {BigThink}
           editor.chain().focus().deleteRange(range).insertContent(`{${name.toLowerCase()}} `).run();
         },
       }),
@@ -511,6 +576,21 @@ export function DayLabEditor({
     content: { type: 'doc', content: textToContent(value || '') },
     editable,
     editorProps: {
+      handleClick(view, pos, event) {
+        // Chip clicks — navigate to project or note
+        const target = event.target;
+        const projectChip = target.closest?.('.dl-project-tag');
+        if (projectChip && onProjectClickRef.current) {
+          const name = projectChip.getAttribute('data-name');
+          if (name) { onProjectClickRef.current(name); return true; }
+        }
+        const noteChip = target.closest?.('.dl-note-link');
+        if (noteChip && onNoteClickRef.current) {
+          const name = noteChip.getAttribute('data-name');
+          if (name) { onNoteClickRef.current(name); return true; }
+        }
+        return false;
+      },
       handleKeyDown(view, e) {
         if (e.key === 'Enter' && !e.shiftKey && singleLine) {
           e.preventDefault();
@@ -571,7 +651,6 @@ export function DayLabEditor({
     return () => clearTimeout(id);
   }, [editor, autoFocus]);
 
-  // Capture-phase backspace for empty singleLine
   useEffect(() => {
     if (!editor || !singleLine) return;
     const dom = editor.view.dom;
@@ -585,7 +664,6 @@ export function DayLabEditor({
     return () => dom.removeEventListener('keydown', handler, true);
   }, [editor, singleLine]);
 
-  // Sync external value when editor is not focused
   useEffect(() => {
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
@@ -607,7 +685,6 @@ export function DayLabEditor({
         <EditorContent editor={editor} />
       </div>
 
-      {/* Dropdown portalled to body — unaffected by any overflow:hidden ancestor */}
       <SuggestionDropdown
         state={sugg}
         onSelect={item => { sugg?.command(item); setSugg(null); }}

@@ -3148,6 +3148,7 @@ function JournalEditor({date,userId,token}) {
 
   const { notes: ctxNotes, onCreateNote: ctxOnCreateNote } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   return (
     <DayLabEditor
       value={value || ''}
@@ -3156,6 +3157,8 @@ function JournalEditor({date,userId,token}) {
       noteNames={ctxNotes}
       projectNames={ctxProjects}
       onCreateNote={ctxOnCreateNote}
+      onProjectClick={name => navigateToProject(name)}
+      onNoteClick={name => navigateToNote(name)}
       placeholder="What's on your mind?"
       textColor={C.text}
       mutedColor={C.dim}
@@ -5347,8 +5350,10 @@ function fmtDate(ds) {
 
 // ─── NoteContext — passes project note names + onCreateNote to editors
 const NoteContext = createContext({ notes: [], onCreateNote: null });
-// ─── ProjectNamesContext — passes known project names to editors for #tag autocomplete
+// ─── ProjectNamesContext — passes known project names to editors for {tag} autocomplete
 const ProjectNamesContext = createContext([]);
+// ─── NavigationContext — lets editors navigate to projects or notes on chip click
+const NavigationContext = createContext({ navigateToProject: () => {}, navigateToNote: () => {} });
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 // Unified nav bar — lives in scroll flow, right below the sticky vignette.
@@ -6104,6 +6109,17 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const selectNote = (id) => {
     setNotesStore({ ...notesStore, activeId: id }, { skipHistory: true });
   };
+
+  // Navigate-to-note from journal chip clicks
+  useEffect(() => {
+    const handler = (e) => {
+      const targetName = e.detail?.name?.toLowerCase?.() || '';
+      const match = notesList.find(n => noteName(n).toLowerCase() === targetName);
+      if (match) selectNote(match.id);
+    };
+    window.addEventListener('lifeos:go-to-note', handler);
+    return () => window.removeEventListener('lifeos:go-to-note', handler);
+  }, [notesList]); // eslint-disable-line
   const updateNoteContent = (id, newContent) => {
     const oldNote = notesList.find(n => n.id === id);
     const oldName = noteName(oldNote);
@@ -6843,6 +6859,16 @@ export default function Dashboard() {
 
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
+    <NavigationContext.Provider value={{
+      navigateToProject: (name) => setActiveProject(name),
+      navigateToNote: (name) => {
+        // Go to __everything__ (all-projects) view, then fire event so Notes card selects by name
+        setActiveProject('__everything__');
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('lifeos:go-to-note', { detail: { name } }));
+        }, 120);
+      },
+    }}>
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -7066,6 +7092,7 @@ export default function Dashboard() {
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
       )}
     </div>
+    </NavigationContext.Provider>
     </ProjectNamesContext.Provider>
   );
 }
