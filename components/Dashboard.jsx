@@ -3727,7 +3727,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
     return value || '';
   }, [value]);
 
-  // Apply filter directly to DOM — more reliable than CSS attribute selectors
+  // Apply filter directly to DOM
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
@@ -3737,14 +3737,19 @@ function Tasks({date,token,userId,taskFilter='all'}) {
         let show = true;
         if (taskFilter === 'open' && checked)  show = false;
         if (taskFilter === 'done' && !checked) show = false;
-        li.style.display = show ? 'flex' : 'none';
+        li.style.display = show ? '' : 'none';
       });
     };
-    apply();
-    // Re-apply on any DOM mutation (checkbox clicks update data-checked)
+    // rAF: TipTap renders asynchronously — wait one frame before first apply
+    const raf = requestAnimationFrame(apply);
     const obs = new MutationObserver(apply);
-    obs.observe(el, { attributes: true, subtree: true, attributeFilter: ['data-checked'] });
-    return () => obs.disconnect();
+    obs.observe(el, {
+      subtree: true,
+      childList: true,           // catches TipTap replacing whole <li> nodes
+      attributes: true,
+      attributeFilter: ['data-checked'],
+    });
+    return () => { cancelAnimationFrame(raf); obs.disconnect(); };
   }, [taskFilter, loaded]);
 
   if (!loaded) return (

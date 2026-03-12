@@ -291,7 +291,7 @@ export function textToContent(text) {
 }
 
 // ── Custom suggestion match — supports spaces in multi-word names ─────────────
-function makeCustomFindSuggestionMatch(char) {
+function makeCustomFindSuggestionMatch(char, { startOfLineOnly = false } = {}) {
   return function ({ $position }) {
     const nodeBefore = $position.nodeBefore;
     if (!nodeBefore?.isText) return null;
@@ -307,6 +307,13 @@ function makeCustomFindSuggestionMatch(char) {
     }
     if (charIdx === -1) return null;
 
+    // For slash: only trigger if "/" is the very first char in the paragraph
+    // (charIdx 0 in this text node AND no content before this node in the parent)
+    if (startOfLineOnly) {
+      if (charIdx !== 0) return null;
+      if ($position.parentOffset - nodeText.length > 0) return null;
+    }
+
     const from  = nodeStart + charIdx;
     const to    = $position.pos;
     const query = nodeText.slice(charIdx + 1);
@@ -315,7 +322,7 @@ function makeCustomFindSuggestionMatch(char) {
 }
 
 // ── Suggestion extension factory ──────────────────────────────────────────────
-function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
+function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey, startOfLineOnly = false }) {
   return Extension.create({
     name: `suggestion_${suggKey}`,
     addProseMirrorPlugins() {
@@ -325,7 +332,7 @@ function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
         char,
         allowSpaces: true,
         allowedPrefixes: null,
-        findSuggestionMatch: makeCustomFindSuggestionMatch(char),
+        findSuggestionMatch: makeCustomFindSuggestionMatch(char, { startOfLineOnly }),
         pluginKey: new PluginKey(`suggestion_${suggKey}`),
         items: ({ query }) => itemsFn(query),
         command: ({ editor, range, props }) => commandFn({ editor, range, name: props }),
@@ -523,7 +530,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         setSugg(p => p ? { ...p, selectedIndex: (p.selectedIndex - 1 + len) % len } : p);
         return true;
       }
-      if (event.key === 'Enter' || event.key === 'Tab' || event.key === ']' || event.key === '}') {
+      if (event.key === 'Enter' || event.key === 'Tab') {
         const item = s.items[s.selectedIndex];
         if (item != null) { s.command(item); setSugg(null); event.preventDefault(); }
         return true;
@@ -555,24 +562,26 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           nested: false,
           HTMLAttributes: { style: 'display:flex;align-items:flex-start;gap:10px;padding:3px 0;' },
         }),
-        // Prevent backspace/delete from removing the taskList container entirely.
+        // Structural guard: after every transaction, ensure the doc always has
+        // a taskList as its only child. appendTransaction runs AFTER the 
+        // transaction is applied — unlike keyboard shortcuts which fire before.
         Extension.create({
           name: 'taskGuard',
-          addKeyboardShortcuts() {
-            const ensureList = (editor) => {
-              const { doc } = editor.state;
-              if (doc.firstChild?.type.name !== 'taskList') {
-                editor.commands.setContent(
-                  '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>'
-                );
-                return true;
-              }
-              return false;
-            };
-            return {
-              Backspace: ({ editor }) => ensureList(editor),
-              Delete:    ({ editor }) => ensureList(editor),
-            };
+          addProseMirrorPlugins() {
+            return [new Plugin({
+              key: new PluginKey('taskGuard'),
+              appendTransaction(_transactions, _oldState, newState) {
+                if (newState.doc.firstChild?.type.name === 'taskList') return null;
+                // Doc lost its taskList — restore a blank one
+                const { schema } = newState;
+                const taskList = schema.nodes.taskList.create(null, [
+                  schema.nodes.taskItem.create({ checked: false }, [
+                    schema.nodes.paragraph.create(),
+                  ]),
+                ]);
+                return newState.tr.replaceWith(0, newState.doc.content.size, taskList);
+              },
+            })];
           },
         }),
       ] : []),
@@ -582,6 +591,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       createSuggestion({
         char: '/',
         suggKey: 'slash',
+        startOfLineOnly: true,
         renderRef,
         itemsFn: (query) => {
           const q = query.trim();
