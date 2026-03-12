@@ -14,13 +14,13 @@ export function NewProjectTask({ project, onAdd }) {
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
-      <div style={{ width: 14, height: 14, flexShrink: 0, borderRadius: 3, border: `1.5px solid ${C.border2}`, background: 'transparent' }}/>
+      <div style={{ width: 14, height: 14, flexShrink: 0, borderRadius: 3, border: "1.5px solid var(--dl-border2)", background: 'transparent' }}/>
       <DayLabEditor
         singleLine
         placeholder="Add a task…"
         projectNames={ctxProjects}
-        textColor={C.text}
-        mutedColor={C.dim}
+        textColor={"var(--dl-text)"}
+        mutedColor={"var(--dl-dim)"}
         color={col}
         style={{ flex: 1, padding: 0 }}
         onEnterCommit={text => { if (text.trim()) onAdd(text); }}
@@ -81,14 +81,14 @@ export function TaskCheckbox({ done, onToggle }) {
       style={{
         width: 15, height: 15, flexShrink: 0, borderRadius: 4, padding: 0,
         cursor: 'pointer', marginTop: 4,
-        border: `1.5px solid ${done ? C.blue : C.border2}`,
-        background: done ? C.blue : 'transparent',
+        border: `1.5px solid ${done ? "var(--dl-blue)" : "var(--dl-border2)"}`,
+        background: done ? "var(--dl-blue)" : 'transparent',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'all 0.15s',
       }}
     >
       {done && (
-        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke={C.bg} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke={"var(--dl-bg)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="1.5,5 4,7.5 8.5,2"/>
         </svg>
       )}
@@ -148,9 +148,9 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
             placeholder="Add a task…"
             projectNames={taskProjectNames}
             noteNames={ctxNotes}
-            textColor={C.text}
-            mutedColor={C.dim}
-            color={C.blue}
+            textColor={"var(--dl-text)"}
+            mutedColor={"var(--dl-dim)"}
+            color={"var(--dl-blue)"}
             style={{flex:1, padding:0, minHeight:'1.7em'}}
             onProjectClick={name => navigateToProject(name)}
             onNoteClick={name => navigateToNote(name)}
@@ -160,7 +160,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
         </div>
       )}
       {filtered.length === 0 && taskFilter !== 'all' && (
-        <div style={{fontFamily:mono, fontSize:F.sm, color:C.dim, padding:'4px 0'}}>
+        <div style={{fontFamily:mono, fontSize:F.sm, color:"var(--dl-dim)", padding:'4px 0'}}>
           {taskFilter === 'open' ? 'No open tasks.' : 'No completed tasks.'}
         </div>
       )}
@@ -173,9 +173,9 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
             <DayLabEditor
               autoFocus singleLine
               value={editingText}
-              textColor={task.done ? C.muted : C.text}
-              mutedColor={C.dim}
-              color={C.blue}
+              textColor={task.done ? "var(--dl-muted)" : "var(--dl-text)"}
+              mutedColor={"var(--dl-dim)"}
+              color={"var(--dl-blue)"}
               style={{flex:1, padding:0, minHeight:'1.7em',
                 textDecoration: task.done ? 'line-through' : 'none'}}
               projectNames={taskProjectNames}
@@ -189,7 +189,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
             <div
               onClick={() => { setEditingId(task.id); setEditingText(task.text); }}
               style={{flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
-                color: task.done ? C.muted : C.text, cursor:'text',
+                color: task.done ? "var(--dl-muted)" : "var(--dl-text)", cursor:'text',
                 textDecoration: task.done ? 'line-through' : 'none',
                 opacity: task.done ? 0.45 : 1,
                 whiteSpace:'pre-wrap', wordBreak:'break-word'}}
@@ -234,13 +234,13 @@ export function TaskFilterBtns({ filter, setFilter }) {
               borderRadius: 4, cursor: 'pointer',
               minHeight: 22,
               background: active ? C.accent+'22' : 'none',
-              border: `1px solid ${active ? C.accent : C.border2}`,
-              color: active ? C.accent : C.muted,
+              border: `1px solid ${active ? "var(--dl-accent)" : "var(--dl-border2)"}`,
+              color: active ? "var(--dl-accent)" : "var(--dl-muted)",
               display: 'flex', alignItems: 'center', gap: 3,
               transition: 'all 0.15s',
             }}
-            onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor=C.accent+'66'; e.currentTarget.style.color=C.text; }}}
-            onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor=C.border2; e.currentTarget.style.color=C.muted; }}}
+            onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor=C.accent+'66'; e.currentTarget.style.color="var(--dl-text)"; }}}
+            onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor="var(--dl-border2)"; e.currentTarget.style.color="var(--dl-muted)"; }}}
           >
             {b.label || b.icon}
           </button>

@@ -287,25 +287,25 @@ function DashboardInner() {
 
   const mobile = useIsMobile();
   if(!authReady) return (
-    <div style={{background:C.bg,height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,letterSpacing:"0.2em"}}>loading…</span>
+    <div style={{background:"var(--dl-bg)",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",letterSpacing:"0.2em"}}>loading…</span>
     </div>
   );
   if(!session) return <LoginScreen/>;
 
   const syncStatus={syncing:syncing.size>0,lastSync};
 
-  const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span></span>;
+  const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:72,textAlign:"center"}}>energy</span></span>;
   const ACT_HDR = <span style={{display:"flex",gap:0}}>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:60,textAlign:"center"}}>dist</span>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:100,textAlign:"center"}}>pace</span>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:60,textAlign:"center"}}>dist</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:100,textAlign:"center"}}>pace</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:72,textAlign:"center"}}>energy</span>
   </span>;
   const WIDGETS = [
-    {id:"journal",  label:"Journal",  color:()=>C.accent, Comp:JournalEditor},
-    {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
-    {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals,    headerRight:()=>MEALS_HDR},
-    {id:"workouts", label:"Workouts", color:()=>C.green,  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
+    {id:"journal",  label:"Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor},
+    {id:"tasks",    label:"Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks},
+    {id:"meals",    label:"Meals",    color:()=>"var(--dl-red)",    Comp:Meals,    headerRight:()=>MEALS_HDR},
+    {id:"workouts", label:"Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
   ];
   const [leftWidget,...rightWidgets] = WIDGETS;
 
@@ -322,7 +322,7 @@ function DashboardInner() {
         }, 150);
       },
     }}>
-    <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
+    <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-text)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
       {/* Global styles now in theme.css */}
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
@@ -331,7 +331,7 @@ function DashboardInner() {
       <div style={{
         position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 38px)", left:0, right:0,
         height:80, pointerEvents:"none", zIndex:48,
-        background:`linear-gradient(to bottom, ${C.bg} 0%, ${C.bg} 30%, transparent 100%)`,
+        background:"linear-gradient(to bottom, var(--dl-bg) 0%, var(--dl-bg) 30%, transparent 100%)",
       }}/>
 
 
@@ -456,7 +456,7 @@ function DashboardInner() {
             (() => {
               const isGraph  = activeProject === '__graph__';
               const isHealth = activeProject === '__health__';
-              const pcol = isHealth ? C.green : isGraph ? C.accent : projectColor(activeProject);
+              const pcol = isHealth ? "var(--dl-green)" : isGraph ? "var(--dl-accent)" : projectColor(activeProject);
               return (
                 <>
                   {/* Scrollable content */}
@@ -487,7 +487,7 @@ function DashboardInner() {
                         ) : (
                           <Card style={{height:'auto'}}>
                             <div style={{padding:40,display:'flex',alignItems:'center',justifyContent:'center',
-                              fontFamily:mono,fontSize:F.sm,color:C.dim}}>Loading graph…</div>
+                              fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)"}}>Loading graph…</div>
                           </Card>
                         )}
                         <ProjectView
@@ -532,7 +532,7 @@ function DashboardInner() {
       <div style={{
         position:"fixed", bottom:0, left:0, right:0,
         height:120, pointerEvents:"none", zIndex:96,
-        background:`linear-gradient(to top, ${C.bg} 0%, ${C.bg}99 35%, transparent 100%)`,
+        background:"linear-gradient(to top, var(--dl-bg) 0%, var(--dl-bg)99 35%, transparent 100%)",
       }}/>
 
       {/* Floating chat pill — hidden during search */}

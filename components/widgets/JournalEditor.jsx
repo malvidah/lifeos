@@ -33,9 +33,9 @@ export function JournalEditor({date,userId,token}) {
       onProjectClick={name => navigateToProject(name)}
       onNoteClick={name => navigateToNote(name)}
       placeholder="What's on your mind?"
-      textColor={C.text}
-      mutedColor={C.dim}
-      color={C.accent}
+      textColor={"var(--dl-text)"}
+      mutedColor={"var(--dl-dim)"}
+      color={"var(--dl-accent)"}
       style={{minHeight: 80, width: '100%'}}
     />
   );
@@ -136,19 +136,19 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
     borderRadius:4, padding:"2px 8px", whiteSpace:"nowrap"};
   const PROT_W = 50, ENRG_W = 72;
-  const colProtein = {fontFamily:mono, fontSize:F.sm, color:C.blue, flexShrink:0,
+  const colProtein = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-blue)", flexShrink:0,
     width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
-  const colKcal = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0,
+  const colKcal = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-orange)", flexShrink:0,
     width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
-  const colMutedProt = {fontFamily:mono, fontSize:F.sm, color:C.muted, flexShrink:0,
+  const colMutedProt = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-muted)", flexShrink:0,
     width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
-  const colMutedEnrg = {fontFamily:mono, fontSize:F.sm, color:C.muted, flexShrink:0,
+  const colMutedEnrg = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-muted)", flexShrink:0,
     width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
   const rowStyle = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
   const hdrColProt = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
-    color:C.muted, flexShrink:0, textAlign:"center", width:PROT_W};
+    color:"var(--dl-muted)", flexShrink:0, textAlign:"center", width:PROT_W};
   const hdrColEnrg = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
-    color:C.muted, flexShrink:0, textAlign:"center", width:ENRG_W};
+    color:"var(--dl-muted)", flexShrink:0, textAlign:"center", width:ENRG_W};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -176,9 +176,9 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
               value={row.text}
               singleLine
               placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+" : ""}
-              textColor={C.text}
-              mutedColor={C.dim}
-              color={C.accent}
+              textColor={"var(--dl-text)"}
+              mutedColor={"var(--dl-dim)"}
+              color={"var(--dl-accent)"}
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {
                 setRows(safe.map(r => r.id===row.id ? {...r, text, kcal: text !== r.text ? null : r.kcal, protein: text !== r.text ? null : r.protein} : r));
@@ -209,15 +209,15 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
         ))}
       </div>
       {(totalKcal > 0 || totalProtein > 0) && (
-        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:0,borderTop:`1px solid ${C.border}`}}>
+        <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:0,borderTop:"1px solid var(--dl-border)"}}>
           <div style={{flex:1}}/>
           {showProtein && (
             <div style={{width:PROT_W,display:"flex",justifyContent:"center"}}>
-              {totalProtein > 0 && <span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalProtein}g</span>}
+              {totalProtein > 0 && <span style={{...chipBase,background:C.blue+"22",color:"var(--dl-blue)"}}>{totalProtein}g</span>}
             </div>
           )}
           <div style={{width:ENRG_W,display:"flex",justifyContent:"center"}}>
-            {totalKcal > 0 && <span style={{...chipBase,background:C.orange+"22",color:C.orange}}>{totalKcal}kcal</span>}
+            {totalKcal > 0 && <span style={{...chipBase,background:C.orange+"22",color:"var(--dl-orange)"}}>{totalKcal}kcal</span>}
           </div>
         </div>
       )}
@@ -225,11 +225,11 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   );
 }
 
-export function Meals({date,token,userId}) { const { C } = useTheme(); return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={C.accent} showProtein/>; }
+export function Meals({date,token,userId}) { const { C } = useTheme(); return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={"var(--dl-accent)"} showProtein/>; }
 
 export function AddJournalLine({ project, onAdd, placeholder }) {
   const { C } = useTheme();
-  const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
+  const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : "var(--dl-accent)";
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxNotes    = useContext(NoteContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
@@ -240,8 +240,8 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         placeholder={placeholder || 'Add an entry…'}
         projectNames={ctxProjects}
         noteNames={ctxNotes.notes}
-        textColor={C.text}
-        mutedColor={C.dim}
+        textColor={"var(--dl-text)"}
+        mutedColor={"var(--dl-dim)"}
         color={col}
         style={{ flex: 1, padding: 0 }}
         onProjectClick={name => navigateToProject(name)}

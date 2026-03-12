@@ -52,10 +52,10 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
   }
 
   const PROT_W = 50, ENRG_W = 72;
-  const colProtein  = {fontFamily:mono,fontSize:F.sm,color:C.blue,  flexShrink:0,width:PROT_W,textAlign:'center',whiteSpace:'nowrap'};
-  const colKcal     = {fontFamily:mono,fontSize:F.sm,color:C.orange,flexShrink:0,width:ENRG_W,textAlign:'center',whiteSpace:'nowrap'};
-  const colMutedP   = {fontFamily:mono,fontSize:F.sm,color:C.muted, flexShrink:0,width:PROT_W,textAlign:'center',whiteSpace:'nowrap'};
-  const colMutedE   = {fontFamily:mono,fontSize:F.sm,color:C.muted, flexShrink:0,width:ENRG_W,textAlign:'center',whiteSpace:'nowrap'};
+  const colProtein  = {fontFamily:mono,fontSize:F.sm,color:"var(--dl-blue)",  flexShrink:0,width:PROT_W,textAlign:'center',whiteSpace:'nowrap'};
+  const colKcal     = {fontFamily:mono,fontSize:F.sm,color:"var(--dl-orange)",flexShrink:0,width:ENRG_W,textAlign:'center',whiteSpace:'nowrap'};
+  const colMutedP   = {fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)", flexShrink:0,width:PROT_W,textAlign:'center',whiteSpace:'nowrap'};
+  const colMutedE   = {fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)", flexShrink:0,width:ENRG_W,textAlign:'center',whiteSpace:'nowrap'};
   const chipBase    = {fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',flexShrink:0,borderRadius:4,padding:'2px 8px',whiteSpace:'nowrap'};
   const rowS        = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
 
@@ -73,12 +73,12 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
       <div
         onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
         style={{fontFamily:mono,fontSize:10,
-          color:isToday?C.accent:C.muted,
+          color:isToday?"var(--dl-accent)":"var(--dl-muted)",
           letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4,
           cursor:(!isToday&&onSelectDate)?'pointer':'default',
           display:'inline-block',transition:'color 0.15s'}}
-        onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.text;}}
-        onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.muted;}}
+        onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color="var(--dl-text)";}}
+        onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color="var(--dl-muted)";}}
       >{isToday ? 'Today' : fmtDate(date)}</div>
     );
   }
@@ -93,7 +93,7 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
       />
       {todayMeals.map((r, i) => (
         <div key={r.id||i} style={rowS}>
-          <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
+          <span style={{flex:1,lineHeight:1.7,color:"var(--dl-text)",fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
           <span style={r.protein ? colProtein : colMutedP}>{r.protein ? `${r.protein}g` : '—'}</span>
           <span style={r.kcal    ? colKcal    : colMutedE}>{r.kcal    ? `${r.kcal}kcal` : '—'}</span>
         </div>
@@ -102,10 +102,10 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
         <div style={{display:'flex',alignItems:'center',gap:0,paddingTop:4,marginTop:2}}>
           <div style={{flex:1}}/>
           <div style={{width:PROT_W,display:'flex',justifyContent:'center'}}>
-            {todayProtein > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{todayProtein}g</span>}
+            {todayProtein > 0 && <span style={{...chipBase,background:C.blue+'22',color:"var(--dl-blue)"}}>{todayProtein}g</span>}
           </div>
           <div style={{width:ENRG_W,display:'flex',justifyContent:'center'}}>
-            {todayKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:C.orange}}>{todayKcal}kcal</span>}
+            {todayKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:"var(--dl-orange)"}}>{todayKcal}kcal</span>}
           </div>
         </div>
       )}
@@ -115,11 +115,11 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
         const totalProtein = rows.reduce((s,r) => s+(r.protein||0), 0);
         return (
           <div key={date}>
-            <div style={{height:1,background:C.border,margin:'8px 0'}}/>
+            <div style={{height:1,background:"var(--dl-border)",margin:'8px 0'}}/>
             <DateLabel date={date} isToday={false} />
             {rows.map((r, i) => (
               <div key={i} style={rowS}>
-                <span style={{flex:1,lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
+                <span style={{flex:1,lineHeight:1.7,color:"var(--dl-text)",fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{r.text}</span>
                 <span style={r.protein ? colProtein : colMutedP}>{r.protein ? `${r.protein}g` : '—'}</span>
                 <span style={r.kcal    ? colKcal    : colMutedE}>{r.kcal    ? `${r.kcal}kcal` : '—'}</span>
               </div>
@@ -128,10 +128,10 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
               <div style={{display:'flex',alignItems:'center',gap:0,paddingTop:4,marginTop:2}}>
                 <div style={{flex:1}}/>
                 <div style={{width:PROT_W,display:'flex',justifyContent:'center'}}>
-                  {totalProtein > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{totalProtein}g</span>}
+                  {totalProtein > 0 && <span style={{...chipBase,background:C.blue+'22',color:"var(--dl-blue)"}}>{totalProtein}g</span>}
                 </div>
                 <div style={{width:ENRG_W,display:'flex',justifyContent:'center'}}>
-                  {totalKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:C.orange}}>{totalKcal}kcal</span>}
+                  {totalKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:"var(--dl-orange)"}}>{totalKcal}kcal</span>}
                 </div>
               </div>
             )}
@@ -190,7 +190,7 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
     if (!missing.length) return;
     setEstimating(prev => new Set([...prev, ...missing.map(r => r.id)]));
     missing.forEach(row => {
-      estimateNutrition(`Calories burned for: "${row.text}"${row.dist ? ` (${row.dist})` : ''} for a typical adult. Return JSON: {"kcal":300}`, token)
+      estimateNutrition(`Calories burned for: "${row.text}"${row.dist ? ` (${row.dist})" : ''} for a typical adult. Return JSON: {"kcal":300}", token)
         .then(result => {
           if (result?.kcal) setRows(prev => (prev||[]).map(r => r.id === row.id ? {...r, kcal: result.kcal} : r));
           setEstimating(prev => { const n = new Set(prev); n.delete(row.id); return n; });
@@ -199,10 +199,10 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
   }, [rows?.map(r=>r.id).join(','), token]); // eslint-disable-line
 
   const KCOL=72, DCOL=60, PCOL=100;
-  const colDist   = {fontFamily:mono,fontSize:F.sm,color:C.blue,   flexShrink:0,width:DCOL,textAlign:'center',whiteSpace:'nowrap'};
-  const colPace   = {fontFamily:mono,fontSize:F.sm,color:C.green,  flexShrink:0,width:PCOL,textAlign:'center',whiteSpace:'nowrap'};
-  const colKcal   = {fontFamily:mono,fontSize:F.sm,color:C.orange, flexShrink:0,width:KCOL, textAlign:'center',whiteSpace:'nowrap'};
-  const colMuted  = (w) => ({fontFamily:mono,fontSize:F.sm,color:C.muted,flexShrink:0,width:w,textAlign:'center',whiteSpace:'nowrap'});
+  const colDist   = {fontFamily:mono,fontSize:F.sm,color:"var(--dl-blue)",   flexShrink:0,width:DCOL,textAlign:'center',whiteSpace:'nowrap'};
+  const colPace   = {fontFamily:mono,fontSize:F.sm,color:"var(--dl-green)",  flexShrink:0,width:PCOL,textAlign:'center',whiteSpace:'nowrap'};
+  const colKcal   = {fontFamily:mono,fontSize:F.sm,color:"var(--dl-orange)", flexShrink:0,width:KCOL, textAlign:'center',whiteSpace:'nowrap'};
+  const colMuted  = (w) => ({fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",flexShrink:0,width:w,textAlign:'center',whiteSpace:'nowrap'});
   const chipBase  = {fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',flexShrink:0,borderRadius:4,padding:'2px 8px',whiteSpace:'nowrap'};
   const rowS      = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
 
@@ -242,12 +242,12 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
       <div
         onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
         style={{fontFamily:mono,fontSize:10,
-          color:isToday?C.accent:C.muted,
+          color:isToday?"var(--dl-accent)":"var(--dl-muted)",
           letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:4,
           cursor:(!isToday&&onSelectDate)?'pointer':'default',
           display:'inline-block',transition:'color 0.15s'}}
-        onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.text;}}
-        onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.muted;}}
+        onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color="var(--dl-text)";}}
+        onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color="var(--dl-muted)";}}
       >{isToday ? 'Today' : fmtDate(date)}</div>
     );
   }
@@ -263,7 +263,7 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
       {todayRows.map((r, i) => (
         <div key={r.id||i} style={rowS}>
           <span style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0,overflow:'hidden'}}>
-            <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.text}</span>
+            <span style={{lineHeight:1.7,color:"var(--dl-text)",fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.text}</span>
             <SourceBadge source={r.source}/>
           </span>
           <span style={r.dist ? colDist : colMuted(DCOL)}>{r.dist || '—'}</span>
@@ -277,11 +277,11 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
         <div style={{display:'flex',alignItems:'center',gap:0,paddingTop:4,marginTop:2}}>
           <div style={{flex:1}}/>
           <div style={{width:DCOL,display:'flex',justifyContent:'center'}}>
-            {todayDist > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{todayDist.toFixed(1)}mi</span>}
+            {todayDist > 0 && <span style={{...chipBase,background:C.blue+'22',color:"var(--dl-blue)"}}>{todayDist.toFixed(1)}mi</span>}
           </div>
           <div style={{width:PCOL}}/>
           <div style={{width:KCOL,display:'flex',justifyContent:'center'}}>
-            {todayKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:C.orange}}>{todayKcal}kcal</span>}
+            {todayKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:"var(--dl-orange)"}}>{todayKcal}kcal</span>}
           </div>
         </div>
       )}
@@ -292,12 +292,12 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
         const totalDist = distVals.length ? distVals.reduce((a,b)=>a+b,0) : 0;
         return (
           <div key={date}>
-            <div style={{height:1,background:C.border,margin:'8px 0'}}/>
+            <div style={{height:1,background:"var(--dl-border)",margin:'8px 0'}}/>
             <ActDateLabel date={date} isToday={false} />
             {dateRows.map((r, i) => (
               <div key={r.id||i} style={rowS}>
                 <span style={{display:'flex',alignItems:'center',gap:6,flex:1,minWidth:0,overflow:'hidden'}}>
-                  <span style={{lineHeight:1.7,color:C.text,fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.text}</span>
+                  <span style={{lineHeight:1.7,color:"var(--dl-text)",fontFamily:serif,fontSize:F.md,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{r.text}</span>
                   <SourceBadge source={r.source}/>
                 </span>
                 <span style={r.dist ? colDist : colMuted(DCOL)}>{r.dist || '—'}</span>
@@ -311,11 +311,11 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
               <div style={{display:'flex',alignItems:'center',gap:0,paddingTop:4,marginTop:2}}>
                 <div style={{flex:1}}/>
                 <div style={{width:DCOL,display:'flex',justifyContent:'center'}}>
-                  {totalDist > 0 && <span style={{...chipBase,background:C.blue+'22',color:C.blue}}>{totalDist.toFixed(1)}mi</span>}
+                  {totalDist > 0 && <span style={{...chipBase,background:C.blue+'22',color:"var(--dl-blue)"}}>{totalDist.toFixed(1)}mi</span>}
                 </div>
                 <div style={{width:PCOL}}/>
                 <div style={{width:KCOL,display:'flex',justifyContent:'center'}}>
-                  {totalKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:C.orange}}>{totalKcal}kcal</span>}
+                  {totalKcal > 0 && <span style={{...chipBase,background:C.orange+'22',color:"var(--dl-orange)"}}>{totalKcal}kcal</span>}
                 </div>
               </div>
             )}
@@ -382,7 +382,7 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
   const tasksWidget = (
     <Card
       label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
-      color={C.blue} autoHeight
+      color={"var(--dl-blue)"} autoHeight
       collapsed={tasksCollapsed} onToggle={toggleTasks}
       headerRight={<TaskFilterBtns filter={pvTaskFilter} setFilter={setPvTaskFilter}/>}
     >
@@ -405,7 +405,7 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
               return (
                 <div key={date}>
                   <div style={{fontFamily:mono,fontSize:10,
-                    color:isToday?C.accent:C.muted,
+                    color:isToday?"var(--dl-accent)":"var(--dl-muted)",
                     letterSpacing:'0.06em',textTransform:'uppercase',
                     marginTop:dateIdx===0?0:4,marginBottom:6}}>
                     {isToday ? 'Today' : fmtDate(date)}
@@ -428,19 +428,19 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
                   )}
                   {pvTaskFilter !== 'done' && open.map(task => (
                     <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0'}}>
-                      <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.border2}`,background:'transparent'}}/>
-                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,whiteSpace:'pre-wrap',wordBreak:'break-word'}}><RichLine text={task.text}/></div>
+                      <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:"1.5px solid var(--dl-border2)",background:'transparent'}}/>
+                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:"var(--dl-text)",whiteSpace:'pre-wrap',wordBreak:'break-word'}}><RichLine text={task.text}/></div>
                     </div>
                   ))}
                   {pvTaskFilter !== 'open' && done.map(task => (
                     <div key={task.id} style={{display:'flex',alignItems:'flex-start',gap:10,padding:'3px 0',opacity:0.45}}>
-                      <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:`1.5px solid ${C.accent}`,background:C.accent,display:'flex',alignItems:'center',justifyContent:'center'}}>
-                        <span style={{fontSize:10,color:C.bg,lineHeight:1}}>✓</span>
+                      <div style={{width:14,height:14,flexShrink:0,marginTop:4,borderRadius:3,border:"1.5px solid var(--dl-accent)",background:"var(--dl-accent)",display:'flex',alignItems:'center',justifyContent:'center'}}>
+                        <span style={{fontSize:10,color:"var(--dl-bg)",lineHeight:1}}>✓</span>
                       </div>
-                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.muted,textDecoration:'line-through'}}><RichLine text={task.text}/></div>
+                      <div style={{flex:1,fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:"var(--dl-muted)",textDecoration:'line-through'}}><RichLine text={task.text}/></div>
                     </div>
                   ))}
-                  {dateIdx < allDates.length - 1 && <div style={{borderTop:`1px solid ${C.border}`,marginTop:12,marginBottom:4}}/>}
+                  {dateIdx < allDates.length - 1 && <div style={{borderTop:"1px solid var(--dl-border)",marginTop:12,marginBottom:4}}/>}
                 </div>
               );
             })}
@@ -453,7 +453,7 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
   const entriesWidget = (
     <Card
       label={journalEntries.length ? `Entries · ${journalEntries.length}` : 'Entries'}
-      color={C.accent} autoHeight
+      color={"var(--dl-accent)"} autoHeight
       collapsed={entriesCollapsed} onToggle={toggleEntries}
     >
       {entries === null ? (
@@ -470,16 +470,16 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
               if (!isToday && lines.length === 0) return null;
               return (
                 <div key={date}>
-                  {dateIdx > 0 && <div style={{height:1,background:C.border,margin:'8px 0'}}/>}
+                  {dateIdx > 0 && <div style={{height:1,background:"var(--dl-border)",margin:'8px 0'}}/>}
                   <div
                     onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
                     style={{fontFamily:mono,fontSize:10,
-                      color:isToday?C.accent:C.muted,
+                      color:isToday?"var(--dl-accent)":"var(--dl-muted)",
                       letterSpacing:'0.06em',textTransform:'uppercase',marginBottom:6,
                       cursor:(!isToday&&onSelectDate)?'pointer':'default',
                       display:'inline-block',transition:'color 0.15s'}}
-                    onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.text;}}
-                    onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color=C.muted;}}
+                    onMouseEnter={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color="var(--dl-text)";}}
+                    onMouseLeave={e=>{if(!isToday&&onSelectDate)e.currentTarget.style.color="var(--dl-muted)";}}
                   >{isToday ? 'Today' : fmtDate(date)}</div>
                   {isToday && (
                     <AddJournalLine project="__health__" onAdd={async text => {
@@ -498,7 +498,7 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
                     }} placeholder="Add a health journal entry…" />
                   )}
                   {lines.map((entry, i) => (
-                    <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:C.text,padding:'1px 0'}}>
+                    <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:'1.7',color:"var(--dl-text)",padding:'1px 0'}}>
                       <RichLine text={entry.text}/>
                     </div>
                   ))}
@@ -512,10 +512,10 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
   );
 
   const mealsWidget = (
-    <Card label="Meals" color={C.red} autoHeight collapsed={mealsCollapsed} onToggle={toggleMeals}
+    <Card label="Meals" color={"var(--dl-red)"} autoHeight collapsed={mealsCollapsed} onToggle={toggleMeals}
       headerRight={<span style={{display:'flex',gap:0}}>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:50,textAlign:'center'}}>prot</span>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-dim)",width:50,textAlign:'center'}}>prot</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-dim)",width:72,textAlign:'center'}}>energy</span>
       </span>}
     >
       <HealthAllMeals token={token} userId={userId} onSelectDate={onSelectDate} onBack={onBack} />
@@ -523,11 +523,11 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
   );
 
   const activitiesWidget = (
-    <Card label="Workouts" color={C.green} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
+    <Card label="Workouts" color={"var(--dl-green)"} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
       headerRight={<span style={{display:'flex',gap:0}}>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:60,textAlign:'center'}}>dist</span>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:100,textAlign:'center'}}>pace</span>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-dim)",width:60,textAlign:'center'}}>dist</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-dim)",width:100,textAlign:'center'}}>pace</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-dim)",width:72,textAlign:'center'}}>energy</span>
       </span>}
     >
       <HealthAllActivities token={token} userId={userId} onSelectDate={onSelectDate} onBack={onBack} />
