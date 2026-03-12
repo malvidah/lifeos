@@ -1,3 +1,5 @@
+import "@/components/theme/theme.css";
+
 export const metadata = {
   title: "Day Lab",
   description: "Your personal health and life dashboard.",

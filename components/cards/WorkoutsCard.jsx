@@ -151,10 +151,10 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   }
 
   const KCOL=72, DCOL=60, PCOL=100;
-  const colDist  = {fontFamily:mono, fontSize:F.sm, color:C.blue,   flexShrink:0, width:DCOL, textAlign:"center", whiteSpace:"nowrap"};
-  const colPace  = {fontFamily:mono, fontSize:F.sm, color:C.green,  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
-  const colKcal  = {fontFamily:mono, fontSize:F.sm, color:C.orange, flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
-  const colMuted = (w) => ({fontFamily:mono, fontSize:F.sm, color:C.muted, flexShrink:0, width:w, textAlign:"center", whiteSpace:"nowrap"});
+  const colDist  = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-blue)",   flexShrink:0, width:DCOL, textAlign:"center", whiteSpace:"nowrap"};
+  const colPace  = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-green)",  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
+  const colKcal  = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-orange)", flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
+  const colMuted = (w) => ({fontFamily:mono, fontSize:F.sm, color:"var(--dl-muted)", flexShrink:0, width:w, textAlign:"center", whiteSpace:"nowrap"});
   const editCol  = (w, clr) => ({fontFamily:mono, fontSize:F.sm, color:clr, flexShrink:0, width:w, textAlign:"center",
     background:"transparent", border:"none", outline:"none", padding:0});
   const rowS = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
@@ -202,9 +202,9 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
               value={row.text}
               singleLine
               placeholder={idx===0&&mergedSynced.length===0?"What did you do?":""}
-              textColor={C.text}
-              mutedColor={C.dim}
-              color={C.accent}
+              textColor={"var(--dl-text)"}
+              mutedColor={"var(--dl-dim)"}
+              color={"var(--dl-accent)"}
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {
                 setManualRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===row.id ? {...r, text} : r));
@@ -237,16 +237,16 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
         ))}
       </div>
       {showTotals && (
-        <div style={{flexShrink:0,paddingTop:6,paddingBottom:2,display:"flex",alignItems:"center",borderTop:`1px solid ${C.border}`}}>
+        <div style={{flexShrink:0,paddingTop:6,paddingBottom:2,display:"flex",alignItems:"center",borderTop:"1px solid var(--dl-border)"}}>
           <div style={{flex:1}}/>
           <div style={{width:DCOL,display:"flex",justifyContent:"center"}}>
-            {totalDistMi>0&&<span style={{...chipBase,background:C.blue+"22",color:C.blue}}>{totalDistMi.toFixed(1)}mi</span>}
+            {totalDistMi>0&&<span style={{...chipBase,background:C.blue+"22",color:"var(--dl-blue)"}}>{totalDistMi.toFixed(1)}mi</span>}
           </div>
           <div style={{width:PCOL,display:"flex",justifyContent:"center"}}>
-            {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:C.green}}>{avgPaceFmt}/mi</span>}
+            {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:"var(--dl-green)"}}>{avgPaceFmt}/mi</span>}
           </div>
           <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
-            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:C.orange}}>-{totalKcal}kcal</span>}
+            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:"var(--dl-orange)"}}>-{totalKcal}kcal</span>}
           </div>
         </div>
       )}

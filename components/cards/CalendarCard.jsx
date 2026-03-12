@@ -311,7 +311,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
           {DAY_NAMES.map((n, i) => (
             <div key={i} style={{
               textAlign: 'center', fontFamily: mono, fontSize: '10px',
-              fontWeight: '500', letterSpacing: '0.08em', color: C.muted,
+              fontWeight: '500', letterSpacing: '0.08em', color: "var(--dl-muted)",
             }}>{n}</div>
           ))}
         </div>
@@ -335,7 +335,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
         >
           <div style={{
             width: 1, height: '100%',
-            background: scrubHover || scrubDragging ? C.border2 : C.border,
+            background: scrubHover || scrubDragging ? "var(--dl-border2)" : "var(--dl-border)",
             borderRadius: 1, transition: 'background 0.2s', position: 'relative',
           }}>
             <div style={{
@@ -344,7 +344,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
               width: scrubHover || scrubDragging ? 5 : 3,
               height: scrubHover || scrubDragging ? 20 : 14,
               borderRadius: 3,
-              background: scrubHover || scrubDragging ? C.accent : C.muted,
+              background: scrubHover || scrubDragging ? "var(--dl-accent)" : "var(--dl-muted)",
               transition: 'width 0.15s, height 0.15s, background 0.15s',
             }} />
           </div>
@@ -352,8 +352,8 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
             <div style={{
               position: 'absolute', left: 20, top: `calc(${thumbPct * 100}% - 8px)`,
               fontFamily: mono, fontSize: '8px', letterSpacing: '0.08em',
-              color: C.accent, whiteSpace: 'nowrap', pointerEvents: 'none',
-              background: C.bg, padding: '1px 3px', borderRadius: 2,
+              color: "var(--dl-accent)", whiteSpace: 'nowrap', pointerEvents: 'none',
+              background: "var(--dl-bg)", padding: '1px 3px', borderRadius: 2,
             }}>{currentYr}</div>
           )}
         </div>
@@ -387,7 +387,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                 <div style={{
                   fontFamily: mono, fontSize: F.sm, fontWeight: 'normal',
                   letterSpacing: '0.06em', textTransform: 'uppercase',
-                  color: C.muted, marginTop: 2, marginBottom: 4, flexShrink: 0,
+                  color: "var(--dl-muted)", marginTop: 2, marginBottom: 4, flexShrink: 0,
                   paddingLeft: 2, overflow: 'hidden', whiteSpace: 'nowrap',
                 }}>{MONTH_NAMES[mo]}</div>
 
@@ -420,16 +420,16 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                         <div style={{
                           fontFamily: serif, fontSize: '13px', lineHeight: 1,
                           fontWeight: isToday || isSelected ? '700' : 'normal',
-                          color: isToday ? C.text : isSelected ? C.accent : C.muted,
+                          color: isToday ? "var(--dl-text)" : isSelected ? "var(--dl-accent)" : "var(--dl-muted)",
                           flexShrink: 0,
                         }}>{day}</div>
 
                         {/* Health dots */}
                         {hasDots && (
                           <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                            {dots.sleep     >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.blue,    flexShrink: 0 }} />}
-                            {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.green,   flexShrink: 0 }} />}
-                            {dots.activity  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.accent,  flexShrink: 0 }} />}
+                            {dots.sleep     >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-blue)",    flexShrink: 0 }} />}
+                            {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-green)",   flexShrink: 0 }} />}
+                            {dots.activity  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-accent)",  flexShrink: 0 }} />}
                             {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8B6BB5', flexShrink: 0 }} />}
                           </div>
                         )}
@@ -443,7 +443,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                               {bigEvents.map((ev, j) => (
                                 <div key={j} style={{
                                   height: 3, borderRadius: 2,
-                                  background: ev.color || C.accent,
+                                  background: ev.color || "var(--dl-accent)",
                                   flexShrink: 0,
                                 }} title={ev.title} />
                               ))}
@@ -453,8 +453,8 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                           bigEvents.map((ev, j) => (
                             <div key={j} style={{
                               fontFamily: mono, fontSize: '9px', lineHeight: 1.2,
-                              color: ev.color || C.accent,
-                              background: (ev.color || C.accent) + '28',
+                              color: ev.color || "var(--dl-accent)",
+                              background: (ev.color || "var(--dl-accent)") + '28',
                               borderRadius: 3, padding: '2px 3px',
                               overflow: 'hidden', whiteSpace: 'nowrap',
                               textOverflow: 'ellipsis', flexShrink: 0,
@@ -465,7 +465,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                         {/* AI summary — desktop only, too small to read on mobile */}
                         {vw >= 600 && summary && (
                           <div style={{
-                            fontFamily: mono, fontSize: '7.5px', color: C.dim,
+                            fontFamily: mono, fontSize: '7.5px', color: "var(--dl-dim)",
                             lineHeight: 1.25, overflow: 'hidden',
                             display: '-webkit-box', WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical', flex: 1, minHeight: 0,
@@ -633,14 +633,14 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       <div style={{
         display:"flex", alignItems:"center",
         padding:"10px 16px 8px",
-        borderBottom:`1px solid ${C.border}`,
+        borderBottom:"1px solid var(--dl-border)",
         flexShrink:0, position:'relative',
         cursor: onToggle ? 'pointer' : 'default',
       }} onClick={onToggle}>
         {/* CALENDAR label — left */}
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-muted)"}}>Calendar</span>
         </div>
 
         {collapsed ? (
@@ -652,21 +652,21 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
                 display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
                 <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,-1)));}} style={{
-                  background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                  background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
                   fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
+                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>‹</button>
                 <span style={{
                   fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-                  color:isToday?C.text:C.accent,
-                  background:(isToday?C.text:C.accent)+"1A",
+                  color:isToday?"var(--dl-text)":"var(--dl-accent)",
+                  background:(isToday?"var(--dl-text)":"var(--dl-accent)")+"1A",
                   borderRadius:6,padding:"4px 10px",
                 }}>{selMonth} {selDate.getDate()}, {selYear}</span>
                 <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,+1)));}} style={{
-                  background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                  background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
                   fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
+                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>›</button>
               </div>
             );
           })()
@@ -676,8 +676,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
             <span style={{
               fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-              color:toKey(selDate)===today?C.text:C.accent,
-              background:(toKey(selDate)===today?C.text:C.accent)+"1A",
+              color:toKey(selDate)===today?"var(--dl-text)":"var(--dl-accent)",
+              background:(toKey(selDate)===today?"var(--dl-text)":"var(--dl-accent)")+"1A",
               borderRadius:6,padding:"4px 10px",
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
@@ -692,12 +692,12 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                 padding:'3px 8px',borderRadius:4,cursor:'pointer',
                 minHeight:22,minWidth:22,
-                background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>M</button>
+                background:'none',border:"1px solid var(--dl-border2)",color:"var(--dl-muted)"}}>M</button>
             <button onClick={()=>onCalViewChange('day')}
               style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                 padding:'3px 8px',borderRadius:4,cursor:'pointer',
                 minHeight:22,minWidth:22,
-                background:C.accent+'22',border:`1px solid ${C.accent}`,color:C.accent}}>D</button>
+                background:C.accent+'22',border:"1px solid var(--dl-accent)",color:"var(--dl-accent)"}}>D</button>
           </>}
         </div>
       </div>
@@ -742,9 +742,9 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   cursor: isCtr ? "default" : "pointer",
                   opacity,
                   transition: "opacity 0.15s",
-                  borderLeft: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
-                  borderRight: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
-                  background: isCtr ? `${C.accent}08` : "transparent",
+                  borderLeft: isCtr ? "1px solid var(--dl-accent)20" : "1px solid transparent",
+                  borderRight: isCtr ? "1px solid var(--dl-accent)20" : "1px solid transparent",
+                  background: isCtr ? "var(--dl-accent)08" : "transparent",
                   borderRadius: 6,
                   height: 272,
                   overflow: "hidden",
@@ -755,7 +755,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 <div style={{textAlign:"center", marginBottom:6, paddingTop:2, flexShrink:0}}>
                   <div style={{
                     fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em",
-                    color: (isCtr || isTdy) ? C.accent : C.muted,
+                    color: (isCtr || isTdy) ? "var(--dl-accent)" : "var(--dl-muted)",
                     marginBottom:3,
                   }}>{DAY_NAMES[d.getDay()]}</div>
                   <div style={{
@@ -763,13 +763,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     fontSize: isCtr ? F.md : F.sm,
                     fontWeight: isCtr ? "600" : "normal",
                     lineHeight:1,
-                    color: isCtr ? C.text : isTdy ? C.accent : C.muted,
+                    color: isCtr ? "var(--dl-text)" : isTdy ? "var(--dl-accent)" : "var(--dl-muted)",
                   }}>{d.getDate()}</div>
                   {/* Health dots */}
                   <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
-                    {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
-                    {k<=today && (healthDots[k]?.readiness >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
-                    {k<=today && (healthDots[k]?.activity >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
+                    {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-blue)"}}/>}
+                    {k<=today && (healthDots[k]?.readiness >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-green)"}}/>}
+                    {k<=today && (healthDots[k]?.activity >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-accent)"}}/>}
                     {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"#8B6BB5"}}/>}
                   </div>
                 </div>
@@ -784,18 +784,18 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       onClick={isCtr && onEventClick ? (e)=>{e.stopPropagation();onEventClick(ev);} : undefined}
                       style={{
                         padding:"2px 5px", borderRadius:4, flexShrink:0,
-                        background:`${ev.color||C.accent}22`,
+                        background:`${ev.color||"var(--dl-accent)"}22`,
                         cursor: isCtr && onEventClick ? 'pointer' : 'default',
                         transition:'background 0.1s',
                         opacity: isCtr ? 1 : 0.85,
                       }}
-                      onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}38`;}:undefined}
-                      onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||C.accent}22`;}:undefined}
+                      onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||"var(--dl-accent)"}38`;}:undefined}
+                      onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||"var(--dl-accent)"}22`;}:undefined}
                     >
-                      <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||C.accent}`, lineHeight:1.3, opacity: isCtr ? 0.7 : 0.85}}>
+                      <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||"var(--dl-accent)"}`, lineHeight:1.3, opacity: isCtr ? 0.7 : 0.85}}>
                         {ev.time !== "all day" ? ev.time : ""}
                       </div>
-                      <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||C.accent}`,
+                      <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||"var(--dl-accent)"}`,
                         lineHeight:1.3, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", opacity: isCtr ? 1 : 0.85}}>
                         {ev.title}
                       </div>
@@ -810,15 +810,15 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     style={{
                       flexShrink:0,marginTop:4,
                       background:'none',
-                      border:`1px solid ${C.border2}`,
+                      border:"1px solid var(--dl-border2)",
                       borderRadius:5,cursor:'pointer',
-                      color:C.muted,fontFamily:mono,fontSize:F.sm,
+                      color:"var(--dl-muted)",fontFamily:mono,fontSize:F.sm,
                       letterSpacing:'0.04em',textTransform:'uppercase',
                       padding:'5px 0',width:'100%',textAlign:'center',
                       transition:'all 0.15s',
                     }}
-                    onMouseEnter={e=>{e.currentTarget.style.color=C.text;e.currentTarget.style.borderColor=C.text;}}
-                    onMouseLeave={e=>{e.currentTarget.style.color=C.muted;e.currentTarget.style.borderColor=C.border2;}}
+                    onMouseEnter={e=>{e.currentTarget.style.color="var(--dl-text)";e.currentTarget.style.borderColor="var(--dl-text)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.color="var(--dl-muted)";e.currentTarget.style.borderColor="var(--dl-border2)";}}
                   >+ add</button>
                 )}
                 </div>
@@ -846,7 +846,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
   const [editingTitle, setEditingTitle] = useState(false);
 
   const isNew = active !== null && !active.id;
-  const color = active?.color || C.accent;
+  const color = active?.color || "var(--dl-accent)";
 
   const to12h = t => {
     if (!t || t === 'all day') return 'all day';
@@ -999,13 +999,13 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
 
   const inputBase = {
     background:'transparent', border:'none', outline:'none',
-    padding:0, margin:0, color:C.text,
+    padding:0, margin:0, color:"var(--dl-text)",
   };
 
   // Derive selected date info for header pill
   const selDateObj = selected ? new Date(selected + 'T12:00:00') : new Date();
   const isSelToday = selected === todayKey();
-  const pillColor = isSelToday ? C.text : C.accent;
+  const pillColor = isSelToday ? "var(--dl-text)" : "var(--dl-accent)";
   const SEL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const selPillLabel = `${SEL_MONTHS[selDateObj.getMonth()]} ${selDateObj.getDate()}, ${selDateObj.getFullYear()}`;
 
@@ -1015,30 +1015,30 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
         <div style={{userSelect:'none',display:'flex',flexDirection:'column'}}>
           {/* Month header — same layout as day view */}
           <div style={{display:'flex',alignItems:'center',padding:'10px 16px 8px',
-            borderBottom:`1px solid ${C.border}`,flexShrink:0,position:'relative',
+            borderBottom:"1px solid var(--dl-border)",flexShrink:0,position:'relative',
             cursor:onToggle?'pointer':'default'}} onClick={onToggle}>
             <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
               {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.muted}}>Calendar</span>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-muted)"}}>Calendar</span>
             </div>
             {collapsed ? (
               /* Collapsed: always day nav — same as day view */
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
                 display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
                 <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()-1);onSelect(toKey(n));}}
-                  style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
+                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>‹</button>
                 <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
                   color:pillColor,background:pillColor+'1A',borderRadius:6,padding:'4px 10px'}}>
                   {selPillLabel}
                 </span>
                 <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()+1);onSelect(toKey(n));}}
-                  style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
+                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>›</button>
               </div>
             ) : (
               /* Expanded: selected date pill only */
@@ -1056,12 +1056,12 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
                 style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                   padding:'3px 8px',borderRadius:4,cursor:'pointer',
                   minHeight:22,minWidth:22,
-                  background:C.accent+'22',border:`1px solid ${C.accent}`,color:C.accent}}>M</button>
+                  background:C.accent+'22',border:"1px solid var(--dl-accent)",color:"var(--dl-accent)"}}>M</button>
               <button onClick={()=>onCalViewChange('day')}
                 style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                   padding:'3px 8px',borderRadius:4,cursor:'pointer',
                   minHeight:22,minWidth:22,
-                  background:'none',border:`1px solid ${C.border2}`,color:C.muted}}>D</button>
+                  background:'none',border:"1px solid var(--dl-border2)",color:"var(--dl-muted)"}}>D</button>
               </>}
             </div>
           </div>
@@ -1087,7 +1087,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
 
       {/* ── Event panel ── */}
       {active !== null && (
-        <div style={{borderTop:`1px solid ${C.border}`,padding:'12px 16px'}}>
+        <div style={{borderTop:"1px solid var(--dl-border)",padding:'12px 16px'}}>
 
           {/* Main row: color bar | info | delete | × */}
           <div style={{display:'flex',gap:10,alignItems:'flex-start'}}>
@@ -1113,7 +1113,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               ) : (
                 <div
                   onClick={()=>setEditingTitle(true)}
-                  style={{fontFamily:serif,fontSize:F.md,color:form.title?C.text:C.muted,
+                  style={{fontFamily:serif,fontSize:F.md,color:form.title?"var(--dl-text)":"var(--dl-muted)",
                     marginBottom:5,cursor:'text',minHeight:'1.4em'}}
                 >
                   {form.title || 'Event title'}
@@ -1132,13 +1132,13 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
                 }}>
                   <input type='time' value={form.startTime}
                     onChange={e=>updateForm({startTime:e.target.value})}
-                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:C.muted,
+                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",
                       width:96,cursor:'text'}}
                   />
-                  <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,opacity:0.4}}>–</span>
+                  <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",opacity:0.4}}>–</span>
                   <input type='time' value={form.endTime}
                     onChange={e=>updateForm({endTime:e.target.value})}
-                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:C.muted,
+                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",
                       width:96,cursor:'text'}}
                   />
                 </div>
@@ -1147,15 +1147,15 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
                 <button onClick={()=>updateForm({allDay:!form.allDay})} style={{
                   background:'none',border:'none',cursor:'pointer',padding:0,
                   fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',
-                  color:form.allDay?C.accent:C.muted,
+                  color:form.allDay?"var(--dl-accent)":"var(--dl-muted)",
                   transition:'color 0.2s',
                 }}
-                onMouseEnter={e=>{if(!form.allDay)e.currentTarget.style.color=C.text;}}
-                onMouseLeave={e=>{if(!form.allDay)e.currentTarget.style.color=C.muted;}}>
+                onMouseEnter={e=>{if(!form.allDay)e.currentTarget.style.color="var(--dl-text)";}}
+                onMouseLeave={e=>{if(!form.allDay)e.currentTarget.style.color="var(--dl-muted)";}}>
                   all day
                 </button>
 
-                {saving && <span style={{fontFamily:mono,fontSize:F.sm,color:C.muted,opacity:0.5}}>saving…</span>}
+                {saving && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",opacity:0.5}}>saving…</span>}
               </div>
 
 
@@ -1163,7 +1163,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               {active.zoomUrl && (
                 <a href={active.zoomUrl} target='_blank' rel='noopener noreferrer'
                   style={{display:'inline-block',marginTop:6,fontFamily:mono,fontSize:F.sm,
-                    letterSpacing:'0.1em',textTransform:'uppercase',color:C.blue,textDecoration:'none'}}>
+                    letterSpacing:'0.1em',textTransform:'uppercase',color:"var(--dl-blue)",textDecoration:'none'}}>
                   Join ↗
                 </a>
               )}
@@ -1175,11 +1175,11 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               {!isNew && active.id && (
                 <button onClick={deleteEvent} disabled={deleting} title="Delete" style={{
                   background:'none',border:'none',cursor:deleting?'default':'pointer',
-                  color:C.red,padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
+                  color:"var(--dl-red)",padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
                   opacity:deleting?0.3:0.6,transition:'color 0.15s, opacity 0.15s',
                 }}
-                onMouseEnter={e=>{if(!deleting){e.currentTarget.style.opacity='1';e.currentTarget.style.color=C.red;}}}
-                onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.color=C.red;}}>
+                onMouseEnter={e=>{if(!deleting){e.currentTarget.style.opacity='1';e.currentTarget.style.color="var(--dl-red)";}}}
+                onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.color="var(--dl-red)";}}>
                   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                     <path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
@@ -1189,11 +1189,11 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               {/* Cancel × */}
               <button onClick={closePanel} title="Cancel" style={{
                 background:'none',border:'none',cursor:'pointer',
-                color:C.muted,padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
+                color:"var(--dl-muted)",padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
                 opacity:0.6,transition:'color 0.15s, opacity 0.15s',
               }}
-              onMouseEnter={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color=C.text;}}
-              onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.color=C.muted;}}>
+              onMouseEnter={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color="var(--dl-text)";}}
+              onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.color="var(--dl-muted)";}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -1201,11 +1201,11 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               {/* Save ✓ */}
               <button onClick={async()=>{if(form.title.trim()){await save();closePanel();}}} disabled={saving||!form.title.trim()} title="Save" style={{
                 background:'none',border:'none',cursor:(saving||!form.title.trim())?'default':'pointer',
-                color:C.muted,padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
+                color:"var(--dl-muted)",padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
                 opacity:(saving||!form.title.trim())?0.3:0.6,transition:'color 0.15s, opacity 0.15s',
               }}
-              onMouseEnter={e=>{if(!saving&&form.title.trim()){e.currentTarget.style.opacity='1';e.currentTarget.style.color=C.green;}}}
-              onMouseLeave={e=>{e.currentTarget.style.opacity=(saving||!form.title.trim())?'0.3':'0.6';e.currentTarget.style.color=C.muted;}}>
+              onMouseEnter={e=>{if(!saving&&form.title.trim()){e.currentTarget.style.opacity='1';e.currentTarget.style.color="var(--dl-green)";}}}
+              onMouseLeave={e=>{e.currentTarget.style.opacity=(saving||!form.title.trim())?'0.3':'0.6';e.currentTarget.style.color="var(--dl-muted)";}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>

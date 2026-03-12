@@ -78,7 +78,7 @@ export function useSearch(query, token, userId) {
 export function SearchResults({ results, loading, query, onSelectDate }) {
   const { C } = useTheme();
   const TYPE_LABEL = { journal: 'Journal', task: 'Task', meal: 'Meal', activity: 'Workout' };
-  const TYPE_COLOR = { journal: C.accent, task: C.accent, meal: C.red, activity: C.blue };
+  const TYPE_COLOR = { journal: "var(--dl-accent)", task: "var(--dl-accent)", meal: "var(--dl-red)", activity: "var(--dl-blue)" };
 
   function highlight(text, q) {
     if (!q || !text) return text;
@@ -87,7 +87,7 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
     return (
       <>
         {text.slice(0, idx)}
-        <mark style={{ background: C.accent + '30', color: C.accent, borderRadius: 2, padding: '0 1px', fontStyle: 'normal' }}>
+        <mark style={{ background: C.accent + '30', color: "var(--dl-accent)", borderRadius: 2, padding: '0 1px', fontStyle: 'normal' }}>
           {text.slice(idx, idx + q.length)}
         </mark>
         {text.slice(idx + q.length)}
@@ -97,7 +97,7 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
 
   if (loading && !results) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
-      <span style={{ fontFamily: mono, fontSize: 9, color: C.muted, letterSpacing: '0.15em', textTransform: 'uppercase' }}>searching…</span>
+      <span style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-muted)", letterSpacing: '0.15em', textTransform: 'uppercase' }}>searching…</span>
     </div>
   );
 
@@ -105,7 +105,7 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
 
   if (results.length === 0) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-      <span style={{ fontFamily: mono, fontSize: 10, color: C.dim, letterSpacing: '0.06em' }}>No results match your search</span>
+      <span style={{ fontFamily: mono, fontSize: 10, color: "var(--dl-dim)", letterSpacing: '0.06em' }}>No results match your search</span>
     </div>
   );
 
@@ -131,10 +131,10 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
             <div
               onClick={() => onSelectDate && onSelectDate(date)}
               style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
-                color: C.muted, padding: '10px 2px 8px', cursor: 'pointer', display: 'inline-block',
+                color: "var(--dl-muted)", padding: '10px 2px 8px', cursor: 'pointer', display: 'inline-block',
                 transition: 'color 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.color = C.text}
-              onMouseLeave={e => e.currentTarget.style.color = C.muted}
+              onMouseEnter={e => e.currentTarget.style.color = "var(--dl-text)"}
+              onMouseLeave={e => e.currentTarget.style.color = "var(--dl-muted)"}
             >{fmtDate(date)}</div>
 
             {/* Per-type outlined card */}
@@ -143,24 +143,24 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
                 onClick={() => onSelectDate && onSelectDate(date)}
                 style={{
                   marginBottom: 8, borderRadius: 10, cursor: 'pointer',
-                  border: `1px solid ${C.border}`,
+                  border: "1px solid var(--dl-border)",
                   overflow: 'hidden',
                   transition: 'border-color 0.15s, background 0.15s',
                 }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.background = C.surface;
-                  e.currentTarget.style.borderColor = C.border2;
+                  e.currentTarget.style.background = "var(--dl-surface)";
+                  e.currentTarget.style.borderColor = "var(--dl-border2)";
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.borderColor = C.border;
+                  e.currentTarget.style.borderColor = "var(--dl-border)";
                 }}
               >
                 {/* Card header — type label */}
                 <div style={{
                   fontFamily: mono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase',
                   color: TYPE_COLOR[type] + 'cc', padding: '7px 12px 5px',
-                  borderBottom: `1px solid ${C.border}`,
+                  borderBottom: "1px solid var(--dl-border)",
                 }}>
                   {TYPE_SECTION[type]}
                 </div>
@@ -169,18 +169,18 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
                   <div key={i} style={{
                     display: 'flex', alignItems: 'flex-start', gap: 10,
                     padding: '7px 12px',
-                    borderBottom: i < byType[type].length - 1 ? `1px solid ${C.border}` : 'none',
+                    borderBottom: i < byType[type].length - 1 ? "1px solid var(--dl-border)" : 'none',
                   }}>
                     {type === 'task' && (
                       <div style={{ width: 13, height: 13, flexShrink: 0, borderRadius: 3, marginTop: 5,
-                        border: `1.5px solid ${hit.done ? C.accent : C.border2}`,
-                        background: hit.done ? C.accent : 'transparent',
+                        border: `1.5px solid ${hit.done ? "var(--dl-accent)" : "var(--dl-border2)"}`,
+                        background: hit.done ? "var(--dl-accent)" : 'transparent',
                         display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {hit.done && <span style={{ fontSize: 9, color: C.bg, lineHeight: 1 }}>✓</span>}
+                        {hit.done && <span style={{ fontSize: 9, color: "var(--dl-bg)", lineHeight: 1 }}>✓</span>}
                       </div>
                     )}
                     <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: 1.6,
-                      color: hit.done ? C.muted : C.text, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      color: hit.done ? "var(--dl-muted)" : "var(--dl-text)", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                       textDecoration: hit.done ? 'line-through' : 'none',
                       opacity: hit.done ? 0.5 : 1 }}>
                       {highlight(hit.text, query.trim())}
