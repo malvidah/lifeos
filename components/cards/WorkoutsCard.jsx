@@ -9,7 +9,7 @@ import { cachedOuraFetch } from "@/lib/ouraCache";
 import { RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 
-function SourceBadge({source}) {
+export function SourceBadge({source}) {
   if (!source) return null;
   const isStrava = source === "strava";
   return (

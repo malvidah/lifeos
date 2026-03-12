@@ -5,6 +5,7 @@ import { mono, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer } from "../ui/primitives.jsx";
+import { SourceBadge } from "../cards/WorkoutsCard.jsx";
 import { estimateNutrition, uploadImageFile } from "@/lib/images";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 

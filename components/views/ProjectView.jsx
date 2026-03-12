@@ -10,14 +10,14 @@ import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card, Widget, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
-import { TaskFilterBtns } from "../widgets/Tasks.jsx";
+import { TaskFilterBtns, NewProjectTask, TaskCheckbox } from "../widgets/Tasks.jsx";
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 // Unified nav bar — lives in scroll flow, inside each scroll container.
 // Both modes share identical outer shell (height:48, no padding) so the search
 // button lands at exactly the same pixel on every page.
 // Home:    [all-projects icon | project chips ···] [search icon]
-function AddJournalLine({ project, onAdd, placeholder }) {
+export function AddJournalLine({ project, onAdd, placeholder }) {
   const { C } = useTheme();
   const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
   const ctxProjects = useContext(ProjectNamesContext);
