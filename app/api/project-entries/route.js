@@ -12,31 +12,36 @@ function getUserClient(req) {
   return { supabase, token };
 }
 
-function toDisplayName(name) {
-  return name
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
-}
-
-// Match rules:
-// 1. Always match #TagName (case-insensitive) — this is the authoritative form
-// 2. For multi-word display names (DayLab → "Day Lab"): also match the phrase "Day Lab"
-//    This lets entries that mention "Day Lab" without the # show in the project view.
-// Single-word names only match via #tag to avoid false positives (e.g. #can ≠ "can't").
-function makeMatchRe(name) {
+// Project names are stored lowercase, possibly with spaces: "big think", "day lab", "audian"
+// Build a regex that matches both storage formats:
+//   new: {projectname}  e.g. {big think}
+//   legacy: #ProjectName  e.g. #BigThink  (during migration window)
+function makeMatchRe(storedName) {
+  // storedName is lowercase, may have spaces: "big think"
   const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const display = toDisplayName(name);
-  // #tag match — case insensitive, must not be followed by alphanumeric
-  const parts = [`#${esc(name)}(?![A-Za-z0-9])`];
-  // Multi-word display name phrase match
-  if (display !== name && display.includes(' ')) {
-    parts.push(`\\b${esc(display)}\\b`);
-  }
-  return new RegExp(parts.join('|'), 'i');
+
+  // New format: {big think} — exact match of stored name inside braces
+  const newFmt = `\\{${esc(storedName)}\\}`;
+
+  // Legacy format: #BigThink — reconstruct camelCase or PascalCase from stored name
+  // "big think" → "BigThink" or "bigthink"
+  const pascal = storedName.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+  const camel  = storedName.split(/\s+/).join('');
+  const legacyParts = new Set([pascal, camel, storedName]);
+  const legacyAlts  = [...legacyParts].map(v => `#${esc(v)}(?![A-Za-z0-9])`);
+
+  return new RegExp([newFmt, ...legacyAlts].join('|'), 'i');
 }
 
-// Health project: #Health tag (canonical) + broad keyword set
-const HEALTH_RE = /(?:#Health(?![A-Za-z0-9])|\b(health|workout|working out|worked out|run|ran|running|walk|walked|walking|bike|biked|biking|cycle|cycled|cycling|swim|swam|swimming|hike|hiked|hiking|gym|lift|lifted|lifting|yoga|stretch|stretching|sleep|slept|sleeping|recovery|recover|calories|calorie|nutrition|diet|meal|eat|ate|eating|exercise|exercised|exercising|weight|reps|sets|miles|km|heart rate|hrv|steps|active|activity|fitness|training|trained|train|breathwork|meditation|meditate|meditating|rest|resting|rested|sick|illness|pain|sore|soreness|energy|fatigue|tired|exhausted|hydrat|water|protein|macros|cardio|strength|endurance|mobility|flexibility|vo2|pace|distance)\b)/i;
+// Health project: {health} tag (new) + #Health (legacy) + broad keyword set
+const HEALTH_RE = /(?:\{health\}|#Health(?![A-Za-z0-9])|\b(health|workout|working out|worked out|run|ran|running|walk|walked|walking|bike|biked|biking|cycle|cycled|cycling|swim|swam|swimming|hike|hiked|hiking|gym|lift|lifted|lifting|yoga|stretch|stretching|sleep|slept|sleeping|recovery|recover|calories|calorie|nutrition|diet|meal|eat|ate|eating|exercise|exercised|exercising|weight|reps|sets|miles|km|heart rate|hrv|steps|active|activity|fitness|training|trained|train|breathwork|meditation|meditate|meditating|rest|resting|rested|sick|illness|pain|sore|soreness|energy|fatigue|tired|exhausted|hydrat|water|protein|macros|cardio|strength|endurance|mobility|flexibility|vo2|pace|distance)\b)/i;
+
+// Validate stored project name: lowercase letters, digits, spaces — 1-40 chars
+// e.g. "big think", "audian", "day lab", "__everything__", "__health__"
+function isValidProject(name) {
+  if (name === '__everything__' || name === '__health__') return true;
+  return /^[a-z0-9][a-z0-9 ]{0,38}[a-z0-9]$|^[a-z0-9]$/.test(name);
+}
 
 export async function GET(req) {
   const { supabase } = getUserClient(req);
@@ -47,12 +52,13 @@ export async function GET(req) {
 
   const { searchParams } = new URL(req.url);
   const project = searchParams.get('project');
-  const isEverything = project === '__everything__';
-  const isHealth = project === '__health__';
 
-  if (!project || (!isEverything && !isHealth && !/^[A-Za-z][A-Za-z0-9]+$/.test(project))) {
-    return Response.json({ error: 'invalid project name' }, { status: 400 });
+  if (!project || !isValidProject(project)) {
+    return Response.json({ error: 'invalid project name', got: project }, { status: 400 });
   }
+
+  const isEverything = project === '__everything__';
+  const isHealth     = project === '__health__';
 
   try {
     const { data: notesRows, error: ne } = await supabase

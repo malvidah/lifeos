@@ -72,7 +72,7 @@ const ProjectTagNode = Node.create({
         `color:${col}`,
         `background:${col}1e`,
         `border:1.5px solid ${col}66`,
-        `border-radius:999px`,
+        `border-radius:5px`,
         `padding:0 7px`,
         `font-family:${mono}`,
         `font-size:11px`,
@@ -111,7 +111,7 @@ const NoteLinkNode = Node.create({
       style: [
         `color:${ACCENT}`,
         `background:${ACCENT}1a`,
-        `border-radius:999px`,
+        `border-radius:5px`,
         `padding:0 6px`,
         `font-family:${serif}`,
         `font-size:14px`,
@@ -556,6 +556,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       },
 
       handleKeyDown(view, e) {
+        // If a suggestion dropdown is open, let the suggestion plugin handle Enter/Tab/]/}
+        // The suggestion plugin's onKeyDown fires AFTER editorProps.handleKeyDown in TipTap,
+        // so we must defer to it by not consuming those keys when a suggestion is active.
+        if (suggRef.current && (e.key === 'Enter' || e.key === 'Tab' || e.key === ']' || e.key === '}')) {
+          return false;
+        }
+
         if (e.key === 'Enter' && !e.shiftKey && singleLine) {
           e.preventDefault();
           const text = docToText(view.state.doc.toJSON());

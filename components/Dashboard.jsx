@@ -3148,7 +3148,10 @@ function JournalEditor({date,userId,token}) {
 
   const { notes: ctxNotes, onCreateNote: ctxOnCreateNote } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+  const { navigateToProject, navigateToNote, createNoteGlobally } = useContext(NavigationContext);
+  // In the day view there's no NoteContext.Provider, so ctxOnCreateNote is null.
+  // Fall back to createNoteGlobally which navigates to __everything__ and fires an event.
+  const handleCreateNote = ctxOnCreateNote || createNoteGlobally;
   return (
     <DayLabEditor
       value={value || ''}
@@ -3156,7 +3159,7 @@ function JournalEditor({date,userId,token}) {
       onImageUpload={file => uploadImageFile(file, token)}
       noteNames={ctxNotes}
       projectNames={ctxProjects}
-      onCreateNote={ctxOnCreateNote}
+      onCreateNote={handleCreateNote}
       onProjectClick={name => navigateToProject(name)}
       onNoteClick={name => navigateToNote(name)}
       placeholder="What's on your mind?"
@@ -6134,13 +6137,20 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
 
   // Navigate-to-note from journal chip clicks
   useEffect(() => {
-    const handler = (e) => {
+    const goHandler = (e) => {
       const targetName = e.detail?.name?.toLowerCase?.() || '';
       const match = notesList.find(n => noteName(n).toLowerCase() === targetName);
       if (match) selectNote(match.id);
     };
-    window.addEventListener('lifeos:go-to-note', handler);
-    return () => window.removeEventListener('lifeos:go-to-note', handler);
+    const createHandler = (e) => {
+      addNote(e.detail?.name || '');
+    };
+    window.addEventListener('lifeos:go-to-note', goHandler);
+    window.addEventListener('lifeos:create-note', createHandler);
+    return () => {
+      window.removeEventListener('lifeos:go-to-note', goHandler);
+      window.removeEventListener('lifeos:create-note', createHandler);
+    };
   }, [notesList]); // eslint-disable-line
   const updateNoteContent = (id, newContent) => {
     const oldNote = notesList.find(n => n.id === id);
@@ -6889,10 +6899,17 @@ export default function Dashboard() {
     <NavigationContext.Provider value={{
       navigateToProject: (name) => setActiveProject(name),
       navigateToNote: (name) => {
-        // Go to __everything__ (all-projects) view, then fire event so Notes card selects by name
         setActiveProject('__everything__');
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('lifeos:go-to-note', { detail: { name } }));
+        }, 120);
+      },
+      // Called when user creates a [new note] chip from the day-view journal.
+      // Navigates to __everything__ and creates the note there.
+      createNoteGlobally: (name) => {
+        setActiveProject('__everything__');
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('lifeos:create-note', { detail: { name } }));
         }, 120);
       },
     }}>
