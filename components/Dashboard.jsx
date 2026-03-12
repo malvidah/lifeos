@@ -126,40 +126,33 @@ function projectColor(name) {
 }
 function TagChip({ name, onClick, style={}, plain=false }) {
   const col = projectColor(name);
+  const base = {
+    display:'inline-flex', alignItems:'center',
+    background: col + '18',
+    border: `1.5px solid ${col}55`,
+    borderRadius: 999, padding: '0 7px',
+    fontSize: '0.78em', letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+    fontFamily: mono, lineHeight: '1.65',
+    flexShrink: 0, verticalAlign: 'middle',
+  };
   if (plain) {
-    // Project's own tag: same chip but dimmed, no hover
     return (
-      <span
-        style={{
-          display:'inline-flex', alignItems:'center',
-          background: col + '10',
-          border: `1px solid ${col}25`,
-          borderRadius: 4, padding: '0 5px',
-          fontSize: '0.82em', color: col + '55',
-          fontFamily: mono, lineHeight: '1.6',
-          flexShrink: 0, verticalAlign: 'middle',
-          cursor: 'default', opacity: 0.5,
-          ...style,
-        }}
-      >#{name}</span>
+      <span style={{ ...base, color: col, opacity: 0.4, cursor: 'default', ...style }}>
+        {name}
+      </span>
     );
   }
   return (
     <span
       onClick={onClick}
       style={{
-        display:'inline-flex', alignItems:'center',
-        background: col + '20',
-        border: `1px solid ${col}40`,
-        borderRadius: 4, padding: '0 5px',
-        fontSize: '0.82em', color: col,
-        fontFamily: mono, lineHeight: '1.6',
-        flexShrink: 0, verticalAlign: 'middle',
+        ...base, color: col,
         cursor: onClick ? 'pointer' : 'default',
         transition: 'opacity 0.15s',
         ...style,
       }}
-    >#{name}</span>
+    >{name}</span>
   );
 }
 // Edit-mode tag renderer: colored #tag spans (no chip pill), consistent with Notes focused renderInline.
@@ -170,8 +163,7 @@ function renderTaskInline(text) {
   const parts = []; let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
-    const col = projectColor(m[2]);
-    parts.push(<span key={`c${m.index}`} style={{ color: col, fontFamily: 'inherit' }}>{m[1]}</span>);
+    parts.push(<TagChip key={`c${m.index}`} name={m[2]} />);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
@@ -4859,7 +4851,7 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 }
 
 
-// ─── MapCard (ProjectGraphView) ────────────────────────────────────────────────
+// ─── Map card (ProjectGraphView) ───────────────────────────────────────────────
 function ProjectGraphView({ allTags, connections, onSelectProject, token, userId, taskFilter, setTaskFilter }) {
   // Nodes and edges built once from props
   const graphRef = useRef(null); // {nodes, edges}
@@ -5015,7 +5007,7 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
 
   return (
     <div style={{ display:'flex', flexDirection:'column', background:C.bg }}>
-      {/* ── Graph card ── */}
+      {/* ── Map card ── */}
       <div style={{ margin:'52px 10px 0', background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, overflow:'hidden' }}>
         {/* Card header — matches Widget style */}
         <div style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 14px',
@@ -5023,7 +5015,7 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
           onClick={() => setGraphCollapsed(c => !c)}>
           <ChevronBtn collapsed={graphCollapsed} onToggle={e => { e.stopPropagation(); setGraphCollapsed(c => !c); }}/>
           <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em', textTransform:'uppercase', color:C.muted, flex:1 }}>
-            Project Graph
+            Map
           </span>
           {!graphCollapsed && <span style={{ fontFamily:mono, fontSize:9, color:C.dim }}>
             {(allTags||[]).length + 1} projects · scroll to zoom · drag to pan
@@ -5121,7 +5113,7 @@ function ProjectGraphView({ allTags, connections, onSelectProject, token, userId
           ))}
         </div>
       </div>}
-      </div>{/* end graph card */}
+      </div>{/* end map card */}
 
       {/* ── All entries + tasks — inline below graph card ── */}
       <ProjectView
@@ -6276,7 +6268,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
 
       {/* Notes card — left 1/3: note list sorted by recency; right 2/3: editor */}
-      {project !== '__everything__' && (
+      {true && (
         <Widget
           label="Notes"
           color={C.muted}
@@ -6342,8 +6334,8 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
         </Widget>
       )}
 
-      {/* Tasks — grouped by date with separators */}
-      <Widget
+      {/* Tasks — only shown on specific projects, not ALL PROJECTS */}
+      {project !== '__everything__' && <Widget
         label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
         color={C.blue} autoHeight
         collapsed={tasksCollapsed} onToggle={toggleTasks}
@@ -6440,13 +6432,13 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
             </div>
           );
         })()}
-      </Widget>
+      </Widget>}
 
       {/* Journal Entries */}
       <Widget
         label={entries?.journalEntries?.length
-          ? (project === '__everything__' ? `ALL ENTRIES · ${entries.journalEntries.length}` : `Entries · ${entries.journalEntries.length}`)
-          : (project === '__everything__' ? 'ALL ENTRIES' : 'Entries')}
+          ? (project === '__everything__' ? `Journal · ${entries.journalEntries.length}` : `Journal · ${entries.journalEntries.length}`)
+          : (project === '__everything__' ? 'Journal' : 'Journal')}
         color={C.accent} autoHeight
         collapsed={entriesCollapsed} onToggle={toggleEntries}
         headerLeft={null}

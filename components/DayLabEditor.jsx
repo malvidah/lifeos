@@ -7,20 +7,21 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DecorationSet, Decoration } from '@tiptap/pm/view';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Suggestion } from '@tiptap/suggestion';
 
 // ── Constants (kept in sync with Dashboard.jsx) ───────────────────────────────
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 const F = { lg: 18, md: 15, sm: 12 };
-const ACCENT  = '#D08828';  // note link colour
-const WARM    = '#C8A87A';  // URL colour — warmer than text, cooler than accent
+const ACCENT = '#D08828';   // @note link colour
+const WARM   = '#C8A87A';   // URL colour — warmer than body text
 
 const PROJECT_PALETTE = [
   '#C17B4A', '#7A9E6E', '#6B8EB8', '#A07AB0',
   '#B08050', '#5E9E8A', '#B06878', '#8A8A50',
 ];
-function projectColor(name) {
+export function projectColor(name) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
   return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
@@ -41,12 +42,11 @@ function injectEditorStyles() {
   document.head.appendChild(s);
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 // Escape a string for use in a RegExp
 function reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
-// ── Decoration: @note name → orange accent chip ───────────────────────────────
-// Text stays as `@note name` in the doc; visual chip strips the `@`.
+// ── Decoration: @note name → orange chip (hides the @) ───────────────────────
+// Text stored as `@note name`, displayed as `note name` in accent orange.
 function createNoteLinkDecoration(noteNamesRef) {
   return Extension.create({
     name: 'noteLinkDecoration',
@@ -58,24 +58,17 @@ function createNoteLinkDecoration(noteNamesRef) {
             const names = noteNamesRef.current;
             if (!names?.length) return DecorationSet.empty;
             const decos = [];
-            const escaped = names.map(reEsc);
-            // Match @name — longest first so "Portland Planning" wins over "Portland"
-            const sorted = escaped.slice().sort((a, b) => b.length - a.length);
-            const re = new RegExp(`@(${sorted.join('|')})(?=[^A-Za-z0-9]|$)`, 'g');
+            // Longest first so multi-word names match before subsets
+            const sorted = [...names].sort((a, b) => b.length - a.length);
+            const re = new RegExp(`@(${sorted.map(reEsc).join('|')})(?=[^A-Za-z0-9]|$)`, 'g');
             state.doc.descendants((node, pos) => {
               if (!node.isText) return;
               let m; re.lastIndex = 0;
               while ((m = re.exec(node.text)) !== null) {
-                // Decorate full `@name` range but display as just `name`
-                decos.push(Decoration.inline(
-                  pos + m.index,
-                  pos + m.index + m[0].length,
-                  {
-                    style: `color:${ACCENT};font-family:${serif};cursor:pointer`,
-                    class: 'dl-note-link',
-                    'data-note': m[1],
-                  }
-                ));
+                decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
+                  style: `color:${ACCENT};font-family:${serif};cursor:pointer`,
+                  class: 'dl-note-link',
+                }));
               }
             });
             return DecorationSet.create(state.doc, decos);
@@ -86,9 +79,9 @@ function createNoteLinkDecoration(noteNamesRef) {
   });
 }
 
-// ── Decoration: #project name → project pill ─────────────────────────────────
-// Handles multi-word project names when projectNamesRef is provided,
-// falls back to single-word #tags otherwise.
+// ── Decoration: #project name → uppercase pill with heavy rounding ────────────
+// Text stored as `#project name` (inserted by / trigger).
+// Known multi-word names matched first (longest-first), single-word fallback.
 function createProjectTagDecoration(projectNamesRef) {
   return Extension.create({
     name: 'projectTagDecoration',
@@ -99,34 +92,37 @@ function createProjectTagDecoration(projectNamesRef) {
           decorations(state) {
             const decos = [];
             const names = projectNamesRef.current || [];
+            const knownLower = new Set(names.map(n => n.toLowerCase()));
+            const pillStyle = (col) =>
+              `color:${col};background:${col}18;border:1.5px solid ${col}55;` +
+              `border-radius:999px;padding:0 7px;font-family:${mono};font-size:0.78em;` +
+              `letter-spacing:0.08em;text-transform:uppercase;line-height:1.65;` +
+              `vertical-align:middle;display:inline-block;cursor:pointer`;
 
-            // Multi-word known project names — longest first
+            // Multi-word known names (longest first)
             if (names.length) {
-              const sorted = names.slice().sort((a, b) => b.length - a.length);
+              const sorted = [...names].sort((a, b) => b.length - a.length);
               const re = new RegExp(`#(${sorted.map(reEsc).join('|')})(?=[^A-Za-z0-9]|$)`, 'gi');
               state.doc.descendants((node, pos) => {
                 if (!node.isText) return;
                 let m; re.lastIndex = 0;
                 while ((m = re.exec(node.text)) !== null) {
-                  const col = projectColor(m[1].toLowerCase());
                   decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                    style: `color:${col};background:${col}18;border:1px solid ${col}50;border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;letter-spacing:0.06em;text-transform:uppercase;line-height:1.6;vertical-align:middle;display:inline-block;cursor:pointer`,
+                    style: pillStyle(projectColor(m[1].toLowerCase())),
                   }));
                 }
               });
             }
 
             // Single-word fallback for unrecognised #tags
-            const knownLower = new Set(names.map(n => n.toLowerCase()));
             const reWord = /#([A-Za-z][A-Za-z0-9]+)/g;
             state.doc.descendants((node, pos) => {
               if (!node.isText) return;
               let m; reWord.lastIndex = 0;
               while ((m = reWord.exec(node.text)) !== null) {
-                if (knownLower.has(m[1].toLowerCase())) continue; // already handled above
-                const col = projectColor(m[1]);
+                if (knownLower.has(m[1].toLowerCase())) continue;
                 decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                  style: `color:${col};background:${col}18;border:1px solid ${col}50;border-radius:4px;padding:0 5px;font-family:${mono};font-size:0.82em;letter-spacing:0.06em;text-transform:uppercase;line-height:1.6;vertical-align:middle;display:inline-block`,
+                  style: pillStyle(projectColor(m[1])),
                 }));
               }
             });
@@ -167,11 +163,11 @@ const URLExtension = Extension.create({
 });
 
 // ── Suggestion factory ────────────────────────────────────────────────────────
-// Reusable for both @note and #project triggers.
-// char          — trigger character
-// itemsFn       — (query) => string[]
-// commandFn     — ({ editor, range, name }) => void
-// renderRef     — shared renderRef from component
+// char          — trigger character (e.g. '@' or '/')
+// allowSpaces   — true: spaces don't close the dropdown (for multi-word names)
+// itemsFn       — (query: string) => string[]
+// commandFn     — ({ editor, range, name: string }) => void
+// renderRef     — shared renderRef from DayLabEditor
 // suggKey       — unique string for PluginKey
 function createSuggestion({ char, allowSpaces, itemsFn, commandFn, renderRef, suggKey }) {
   return Extension.create({
@@ -250,66 +246,76 @@ export function textToContent(text) {
   });
 }
 
-// ── Suggestion dropdown component ─────────────────────────────────────────────
-function SuggestionDropdown({ state, onSelect, wrapRef }) {
+// ── Suggestion dropdown — portalled to document.body for no scroll clipping ───
+// Uses position:fixed + viewport coords from TipTap's clientRect(). z-index:9999.
+function SuggestionDropdown({ state, onSelect }) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
-    if (!state?.clientRect || !wrapRef.current) return;
+    if (!state?.clientRect) return;
     const rect = state.clientRect();
     if (!rect) return;
-    const wrect = wrapRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom - wrect.top + 4, left: Math.max(0, rect.left - wrect.left) });
-  }, [state, wrapRef]);
+    // Clamp to viewport so it doesn't go off-screen
+    const left = Math.min(rect.left, window.innerWidth - 280);
+    const top  = rect.bottom + 4;
+    setPos({ top, left: Math.max(4, left) });
+  }, [state]);
 
   if (!state || !state.items.length) return null;
+  if (typeof document === 'undefined') return null;
 
-  return (
+  const dropdown = (
     <div style={{
-      position: 'absolute', top: pos.top, left: pos.left, zIndex: 300,
-      background: 'var(--dl-surface, #1E1C1A)',
-      border: '1px solid var(--dl-border, #2A2724)',
-      borderRadius: 8, boxShadow: '0 6px 24px rgba(0,0,0,0.4)',
-      padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 220, overflowY: 'auto',
+      position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+      background: '#1E1C1A',
+      border: '1px solid #2A2724',
+      borderRadius: 10,
+      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      padding: '4px 0',
+      minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
       {state.items.map((item, i) => {
-        const isCreate = item.startsWith?.('__create__:');
-        const label = isCreate ? `+ Create "${item.slice(11)}"` : item;
-        const isSelected = i === state.selectedIndex;
+        const isCreate = typeof item === 'string' && item.startsWith('__create__:');
+        const label    = isCreate ? `+ Create "${item.slice(11)}"` : item;
+        const selected = i === state.selectedIndex;
         return (
-          <button key={i}
+          <button
+            key={i}
             onMouseDown={e => { e.preventDefault(); onSelect(item); }}
             onMouseEnter={() => state.setIndex(i)}
             style={{
               display: 'block', width: '100%', border: 'none', textAlign: 'left',
-              padding: '6px 12px', cursor: 'pointer',
-              background: isSelected ? 'rgba(255,255,255,0.08)' : 'none',
+              padding: '7px 14px', cursor: 'pointer',
+              background: selected ? 'rgba(255,255,255,0.09)' : 'transparent',
               fontFamily: mono, fontSize: 12, letterSpacing: '0.04em',
               color: isCreate ? '#9A9088' : '#EFDFC3',
+              transition: 'background 0.08s',
             }}
           >{label}</button>
         );
       })}
     </div>
   );
+
+  return createPortal(dropdown, document.body);
 }
 
 // ── DayLabEditor ──────────────────────────────────────────────────────────────
 // Props:
-//   value           — plain text (Day Lab format)
+//   value           — plain text (Day Lab storage format)
 //   onBlur          — (text) => void
-//   onEnterCommit   — singleLine: Enter commits
+//   onEnterCommit   — singleLine: Enter commits + clears
 //   onEnterSplit    — singleLine: Enter splits at caret
-//   onBackspaceEmpty— singleLine: Backspace on empty
+//   onBackspaceEmpty— singleLine: Backspace when empty
 //   onImageUpload   — async (File) => url
 //   noteNames       — string[] — enables @note autocomplete + decoration
-//   projectNames    — string[] — enables #project autocomplete + multi-word decoration
-//   onCreateNote    — (name) => void — called when user types a new @note
+//   projectNames    — string[] — enables / project autocomplete + multi-word decoration
+//   onCreateNote    — (name) => void — called when @new-note created
 //   placeholder     — string
 //   singleLine      — boolean
 //   autoFocus       — boolean
-//   style           — style object
-//   color           — caret colour (default #D08828)
+//   style           — style object for outer wrapper
+//   color           — caret colour (default ACCENT)
 //   textColor       — text colour
 //   mutedColor      — placeholder colour
 //   editable        — boolean (default true)
@@ -334,7 +340,7 @@ export function DayLabEditor({
 }) {
   useEffect(injectEditorStyles, []);
 
-  // Stable refs for all callbacks
+  // Stable callback refs — avoids stale closures in TipTap plugins
   const editorRef           = useRef(null);
   const lastExternalValue   = useRef(value);
   const onBlurRef           = useRef(onBlur);
@@ -355,33 +361,24 @@ export function DayLabEditor({
   useEffect(() => { projectNamesRef.current      = projectNames || []; },[projectNames]);
   useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
 
-  // ── Suggestion state — one at a time (@ or # but not both simultaneously) ──
+  // ── Suggestion state — one active dropdown at a time ─────────────────────
   const [sugg, setSugg]   = useState(null);
-  // sugg: { key, items, selectedIndex, clientRect, command, setIndex }
   const suggRef           = useRef(null);
   useEffect(() => { suggRef.current = sugg; }, [sugg]);
-
-  const wrapRef = useRef(null);
 
   // renderRef bridges TipTap suggestion lifecycle → React state
   const renderRef = useRef({
     onStart(props, key) {
       setSugg({
-        key,
-        items: props.items,
-        selectedIndex: 0,
-        clientRect: props.clientRect,
-        command: props.command,
+        key, items: props.items, selectedIndex: 0,
+        clientRect: props.clientRect, command: props.command,
         setIndex: i => setSugg(s => s ? { ...s, selectedIndex: i } : s),
       });
     },
     onUpdate(props, key) {
       setSugg(s => !s || s.key !== key ? s : {
-        ...s,
-        items: props.items,
-        selectedIndex: 0,
-        clientRect: props.clientRect,
-        command: props.command,
+        ...s, items: props.items, selectedIndex: 0,
+        clientRect: props.clientRect, command: props.command,
       });
     },
     onExit(_, key) {
@@ -390,12 +387,13 @@ export function DayLabEditor({
     onKeyDown({ event }, key) {
       const s = suggRef.current;
       if (!s || s.key !== key) return false;
+      const len = Math.max(s.items.length, 1);
       if (event.key === 'ArrowDown') {
-        setSugg(prev => prev ? { ...prev, selectedIndex: (prev.selectedIndex + 1) % Math.max(prev.items.length, 1) } : prev);
+        setSugg(p => p ? { ...p, selectedIndex: (p.selectedIndex + 1) % len } : p);
         return true;
       }
       if (event.key === 'ArrowUp') {
-        setSugg(prev => prev ? { ...prev, selectedIndex: (prev.selectedIndex - 1 + Math.max(prev.items.length, 1)) % Math.max(prev.items.length, 1) } : prev);
+        setSugg(p => p ? { ...p, selectedIndex: (p.selectedIndex - 1 + len) % len } : p);
         return true;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
@@ -411,9 +409,9 @@ export function DayLabEditor({
   textColor  = textColor  || 'inherit';
   mutedColor = mutedColor || '#9A9088';
 
-  // Build stable extension refs — only created once per editor instance
-  const noteLinkDeco    = useRef(createNoteLinkDecoration(noteNamesRef));
-  const projectTagDeco  = useRef(createProjectTagDecoration(projectNamesRef));
+  // Build decoration extensions once per editor instance (stable refs)
+  const noteLinkDeco   = useRef(createNoteLinkDecoration(noteNamesRef));
+  const projectTagDeco = useRef(createProjectTagDecoration(projectNamesRef));
 
   const editor = useEditor({
     extensions: [
@@ -428,7 +426,7 @@ export function DayLabEditor({
       ...(singleLine ? [] : [ImageBlock]),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
-      // @note suggestion
+      // @ → note link autocomplete
       createSuggestion({
         char: '@',
         allowSpaces: true,
@@ -438,6 +436,7 @@ export function DayLabEditor({
           const names = noteNamesRef.current || [];
           const q = query.toLowerCase();
           const matches = names.filter(n => n.toLowerCase().includes(q));
+          // Offer "create" when query non-empty and no exact match
           if (q && !names.some(n => n.toLowerCase() === q)) {
             matches.push(`__create__:${query}`);
           }
@@ -446,14 +445,15 @@ export function DayLabEditor({
         commandFn: ({ editor, range, name }) => {
           const isCreate = name.startsWith('__create__:');
           const noteName = isCreate ? name.slice(11) : name;
+          // Insert @note name followed by a space so cursor moves past the link
           editor.chain().focus().deleteRange(range).insertContent(`@${noteName} `).run();
           if (isCreate) onCreateNoteRef.current?.(noteName);
         },
       }),
 
-      // #project suggestion
+      // / → project tag autocomplete (stores as #project name in text)
       createSuggestion({
-        char: '#',
+        char: '/',
         allowSpaces: true,
         suggKey: 'project',
         renderRef,
@@ -463,6 +463,7 @@ export function DayLabEditor({
           return names.filter(n => n.toLowerCase().includes(q));
         },
         commandFn: ({ editor, range, name }) => {
+          // Delete the / + query, insert #project name
           editor.chain().focus().deleteRange(range).insertContent(`#${name} `).run();
         },
       }),
@@ -481,13 +482,13 @@ export function DayLabEditor({
             ), 0);
           } else if (onEnterSplitRef.current) {
             const { from } = view.state.selection;
-            let caretPos = 0;
+            let cp = 0;
             view.state.doc.descendants((node, nodePos) => {
               if (!node.isText) return;
-              if (from > nodePos + node.text.length) caretPos += node.text.length;
-              else if (from > nodePos)               caretPos += from - nodePos;
+              if (from > nodePos + node.text.length) cp += node.text.length;
+              else if (from > nodePos)               cp += from - nodePos;
             });
-            onEnterSplitRef.current({ before: text.slice(0, caretPos), after: text.slice(caretPos) });
+            onEnterSplitRef.current({ before: text.slice(0, cp), after: text.slice(cp) });
           }
           return true;
         }
@@ -530,13 +531,13 @@ export function DayLabEditor({
     return () => clearTimeout(id);
   }, [editor, autoFocus]);
 
+  // Capture-phase backspace for empty singleLine
   useEffect(() => {
     if (!editor || !singleLine) return;
     const dom = editor.view.dom;
     const handler = (e) => {
       if (e.key !== 'Backspace' || !onBackspaceEmptyRef.current) return;
-      const text = docToText(editor.view.state.doc.toJSON());
-      if (text) return;
+      if (docToText(editor.view.state.doc.toJSON())) return;
       e.preventDefault(); e.stopPropagation();
       onBackspaceEmptyRef.current();
     };
@@ -544,6 +545,7 @@ export function DayLabEditor({
     return () => dom.removeEventListener('keydown', handler, true);
   }, [editor, singleLine]);
 
+  // Sync external value when editor is not focused
   useEffect(() => {
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
@@ -555,7 +557,7 @@ export function DayLabEditor({
   useEffect(() => { editor?.setEditable(editable); }, [editable, editor]);
 
   return (
-    <div ref={wrapRef} style={{ position: 'relative' }}>
+    <>
       <div className="dl-editor" style={{
         fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
         color: textColor, caretColor: color,
@@ -565,11 +567,11 @@ export function DayLabEditor({
         <EditorContent editor={editor} />
       </div>
 
+      {/* Dropdown portalled to body — unaffected by any overflow:hidden ancestor */}
       <SuggestionDropdown
         state={sugg}
-        wrapRef={wrapRef}
         onSelect={item => { sugg?.command(item); setSugg(null); }}
       />
-    </div>
+    </>
   );
 }
