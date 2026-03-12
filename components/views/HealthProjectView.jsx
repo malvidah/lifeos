@@ -190,7 +190,7 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
     if (!missing.length) return;
     setEstimating(prev => new Set([...prev, ...missing.map(r => r.id)]));
     missing.forEach(row => {
-      estimateNutrition(`Calories burned for: "${row.text}"${row.dist ? ` (${row.dist})" : ''} for a typical adult. Return JSON: {"kcal":300}", token)
+      estimateNutrition(`Calories burned for: "${row.text}"${row.dist ? ` (${row.dist})` : ''} for a typical adult. Return JSON: {"kcal":300}`, token)
         .then(result => {
           if (result?.kcal) setRows(prev => (prev||[]).map(r => r.id === row.id ? {...r, kcal: result.kcal} : r));
           setEstimating(prev => { const n = new Set(prev); n.delete(row.id); return n; });
