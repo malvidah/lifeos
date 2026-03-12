@@ -4762,8 +4762,7 @@ function SearchResults({ results, loading, query, onSelectDate }) {
 
 // ─── Map card ───────────────────────────────────────────────
 function MapCard({ allTags, connections, onSelectProject, token, userId, taskFilter, setTaskFilter }) {
-  // Nodes and edges built once from props
-  const graphRef = useRef(null); // {nodes, edges}
+  const graphRef = useRef(null);
   const [ready, setReady] = useState(false);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
@@ -4773,7 +4772,6 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
   const containerRef = useRef(null);
   const dragStart = useRef(null);
 
-  // Build graph + run force simulation in effect (never during render/hydration)
   useEffect(() => {
     const tagList = ['__health__', ...(allTags || [])];
     const lower = tagList.map(t => t.toLowerCase());
@@ -4793,7 +4791,6 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
     }
     const maxDeg = Math.max(1, ...deg);
 
-    // Radial initial positions (no Math.random = deterministic, safe for hydration)
     const n = tagList.length;
     const nodes = tagList.map((name, i) => {
       const angle = (i / n) * Math.PI * 2;
@@ -4809,11 +4806,9 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
       };
     });
 
-    // Force simulation
     const K = Math.sqrt((700 * 700) / Math.max(n, 1)) * 0.9;
     for (let iter = 0; iter < 280; iter++) {
       const alpha = (1 - iter / 280) * (1 - iter / 280);
-      // Repulsion between all pairs
       for (let a = 0; a < nodes.length; a++) {
         for (let b = a + 1; b < nodes.length; b++) {
           const na = nodes[a]; const nb = nodes[b];
@@ -4824,7 +4819,6 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
           nb.vx += (ddx / dd) * ff; nb.vy += (ddy / dd) * ff;
         }
       }
-      // Spring attraction along edges
       for (const edge of edges) {
         const na = nodes[edge.si]; const nb = nodes[edge.ti];
         let ddx = nb.x - na.x; let ddy = nb.y - na.y;
@@ -4834,7 +4828,6 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
         na.vx += (ddx / dd) * ff; na.vy += (ddy / dd) * ff;
         nb.vx -= (ddx / dd) * ff; nb.vy -= (ddy / dd) * ff;
       }
-      // Gravity toward center
       for (const node of nodes) {
         node.vx -= node.x * 0.012 * alpha;
         node.vy -= node.y * 0.012 * alpha;
@@ -4845,39 +4838,31 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
       }
     }
 
-    // Normalize all node coords into a fixed 600×400 box so doFit always works
     {
       const xs = nodes.map(nd => nd.x), ys = nodes.map(nd => nd.y);
       const mnX = Math.min(...xs), mxX = Math.max(...xs);
       const mnY = Math.min(...ys), mxY = Math.max(...ys);
       const spanX = mxX - mnX || 1, spanY = mxY - mnY || 1;
-      const BOX_W = 600, BOX_H = 400;
       nodes.forEach(nd => {
-        nd.x = ((nd.x - mnX) / spanX - 0.5) * BOX_W;
-        nd.y = ((nd.y - mnY) / spanY - 0.5) * BOX_H;
+        nd.x = ((nd.x - mnX) / spanX - 0.5) * 600;
+        nd.y = ((nd.y - mnY) / spanY - 0.5) * 400;
       });
     }
 
     graphRef.current = { nodes, edges };
     setReady(true);
 
-    // Fit after paint — defer so containerRef has real dimensions
     function doFit() {
       if (!containerRef.current) return;
       var rect = containerRef.current.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) {
-        requestAnimationFrame(doFit);
-        return;
-      }
-      var allX = nodes.map(function(nd) { return nd.x; });
-      var allY = nodes.map(function(nd) { return nd.y; });
+      if (rect.width === 0 || rect.height === 0) { requestAnimationFrame(doFit); return; }
+      var allX = nodes.map(nd => nd.x);
+      var allY = nodes.map(nd => nd.y);
       var minX = Math.min.apply(null, allX) - 40;
       var maxX = Math.max.apply(null, allX) + 40;
       var minY = Math.min.apply(null, allY) - 40;
       var maxY = Math.max.apply(null, allY) + 40;
-      var gW = maxX - minX;
-      var gH = maxY - minY;
-      // Tight fit — no arbitrary cap, fills available space
+      var gW = maxX - minX, gH = maxY - minY;
       var newScale = Math.min(rect.width / gW, rect.height / gH) * 0.92;
       setScale(newScale);
       setTx(rect.width / 2 - ((minX + maxX) / 2) * newScale);
@@ -4893,14 +4878,12 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
     e.preventDefault();
     if (!containerRef.current) return;
     var rect = containerRef.current.getBoundingClientRect();
-    var mx = e.clientX - rect.left;
-    var my = e.clientY - rect.top;
+    var mx = e.clientX - rect.left, my = e.clientY - rect.top;
     var factor = e.deltaY < 0 ? 1.12 : 0.89;
-    setScale(function(prev) { return Math.max(0.12, Math.min(3, prev * factor)); });
-    setTx(function(prev) { return mx - (mx - prev) * factor; });
-    setTy(function(prev) { return my - (my - prev) * factor; });
+    setScale(prev => Math.max(0.12, Math.min(3, prev * factor)));
+    setTx(prev => mx - (mx - prev) * factor);
+    setTy(prev => my - (my - prev) * factor);
   }
-
   function handleMouseDown(e) {
     if (e.target.closest('[data-node]')) return;
     dragStart.current = { cx: e.clientX, cy: e.clientY, ox: tx, oy: ty };
@@ -4912,132 +4895,143 @@ function MapCard({ allTags, connections, onSelectProject, token, userId, taskFil
   }
   function handleMouseUp() { dragStart.current = null; }
 
+  // Touch pan support for mobile
+  const touchStart = useRef(null);
+  function handleTouchStart(e) {
+    if (e.touches.length === 1) {
+      touchStart.current = { cx: e.touches[0].clientX, cy: e.touches[0].clientY, ox: tx, oy: ty };
+    }
+  }
+  function handleTouchMove(e) {
+    if (!touchStart.current || e.touches.length !== 1) return;
+    e.preventDefault();
+    setTx(touchStart.current.ox + e.touches[0].clientX - touchStart.current.cx);
+    setTy(touchStart.current.oy + e.touches[0].clientY - touchStart.current.cy);
+  }
+  function handleTouchEnd() { touchStart.current = null; }
+
   const { nodes, edges } = graphRef.current || { nodes: [], edges: [] };
 
+  // Render as a plain Widget-style card — no outer wrapper, no rogue margins
   return (
-    <div style={{ display:'flex', flexDirection:'column', background:C.bg }}>
-      {/* ── Map card ── */}
-      <div style={{ margin:'52px 10px 0', background:C.surface, border:`1px solid ${C.border}`, borderRadius:12, overflow:'hidden' }}>
-        {/* Card header — matches Widget style */}
-        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 14px',
-          borderBottom:graphCollapsed?'none':`1px solid ${C.border}`, flexShrink:0, cursor:'pointer' }}
-          onClick={() => setGraphCollapsed(c => !c)}>
-          <ChevronBtn collapsed={graphCollapsed} onToggle={e => { e.stopPropagation(); setGraphCollapsed(c => !c); }}/>
-          <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em', textTransform:'uppercase', color:C.muted, flex:1 }}>
-            Map
+    <Card style={{ height: 'auto' }}>
+      {/* Header */}
+      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 14px',
+        borderBottom: graphCollapsed ? 'none' : `1px solid ${C.border}`,
+        flexShrink:0, cursor:'pointer' }}
+        onClick={() => setGraphCollapsed(c => !c)}>
+        <ChevronBtn collapsed={graphCollapsed} onToggle={e => { e.stopPropagation(); setGraphCollapsed(c => !c); }}/>
+        <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
+          textTransform:'uppercase', color:C.muted, flex:1 }}>Map</span>
+        {!graphCollapsed && (
+          <span style={{ fontFamily:mono, fontSize:9, color:C.dim }}>
+            {(allTags||[]).length + 1} projects · pinch/scroll to zoom
           </span>
-          {!graphCollapsed && <span style={{ fontFamily:mono, fontSize:9, color:C.dim }}>
-            {(allTags||[]).length + 1} projects · scroll to zoom · drag to pan
-          </span>}
-        </div>
-
-        {/* Canvas */}
-        {!graphCollapsed && <div ref={containerRef}
-          style={{ height:400, position:'relative', overflow:'hidden', cursor:'grab' }}
-        onWheel={handleWheel}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}>
-        {!ready && (
-          <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
-            fontFamily:mono, fontSize:F.sm, color:C.dim }}>Laying out graph…</div>
         )}
-        {ready && (
-          <svg width="100%" height="100%" style={{ display:'block' }}>
-            <defs>
-              <pattern id="dotgrid" x={tx % (24 * scale)} y={ty % (24 * scale)}
-                width={24 * scale} height={24 * scale} patternUnits="userSpaceOnUse">
-                <circle cx={12 * scale} cy={12 * scale} r={Math.max(0.6, scale * 0.7)} fill={C.border2} opacity="0.7"/>
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#dotgrid)"/>
-            <g transform={`translate(${tx},${ty}) scale(${scale})`}>
-              {edgeAlpha > 0 && edges.map((edge, i) => {
-                const na = nodes[edge.si]; const nb = nodes[edge.ti];
-                if (!na || !nb) return null;
-                return (
-                  <line key={i}
-                    x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}
-                    stroke={na.color}
-                    strokeWidth={Math.max(0.4, edge.w * 0.35)}
-                    strokeOpacity={edgeAlpha * 0.15 * Math.min(1, edge.w / 2)} />
-                );
-              })}
-              {nodes.map((node, i) => {
-                const isPill = scale >= PILL_SCALE;
-                const isHov = hovered === i;
-                const col = node.color;
-                const pw = node.label.length * 7.2 + 26;
-                return (
-                  <g key={node.id} data-node="1"
-                    transform={`translate(${node.x},${node.y})`}
-                    style={{ cursor:'pointer' }}
-                    onClick={() => onSelectProject(node.id)}
-                    onMouseEnter={() => setHovered(i)}
-                    onMouseLeave={() => setHovered(null)}>
-                    {isPill ? (
-                      <>
-                        <rect x={-pw/2} y={-13} width={pw} height={26} rx={13}
-                          fill={isHov ? col+'33' : col+'18'}
-                          stroke={isHov ? col : col+'55'}
-                          strokeWidth={isHov ? 1.5 : 1} />
-                        <text x={0} y={4} textAnchor="middle"
-                          style={{ fontFamily:mono, fontSize:10.5, fill:isHov ? col : col+'cc',
-                            letterSpacing:'0.06em', pointerEvents:'none', userSelect:'none' }}>
-                          {node.label}
-                        </text>
-                      </>
-                    ) : (
-                      <>
-                        <circle r={node.r}
-                          fill={isHov ? col+'33' : col+'18'}
-                          stroke={isHov ? col : col+'55'}
-                          strokeWidth={isHov ? 2 : 1.5} />
-                        {scale >= 0.32 && (
-                          <text y={node.r + 11} textAnchor="middle"
-                            style={{ fontFamily:mono, fontSize:Math.max(8, 9 / scale),
-                              fill:col+'99', pointerEvents:'none', userSelect:'none' }}>
-                            {node.label.length > 9 ? node.label.slice(0,8)+'…' : node.label}
+      </div>
+
+      {/* Canvas */}
+      {!graphCollapsed && (
+        <div ref={containerRef}
+          style={{ height: 340, position:'relative', overflow:'hidden',
+            cursor: dragStart.current ? 'grabbing' : 'grab' }}
+          onWheel={handleWheel}
+          onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+          onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}>
+          {!ready && (
+            <div style={{ position:'absolute', inset:0, display:'flex',
+              alignItems:'center', justifyContent:'center',
+              fontFamily:mono, fontSize:F.sm, color:C.dim }}>
+              Laying out graph…
+            </div>
+          )}
+          {ready && (
+            <svg width="100%" height="100%" style={{ display:'block' }}>
+              <defs>
+                <pattern id="dotgrid" x={tx % (24 * scale)} y={ty % (24 * scale)}
+                  width={24 * scale} height={24 * scale} patternUnits="userSpaceOnUse">
+                  <circle cx={12 * scale} cy={12 * scale}
+                    r={Math.max(0.6, scale * 0.7)} fill={C.border2} opacity="0.7"/>
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#dotgrid)"/>
+              <g transform={`translate(${tx},${ty}) scale(${scale})`}>
+                {edgeAlpha > 0 && edges.map((edge, i) => {
+                  const na = nodes[edge.si]; const nb = nodes[edge.ti];
+                  if (!na || !nb) return null;
+                  return (
+                    <line key={i} x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}
+                      stroke={na.color}
+                      strokeWidth={Math.max(0.4, edge.w * 0.35)}
+                      strokeOpacity={edgeAlpha * 0.15 * Math.min(1, edge.w / 2)}/>
+                  );
+                })}
+                {nodes.map((node, i) => {
+                  const isPill = scale >= PILL_SCALE;
+                  const isHov = hovered === i;
+                  const col = node.color;
+                  const pw = node.label.length * 7.2 + 26;
+                  return (
+                    <g key={node.id} data-node="1"
+                      transform={`translate(${node.x},${node.y})`}
+                      style={{ cursor:'pointer' }}
+                      onClick={() => onSelectProject(node.id)}
+                      onMouseEnter={() => setHovered(i)}
+                      onMouseLeave={() => setHovered(null)}>
+                      {isPill ? (
+                        <>
+                          <rect x={-pw/2} y={-13} width={pw} height={26} rx={13}
+                            fill={isHov ? col+'33' : col+'18'}
+                            stroke={isHov ? col : col+'55'}
+                            strokeWidth={isHov ? 1.5 : 1}/>
+                          <text x={0} y={4} textAnchor="middle"
+                            style={{ fontFamily:mono, fontSize:10.5, fill:isHov ? col : col+'cc',
+                              letterSpacing:'0.06em', pointerEvents:'none', userSelect:'none' }}>
+                            {node.label}
                           </text>
-                        )}
-                      </>
-                    )}
-                  </g>
-                );
-              })}
-            </g>
-          </svg>
-        )}
-        {/* Zoom buttons */}
-        <div style={{ position:'absolute', bottom:16, right:16, display:'flex', flexDirection:'column', gap:4 }}>
-          {[{label:'+',f:1.25},{label:'−',f:0.8}].map(({label,f}) => (
-            <button key={label}
-              onClick={() => setScale(prev => Math.max(0.12, Math.min(3, prev * f)))}
-              style={{ width:30, height:30, background:C.surface, border:`1px solid ${C.border2}`, borderRadius:6,
-                color:C.muted, fontFamily:mono, fontSize:16, cursor:'pointer',
-                display:'flex', alignItems:'center', justifyContent:'center' }}>
-              {label}
-            </button>
-          ))}
+                        </>
+                      ) : (
+                        <>
+                          <circle r={node.r}
+                            fill={isHov ? col+'33' : col+'18'}
+                            stroke={isHov ? col : col+'55'}
+                            strokeWidth={isHov ? 2 : 1.5}/>
+                          {scale >= 0.32 && (
+                            <text y={node.r + 11} textAnchor="middle"
+                              style={{ fontFamily:mono, fontSize:Math.max(8, 9 / scale),
+                                fill:col+'99', pointerEvents:'none', userSelect:'none' }}>
+                              {node.label.length > 9 ? node.label.slice(0,8)+'…' : node.label}
+                            </text>
+                          )}
+                        </>
+                      )}
+                    </g>
+                  );
+                })}
+              </g>
+            </svg>
+          )}
+          {/* Zoom buttons */}
+          <div style={{ position:'absolute', bottom:12, right:12,
+            display:'flex', flexDirection:'column', gap:4 }}>
+            {[{label:'+',f:1.25},{label:'−',f:0.8}].map(({label,f}) => (
+              <button key={label}
+                onClick={() => setScale(prev => Math.max(0.12, Math.min(3, prev * f)))}
+                style={{ width:30, height:30, background:C.surface,
+                  border:`1px solid ${C.border2}`, borderRadius:6,
+                  color:C.muted, fontFamily:mono, fontSize:16, cursor:'pointer',
+                  display:'flex', alignItems:'center', justifyContent:'center' }}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>}
-      </div>{/* end map card */}
-
-      {/* ── All entries + tasks — inline below graph card ── */}
-      <ProjectView
-        project="__everything__"
-        token={token}
-        userId={userId}
-        onBack={() => {}}
-        onSelectDate={() => {}}
-        taskFilter={taskFilter}
-        setTaskFilter={setTaskFilter}
-      />
-    </div>
+      )}
+    </Card>
   );
 }
-
 
 // ─── ProjectsCard ─────────────────────────────────────────────────────────────
 // Source of truth: #tags present in the DB (notes + tasks). projectsMeta is
@@ -6946,20 +6940,29 @@ export default function Dashboard() {
                       tagDisplayName={tagDisplayName} projectColor={projectColor}
                     />
                     {isGraph ? (
-                      graphData ? (
-                        <MapCard
-                          allTags={graphData.allTags}
-                          connections={graphData.connections}
-                          onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
-                          token={token}
-                          userId={userId}
-                          taskFilter={taskFilter}
-                          setTaskFilter={setTaskFilter}
+                      <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                        {graphData ? (
+                          <MapCard
+                            allTags={graphData.allTags}
+                            connections={graphData.connections}
+                            onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
+                            token={token} userId={userId}
+                            taskFilter={taskFilter} setTaskFilter={setTaskFilter}
+                          />
+                        ) : (
+                          <Card style={{height:'auto'}}>
+                            <div style={{padding:40,display:'flex',alignItems:'center',justifyContent:'center',
+                              fontFamily:mono,fontSize:F.sm,color:C.dim}}>Loading graph…</div>
+                          </Card>
+                        )}
+                        <ProjectView
+                          project="__everything__"
+                          token={token} userId={userId}
+                          onBack={() => {}}
+                          onSelectDate={d => { setActiveProject(null); setSelected(d); }}
+                          taskFilter={taskFilter} setTaskFilter={setTaskFilter}
                         />
-                      ) : (
-                        <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100%',
-                          fontFamily:mono,fontSize:F.sm,color:C.dim}}>Loading graph…</div>
-                      )
+                      </div>
                     ) : isHealth ? (
                       <HealthProjectView
                         token={token} userId={userId}
