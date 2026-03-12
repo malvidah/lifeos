@@ -50,17 +50,16 @@ function injectEditorStyles() {
 
 function injectTaskStyles() {
   if (typeof document === 'undefined') return;
-  if (document.getElementById('daylab-task-styles')) return;
+  // Always replace so we get fresh styles after deploys
+  const existing = document.getElementById('daylab-task-styles');
+  if (existing) existing.remove();
   const s = document.createElement('style');
   s.id = 'daylab-task-styles';
   s.textContent = `
-    .dl-tasks .ProseMirror ul[data-type="taskList"] { list-style: none; padding: 0; margin: 0; }
-    .dl-tasks .ProseMirror li[data-type="taskItem"] {
-      display: flex !important; align-items: flex-start; gap: 10px; padding: 3px 0;
-    }
+    /* Checkbox — inline style can't do appearance:none or ::after */
     .dl-tasks .ProseMirror li[data-type="taskItem"] > label {
       display: flex; align-items: center; flex-shrink: 0;
-      margin-top: 0.3em; cursor: pointer; user-select: none; contenteditable: false;
+      margin-top: 0.3em; cursor: pointer; user-select: none;
     }
     .dl-tasks .ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"] {
       appearance: none; -webkit-appearance: none;
@@ -77,16 +76,16 @@ function injectTaskStyles() {
       border: 1.5px solid #111110; border-top: none; border-left: none;
       transform: rotate(45deg);
     }
+    /* Text area next to checkbox */
     .dl-tasks .ProseMirror li[data-type="taskItem"] > div { flex: 1; min-width: 0; }
     .dl-tasks .ProseMirror li[data-type="taskItem"] > div > p { margin: 0; }
+    /* Done */
     .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"] > div {
       text-decoration: line-through; opacity: 0.35;
     }
-    [data-task-filter="open"]  .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"]  { display: none !important; }
-    [data-task-filter="done"]  .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="false"] { display: none !important; }
-    .dl-tasks .ProseMirror li[data-type="taskItem"].is-empty > div > p::before {
-      content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted);
-    }
+    /* Filter — !important beats the inline display:flex on the <li> */
+    [data-task-filter="open"] .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"]  { display: none !important; }
+    [data-task-filter="done"] .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="false"] { display: none !important; }
   `;
   document.head.appendChild(s);
 }
@@ -541,17 +540,20 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       NoteLinkNode,
       ...(singleLine ? [] : [ImageBlock]),
       ...(taskMode ? [
-        TaskList,
-        TaskItem.configure({ nested: false }),
+        TaskList.configure({
+          HTMLAttributes: { style: 'list-style:none;padding:0;margin:0;' },
+        }),
+        TaskItem.configure({
+          nested: false,
+          HTMLAttributes: { style: 'display:flex;align-items:flex-start;gap:10px;padding:3px 0;' },
+        }),
         // Prevent backspace/delete from removing the taskList container entirely.
-        // If the doc would become empty or lose its taskList, restore a blank taskItem.
         Extension.create({
           name: 'taskGuard',
           addKeyboardShortcuts() {
             const ensureList = (editor) => {
               const { doc } = editor.state;
-              const hasTaskList = doc.firstChild?.type.name === 'taskList';
-              if (!hasTaskList) {
+              if (doc.firstChild?.type.name !== 'taskList') {
                 editor.commands.setContent(
                   '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>'
                 );
