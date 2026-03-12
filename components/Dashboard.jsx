@@ -6119,7 +6119,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
     const oldNote = notesList.find(n => n.id === id);
     const oldName = noteName(oldNote);
     const newName = (newContent || '').split('\n')[0].trim() || 'Untitled';
-    // If name changed, update [oldName] note links in all other notes
+    // Update [oldName] note links in all other notes in this project
     let updatedNotes = notesList.map(n => {
       if (n.id === id) return { ...n, content: newContent, updatedAt: Date.now() };
       if (oldName !== newName && n.content) {
@@ -6130,6 +6130,26 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
       return n;
     });
     setNotesStore({ ...notesStore, notes: updatedNotes }, { skipHistory: true });
+
+    // Propagate rename to every journal entry that references [oldName]
+    if (oldName !== newName && token) {
+      const esc2 = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const sb = createClient();
+      sb.from('entries').select('date, data').eq('type', 'journal')
+        .then(({ data: rows }) => {
+          if (!rows) return;
+          rows.forEach(row => {
+            const text = typeof row.data === 'string' ? row.data : null;
+            if (!text || !text.includes('[' + oldName + ']')) return;
+            const linkRe  = new RegExp('\\[' + esc2 + '\\]', 'g');
+            const updated = text.replace(linkRe, '[' + newName + ']');
+            dbSave(row.date, 'journal', updated, token);
+            // Patch in-memory cache so open journal editors see the new name immediately
+            const cacheKey = userId + ':' + row.date + ':journal';
+            if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated;
+          });
+        });
+    }
   };
   const deleteNote = (id) => {
     const remaining = notesList.filter(n => n.id !== id);
