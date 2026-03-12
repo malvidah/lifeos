@@ -3328,13 +3328,32 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
         ))}
         {safe.map((row, idx) => (
           <div key={row.id} style={rowStyle}>
-            <input ref={el=>refs.current[row.id]=el} value={row.text}
-              onChange={e => setRows(safe.map(r => r.id===row.id ? {...r,text:e.target.value,kcal:null,protein:null} : r))}
-              onBlur={e => { const r=safe.find(r=>r.id===row.id); if(e.target.value.trim()&&r?.kcal===null&&!r?.estimating) runEstimate(row.id,e.target.value); }}
-              onKeyDown={e => onKey(e,row.id,idx)}
+            <DayLabEditor
+              ref={el => refs.current[row.id] = el}
+              value={row.text}
+              singleLine
               placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+" : ""}
-              style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
-                lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
+              textColor={C.text}
+              mutedColor={C.dim}
+              color={C.accent}
+              style={{ flex: 1, padding: 0 }}
+              onBlur={text => {
+                setRows(safe.map(r => r.id===row.id ? {...r, text, kcal: text !== r.text ? null : r.kcal, protein: text !== r.text ? null : r.protein} : r));
+                if (text.trim()) { const r=safe.find(r=>r.id===row.id); if(r?.kcal===null&&!r?.estimating) runEstimate(row.id, text); }
+              }}
+              onEnterCommit={text => {
+                setRows(safe.map(r => r.id===row.id ? {...r, text} : r));
+                const row2 = mkRow();
+                const i = safe.findIndex(r => r.id===row.id);
+                setRows(prev => { const s=Array.isArray(prev)?prev:safe; return [...s.slice(0,i+1), row2, ...s.slice(i+1)]; });
+                setTimeout(() => refs.current[row2.id]?.focus(), 30);
+              }}
+              onBackspaceEmpty={safe.length > 1 ? () => {
+                setRows(safe.filter(r => r.id!==row.id));
+                const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
+                setTimeout(() => refs.current[t]?.focus(), 30);
+              } : undefined}
+            />
             {showProtein && (
               <span style={row.protein ? colProtein : colMutedProt}>
                 {!row.text ? "" : row.estimating ? "…" : row.protein ? `${row.protein}g` : "—"}
@@ -3588,21 +3607,37 @@ function WorkoutsCard({date,token,userId,stravaConnected}) {
         ))}
         {safe.map((row,idx)=>(
           <div key={row.id} style={rowS}>
-            <input ref={el=>refs.current[row.id]=el} value={row.text}
-              onChange={e=>setManualRows(safe.map(r=>r.id===row.id?{...r,text:e.target.value,kcal:null}:r))}
-              onBlur={e=>{
-                const r=safe.find(r=>r.id===row.id);
-                const text=e.target.value.trim();
-                if(text){
+            <DayLabEditor
+              ref={el => refs.current[row.id] = el}
+              value={row.text}
+              singleLine
+              placeholder={idx===0&&mergedSynced.length===0?"What did you do?":""}
+              textColor={C.text}
+              mutedColor={C.dim}
+              color={C.accent}
+              style={{ flex: 1, padding: 0 }}
+              onBlur={text => {
+                setManualRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===row.id ? {...r, text} : r));
+                if (text.trim()) {
                   const {dist,pace}=parseActivityText(text);
                   setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(x=>x.id===row.id?{...x,dist:dist||x.dist,pace:pace||x.pace}:x));
+                  const r=safe.find(r=>r.id===row.id);
                   if(r?.kcal===null&&!r?.estimating) runEstimate(row.id,text);
                 }
               }}
-              onKeyDown={e=>onKey(e,row.id,idx)}
-              placeholder={idx===0&&mergedSynced.length===0?"What did you do?":""}
-              style={{background:"transparent",border:"none",outline:"none",padding:0,flex:1,
-                lineHeight:1.7,color:row.text?C.text:C.muted,fontFamily:serif,fontSize:F.md}}/>
+              onEnterCommit={text => {
+                setManualRows(safe.map(r => r.id===row.id ? {...r, text} : r));
+                const row2 = mkRow();
+                const i = safe.findIndex(r => r.id===row.id);
+                setManualRows(prev => { const s=Array.isArray(prev)?prev:safe; return [...s.slice(0,i+1), row2, ...s.slice(i+1)]; });
+                setTimeout(() => refs.current[row2.id]?.focus(), 30);
+              }}
+              onBackspaceEmpty={safe.length > 1 ? () => {
+                setManualRows(safe.filter(r => r.id!==row.id));
+                const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
+                setTimeout(() => refs.current[t]?.focus(), 30);
+              } : undefined}
+            />
             <span style={row.dist ? colDist : colMuted(DCOL)}>{!row.text ? "" : row.dist||"—"}</span>
             <span style={row.pace ? colPace : colMuted(PCOL)}>{!row.text ? "" : row.pace?`${row.pace}/mi`:"—"}</span>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
@@ -3632,36 +3667,22 @@ function WorkoutsCard({date,token,userId,stravaConnected}) {
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 // ─── NewProjectTask — empty-state inline task input for project view ─────────
 function NewProjectTask({ project, onAdd }) {
-  const [text, setText] = useState('');
-  const inputRef = useRef(null);
   const col = projectColor(project);
-
-  function commit() {
-    if (text.trim()) { onAdd(text); setText(''); }
-  }
+  const ctxProjects = useContext(ProjectNamesContext);
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
-      {/* Checkbox placeholder */}
-      <div style={{
-        width: 14, height: 14, flexShrink: 0,
-        borderRadius: 3, border: `1.5px solid ${C.border2}`,
-        background: 'transparent',
-      }}/>
-      <input
-        ref={inputRef}
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={e => {
-          if (e.key === 'Enter') { e.preventDefault(); commit(); }
-        }}
-        onBlur={commit}
-        placeholder={`Add a task…`}
-        style={{
-          flex: 1, background: 'transparent', border: 'none', outline: 'none',
-          fontFamily: serif, fontSize: F.md, color: C.text,
-          caretColor: col,
-        }}
+      <div style={{ width: 14, height: 14, flexShrink: 0, borderRadius: 3, border: `1.5px solid ${C.border2}`, background: 'transparent' }}/>
+      <DayLabEditor
+        singleLine
+        placeholder="Add a task…"
+        projectNames={ctxProjects}
+        textColor={C.text}
+        mutedColor={C.dim}
+        color={col}
+        style={{ flex: 1, padding: 0 }}
+        onEnterCommit={text => { if (text.trim()) onAdd(text); }}
+        onBlur={text => { if (text.trim()) onAdd(text); }}
       />
     </div>
   );
@@ -5455,24 +5476,25 @@ function NavBar({ activeProject, searchOpen, setSearchOpen, searchQuery, setSear
 
 // ─── AddJournalLine — inline entry input; supports uncontrolled (default) or controlled (value+onChange) ──
 function AddJournalLine({ project, onAdd, placeholder, value: controlledValue, onChange: controlledOnChange }) {
-  const [internalText, setInternalText] = useState('');
-  const isControlled = controlledValue !== undefined;
-  const text = isControlled ? controlledValue : internalText;
-  const setText = isControlled ? controlledOnChange : setInternalText;
   const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
-  function commit() {
-    if (text.trim()) { onAdd(text.trim()); if (!isControlled) setText(''); }
-  }
+  const ctxProjects = useContext(ProjectNamesContext);
+  const ctxNotes    = useContext(NoteContext);
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
-      <input
-        value={text}
-        onChange={e => setText(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); commit(); } }}
-        onBlur={commit}
+      <DayLabEditor
+        singleLine
         placeholder={placeholder || 'Add an entry…'}
-        style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none',
-          fontFamily: serif, fontSize: F.md, color: C.text, caretColor: col }}
+        projectNames={ctxProjects}
+        noteNames={ctxNotes.notes}
+        textColor={C.text}
+        mutedColor={C.dim}
+        color={col}
+        style={{ flex: 1, padding: 0 }}
+        onProjectClick={name => navigateToProject(name)}
+        onNoteClick={name => navigateToNote(name)}
+        onEnterCommit={text => { if (text.trim()) onAdd(text.trim()); }}
+        onBlur={text => { if (text.trim()) onAdd(text.trim()); }}
       />
     </div>
   );
@@ -6425,13 +6447,18 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                   display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.15s',
                 }}>{task.done && <span style={{ fontSize:12, color:C.bg, lineHeight:1 }}>✓</span>}</button>
                 {editingTask?.date === task.date && editingTask?.id === task.id ? (
-                  <input autoFocus value={editingTask.text}
-                    onChange={e => setEditingTask(prev => ({...prev, text: e.target.value}))}
-                    onBlur={async () => { await saveTaskEdit(task.date, task.id, editingTask.text); setEditingTask(null); }}
-                    onKeyDown={e => { if (e.key==='Enter'||e.key==='Escape') e.target.blur(); }}
-                    style={{ background:'transparent', border:'none', outline:'none', padding:0, flex:1, lineHeight:'1.7',
-                      color: task.done ? C.muted : C.text, caretColor:C.accent, fontFamily:serif, fontSize:F.md,
-                      textDecoration: task.done ? 'line-through' : 'none' }}
+                  <DayLabEditor
+                    autoFocus
+                    singleLine
+                    value={editingTask.text}
+                    textColor={task.done ? C.muted : C.text}
+                    mutedColor={C.dim}
+                    color={C.accent}
+                    style={{ flex: 1, padding: 0, minHeight: '1.7em',
+                      textDecoration: task.done ? 'line-through' : 'none',
+                      opacity: task.done ? 0.7 : 1 }}
+                    onBlur={async text => { await saveTaskEdit(task.date, task.id, text); setEditingTask(null); }}
+                    onEnterCommit={async text => { await saveTaskEdit(task.date, task.id, text); setEditingTask(null); }}
                   />
                 ) : (
                   <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}

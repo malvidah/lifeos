@@ -6,11 +6,14 @@ import { Extension, Node } from '@tiptap/core';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DecorationSet, Decoration } from '@tiptap/pm/view';
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect, useRef, useState,
+  forwardRef, useImperativeHandle,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { Suggestion } from '@tiptap/suggestion';
 
-// ── Constants (kept in sync with Dashboard.jsx) ───────────────────────────────
+// ── Shared design tokens ──────────────────────────────────────────────────────
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 const F = { lg: 18, md: 15, sm: 12 };
@@ -27,18 +30,6 @@ export function projectColor(name) {
   return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
 }
 
-// ── Hex → rgba helper ─────────────────────────────────────────────────────────
-function hexAlpha(hex, alpha) {
-  // Expand shorthand (#abc → #aabbcc)
-  const full = hex.length === 4
-    ? '#' + hex[1]+hex[1]+hex[2]+hex[2]+hex[3]+hex[3]
-    : hex;
-  const r = parseInt(full.slice(1,3),16);
-  const g = parseInt(full.slice(3,5),16);
-  const b = parseInt(full.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 // ── Base styles ───────────────────────────────────────────────────────────────
 function injectEditorStyles() {
   if (typeof document === 'undefined') return;
@@ -50,162 +41,118 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
-
-    /* Project tag chip — hides raw {text}, shows ::before pill */
-    .dl-project-tag {
-      font-size: 0 !important;
-      display: inline-block;
-      vertical-align: middle;
-      cursor: pointer;
-      line-height: 0;
-    }
-    .dl-project-tag::before {
-      content: attr(data-label);
-      display: inline-block;
-      font-size: 11px;
-      font-family: ${mono};
-      letter-spacing: 0.08em;
-      line-height: 1.65;
-      vertical-align: middle;
-      padding: 0 7px;
-      border-radius: 999px;
-      color: var(--tag-color);
-      background: var(--tag-bg);
-      border: 1.5px solid var(--tag-border);
-      cursor: pointer;
-    }
-
-    /* Note link chip — hides raw [text], shows ::before in accent */
-    .dl-note-link {
-      font-size: 0 !important;
-      display: inline-block;
-      vertical-align: middle;
-      cursor: pointer;
-      line-height: 0;
-    }
-    .dl-note-link::before {
-      content: attr(data-label);
-      display: inline-block;
-      font-size: 14px;
-      font-family: ${serif};
-      letter-spacing: 0;
-      line-height: 1.65;
-      vertical-align: middle;
-      padding: 0 5px;
-      border-radius: 999px;
-      color: ${ACCENT};
-      background: ${hexAlpha(ACCENT, 0.1)};
-      cursor: pointer;
-    }
+    /* atom node selection ring — replaces the blue browser default */
+    .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
   `;
   document.head.appendChild(s);
 }
 
-// Escape a string for use in a RegExp
-function reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+// ── ProjectTag — inline atom node ─────────────────────────────────────────────
+// Stored in plain-text as `{projectname}` (lowercase).
+// Rendered directly as a colored pill. No CSS tricks — the node IS the pill.
+const ProjectTagNode = Node.create({
+  name: 'projectTag',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  draggable: false,
+  addAttributes() {
+    return { name: { default: '' } };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-project-tag]', getAttrs: el => ({ name: el.getAttribute('data-project-tag') || '' }) }];
+  },
+  renderHTML({ node }) {
+    const name = node.attrs.name || '';
+    const col  = projectColor(name);
+    return ['span', {
+      'data-project-tag': name,
+      style: [
+        `color:${col}`,
+        `background:${col}1e`,
+        `border:1.5px solid ${col}66`,
+        `border-radius:999px`,
+        `padding:0 7px`,
+        `font-family:${mono}`,
+        `font-size:11px`,
+        `letter-spacing:0.08em`,
+        `line-height:1.65`,
+        `display:inline-block`,
+        `vertical-align:middle`,
+        `cursor:pointer`,
+        `user-select:none`,
+        `white-space:nowrap`,
+      ].join(';'),
+    }, name.toUpperCase()];
+  },
+});
 
-// ── Decoration: [note name] → clean note chip ─────────────────────────────────
-// Text stored as `[note name]`, displayed as clean "note name" chip via ::before CSS.
-function createNoteLinkDecoration(noteNamesRef) {
-  return Extension.create({
-    name: 'noteLinkDecoration',
-    addProseMirrorPlugins() {
-      return [new Plugin({
-        key: new PluginKey('noteLinkDeco'),
-        props: {
-          decorations(state) {
-            const decos = [];
-            const re = /\[([^\]]+)\]/g;
-            state.doc.descendants((node, pos) => {
-              if (!node.isText) return;
-              let m; re.lastIndex = 0;
-              while ((m = re.exec(node.text)) !== null) {
-                const noteName = m[1];
-                decos.push(Decoration.inline(
-                  pos + m.index,
-                  pos + m.index + m[0].length,
-                  {
-                    nodeName: 'span',
-                    class: 'dl-note-link',
-                    'data-name': noteName,       // stored value — for navigation
-                    'data-label': noteName,       // display value — shown by ::before
-                  }
-                ));
-              }
-            });
-            return DecorationSet.create(state.doc, decos);
-          },
-        },
-      })];
-    },
-  });
-}
+// ── NoteLink — inline atom node ───────────────────────────────────────────────
+// Stored in plain-text as `[note name]`.
+// Rendered as an accent-colored chip.
+const NoteLinkNode = Node.create({
+  name: 'noteLink',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+  draggable: false,
+  addAttributes() {
+    return { name: { default: '' } };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-note-link]', getAttrs: el => ({ name: el.getAttribute('data-note-link') || '' }) }];
+  },
+  renderHTML({ node }) {
+    const name = node.attrs.name || '';
+    return ['span', {
+      'data-note-link': name,
+      style: [
+        `color:${ACCENT}`,
+        `background:${ACCENT}1a`,
+        `border-radius:999px`,
+        `padding:0 6px`,
+        `font-family:${serif}`,
+        `font-size:14px`,
+        `display:inline-block`,
+        `vertical-align:middle`,
+        `cursor:pointer`,
+        `user-select:none`,
+        `white-space:nowrap`,
+      ].join(';'),
+    }, name];
+  },
+});
 
-// ── Decoration: {projectname} → clean project pill ───────────────────────────
-// Text stored as `{projectname}` (lowercase). Displayed as "PROJECT NAME" pill via ::before CSS.
-// Legacy #ProjectName also decorated during migration window.
-function createProjectTagDecoration(projectNamesRef) {
-  return Extension.create({
-    name: 'projectTagDecoration',
-    addProseMirrorPlugins() {
-      return [new Plugin({
-        key: new PluginKey('projectTagDeco'),
-        props: {
-          decorations(state) {
-            const decos = [];
+// ── ImageBlock — block atom node ──────────────────────────────────────────────
+const ImageBlock = Node.create({
+  name: 'imageBlock',
+  group: 'block',
+  atom: true,
+  selectable: true,
+  draggable: false,
+  addAttributes() { return { src: { default: null } }; },
+  parseHTML() { return [{ tag: 'div[data-imageblock]' }]; },
+  renderHTML({ node }) {
+    return ['div', { 'data-imageblock': node.attrs.src, style: 'margin:4px 0;line-height:0' },
+      ['img', { src: node.attrs.src, style: 'max-width:100%;max-height:320px;border-radius:8px;display:block;cursor:default', contenteditable: 'false', draggable: 'false' }]
+    ];
+  },
+  addKeyboardShortcuts() {
+    const del = () => {
+      if (this.editor.state.selection?.node?.type.name === 'imageBlock') {
+        this.editor.commands.deleteSelection(); return true;
+      }
+      return false;
+    };
+    return { Backspace: del, Delete: del };
+  },
+});
 
-            const makeAttrs = (storedName, displayLabel) => {
-              const col = projectColor(storedName);
-              return {
-                nodeName: 'span',
-                class: 'dl-project-tag',
-                'data-name': storedName,           // lowercase stored name — for navigation
-                'data-label': displayLabel,         // display label — shown by ::before
-                style: `--tag-color:${col};--tag-bg:${hexAlpha(col,0.12)};--tag-border:${hexAlpha(col,0.4)}`,
-              };
-            };
-
-            // New format: {projectname}
-            const reNew = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
-            state.doc.descendants((node, pos) => {
-              if (!node.isText) return;
-              let m; reNew.lastIndex = 0;
-              while ((m = reNew.exec(node.text)) !== null) {
-                const stored  = m[1];                         // e.g. "big think"
-                const display = stored.toUpperCase();          // e.g. "BIG THINK"
-                decos.push(Decoration.inline(
-                  pos + m.index,
-                  pos + m.index + m[0].length,
-                  makeAttrs(stored, display)
-                ));
-              }
-            });
-
-            // Legacy format: #ProjectName
-            const reLegacy = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
-            state.doc.descendants((node, pos) => {
-              if (!node.isText) return;
-              let m; reLegacy.lastIndex = 0;
-              while ((m = reLegacy.exec(node.text)) !== null) {
-                const stored  = m[1].toLowerCase();
-                const display = m[1].toUpperCase();
-                decos.push(Decoration.inline(
-                  pos + m.index,
-                  pos + m.index + m[0].length,
-                  makeAttrs(stored, display)
-                ));
-              }
-            });
-
-            return DecorationSet.create(state.doc, decos);
-          },
-        },
-      })];
-    },
-  });
-}
-
-// ── Decoration: URLs → warm underline ────────────────────────────────────────
+// ── URL decoration ────────────────────────────────────────────────────────────
+// URLs are decorations (not nodes) because they're pure display — the raw URL
+// is the right storage format, and decorations are correct for display-only overlays.
 const URLExtension = Extension.create({
   name: 'urlDecoration',
   addProseMirrorPlugins() {
@@ -232,12 +179,79 @@ const URLExtension = Extension.create({
   },
 });
 
-// ── Custom findSuggestionMatch ────────────────────────────────────────────────
+// ── Serialisation: doc JSON ↔ plain-text storage format ───────────────────────
+// Plain-text format:
+//   projectTag node  →  {projectname}
+//   noteLink node    →  [note name]
+//   imageBlock node  →  [img:url]  (its own line)
+//   text node        →  literal text
+//   paragraphs       →  joined with \n
+
+export function docToText(docJson) {
+  function walkInline(nodes) {
+    return (nodes || []).map(c => {
+      if (c.type === 'text')        return c.text ?? '';
+      if (c.type === 'hardBreak')   return '\n';
+      if (c.type === 'projectTag')  return `{${c.attrs?.name ?? ''}}`;
+      if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
+      return '';
+    }).join('');
+  }
+
+  const lines = [];
+  for (const node of (docJson?.content || [])) {
+    if (node.type === 'imageBlock') {
+      lines.push(`[img:${node.attrs?.src}]`);
+    } else if (node.type === 'paragraph') {
+      lines.push(walkInline(node.content));
+    }
+  }
+  const result = lines.join('\n');
+  return result.endsWith('\n') ? result.slice(0, -1) : result;
+}
+
+// Parse a plain-text line into an array of ProseMirror inline content nodes.
+function parseLineContent(line) {
+  const content = [];
+  // Matches: {project} | [note] | legacy #Tag — all other chars are plain text
+  const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]|#([A-Za-z][A-Za-z0-9]+)/g;
+  let last = 0, m;
+  while ((m = re.exec(line)) !== null) {
+    if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
+    if (m[1] != null) {
+      // {project} — new format
+      content.push({ type: 'projectTag', attrs: { name: m[1] } });
+    } else if (m[2] != null) {
+      // [note] — note link
+      content.push({ type: 'noteLink', attrs: { name: m[2] } });
+    } else if (m[3] != null) {
+      // #Legacy — convert to projectTag on load
+      content.push({ type: 'projectTag', attrs: { name: m[3].toLowerCase() } });
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < line.length) content.push({ type: 'text', text: line.slice(last) });
+  return content;
+}
+
+export function textToContent(text) {
+  if (!text) return [{ type: 'paragraph' }];
+  return text.split('\n').map(line => {
+    // Image blocks are whole-line tokens
+    const imgM = line.match(/^\[img:(https?:\/\/[^\]]+)\]$/);
+    if (imgM) return { type: 'imageBlock', attrs: { src: imgM[1] } };
+
+    const content = parseLineContent(line);
+    return { type: 'paragraph', content: content.length ? content : undefined };
+  });
+}
+
+// ── Custom suggestion match — supports spaces in multi-word names ─────────────
 function makeCustomFindSuggestionMatch(char) {
-  return function customFind({ $position }) {
+  return function ({ $position }) {
     const nodeBefore = $position.nodeBefore;
     if (!nodeBefore?.isText) return null;
-    const nodeText = nodeBefore.text;
+    const nodeText  = nodeBefore.text;
     const nodeStart = $position.pos - nodeBefore.nodeSize;
 
     let charIdx = -1;
@@ -256,7 +270,7 @@ function makeCustomFindSuggestionMatch(char) {
   };
 }
 
-// ── Suggestion factory ────────────────────────────────────────────────────────
+// ── Suggestion extension factory ──────────────────────────────────────────────
 function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
   return Extension.create({
     name: `suggestion_${suggKey}`,
@@ -282,59 +296,6 @@ function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
   });
 }
 
-// ── ImageBlock node ───────────────────────────────────────────────────────────
-const ImageBlock = Node.create({
-  name: 'imageBlock',
-  group: 'block',
-  atom: true,
-  selectable: true,
-  draggable: false,
-  addAttributes() { return { src: { default: null } }; },
-  parseHTML() { return [{ tag: 'div[data-imageblock]' }]; },
-  renderHTML({ node }) {
-    return ['div', { 'data-imageblock': node.attrs.src, style: 'margin:4px 0;line-height:0' },
-      ['img', { src: node.attrs.src, style: 'max-width:100%;max-height:320px;border-radius:8px;display:block;cursor:default', contenteditable: 'false', draggable: 'false' }]
-    ];
-  },
-  addKeyboardShortcuts() {
-    const del = () => {
-      if (this.editor.state.selection?.node?.type.name === 'imageBlock') {
-        this.editor.commands.deleteSelection(); return true;
-      }
-      return false;
-    };
-    return { Backspace: del, Delete: del };
-  },
-});
-
-// ── Serialisation ─────────────────────────────────────────────────────────────
-export function docToText(docJson) {
-  const lines = [];
-  (docJson?.content || []).forEach(node => {
-    if (node.type === 'imageBlock') {
-      lines.push(`[img:${node.attrs?.src}]`);
-    } else if (node.type === 'paragraph') {
-      let text = '';
-      (node.content || []).forEach(c => {
-        if (c.type === 'text') text += c.text ?? '';
-        else if (c.type === 'hardBreak') text += '\n';
-      });
-      lines.push(text);
-    }
-  });
-  const result = lines.join('\n');
-  return result.endsWith('\n') ? result.slice(0, -1) : result;
-}
-
-export function textToContent(text) {
-  if (!text) return [{ type: 'paragraph' }];
-  return text.split('\n').map(line => {
-    const m = line.match(/\[img:(https?:\/\/[^\]]+)\]/);
-    if (m) return { type: 'imageBlock', attrs: { src: m[1] } };
-    return { type: 'paragraph', content: line ? [{ type: 'text', text: line }] : undefined };
-  });
-}
-
 // ── Suggestion dropdown ───────────────────────────────────────────────────────
 function SuggestionDropdown({ state, onSelect }) {
   const [pos, setPos] = useState({ top: 0, left: 0 });
@@ -343,35 +304,31 @@ function SuggestionDropdown({ state, onSelect }) {
     if (!state?.clientRect) return;
     const rect = state.clientRect();
     if (!rect) return;
-    const left = Math.min(rect.left, window.innerWidth - 280);
-    const top  = rect.bottom + 4;
-    setPos({ top, left: Math.max(4, left) });
+    setPos({
+      top:  rect.bottom + 4,
+      left: Math.max(4, Math.min(rect.left, window.innerWidth - 280)),
+    });
   }, [state]);
 
-  if (!state || !state.items.length) return null;
-  if (typeof document === 'undefined') return null;
+  if (!state?.items.length || typeof document === 'undefined') return null;
 
   const isProject = state.key === 'project';
 
-  const dropdown = (
+  return createPortal(
     <div style={{
       position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
-      background: '#1E1C1A',
-      border: '1px solid #2A2724',
-      borderRadius: 10,
+      background: '#1E1C1A', border: '1px solid #2A2724', borderRadius: 10,
       boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-      padding: '4px 0',
-      minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
+      padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
       {state.items.map((item, i) => {
         const isCreate = typeof item === 'string' && item.startsWith('__create__:');
         const rawLabel = isCreate ? item.slice(11) : item;
-        // Projects show ALL CAPS; notes show as-is (lowercase)
-        const label = isCreate
-          ? `+ Create "${rawLabel}"`
-          : isProject ? rawLabel.toUpperCase() : rawLabel;
-        const selected = i === state.selectedIndex;
+        const label    = isCreate ? `+ Create "${rawLabel}"`
+                       : isProject ? rawLabel.toUpperCase()
+                       : rawLabel;
         const col = isProject && !isCreate ? projectColor(rawLabel) : null;
+        const selected = i === state.selectedIndex;
         return (
           <button
             key={i}
@@ -381,41 +338,40 @@ function SuggestionDropdown({ state, onSelect }) {
               display: 'block', width: '100%', border: 'none', textAlign: 'left',
               padding: '7px 14px', cursor: 'pointer',
               background: selected ? 'rgba(255,255,255,0.09)' : 'transparent',
-              fontFamily: mono, fontSize: 12, letterSpacing: isProject ? '0.08em' : '0.04em',
+              fontFamily: mono, fontSize: 12,
+              letterSpacing: isProject && !isCreate ? '0.08em' : '0.04em',
               color: isCreate ? '#9A9088' : col || '#EFDFC3',
               transition: 'background 0.08s',
             }}
           >{label}</button>
         );
       })}
-    </div>
+    </div>,
+    document.body
   );
-
-  return createPortal(dropdown, document.body);
 }
 
 // ── DayLabEditor ──────────────────────────────────────────────────────────────
+// The single text-editing primitive for Day Lab.
+// All cards (Journal, Tasks, Meals, Workouts, Notes) use this component.
+//
 // Props:
-//   value           — plain text (Day Lab storage format)
-//   onBlur          — (text) => void
-//   onEnterCommit   — singleLine: Enter commits + clears
-//   onEnterSplit    — singleLine: Enter splits at caret
-//   onBackspaceEmpty— singleLine: Backspace when empty
-//   onImageUpload   — async (File) => url
-//   noteNames       — string[] — enables [ note autocomplete + decoration
-//   projectNames    — string[] — enables { project autocomplete + decoration
-//   onCreateNote    — (name) => void
-//   onProjectClick  — (storedName: string) => void — called when project chip clicked
-//   onNoteClick     — (noteName: string) => void   — called when note chip clicked
-//   placeholder     — string
-//   singleLine      — boolean
-//   autoFocus       — boolean
-//   style           — style object for outer wrapper
-//   color           — caret colour (default ACCENT)
-//   textColor       — text colour
-//   mutedColor      — placeholder colour
-//   editable        — boolean (default true)
-export function DayLabEditor({
+//   value            — plain-text storage string
+//   onBlur           — (text: string) => void
+//   onEnterCommit    — singleLine: fires with text on Enter, then clears editor
+//   onEnterSplit     — singleLine: fires {before, after} on Enter (tasks use this)
+//   onBackspaceEmpty — singleLine: fires when Backspace pressed in empty editor
+//   onImageUpload    — async (File) => url
+//   noteNames        — string[] for [ autocomplete
+//   projectNames     — string[] for { autocomplete
+//   onCreateNote     — (name: string) => void
+//   onProjectClick   — (storedName: string) => void  — chip click nav
+//   onNoteClick      — (noteName: string) => void    — chip click nav
+//   placeholder, singleLine, autoFocus, style, color, textColor, mutedColor, editable
+//
+// Ref: exposes { focus() } for imperative focus (used by RowList row navigation)
+
+export const DayLabEditor = forwardRef(function DayLabEditor({
   value,
   onBlur,
   onEnterCommit,
@@ -428,17 +384,17 @@ export function DayLabEditor({
   onProjectClick,
   onNoteClick,
   placeholder,
-  singleLine = false,
-  autoFocus = false,
+  singleLine   = false,
+  autoFocus    = false,
   style,
-  color = ACCENT,
+  color        = ACCENT,
   textColor,
   mutedColor,
-  editable = true,
-}) {
+  editable     = true,
+}, ref) {
   useEffect(injectEditorStyles, []);
 
-  // Stable callback refs
+  // Stable refs — avoid stale closures in TipTap plugins / editorProps
   const editorRef            = useRef(null);
   const lastExternalValue    = useRef(value);
   const onBlurRef            = useRef(onBlur);
@@ -457,21 +413,20 @@ export function DayLabEditor({
   useEffect(() => { onEnterSplitRef.current     = onEnterSplit; },     [onEnterSplit]);
   useEffect(() => { onBackspaceEmptyRef.current = onBackspaceEmpty; }, [onBackspaceEmpty]);
   useEffect(() => { onImageUploadRef.current    = onImageUpload; },    [onImageUpload]);
-  useEffect(() => {
-    noteNamesRef.current = noteNames || [];
-    if (editorRef.current?.view) {
-      const { view } = editorRef.current;
-      view.dispatch(view.state.tr.setMeta('forceRedecorate', true));
-    }
-  }, [noteNames]);
+  useEffect(() => { noteNamesRef.current        = noteNames || []; },  [noteNames]);
   useEffect(() => { projectNamesRef.current     = projectNames || []; }, [projectNames]);
   useEffect(() => { onCreateNoteRef.current     = onCreateNote; },     [onCreateNote]);
   useEffect(() => { onProjectClickRef.current   = onProjectClick; },   [onProjectClick]);
   useEffect(() => { onNoteClickRef.current      = onNoteClick; },      [onNoteClick]);
 
-  // ── Suggestion state ──────────────────────────────────────────────────────
-  const [sugg, setSugg]   = useState(null);
-  const suggRef           = useRef(null);
+  // Expose focus() imperatively so RowList can programmatically focus rows
+  useImperativeHandle(ref, () => ({
+    focus: () => editorRef.current?.commands.focus('end'),
+  }), []); // eslint-disable-line
+
+  // ── Suggestion dropdown state ─────────────────────────────────────────────
+  const [sugg, setSugg] = useState(null);
+  const suggRef = useRef(null);
   useEffect(() => { suggRef.current = sugg; }, [sugg]);
 
   const renderRef = useRef({
@@ -505,10 +460,7 @@ export function DayLabEditor({
       }
       if (event.key === 'Enter' || event.key === 'Tab' || event.key === ']' || event.key === '}') {
         const item = s.items[s.selectedIndex];
-        if (item != null) {
-          s.command(item); setSugg(null);
-          event.preventDefault();
-        }
+        if (item != null) { s.command(item); setSugg(null); event.preventDefault(); }
         return true;
       }
       if (event.key === 'Escape') { setSugg(null); return true; }
@@ -519,9 +471,6 @@ export function DayLabEditor({
   textColor  = textColor  || 'inherit';
   mutedColor = mutedColor || '#9A9088';
 
-  const noteLinkDeco   = useRef(createNoteLinkDecoration(noteNamesRef));
-  const projectTagDeco = useRef(createProjectTagDecoration(projectNamesRef));
-
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -530,67 +479,82 @@ export function DayLabEditor({
         strike: false, bold: false, italic: false,
       }),
       URLExtension,
-      noteLinkDeco.current,
-      projectTagDeco.current,
+      ProjectTagNode,
+      NoteLinkNode,
       ...(singleLine ? [] : [ImageBlock]),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
-      // [ → note link autocomplete
+      // [ → note link
       createSuggestion({
         char: '[',
         suggKey: 'note',
         renderRef,
         itemsFn: (query) => {
           const names = noteNamesRef.current || [];
-          const q = query.toLowerCase().replace(/\s/g, '');
+          const q     = query.toLowerCase().replace(/\s/g, '');
           const matches = names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
-          const qTrim = query.trim();
+          const qTrim   = query.trim();
           if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
             matches.push(`__create__:${qTrim}`);
           }
           return matches;
         },
         commandFn: ({ editor, range, name }) => {
-          const isCreate = name.startsWith('__create__:');
-          const noteName = isCreate ? name.slice(11) : name;
-          editor.chain().focus().deleteRange(range).insertContent(`[${noteName}] `).run();
+          const isCreate  = name.startsWith('__create__:');
+          const noteName  = isCreate ? name.slice(11) : name;
+          editor.chain().focus()
+            .deleteRange(range)
+            .insertContent([
+              { type: 'noteLink', attrs: { name: noteName } },
+              { type: 'text', text: ' ' },
+            ])
+            .run();
           if (isCreate) onCreateNoteRef.current?.(noteName);
         },
       }),
 
-      // { → project tag autocomplete
+      // { → project tag
       createSuggestion({
         char: '{',
         suggKey: 'project',
         renderRef,
         itemsFn: (query) => {
           const names = projectNamesRef.current || [];
-          const q = query.toLowerCase().replace(/\s/g, '');
+          const q     = query.toLowerCase().replace(/\s/g, '');
           return names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
         },
         commandFn: ({ editor, range, name }) => {
-          editor.chain().focus().deleteRange(range).insertContent(`{${name.toLowerCase()}} `).run();
+          editor.chain().focus()
+            .deleteRange(range)
+            .insertContent([
+              { type: 'projectTag', attrs: { name: name.toLowerCase() } },
+              { type: 'text', text: ' ' },
+            ])
+            .run();
         },
       }),
     ],
+
     content: { type: 'doc', content: textToContent(value || '') },
     editable,
+
     editorProps: {
+      // Chip click → navigate
       handleClick(view, pos, event) {
-        // Chip clicks — navigate to project or note
-        const target = event.target;
-        const projectChip = target.closest?.('.dl-project-tag');
-        if (projectChip && onProjectClickRef.current) {
-          const name = projectChip.getAttribute('data-name');
-          if (name) { onProjectClickRef.current(name); return true; }
+        const t = event.target;
+        const projectEl = t.closest?.('[data-project-tag]');
+        if (projectEl && onProjectClickRef.current) {
+          onProjectClickRef.current(projectEl.getAttribute('data-project-tag'));
+          return true;
         }
-        const noteChip = target.closest?.('.dl-note-link');
-        if (noteChip && onNoteClickRef.current) {
-          const name = noteChip.getAttribute('data-name');
-          if (name) { onNoteClickRef.current(name); return true; }
+        const noteEl = t.closest?.('[data-note-link]');
+        if (noteEl && onNoteClickRef.current) {
+          onNoteClickRef.current(noteEl.getAttribute('data-note-link'));
+          return true;
         }
         return false;
       },
+
       handleKeyDown(view, e) {
         if (e.key === 'Enter' && !e.shiftKey && singleLine) {
           e.preventDefault();
@@ -601,6 +565,7 @@ export function DayLabEditor({
               { type: 'doc', content: [{ type: 'paragraph' }] }
             ), 0);
           } else if (onEnterSplitRef.current) {
+            // Calculate char position before split
             const { from } = view.state.selection;
             let cp = 0;
             view.state.doc.descendants((node, nodePos) => {
@@ -615,6 +580,7 @@ export function DayLabEditor({
         if (e.key === 'Escape') { view.dom.blur(); return true; }
         return false;
       },
+
       handleDOMEvents: {
         paste(view, e) {
           if (!onImageUploadRef.current) return false;
@@ -638,6 +604,7 @@ export function DayLabEditor({
         },
       },
     },
+
     onBlur({ editor }) {
       onBlurRef.current?.(docToText(editor.getJSON()));
     },
@@ -645,12 +612,14 @@ export function DayLabEditor({
 
   useEffect(() => { editorRef.current = editor; }, [editor]);
 
+  // Imperative focus for autoFocus prop
   useEffect(() => {
     if (!editor || !autoFocus) return;
     const id = setTimeout(() => editor.commands.focus('end'), 0);
     return () => clearTimeout(id);
   }, [editor, autoFocus]);
 
+  // Capture-phase Backspace for empty singleLine
   useEffect(() => {
     if (!editor || !singleLine) return;
     const dom = editor.view.dom;
@@ -664,6 +633,7 @@ export function DayLabEditor({
     return () => dom.removeEventListener('keydown', handler, true);
   }, [editor, singleLine]);
 
+  // Sync externally-driven value changes (only when editor is not focused)
   useEffect(() => {
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
@@ -684,11 +654,10 @@ export function DayLabEditor({
       }}>
         <EditorContent editor={editor} />
       </div>
-
       <SuggestionDropdown
         state={sugg}
         onSelect={item => { sugg?.command(item); setSugg(null); }}
       />
     </>
   );
-}
+});
