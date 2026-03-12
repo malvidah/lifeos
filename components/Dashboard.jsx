@@ -3598,6 +3598,35 @@ function migrateTasksToHtml(raw) {
   return items ? `<ul data-type="taskList">${items}</ul>` : '';
 }
 
+// Client-side parseTasks — mirrors the API-side version in app/api/_lib/parseTasks.js.
+// Handles both storage formats so project-view can toggle/edit tasks regardless of format.
+function clientParseTasks(data) {
+  if (Array.isArray(data)) {
+    return data.filter(t => t?.text).map((t, i) => ({ id: t.id ?? `old_${i}`, text: t.text, done: !!t.done }));
+  }
+  if (typeof data === 'string' && data.includes('data-type="taskItem"')) {
+    const tasks = []; let idx = 0;
+    const re = /<li[^>]*data-type="taskItem"[^>]*data-checked="(true|false)"[^>]*>([\s\S]*?)<\/li>/g;
+    let m;
+    while ((m = re.exec(data)) !== null) {
+      const text = m[2].replace(/<[^>]+>/g, '').trim();
+      if (text) tasks.push({ id: `html_${idx++}`, text, done: m[1] === 'true' });
+    }
+    return tasks;
+  }
+  return [];
+}
+
+// Serialise [{id,text,done}] back to TipTap HTML.
+// Used by project-view toggleTask/saveTaskEdit to write back in a consistent format.
+function tasksToHtml(tasks) {
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const items = tasks.filter(t => t.text).map(t =>
+    `<li data-type="taskItem" data-checked="${t.done?'true':'false'}"><p>${esc(t.text)}</p></li>`
+  ).join('');
+  return items ? `<ul data-type="taskList">${items}</ul>` : '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>';
+}
+
 function Tasks({date,token,userId,taskFilter='all'}) {
   const {value,setValue,loaded} = useDbSave(date,'tasks','',token,userId);
   const taskProjectNames = useContext(ProjectNamesContext);
@@ -5788,6 +5817,8 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
 function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   const baseStyle = { fontFamily: serif, fontSize: F.md, lineHeight: '1.7', padding: '2px 0', wordBreak: 'break-word' };
   const ctxProjects = useContext(ProjectNamesContext);
+  const ctxNotes    = useContext(NoteContext);
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
 
   if (editing) {
     return (
@@ -5797,6 +5828,10 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
         placeholder=""
         singleLine
         projectNames={ctxProjects}
+        noteNames={ctxNotes.notes}
+        onCreateNote={ctxNotes.onCreateNote}
+        onProjectClick={name => navigateToProject(name)}
+        onNoteClick={name => navigateToNote(name)}
         textColor={C.text}
         mutedColor={C.dim}
         color={C.accent}
@@ -5814,6 +5849,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
 // ─── ProjectView ──────────────────────────────────────────────────────────────
 function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter }) {
   const pvProjectNames = useContext(ProjectNamesContext);
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   const { value: projectsMeta, setValue: setProjectsMeta } =
     useDbSave('global', 'projects', {}, token, userId);
 
@@ -6000,11 +6036,22 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   }
 
   async function toggleTask(date, taskId, currentDone) {
-    const current = await dbLoad(date, 'tasks', token);
-    if (!Array.isArray(current)) return;
-    const updated = current.map(t => t.id === taskId ? { ...t, done: !currentDone } : t);
-    await dbSave(date, 'tasks', updated, token);
-    MEM[`${userId}:${date}:tasks`] = updated;
+    const raw = await dbLoad(date, 'tasks', token);
+    if (raw === null) return;
+    // Parse handles both old array format and new TipTap HTML — save back as HTML
+    const tasks = clientParseTasks(raw);
+    // Match by id (new format) or by position (old format ids may differ from API ids)
+    let matched = false;
+    const updated = tasks.map((t, i) => {
+      if (t.id === taskId || (!matched && `html_${i}` === taskId)) {
+        matched = true;
+        return { ...t, done: !currentDone };
+      }
+      return t;
+    });
+    const html = tasksToHtml(updated);
+    await dbSave(date, 'tasks', html, token);
+    MEM[`${userId}:${date}:tasks`] = html;
     window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
     setEntries(prev => prev ? {
       ...prev,
@@ -6015,11 +6062,20 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   }
 
   async function saveTaskEdit(date, taskId, newText) {
-    const current = await dbLoad(date, 'tasks', token);
-    if (!Array.isArray(current)) return;
-    const updated = current.map(t => t.id === taskId ? { ...t, text: newText } : t);
-    await dbSave(date, 'tasks', updated, token);
-    MEM[`${userId}:${date}:tasks`] = updated;
+    const raw = await dbLoad(date, 'tasks', token);
+    if (raw === null) return;
+    const tasks = clientParseTasks(raw);
+    let matched = false;
+    const updated = tasks.map((t, i) => {
+      if (t.id === taskId || (!matched && `html_${i}` === taskId)) {
+        matched = true;
+        return { ...t, text: newText };
+      }
+      return t;
+    });
+    const html = tasksToHtml(updated);
+    await dbSave(date, 'tasks', html, token);
+    MEM[`${userId}:${date}:tasks`] = html;
     window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
     registerNewTags(newText);
     setEntries(prev => prev ? {
@@ -6142,6 +6198,13 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                   placeholder='Note name (first line)…'
                   noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
                   projectNames={pvProjectNames}
+                  onCreateNote={addNote}
+                  onProjectClick={name => navigateToProject(name)}
+                  onNoteClick={name => {
+                    const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
+                    if (match) selectNote(match.id);
+                    else addNote(name);
+                  }}
                   textColor={C.text}
                   mutedColor={C.dim}
                   color={C.muted}
@@ -6675,25 +6738,25 @@ export default function Dashboard() {
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           display:"flex", flexDirection:"column", overflow:"hidden"}}>
 
-
+          {/* ── NavBar — single instance, above all scroll areas, consistent position on every page ── */}
+          <NavBar
+            activeProject={activeProject}
+            searchOpen={searchOpen} setSearchOpen={setSearchOpen}
+            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+            searchInputRef={searchInputRef} srLoading={srLoading}
+            date={selected} token={token} userId={userId}
+            onSelectProject={setActiveProject}
+            onBack={() => setActiveProject(null)}
+            tagDisplayName={tagDisplayName} projectColor={projectColor}
+          />
 
           {/* ── Day View scroll — calendar, health, cards ── */}
           {!activeProject && (
             <div style={{
               flex:1, minHeight:0, overflowY:"auto",
-              padding:mobile?"6px 8px":10, paddingTop:10,
+              padding:10, paddingTop:4,
               paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:mobile?10:8}}>
-              {/* ── NavBar ── */}
-              <NavBar
-                activeProject={null}
-                searchOpen={searchOpen} setSearchOpen={setSearchOpen}
-                searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-                searchInputRef={searchInputRef} srLoading={srLoading}
-                date={selected} token={token} userId={userId}
-                onSelectProject={setActiveProject}
-                onBack={null} tagDisplayName={tagDisplayName} projectColor={projectColor}
-              />
                               {/* Cal + Health — hidden during search */}
                 {!searchOpen && (
                   <>
@@ -6793,18 +6856,7 @@ export default function Dashboard() {
               return (
                 <>
                   {/* Scrollable content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:10,boxSizing:'border-box'}}>
-                    {/* NavBar — unified, in scroll flow */}
-                    <NavBar
-                      activeProject={activeProject}
-                      searchOpen={searchOpen} setSearchOpen={setSearchOpen}
-                      searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-                      searchInputRef={searchInputRef} srLoading={srLoading}
-                      date={selected} token={token} userId={userId}
-                      onSelectProject={setActiveProject}
-                      onBack={() => setActiveProject(null)}
-                      tagDisplayName={tagDisplayName} projectColor={projectColor}
-                    />
+                  <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:4,boxSizing:'border-box'}}>
                     {isGraph ? (
                       <div style={{display:'flex',flexDirection:'column',gap:10}}>
                         {graphData ? (
