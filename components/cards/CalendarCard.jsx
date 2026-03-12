@@ -936,7 +936,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
     setSaving(true); setSaveErr('');
     try {
       if (isNew) {
-        const data = await api.post('/api/calendar-create', {title:form.title.trim(),date:selected,
+        const data = await api.post('/api/calendar', {title:form.title.trim(),date:selected,
           startTime:form.allDay?'':form.startTime,endTime:form.allDay?'':form.endTime,
           allDay:form.allDay,tz}, token);
         if (!data||data.error){ setSaveErr(data?.error||'Failed'); setSaving(false); return; }
@@ -946,7 +946,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
            endTime:form.allDay?null:to12h(form.endTime),allDay:form.allDay,color:'#B8A882'}]}));
         closePanel();
       } else {
-        const data = await api.post('/api/calendar-update', {eventId:active.id,title:form.title.trim(),date:selected,
+        const data = await api.patch('/api/calendar', {eventId:active.id,title:form.title.trim(),date:selected,
           startTime:form.allDay?'':form.startTime,endTime:form.allDay?'':form.endTime,
           allDay:form.allDay,tz}, token);
         if (!data||data.error){ setSaveErr(data?.error||'Failed'); setSaving(false); return; }
@@ -966,7 +966,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
     const snapshot = {...active};
     const dateSnap = selected;
     try {
-      const data = await api.post('/api/calendar-delete', {eventId:active.id}, token);
+      const data = await api.delete('/api/calendar', token, {eventId:active.id});
       if (data !== null) {
         setEvents(prev=>({...prev,[selected]:(prev[selected]||[]).filter(e=>e.id!==active.id)}));
         closePanel();
@@ -974,7 +974,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
           label: `Delete "${snapshot.title}"`,
           undo: async () => {
             const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-            const d = await api.post('/api/calendar-create', {title:snapshot.title, date:dateSnap,
+            const d = await api.post('/api/calendar', {title:snapshot.title, date:dateSnap,
               startTime: snapshot.allDay?'':toHHMM(snapshot.time),
               endTime: snapshot.allDay?'':toHHMM(snapshot.endTime),
               allDay:snapshot.allDay||snapshot.time==='all day', tz}, token);
@@ -984,7 +984,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
             }
           },
           redo: async () => {
-            await api.post('/api/calendar-delete', {eventId:snapshot.id}, token);
+            await api.delete('/api/calendar', token, {eventId:snapshot.id});
             setEvents(prev=>({...prev,[dateSnap]:(prev[dateSnap]||[]).filter(e=>e.id!==snapshot.id)}));
           },
         });
