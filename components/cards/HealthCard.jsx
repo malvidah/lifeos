@@ -8,6 +8,7 @@ import { cachedOuraFetch, _ouraCache } from "@/lib/ouraCache";
 import { createClient } from "@/lib/supabase";
 import { Card, Ring, Widget, Shimmer, ChevronBtn, InfoTip } from "../ui/primitives.jsx";
 import { fmtMins, fmtMinsField, sportEmoji } from "@/lib/formatting";
+import { api } from "@/lib/api";
 
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",activeMinutes:"",resilienceScore:"",stressMins:"",recoveryMins:""};
 
