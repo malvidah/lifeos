@@ -304,6 +304,19 @@ function DashboardInner() {
   if(!session) return <LoginScreen/>;
 
   const syncStatus={syncing:syncing.size>0,lastSync};
+
+  const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span></span>;
+  const ACT_HDR = <span style={{display:"flex",gap:0}}>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:60,textAlign:"center"}}>dist</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:100,textAlign:"center"}}>pace</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:C.dim,width:72,textAlign:"center"}}>energy</span>
+  </span>;
+  const WIDGETS = [
+    {id:"journal",  label:"Journal",  color:()=>C.accent, Comp:JournalEditor},
+    {id:"tasks",    label:"Tasks",    color:()=>C.blue,   Comp:Tasks},
+    {id:"meals",    label:"Meals",    color:()=>C.red,    Comp:Meals,    headerRight:()=>MEALS_HDR},
+    {id:"workouts", label:"Workouts", color:()=>C.green,  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
+  ];
   const [leftWidget,...rightWidgets] = WIDGETS;
 
   return (
