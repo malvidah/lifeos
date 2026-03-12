@@ -9,6 +9,7 @@ import { cachedOuraFetch } from "@/lib/ouraCache";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 import { api } from "@/lib/api";
+import { estimateNutrition } from "@/lib/images";
 
 // Merge Oura workouts + Strava activities, deduplicating by overlapping type+time
 function normalizeType(str) {

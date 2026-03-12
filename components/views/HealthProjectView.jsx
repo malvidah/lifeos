@@ -4,6 +4,7 @@ import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT } from "@/lib/dates";
 import { api } from "@/lib/api";
+import { estimateNutrition } from "@/lib/images";
 import { tagDisplayName } from "@/lib/tags";
 import { Card, Ring, ChevronBtn, RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { fmtMins, sportEmoji } from "@/lib/workouts";
