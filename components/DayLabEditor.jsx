@@ -13,22 +13,11 @@ import {
 import { createPortal } from 'react-dom';
 import { Suggestion } from '@tiptap/suggestion';
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-const serif = "Georgia, 'Times New Roman', serif";
-const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
-const F = { lg: 18, md: 15, sm: 12 };
+// ── Design tokens — imported from shared lib ─────────────────────────────────
+import { serif, mono, F, projectColor, CHIP_TOKENS as _SHARED_CHIP_TOKENS } from '@/lib/tokens';
+export { projectColor } from '@/lib/tokens';
 const ACCENT = '#D08828';
 const WARM   = '#C8A87A';
-
-const PROJECT_PALETTE = [
-  '#C17B4A', '#7A9E6E', '#6B8EB8', '#A07AB0',
-  '#B08050', '#5E9E8A', '#B06878', '#8A8A50',
-];
-export function projectColor(name) {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
-}
 
 // ── CSS injection ─────────────────────────────────────────────────────────────
 function injectEditorStyles() {

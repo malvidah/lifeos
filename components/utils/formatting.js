@@ -1,0 +1,6 @@
+export const SPORT_EMOJI={running:"🏃",cycling:"🚴",swimming:"🏊",walking:"🚶",hiking:"🥾",yoga:"🧘",climbing:"🧗",rowing:"🚣"};
+export function sportEmoji(type){if(!type)return"💪";const key=type.toLowerCase().replace(/[^a-z]/g,"");for(const[k,v]of Object.entries(SPORT_EMOJI)){if(key.includes(k))return v;}return"💪";}
+export function fmtMins(val){const v=typeof val==="string"?parseInt(val,10):val;if(v==null||isNaN(v))return"";if(v<60)return`${v}m`;const h=Math.floor(v/60);const m=v%60;return m?`${h}h ${m}m`:`${h}h`;}
+export function fmtMinsField(val){const v=typeof val==="string"?parseInt(val,10):val;if(v==null||isNaN(v))return"";if(v<60)return`${v}`;return fmtMins(v);}
+export const BIG_EVENT_KEYWORDS=/birthday|bday|anniversary|wedding|graduation|party|trip|camping|hike|concert|festival|game.?night|board.?game|vacation|holiday|travel|flight|conference|retreat|summit|christm|thanksgiv|new.?year|halloween|passover|hanukkah|diwali|eid|week.?off|day.?off|surgery|date.?night|show|performance|recital|marathon|race|gala|ceremony|opening.?night|potluck|picnic|reunion|sleepover|road.?trip/i;
+export function isBigEvent(ev){if(!ev)return false;return BIG_EVENT_KEYWORDS.test(ev.summary||ev.title||"");}

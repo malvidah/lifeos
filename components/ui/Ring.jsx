@@ -1,0 +1,2 @@
+"use client";
+export function Ring({score,color,size=48}){const r=(size-6)/2;const c=2*Math.PI*r;const pct=score!=null?Math.max(0,Math.min(100,score))/100:0;return <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}><circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--dl-border)" strokeWidth={3}/><circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={3} strokeDasharray={`${c*pct} ${c*(1-pct)}`} strokeLinecap="round" style={{transition:"stroke-dasharray 0.4s ease"}}/></svg>;}
