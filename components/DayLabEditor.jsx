@@ -16,7 +16,6 @@ import { serif, mono, F, projectColor, CHIP_TOKENS, THEMES } from '@/lib/tokens'
 
 const ACCENT = THEMES.dark.accent;
 const WARM   = '#C8A87A';
-}
 
 // ── CSS injection ─────────────────────────────────────────────────────────────
 function injectEditorStyles() {
