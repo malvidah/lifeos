@@ -432,11 +432,13 @@ function useDbSave(date, type, empty, token, userId) {
     _set(next);
     // Notify sibling hook instances with the same cacheKey
     window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: next } }));
+    // Write to DB immediately on every setValue call.
+    // Previously used a 200ms debounce (originally for keystroke batching) but
+    // onBlur fires once per session — immediate write prevents data loss on navigation
+    // where component unmounts before the timer fires.
     clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      dbSave(dateRef.current, type, live.current, token);
-      DIRTY[cacheKey] = false;
-    }, 200);
+    dbSave(dateRef.current, type, live.current, token);
+    DIRTY[cacheKey] = false;
     // Push undo entry for meaningful edits (not AI calorie estimates, not loading)
     if (!skipHistory && undoLabel) {
       pushHistory({
@@ -5949,16 +5951,16 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
           }
         });
 
-      // Update this project view's local entries state so EntryLine chips update immediately
+      // Update this project view's local entries state so all displayed chips update immediately
       const linkRe2 = new RegExp('\\[' + esc2 + '\\]', 'g');
+      const patchText = t => t.includes('[' + oldName + ']') ? t.replace(linkRe2, '[' + newName + ']') : t;
       setEntries(prev => {
         if (!prev) return prev;
-        const updated = prev.journalEntries.map(e =>
-          e.text.includes('[' + oldName + ']')
-            ? { ...e, text: e.text.replace(linkRe2, '[' + newName + ']') }
-            : e
-        );
-        return { ...prev, journalEntries: updated };
+        return {
+          ...prev,
+          journalEntries: prev.journalEntries.map(e => ({ ...e, text: patchText(e.text) })),
+          taskEntries:    prev.taskEntries.map(t    => ({ ...t, text: patchText(t.text) })),
+        };
       });
     }
   };
@@ -6239,8 +6241,8 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
         </Widget>
       )}
 
-      {/* Tasks — only shown on specific projects, not ALL PROJECTS */}
-      {project !== '__everything__' && <Widget
+      {/* Tasks — all projects and specific projects */}
+      <Widget
         label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
         color={C.blue} autoHeight
         collapsed={tasksCollapsed} onToggle={toggleTasks}
@@ -6342,13 +6344,11 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
             </div>
           );
         })()}
-      </Widget>}
+      </Widget>
 
       {/* Journal Entries */}
       <Widget
-        label={entries?.journalEntries?.length
-          ? (project === '__everything__' ? `Journal · ${entries.journalEntries.length}` : `Journal · ${entries.journalEntries.length}`)
-          : (project === '__everything__' ? 'Journal' : 'Journal')}
+        label={entries?.journalEntries?.length ? `Journal · ${entries.journalEntries.length}` : 'Journal'}
         color={C.accent} autoHeight
         collapsed={entriesCollapsed} onToggle={toggleEntries}
         headerLeft={null}

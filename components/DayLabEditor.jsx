@@ -323,16 +323,19 @@ function SuggestionDropdown({ state, onSelect }) {
   // Compute position synchronously on every render from the live clientRect —
   // avoids the one-frame-late flash that useEffect+setState caused.
   if (!state?.items.length || typeof document === 'undefined') return null;
+  // clientRect() returns a live DOMRect from the caret position — viewport-relative,
+  // correct for position:fixed. Returns null when editor isn't mounted or has no selection.
   const rect = state.clientRect?.();
-  if (!rect) return null;
-  // clientRect is viewport-relative — correct for position:fixed, no scroll offset needed.
-  // Flip above the caret if there isn't enough room below.
-  const MENU_W = 290; const MENU_H = 240;
+  if (!rect || (rect.top === 0 && rect.left === 0)) return null;
+  const MENU_W = 290;
+  const itemH = 36;
+  const MENU_H = Math.min(240, state.items.length * itemH + 8);
+  // Flip above caret when not enough room below; clamp to viewport edges
   const spaceBelow = window.innerHeight - rect.bottom - 8;
-  const top  = spaceBelow >= Math.min(MENU_H, state.items.length * 36 + 8)
-    ? rect.bottom + 4
-    : Math.max(4, rect.top - Math.min(MENU_H, state.items.length * 36 + 8) - 4);
-  const left = Math.max(4, Math.min(rect.left, window.innerWidth - MENU_W - 4));
+  const top  = spaceBelow >= MENU_H
+    ? rect.bottom + 6
+    : Math.max(8, rect.top - MENU_H - 6);
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - MENU_W - 8));
 
   return createPortal(
     <div style={{
@@ -616,7 +619,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             const serialised = taskModeRef.current
               ? editorRef.current.getHTML()
               : docToText(editorRef.current.getJSON());
+            // Call onBlur synchronously — this writes to MEM and starts the 200ms
+            // debounce timer. We then also fire a synthetic blur on the DOM element
+            // so any outer focus-tracking (useDbSave DIRTY flag etc.) sees the blur.
             onBlurRef.current(serialised);
+            editorRef.current.view?.dom?.blur();
           }
           onProjectClickRef.current(projectEl.getAttribute('data-project-tag'));
           return true;
@@ -629,6 +636,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               ? editorRef.current.getHTML()
               : docToText(editorRef.current.getJSON());
             onBlurRef.current(serialised);
+            editorRef.current.view?.dom?.blur();
           }
           onNoteClickRef.current(noteEl.getAttribute('data-note-link'));
           return true;
