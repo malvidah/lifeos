@@ -1,14 +1,11 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useContext, createContext } from "react";
-import { useTheme } from "../theme/ThemeContext.jsx";
-import { mono, serif, F, R } from "../theme/tokens.js";
-import { todayKey } from "../utils/dates.js";
-import { estimateNutrition } from "../utils/ai.js";
-import { uploadImageFile } from "../utils/images.js";
-import { useDbSave } from "../hooks/useDbSave.js";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useTheme } from "@/lib/theme";
+import { mono, F, R, projectColor } from "@/lib/tokens";
+import { useDbSave } from "@/lib/db";
+import { estimateNutrition, uploadImageFile } from "@/lib/images";
 import { DayLabEditor } from "../DayLabEditor.jsx";
-import { RichLine } from "../ui/index.jsx";
-export const ProjectNamesContext = createContext([]);
+
 export function JournalEditor({date,userId,token}) {
   const { C } = useTheme();
   const {value, setValue, loaded} = useDbSave(date, 'journal', '', token, userId);
@@ -226,4 +223,5 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   );
 }
 
-export function Meals({date,token,userId}){return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={C.accent} showProtein/>;}
+export function Meals({date,token,userId}) { const { C } = useTheme(); return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={C.accent} showProtein/>; }
+export { ProjectNamesContext } from "@/lib/contexts";

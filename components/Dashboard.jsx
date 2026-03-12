@@ -1,28 +1,28 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ThemeProvider, useTheme } from "./theme/ThemeContext.jsx";
-import { mono, F, injectBlurWebFont } from "./theme/tokens.js";
-import { createClient } from "../lib/supabase.js";
-import { todayKey, toKey, shift } from "./utils/dates.js";
-import { tagDisplayName } from "./utils/tags.js";
-import { bustOuraCache } from "./utils/ouraCache.js";
-import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "./hooks/cache.js";
-import { useIsMobile } from "./hooks/useIsMobile.js";
-import { useCollapse } from "./hooks/useCollapse.js";
-import { projectColor, Widget, Card, TaskFilterBtns, NavigationContext } from "./ui/index.jsx";
-import { Header } from "./nav/Header.jsx";
-import { NavBar } from "./nav/NavBar.jsx";
-import { CalendarCard } from "./cards/CalendarCard.jsx";
-import { HealthCard } from "./cards/HealthCard.jsx";
-import { WorkoutsCard } from "./cards/WorkoutsCard.jsx";
+import { ThemeProvider, useTheme } from "@/lib/theme";
+import { mono, F, injectBlurWebFont, projectColor } from "@/lib/tokens";
+import { createClient } from "@/lib/supabase";
+import { todayKey, toKey, shift } from "@/lib/dates";
+import { tagDisplayName } from "@/lib/tags";
+import { bustOuraCache } from "@/lib/ouraCache";
+import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
+import { useIsMobile, useCollapse } from "@/lib/hooks";
+import { NavigationContext, ProjectNamesContext } from "@/lib/contexts";
+import { Widget, Card } from "./ui/primitives.jsx";
+import Header from "./nav/Header.jsx";
+import NavBar from "./nav/NavBar.jsx";
+import CalendarCard from "./cards/CalendarCard.jsx";
+import HealthCard from "./cards/HealthCard.jsx";
+import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
-import { JournalEditor, Meals, ProjectNamesContext } from "./widgets/JournalEditor.jsx";
-import { Tasks } from "./widgets/Tasks.jsx";
-import { ChatFloat } from "./widgets/ChatFloat.jsx";
+import { JournalEditor, Meals } from "./widgets/JournalEditor.jsx";
+import Tasks, { TaskFilterBtns } from "./widgets/Tasks.jsx";
+import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
-import { LoginScreen } from "./views/LoginScreen.jsx";
-import { ProjectView } from "./views/ProjectView.jsx";
-import { HealthProjectView } from "./views/HealthProjectView.jsx";
+import LoginScreen from "./views/LoginScreen.jsx";
+import ProjectView from "./views/ProjectView.jsx";
+import HealthProjectView from "./views/HealthProjectView.jsx";
 import "./theme/theme.css";
 
 function DashboardInner() {
@@ -123,8 +123,7 @@ function DashboardInner() {
     if (!token || !userId) return;
     const today = todayKey();
     // Remove today's entry from the module-level Oura cache so next render re-fetches
-    const k = `${userId}|${today}`;
-    delete _ouraCache_unused;
+    bustOuraCache(userId, today);
     // Also evict today's health entry from the in-memory DB cache so useDbSave
     // re-fetches from Supabase after the fresh Oura write lands
     const healthKey = `${userId}:${today}:health`;

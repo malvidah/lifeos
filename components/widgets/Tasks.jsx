@@ -27,52 +27,6 @@ function NewProjectTask({ project, onAdd }) {
   );
 }
 
-// ─── TaskFilterBtns ──────────────────────────────────────────────────────────
-function TaskFilterBtns({ filter, setFilter }) {
-  const OpenIcon = () => (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="12" height="12" rx="2.5"/>
-    </svg>
-  );
-  const DoneIcon = () => (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="2" width="12" height="12" rx="2.5"/>
-      <polyline points="5,8.5 7,10.5 11,6"/>
-    </svg>
-  );
-  const btns = [
-    { key: 'open', label: null,  icon: <OpenIcon/> },
-    { key: 'done', label: null,  icon: <DoneIcon/> },
-    { key: 'all',  label: 'ALL', icon: null },
-  ];
-  return (
-    <div style={{ display:'flex', gap:4 }}>
-      {btns.map(b => {
-        const active = filter === b.key;
-        return (
-          <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }}
-            style={{
-              fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em',
-              padding: b.label ? '3px 8px' : '3px 6px',
-              borderRadius: 4, cursor: 'pointer',
-              minHeight: 22,
-              background: active ? C.accent+'22' : 'none',
-              border: `1px solid ${active ? C.accent : C.border2}`,
-              color: active ? C.accent : C.muted,
-              display: 'flex', alignItems: 'center', gap: 3,
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor=C.accent+'66'; e.currentTarget.style.color=C.text; }}}
-            onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor=C.border2; e.currentTarget.style.color=C.muted; }}}
-          >
-            {b.label || b.icon}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ─── Tasks ────────────────────────────────────────────────────────────────────
 // Stores as HTML string (like journal). Old format [{id,text,done}] auto-migrates.
 // Old [{id,text,done}] JSON is converted to HTML on read; the HTML stores checked state.

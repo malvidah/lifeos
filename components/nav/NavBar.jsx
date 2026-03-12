@@ -4,6 +4,7 @@ import { useTheme } from "@/lib/theme";
 import { mono, F, R, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
 import { useNavigation } from "@/lib/contexts";
+import ProjectsCard from "../cards/ProjectsCard.jsx";
 
 export default function NavBar(props) {
   const { C } = useTheme();
