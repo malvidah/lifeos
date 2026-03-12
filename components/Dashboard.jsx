@@ -6101,9 +6101,10 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   // Navigate-to-note from journal chip clicks
   useEffect(() => {
     const goHandler = (e) => {
-      const targetName = e.detail?.name?.toLowerCase?.() || '';
-      const match = notesList.find(n => noteName(n).toLowerCase() === targetName);
+      const targetName = e.detail?.name || '';
+      const match = notesList.find(n => noteName(n).toLowerCase() === targetName.toLowerCase());
       if (match) selectNote(match.id);
+      else addNote(targetName);
     };
     const createHandler = (e) => {
       addNote(e.detail?.name || '');
