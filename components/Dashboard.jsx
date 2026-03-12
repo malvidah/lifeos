@@ -136,24 +136,6 @@ function NoteChip({ name, onClick }) {
     }}>{name}</span>
   );
 }
-// Edit-mode tag renderer: {project} pills + [note] chips (no legacy # here — edit views show migrated text)
-function renderTaskInline(text) {
-  if (!text) return null;
-  const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]/g;
-  const parts = []; let last = 0, m;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
-    if (m[1] !== undefined) {
-      parts.push(<TagChip key={`c${m.index}`} name={m[1]} />);
-    } else {
-      parts.push(<NoteChip key={`n${m.index}`} name={m[2]} />);
-    }
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
-  return parts.length ? parts : text;
-}
-
 // RichLine — renders stored text with chips and links, NavigationContext-aware.
 // Use this everywhere instead of calling renderRichLine() directly.
 // It is the read-only counterpart to DayLabEditor — same visual output, no editing.
@@ -165,22 +147,6 @@ function RichLine({ text, dimTag = null }) {
     (name) => navigateToNote(name),
   )}</>;
 }
-
-function renderWithTags(text, dimTag=null, onTagClick=null) {
-  if (!text) return null;
-  const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
-  const parts = []; let last = 0; let m;
-  while ((m = re.exec(text)) !== null) {
-    if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
-    const name = m[1] ?? m[2].toLowerCase();
-    const isOwn = dimTag && name === dimTag.toLowerCase();
-    parts.push(<TagChip key={`c${m.index}`} name={name} plain={isOwn}/>);
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
-  return parts.length > 0 ? parts : text;
-}
-
 
 // ─── URL + Image rendering helpers ──────────────────────────────────────────
 const URL_RE = /https?:\/\/[^\s<>"')\]]+/g;
@@ -3136,18 +3102,6 @@ function JournalEditor({date,userId,token}) {
   );
 }
 
-// Helper: insert text at textarea cursor position
-function insertAtCursor(ta, text) {
-  const start = ta.selectionStart;
-  const end   = ta.selectionEnd;
-  const val   = ta.value;
-  ta.value = val.slice(0, start) + text + val.slice(end);
-  ta.selectionStart = ta.selectionEnd = start + text.length;
-  ta.style.height = 'auto';
-  ta.style.height = ta.scrollHeight + 'px';
-}
-
-
 // ─── RowList ─────────────────────────────────────────────────────────────────
 // syncedRows: live from API, may have native kcal (Strava) or need estimation (Oura)
 // AI estimates for synced rows persist to DB under type+"_kcal" key
@@ -5942,7 +5896,6 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
     useDbSave('global', 'projects', {}, token, userId);
 
   const [entries, setEntries] = useState(null); // null=loading, obj=loaded
-  const [showCompleted, setShowCompleted] = useState(false);
   const pvTaskFilter = taskFilter;
   const setPvTaskFilter = setTaskFilter;
   const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}

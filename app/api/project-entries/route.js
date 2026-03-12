@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { parseTasks } from '../_lib/parseTasks.js';
 
 function getUserClient(req) {
   const auth = req.headers.get('authorization') || '';
@@ -96,14 +97,13 @@ export async function GET(req) {
       .eq('user_id', user.id).eq('type', 'tasks')
       .order('date', { ascending: true });
     if (te) throw te;
+    // parseTasks handles both old [{id,text,done}] JSON and new TipTap HTML string formats
     for (const row of tasksRows || []) {
-      const tasks = Array.isArray(row.data) ? row.data : [];
-      tasks.forEach(task => {
-        if (!task?.text) return;
+      for (const task of parseTasks(row.data)) {
         if (!matchRe || matchRe.test(task.text)) {
-          taskEntries.push({ date: row.date, id: task.id, text: task.text, done: !!task.done });
+          taskEntries.push({ date: row.date, id: task.id, text: task.text, done: task.done });
         }
-      });
+      }
     }
 
     return Response.json({ journalEntries, taskEntries, isEverything, isHealth });

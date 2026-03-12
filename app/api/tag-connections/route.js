@@ -1,12 +1,12 @@
 import { getUserClient } from '../_lib/google.js';
+import { parseTasks } from '../_lib/parseTasks.js';
 
 // New format: {projectname}  Legacy: #ProjectName
 const TAG_RE_NEW    = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
 const TAG_RE_LEGACY = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
 
 function canonical(lower) {
-  if (lower === 'health') return '__health__';
-  return lower;
+  return lower === 'health' ? '__health__' : lower;
 }
 
 function tagsIn(text) {
@@ -23,30 +23,32 @@ function tagsIn(text) {
 export async function GET(req) {
   const { supabase } = getUserClient(req);
   if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
+
   const { data: { user }, error } = await supabase.auth.getUser();
   if (error || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   try {
-    const [journalR, legacyR, tasksR] = await Promise.all([
+    const [journalR, tasksR] = await Promise.all([
       supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'journal'),
-      supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'notes'),
       supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'tasks'),
     ]);
 
-    const coMap = new Map();
+    const coMap   = new Map();
     const recency = new Map();
-    const byDate = new Map();
+    const byDate  = new Map();
 
-    for (const row of [...(journalR.data || []), ...(legacyR.data || [])]) {
+    for (const row of (journalR.data || [])) {
       const tags = tagsIn(typeof row.data === 'string' ? row.data : '');
       const existing = byDate.get(row.date) || new Set();
       tags.forEach(t => existing.add(t));
       byDate.set(row.date, existing);
     }
+
+    // parseTasks handles both old [{id,text,done}] and new TipTap HTML format
     for (const row of (tasksR.data || [])) {
       const tags = new Set();
-      for (const task of (Array.isArray(row.data) ? row.data : [])) {
-        if (task?.text) tagsIn(task.text).forEach(t => tags.add(t));
+      for (const task of parseTasks(row.data)) {
+        tagsIn(task.text).forEach(t => tags.add(t));
       }
       const existing = byDate.get(row.date) || new Set();
       tags.forEach(t => existing.add(t));
