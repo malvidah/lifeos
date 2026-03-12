@@ -3734,45 +3734,6 @@ function Tasks({date,token,userId,taskFilter='all'}) {
 
   return (
     <div data-task-filter={taskFilter} style={{flex:1}}>
-      <style>{`
-        /* Task list chrome */
-        .dl-tasks ul[data-type="taskList"] { list-style:none; padding:0; margin:0; }
-        .dl-tasks li[data-type="taskItem"] {
-          display:flex; align-items:flex-start; gap:10px; padding:4px 0;
-        }
-        .dl-tasks li[data-type="taskItem"] > label {
-          display:flex; align-items:center; flex-shrink:0; margin-top:4px; cursor:pointer;
-        }
-        .dl-tasks li[data-type="taskItem"] > label > input[type="checkbox"] {
-          appearance:none; -webkit-appearance:none;
-          width:15px; height:15px; border-radius:4px; flex-shrink:0;
-          border:1.5px solid ${C.border2}; background:transparent; cursor:pointer;
-          transition:all 0.15s; position:relative; margin:0;
-        }
-        .dl-tasks li[data-type="taskItem"] > label > input[type="checkbox"]:checked {
-          background:${C.blue}; border-color:${C.blue};
-        }
-        .dl-tasks li[data-type="taskItem"] > label > input[type="checkbox"]:checked::after {
-          content:''; position:absolute;
-          left:3px; top:1px; width:5px; height:9px;
-          border:1.5px solid #111; border-top:none; border-left:none;
-          transform:rotate(45deg);
-        }
-        .dl-tasks li[data-type="taskItem"][data-checked="true"] > div {
-          text-decoration:line-through; opacity:0.35;
-        }
-        /* Filter */
-        [data-task-filter="open"] .dl-tasks li[data-type="taskItem"][data-checked="true"] { display:none; }
-        [data-task-filter="done"] .dl-tasks li[data-type="taskItem"][data-checked="false"] { display:none; }
-        /* Paragraph inside task item — no extra margin */
-        .dl-tasks li[data-type="taskItem"] > div > p { margin:0; }
-        /* Placeholder only when truly empty */
-        .dl-tasks .is-empty::before {
-          content: attr(data-placeholder);
-          color: ${C.dim}; pointer-events:none; float:left; height:0;
-          font-family: ${serif}; font-size: ${F.md}px;
-        }
-      `}</style>
       <DayLabEditor
         taskMode
         value={htmlValue}

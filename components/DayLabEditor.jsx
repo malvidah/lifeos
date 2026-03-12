@@ -43,8 +43,47 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
-    /* atom node selection ring — replaces the blue browser default */
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
+
+    /* ── Task list ─────────────────────────────────────────────────────── */
+    .dl-tasks .ProseMirror ul[data-type="taskList"] { list-style: none; padding: 0; margin: 0; }
+    .dl-tasks .ProseMirror li[data-type="taskItem"] {
+      display: flex; align-items: flex-start; gap: 10px; padding: 3px 0; min-height: 1.7em;
+    }
+    /* TipTap wraps the checkbox in a <label contenteditable=false> */
+    .dl-tasks .ProseMirror li[data-type="taskItem"] > label {
+      display: flex; align-items: center; flex-shrink: 0;
+      margin-top: 0.25em; cursor: pointer; user-select: none;
+    }
+    .dl-tasks .ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"] {
+      appearance: none; -webkit-appearance: none;
+      width: 15px; height: 15px; border-radius: 4px; flex-shrink: 0;
+      border: 1.5px solid #333028; background: transparent; cursor: pointer;
+      transition: background 0.15s, border-color 0.15s; position: relative; margin: 0;
+    }
+    .dl-tasks .ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"]:checked {
+      background: #4878A8; border-color: #4878A8;
+    }
+    .dl-tasks .ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"]:checked::after {
+      content: ''; position: absolute;
+      left: 3px; top: 1px; width: 5px; height: 9px;
+      border: 1.5px solid #111110; border-top: none; border-left: none;
+      transform: rotate(45deg);
+    }
+    /* The editable content lives in a <div> next to the label */
+    .dl-tasks .ProseMirror li[data-type="taskItem"] > div { flex: 1; min-width: 0; }
+    .dl-tasks .ProseMirror li[data-type="taskItem"] > div > p { margin: 0; }
+    /* Done styling */
+    .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"] > div {
+      text-decoration: line-through; opacity: 0.35;
+    }
+    /* Filter — toggled by data-task-filter attribute on wrapper */
+    [data-task-filter="open"]  .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"]  { display: none; }
+    [data-task-filter="done"]  .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="false"] { display: none; }
+    /* Placeholder — only on empty task list */
+    .dl-tasks .ProseMirror li[data-type="taskItem"].is-empty > div > p::before {
+      content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted);
+    }
   `;
   document.head.appendChild(s);
 }
