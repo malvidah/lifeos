@@ -3119,12 +3119,14 @@ function Notes({date,userId,token}) {
   );
 
   const { notes: ctxNotes } = useContext(NoteContext);
+  const ctxProjects = useContext(ProjectNamesContext);
   return (
     <DayLabEditor
       value={value || ''}
       onBlur={text => setValue(text, {undoLabel: 'Edit notes'})}
       onImageUpload={file => uploadImageFile(file, token)}
       noteNames={ctxNotes}
+      projectNames={ctxProjects}
       placeholder="What's on your mind?"
       textColor={C.text}
       mutedColor={C.dim}
@@ -3682,6 +3684,7 @@ function TaskFilterBtns({ filter, setFilter }) {
 function Tasks({date,token,userId,taskFilter='all'}) {
   const mkRow=()=>({id:Date.now(),text:"",done:false});
   const {value:rows,setValue:setRows,loaded}=useDbSave(date,"tasks",[mkRow()],token,userId);
+  const taskProjectNames = useContext(ProjectNamesContext);
   const skipBlurRef=useRef(false);
   const longPressTimer=useRef(null);
   const clickCaretRef=useRef(null);
@@ -3793,6 +3796,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
                   value={row.text}
                   autoFocus
                   singleLine
+                  projectNames={taskProjectNames}
                   textColor={row.done ? C.muted : C.text}
                   mutedColor={C.dim}
                   color={row.done ? C.muted : C.accent}
@@ -5314,6 +5318,8 @@ function fmtDate(ds) {
 
 // ─── NoteContext — passes project note names to editors for {note} autocomplete
 const NoteContext = createContext({ notes: [] });
+// ─── ProjectNamesContext — passes known project names to editors for #tag autocomplete
+const ProjectNamesContext = createContext([]);
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 // Unified nav bar — lives in scroll flow, right below the sticky vignette.
@@ -6007,6 +6013,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
 // ─── EntryLine — stable-height edit line for ProjectView ─────────────────────
 function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   const baseStyle = { fontFamily: serif, fontSize: F.md, lineHeight: '1.7', padding: '2px 0', wordBreak: 'break-word' };
+  const ctxProjects = useContext(ProjectNamesContext);
 
   if (editing) {
     return (
@@ -6015,6 +6022,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
         onBlur={text => onSave(text)}
         placeholder=""
         singleLine
+        projectNames={ctxProjects}
         textColor={C.text}
         mutedColor={C.dim}
         color={C.accent}
@@ -6031,6 +6039,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
 
 // ─── ProjectView ──────────────────────────────────────────────────────────────
 function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter }) {
+  const pvProjectNames = useContext(ProjectNamesContext);
   const { value: projectsMeta, setValue: setProjectsMeta } =
     useDbSave('global', 'projects', {}, token, userId);
 
@@ -6320,6 +6329,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
                   onBlur={text => updateNoteContent(activeNote.id, text)}
                   placeholder='Note name (first line)…'
                   noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
+                  projectNames={pvProjectNames}
                   onCreateNote={name => addNote(name)}
                   textColor={C.text}
                   mutedColor={C.dim}
@@ -6575,6 +6585,16 @@ export default function Dashboard() {
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
 
+  // Project names — fetched once on login, used by all editors for #tag autocomplete
+  const [allProjectNames, setAllProjectNames] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/all-tags', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d.tags)) setAllProjectNames(d.tags); })
+      .catch(() => {});
+  }, [token]); // eslint-disable-line
+
   // Graph data — declared HERE so token is already defined (avoids TDZ in minified bundle)
   const [graphData, setGraphData] = useState(null);
   useEffect(() => {
@@ -6793,6 +6813,7 @@ export default function Dashboard() {
   const [leftWidget,...rightWidgets] = WIDGETS;
 
   return (
+    <ProjectNamesContext.Provider value={allProjectNames}>
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
       <style>{`
         *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
@@ -7016,5 +7037,6 @@ export default function Dashboard() {
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
       )}
     </div>
+    </ProjectNamesContext.Provider>
   );
 }
