@@ -44,16 +44,23 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
+  `;
+  document.head.appendChild(s);
+}
 
-    /* ── Task list ─────────────────────────────────────────────────────── */
+function injectTaskStyles() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('daylab-task-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'daylab-task-styles';
+  s.textContent = `
     .dl-tasks .ProseMirror ul[data-type="taskList"] { list-style: none; padding: 0; margin: 0; }
     .dl-tasks .ProseMirror li[data-type="taskItem"] {
-      display: flex; align-items: flex-start; gap: 10px; padding: 3px 0; min-height: 1.7em;
+      display: flex !important; align-items: flex-start; gap: 10px; padding: 3px 0;
     }
-    /* TipTap wraps the checkbox in a <label contenteditable=false> */
     .dl-tasks .ProseMirror li[data-type="taskItem"] > label {
       display: flex; align-items: center; flex-shrink: 0;
-      margin-top: 0.25em; cursor: pointer; user-select: none;
+      margin-top: 0.3em; cursor: pointer; user-select: none; contenteditable: false;
     }
     .dl-tasks .ProseMirror li[data-type="taskItem"] > label > input[type="checkbox"] {
       appearance: none; -webkit-appearance: none;
@@ -70,17 +77,13 @@ function injectEditorStyles() {
       border: 1.5px solid #111110; border-top: none; border-left: none;
       transform: rotate(45deg);
     }
-    /* The editable content lives in a <div> next to the label */
     .dl-tasks .ProseMirror li[data-type="taskItem"] > div { flex: 1; min-width: 0; }
     .dl-tasks .ProseMirror li[data-type="taskItem"] > div > p { margin: 0; }
-    /* Done styling */
     .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"] > div {
       text-decoration: line-through; opacity: 0.35;
     }
-    /* Filter — toggled by data-task-filter attribute on wrapper */
-    [data-task-filter="open"]  .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"]  { display: none; }
-    [data-task-filter="done"]  .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="false"] { display: none; }
-    /* Placeholder — only on empty task list */
+    [data-task-filter="open"]  .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"]  { display: none !important; }
+    [data-task-filter="done"]  .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="false"] { display: none !important; }
     .dl-tasks .ProseMirror li[data-type="taskItem"].is-empty > div > p::before {
       content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted);
     }
@@ -436,6 +439,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   editable     = true,
 }, ref) {
   useEffect(injectEditorStyles, []);
+  useEffect(() => { if (taskMode) injectTaskStyles(); }, [taskMode]);
 
   // Stable refs — avoid stale closures in TipTap plugins / editorProps
   const editorRef            = useRef(null);
@@ -539,6 +543,28 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ...(taskMode ? [
         TaskList,
         TaskItem.configure({ nested: false }),
+        // Prevent backspace/delete from removing the taskList container entirely.
+        // If the doc would become empty or lose its taskList, restore a blank taskItem.
+        Extension.create({
+          name: 'taskGuard',
+          addKeyboardShortcuts() {
+            const ensureList = (editor) => {
+              const { doc } = editor.state;
+              const hasTaskList = doc.firstChild?.type.name === 'taskList';
+              if (!hasTaskList) {
+                editor.commands.setContent(
+                  '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>'
+                );
+                return true;
+              }
+              return false;
+            };
+            return {
+              Backspace: ({ editor }) => ensureList(editor),
+              Delete:    ({ editor }) => ensureList(editor),
+            };
+          },
+        }),
       ] : []),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
