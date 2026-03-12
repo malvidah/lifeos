@@ -3057,8 +3057,9 @@ function JournalEditor({date,userId,token}) {
   const { notes: ctxNotes, onCreateNote: ctxOnCreateNote } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
   const { navigateToProject, navigateToNote, createNoteGlobally } = useContext(NavigationContext);
-  // In the day view there's no NoteContext.Provider, so ctxOnCreateNote is null.
-  // Fall back to createNoteGlobally which navigates to __everything__ and fires an event.
+  // In day-view there's no NoteContext.Provider, so ctxOnCreateNote is null.
+  // Fall back to createNoteGlobally — when called with { silent: true } from chip creation,
+  // it registers the note without navigating. Click handlers pass { silent: false } (default).
   const handleCreateNote = ctxOnCreateNote || createNoteGlobally;
   return (
     <DayLabEditor
@@ -3607,7 +3608,7 @@ function Tasks({date,token,userId,taskFilter='all'}) {
   const taskProjectNames = useContext(ProjectNamesContext);
   const {navigateToProject,navigateToNote,createNoteGlobally} = useContext(NavigationContext);
   const {notes:ctxNotes,onCreateNote:ctxOnCreateNote} = useContext(NoteContext);
-  const handleCreateNote = ctxOnCreateNote || createNoteGlobally;
+  const handleCreateNote = ctxOnCreateNote || createNoteGlobally; // silent-aware via { silent: true }
   const wrapperRef = useRef(null);
 
   // Migrate old [{id,text,done}] array format to HTML on first load
@@ -5205,12 +5206,17 @@ function NavBar({ activeProject, searchOpen, setSearchOpen, searchQuery, setSear
   );
 }
 
-// ─── AddJournalLine — inline entry input; supports uncontrolled (default) or controlled (value+onChange) ──
-function AddJournalLine({ project, onAdd, placeholder, value: controlledValue, onChange: controlledOnChange }) {
+// ─── AddJournalLine — single-line DayLabEditor that calls onAdd(text) on Enter or blur.
+// DayLabEditor self-clears after commit; callers do not need to maintain text state.
+function AddJournalLine({ project, onAdd, placeholder }) {
   const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxNotes    = useContext(NoteContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+  // Silent create: register note in list without navigating away
+  const handleCreateNote = ctxNotes.onCreateNote
+    ? (name) => ctxNotes.onCreateNote(name)
+    : null;
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
       <DayLabEditor
@@ -5218,6 +5224,7 @@ function AddJournalLine({ project, onAdd, placeholder, value: controlledValue, o
         placeholder={placeholder || 'Add an entry…'}
         projectNames={ctxProjects}
         noteNames={ctxNotes.notes}
+        onCreateNote={handleCreateNote}
         textColor={C.text}
         mutedColor={C.dim}
         color={col}
@@ -5234,7 +5241,6 @@ function AddJournalLine({ project, onAdd, placeholder, value: controlledValue, o
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
 function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
   const [allMeals, setAllMeals] = useState(null);
-  const [addText, setAddText] = useState('');
   const todayStr = new Date().toISOString().slice(0, 10);
 
   useEffect(() => {
@@ -5252,10 +5258,9 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
       });
   }, [token, userId]);
 
-  async function commitMeal() {
-    const text = addText.trim();
-    if (!text) return;
-    setAddText('');
+  async function commitMeal(text) {
+    if (!text?.trim()) return;
+    text = text.trim();
     const current = await dbLoad(todayStr, 'meals', token);
     const existing = Array.isArray(current) ? current.filter(r => r.text) : [];
     const newRow = { id: Date.now(), text, kcal: null, protein: null };
@@ -5308,8 +5313,6 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
       <AddJournalLine
         onAdd={commitMeal}
         placeholder="Add a meal…"
-        value={addText}
-        onChange={setAddText}
       />
       {todayMeals.map((r, i) => (
         <div key={r.id||i} style={rowS}>
@@ -5425,13 +5428,11 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
   const chipBase  = {fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',flexShrink:0,borderRadius:4,padding:'2px 8px',whiteSpace:'nowrap'};
   const rowS      = {display:'flex',alignItems:'center',gap:0,padding:'3px 0',minHeight:28};
 
-  const [actAddText, setActAddText] = useState('');
   const todayStr = new Date().toISOString().slice(0, 10);
 
-  async function commitActivity() {
-    const text = actAddText.trim();
-    if (!text) return;
-    setActAddText('');
+  async function commitActivity(text) {
+    if (!text?.trim()) return;
+    text = text.trim();
     const current = await dbLoad(todayStr, 'workouts', token);
     const existing = Array.isArray(current) ? current.filter(r => r.text) : [];
     const newRow = { id: Date.now(), text, dist: null, pace: null, kcal: null };
@@ -5480,8 +5481,6 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
       <AddJournalLine
         onAdd={commitActivity}
         placeholder="Add an activity…"
-        value={actAddText}
-        onChange={setActAddText}
       />
       {todayRows.map((r, i) => (
         <div key={r.id||i} style={rowS}>
@@ -6655,7 +6654,16 @@ export default function Dashboard() {
       },
       // Called when user creates a [new note] chip from the day-view journal.
       // Navigates to __everything__ and creates the note there.
-      createNoteGlobally: (name) => {
+      // Called when user creates a new [note] chip.
+      // silent=true: just register the note, don't navigate (chip was created inline).
+      // silent=false (default, e.g. clicking a chip for a non-existent note): navigate.
+      createNoteGlobally: (name, { silent = false } = {}) => {
+        if (silent) {
+          // Register the note without navigating — fires create-note which ProjectView
+          // handles by adding it to the notes list, but only if already on __everything__.
+          window.dispatchEvent(new CustomEvent('lifeos:create-note', { detail: { name, silent: true } }));
+          return;
+        }
         setActiveProject('__everything__');
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('lifeos:create-note', { detail: { name } }));

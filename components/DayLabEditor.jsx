@@ -553,13 +553,20 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               { type: 'text', text: ' ' },
             ]).run();
           } else {
+            // Insert note chip. Do NOT navigate — navigation only fires on chip click.
+            // If this is a new note name, call onCreateNote to register it silently
+            // in the note list (so it appears in future /n suggestions), but do NOT
+            // call createNoteGlobally which would navigate away from the current view.
             const isCreate = name.startsWith('__create__:');
             const noteName = isCreate ? name.slice(11) : name.slice(9); // __note__:=9
             editor.chain().focus().deleteRange(range).insertContent([
               { type: 'noteLink', attrs: { name: noteName } },
               { type: 'text', text: ' ' },
             ]).run();
-            if (isCreate) onCreateNoteRef.current?.(noteName);
+            // Only call onCreateNote if it's a context-scoped handler (not createNoteGlobally).
+            // createNoteGlobally navigates — that should only happen on explicit chip click.
+            // We signal this with a flag the caller can check.
+            if (isCreate) onCreateNoteRef.current?.(noteName, { silent: true });
           }
         },
       }),
