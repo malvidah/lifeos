@@ -10,6 +10,7 @@ import { dbLoad, dbSave, MEM } from "@/lib/db";
 import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import HealthCard from "../cards/HealthCard.jsx";
+import { TaskFilterBtns } from "../widgets/Tasks.jsx";
 
 function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
   const { C } = useTheme();

@@ -7,6 +7,7 @@ import { useDbSave, dbLoad } from "@/lib/db";
 import { fmtMins, sportEmoji } from "@/lib/formatting";
 import { cachedOuraFetch } from "@/lib/ouraCache";
 import { RichLine, Shimmer } from "../ui/primitives.jsx";
+import { DayLabEditor } from "../DayLabEditor.jsx";
 
 function SourceBadge({source}) {
   if (!source) return null;
