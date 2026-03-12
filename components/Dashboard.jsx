@@ -136,73 +136,50 @@ function NoteChip({ name, onClick }) {
     }}>{name}</span>
   );
 }
-// RichLine — renders stored text with chips and links, NavigationContext-aware.
-// Use this everywhere instead of calling renderRichLine() directly.
-// It is the read-only counterpart to DayLabEditor — same visual output, no editing.
+// RichLine — read-only counterpart to DayLabEditor.
+// Renders stored plain-text with {project} chips, [note] chips, URLs, and [img:] blocks.
+// Single flat pass — no indirection through renderRichLine/renderTextWithLinksAndTags.
 function RichLine({ text, dimTag = null }) {
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   if (!text) return null;
-  return <>{renderRichLine(text, dimTag,
-    (name) => navigateToProject(name),
-    (name) => navigateToNote(name),
-  )}</>;
-}
 
-// ─── URL + Image rendering helpers ──────────────────────────────────────────
-const URL_RE = /https?:\/\/[^\s<>"')\]]+/g;
-const IMG_RE = /\[img:(https?:\/\/[^\]]+|data:[^\]]+)\]/g;
-
-// Split text by images first, then render each text segment with URLs+tags
-function renderRichLine(text, dimTag=null, onTagClick=null, onNoteClick=null) {
-  if (!text) return null;
   const parts = [];
-  let last = 0;
-  const re = new RegExp(IMG_RE.source, 'g'); let m;
+  let last = 0, k = 0;
+  // Single combined regex: [img:] | URL | {project} | #Legacy | [note]
+  const re = /\[img:(https?:\/\/[^\]]+|data:[^\]]+)\]|(https?:\/\/[^\s<>"')[\]]+)|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|(#[A-Za-z][A-Za-z0-9]+(?![A-Za-z0-9]))|\[([^\]]+)\]/g;
+  let m;
   while ((m = re.exec(text)) !== null) {
-    if (m.index > last) {
-      parts.push(<span key={`t${last}`}>{renderTextWithLinksAndTags(text.slice(last, m.index), dimTag, last, onTagClick, onNoteClick)}</span>);
-    }
-    parts.push(
-      <div key={`img${m.index}`} style={{ margin: '6px 0', lineHeight: 0 }}>
-        <img src={m[1]} alt="" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 8, display: 'block' }} />
-      </div>
-    );
-    last = m.index + m[0].length;
-  }
-  if (last < text.length) parts.push(<span key={`e${last}`}>{renderTextWithLinksAndTags(text.slice(last), dimTag, last, onTagClick, onNoteClick)}</span>);
-  return parts.length ? parts : renderTextWithLinksAndTags(text, dimTag, 0, onTagClick, onNoteClick);
-}
-
-function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0, onTagClick=null, onNoteClick=null) {
-  if (!text) return null;
-  const combined = /(https?:\/\/[^\s<>"')\]]+)|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|(#[A-Za-z][A-Za-z0-9]+(?![A-Za-z0-9]))|\[([^\]]+)\]/g;
-  const parts = []; let last = 0; let m;
-  while ((m = combined.exec(text)) !== null) {
-    if (m.index > last) parts.push(<Fragment key={`${keyOffset}t${last}`}>{text.slice(last, m.index)}</Fragment>);
+    if (m.index > last) parts.push(<Fragment key={k++}>{text.slice(last, m.index)}</Fragment>);
     if (m[1]) {
-      const url = m[1];
       parts.push(
-        <a key={`${keyOffset}u${m.index}`} href={url} target="_blank" rel="noreferrer"
-          style={{ color: '#C8820A', textDecoration: 'none', transition: 'color 0.15s', pointerEvents: 'auto' }}
+        <div key={k++} style={{ margin: '6px 0', lineHeight: 0 }}>
+          <img src={m[1]} alt="" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 8, display: 'block' }} />
+        </div>
+      );
+    } else if (m[2]) {
+      const url = m[2];
+      parts.push(
+        <a key={k++} href={url} target="_blank" rel="noreferrer"
+          style={{ color: '#C8820A', textDecoration: 'none', transition: 'color 0.15s' }}
           onMouseEnter={e => e.currentTarget.style.color = '#F5A623'}
           onMouseLeave={e => e.currentTarget.style.color = '#C8820A'}
         >{url}</a>
       );
-    } else if (m[2] !== undefined) {
-      const name = m[2];
+    } else if (m[3] !== undefined) {
+      const name = m[3];
       const isOwn = dimTag && name === dimTag.toLowerCase();
-      parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={name} plain={isOwn} onClick={onTagClick ? () => onTagClick(name) : undefined}/>);
-    } else if (m[3]) {
-      const name = m[3].slice(1).toLowerCase();
-      const isOwn = dimTag && name === dimTag.toLowerCase();
-      parts.push(<TagChip key={`${keyOffset}lc${m.index}`} name={name} plain={isOwn} onClick={onTagClick ? () => onTagClick(name) : undefined}/>);
+      parts.push(<TagChip key={k++} name={name} plain={isOwn} onClick={() => navigateToProject(name)}/>);
     } else if (m[4]) {
-      parts.push(<NoteChip key={`${keyOffset}n${m.index}`} name={m[4]} onClick={onNoteClick ? () => onNoteClick(m[4]) : undefined}/>);
+      const name = m[4].slice(1).toLowerCase();
+      const isOwn = dimTag && name === dimTag.toLowerCase();
+      parts.push(<TagChip key={k++} name={name} plain={isOwn} onClick={() => navigateToProject(name)}/>);
+    } else if (m[5]) {
+      parts.push(<NoteChip key={k++} name={m[5]} onClick={() => navigateToNote(m[5])}/>);
     }
     last = m.index + m[0].length;
   }
-  if (last < text.length) parts.push(<Fragment key={`${keyOffset}e${last}`}>{text.slice(last)}</Fragment>);
-  return parts.length ? parts : text;
+  if (last < text.length) parts.push(<Fragment key={k++}>{text.slice(last)}</Fragment>);
+  return <>{parts.length ? parts : text}</>;
 }
 
 // Client-side image resize+compress before upload
@@ -3185,24 +3162,6 @@ function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,synce
     }
   }
 
-  function onKey(e, id, idx) {
-    if (e.key==="Enter") {
-      e.preventDefault();
-      const row = mkRow();
-      const i = safe.findIndex(r => r.id===id);
-      setRows([...safe.slice(0,i+1), row, ...safe.slice(i+1)]);
-      setTimeout(() => refs.current[row.id]?.focus(), 30);
-    }
-    if (e.key==="Backspace" && safe[idx]?.text==="" && safe.length>1) {
-      e.preventDefault();
-      setRows(safe.filter(r => r.id!==id));
-      const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
-      setTimeout(() => refs.current[t]?.focus(), 30);
-    }
-    if (e.key==="ArrowUp" && idx > 0) { e.preventDefault(); refs.current[safe[idx-1].id]?.focus(); }
-    if (e.key==="ArrowDown" && idx < safe.length-1) { e.preventDefault(); refs.current[safe[idx+1].id]?.focus(); }
-  }
-
   if (!loaded) return (
     <div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
       <Shimmer width="75%" height={13}/>
@@ -3450,30 +3409,6 @@ function WorkoutsCard({date,token,userId,stravaConnected}) {
     else if (paceMin) { const tot=parseFloat(paceMin[1])*60; pace=`${Math.floor(tot/60)}:${String(Math.round(tot%60)).padStart(2,'0')}`; }
     return { dist, pace };
   }
-  function onKey(e,id,idx) {
-    if(e.key==="Enter"){
-      e.preventDefault();
-      // Parse and save dist/pace for current row before moving on
-      const cur=safe.find(r=>r.id===id);
-      if(cur?.text){
-        const {dist,pace}=parseActivityText(cur.text);
-        const updated=safe.map(r=>r.id===id?{...r,dist:dist||r.dist,pace:pace||r.pace}:r);
-        const newRow=mkRow();
-        const i=updated.findIndex(r=>r.id===id);
-        setManualRows([...updated.slice(0,i+1),newRow,...updated.slice(i+1)]);
-        if(cur.kcal===null&&!cur.estimating) runEstimate(id,cur.text);
-        setTimeout(()=>refs.current[newRow.id]?.focus(),30);
-      } else {
-        const row=mkRow();const i=safe.findIndex(r=>r.id===id);
-        setManualRows([...safe.slice(0,i+1),row,...safe.slice(i+1)]);
-        setTimeout(()=>refs.current[row.id]?.focus(),30);
-      }
-    }
-    if(e.key==="Backspace"&&safe[idx]?.text===""&&safe.length>1){e.preventDefault();setManualRows(safe.filter(r=>r.id!==id));const t=safe[idx-1]?.id??safe[idx+1]?.id;setTimeout(()=>refs.current[t]?.focus(),30);}
-    if(e.key==="ArrowUp"&&idx>0){e.preventDefault();refs.current[safe[idx-1].id]?.focus();}
-    if(e.key==="ArrowDown"&&idx<safe.length-1){e.preventDefault();refs.current[safe[idx+1].id]?.focus();}
-  }
-
   async function runEstimate(id, text) {
     setManualRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
     const result = await estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token);

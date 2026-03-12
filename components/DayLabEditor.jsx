@@ -15,7 +15,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Suggestion } from '@tiptap/suggestion';
 
-// ── Shared design tokens ──────────────────────────────────────────────────────
+// ── Design tokens ─────────────────────────────────────────────────────────────
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 const F = { lg: 18, md: 15, sm: 12 };
@@ -32,7 +32,7 @@ export function projectColor(name) {
   return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
 }
 
-// ── Base styles ───────────────────────────────────────────────────────────────
+// ── CSS injection ─────────────────────────────────────────────────────────────
 function injectEditorStyles() {
   if (typeof document === 'undefined') return;
   if (document.getElementById('daylab-editor-styles')) return;
@@ -50,13 +50,11 @@ function injectEditorStyles() {
 
 function injectTaskStyles() {
   if (typeof document === 'undefined') return;
-  // Always replace so we get fresh styles after deploys
   const existing = document.getElementById('daylab-task-styles');
   if (existing) existing.remove();
   const s = document.createElement('style');
   s.id = 'daylab-task-styles';
   s.textContent = `
-    /* Checkbox — inline style can't do appearance:none or ::after */
     .dl-tasks .ProseMirror li[data-type="taskItem"] > label {
       display: flex; align-items: center; flex-shrink: 0;
       margin-top: 0.3em; cursor: pointer; user-select: none;
@@ -76,57 +74,41 @@ function injectTaskStyles() {
       border: 1.5px solid #111110; border-top: none; border-left: none;
       transform: rotate(45deg);
     }
-    /* Text area next to checkbox */
     .dl-tasks .ProseMirror li[data-type="taskItem"] > div { flex: 1; min-width: 0; }
     .dl-tasks .ProseMirror li[data-type="taskItem"] > div > p { margin: 0; }
-    /* Done */
     .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"] > div {
       text-decoration: line-through; opacity: 0.35;
     }
-    /* Filter — !important beats the inline display:flex on the <li> */
     [data-task-filter="open"] .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="true"]  { display: none !important; }
     [data-task-filter="done"] .dl-tasks .ProseMirror li[data-type="taskItem"][data-checked="false"] { display: none !important; }
   `;
   document.head.appendChild(s);
 }
 
+// ── Chip style tokens — shared with Dashboard's read-only TagChip/NoteChip ───
 export const CHIP_TOKENS = {
   project: (col) => ({
     display: 'inline-block', verticalAlign: 'middle',
-    color: col,
-    background: col + '22',
-    borderRadius: '5px',
-    padding: '1px 7px',
-    fontFamily: mono, fontSize: '11px',
+    color: col, background: col + '22', borderRadius: '5px',
+    padding: '1px 7px', fontFamily: mono, fontSize: '11px',
     letterSpacing: '0.08em', lineHeight: '1.65',
-    textTransform: 'uppercase',
-    whiteSpace: 'nowrap', flexShrink: 0,
+    textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0,
   }),
   note: {
     display: 'inline-block', verticalAlign: 'middle',
-    color: ACCENT,
-    background: ACCENT + '1a',
-    borderRadius: '5px',
-    padding: '1px 6px',
-    fontFamily: serif, fontSize: '14px',
-    lineHeight: '1.65',
-    whiteSpace: 'nowrap', flexShrink: 0,
+    color: ACCENT, background: ACCENT + '1a', borderRadius: '5px',
+    padding: '1px 6px', fontFamily: serif, fontSize: '14px',
+    lineHeight: '1.65', whiteSpace: 'nowrap', flexShrink: 0,
   },
 };
 
-// ── ProjectTag — inline atom node ─────────────────────────────────────────────
-// Stored in plain-text as `{projectname}` (lowercase).
-// Rendered directly as a colored pill. No CSS tricks — the node IS the pill.
+// ── TipTap custom nodes ───────────────────────────────────────────────────────
+
+// ProjectTag: stored as {projectname}, rendered as colored pill atom node.
 const ProjectTagNode = Node.create({
-  name: 'projectTag',
-  group: 'inline',
-  inline: true,
-  atom: true,
-  selectable: true,
-  draggable: false,
-  addAttributes() {
-    return { name: { default: '' } };
-  },
+  name: 'projectTag', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() { return { name: { default: '' } }; },
   parseHTML() {
     return [{ tag: 'span[data-project-tag]', getAttrs: el => ({ name: el.getAttribute('data-project-tag') || '' }) }];
   },
@@ -142,19 +124,11 @@ const ProjectTagNode = Node.create({
   },
 });
 
-// ── NoteLink — inline atom node ───────────────────────────────────────────────
-// Stored in plain-text as `[note name]`.
-// Rendered as an accent-colored chip.
+// NoteLink: stored as [note name], rendered as accent chip atom node.
 const NoteLinkNode = Node.create({
-  name: 'noteLink',
-  group: 'inline',
-  inline: true,
-  atom: true,
-  selectable: true,
-  draggable: false,
-  addAttributes() {
-    return { name: { default: '' } };
-  },
+  name: 'noteLink', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() { return { name: { default: '' } }; },
   parseHTML() {
     return [{ tag: 'span[data-note-link]', getAttrs: el => ({ name: el.getAttribute('data-note-link') || '' }) }];
   },
@@ -169,13 +143,9 @@ const NoteLinkNode = Node.create({
   },
 });
 
-// ── ImageBlock — block atom node ──────────────────────────────────────────────
+// ImageBlock: stored as [img:url], rendered as block image atom node.
 const ImageBlock = Node.create({
-  name: 'imageBlock',
-  group: 'block',
-  atom: true,
-  selectable: true,
-  draggable: false,
+  name: 'imageBlock', group: 'block', atom: true, selectable: true, draggable: false,
   addAttributes() { return { src: { default: null } }; },
   parseHTML() { return [{ tag: 'div[data-imageblock]' }]; },
   renderHTML({ node }) {
@@ -194,9 +164,7 @@ const ImageBlock = Node.create({
   },
 });
 
-// ── URL decoration ────────────────────────────────────────────────────────────
-// URLs are decorations (not nodes) because they're pure display — the raw URL
-// is the right storage format, and decorations are correct for display-only overlays.
+// URLExtension: decoration-only — URLs stay as plain text in storage.
 const URLExtension = Extension.create({
   name: 'urlDecoration',
   addProseMirrorPlugins() {
@@ -205,7 +173,7 @@ const URLExtension = Extension.create({
       props: {
         decorations(state) {
           const decos = [];
-          const re = /(?<!\[img:)(https?:\/\/[^\s<>"')[\]]+)/g;
+          const re = /(?<!\[img:)(https?:\/\/[^\s<>"')[  \]]+)/g;
           state.doc.descendants((node, pos) => {
             if (!node.isText) return;
             let m; re.lastIndex = 0;
@@ -223,13 +191,31 @@ const URLExtension = Extension.create({
   },
 });
 
-// ── Serialisation: doc JSON ↔ plain-text storage format ───────────────────────
-// Plain-text format:
-//   projectTag node  →  {projectname}
-//   noteLink node    →  [note name]
-//   imageBlock node  →  [img:url]  (its own line)
-//   text node        →  literal text
-//   paragraphs       →  joined with \n
+// TaskGuard: appendTransaction plugin — ensures doc always has exactly one taskList root.
+// appendTransaction fires AFTER the transaction is applied (unlike keyboard shortcuts).
+const TaskGuard = Extension.create({
+  name: 'taskGuard',
+  addProseMirrorPlugins() {
+    return [new Plugin({
+      key: new PluginKey('taskGuard'),
+      appendTransaction(_transactions, _oldState, newState) {
+        if (newState.doc.firstChild?.type.name === 'taskList') return null;
+        const { schema } = newState;
+        const taskList = schema.nodes.taskList.create(null, [
+          schema.nodes.taskItem.create({ checked: false }, [schema.nodes.paragraph.create()]),
+        ]);
+        return newState.tr.replaceWith(0, newState.doc.content.size, taskList);
+      },
+    })];
+  },
+});
+
+// ── Serialisation ─────────────────────────────────────────────────────────────
+// Storage format (plain text):
+//   projectTag → {projectname}
+//   noteLink   → [note name]
+//   imageBlock → [img:url]  (its own paragraph line)
+//   paragraphs → joined with \n
 
 export function docToText(docJson) {
   function walkInline(nodes) {
@@ -241,37 +227,25 @@ export function docToText(docJson) {
       return '';
     }).join('');
   }
-
   const lines = [];
   for (const node of (docJson?.content || [])) {
-    if (node.type === 'imageBlock') {
-      lines.push(`[img:${node.attrs?.src}]`);
-    } else if (node.type === 'paragraph') {
-      lines.push(walkInline(node.content));
-    }
+    if (node.type === 'imageBlock') lines.push(`[img:${node.attrs?.src}]`);
+    else if (node.type === 'paragraph') lines.push(walkInline(node.content));
   }
   const result = lines.join('\n');
   return result.endsWith('\n') ? result.slice(0, -1) : result;
 }
 
-// Parse a plain-text line into an array of ProseMirror inline content nodes.
 function parseLineContent(line) {
   const content = [];
-  // Matches: {project} | [note] | legacy #Tag — all other chars are plain text
+  // {project} | [note] | legacy #Tag
   const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]|#([A-Za-z][A-Za-z0-9]+)/g;
   let last = 0, m;
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
-    if (m[1] != null) {
-      // {project} — new format
-      content.push({ type: 'projectTag', attrs: { name: m[1] } });
-    } else if (m[2] != null) {
-      // [note] — note link
-      content.push({ type: 'noteLink', attrs: { name: m[2] } });
-    } else if (m[3] != null) {
-      // #Legacy — convert to projectTag on load
-      content.push({ type: 'projectTag', attrs: { name: m[3].toLowerCase() } });
-    }
+    if (m[1] != null)      content.push({ type: 'projectTag', attrs: { name: m[1] } });
+    else if (m[2] != null) content.push({ type: 'noteLink',   attrs: { name: m[2] } });
+    else if (m[3] != null) content.push({ type: 'projectTag', attrs: { name: m[3].toLowerCase() } });
     last = m.index + m[0].length;
   }
   if (last < line.length) content.push({ type: 'text', text: line.slice(last) });
@@ -281,42 +255,44 @@ function parseLineContent(line) {
 export function textToContent(text) {
   if (!text) return [{ type: 'paragraph' }];
   return text.split('\n').map(line => {
-    // Image blocks are whole-line tokens
     const imgM = line.match(/^\[img:(https?:\/\/[^\]]+)\]$/);
     if (imgM) return { type: 'imageBlock', attrs: { src: imgM[1] } };
-
     const content = parseLineContent(line);
     return { type: 'paragraph', content: content.length ? content : undefined };
   });
 }
 
-// ── Custom suggestion match — supports spaces in multi-word names ─────────────
-// Finds the trigger char preceded by whitespace or at position 0.
-// Supports multi-word queries (allowSpaces: true in Suggestion config).
-function makeCustomFindSuggestionMatch(char) {
-  return function ({ $position }) {
+// ── Slash command suggestion ──────────────────────────────────────────────────
+// Triggers on /p (project) or /n (note) when preceded by whitespace or line start.
+// Safe against: URLs (https://), fractions (1/2), bare slash (/ ), unknown commands (/x).
+//
+// Query format passed to itemsFn: "p" | "p query" | "n" | "n query"
+// Item format returned:  "__project__:name" | "__note__:name" | "__create__:name"
+
+function makeSlashSuggestionMatch() {
+  return function({ $position }) {
     const nodeBefore = $position.nodeBefore;
     if (!nodeBefore?.isText) return null;
     const nodeText  = nodeBefore.text;
     const nodeStart = $position.pos - nodeBefore.nodeSize;
 
-    let charIdx = -1;
+    // Scan backward for /p or /n preceded by whitespace or at paragraph start
     for (let i = nodeText.length - 1; i >= 0; i--) {
-      if (nodeText[i] === char) {
-        const prev = i > 0 ? nodeText[i - 1] : ' ';
-        if (/\s/.test(prev) || i === 0) { charIdx = i; break; }
-      }
+      if (nodeText[i] !== '/') continue;
+      const prev = i > 0 ? nodeText[i - 1] : ' ';
+      if (!/\s/.test(prev) && i !== 0) continue; // require space-before or line start
+      const after = nodeText.slice(i + 1);
+      if (!/^[pn]/i.test(after)) continue;        // require p or n immediately after /
+      return {
+        range: { from: nodeStart + i, to: $position.pos },
+        query: after,           // e.g. "p", "p big think", "n", "n my note"
+        text:  '/' + after,
+      };
     }
-    if (charIdx === -1) return null;
-
-    const from  = nodeStart + charIdx;
-    const to    = $position.pos;
-    const query = nodeText.slice(charIdx + 1);
-    return { range: { from, to }, query, text: char + query };
+    return null;
   };
 }
 
-// ── Suggestion extension factory ──────────────────────────────────────────────
 function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
   return Extension.create({
     name: `suggestion_${suggKey}`,
@@ -327,7 +303,7 @@ function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
         char,
         allowSpaces: true,
         allowedPrefixes: null,
-        findSuggestionMatch: makeCustomFindSuggestionMatch(char),
+        findSuggestionMatch: makeSlashSuggestionMatch(),
         pluginKey: new PluginKey(`suggestion_${suggKey}`),
         items: ({ query }) => itemsFn(query),
         command: ({ editor, range, props }) => commandFn({ editor, range, name: props }),
@@ -358,9 +334,6 @@ function SuggestionDropdown({ state, onSelect }) {
 
   if (!state?.items.length || typeof document === 'undefined') return null;
 
-  const isProject = state.key === 'project';
-  const isNote    = state.key === 'note';
-
   return createPortal(
     <div style={{
       position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
@@ -369,13 +342,12 @@ function SuggestionDropdown({ state, onSelect }) {
       padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
       {state.items.map((item, i) => {
-        const isCreate = item.startsWith('__create__:');
-        const rawLabel = isCreate ? item.slice(11) : item;
-        const label    = isCreate ? `+ Create "${rawLabel}"`
-                       : isProject ? rawLabel.toUpperCase()
-                       : rawLabel;
-        const col = isProject && !isCreate ? projectColor(rawLabel) : null;
-        const selected = i === state.selectedIndex;
+        const isProject = item.startsWith('__project__:');
+        const isCreate  = item.startsWith('__create__:');
+        const rawLabel  = isProject ? item.slice(12) : isCreate ? item.slice(11) : item.slice(7); // __note__: = 7
+        const label     = isCreate  ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
+        const col       = isProject ? projectColor(rawLabel) : null;
+        const selected  = i === state.selectedIndex;
         return (
           <button
             key={i}
@@ -399,24 +371,20 @@ function SuggestionDropdown({ state, onSelect }) {
 }
 
 // ── DayLabEditor ──────────────────────────────────────────────────────────────
-// The single text-editing primitive for Day Lab.
-// All cards (Journal, Tasks, Meals, Workouts, Notes) use this component.
+// The single editing primitive for Day Lab.
+//
+// Slash commands:
+//   /p <query>  →  insert {project} chip   (@ was previous trigger)
+//   /n <query>  →  insert [note] chip      (# was previous trigger)
+//   Trigger requires a space before / (or line start). /p and /n must be
+//   the immediate chars after /. Bare /, /x, URLs, fractions — no trigger.
 //
 // Props:
-//   value            — plain-text storage string
-//   onBlur           — (text: string) => void
-//   onEnterCommit    — singleLine: fires with text on Enter, then clears editor
-//   onEnterSplit     — singleLine: fires {before, after} on Enter (tasks use this)
-//   onBackspaceEmpty — singleLine: fires when Backspace pressed in empty editor
-//   onImageUpload    — async (File) => url
-//   noteNames        — string[] for [ autocomplete
-//   projectNames     — string[] for { autocomplete
-//   onCreateNote     — (name: string) => void
-//   onProjectClick   — (storedName: string) => void  — chip click nav
-//   onNoteClick      — (noteName: string) => void    — chip click nav
-//   placeholder, singleLine, autoFocus, style, color, textColor, mutedColor, editable
-//
-// Ref: exposes { focus() } for imperative focus (used by RowList row navigation)
+//   value, onBlur, onEnterCommit, onEnterSplit, onBackspaceEmpty
+//   onImageUpload, noteNames, projectNames, onCreateNote
+//   onProjectClick, onNoteClick
+//   placeholder, singleLine, taskMode, autoFocus
+//   style, color, textColor, mutedColor, editable
 
 export const DayLabEditor = forwardRef(function DayLabEditor({
   value,
@@ -443,43 +411,39 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(injectEditorStyles, []);
   useEffect(() => { if (taskMode) injectTaskStyles(); }, [taskMode]);
 
-  // Stable refs — avoid stale closures in TipTap plugins / editorProps
-  const editorRef            = useRef(null);
-  const lastExternalValue    = useRef(value);
-  const onBlurRef            = useRef(onBlur);
-  const onEnterCommitRef     = useRef(onEnterCommit);
-  const onEnterSplitRef      = useRef(onEnterSplit);
-  const onBackspaceEmptyRef  = useRef(onBackspaceEmpty);
-  const onImageUploadRef     = useRef(onImageUpload);
-  const noteNamesRef         = useRef(noteNames || []);
-  const projectNamesRef      = useRef(projectNames || []);
-  const onCreateNoteRef      = useRef(onCreateNote);
-  const onProjectClickRef    = useRef(onProjectClick);
-  const onNoteClickRef       = useRef(onNoteClick);
+  // Stable refs — avoid stale closures in TipTap plugins
+  const editorRef           = useRef(null);
+  const lastExternalValue   = useRef(value);
+  const onBlurRef           = useRef(onBlur);
+  const onEnterCommitRef    = useRef(onEnterCommit);
+  const onEnterSplitRef     = useRef(onEnterSplit);
+  const onBackspaceEmptyRef = useRef(onBackspaceEmpty);
+  const onImageUploadRef    = useRef(onImageUpload);
+  const noteNamesRef        = useRef(noteNames || []);
+  const projectNamesRef     = useRef(projectNames || []);
+  const onCreateNoteRef     = useRef(onCreateNote);
+  const onProjectClickRef   = useRef(onProjectClick);
+  const onNoteClickRef      = useRef(onNoteClick);
 
-  useEffect(() => { onBlurRef.current          = onBlur; },           [onBlur]);
-  useEffect(() => { onEnterCommitRef.current    = onEnterCommit; },    [onEnterCommit]);
-  useEffect(() => { onEnterSplitRef.current     = onEnterSplit; },     [onEnterSplit]);
-  useEffect(() => { onBackspaceEmptyRef.current = onBackspaceEmpty; }, [onBackspaceEmpty]);
-  useEffect(() => { onImageUploadRef.current    = onImageUpload; },    [onImageUpload]);
-  useEffect(() => { noteNamesRef.current        = noteNames || []; },  [noteNames]);
-  useEffect(() => { projectNamesRef.current     = projectNames || []; }, [projectNames]);
-  useEffect(() => { onCreateNoteRef.current     = onCreateNote; },     [onCreateNote]);
-  useEffect(() => { onProjectClickRef.current   = onProjectClick; },   [onProjectClick]);
-  useEffect(() => { onNoteClickRef.current      = onNoteClick; },      [onNoteClick]);
+  useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
+  useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
+  useEffect(() => { onEnterSplitRef.current      = onEnterSplit; },     [onEnterSplit]);
+  useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
+  useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
+  useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
+  useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
+  useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
+  useEffect(() => { onProjectClickRef.current    = onProjectClick; },   [onProjectClick]);
+  useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
 
-  // Expose focus() imperatively so RowList can programmatically focus rows
   useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.commands.focus('end'),
   }), []); // eslint-disable-line
 
-  // ── Suggestion dropdown state ─────────────────────────────────────────────
-  // suggRef is updated SYNCHRONOUSLY in onStart/onUpdate/onExit so that
-  // editorProps.handleKeyDown can check it in the same event tick.
-  // (useState + useEffect would be async — the ref would lag one render behind,
-  //  causing Enter to fire the singleLine split while the dropdown is open.)
+  // Suggestion state — suggRef kept in sync synchronously so handleKeyDown
+  // can read the current state in the same event tick (useState is async).
   const [sugg, setSugg] = useState(null);
-  const suggRef = useRef(null);   // kept in sync synchronously below
+  const suggRef = useRef(null);
 
   const renderRef = useRef({
     onStart(props, key) {
@@ -543,79 +507,60 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       NoteLinkNode,
       ...(singleLine ? [] : [ImageBlock]),
       ...(taskMode ? [
-        TaskList.configure({
-          HTMLAttributes: { style: 'list-style:none;padding:0;margin:0;' },
-        }),
+        TaskList.configure({ HTMLAttributes: { style: 'list-style:none;padding:0;margin:0;' } }),
         TaskItem.configure({
           nested: false,
           HTMLAttributes: { style: 'display:flex;align-items:flex-start;gap:10px;padding:3px 0;' },
         }),
-        // Structural guard: after every transaction, ensure the doc always has
-        // a taskList as its only child. appendTransaction runs AFTER the 
-        // transaction is applied — unlike keyboard shortcuts which fire before.
-        Extension.create({
-          name: 'taskGuard',
-          addProseMirrorPlugins() {
-            return [new Plugin({
-              key: new PluginKey('taskGuard'),
-              appendTransaction(_transactions, _oldState, newState) {
-                if (newState.doc.firstChild?.type.name === 'taskList') return null;
-                // Doc lost its taskList — restore a blank one
-                const { schema } = newState;
-                const taskList = schema.nodes.taskList.create(null, [
-                  schema.nodes.taskItem.create({ checked: false }, [
-                    schema.nodes.paragraph.create(),
-                  ]),
-                ]);
-                return newState.tr.replaceWith(0, newState.doc.content.size, taskList);
-              },
-            })];
-          },
-        }),
+        TaskGuard,
       ] : []),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
-      // @ → project tag  (@ is on main mobile keyboard, no ambiguity)
+      // Unified slash command: /p → project chip, /n → note chip
       createSuggestion({
-        char: '@',
-        suggKey: 'project',
+        char: '/',
+        suggKey: 'slash',
         renderRef,
         itemsFn: (query) => {
-          const q = query.toLowerCase().replace(/\s/g, '');
-          return (projectNamesRef.current || [])
-            .filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
-        },
-        commandFn: ({ editor, range, name }) => {
-          editor.chain().focus().deleteRange(range).insertContent([
-            { type: 'projectTag', attrs: { name: name.toLowerCase() } },
-            { type: 'text', text: ' ' },
-          ]).run();
-        },
-      }),
+          const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
+          const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
 
-      // # → note link  (# is on main mobile keyboard)
-      createSuggestion({
-        char: '#',
-        suggKey: 'note',
-        renderRef,
-        itemsFn: (query) => {
-          const names = noteNamesRef.current || [];
-          const q     = query.toLowerCase().replace(/\s/g, '');
-          const matches = names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
-          const qTrim   = query.trim();
-          if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
-            matches.push(`__create__:${qTrim}`);
+          if (cmd === 'p') {
+            const q = search.toLowerCase().replace(/\s/g, '');
+            return (projectNamesRef.current || [])
+              .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
+              .map(n => `__project__:${n}`);
           }
-          return matches;
+          if (cmd === 'n') {
+            const names   = noteNamesRef.current || [];
+            const q       = search.toLowerCase().replace(/\s/g, '');
+            const matches = names
+              .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
+              .map(n => `__note__:${n}`);
+            const qTrim = search.trim();
+            if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+              matches.push(`__create__:${qTrim}`);
+            }
+            return matches;
+          }
+          return [];
         },
         commandFn: ({ editor, range, name }) => {
-          const isCreate = name.startsWith('__create__:');
-          const noteName = isCreate ? name.slice(11) : name;
-          editor.chain().focus().deleteRange(range).insertContent([
-            { type: 'noteLink', attrs: { name: noteName } },
-            { type: 'text', text: ' ' },
-          ]).run();
-          if (isCreate) onCreateNoteRef.current?.(noteName);
+          if (name.startsWith('__project__:')) {
+            const pName = name.slice(12);
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'projectTag', attrs: { name: pName.toLowerCase() } },
+              { type: 'text', text: ' ' },
+            ]).run();
+          } else {
+            const isCreate = name.startsWith('__create__:');
+            const noteName = isCreate ? name.slice(11) : name.slice(9); // __note__:=9
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'noteLink', attrs: { name: noteName } },
+              { type: 'text', text: ' ' },
+            ]).run();
+            if (isCreate) onCreateNoteRef.current?.(noteName);
+          }
         },
       }),
     ],
@@ -626,7 +571,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     editable,
 
     editorProps: {
-      // Chip click → navigate
       handleClick(view, pos, event) {
         const t = event.target;
         const projectEl = t.closest?.('[data-project-tag]');
@@ -643,12 +587,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       },
 
       handleKeyDown(view, e) {
-        // If a suggestion dropdown is open, let the suggestion plugin handle Enter/Tab/]/}
-        // The suggestion plugin's onKeyDown fires AFTER editorProps.handleKeyDown in TipTap,
-        // so we must defer to it by not consuming those keys when a suggestion is active.
-        if (suggRef.current && (e.key === 'Enter' || e.key === 'Tab')) {
-          return false;
-        }
+        // Defer to suggestion plugin when dropdown is open
+        if (suggRef.current && (e.key === 'Enter' || e.key === 'Tab')) return false;
 
         if (e.key === 'Enter' && !e.shiftKey && singleLine) {
           e.preventDefault();
@@ -659,30 +599,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               { type: 'doc', content: [{ type: 'paragraph' }] }
             ), 0);
           } else if (onEnterSplitRef.current) {
-            // Split the paragraph at the cursor using ProseMirror Fragment.cut.
-            //
-            // `from` is an absolute doc position. The singleLine doc is always:
-            //   doc(0) → paragraph(1) → ...content... → paragraph-close → doc-close
-            // Position 1 is the start of paragraph content, so the content offset
-            // within the paragraph = from - 1.
-            //
-            // IMPORTANT: do NOT use doc.cut(1, from) — that calls Fragment.cut(1, from)
-            // on doc.content, which cuts *into* the paragraph's first child at offset 1
-            // and drops its first character. Use para.content.cut(0, offset) instead.
             const { from } = view.state.selection;
-            const para   = view.state.doc.child(0);           // the only paragraph
-            const offset = Math.min(from - 1, para.content.size); // clamp to [0, size]
-            const clampedOffset = Math.max(0, offset);
-
-            const leftFrag  = para.content.cut(0, clampedOffset);
-            const rightFrag = para.content.cut(clampedOffset);
-
-            const toDoc = (frag) => ({
-              type: 'doc',
-              content: [{ type: 'paragraph', content: frag.toJSON() ?? [] }],
-            });
-            const before = docToText(toDoc(leftFrag));
-            const after  = docToText(toDoc(rightFrag));
+            const para   = view.state.doc.child(0);
+            const offset = Math.max(0, Math.min(from - 1, para.content.size));
+            const before = docToText({ type: 'doc', content: [{ type: 'paragraph', content: para.content.cut(0, offset).toJSON() ?? [] }] });
+            const after  = docToText({ type: 'doc', content: [{ type: 'paragraph', content: para.content.cut(offset).toJSON()  ?? [] }] });
             onEnterSplitRef.current({ before, after });
           }
           return true;
@@ -722,14 +643,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
   useEffect(() => { editorRef.current = editor; }, [editor]);
 
-  // Imperative focus for autoFocus prop
   useEffect(() => {
     if (!editor || !autoFocus) return;
     const id = setTimeout(() => editor.commands.focus('end'), 0);
     return () => clearTimeout(id);
   }, [editor, autoFocus]);
 
-  // Capture-phase Backspace for empty singleLine
+  // Capture-phase Backspace for empty singleLine rows
   useEffect(() => {
     if (!editor || !singleLine) return;
     const dom = editor.view.dom;
@@ -743,7 +663,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     return () => dom.removeEventListener('keydown', handler, true);
   }, [editor, singleLine]);
 
-  // Sync externally-driven value changes (only when editor is not focused)
+  // Sync externally-driven value changes (only when editor not focused)
   useEffect(() => {
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
