@@ -176,8 +176,8 @@ function DashboardInner() {
   const [taskFilter, setTaskFilter] = useState('all');
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
-  const collapseMap = {notes:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,activity:actCollapsed};
-  const toggleMap   = {notes:toggleNotes,  tasks:toggleTasks,  meals:toggleMeals,  activity:toggleAct};
+  const collapseMap = {journal:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
+  const toggleMap   = {journal:toggleNotes,  tasks:toggleTasks,  meals:toggleMeals,  workouts:toggleAct};
 
   // ── Global undo/redo keyboard shortcut ──────────────────────────────────
   useEffect(() => {

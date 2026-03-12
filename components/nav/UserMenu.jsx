@@ -298,28 +298,27 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
               onToggleOn={garminEmail.trim() && garminPassword.trim() && !garminLoading ? connectGarmin : ()=>{}}
               onToggleOff={disconnectGarmin}
               pendingToggle={!garminConnected && !!garminEmail.trim() && !!garminPassword.trim()}
-            >
-              {!garminConnected && (
-                <form onSubmit={e=>{e.preventDefault();connectGarmin();}} style={{display:"flex",flexDirection:"column",gap:4,flex:1,minWidth:0}}>
-                  <input type="email" value={garminEmail}
-                    onChange={e=>setGarminEmail(e.target.value)}
-                    placeholder="Garmin email"
-                    autoComplete="username"
-                    style={{background:C.surface,border:`1px solid ${C.border2}`,
-                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
-                      padding:"5px 7px",width:"100%",boxSizing:"border-box"}}/>
-                  <input type="password" value={garminPassword}
-                    onChange={e=>setGarminPassword(e.target.value)}
-                    placeholder="Garmin password"
-                    autoComplete="current-password"
-                    style={{background:C.surface,border:`1px solid ${C.border2}`,
-                      borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
-                      padding:"5px 7px",width:"100%",boxSizing:"border-box"}}/>
-                  {garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:C.dim}}>Connecting…</span>}
-                  {garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:C.red}}>{garminError}</span>}
-                </form>
-              )}
-            </IntegrationRow>
+            />
+            {!garminConnected && (
+              <form onSubmit={e=>{e.preventDefault();connectGarmin();}} style={{display:"flex",gap:4,marginTop:6}}>
+                <input type="email" value={garminEmail}
+                  onChange={e=>setGarminEmail(e.target.value)}
+                  placeholder="Email"
+                  autoComplete="username"
+                  style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
+                    borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                    padding:"5px 7px",boxSizing:"border-box"}}/>
+                <input type="password" value={garminPassword}
+                  onChange={e=>setGarminPassword(e.target.value)}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  style={{flex:1,minWidth:0,background:C.surface,border:`1px solid ${C.border2}`,
+                    borderRadius:5,outline:"none",color:C.text,fontFamily:mono,fontSize:F.sm,
+                    padding:"5px 7px",boxSizing:"border-box"}}/>
+              </form>
+            )}
+            {!garminConnected && garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:C.dim,marginTop:4,display:"block"}}>Connecting…</span>}
+            {!garminConnected && garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:C.red,marginTop:4,display:"block"}}>{garminError}</span>}
           </div>
 
           {divider}

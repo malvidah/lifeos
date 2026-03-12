@@ -45,7 +45,7 @@ function migrateTasksToHtml(raw) {
 
 // Client-side parseTasks — mirrors the API-side version in app/api/_lib/parseTasks.js.
 // Handles both storage formats so project-view can toggle/edit tasks regardless of format.
-function clientParseTasks(data) {
+export function clientParseTasks(data) {
   if (Array.isArray(data)) {
     return data.filter(t => t?.text).map((t, i) => ({ id: t.id ?? `old_${i}`, text: t.text, done: !!t.done }));
   }
@@ -64,7 +64,7 @@ function clientParseTasks(data) {
 
 // Serialise [{id,text,done}] back to TipTap HTML.
 // Used by project-view toggleTask/saveTaskEdit to write back in a consistent format.
-function tasksToHtml(tasks) {
+export function tasksToHtml(tasks) {
   const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   const items = tasks.filter(t => t.text).map(t =>
     `<li data-type="taskItem" data-checked="${t.done?'true':'false'}"><p>${esc(t.text)}</p></li>`

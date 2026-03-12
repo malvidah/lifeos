@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card, Widget, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
-import { TaskFilterBtns, NewProjectTask, TaskCheckbox } from "../widgets/Tasks.jsx";
+import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 // Unified nav bar — lives in scroll flow, inside each scroll container.
@@ -377,14 +377,14 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       ? text.trim()
       : `${text.trim()} {${project.toLowerCase()}}`;
     const current = await dbLoad(today, 'tasks', token);
-    const existing = Array.isArray(current) ? current : [];
+    const existing = clientParseTasks(current);
     const newTask = { id: crypto.randomUUID(), text: taskText, done: false };
-    const updated = [...existing, newTask];
-    await dbSave(today, 'tasks', updated, token);
+    const html = tasksToHtml([...existing, newTask]);
+    await dbSave(today, 'tasks', html, token);
     const cacheKey = `${userId}:${today}:tasks`;
-    MEM[cacheKey] = updated;
+    MEM[cacheKey] = html;
     // Notify day-view Tasks hook directly so it shows without re-fetching
-    window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: updated } }));
+    window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: html } }));
     registerNewTags(taskText);
     // Append to local project-view entries so it appears immediately here too
     setEntries(prev => prev ? {
