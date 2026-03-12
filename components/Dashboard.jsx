@@ -5875,10 +5875,13 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   // All current note names (for {note} autocomplete)
   const allNoteNames = notesList.map(noteName).filter(Boolean);
 
-  const addNote = (initialName = '') => {
+  const addNote = (initialName = '', { silent = false } = {}) => {
     const id = `note_${Date.now()}`;
     const content = initialName || '';
-    const updated = { notes: [...notesList, { id, content, updatedAt: Date.now() }], activeId: id };
+    // silent=true: register note without switching to it (used when /n creates a chip)
+    const updated = silent
+      ? { ...notesStore, notes: [...notesList, { id, content, updatedAt: Date.now() }] }
+      : { notes: [...notesList, { id, content, updatedAt: Date.now() }], activeId: id };
     setNotesStore(updated, { skipHistory: true });
   };
   const selectNote = (id) => {
@@ -5926,6 +5929,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
       sb.from('entries').select('date, data').eq('type', 'journal')
         .then(({ data: rows }) => {
           if (!rows) return;
+          let anyChanged = false;
           rows.forEach(row => {
             const text = typeof row.data === 'string' ? row.data : null;
             if (!text || !text.includes('[' + oldName + ']')) return;
@@ -5935,8 +5939,27 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
             // Patch in-memory cache so open journal editors see the new name immediately
             const cacheKey = userId + ':' + row.date + ':journal';
             if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated;
+            // Notify sibling useDbSave hook instances (day-view JournalEditor)
+            window.dispatchEvent(new CustomEvent('lifeos:mem-update', { detail: { key: cacheKey, value: updated } }));
+            anyChanged = true;
           });
+          // Trigger a refresh so any open journal editors re-render with new chip labels
+          if (anyChanged) {
+            window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
+          }
         });
+
+      // Update this project view's local entries state so EntryLine chips update immediately
+      const linkRe2 = new RegExp('\\[' + esc2 + '\\]', 'g');
+      setEntries(prev => {
+        if (!prev) return prev;
+        const updated = prev.journalEntries.map(e =>
+          e.text.includes('[' + oldName + ']')
+            ? { ...e, text: e.text.replace(linkRe2, '[' + newName + ']') }
+            : e
+        );
+        return { ...prev, journalEntries: updated };
+      });
     }
   };
   const deleteNote = (id) => {
@@ -6140,7 +6163,7 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
   const noteNamesForContext = allNoteNames;
 
   return (
-    <NoteContext.Provider value={{ notes: noteNamesForContext }}>
+    <NoteContext.Provider value={{ notes: noteNamesForContext, onCreateNote: (name, opts) => addNote(name, opts) }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
 
       {/* Notes card — left 1/3: note list sorted by recency; right 2/3: editor */}
@@ -6474,6 +6497,17 @@ export default function Dashboard() {
       .catch(() => {});
   }, [token]); // eslint-disable-line
 
+  // Listen for new project chip creation (/p + new name in any editor)
+  useEffect(() => {
+    const handler = (e) => {
+      const name = e.detail?.name;
+      if (!name) return;
+      setAllProjectNames(prev => prev.includes(name) ? prev : [...prev, name]);
+    };
+    window.addEventListener('lifeos:create-project', handler);
+    return () => window.removeEventListener('lifeos:create-project', handler);
+  }, []); // eslint-disable-line
+
   // Graph data — declared HERE so token is already defined (avoids TDZ in minified bundle)
   const [graphData, setGraphData] = useState(null);
   useEffect(() => {
@@ -6697,10 +6731,12 @@ export default function Dashboard() {
     <NavigationContext.Provider value={{
       navigateToProject: (name) => setActiveProject(name),
       navigateToNote: (name) => {
-        setActiveProject('__everything__');
+        // Navigate to __graph__ (which renders MapCard + the __everything__ ProjectView below it).
+        // Navigating to __everything__ directly showed an orphaned bare list with no map.
+        setActiveProject('__graph__');
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('lifeos:go-to-note', { detail: { name } }));
-        }, 120);
+        }, 150);
       },
     }}>
     <div style={{background:C.bg,height:"100vh",color:C.text,display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>

@@ -9,7 +9,7 @@ import { DecorationSet, Decoration } from '@tiptap/pm/view';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import {
-  useEffect, useRef, useState,
+  useEffect, useLayoutEffect, useRef, useState,
   forwardRef, useImperativeHandle,
 } from 'react';
 import { createPortal } from 'react-dom';
@@ -320,33 +320,38 @@ function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
 
 // ── Suggestion dropdown ───────────────────────────────────────────────────────
 function SuggestionDropdown({ state, onSelect }) {
-  const [pos, setPos] = useState({ top: 0, left: 0 });
-
-  useEffect(() => {
-    if (!state?.clientRect) return;
-    const rect = state.clientRect();
-    if (!rect) return;
-    setPos({
-      top:  rect.bottom + 4,
-      left: Math.max(4, Math.min(rect.left, window.innerWidth - 280)),
-    });
-  }, [state]);
-
+  // Compute position synchronously on every render from the live clientRect —
+  // avoids the one-frame-late flash that useEffect+setState caused.
   if (!state?.items.length || typeof document === 'undefined') return null;
+  const rect = state.clientRect?.();
+  if (!rect) return null;
+  // clientRect is viewport-relative — correct for position:fixed, no scroll offset needed.
+  // Flip above the caret if there isn't enough room below.
+  const MENU_W = 290; const MENU_H = 240;
+  const spaceBelow = window.innerHeight - rect.bottom - 8;
+  const top  = spaceBelow >= Math.min(MENU_H, state.items.length * 36 + 8)
+    ? rect.bottom + 4
+    : Math.max(4, rect.top - Math.min(MENU_H, state.items.length * 36 + 8) - 4);
+  const left = Math.max(4, Math.min(rect.left, window.innerWidth - MENU_W - 4));
 
   return createPortal(
     <div style={{
-      position: 'fixed', top: pos.top, left: pos.left, zIndex: 9999,
+      position: 'fixed', top, left, zIndex: 9999,
       background: '#1E1C1A', border: '1px solid #2A2724', borderRadius: 10,
       boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
       padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
       {state.items.map((item, i) => {
-        const isProject = item.startsWith('__project__:');
-        const isCreate  = item.startsWith('__create__:');
-        const rawLabel  = isProject ? item.slice(12) : isCreate ? item.slice(11) : item.slice(7); // __note__: = 7
-        const label     = isCreate  ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
-        const col       = isProject ? projectColor(rawLabel) : null;
+        const isExistingProject  = item.startsWith('__project__:');
+        const isNewProject       = item.startsWith('__create_project__:');
+        const isProject          = isExistingProject || isNewProject;
+        const isCreate           = item.startsWith('__create__:') || isNewProject;
+        const rawLabel           = isNewProject ? item.slice(18)
+                                 : isExistingProject ? item.slice(12)
+                                 : item.startsWith('__create__:') ? item.slice(11)
+                                 : item.slice(9); // __note__: = 9
+        const label              = isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
+        const col                = isProject ? projectColor(rawLabel) : null;
         const selected  = i === state.selectedIndex;
         return (
           <button
@@ -397,6 +402,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   projectNames,
   onProjectClick,
   onNoteClick,
+  onCreateNote,      // (name, {silent}) — called when /n creates a new note
+  onCreateProject,   // (name) — called when /p creates a new project
   placeholder,
   singleLine   = false,
   taskMode     = false,
@@ -422,6 +429,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const projectNamesRef     = useRef(projectNames || []);
   const onProjectClickRef   = useRef(onProjectClick);
   const onNoteClickRef      = useRef(onNoteClick);
+  const onCreateNoteRef     = useRef(onCreateNote);
+  const onCreateProjectRef  = useRef(onCreateProject);
+  const taskModeRef         = useRef(taskMode);
 
   useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
   useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
@@ -432,6 +442,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
   useEffect(() => { onProjectClickRef.current    = onProjectClick; },   [onProjectClick]);
   useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
+  useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
+  useEffect(() => { onCreateProjectRef.current   = onCreateProject; },  [onCreateProject]);
+  useEffect(() => { taskModeRef.current          = taskMode; },         [taskMode]);
 
   useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.commands.focus('end'),
@@ -526,10 +539,17 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
 
           if (cmd === 'p') {
-            const q = search.toLowerCase().replace(/\s/g, '');
-            return (projectNamesRef.current || [])
+            const q      = search.toLowerCase().replace(/\s/g, '');
+            const qTrim  = search.trim();
+            const names  = projectNamesRef.current || [];
+            const matches = names
               .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
               .map(n => `__project__:${n}`);
+            // Allow creating a new project that doesn't exist yet
+            if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+              matches.push(`__create_project__:${qTrim}`);
+            }
+            return matches;
           }
           if (cmd === 'n') {
             const names   = noteNamesRef.current || [];
@@ -548,21 +568,30 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         commandFn: ({ editor, range, name }) => {
           justInsertedRef.current = true;
           setTimeout(() => { justInsertedRef.current = false; }, 150);
-          if (name.startsWith('__project__:')) {
-            const pName = name.slice(12);
+
+          if (name.startsWith('__project__:') || name.startsWith('__create_project__:')) {
+            // Existing project: "__project__:name"  |  New project: "__create_project__:name"
+            const isNew = name.startsWith('__create_project__:');
+            const pName = (isNew ? name.slice(18) : name.slice(12)).toLowerCase();
             editor.chain().focus().deleteRange(range).insertContent([
-              { type: 'projectTag', attrs: { name: pName.toLowerCase() } },
+              { type: 'projectTag', attrs: { name: pName } },
               { type: 'text', text: ' ' },
             ]).run();
+            if (isNew) {
+              window.dispatchEvent(new CustomEvent('lifeos:create-project', { detail: { name: pName } }));
+              onCreateProjectRef.current?.(pName);
+            }
           } else {
-            // Insert note chip. Chip creation never navigates — only an explicit click does.
-            // New notes are created lazily when the user clicks the chip (lifeos:go-to-note
-            // handler calls addNote if the note doesn't exist yet).
-            const noteName = name.startsWith('__create__:') ? name.slice(11) : name.slice(9);
+            // Note chip: "__note__:name" (existing) or "__create__:name" (new)
+            const noteName = name.startsWith('__create__:') ? name.slice(11) : name.slice(9); // __note__: = 9 (7+prefix)
             editor.chain().focus().deleteRange(range).insertContent([
               { type: 'noteLink', attrs: { name: noteName } },
               { type: 'text', text: ' ' },
             ]).run();
+            if (name.startsWith('__create__:')) {
+              onCreateNoteRef.current?.(noteName, { silent: true });
+              window.dispatchEvent(new CustomEvent('lifeos:create-note', { detail: { name: noteName } }));
+            }
           }
         },
       }),
@@ -580,11 +609,27 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         const t = event.target;
         const projectEl = t.closest?.('[data-project-tag]');
         if (projectEl && onProjectClickRef.current) {
+          // Flush editor content BEFORE navigating. Chip clicks stay inside the editor,
+          // so TipTap's onBlur never fires. Without this explicit flush the useDbSave
+          // 200ms debounce timer never executes and the entry is lost on unmount.
+          if (onBlurRef.current && editorRef.current) {
+            const serialised = taskModeRef.current
+              ? editorRef.current.getHTML()
+              : docToText(editorRef.current.getJSON());
+            onBlurRef.current(serialised);
+          }
           onProjectClickRef.current(projectEl.getAttribute('data-project-tag'));
           return true;
         }
         const noteEl = t.closest?.('[data-note-link]');
         if (noteEl && onNoteClickRef.current) {
+          // Same flush before navigating to a note
+          if (onBlurRef.current && editorRef.current) {
+            const serialised = taskModeRef.current
+              ? editorRef.current.getHTML()
+              : docToText(editorRef.current.getJSON());
+            onBlurRef.current(serialised);
+          }
           onNoteClickRef.current(noteEl.getAttribute('data-note-link'));
           return true;
         }
@@ -653,6 +698,23 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     const id = setTimeout(() => editor.commands.focus('end'), 0);
     return () => clearTimeout(id);
   }, [editor, autoFocus]);
+
+  // ── Unmount flush — save editor content before React destroys this instance.
+  // When a chip click triggers navigation (setActiveProject), React unmounts the
+  // editor synchronously. TipTap destroys its editor in a useEffect cleanup which
+  // runs BEFORE the DOM is removed in React 18, so the native blur event never fires
+  // and the last unsaved text is silently dropped.
+  // Fix: explicitly flush on unmount via a cleanup with an empty deps array.
+  useEffect(() => {
+    return () => {
+      const ed = editorRef.current;
+      if (!ed || ed.isDestroyed || !onBlurRef.current) return;
+      try {
+        const text = taskModeRef.current ? ed.getHTML() : docToText(ed.getJSON());
+        onBlurRef.current(text);
+      } catch (_) { /* editor already destroyed — ignore */ }
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Capture-phase Backspace for empty singleLine rows
   useEffect(() => {
