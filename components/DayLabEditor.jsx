@@ -330,9 +330,15 @@ function SuggestionDropdown({ state, onSelect }) {
   const MENU_W = 290;
   const itemH = 36;
   const MENU_H = Math.min(240, state.items.length * itemH + 8);
-  // Flip above caret when not enough room below; clamp to viewport edges
-  const spaceBelow = window.innerHeight - rect.bottom - 8;
-  const top  = spaceBelow >= MENU_H
+  // Use visualViewport height when available — on mobile this reflects the actual
+  // visible area above the software keyboard. window.innerHeight includes the
+  // area behind the keyboard, causing the dropdown to be placed off-screen.
+  const vvH = (typeof window !== 'undefined' && window.visualViewport)
+    ? window.visualViewport.height
+    : window.innerHeight;
+  const spaceBelow = vvH - rect.bottom - 8;
+  // Always prefer showing above the caret on mobile (safer for keyboard clearance)
+  const top = spaceBelow >= MENU_H
     ? rect.bottom + 6
     : Math.max(8, rect.top - MENU_H - 6);
   const left = Math.max(8, Math.min(rect.left, window.innerWidth - MENU_W - 8));
@@ -349,7 +355,7 @@ function SuggestionDropdown({ state, onSelect }) {
         const isNewProject       = item.startsWith('__create_project__:');
         const isProject          = isExistingProject || isNewProject;
         const isCreate           = item.startsWith('__create__:') || isNewProject;
-        const rawLabel           = isNewProject ? item.slice(18)
+        const rawLabel           = isNewProject ? item.slice(19)
                                  : isExistingProject ? item.slice(12)
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9); // __note__: = 9

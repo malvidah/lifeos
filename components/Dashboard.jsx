@@ -4998,6 +4998,20 @@ function ProjectsCard({ date, token, userId, onSelectProject }) {
       .catch(() => {});
   }, [todayTags, token]); // eslint-disable-line
 
+  // When a new project is created via /p chip, add it immediately to the nav strip
+  // without waiting for a DB re-fetch (the entry may not be saved yet).
+  useEffect(() => {
+    const handler = (e) => {
+      const name = e.detail?.name;
+      if (!name) return;
+      setAllTags(prev => (prev && !prev.includes(name)) ? [...prev, name] : prev);
+      // Also bump recency so it sorts to the front
+      setRecency(prev => ({ ...prev, [name.toLowerCase()]: new Date().toISOString() }));
+    };
+    window.addEventListener('lifeos:create-project', handler);
+    return () => window.removeEventListener('lifeos:create-project', handler);
+  }, []); // eslint-disable-line
+
   // Sort by recency, show top 6 in strip
   const _pcSorted = useMemo(function() {
     if (!allTags) return [];
@@ -5987,8 +6001,11 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
       .then(r => r.json())
       .then(d => {
         if (d.error) { setEntries({ journalEntries: [], taskEntries: [] }); return; }
-        // Auto-delete project if it has no entries anywhere (skip for Everything)
-        if (!d.isEverything && !d.journalEntries?.length && !d.taskEntries?.length) {
+        // Auto-delete project if it has no entries AND was previously registered in
+        // projectsMeta (meaning it's orphaned). Skip for new projects (/p just created
+        // them — they have no entries yet but are real) and skip for __everything__.
+        const wasRegistered = !!(projectsMeta || {})[project];
+        if (!d.isEverything && wasRegistered && !d.journalEntries?.length && !d.taskEntries?.length) {
           const updated = { ...(projectsMeta || {}) };
           delete updated[project];
           setProjectsMeta(updated, { skipHistory: true });
