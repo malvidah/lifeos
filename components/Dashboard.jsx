@@ -6759,6 +6759,7 @@ export default function Dashboard() {
       // Don't fire when typing inside an input/textarea
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      if (document.activeElement?.isContentEditable) return;
       e.preventDefault();
       if (e.shiftKey) { await doRedo(); }
       else            { await doUndo(); }
