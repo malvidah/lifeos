@@ -1,0 +1,364 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 63;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		246F5EE52F5B730E001A9BBA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 246F5EE42F5B730E001A9BBA /* Assets.xcassets */; };
+		51E96AAF5CB7C2A0E4651058 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = E51244A0E8078E8B4D123E08 /* AppDelegate.swift */; };
+		C029A90B5A4897EAA6CC01D7 /* Info-additions.plist in Resources */ = {isa = PBXBuildFile; fileRef = 4C61A35D5838C37D7E23EE88 /* Info-additions.plist */; };
+		D2684DBCF3994F548DCFE478 /* WebViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 364C5B8AEB2A02AAF9B142A3 /* WebViewController.swift */; };
+		F3670E507DAF2CC38CCFC755 /* HealthKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 303EB0D05C311E52192FE02D /* HealthKitSync.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		19D134483489B44D4EC0B627 /* DayLab.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = DayLab.entitlements; sourceTree = "<group>"; };
+		246F5EE42F5B730E001A9BBA /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		303EB0D05C311E52192FE02D /* HealthKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitSync.swift; sourceTree = "<group>"; };
+		364C5B8AEB2A02AAF9B142A3 /* WebViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebViewController.swift; sourceTree = "<group>"; };
+		4C61A35D5838C37D7E23EE88 /* Info-additions.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "Info-additions.plist"; sourceTree = "<group>"; };
+		83AA7A8A1EE16DEC75866024 /* Day Lab.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Day Lab.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		E3A1FD486ED2CA89BEE6D2EF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		E51244A0E8078E8B4D123E08 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		B8C61F5EDF2A5459293435F7 /* DayLab */ = {
+			isa = PBXGroup;
+			children = (
+				E51244A0E8078E8B4D123E08 /* AppDelegate.swift */,
+				19D134483489B44D4EC0B627 /* DayLab.entitlements */,
+				303EB0D05C311E52192FE02D /* HealthKitSync.swift */,
+				4C61A35D5838C37D7E23EE88 /* Info-additions.plist */,
+				E3A1FD486ED2CA89BEE6D2EF /* Info.plist */,
+				364C5B8AEB2A02AAF9B142A3 /* WebViewController.swift */,
+			);
+			path = DayLab;
+			sourceTree = "<group>";
+		};
+		C434594609CFCF26B6E0D268 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				B8C61F5EDF2A5459293435F7 /* DayLab */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		C49290368760FFDFD54C797E /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				83AA7A8A1EE16DEC75866024 /* Day Lab.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		F7C94CB6994C043D5DDB37AD = {
+			isa = PBXGroup;
+			children = (
+				246F5EE42F5B730E001A9BBA /* Assets.xcassets */,
+				C434594609CFCF26B6E0D268 /* Sources */,
+				C49290368760FFDFD54C797E /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		886FA4719F4C0875A293DF9A /* DayLab */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6B16F1312540E0508A6977B7 /* Build configuration list for PBXNativeTarget "DayLab" */;
+			buildPhases = (
+				050996323DDFCFCDA288BD42 /* Sources */,
+				02D075612CA6B2305DB35B54 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = DayLab;
+			packageProductDependencies = (
+			);
+			productName = DayLab;
+			productReference = 83AA7A8A1EE16DEC75866024 /* Day Lab.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A5BA707F00A7D9D230989AE9 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1500;
+				TargetAttributes = {
+					886FA4719F4C0875A293DF9A = {
+						DevelopmentTeam = AZ65YJVYKM;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 8163D528A91AB5EABA49F3D9 /* Build configuration list for PBXProject "DayLab" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = F7C94CB6994C043D5DDB37AD;
+			minimizedProjectReferenceProxies = 1;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				886FA4719F4C0875A293DF9A /* DayLab */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		02D075612CA6B2305DB35B54 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				246F5EE52F5B730E001A9BBA /* Assets.xcassets in Resources */,
+				C029A90B5A4897EAA6CC01D7 /* Info-additions.plist in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		050996323DDFCFCDA288BD42 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				51E96AAF5CB7C2A0E4651058 /* AppDelegate.swift in Sources */,
+				F3670E507DAF2CC38CCFC755 /* HealthKitSync.swift in Sources */,
+				D2684DBCF3994F548DCFE478 /* WebViewController.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		35020ED63C574A6753890F12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = Sources/DayLab/DayLab.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = AZ65YJVYKM;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/DayLab/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Day Lab";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Day Lab reads your health data to show sleep, activity, and heart rate on your dashboard.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Day Lab writes health data to Apple Health.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Day Lab uses the microphone to let you add notes, tasks, and activities by voice.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Day Lab uses speech recognition to transcribe your voice into notes and tasks.";
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
+				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.daylab.app;
+				PRODUCT_NAME = "Day Lab";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		943530DAC6536D3FF6374A22 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = Sources/DayLab/DayLab.entitlements;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = AZ65YJVYKM;
+				ENABLE_BITCODE = NO;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Sources/DayLab/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "Day Lab";
+				INFOPLIST_KEY_NSHealthShareUsageDescription = "Day Lab reads your health data to show sleep, activity, and heart rate on your dashboard.";
+				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Day Lab writes health data to Apple Health.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Day Lab uses the microphone to let you add notes, tasks, and activities by voice.";
+				INFOPLIST_KEY_NSSpeechRecognitionUsageDescription = "Day Lab uses speech recognition to transcribe your voice into notes and tasks.";
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleLightContent;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Dark;
+				INFOPLIST_KEY_UIViewControllerBasedStatusBarAppearance = NO;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = me.daylab.app;
+				PRODUCT_NAME = "Day Lab";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		98F2A48EAEA9CF38BCF1D700 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		D8CE08734FF1775169676D72 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		6B16F1312540E0508A6977B7 /* Build configuration list for PBXNativeTarget "DayLab" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				943530DAC6536D3FF6374A22 /* Debug */,
+				35020ED63C574A6753890F12 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		8163D528A91AB5EABA49F3D9 /* Build configuration list for PBXProject "DayLab" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D8CE08734FF1775169676D72 /* Debug */,
+				98F2A48EAEA9CF38BCF1D700 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A5BA707F00A7D9D230989AE9 /* Project object */;
+}

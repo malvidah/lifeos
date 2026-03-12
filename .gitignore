@@ -3,6 +3,18 @@ node_modules/
 .env
 .env.local
 .vercel
--e 
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Xcode user-specific data
+xcuserdata/
+*.xcuserstate
+
+# Claude Code workspace
+.claude/
+
 # Desktop build artifacts
 desktop/dist/
+desktop/FETCH_HEAD
