@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useTheme } from "@/lib/theme";
-import { mono, F, R } from "@/lib/tokens";
+import { serif, mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey, shift, dayOffset, offsetToDate, keyToDayNum, MONTHS_FULL, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { useIsMobile } from "@/lib/hooks";
 import { Card, NavBtn, ChevronBtn } from "../ui/primitives.jsx";

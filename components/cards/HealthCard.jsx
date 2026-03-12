@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "@/lib/theme";
-import { mono, F, R } from "@/lib/tokens";
+import { serif, mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey } from "@/lib/dates";
 import { useDbSave, dbLoad, MEM, DIRTY } from "@/lib/db";
 import { cachedOuraFetch, _ouraCache } from "@/lib/ouraCache";

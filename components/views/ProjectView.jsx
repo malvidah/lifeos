@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useMemo, Fragment, useContext } from "react";
 import { useTheme } from "@/lib/theme";
-import { mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
+import { serif, mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { extractTags, tagDisplayName } from "@/lib/tags";
 import { useDbSave, dbLoad } from "@/lib/db";
