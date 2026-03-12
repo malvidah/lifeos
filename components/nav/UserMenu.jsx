@@ -3,6 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/lib/theme";
 import { mono, F, R, blurweb } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
+import { api } from "@/lib/api";
 import { dbLoad, dbSave } from "@/lib/db";
 import { ouraKey } from "@/lib/ouraCache";
 import { IntegrationToggle, IntegrationRow, InfoTip, Card, DayLabLoader } from "../ui/primitives.jsx";
@@ -50,8 +51,8 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
         plan: premRow.data?.data?.plan || null,
       });
     }).catch(()=>{});
-    fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
+    api.get("/api/entries?date=0000-00-00&type=strava_token", token)
+      .then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
     // Check Apple Health data + Claude MCP connection (use singleton — no new GoTrueClient)
     const _sb = createClient();
     _sb.from("entries").select("data").eq("type","health_apple").limit(5)
@@ -115,21 +116,11 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
     setSyncing("oura");
     try {
       // Save token
-      await fetch("/api/entries",{method:"POST",
-        headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey.trim()}})});
+      await api.post("/api/entries", {date:"global",type:"settings",data:{ouraToken:ouraKey.trim()}}, token);
       setOuraConnected(true);
-      // Backfill history
-      const res = await fetch("/api/oura-backfill",{method:"POST",
-        headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({})});
-      const d = await res.json();
-      if(!d.ok) console.warn("Oura backfill error:", d.error);
-      // Also recompute all scores from the fresh data
-      fetch('/api/scores-backfill', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ force: true }),
-      }).catch(() => {});
+      const d = await api.post("/api/oura-backfill", {}, token);
+      if(!d?.ok) console.warn("Oura backfill error:", d?.error);
+      api.post('/api/scores-backfill', { force: true }, token).catch(() => {});
     } catch(e) { console.warn("Oura connect failed:", e); }
     setSyncing(null);
   }
@@ -179,14 +170,9 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
     if (!garminEmail.trim() || !garminPassword.trim()) return;
     setGarminLoading(true); setGarminError("");
     try {
-      const r = await fetch("/api/garmin-auth", {
-        method:"POST",
-        headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`},
-        body:JSON.stringify({email:garminEmail.trim(),password:garminPassword}),
-      });
-      const d = await r.json();
-      if (!r.ok || d.error) {
-        setGarminError(d.error === "invalid_credentials" ? "Wrong email or password" : "Connection failed. Try again.");
+      const d = await api.post("/api/garmin-auth", {email:garminEmail.trim(),password:garminPassword}, token);
+      if (!d || d.error) {
+        setGarminError(d?.error === "invalid_credentials" ? "Wrong email or password" : "Connection failed. Try again.");
       } else {
         setGarminConnected(true); setGarminEmail(""); setGarminPassword("");
       }
@@ -195,7 +181,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
   }
 
   async function disconnectGarmin() {
-    await fetch("/api/garmin-auth", {method:"DELETE",headers:{Authorization:`Bearer ${token}`}});
+    await api.delete("/api/garmin-auth", token);
     setGarminConnected(false); setGarminEmail(""); setGarminPassword(""); setGarminError("");
   }
 

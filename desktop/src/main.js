@@ -1,7 +1,8 @@
 const { app, BrowserWindow, shell, session } = require('electron');
 const path = require('path');
 
-const APP_URL  = 'https://daylab.me';
+const IS_DEV   = process.env.NODE_ENV === 'development' || process.env.ELECTRON_DEV === '1';
+const APP_URL  = IS_DEV ? 'http://localhost:3000' : 'https://daylab.me';
 const PROTOCOL = 'daylab';
 
 app.setAsDefaultProtocolClient(PROTOCOL);
