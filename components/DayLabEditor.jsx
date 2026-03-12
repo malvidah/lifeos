@@ -45,8 +45,9 @@ function injectEditorStyles() {
 // Escape a string for use in a RegExp
 function reEsc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
 
-// ── Decoration: @note name → orange chip (hides the @) ───────────────────────
-// Text stored as `@note name`, displayed as `note name` in accent orange.
+// ── Decoration: [note name] → orange chip ────────────────────────────────────
+// Text stored as `[note name]`, decorated in accent orange.
+// Also matches known note names specifically to avoid false positives.
 function createNoteLinkDecoration(noteNamesRef) {
   return Extension.create({
     name: 'noteLinkDecoration',
@@ -55,18 +56,17 @@ function createNoteLinkDecoration(noteNamesRef) {
         key: new PluginKey('noteLinkDeco'),
         props: {
           decorations(state) {
-            const names = noteNamesRef.current;
-            if (!names?.length) return DecorationSet.empty;
             const decos = [];
-            // Longest first so multi-word names match before subsets
-            const sorted = [...names].sort((a, b) => b.length - a.length);
-            const re = new RegExp(`@(${sorted.map(reEsc).join('|')})(?=[^A-Za-z0-9]|$)`, 'g');
+            // Match any [bracketed text] — display as note chip regardless of known names
+            // (a note may have been created mid-session before noteNamesRef updates)
+            const re = /\[([^\]]+)\]/g;
             state.doc.descendants((node, pos) => {
               if (!node.isText) return;
               let m; re.lastIndex = 0;
               while ((m = re.exec(node.text)) !== null) {
                 decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                  style: `color:${ACCENT};font-family:${serif};cursor:pointer`,
+                  style: `color:${ACCENT};font-family:${serif};cursor:pointer;` +
+                    `background:${ACCENT}18;border-radius:999px;padding:0 5px;`,
                   class: 'dl-note-link',
                 }));
               }
@@ -79,9 +79,9 @@ function createNoteLinkDecoration(noteNamesRef) {
   });
 }
 
-// ── Decoration: #project name → uppercase pill with heavy rounding ────────────
-// Text stored as `#project name` (inserted by / trigger).
-// Known multi-word names matched first (longest-first), single-word fallback.
+// ── Decoration: {projectname} → uppercase pill ────────────────────────────────
+// Text stored as `{projectname}` (lowercase, no spaces, curly braces).
+// Also decorates legacy #ProjectName for backward compat during migration window.
 function createProjectTagDecoration(projectNamesRef) {
   return Extension.create({
     name: 'projectTagDecoration',
@@ -91,38 +91,32 @@ function createProjectTagDecoration(projectNamesRef) {
         props: {
           decorations(state) {
             const decos = [];
-            const names = projectNamesRef.current || [];
-            const knownLower = new Set(names.map(n => n.toLowerCase()));
             const pillStyle = (col) =>
               `color:${col};background:${col}18;border:1.5px solid ${col}55;` +
               `border-radius:999px;padding:0 7px;font-family:${mono};font-size:0.78em;` +
               `letter-spacing:0.08em;text-transform:uppercase;line-height:1.65;` +
               `vertical-align:middle;display:inline-block;cursor:pointer`;
 
-            // Multi-word known names (longest first)
-            if (names.length) {
-              const sorted = [...names].sort((a, b) => b.length - a.length);
-              const re = new RegExp(`#(${sorted.map(reEsc).join('|')})(?=[^A-Za-z0-9]|$)`, 'gi');
-              state.doc.descendants((node, pos) => {
-                if (!node.isText) return;
-                let m; re.lastIndex = 0;
-                while ((m = re.exec(node.text)) !== null) {
-                  decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                    style: pillStyle(projectColor(m[1].toLowerCase())),
-                  }));
-                }
-              });
-            }
-
-            // Single-word fallback for unrecognised #tags
-            const reWord = /#([A-Za-z][A-Za-z0-9]+)/g;
+            // New format: {projectname}
+            const reNew = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
             state.doc.descendants((node, pos) => {
               if (!node.isText) return;
-              let m; reWord.lastIndex = 0;
-              while ((m = reWord.exec(node.text)) !== null) {
-                if (knownLower.has(m[1].toLowerCase())) continue;
+              let m; reNew.lastIndex = 0;
+              while ((m = reNew.exec(node.text)) !== null) {
                 decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
                   style: pillStyle(projectColor(m[1])),
+                }));
+              }
+            });
+
+            // Legacy format: #ProjectName (shown during migration window)
+            const reLegacy = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
+            state.doc.descendants((node, pos) => {
+              if (!node.isText) return;
+              let m; reLegacy.lastIndex = 0;
+              while ((m = reLegacy.exec(node.text)) !== null) {
+                decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
+                  style: pillStyle(projectColor(m[1].toLowerCase())),
                 }));
               }
             });
@@ -163,8 +157,8 @@ const URLExtension = Extension.create({
 });
 
 // ── Custom findSuggestionMatch ────────────────────────────────────────────────
-// The default TipTap matcher closes on space when items don't match because it
-// compares "Big " (with trailing space) against "BigThink" which fails.
+// Keeps the dropdown open through spaces so multi-word names work.
+// Triggers: [ for notes (closes on ] or Enter), { for projects (closes on } or Enter).
 // This custom matcher:
 //   1. Walks backward through the current paragraph's text node to find the
 //      last trigger char at a word-boundary position (preceded by whitespace or
@@ -441,9 +435,13 @@ export function DayLabEditor({
         setSugg(p => p ? { ...p, selectedIndex: (p.selectedIndex - 1 + len) % len } : p);
         return true;
       }
-      if (event.key === 'Enter' || event.key === 'Tab') {
+      if (event.key === 'Enter' || event.key === 'Tab' || event.key === ']' || event.key === '}') {
         const item = s.items[s.selectedIndex];
-        if (item != null) { s.command(item); setSugg(null); }
+        if (item != null) {
+          s.command(item); setSugg(null);
+          // Prevent ] or } from being inserted — the commandFn already adds the closing char
+          event.preventDefault();
+        }
         return true;
       }
       if (event.key === 'Escape') { setSugg(null); return true; }
@@ -471,17 +469,15 @@ export function DayLabEditor({
       ...(singleLine ? [] : [ImageBlock]),
       Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
-      // @ → note link autocomplete
+      // [ → note link autocomplete; ] or Enter commits; stores as [note name]
       createSuggestion({
-        char: '@',
+        char: '[',
         suggKey: 'note',
         renderRef,
         itemsFn: (query) => {
           const names = noteNamesRef.current || [];
-          // Normalise: strip spaces before comparing so "my note" matches "MyNote"
           const q = query.toLowerCase().replace(/\s/g, '');
           const matches = names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
-          // Offer "create" when query non-empty and no exact match
           const qTrim = query.trim();
           if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
             matches.push(`__create__:${qTrim}`);
@@ -491,26 +487,24 @@ export function DayLabEditor({
         commandFn: ({ editor, range, name }) => {
           const isCreate = name.startsWith('__create__:');
           const noteName = isCreate ? name.slice(11) : name;
-          // Insert @note name followed by a space so cursor moves past the link
-          editor.chain().focus().deleteRange(range).insertContent(`@${noteName} `).run();
+          editor.chain().focus().deleteRange(range).insertContent(`[${noteName}] `).run();
           if (isCreate) onCreateNoteRef.current?.(noteName);
         },
       }),
 
-      // / → project tag autocomplete (stores as #project name in text)
+      // { → project tag autocomplete; } or Enter commits; stores as {projectname} (lowercase)
       createSuggestion({
-        char: '/',
+        char: '{',
         suggKey: 'project',
         renderRef,
         itemsFn: (query) => {
           const names = projectNamesRef.current || [];
-          // Strip spaces from both sides so "/Big T" matches "BigThink"
           const q = query.toLowerCase().replace(/\s/g, '');
           return names.filter(n => n.toLowerCase().replace(/\s/g, '').includes(q));
         },
         commandFn: ({ editor, range, name }) => {
-          // Delete the / + query, insert #project name
-          editor.chain().focus().deleteRange(range).insertContent(`#${name} `).run();
+          // Store lowercase — {bigthink}, not {BigThink}
+          editor.chain().focus().deleteRange(range).insertContent(`{${name.toLowerCase()}} `).run();
         },
       }),
     ],

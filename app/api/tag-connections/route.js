@@ -1,8 +1,9 @@
 import { getUserClient } from '../_lib/google.js';
 
-const TAG_RE = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
+// New format: {projectname}  Legacy: #ProjectName
+const TAG_RE_NEW    = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
+const TAG_RE_LEGACY = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
 
-// Normalize a tag key: map built-in aliases to their canonical id
 function canonical(lower) {
   if (lower === 'health') return '__health__';
   return lower;
@@ -10,9 +11,12 @@ function canonical(lower) {
 
 function tagsIn(text) {
   const s = new Set();
-  TAG_RE.lastIndex = 0;
+  if (typeof text !== 'string') return s;
+  TAG_RE_NEW.lastIndex = 0;
   let m;
-  while ((m = TAG_RE.exec(text)) !== null) s.add(canonical(m[1].toLowerCase()));
+  while ((m = TAG_RE_NEW.exec(text)) !== null) s.add(canonical(m[1].toLowerCase()));
+  TAG_RE_LEGACY.lastIndex = 0;
+  while ((m = TAG_RE_LEGACY.exec(text)) !== null) s.add(canonical(m[1].toLowerCase()));
   return s;
 }
 
@@ -23,23 +27,23 @@ export async function GET(req) {
   if (error || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   try {
-    const [notesR, tasksR] = await Promise.all([
+    const [journalR, legacyR, tasksR] = await Promise.all([
+      supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'journal'),
       supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'notes'),
       supabase.from('entries').select('data, date').eq('user_id', user.id).eq('type', 'tasks'),
     ]);
 
     const coMap = new Map();
     const recency = new Map();
-
-    // Group all tags by date (canonical keys)
     const byDate = new Map();
-    for (const row of notesR.data || []) {
+
+    for (const row of [...(journalR.data || []), ...(legacyR.data || [])]) {
       const tags = tagsIn(typeof row.data === 'string' ? row.data : '');
       const existing = byDate.get(row.date) || new Set();
       tags.forEach(t => existing.add(t));
       byDate.set(row.date, existing);
     }
-    for (const row of tasksR.data || []) {
+    for (const row of (tasksR.data || [])) {
       const tags = new Set();
       for (const task of (Array.isArray(row.data) ? row.data : [])) {
         if (task?.text) tagsIn(task.text).forEach(t => tags.add(t));

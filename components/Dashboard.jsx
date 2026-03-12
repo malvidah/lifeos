@@ -78,14 +78,19 @@ const shift    = (d,n) => { const x=new Date(d); x.setDate(x.getDate()+n); retur
 // ─── Projects — tag parsing & rendering ──────────────────────────────────────
 function extractTags(text) {
   if (!text || typeof text !== 'string') return [];
-  // Require a non-word char (space, punctuation, EOL) after the tag so
-  // partial words mid-typing don't create spurious projects.
-  // Keep original case — dedup is handled case-insensitively at the project level.
-  const re = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
-  const tags = []; const seenLower = new Set(); let m;
-  while ((m = re.exec(text)) !== null) {
+  const seen = new Set(); const tags = [];
+  // New format: {projectname}
+  const reNew = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
+  let m;
+  while ((m = reNew.exec(text)) !== null) {
     const lower = m[1].toLowerCase();
-    if (!seenLower.has(lower)) { seenLower.add(lower); tags.push(m[1]); }
+    if (!seen.has(lower)) { seen.add(lower); tags.push(lower); }
+  }
+  // Legacy format: #ProjectName — normalise to lowercase
+  const reLegacy = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
+  while ((m = reLegacy.exec(text)) !== null) {
+    const lower = m[1].toLowerCase();
+    if (!seen.has(lower)) { seen.add(lower); tags.push(lower); }
   }
   return tags;
 }
@@ -155,15 +160,39 @@ function TagChip({ name, onClick, style={}, plain=false }) {
     >{name}</span>
   );
 }
-// Edit-mode tag renderer: colored #tag spans (no chip pill), consistent with Notes focused renderInline.
-// Used in task edit overlay and any other edit context across the app.
+// Orange inline chip for [note name] links in read-mode
+function NoteChip({ name, onClick }) {
+  const ACCENT = '#D08828';
+  return (
+    <span
+      onClick={onClick}
+      style={{
+        display:'inline-flex', alignItems:'center',
+        color: ACCENT,
+        background: ACCENT + '18',
+        border: `1.5px solid ${ACCENT}55`,
+        borderRadius: 999, padding: '0 7px',
+        fontSize: '0.82em', letterSpacing: '0.04em',
+        fontFamily: "Georgia, 'Times New Roman', serif",
+        lineHeight: '1.65', flexShrink: 0, verticalAlign: 'middle',
+        cursor: onClick ? 'pointer' : 'default',
+        transition: 'opacity 0.15s',
+      }}
+    >[{name}]</span>
+  );
+}
+// Edit-mode tag renderer: {project} pills + [note] chips (no legacy # here — edit views show migrated text)
 function renderTaskInline(text) {
   if (!text) return null;
-  const re = /(#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9]))/g;
+  const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]/g;
   const parts = []; let last = 0, m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
-    parts.push(<TagChip key={`c${m.index}`} name={m[2]} />);
+    if (m[1] !== undefined) {
+      parts.push(<TagChip key={`c${m.index}`} name={m[1]} />);
+    } else {
+      parts.push(<NoteChip key={`n${m.index}`} name={m[2]} />);
+    }
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
@@ -172,12 +201,13 @@ function renderTaskInline(text) {
 
 function renderWithTags(text, dimTag=null, onTagClick=null) {
   if (!text) return null;
-  const parts = []; let last = 0;
-  const re = /#([A-Za-z][A-Za-z0-9]+)/g; let m;
+  const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
+  const parts = []; let last = 0; let m;
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) parts.push(<Fragment key={`t${last}`}>{text.slice(last, m.index)}</Fragment>);
-    const isOwn = dimTag && m[1].toLowerCase() === dimTag.toLowerCase();
-    parts.push(<TagChip key={`c${m.index}`} name={m[1]} plain={isOwn}/>);
+    const name = m[1] ?? m[2].toLowerCase();
+    const isOwn = dimTag && name === dimTag.toLowerCase();
+    parts.push(<TagChip key={`c${m.index}`} name={name} plain={isOwn}/>);
     last = m.index + m[0].length;
   }
   if (last < text.length) parts.push(<Fragment key={`e${last}`}>{text.slice(last)}</Fragment>);
@@ -212,13 +242,12 @@ function renderRichLine(text, dimTag=null, onTagClick=null) {
 
 function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0, onTagClick=null) {
   if (!text) return null;
-  // Build a combined regex for URLs and #tags
-  const combined = /(https?:\/\/[^\s<>"')\]]+)|(#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9]))/g;
+  // Combined: URLs | {project} new | #Tag legacy | [note link]
+  const combined = /(https?:\/\/[^\s<>"')\]]+)|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|(#[A-Za-z][A-Za-z0-9]+(?![A-Za-z0-9]))|\[([^\]]+)\]/g;
   const parts = []; let last = 0; let m;
   while ((m = combined.exec(text)) !== null) {
     if (m.index > last) parts.push(<Fragment key={`${keyOffset}t${last}`}>{text.slice(last, m.index)}</Fragment>);
     if (m[1]) {
-      // URL
       const url = m[1];
       parts.push(
         <a key={`${keyOffset}u${m.index}`} href={url} target="_blank" rel="noreferrer"
@@ -227,10 +256,17 @@ function renderTextWithLinksAndTags(text, dimTag=null, keyOffset=0, onTagClick=n
           onMouseLeave={e => e.currentTarget.style.color = '#C8820A'}
         >{url}</a>
       );
-    } else {
-      // #tag
-      const isOwn = dimTag && m[3].toLowerCase() === dimTag.toLowerCase();
-      parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={m[3]} plain={isOwn}/>);
+    } else if (m[2] !== undefined) {
+      const name = m[2];
+      const isOwn = dimTag && name === dimTag.toLowerCase();
+      parts.push(<TagChip key={`${keyOffset}c${m.index}`} name={name} plain={isOwn} onClick={onTagClick ? () => onTagClick(name) : undefined}/>);
+    } else if (m[3]) {
+      // Legacy #Tag — normalize to lowercase
+      const name = m[3].slice(1).toLowerCase();
+      const isOwn = dimTag && name === dimTag.toLowerCase();
+      parts.push(<TagChip key={`${keyOffset}lc${m.index}`} name={name} plain={isOwn}/>);
+    } else if (m[4]) {
+      parts.push(<NoteChip key={`${keyOffset}n${m.index}`} name={m[4]}/>);
     }
     last = m.index + m[0].length;
   }
@@ -5842,7 +5878,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                   </div>
                   {isToday && pvTaskFilter !== 'done' && (
                     <NewProjectTask project="__health__" onAdd={async text => {
-                      const taskText = text.trim().toLowerCase().includes('#health') ? text.trim() : text.trim() + ' #Health';
+                      const taskText = text.trim().toLowerCase().includes('{health}') ? text.trim() : text.trim() + ' {health}';
                       const current = await dbLoad(todayStr, 'tasks', token);
                       const existing = Array.isArray(current) ? current : [];
                       const newTask = { id: Date.now(), text: taskText, done: false };
@@ -5913,7 +5949,7 @@ function HealthProjectView({ token, userId, onBack, onHealthChange, onScoresRead
                   >{isToday ? 'Today' : fmtDate(date)}</div>
                   {isToday && (
                     <AddJournalLine project="__health__" onAdd={async text => {
-                      const entryText = text.trim().toLowerCase().includes('#health') ? text.trim() : text.trim() + ' #Health';
+                      const entryText = text.trim().toLowerCase().includes('{health}') ? text.trim() : text.trim() + ' {health}';
                       const current = await dbLoad(todayStr, 'notes', token);
                       const existing = (typeof current === 'string' ? current : '') || '';
                       const updated = existing ? existing.trimEnd() + "\n" + entryText : entryText;
@@ -6072,12 +6108,12 @@ function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter,
     const oldNote = notesList.find(n => n.id === id);
     const oldName = noteName(oldNote);
     const newName = (newContent || '').split('\n')[0].trim() || 'Untitled';
-    // If name changed, update {oldName} references in all other notes
+    // If name changed, update [oldName] note links in all other notes
     let updatedNotes = notesList.map(n => {
       if (n.id === id) return { ...n, content: newContent, updatedAt: Date.now() };
       if (oldName !== newName && n.content) {
         const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const updated = n.content.replace(new RegExp('\\{' + escaped + '\\}', 'g'), '{' + newName + '}');
+        const updated = n.content.replace(new RegExp('\\[' + escaped + '\\]', 'g'), '[' + newName + ']');
         return updated !== n.content ? { ...n, content: updated } : n;
       }
       return n;
