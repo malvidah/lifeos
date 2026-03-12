@@ -518,7 +518,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               { type: 'text', text: ' ' },
             ]).run();
             if (isNew) {
-              window.dispatchEvent(new CustomEvent('lifeos:create-project', { detail: { name: pName } }));
+              window.dispatchEvent(new CustomEvent('daylab:create-project', { detail: { name: pName } }));
               onCreateProjectRef.current?.(pName);
             }
           } else {
@@ -530,7 +530,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             ]).run();
             if (name.startsWith('__create__:')) {
               onCreateNoteRef.current?.(noteName, { silent: true });
-              window.dispatchEvent(new CustomEvent('lifeos:create-note', { detail: { name: noteName } }));
+              window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name: noteName } }));
             }
           }
         },

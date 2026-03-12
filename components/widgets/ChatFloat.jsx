@@ -6,7 +6,7 @@ import { toKey, todayKey, fmtDate } from "@/lib/dates";
 import { api } from "@/lib/api";
 import { dbLoad, dbSave, MEM, DIRTY, pushHistory } from "@/lib/db";
 import { useIsMobile } from "@/lib/hooks";
-import { DayLabLoader, Widget, Shimmer } from "../ui/primitives.jsx";
+import { DayLabLoader, Card, Shimmer } from "../ui/primitives.jsx";
 
 export function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
   const { C } = useTheme();
@@ -91,7 +91,7 @@ export function InsightsCard({date, token, userId, healthKey, collapsed, onToggl
   }, [date, token, userId, healthKey]); // eslint-disable-line
 
   return (
-    <Widget label="Insights" color={C.muted} slim collapsed={collapsed} onToggle={onToggle}>
+    <Card label="Insights" color={C.muted} slim collapsed={collapsed} onToggle={onToggle}>
       {/* Fixed responsive height — content scrolls inside, no scrollbar visible */}
       <div style={{ height: "clamp(80px, 10vh, 120px)", overflowY: "auto", scrollbarWidth: "none" }}>
         <div style={{ opacity: busy && !text ? 0 : 1, transition: "opacity 0.3s ease" }}>
@@ -127,7 +127,7 @@ export function InsightsCard({date, token, userId, healthKey, collapsed, onToggl
           ) : null}
         </div>
       </div>
-    </Widget>
+    </Card>
   );
 }
 
@@ -351,17 +351,17 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
       const key = `${userId}:${date}:${t}`;
       if (MEM[key] !== undefined) snapshots[key] = JSON.parse(JSON.stringify(MEM[key]));
     });
-    window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: refreshTypes } }));
+    window.dispatchEvent(new CustomEvent("daylab:refresh", { detail: { types: refreshTypes } }));
     if (Object.keys(snapshots).length > 0) {
       pushHistory({
         label: `AI: ${summary || "entry"}`,
         undo: () => {
           Object.entries(snapshots).forEach(([k, v]) => { MEM[k] = v; DIRTY[k] = true; });
-          window.dispatchEvent(new CustomEvent("lifeos:snapshot-restore", { detail: { keys: Object.keys(snapshots) } }));
+          window.dispatchEvent(new CustomEvent("daylab:snapshot-restore", { detail: { keys: Object.keys(snapshots) } }));
         },
         redo: () => {
           Object.keys(snapshots).forEach(k => { delete MEM[k]; delete DIRTY[k]; });
-          window.dispatchEvent(new CustomEvent("lifeos:refresh", { detail: { types: refreshTypes } }));
+          window.dispatchEvent(new CustomEvent("daylab:refresh", { detail: { types: refreshTypes } }));
         },
       });
     }

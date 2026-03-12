@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase";
 import { api } from "@/lib/api";
 import { dbLoad, dbSave } from "@/lib/db";
 import { ouraKey } from "@/lib/ouraCache";
-import { IntegrationToggle, IntegrationRow, InfoTip, Card, DayLabLoader } from "../ui/primitives.jsx";
+import { IntegrationToggle, IntegrationRow, InfoTip, DayLabLoader } from "../ui/primitives.jsx";
 
 export default function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onStravaChange}) {
   const { C } = useTheme();

@@ -4,24 +4,11 @@ import { useTheme } from "@/lib/theme";
 import { mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey } from "@/lib/dates";
 import { useDbSave, dbLoad } from "@/lib/db";
-import { fmtMins, sportEmoji } from "@/lib/formatting";
+import { fmtMins, sportEmoji, fmtMinsField, SPORT_EMOJI } from "@/lib/workouts";
 import { cachedOuraFetch } from "@/lib/ouraCache";
-import { RichLine, Shimmer } from "../ui/primitives.jsx";
+import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
 import { api } from "@/lib/api";
-
-export function SourceBadge({source}) {
-  if (!source) return null;
-  const isStrava = source === "strava";
-  return (
-    <span style={{
-      fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", textTransform:"uppercase",
-      color: isStrava ? "#FC4C02" : "#B8A882",
-      border: `1px solid ${isStrava ? "#FC4C02" : "#B8A882"}`,
-      borderRadius:3, padding:"1px 4px", flexShrink:0, opacity:0.8,
-    }}>{isStrava ? "Strava" : "Oura"}</span>
-  );
-}
 
 // Merge Oura workouts + Strava activities, deduplicating by overlapping type+time
 function normalizeType(str) {

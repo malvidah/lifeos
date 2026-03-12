@@ -6,7 +6,7 @@ import { toKey, todayKey, shift, fmtDate } from "@/lib/dates";
 import { extractTags, extractTagsFromAll, tagDisplayName } from "@/lib/tags";
 import { useDbSave } from "@/lib/db";
 import { useNavigation } from "@/lib/contexts";
-import { Card, Ring, TagChip } from "../ui/primitives.jsx";
+import { Ring, TagChip } from "../ui/primitives.jsx";
 import { TaskFilterBtns } from "../widgets/Tasks.jsx";
 import { api } from "@/lib/api";
 
@@ -77,8 +77,8 @@ export default function ProjectsCard({ date, token, userId, onSelectProject }) {
       // Also bump recency so it sorts to the front
       setRecency(prev => ({ ...prev, [name.toLowerCase()]: new Date().toISOString() }));
     };
-    window.addEventListener('lifeos:create-project', handler);
-    return () => window.removeEventListener('lifeos:create-project', handler);
+    window.addEventListener('daylab:create-project', handler);
+    return () => window.removeEventListener('daylab:create-project', handler);
   }, []); // eslint-disable-line
 
   // Sort by recency, show top 6 in strip

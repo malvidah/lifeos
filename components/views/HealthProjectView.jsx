@@ -5,14 +5,13 @@ import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT } from "@/lib/dates";
 import { api } from "@/lib/api";
 import { tagDisplayName } from "@/lib/tags";
-import { Card, Widget, Ring, ChevronBtn, RichLine, Shimmer } from "../ui/primitives.jsx";
-import { fmtMins, sportEmoji } from "@/lib/formatting";
+import { Card, Ring, ChevronBtn, RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
+import { fmtMins, sportEmoji } from "@/lib/workouts";
 import { dbLoad, dbSave, MEM } from "@/lib/db";
 import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import HealthCard from "../cards/HealthCard.jsx";
-import { SourceBadge } from "../cards/WorkoutsCard.jsx";
-import { AddJournalLine } from "./ProjectView.jsx";
+import { AddJournalLine } from "../widgets/JournalEditor.jsx";
 import { TaskFilterBtns, NewProjectTask } from "../widgets/Tasks.jsx";
 
 function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
@@ -43,7 +42,7 @@ function HealthAllMeals({ token, userId, onSelectDate, onBack }) {
     const newRow = { id: Date.now(), text, kcal: null, protein: null };
     await dbSave(todayStr, 'meals', [...existing, newRow], token);
     MEM[`${userId}:${todayStr}:meals`] = [...existing, newRow];
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['meals'] } }));
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['meals'] } }));
     setAllMeals(prev => [...(prev || []), { date: todayStr, ...newRow }]);
     estimateNutrition(`Estimate for: "${text}". Return JSON: {"kcal":420,"protein":30}`, token)
       .then(result => {
@@ -216,7 +215,7 @@ function HealthAllActivities({ token, userId, onSelectDate, onBack }) {
     const newRow = { id: Date.now(), text, dist: null, pace: null, kcal: null };
     await dbSave(todayStr, 'workouts', [...existing, newRow], token);
     MEM[`${userId}:${todayStr}:workouts`] = [...existing, newRow];
-    window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['workouts'] } }));
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['workouts'] } }));
     setRows(prev => [...(prev || []), { date: todayStr, ...newRow }]);
     estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token)
       .then(result => {
@@ -380,7 +379,7 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
   }, [journalEntries]);
 
   const tasksWidget = (
-    <Widget
+    <Card
       label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
       color={C.blue} autoHeight
       collapsed={tasksCollapsed} onToggle={toggleTasks}
@@ -419,7 +418,7 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
                       const updated = [...existing, newTask];
                       await dbSave(todayStr, 'tasks', updated, token);
                       MEM[`${userId}:${todayStr}:tasks`] = updated;
-                      window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['tasks'] } }));
+                      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'] } }));
                       setEntries(prev => prev ? {
                         ...prev,
                         taskEntries: [...(prev.taskEntries||[]), { date: todayStr, id: newTask.id, text: taskText, done: false }],
@@ -447,11 +446,11 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
           </div>
         );
       })()}
-    </Widget>
+    </Card>
   );
 
   const entriesWidget = (
-    <Widget
+    <Card
       label={journalEntries.length ? `Entries · ${journalEntries.length}` : 'Entries'}
       color={C.accent} autoHeight
       collapsed={entriesCollapsed} onToggle={toggleEntries}
@@ -490,7 +489,7 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
                       const newLineIndex = updated.split("\n").lastIndexOf(entryText);
                       await dbSave(todayStr, 'journal', updated, token);
                       MEM[`${userId}:${todayStr}:journal`] = updated;
-                      window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
+                      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
                       setEntries(prev => prev ? {
                         ...prev,
                         journalEntries: [...(prev.journalEntries||[]), { date: todayStr, lineIndex: newLineIndex, text: entryText }],
@@ -508,22 +507,22 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
           </div>
         );
       })()}
-    </Widget>
+    </Card>
   );
 
   const mealsWidget = (
-    <Widget label="Meals" color={C.red} autoHeight collapsed={mealsCollapsed} onToggle={toggleMeals}
+    <Card label="Meals" color={C.red} autoHeight collapsed={mealsCollapsed} onToggle={toggleMeals}
       headerRight={<span style={{display:'flex',gap:0}}>
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:50,textAlign:'center'}}>prot</span>
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:72,textAlign:'center'}}>energy</span>
       </span>}
     >
       <HealthAllMeals token={token} userId={userId} onSelectDate={onSelectDate} onBack={onBack} />
-    </Widget>
+    </Card>
   );
 
   const activitiesWidget = (
-    <Widget label="Workouts" color={C.green} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
+    <Card label="Workouts" color={C.green} autoHeight collapsed={activitiesCollapsed} onToggle={toggleActivities}
       headerRight={<span style={{display:'flex',gap:0}}>
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:60,textAlign:'center'}}>dist</span>
         <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:C.dim,width:100,textAlign:'center'}}>pace</span>
@@ -531,7 +530,7 @@ export default function HealthProjectView({ token, userId, onBack, onHealthChang
       </span>}
     >
       <HealthAllActivities token={token} userId={userId} onSelectDate={onSelectDate} onBack={onBack} />
-    </Widget>
+    </Card>
   );
 
   return (

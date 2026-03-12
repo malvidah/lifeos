@@ -6,8 +6,8 @@ import { toKey, todayKey, shift } from "@/lib/dates";
 import { useDbSave, dbLoad, MEM, DIRTY } from "@/lib/db";
 import { cachedOuraFetch, _ouraCache } from "@/lib/ouraCache";
 import { createClient } from "@/lib/supabase";
-import { Card, Ring, Widget, Shimmer, ChevronBtn, InfoTip } from "../ui/primitives.jsx";
-import { fmtMins, fmtMinsField, sportEmoji } from "@/lib/formatting";
+import { Ring, Card, Shimmer, ChevronBtn, InfoTip } from "../ui/primitives.jsx";
+import { fmtMins, fmtMinsField, sportEmoji } from "@/lib/workouts";
 import { api } from "@/lib/api";
 
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",activeMinutes:"",resilienceScore:"",stressMins:"",recoveryMins:""};
