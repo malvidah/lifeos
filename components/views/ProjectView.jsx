@@ -467,7 +467,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           {!notesListCollapsed && (
             <div style={{ width: 164, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 440, paddingRight: 2 }}>
               {sortedNotes.length === 0 && (
-                <div style={{ fontFamily: serif, fontSize: F.sm, color: "var(--dl-dim)", padding: '8px 6px', lineHeight: 1.5 }}>No notes yet.</div>
+                <button onClick={() => addNote()} style={{ background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'text', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: "var(--dl-dim)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}>Untitled</button>
               )}
               {sortedNotes.map(note => (
                 <div
@@ -535,8 +535,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               />
             ) : (
               <div onClick={() => addNote()} style={{ cursor: 'text', minHeight: 180, padding: '2px 0' }}>
-                <div style={{ fontFamily: mono, fontSize: F.sm, fontWeight: 700, color: "var(--dl-dim)", lineHeight: 1.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>New note</div>
-                <div style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-dim)", lineHeight: 1.7, marginTop: 4 }}>Write something...</div>
+                <div style={{ fontFamily: mono, fontSize: F.sm, fontWeight: 400, color: "var(--dl-dim)", lineHeight: 1.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Untitled</div>
               </div>
             )}
           </div>
