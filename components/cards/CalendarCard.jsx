@@ -309,7 +309,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
           {DAY_NAMES.map((n, i) => (
             <div key={i} style={{
               textAlign: 'center', fontFamily: mono, fontSize: '10px',
-              fontWeight: '500', letterSpacing: '0.08em', color: "var(--dl-highlight)",
+              fontWeight: '500', letterSpacing: '0.08em', color: "var(--dl-middle)",
             }}>{n}</div>
           ))}
         </div>
