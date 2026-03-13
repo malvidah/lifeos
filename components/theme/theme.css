@@ -67,7 +67,7 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 ::-webkit-scrollbar{display:none}*{scrollbar-width:none}
 button{border-radius:0}a{text-decoration:none}
-::placeholder{color:var(--dl-muted);opacity:1}
+::placeholder{color:var(--dl-detail);opacity:1}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 @keyframes spin{to{transform:rotate(360deg)}}
