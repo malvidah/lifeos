@@ -18,6 +18,7 @@ import { serif, mono, F, projectColor, CHIP_TOKENS, THEMES } from '@/lib/tokens'
 
 const ACCENT = THEMES.dark.accent;
 const WARM   = 'var(--dl-accent)';
+const EMPTY_TASK_LIST = '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>';
 
 // ── CSS injection ─────────────────────────────────────────────────────────────
 function injectEditorStyles() {
@@ -518,7 +519,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       }),
     ],
 
-    content: taskList ? (value || '') : { type: 'doc', content: textToContent(value || '') },
+    content: taskList ? (value || EMPTY_TASK_LIST) : { type: 'doc', content: textToContent(value || '') },
     editable,
 
     editorProps: {
@@ -582,8 +583,18 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         }
         if (e.key === 'Backspace' && taskListRef.current) {
           const { selection } = view.state;
-          // Prevent deleting the first task item — cursor at start of first task's paragraph (pos ≤ 3)
-          if (selection.empty && selection.$from.pos <= 3) return true;
+          if (selection.empty) {
+            const $from = selection.$from;
+            // Block backspace only when at the start of the first task item's paragraph
+            // (prevents collapsing the task item structure, but allows character deletion)
+            if ($from.parentOffset === 0 && $from.depth >= 2) {
+              const taskItemNode = $from.node($from.depth - 1);
+              if (taskItemNode?.type.name === 'taskItem') {
+                const taskItemIndex = $from.index($from.depth - 2);
+                if (taskItemIndex === 0) return true;
+              }
+            }
+          }
         }
         if (e.key === 'Escape') { view.dom.blur(); return true; }
         return false;
@@ -670,7 +681,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     lastExternalValue.current = value;
     if (!editor.isFocused) {
       if (taskList) {
-        editor.commands.setContent(value || '');
+        editor.commands.setContent(value || EMPTY_TASK_LIST);
       } else {
         editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });
       }
