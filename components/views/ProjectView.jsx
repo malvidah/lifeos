@@ -99,9 +99,32 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   // All current note names (for {note} autocomplete)
   const allNoteNames = notesList.map(noteName).filter(Boolean);
 
+  const getUniqueName = (baseName, existingNames) => {
+    const lower = existingNames.map(n => n.toLowerCase());
+    if (!lower.includes(baseName.toLowerCase())) return baseName;
+    let i = 2;
+    while (lower.includes(`${baseName} ${i}`.toLowerCase())) i++;
+    return `${baseName} ${i}`;
+  };
   const addNote = (initialName = '', { silent = false, initialContent } = {}) => {
     const id = `note_${Date.now()}`;
-    const content = initialContent || initialName || '';
+    let content = initialContent || initialName || '';
+    // If content would produce a duplicate name, auto-suffix
+    const derivedName = content ? (content.replace(/<[^>]*>/g, '').split('\n')[0].trim() || 'Untitled') : 'Untitled';
+    const existingNames = notesList.map(noteName);
+    const uniqueName = getUniqueName(derivedName, existingNames);
+    if (uniqueName !== derivedName) {
+      // Replace the title in content, or set content if empty
+      if (!content) {
+        content = uniqueName;
+      } else if (content.includes('<h1')) {
+        content = content.replace(/(<h1[^>]*>)(.*?)(<\/h1>)/, `$1${uniqueName}$3`);
+      } else {
+        const lines = content.split('\n');
+        lines[0] = uniqueName;
+        content = lines.join('\n');
+      }
+    }
     setNotesStore(current => {
       const list = Array.isArray(current?.notes) ? current.notes : [];
       return silent
@@ -236,6 +259,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const [workoutsCollapsed,   toggleWorkouts]   = useCollapse(`pv:${project}:workouts`,   false);
   const [mealsCollapsed,      toggleMeals]      = useCollapse(`pv:${project}:meals`,      false);
   const [hoveredNoteId,       setHoveredNoteId] = useState(null);
+  const skipPhantomBlur = useRef(false);
 
   // Workouts + meals tagged to this project
   const [workoutItems, setWorkoutItems] = useState(null); // null=not loaded, []=empty
@@ -452,7 +476,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
         onToggle={toggleNotes}
         headerRight={
           <button
-            onClick={e => { e.stopPropagation(); addNote(); }}
+            onClick={e => { e.stopPropagation(); skipPhantomBlur.current = true; addNote(); }}
             title="New note"
             style={{ background:'none', border:'none', cursor:'pointer', padding:'2px 8px', color:"var(--dl-dim)", display:'flex', alignItems:'center', borderRadius:4, transition:'color 0.12s' }}
             onMouseEnter={e => e.currentTarget.style.color="var(--dl-text)"}
@@ -467,7 +491,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           {!notesListCollapsed && (
             <div style={{ width: 164, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 440, paddingRight: 2 }}>
               {sortedNotes.length === 0 && (
-                <button onClick={() => addNote()} style={{ background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'text', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: "var(--dl-dim)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}>Untitled</button>
+                <button onClick={() => { skipPhantomBlur.current = true; addNote(); }} style={{ background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'text', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: "var(--dl-dim)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}>Untitled</button>
               )}
               {sortedNotes.map(note => (
                 <div
@@ -538,7 +562,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 key="phantom"
                 value=""
                 noteTitle
-                onBlur={html => { if (html?.replace(/<[^>]*>/g, '').trim()) addNote('', { initialContent: html }); }}
+                onBlur={html => { if (skipPhantomBlur.current) { skipPhantomBlur.current = false; return; } if (html?.replace(/<[^>]*>/g, '').trim()) addNote('', { initialContent: html }); }}
                 noteNames={[]}
                 projectNames={pvProjectNames}
                 onCreateNote={addNote}
