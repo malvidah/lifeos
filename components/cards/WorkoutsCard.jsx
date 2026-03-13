@@ -207,7 +207,12 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
               color={"var(--dl-accent)"}
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {
-                setManualRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===row.id ? {...r, text} : r));
+                setManualRows(prev => {
+                  const s = Array.isArray(prev) ? prev : safe;
+                  const existing = s.find(r => r.id === row.id);
+                  if (!text.trim() && existing?.text?.trim()) return prev; // skip ghost blur after Enter
+                  return s.map(r => r.id===row.id ? {...r, text} : r);
+                });
                 if (text.trim()) {
                   const {dist,pace}=parseActivityText(text);
                   setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(x=>x.id===row.id?{...x,dist:dist||x.dist,pace:pace||x.pace}:x));
@@ -216,10 +221,13 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
                 }
               }}
               onEnterCommit={text => {
-                setManualRows(safe.map(r => r.id===row.id ? {...r, text} : r));
                 const row2 = mkRow();
                 const i = safe.findIndex(r => r.id===row.id);
-                setManualRows(prev => { const s=Array.isArray(prev)?prev:safe; return [...s.slice(0,i+1), row2, ...s.slice(i+1)]; });
+                setManualRows(prev => {
+                  const s = Array.isArray(prev) ? prev : safe;
+                  const updated = s.map(r => r.id===row.id ? {...r, text} : r);
+                  return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
+                });
                 setTimeout(() => refs.current[row2.id]?.focus(), 30);
               }}
               onBackspaceEmpty={safe.length > 1 ? () => {

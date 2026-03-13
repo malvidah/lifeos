@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../DayLabEditor.jsx";
-import { TaskFilterBtns, NewProjectTask, TaskCheckbox } from "../widgets/Tasks.jsx";
+import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
 import { AddJournalLine } from "../widgets/JournalEditor.jsx";
 
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
@@ -86,14 +86,15 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const addNote = (initialName = '', { silent = false } = {}) => {
     const id = `note_${Date.now()}`;
     const content = initialName || '';
-    // silent=true: register note without switching to it (used when /n creates a chip)
-    const updated = silent
-      ? { ...notesStore, notes: [...notesList, { id, content, updatedAt: Date.now() }] }
-      : { notes: [...notesList, { id, content, updatedAt: Date.now() }], activeId: id };
-    setNotesStore(updated, { skipHistory: true });
+    setNotesStore(current => {
+      const list = Array.isArray(current?.notes) ? current.notes : [];
+      return silent
+        ? { ...current, notes: [...list, { id, content, updatedAt: Date.now() }] }
+        : { ...current, notes: [...list, { id, content, updatedAt: Date.now() }], activeId: id };
+    }, { skipHistory: true });
   };
   const selectNote = (id) => {
-    setNotesStore({ ...notesStore, activeId: id }, { skipHistory: true });
+    setNotesStore(current => ({ ...current, activeId: id }), { skipHistory: true });
   };
 
   // Navigate-to-note from journal chip clicks
@@ -118,17 +119,19 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const oldNote = notesList.find(n => n.id === id);
     const oldName = noteName(oldNote);
     const newName = (newContent || '').split('\n')[0].trim() || 'Untitled';
-    // Update [oldName] note links in all other notes in this project
-    let updatedNotes = notesList.map(n => {
-      if (n.id === id) return { ...n, content: newContent, updatedAt: Date.now() };
-      if (oldName !== newName && n.content) {
-        const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const updated = n.content.replace(new RegExp('\\[' + escaped + '\\]', 'g'), '[' + newName + ']');
-        return updated !== n.content ? { ...n, content: updated } : n;
-      }
-      return n;
-    });
-    setNotesStore({ ...notesStore, notes: updatedNotes }, { skipHistory: true });
+    setNotesStore(current => {
+      const list = Array.isArray(current?.notes) ? current.notes : [];
+      const updatedNotes = list.map(n => {
+        if (n.id === id) return { ...n, content: newContent, updatedAt: Date.now() };
+        if (oldName !== newName && n.content) {
+          const escaped = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const updated = n.content.replace(new RegExp('\\[' + escaped + '\\]', 'g'), '[' + newName + ']');
+          return updated !== n.content ? { ...n, content: updated } : n;
+        }
+        return n;
+      });
+      return { ...current, notes: updatedNotes };
+    }, { skipHistory: true });
 
     // Propagate rename to all DB entries that reference [oldName]
     // Journal entries store links as plain text [name], tasks store as TipTap HTML data-note-link="name"
@@ -194,9 +197,11 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     }
   };
   const deleteNote = (id) => {
-    const remaining = notesList.filter(n => n.id !== id);
-    const newActive = remaining[0]?.id ?? null;
-    setNotesStore({ notes: remaining, activeId: newActive }, { skipHistory: true });
+    setNotesStore(current => {
+      const list = Array.isArray(current?.notes) ? current.notes : [];
+      const remaining = list.filter(n => n.id !== id);
+      return { ...current, notes: remaining, activeId: remaining[0]?.id ?? null };
+    }, { skipHistory: true });
   };
 
   // Per-project collapse state (persisted)
@@ -348,12 +353,12 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       ? text.trim()
       : `${text.trim()} {${project.toLowerCase()}}`;
     const current = await dbLoad(today, 'tasks', token);
-    const existing = Array.isArray(current) ? current : [];
+    const existing = clientParseTasks(current);
     const newTask = { id: crypto.randomUUID(), text: taskText, done: false };
-    const updated = [...existing, newTask];
-    await dbSave(today, 'tasks', updated, token);
+    const html = tasksToHtml([...existing, newTask]);
+    await dbSave(today, 'tasks', html, token);
     const cacheKey = `${userId}:${today}:tasks`;
-    MEM[cacheKey] = updated; // Zustand proxy notifies all subscribers
+    MEM[cacheKey] = html; // Zustand proxy notifies all subscribers
     registerNewTags(taskText);
     // Append to local project-view entries so it appears immediately here too
     setEntries(prev => prev ? {

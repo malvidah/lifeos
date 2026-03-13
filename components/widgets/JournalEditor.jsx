@@ -181,14 +181,22 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
               color={"var(--dl-accent)"}
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {
-                setRows(safe.map(r => r.id===row.id ? {...r, text, kcal: text !== r.text ? null : r.kcal, protein: text !== r.text ? null : r.protein} : r));
+                setRows(prev => {
+                  const s = Array.isArray(prev) ? prev : safe;
+                  const existing = s.find(r => r.id === row.id);
+                  if (!text.trim() && existing?.text?.trim()) return prev; // skip ghost blur after Enter
+                  return s.map(r => r.id===row.id ? {...r, text, kcal: text !== r.text ? null : r.kcal, protein: text !== r.text ? null : r.protein} : r);
+                });
                 if (text.trim()) { const r=safe.find(r=>r.id===row.id); if(r?.kcal===null&&!r?.estimating) runEstimate(row.id, text); }
               }}
               onEnterCommit={text => {
-                setRows(safe.map(r => r.id===row.id ? {...r, text} : r));
                 const row2 = mkRow();
                 const i = safe.findIndex(r => r.id===row.id);
-                setRows(prev => { const s=Array.isArray(prev)?prev:safe; return [...s.slice(0,i+1), row2, ...s.slice(i+1)]; });
+                setRows(prev => {
+                  const s = Array.isArray(prev) ? prev : safe;
+                  const updated = s.map(r => r.id===row.id ? {...r, text} : r);
+                  return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
+                });
                 setTimeout(() => refs.current[row2.id]?.focus(), 30);
               }}
               onBackspaceEmpty={safe.length > 1 ? () => {
