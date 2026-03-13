@@ -465,12 +465,12 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             onClick={toggleNotesList}
             title={notesListCollapsed ? 'Show list' : 'Hide list'}
             style={{ width: 16, flexShrink: 0, position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onMouseEnter={e => e.currentTarget.querySelector('.notes-chevron').style.borderColor = "var(--dl-accent)"}
-            onMouseLeave={e => e.currentTarget.querySelector('.notes-chevron').style.borderColor = "var(--dl-border)"}
+            onMouseEnter={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-dim)"}
+            onMouseLeave={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-border)"}
           >
             <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, background: 'var(--dl-border)' }}/>
-            <div className="notes-chevron" style={{ position: 'relative', zIndex: 1, width: 14, height: 22, background: 'var(--dl-card)', border: '1px solid var(--dl-border)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color 0.15s' }}>
-              <svg width="7" height="10" viewBox="0 0 7 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <div className="notes-chevron" style={{ position: 'relative', zIndex: 1, color: 'var(--dl-border)', transition: 'color 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <svg width="7" height="10" viewBox="0 0 7 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 {notesListCollapsed
                   ? <polyline points="1.5,1.5 5.5,5 1.5,8.5"/>
                   : <polyline points="5.5,1.5 1.5,5 5.5,8.5"/>}
@@ -479,28 +479,49 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           </div>
 
           {/* Right: editor — full width when list collapsed */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}>
-            {activeNote ? (
-              <DayLabEditor
-                key={activeNote.id}
-                value={activeNote.content || ''}
-                onBlur={text => updateNoteContent(activeNote.id, text)}
-                placeholder='Note name (first line)…'
-                noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
-                projectNames={pvProjectNames}
-                onCreateNote={addNote}
-                onProjectClick={name => navigateToProject(name)}
-                onNoteClick={name => {
-                  const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
-                  if (match) selectNote(match.id);
-                  else addNote(name);
-                }}
-                textColor={"var(--dl-text)"}
-                mutedColor={"var(--dl-dim)"}
-                color={"var(--dl-muted)"}
-                style={{ minHeight: 180, width: '100%' }}
-              />
-            ) : (
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {activeNote ? (() => {
+              const lines = (activeNote.content || '').split('\n');
+              const titleVal = lines[0] || '';
+              const bodyVal = lines.slice(1).join('\n');
+              return (
+                <>
+                  <input
+                    key={activeNote.id + ':title'}
+                    defaultValue={titleVal}
+                    placeholder="Untitled note…"
+                    onBlur={e => {
+                      const newTitle = e.target.value.trim();
+                      const body = (activeNote.content || '').split('\n').slice(1).join('\n');
+                      updateNoteContent(activeNote.id, newTitle ? newTitle + (body ? '\n' + body : '') : body);
+                    }}
+                    style={{ fontFamily: mono, fontSize: F.md, fontWeight: 500, letterSpacing: '0.02em', background: 'none', border: 'none', outline: 'none', color: 'var(--dl-text)', width: '100%', padding: '2px 0', lineHeight: 1.5 }}
+                  />
+                  <DayLabEditor
+                    key={activeNote.id + ':body'}
+                    value={bodyVal}
+                    onBlur={text => {
+                      const title = (activeNote.content || '').split('\n')[0] || '';
+                      updateNoteContent(activeNote.id, title ? title + (text ? '\n' + text : '') : text);
+                    }}
+                    placeholder='Start writing…'
+                    noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
+                    projectNames={pvProjectNames}
+                    onCreateNote={addNote}
+                    onProjectClick={name => navigateToProject(name)}
+                    onNoteClick={name => {
+                      const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
+                      if (match) selectNote(match.id);
+                      else addNote(name);
+                    }}
+                    textColor={"var(--dl-text)"}
+                    mutedColor={"var(--dl-dim)"}
+                    color={"var(--dl-muted)"}
+                    style={{ minHeight: 160, width: '100%' }}
+                  />
+                </>
+              );
+            })() : (
               <div style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-dim)", padding: '8px 0', lineHeight: 1.7 }}>Press + to create a note.</div>
             )}
           </div>
