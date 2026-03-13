@@ -48,11 +48,14 @@ export function clientParseTasks(data) {
   }
   if (typeof data === 'string' && data.includes('data-type="taskItem"')) {
     const tasks = []; let idx = 0;
-    const re = /<li[^>]*data-type="taskItem"[^>]*data-checked="(true|false)"[^>]*>([\s\S]*?)<\/li>/g;
+    const re = /<li\b([^>]*)>([\s\S]*?)<\/li>/g;
     let m;
     while ((m = re.exec(data)) !== null) {
+      const attrs = m[1];
+      if (!attrs.includes('data-type="taskItem"')) continue;
+      const doneMatch = attrs.match(/data-checked="(true|false)"/);
       const text = m[2].replace(/<[^>]+>/g, '').trim();
-      if (text) tasks.push({ id: `html_${idx++}`, text, done: m[1] === 'true' });
+      if (text) tasks.push({ id: `html_${idx++}`, text, done: doneMatch?.[1] === 'true' });
     }
     return tasks;
   }

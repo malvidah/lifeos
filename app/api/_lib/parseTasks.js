@@ -17,13 +17,17 @@ export function parseTasks(data) {
     }));
   }
 
-  // New TipTap HTML format
+  // New TipTap HTML format — TipTap outputs data-checked before data-type, so match
+  // any attribute order by capturing the whole opening tag and parsing separately.
   if (typeof data === 'string' && data.includes('data-type="taskItem"')) {
     const tasks = [];
-    const liRe = /<li[^>]*data-type="taskItem"[^>]*data-checked="(true|false)"[^>]*>([\s\S]*?)<\/li>/g;
+    const liRe = /<li\b([^>]*)>([\s\S]*?)<\/li>/g;
     let m, idx = 0;
     while ((m = liRe.exec(data)) !== null) {
-      const done = m[1] === 'true';
+      const attrs = m[1];
+      if (!attrs.includes('data-type="taskItem"')) continue;
+      const doneMatch = attrs.match(/data-checked="(true|false)"/);
+      const done = doneMatch?.[1] === 'true';
       const text = m[2].replace(/<[^>]+>/g, '').trim();
       if (text) tasks.push({ id: `html_${idx++}`, text, done });
     }

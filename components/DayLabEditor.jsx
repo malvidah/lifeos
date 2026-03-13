@@ -577,8 +577,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         }
         if (e.key === 'Backspace' && taskListRef.current) {
           const { selection } = view.state;
-          // Prevent deleting the first task item — cursor at start of doc (pos ≤ 4)
-          if (selection.empty && selection.$from.pos <= 4) return true;
+          // Prevent deleting the first task item — cursor at start of first task's paragraph (pos ≤ 3)
+          if (selection.empty && selection.$from.pos <= 3) return true;
         }
         if (e.key === 'Escape') { view.dom.blur(); return true; }
         return false;
