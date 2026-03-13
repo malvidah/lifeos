@@ -297,11 +297,11 @@ function DashboardInner() {
 
   const syncStatus={syncing:syncing.size>0,lastSync};
 
-  const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:72,textAlign:"center"}}>energy</span></span>;
+  const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:72,textAlign:"center"}}>energy</span></span>;
   const ACT_HDR = <span style={{display:"flex",gap:0}}>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:60,textAlign:"center"}}>dist</span>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:100,textAlign:"center"}}>pace</span>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:72,textAlign:"center"}}>energy</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:60,textAlign:"center"}}>dist</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:100,textAlign:"center"}}>pace</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:72,textAlign:"center"}}>energy</span>
   </span>;
   const WIDGETS = [
     {id:"journal",  label:"Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor},
@@ -491,7 +491,7 @@ function DashboardInner() {
                         ) : (
                           <Card style={{height:'auto'}}>
                             <div style={{padding:40,display:'flex',alignItems:'center',justifyContent:'center',
-                              fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)"}}>Loading graph…</div>
+                              fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)"}}>Loading graph…</div>
                           </Card>
                         )}
                         <ProjectView

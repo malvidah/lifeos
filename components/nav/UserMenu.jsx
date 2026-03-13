@@ -89,7 +89,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
       <div style={{padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
           <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",letterSpacing:"0.06em",textTransform:"uppercase"}}>Free plan</div>
-          <div style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)",marginTop:2}}>{planInfo.insightCount}/{FREE_LIMIT} AI insights used</div>
+          <div style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-dim)",marginTop:2}}>{planInfo.insightCount}/{FREE_LIMIT} AI insights used</div>
         </div>
         <div style={{width:32,height:32,position:"relative"}}>
           <svg viewBox="0 0 32 32" style={{width:32,height:32,transform:"rotate(-90deg)"}}>
@@ -225,7 +225,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
           <div style={{...row,paddingBottom:2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
               <div style={{fontFamily:blurweb,fontSize:F.md,color:"var(--dl-middle)",letterSpacing:"0.04em"}}>{user?.user_metadata?.name||"—"}</div>
-              <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",marginTop:2}}>{user?.email}</div>
+              <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)",marginTop:2}}>{user?.email}</div>
             </div>
             <button
               onClick={()=>window.location.reload()}
@@ -314,7 +314,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
                     padding:"5px 7px",boxSizing:"border-box"}}/>
               </form>
             )}
-            {!garminConnected && garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",marginTop:4,display:"block"}}>Connecting…</span>}
+            {!garminConnected && garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)",marginTop:4,display:"block"}}>Connecting…</span>}
             {!garminConnected && garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-red)",marginTop:4,display:"block"}}>{garminError}</span>}
           </div>
 
@@ -341,7 +341,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
               {!claudeConnected && (
                 <a href="https://claude.ai/settings/connectors?modal=add-custom-connector"
                   target="_blank" rel="noreferrer"
-                  style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",textDecoration:"none",letterSpacing:"0.02em"}}>
+                  style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)",textDecoration:"none",letterSpacing:"0.02em"}}>
                   add →
                 </a>
               )}
@@ -366,7 +366,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
                 }}
                 title="Copy URL"
                 style={{background:"none",border:"none",cursor:"pointer",
-                  color:urlCopied?"var(--dl-green)":"var(--dl-muted)",padding:0,flexShrink:0,
+                  color:urlCopied?"var(--dl-green)":"var(--dl-dim)",padding:0,flexShrink:0,
                   display:"flex",alignItems:"center",lineHeight:1}}>
                 {urlCopied
                   ? <span style={{fontSize:11}}>✓</span>
@@ -428,13 +428,13 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <a href="/about"
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                color:"var(--dl-muted)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
+                color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
                 textTransform:"uppercase",textDecoration:"none"}}>
               Learn More
             </a>
             <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                color:"var(--dl-muted)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
               Sign Out →
             </button>
           </div>

@@ -7,11 +7,11 @@ export function ChevronBtn({collapsed, onToggle, style={}}) {
   return (
     <button onClick={onToggle} style={{
       background:"none",border:"none",cursor:"pointer",padding:"2px 4px",
-      color:"var(--dl-muted)",display:"flex",alignItems:"center",justifyContent:"center",
+      color:"var(--dl-dim)",display:"flex",alignItems:"center",justifyContent:"center",
       flexShrink:0,transition:"color 0.15s",...style,
     }}
       onMouseEnter={e=>e.currentTarget.style.color="var(--dl-detail)"}
-      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>
+      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-dim)"}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
         {collapsed ? <polyline points="6 9 12 15 18 9"/> : <polyline points="18 15 12 9 6 15"/>}
       </svg>
@@ -32,7 +32,7 @@ export function Ring({score,color,size=48}) {
         strokeDasharray={`${pct*circ} ${circ}`}
         style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%",transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:score?color:"var(--dl-muted)",fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
+        style={{fill:score?color:"var(--dl-dim)",fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
         {score||"—"}
       </text>
     </svg>
@@ -112,7 +112,7 @@ export function InfoTip({text}) {
         onFocus={handleShow} onBlur={()=>setShow(false)}
         style={{width:14,height:14,borderRadius:"50%",border:"1px solid var(--dl-border2)",
           background:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",
-          color:"var(--dl-muted)",fontFamily:mono,fontSize:F.sm,lineHeight:1,flexShrink:0}}
+          color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,lineHeight:1,flexShrink:0}}
         aria-label="More info">i</button>
       {show&&(
         <div style={{position:"absolute",...(above?{bottom:"calc(100% + 6px)"}:{top:"calc(100% + 6px)"}),
@@ -128,7 +128,7 @@ export function InfoTip({text}) {
 
 export function IntegrationToggle({on, onOn, onOff, pending}) {
   const bg = on ? "rgba(196,168,130,0.15)" : pending ? "rgba(208,136,40,0.18)" : "rgba(155,107,58,0.08)";
-  const dot = on ? "var(--dl-accent)" : pending ? "var(--dl-accent)" : "var(--dl-muted)";
+  const dot = on ? "var(--dl-accent)" : pending ? "var(--dl-accent)" : "var(--dl-dim)";
   const borderColor = pending ? "var(--dl-accent)70" : "var(--dl-border2)";
   return (
     <button onClick={on ? onOff : onOn} style={{
@@ -150,7 +150,7 @@ export function IntegrationRow({label, subtitle, connected, onToggleOn, onToggle
           <IntegrationToggle on={connected} onOn={onToggleOn} onOff={onToggleOff} pending={pendingToggle}/>
         </div>
       </div>
-      {subtitle&&(<div style={{fontFamily:mono,fontSize:9,color:"var(--dl-muted)",letterSpacing:"0.03em",marginTop:3}}>— {subtitle}</div>)}
+      {subtitle&&(<div style={{fontFamily:mono,fontSize:9,color:"var(--dl-dim)",letterSpacing:"0.03em",marginTop:3}}>— {subtitle}</div>)}
     </div>
   );
 }

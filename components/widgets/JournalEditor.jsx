@@ -33,7 +33,7 @@ export function JournalEditor({date,userId,token}) {
       onNoteClick={name => navigateToNote(name)}
       placeholder="What's on your mind?"
       textColor={"var(--dl-middle)"}
-      mutedColor={"var(--dl-muted)"}
+      mutedColor={"var(--dl-dim)"}
       color={"var(--dl-accent)"}
       style={{minHeight: 80, width: '100%'}}
     />
@@ -181,7 +181,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
               clearOnEnter={false}
               placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+" : ""}
               textColor={"var(--dl-middle)"}
-              mutedColor={"var(--dl-muted)"}
+              mutedColor={"var(--dl-dim)"}
               color={"var(--dl-accent)"}
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {
@@ -254,7 +254,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         projectNames={ctxProjects}
         noteNames={ctxNotes.notes}
         textColor={"var(--dl-middle)"}
-        mutedColor={"var(--dl-muted)"}
+        mutedColor={"var(--dl-dim)"}
         color={col}
         style={{ flex: 1, padding: 0 }}
         onProjectClick={name => navigateToProject(name)}

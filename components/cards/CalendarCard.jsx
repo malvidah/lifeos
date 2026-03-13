@@ -463,7 +463,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                         {/* AI summary — desktop only, too small to read on mobile */}
                         {vw >= 600 && summary && (
                           <div style={{
-                            fontFamily: mono, fontSize: '7.5px', color: "var(--dl-muted)",
+                            fontFamily: mono, fontSize: '7.5px', color: "var(--dl-dim)",
                             lineHeight: 1.25, overflow: 'hidden',
                             display: '-webkit-box', WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical', flex: 1, minHeight: 0,
@@ -715,7 +715,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     color: (isCtr && isTdy) ? "var(--dl-strong)"
                          : isTdy           ? "var(--dl-orange)"
                          : isCtr           ? "var(--dl-middle)"
-                                           : "var(--dl-muted)",
+                                           : "var(--dl-dim)",
                     marginBottom:3,
                     textTransform:"uppercase",
                   }}>{DAY_NAMES[d.getDay()]} {d.getDate()}</div>

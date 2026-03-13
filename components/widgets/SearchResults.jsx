@@ -104,7 +104,7 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
 
   if (results.length === 0) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-      <span style={{ fontFamily: mono, fontSize: 10, color: "var(--dl-muted)", letterSpacing: '0.06em' }}>No results match your search</span>
+      <span style={{ fontFamily: mono, fontSize: 10, color: "var(--dl-dim)", letterSpacing: '0.06em' }}>No results match your search</span>
     </div>
   );
 

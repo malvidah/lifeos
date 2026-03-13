@@ -167,7 +167,7 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
         <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
           textTransform:'uppercase', color:"var(--dl-detail)", flex:1 }}>Map</span>
         {!graphCollapsed && (
-          <span style={{ fontFamily:mono, fontSize:9, color:"var(--dl-muted)" }}>
+          <span style={{ fontFamily:mono, fontSize:9, color:"var(--dl-dim)" }}>
             {(allTags||[]).length + 1} projects · pinch/scroll to zoom
           </span>
         )}
@@ -186,7 +186,7 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
           {!ready && (
             <div style={{ position:'absolute', inset:0, display:'flex',
               alignItems:'center', justifyContent:'center',
-              fontFamily:mono, fontSize:F.sm, color:"var(--dl-muted)" }}>
+              fontFamily:mono, fontSize:F.sm, color:"var(--dl-dim)" }}>
               Laying out graph…
             </div>
           )}

@@ -101,7 +101,7 @@ export function InsightsCard({date, token, userId, healthKey, collapsed, onToggl
               <div style={{ fontFamily: mono, fontSize: 13, color: "var(--dl-detail)", lineHeight: 1.6, marginBottom: 12 }}>
                 You've used {freeUsage?.count ?? 10} of {freeUsage?.limit ?? 10} free AI insights.
               </div>
-              <div style={{ fontFamily: mono, fontSize: 12, color: "var(--dl-muted)", lineHeight: 1.7, marginBottom: 14 }}>
+              <div style={{ fontFamily: mono, fontSize: 12, color: "var(--dl-dim)", lineHeight: 1.7, marginBottom: 14 }}>
                 Upgrade to Premium for unlimited insights, voice entry, and chat with your health data.
               </div>
               <button onClick={() => window.location.href = "/upgrade"} style={{
@@ -111,7 +111,7 @@ export function InsightsCard({date, token, userId, healthKey, collapsed, onToggl
               }}>Upgrade to Premium →</button>
             </div>
           ) : text ? (
-            <div style={{ fontFamily: mono, fontSize:13, color: "var(--dl-muted)", lineHeight: 1.75, whiteSpace: "pre-line" }}>
+            <div style={{ fontFamily: mono, fontSize:13, color: "var(--dl-dim)", lineHeight: 1.75, whiteSpace: "pre-line" }}>
               {text}
             </div>
           ) : busy ? (
@@ -470,13 +470,13 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
             {/* Chevron down — collapse */}
             <button onClick={() => setExpanded(false)} style={{
               background: "none", border: "none", cursor: "pointer",
-              color: "var(--dl-muted)", display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--dl-dim)", display: "flex", alignItems: "center", justifyContent: "center",
               width: 36, height: 36, borderRadius: 8,
               transition: "color 0.15s, background 0.15s",
               marginBottom: 12,
             }}
             onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.background = "var(--dl-middle)0e"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-muted)"; e.currentTarget.style.background = "transparent"; }}>
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-dim)"; e.currentTarget.style.background = "transparent"; }}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
@@ -484,7 +484,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
 
             {/* DAY LAB AI + Premium badge */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--dl-muted)" }}>
+              <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--dl-dim)" }}>
                 Day Lab AI
               </span>
               {isPremiumUser && (
@@ -558,7 +558,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                       letterSpacing: msg.role === "user" ? 0 : "0.02em",
                     }}>
                       {msg.content === null
-                        ? <DayLabLoader size={28} color={"var(--dl-muted)"}/>
+                        ? <DayLabLoader size={28} color={"var(--dl-dim)"}/>
                         : msg.content}
                     </div>
                     {msg.actions?.length > 0 && msg.summary && (
@@ -597,7 +597,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
 
               {insightLoading && messages.length === 0 && (
                 <div style={{ padding: "8px 2px" }}>
-                  <DayLabLoader size={32} color={"var(--dl-muted)"}/>
+                  <DayLabLoader size={32} color={"var(--dl-dim)"}/>
                 </div>
               )}
               <div ref={messagesEndRef} />

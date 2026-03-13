@@ -214,7 +214,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
               clearOnEnter={false}
               placeholder={idx===0&&mergedSynced.length===0?"What did you do?":""}
               textColor={"var(--dl-middle)"}
-              mutedColor={"var(--dl-muted)"}
+              mutedColor={"var(--dl-dim)"}
               color={"var(--dl-accent)"}
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {

@@ -290,7 +290,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     if (!data || trendLoading) {
       return (
         <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-muted)" }}>{trendLoading ? 'loading…' : '—'}</span>
+          <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-dim)" }}>{trendLoading ? 'loading…' : '—'}</span>
         </div>
       );
     }
@@ -300,7 +300,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     for (let i = -span; i <= 0; i++) days.push(toKey(shift(anchorDate, i)));
     const vals = days.map(d => data[d]?.[metricKey] ?? null);
     const pts = vals.map((v, i) => v != null ? { v, i } : null).filter(Boolean);
-    if (pts.length < 2) return <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-muted)" }}>not enough data</span></div>;
+    if (pts.length < 2) return <div style={{ height: 94, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-dim)" }}>not enough data</span></div>;
 
     const W = 600, H = 80;
     const mn = Math.max(0, Math.min(...pts.map(p => p.v)) - 5);
@@ -404,7 +404,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                 position: 'absolute',
                 left: `${leftPct}%`,
                 transform,
-                fontFamily: mono, fontSize: '9px', color: "var(--dl-muted)",
+                fontFamily: mono, fontSize: '9px', color: "var(--dl-dim)",
                 letterSpacing: '0.04em', lineHeight: 1,
               }}>{t.label}</div>
             );
@@ -423,7 +423,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   const headerBadges = (
     <>
       {dataSource&&(
-        <span style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)",
+        <span style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-dim)",
           border:"1px solid var(--dl-border)",borderRadius:4,padding:"1px 5px"}}>
           {dataSource==="both"?"Oura + Apple Health":dataSource==="apple"?"Apple Health":dataSource==="garmin"?"Garmin":"Oura"}
         </span>
@@ -496,10 +496,10 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                   {m.fields.map(f=>{
                     const sub = f.ck ? (scores?.[m.key]?.contributors?.[f.ck] ?? null) : null;
                     const hasVal = f.value && f.value !== "—" && f.value !== "";
-                    const fc = !hasVal ? "var(--dl-muted)" : sub == null ? "var(--dl-muted)" : sub >= 70 ? "var(--dl-green)" : sub < 45 ? "var(--dl-red)" : "var(--dl-detail)";
+                    const fc = !hasVal ? "var(--dl-dim)" : sub == null ? "var(--dl-dim)" : sub >= 70 ? "var(--dl-green)" : sub < 45 ? "var(--dl-red)" : "var(--dl-detail)";
                     return (
                       <div key={f.label}>
-                        <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:"var(--dl-muted)",marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
+                        <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:"var(--dl-dim)",marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
                         <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                           <span style={{fontFamily:serif,fontSize:F.md,color:fc}}>{f.value||"—"}</span>
                           {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:fc,opacity:0.7}}>{f.unit}</span>}
@@ -557,14 +557,14 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                     trend
                   </span>
                   {date !== todayKey() && (
-                    <span style={{fontFamily:mono,fontSize:"9px",color:"var(--dl-muted)"}}>
+                    <span style={{fontFamily:mono,fontSize:"9px",color:"var(--dl-dim)"}}>
                       to {new Date(date+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}
                     </span>
                   )}
                 </div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   {avgVal != null && (
-                    <span style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)"}}>avg {avgVal}</span>
+                    <span style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-dim)"}}>avg {avgVal}</span>
                   )}
                   {["12m","30d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
@@ -572,7 +572,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                         padding:"6px 10px",borderRadius:6,cursor:"pointer",border:"none",
                         minHeight:32,
                         background: trendRange===r ? m.color+"33" : "transparent",
-                        color: trendRange===r ? m.color : "var(--dl-muted)",
+                        color: trendRange===r ? m.color : "var(--dl-dim)",
                         transition:"background 0.15s,color 0.15s"}}>
                       {r.toUpperCase()}
                     </button>

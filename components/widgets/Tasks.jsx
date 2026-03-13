@@ -19,7 +19,7 @@ export function NewProjectTask({ project, onAdd }) {
         placeholder=""
         projectNames={ctxProjects}
         textColor={"var(--dl-middle)"}
-        mutedColor={"var(--dl-muted)"}
+        mutedColor={"var(--dl-dim)"}
         color={col}
         style={{ flex: 1, padding: 0 }}
         onEnterCommit={text => { if (text.trim()) onAdd(text); }}
@@ -136,7 +136,7 @@ function injectTaskListStyles(accentHex) {
       background-repeat:no-repeat; background-position:center;
     }
     .dl-editor ul[data-type="taskList"] > li > div { flex:1; min-width:0; }
-    .dl-editor ul[data-type="taskList"] > li[data-checked="true"] > div { opacity:0.45; text-decoration:line-through; }
+    .dl-editor ul[data-type="taskList"] > li[data-checked="true"] > div { color:var(--dl-middle); text-decoration:line-through; }
     [data-filter="open"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"] { display:none; }
     [data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="false"] { display:none; }
   `;
@@ -163,7 +163,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
     <div data-filter={taskFilter} style={{
       '--task-border': "var(--dl-border2)",
       '--task-color':  "var(--dl-accent)",
-      '--task-fill':   theme === 'light' ? "var(--dl-bg)" : "var(--dl-muted)",
+      '--task-fill':   theme === 'light' ? "var(--dl-bg)" : "var(--dl-dim)",
     }}>
       <DayLabEditor
         taskList
@@ -173,7 +173,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
         projectNames={taskProjectNames}
         noteNames={ctxNotes}
         textColor={"var(--dl-middle)"}
-        mutedColor={"var(--dl-muted)"}
+        mutedColor={"var(--dl-dim)"}
         color={"var(--dl-accent)"}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
