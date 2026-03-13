@@ -57,7 +57,7 @@ export function HomeSettingsPanel({ open, onClose }) {
           padding: '14px 16px 12px', borderBottom: `1px solid var(--dl-border)`, flexShrink: 0,
         }}>
           <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: "var(--dl-highlight)" }}>
-            Home
+            Dashboard
           </span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
@@ -238,7 +238,7 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
           flexShrink: 0,
         }}>
           <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: pcol }}>
-            Project Settings
+            {tagDisplayName(project)}
           </span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
