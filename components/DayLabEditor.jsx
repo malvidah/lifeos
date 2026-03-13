@@ -31,10 +31,6 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror p.is-empty::before { content: attr(data-placeholder); pointer-events: none; color: var(--dl-muted); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; color: var(--dl-muted); }
-    .dl-editor .ProseMirror ul[data-type="taskList"] { list-style: none; padding: 0; margin: 0; }
-    .dl-editor .ProseMirror li[data-type="taskItem"] { display: flex; align-items: baseline; gap: 6px; }
-    .dl-editor .ProseMirror li[data-type="taskItem"] > label { flex-shrink: 0; cursor: pointer; }
-    .dl-editor .ProseMirror li[data-type="taskItem"] > div { flex: 1; min-width: 0; }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: inherit; font-weight: 500; margin: 0 0 2px; padding: 0; letter-spacing: 0.02em; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
@@ -461,6 +457,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   mutedColor = mutedColor || 'var(--dl-muted)';
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: noteTitle ? { levels: [1] } : false,
@@ -476,9 +473,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
       Placeholder.configure({
         placeholder: noteTitle
-          ? ({ node }) => node.type.name === 'heading' ? 'Untitled note…' : 'Start writing…'
+          ? ({ node }) => node.type.name === 'heading' ? 'New note' : 'Write something...'
           : placeholder || '',
         emptyNodeClass: 'is-empty',
+        showOnlyCurrent: false,
       }),
 
       // Unified slash command: /p → project chip, /n → note chip

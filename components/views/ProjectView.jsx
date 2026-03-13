@@ -154,21 +154,23 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       const esc2 = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const sb = createClient();
 
-      // ── Journal entries: replace [oldName] → [newName] in plain text ──
-      sb.from('entries').select('date, data').eq('type', 'journal')
+      // ── Journal entries: replace [oldName] → [newName] in block content ──
+      sb.from('journal_blocks').select('id, date, content')
+        .eq('user_id', userId).ilike('content', '%[' + oldName + ']%')
         .then(({ data: rows }) => {
-          if (!rows) return;
-          let anyChanged = false;
-          rows.forEach(row => {
-            const text = typeof row.data === 'string' ? row.data : null;
-            if (!text || !text.includes('[' + oldName + ']')) return;
-            const updated = text.replace(new RegExp('\\[' + esc2 + '\\]', 'g'), '[' + newName + ']');
-            dbSave(row.date, 'journal', updated, token);
-            const cacheKey = userId + ':' + row.date + ':journal';
-            if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated; // Zustand proxy notifies all subscribers
-            anyChanged = true;
+          if (!rows?.length) return;
+          const updates = rows
+            .filter(row => row.content?.includes('[' + oldName + ']'))
+            .map(row => {
+              const updated = row.content.replace(new RegExp('\\[' + esc2 + '\\]', 'g'), '[' + newName + ']');
+              return sb.from('journal_blocks').update({ content: updated }).eq('id', row.id).eq('user_id', userId);
+            });
+          if (!updates.length) return;
+          Promise.all(updates).then(() => {
+            const affectedDates = [...new Set(rows.map(r => r.date))];
+            affectedDates.forEach(d => { delete MEM[userId + ':' + d + ':journal']; });
+            window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
           });
-          if (anyChanged) window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
         });
 
       // ── Task entries: replace data-note-link attribute + inner text in TipTap HTML ──
@@ -183,16 +185,21 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       );
       const replaceNoteSpan = s => s.replace(noteSpanRe, 'data-note-link="' + newHtml + '"$1>' + newHtml + '</span>');
 
-      sb.from('entries').select('date, data').eq('type', 'tasks')
+      sb.from('tasks').select('id, date, html, text')
+        .eq('user_id', userId).ilike('html', '%data-note-link="' + escHtml + '"%')
         .then(({ data: rows }) => {
-          if (!rows) return;
-          rows.forEach(row => {
-            const html = typeof row.data === 'string' ? row.data : null;
-            if (!html || !html.includes('data-note-link="' + escHtml + '"')) return;
-            const updated = replaceNoteSpan(html);
-            dbSave(row.date, 'tasks', updated, token);
-            const cacheKey = userId + ':' + row.date + ':tasks';
-            if (MEM[cacheKey] !== undefined) MEM[cacheKey] = updated; // Zustand proxy notifies all subscribers
+          if (!rows?.length) return;
+          const updates = rows
+            .filter(row => row.html?.includes('data-note-link="' + escHtml + '"'))
+            .map(row => {
+              const updatedHtml = replaceNoteSpan(row.html || '');
+              const updatedText = (row.text || '').replace(new RegExp('\\[' + esc2 + '\\]', 'g'), '[' + newName + ']');
+              return sb.from('tasks').update({ html: updatedHtml, text: updatedText }).eq('id', row.id).eq('user_id', userId);
+            });
+          if (!updates.length) return;
+          Promise.all(updates).then(() => {
+            const affectedDates = [...new Set(rows.map(r => r.date))];
+            affectedDates.forEach(d => { delete MEM[userId + ':' + d + ':tasks']; });
           });
         });
 
@@ -224,7 +231,23 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const [notesListCollapsed,  toggleNotesList]  = useCollapse(`pv:${project}:notes-list`, false);
   const [tasksCollapsed,      toggleTasks]      = useCollapse(`pv:${project}:tasks`,      false);
   const [entriesCollapsed,    toggleEntries]    = useCollapse(`pv:${project}:entries`,    false);
+  const [workoutsCollapsed,   toggleWorkouts]   = useCollapse(`pv:${project}:workouts`,   false);
+  const [mealsCollapsed,      toggleMeals]      = useCollapse(`pv:${project}:meals`,      false);
   const [hoveredNoteId,       setHoveredNoteId] = useState(null);
+
+  // Workouts + meals tagged to this project
+  const [workoutItems, setWorkoutItems] = useState(null); // null=not loaded, []=empty
+  const [mealItems,    setMealItems]    = useState(null);
+
+  useEffect(() => {
+    if (!token || !project || project === '__everything__') return;
+    api.get(`/api/workouts?project=${encodeURIComponent(project)}`, token)
+      .then(d => setWorkoutItems(d?.workouts ?? []))
+      .catch(() => setWorkoutItems([]));
+    api.get(`/api/meals?project=${encodeURIComponent(project)}`, token)
+      .then(d => setMealItems(d?.items ?? []))
+      .catch(() => setMealItems([]));
+  }, [project, token]); // eslint-disable-line
 
   const meta = useMemo(() => ((projectsMeta || {})[project] || {}), [projectsMeta, project]);
 
@@ -492,6 +515,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 key={activeNote.id}
                 value={activeNote.content || ''}
                 noteTitle
+                autoFocus
                 onBlur={html => updateNoteContent(activeNote.id, html)}
                 noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
                 projectNames={pvProjectNames}
@@ -508,7 +532,10 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 style={{ minHeight: 180, width: '100%' }}
               />
             ) : (
-              <div style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-dim)", padding: '8px 0', lineHeight: 1.7 }}>Press + to create a note.</div>
+              <div onClick={() => addNote()} style={{ cursor: 'text', minHeight: 180, padding: '2px 0' }}>
+                <div style={{ fontFamily: mono, fontSize: F.md, fontWeight: 500, color: "var(--dl-dim)", lineHeight: 1.5, letterSpacing: '0.02em' }}>New note</div>
+                <div style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-dim)", lineHeight: 1.7, marginTop: 4 }}>Write something...</div>
+              </div>
             )}
           </div>
         </div>
@@ -668,6 +695,83 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           })()
         }
       </Card>
+
+      {/* Workouts tagged to this project */}
+      {workoutItems?.length > 0 && (
+        <Card
+          label={`Workouts · ${workoutItems.length}`}
+          color={"var(--dl-green)"} autoHeight
+          collapsed={workoutsCollapsed} onToggle={toggleWorkouts}
+        >
+          {(() => {
+            const byDate = {};
+            workoutItems.forEach(w => {
+              if (!byDate[w.date]) byDate[w.date] = [];
+              byDate[w.date].push(w);
+            });
+            return Object.entries(byDate)
+              .sort(([a],[b]) => b.localeCompare(a))
+              .map(([date, rows], di) => (
+                <div key={date}>
+                  <div style={{ fontFamily:mono, fontSize:10, color:"var(--dl-muted)",
+                    letterSpacing:'0.06em', textTransform:'uppercase',
+                    marginTop: di===0 ? 0 : 12, marginBottom:8 }}>{fmtDate(date)}</div>
+                  {rows.map(w => (
+                    <div key={w.id} style={{ display:'flex', alignItems:'baseline', gap:8, padding:'3px 0',
+                      borderTop:"1px solid var(--dl-border)" }}>
+                      <span style={{ fontFamily:serif, fontSize:F.md, color:"var(--dl-text)", flex:1 }}>{w.title}</span>
+                      {w.duration_min > 0 && (
+                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-dim)" }}>{w.duration_min}m</span>
+                      )}
+                      {w.distance_m > 0 && (
+                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-dim)" }}>{(w.distance_m/1000).toFixed(1)}km</span>
+                      )}
+                      {w.calories > 0 && (
+                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-dim)" }}>{w.calories} kcal</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ));
+          })()}
+        </Card>
+      )}
+
+      {/* Meals tagged to this project */}
+      {mealItems?.length > 0 && (
+        <Card
+          label={`Meals · ${mealItems.length}`}
+          color={"var(--dl-red)"} autoHeight
+          collapsed={mealsCollapsed} onToggle={toggleMeals}
+        >
+          {(() => {
+            const byDate = {};
+            mealItems.forEach(m => {
+              if (!byDate[m.date]) byDate[m.date] = [];
+              byDate[m.date].push(m);
+            });
+            return Object.entries(byDate)
+              .sort(([a],[b]) => b.localeCompare(a))
+              .map(([date, rows], di) => (
+                <div key={date}>
+                  <div style={{ fontFamily:mono, fontSize:10, color:"var(--dl-muted)",
+                    letterSpacing:'0.06em', textTransform:'uppercase',
+                    marginTop: di===0 ? 0 : 12, marginBottom:8 }}>{fmtDate(date)}</div>
+                  {rows.map(m => (
+                    <div key={m.id} style={{ display:'flex', alignItems:'baseline', gap:8, padding:'3px 0',
+                      borderTop:"1px solid var(--dl-border)" }}>
+                      <span style={{ fontFamily:serif, fontSize:F.md, color:"var(--dl-text)", flex:1 }}>{m.content}</span>
+                      {m.ai_calories > 0 && (
+                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-dim)" }}>{m.ai_calories} kcal</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ));
+          })()}
+        </Card>
+      )}
+
     </div>
     </NoteContext.Provider>
   );
