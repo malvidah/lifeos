@@ -29,10 +29,9 @@ function injectEditorStyles() {
   s.textContent = `
     .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
-    .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
-    .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); font-weight: 400; }
-    .dl-tasklist .ProseMirror > p.is-empty::before { content: none; }
-    .dl-tasklist .ProseMirror [data-type="taskItem"]:only-child p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
+    .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-detail); }
+    .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-detail); font-weight: 400; }
+    .dl-tasklist .ProseMirror .is-empty::before { content: none !important; }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
@@ -305,7 +304,7 @@ function SuggestionDropdown({ state, onSelect }) {
               background: selected ? 'var(--dl-border)' : 'transparent',
               fontFamily: mono, fontSize: 12,
               letterSpacing: isProject && !isCreate ? '0.08em' : '0.04em',
-              color: isCreate ? 'var(--dl-muted)' : col || 'var(--dl-text)',
+              color: isCreate ? 'var(--dl-detail)' : col || 'var(--dl-middle)',
               transition: 'background 0.08s',
             }}
           >{label}</button>
@@ -456,7 +455,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   });
 
   textColor  = textColor  || 'inherit';
-  mutedColor = mutedColor || 'var(--dl-muted)';
+  mutedColor = mutedColor || 'var(--dl-detail)';
 
   const editor = useEditor({
     immediatelyRender: false,
