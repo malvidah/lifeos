@@ -29,10 +29,11 @@ function injectEditorStyles() {
   s.textContent = `
     .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
-    .dl-editor .ProseMirror p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
-    .dl-tasklist .ProseMirror > p.is-empty::before { content: none; }
+    .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
-    .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: inherit; font-weight: 500; margin: 0 0 2px; padding: 0; letter-spacing: 0.02em; }
+    .dl-tasklist .ProseMirror > p.is-empty::before { content: none; }
+    .dl-tasklist .ProseMirror [data-type="taskItem"]:first-child p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
+    .dl-editor .ProseMirror h1 { font-family: ${serif}; font-size: 1.12em; font-weight: 700; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
   `;
