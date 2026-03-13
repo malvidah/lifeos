@@ -83,11 +83,11 @@ export default function ProjectsNav({ date, token, userId, onSelectProject }) {
         style={{
           background:'none', border:'none', cursor:'pointer',
           padding:'8px 12px', display:'flex', alignItems:'center',
-          color:"var(--dl-muted)", flexShrink:0, transition:'color 0.15s',
+          color:"var(--dl-detail)", flexShrink:0, transition:'color 0.15s',
           minWidth:44, minHeight:44, justifyContent:'center',
         }}
-        onMouseEnter={e => e.currentTarget.style.color="var(--dl-text)"}
-        onMouseLeave={e => e.currentTarget.style.color="var(--dl-muted)"}
+        onMouseEnter={e => e.currentTarget.style.color="var(--dl-middle)"}
+        onMouseLeave={e => e.currentTarget.style.color="var(--dl-detail)"}
       >{PackageIcon}</button>
 
       {/* Scrollable chips */}
@@ -131,14 +131,14 @@ export default function ProjectsNav({ date, token, userId, onSelectProject }) {
                 background: active ? col+'22' : 'transparent',
                 border:`1px solid ${active ? col+'55' : "var(--dl-border2)"}`,
                 borderRadius:20, padding:'2px 10px',
-                fontFamily:mono, fontSize:F.sm, color: active ? col : "var(--dl-muted)",
+                fontFamily:mono, fontSize:F.sm, color: active ? col : "var(--dl-detail)",
                 cursor:'pointer', opacity: active ? 1 : 0.35,
                 transition:'opacity 0.15s, color 0.15s',
                 letterSpacing:'0.03em', lineHeight:'1.8',
                 whiteSpace:'nowrap', flexShrink:0,
               }}
               onMouseEnter={e => { e.currentTarget.style.opacity='1'; e.currentTarget.style.color=col; }}
-              onMouseLeave={e => { e.currentTarget.style.opacity=active?'1':'0.35'; e.currentTarget.style.color=active?col:"var(--dl-muted)"; }}
+              onMouseLeave={e => { e.currentTarget.style.opacity=active?'1':'0.35'; e.currentTarget.style.color=active?col:"var(--dl-detail)"; }}
             >{tagDisplayName(p.name).toUpperCase()}</button>
           );
         })}

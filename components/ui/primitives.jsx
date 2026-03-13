@@ -7,11 +7,11 @@ export function ChevronBtn({collapsed, onToggle, style={}}) {
   return (
     <button onClick={onToggle} style={{
       background:"none",border:"none",cursor:"pointer",padding:"2px 4px",
-      color:"var(--dl-dim)",display:"flex",alignItems:"center",justifyContent:"center",
+      color:"var(--dl-muted)",display:"flex",alignItems:"center",justifyContent:"center",
       flexShrink:0,transition:"color 0.15s",...style,
     }}
-      onMouseEnter={e=>e.currentTarget.style.color="var(--dl-muted)"}
-      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-dim)"}>
+      onMouseEnter={e=>e.currentTarget.style.color="var(--dl-detail)"}
+      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
         {collapsed ? <polyline points="6 9 12 15 18 9"/> : <polyline points="18 15 12 9 6 15"/>}
       </svg>
@@ -32,7 +32,7 @@ export function Ring({score,color,size=48}) {
         strokeDasharray={`${pct*circ} ${circ}`}
         style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%",transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:score?color:"var(--dl-dim)",fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
+        style={{fill:score?color:"var(--dl-muted)",fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
         {score||"—"}
       </text>
     </svg>
@@ -49,7 +49,7 @@ export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft,
       {headerLeft}
       {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
       <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-        textTransform:"uppercase",color:labelColor||"var(--dl-muted)",flex:1}}>{label}</span>
+        textTransform:"uppercase",color:labelColor||"var(--dl-detail)",flex:1}}>{label}</span>
       {!collapsed && headerRight}
     </div>
   );
@@ -87,7 +87,7 @@ export function Card({
           {headerLeft}
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-            textTransform:"uppercase",color:labelColor||"var(--dl-muted)",flex:1}}>{label}</span>
+            textTransform:"uppercase",color:labelColor||"var(--dl-detail)",flex:1}}>{label}</span>
           {!collapsed && headerRight}
         </div>
         {!collapsed&&(
@@ -112,12 +112,12 @@ export function InfoTip({text}) {
         onFocus={handleShow} onBlur={()=>setShow(false)}
         style={{width:14,height:14,borderRadius:"50%",border:"1px solid var(--dl-border2)",
           background:"none",cursor:"pointer",padding:0,display:"flex",alignItems:"center",justifyContent:"center",
-          color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,lineHeight:1,flexShrink:0}}
+          color:"var(--dl-muted)",fontFamily:mono,fontSize:F.sm,lineHeight:1,flexShrink:0}}
         aria-label="More info">i</button>
       {show&&(
         <div style={{position:"absolute",...(above?{bottom:"calc(100% + 6px)"}:{top:"calc(100% + 6px)"}),
           right:"-4px",background:"var(--dl-card)",border:"1px solid var(--dl-border2)",borderRadius:6,
-          padding:"8px 10px",width:190,fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",lineHeight:1.5,
+          padding:"8px 10px",width:190,fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",lineHeight:1.5,
           zIndex:500,boxShadow:"var(--dl-shadow)",pointerEvents:"none",whiteSpace:"normal"}}>
           {text}
         </div>
@@ -128,7 +128,7 @@ export function InfoTip({text}) {
 
 export function IntegrationToggle({on, onOn, onOff, pending}) {
   const bg = on ? "rgba(196,168,130,0.15)" : pending ? "rgba(208,136,40,0.18)" : "rgba(155,107,58,0.08)";
-  const dot = on ? "var(--dl-accent)" : pending ? "var(--dl-accent)" : "var(--dl-dim)";
+  const dot = on ? "var(--dl-accent)" : pending ? "var(--dl-accent)" : "var(--dl-muted)";
   const borderColor = pending ? "var(--dl-accent)70" : "var(--dl-border2)";
   return (
     <button onClick={on ? onOff : onOn} style={{
@@ -144,13 +144,13 @@ export function IntegrationRow({label, subtitle, connected, onToggleOn, onToggle
   return (
     <div>
       <div style={{display:"flex",alignItems:"center",gap:8,paddingTop:1}}>
-        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-muted)",flexShrink:0}}>{label}</span>
+        <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-detail)",flexShrink:0}}>{label}</span>
         {children}
         <div style={{marginLeft:"auto",flexShrink:0}}>
           <IntegrationToggle on={connected} onOn={onToggleOn} onOff={onToggleOff} pending={pendingToggle}/>
         </div>
       </div>
-      {subtitle&&(<div style={{fontFamily:mono,fontSize:9,color:"var(--dl-dim)",letterSpacing:"0.03em",marginTop:3}}>— {subtitle}</div>)}
+      {subtitle&&(<div style={{fontFamily:mono,fontSize:9,color:"var(--dl-muted)",letterSpacing:"0.03em",marginTop:3}}>— {subtitle}</div>)}
     </div>
   );
 }
@@ -166,16 +166,16 @@ export function Shimmer({width="100%", height=14, style={}}) {
 export function NavBtn({onClick,title,children}) {
   return (
     <button onClick={onClick} title={title} style={{
-      background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",
+      background:'none',border:'none',cursor:'pointer',color:"var(--dl-detail)",
       fontFamily:mono,fontSize:F.md,lineHeight:1,padding:'3px 5px',borderRadius:4,transition:'color 0.1s'}}
-      onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
-      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>
+      onMouseEnter={e=>e.currentTarget.style.color="var(--dl-middle)"}
+      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-detail)"}>
       {children}
     </button>
   );
 }
 
-export function DayLabLoader({ size = 32, color = "var(--dl-text)" }) {
+export function DayLabLoader({ size = 32, color = "var(--dl-middle)" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 1500 1500" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
       <style>{"@keyframes dlPulse{0%,100%{opacity:.15;transform:scale(.92)}50%{opacity:1;transform:scale(1)}}@keyframes dlDot{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}.dl-cross{animation:dlPulse 1.6s ease-in-out infinite;transform-origin:751px 767px}.dl-dot{animation:dlDot 1.6s ease-in-out infinite .3s;transform-origin:1048px 474px}"}</style>
@@ -238,7 +238,7 @@ export function SourceBadge({source}) {
   return (
     <span style={{
       fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", textTransform:"uppercase",
-      color: isStrava ? "#FC4C02" : "var(--dl-muted)",
+      color: isStrava ? "#FC4C02" : "var(--dl-detail)",
       border: `1px solid ${isStrava ? "#FC4C02" : "var(--dl-border2)"}`,
       borderRadius:3, padding:"1px 4px", flexShrink:0, opacity:0.8,
     }}>{isStrava ? "Strava" : "Oura"}</span>

@@ -56,12 +56,12 @@ export function HomeSettingsPanel({ open, onClose }) {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '14px 16px 12px', borderBottom: `1px solid var(--dl-border)`, flexShrink: 0,
         }}>
-          <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: "var(--dl-muted)" }}>
+          <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: "var(--dl-detail)" }}>
             Home
           </span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: "var(--dl-muted)", fontSize: 16, lineHeight: 1, padding: '2px 4px',
+            color: "var(--dl-detail)", fontSize: 16, lineHeight: 1, padding: '2px 4px',
           }}>×</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }} />
@@ -213,14 +213,14 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
 
   const sectionLabel = {
     fontFamily: mono, fontSize: 9, letterSpacing: '0.1em',
-    textTransform: 'uppercase', color: "var(--dl-muted)", marginBottom: 10,
+    textTransform: 'uppercase', color: "var(--dl-detail)", marginBottom: 10,
   };
 
   const input = {
     fontFamily: serif, fontSize: F.md,
     background: "var(--dl-well)", border: `1px solid var(--dl-border)`,
     borderRadius: 6, padding: '7px 10px',
-    color: "var(--dl-text)", outline: 'none', width: '100%', boxSizing: 'border-box',
+    color: "var(--dl-middle)", outline: 'none', width: '100%', boxSizing: 'border-box',
   };
 
   return (
@@ -242,7 +242,7 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
           </span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: "var(--dl-muted)", fontSize: 16, lineHeight: 1, padding: '2px 4px',
+            color: "var(--dl-detail)", fontSize: 16, lineHeight: 1, padding: '2px 4px',
           }}>×</button>
         </div>
 
@@ -263,7 +263,7 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
               placeholder="project name"
             />
             {renaming && (
-              <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-muted)", marginTop: 6 }}>Renaming…</div>
+              <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-detail)", marginTop: 6 }}>Renaming…</div>
             )}
             {renameErr && (
               <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-red)", marginTop: 6 }}>{renameErr}</div>
@@ -330,7 +330,7 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
               </div>
 
               {saving && (
-                <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-muted)", marginTop: 8 }}>Saving…</div>
+                <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-detail)", marginTop: 8 }}>Saving…</div>
               )}
             </div>
           )}

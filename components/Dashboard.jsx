@@ -290,18 +290,18 @@ function DashboardInner() {
   const mobile = useIsMobile();
   if(!authReady) return (
     <div style={{background:"var(--dl-bg)",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",letterSpacing:"0.2em"}}>loading…</span>
+      <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",letterSpacing:"0.2em"}}>loading…</span>
     </div>
   );
   if(!session) return <LoginScreen/>;
 
   const syncStatus={syncing:syncing.size>0,lastSync};
 
-  const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:72,textAlign:"center"}}>energy</span></span>;
+  const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:72,textAlign:"center"}}>energy</span></span>;
   const ACT_HDR = <span style={{display:"flex",gap:0}}>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:60,textAlign:"center"}}>dist</span>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:100,textAlign:"center"}}>pace</span>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-dim)",width:72,textAlign:"center"}}>energy</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:60,textAlign:"center"}}>dist</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:100,textAlign:"center"}}>pace</span>
+    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-muted)",width:72,textAlign:"center"}}>energy</span>
   </span>;
   const WIDGETS = [
     {id:"journal",  label:"Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor},
@@ -324,7 +324,7 @@ function DashboardInner() {
         }, 150);
       },
     }}>
-    <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-text)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
+    <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-middle)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
       {/* Global styles now in theme.css */}
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
@@ -491,7 +491,7 @@ function DashboardInner() {
                         ) : (
                           <Card style={{height:'auto'}}>
                             <div style={{padding:40,display:'flex',alignItems:'center',justifyContent:'center',
-                              fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)"}}>Loading graph…</div>
+                              fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)"}}>Loading graph…</div>
                           </Card>
                         )}
                         <ProjectView

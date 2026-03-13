@@ -96,7 +96,7 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
 
   if (loading && !results) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
-      <span style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-muted)", letterSpacing: '0.15em', textTransform: 'uppercase' }}>searching…</span>
+      <span style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-detail)", letterSpacing: '0.15em', textTransform: 'uppercase' }}>searching…</span>
     </div>
   );
 
@@ -104,7 +104,7 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
 
   if (results.length === 0) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 60 }}>
-      <span style={{ fontFamily: mono, fontSize: 10, color: "var(--dl-dim)", letterSpacing: '0.06em' }}>No results match your search</span>
+      <span style={{ fontFamily: mono, fontSize: 10, color: "var(--dl-muted)", letterSpacing: '0.06em' }}>No results match your search</span>
     </div>
   );
 
@@ -130,10 +130,10 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
             <div
               onClick={() => onSelectDate && onSelectDate(date)}
               style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
-                color: "var(--dl-muted)", padding: '10px 2px 8px', cursor: 'pointer', display: 'inline-block',
+                color: "var(--dl-detail)", padding: '10px 2px 8px', cursor: 'pointer', display: 'inline-block',
                 transition: 'color 0.15s' }}
-              onMouseEnter={e => e.currentTarget.style.color = "var(--dl-text)"}
-              onMouseLeave={e => e.currentTarget.style.color = "var(--dl-muted)"}
+              onMouseEnter={e => e.currentTarget.style.color = "var(--dl-middle)"}
+              onMouseLeave={e => e.currentTarget.style.color = "var(--dl-detail)"}
             >{fmtDate(date)}</div>
 
             {/* Per-type outlined card */}
@@ -179,7 +179,7 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
                       </div>
                     )}
                     <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: 1.6,
-                      color: hit.done ? "var(--dl-muted)" : "var(--dl-text)", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                      color: hit.done ? "var(--dl-detail)" : "var(--dl-middle)", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
                       textDecoration: hit.done ? 'line-through' : 'none',
                       opacity: hit.done ? 0.5 : 1 }}>
                       {highlight(hit.text, query.trim())}

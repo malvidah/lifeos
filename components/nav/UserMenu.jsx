@@ -78,9 +78,9 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
     <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid var(--dl-accent-19)`,overflow:"hidden"}}>
       <div style={{padding:"10px 12px",textAlign:"center"}}>
         <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-accent)",letterSpacing:"0.06em",textTransform:"uppercase"}}>Premium ✦</div>
-        <div style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)",marginTop:3}}>{planInfo.plan === 'yearly' ? 'Annual plan · $4/mo' : 'Monthly plan · $5/mo'}</div>
+        <div style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-detail)",marginTop:3}}>{planInfo.plan === 'yearly' ? 'Annual plan · $4/mo' : 'Monthly plan · $5/mo'}</div>
       </div>
-      <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"7px 12px",background:"none",borderTop:`1px solid var(--dl-accent-13)`,border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)",letterSpacing:"0.08em",textTransform:"uppercase",textAlign:"center"}}>
+      <button onClick={()=>window.location.href="/upgrade"} style={{width:"100%",padding:"7px 12px",background:"none",borderTop:`1px solid var(--dl-accent-13)`,border:"none",cursor:"pointer",fontFamily:mono,fontSize:"10px",color:"var(--dl-detail)",letterSpacing:"0.08em",textTransform:"uppercase",textAlign:"center"}}>
         Manage Plan →
       </button>
     </div>
@@ -88,8 +88,8 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
     <div style={{margin:"0 12px 10px",borderRadius:6,border:`1px solid var(--dl-border)`,overflow:"hidden"}}>
       <div style={{padding:"8px 12px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
         <div>
-          <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",letterSpacing:"0.06em",textTransform:"uppercase"}}>Free plan</div>
-          <div style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-dim)",marginTop:2}}>{planInfo.insightCount}/{FREE_LIMIT} AI insights used</div>
+          <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",letterSpacing:"0.06em",textTransform:"uppercase"}}>Free plan</div>
+          <div style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-muted)",marginTop:2}}>{planInfo.insightCount}/{FREE_LIMIT} AI insights used</div>
         </div>
         <div style={{width:32,height:32,position:"relative"}}>
           <svg viewBox="0 0 32 32" style={{width:32,height:32,transform:"rotate(-90deg)"}}>
@@ -210,7 +210,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
         border:`1.5px solid var(--dl-border2)`,background:avatar?"transparent":"var(--dl-surface)",
         overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
         {avatar?<img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
-          :<span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)"}}>{initials}</span>}
+          :<span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)"}}>{initials}</span>}
       </button>
 
       {open&&(
@@ -224,8 +224,8 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
           {/* Identity + refresh */}
           <div style={{...row,paddingBottom:2,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <div>
-              <div style={{fontFamily:blurweb,fontSize:F.md,color:"var(--dl-text)",letterSpacing:"0.04em"}}>{user?.user_metadata?.name||"—"}</div>
-              <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)",marginTop:2}}>{user?.email}</div>
+              <div style={{fontFamily:blurweb,fontSize:F.md,color:"var(--dl-middle)",letterSpacing:"0.04em"}}>{user?.user_metadata?.name||"—"}</div>
+              <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",marginTop:2}}>{user?.email}</div>
             </div>
             <button
               onClick={()=>window.location.reload()}
@@ -237,8 +237,8 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
               onMouseLeave={e=>{e.currentTarget.style.opacity="0.4";e.currentTarget.style.background="none";}}
             >
               <svg width="18" height="18" viewBox="0 0 1500 1500" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M841 518C841 551 842.5 578 845.5 599C849.5 619 856.5 635 866.5 647C877.5 659 892.5 667 911.5 671C930.5 675 955 677 985 677C1015 677 1039 679.5 1057 684.5C1076 689.5 1090.5 696 1100.5 704C1110.5 712 1117 721.5 1120 732.5C1124 742.5 1126 753 1126 764C1126 775 1124.5 786.5 1121.5 798.5C1119.5 809.5 1114 819.5 1105 828.5C1096 837.5 1082.5 845 1064.5 851C1046.5 857 1022 860 991 860C961 860 936 862 916 866C897 870 882 877.5 871 888.5C860 898.5 852 913 847 932C843 950 841 973 841 1001C841 1035 838.5 1061.5 833.5 1080.5C828.5 1099.5 821.5 1113.5 812.5 1122.5C804.5 1131.5 795 1137 784 1139C773 1141 762 1142 751 1142C721 1142 698.5 1133.5 683.5 1116.5C668.5 1098.5 661 1061 661 1004C661 951 651.5 914 632.5 893C614.5 871 580 860 529 860C481 860 443 854.5 415 843.5C387 831.5 373 806 373 767C373 737 383.5 714.5 404.5 699.5C426.5 684.5 466 677 523 677C551 677 574 675 592 671C610 666 624 658 634 647C645 635 652 619 655 599C659 579 661 553 661 521C661 493 663.5 470.5 668.5 453.5C673.5 436.5 680 423.5 688 414.5C696 405.5 705.5 399.5 716.5 396.5C727.5 393.5 739 392 751 392C784 392 807 403.5 820 426.5C834 448.5 841 479 841 518Z" fill="var(--dl-text)"/>
-                <path d="M1138 476C1138 488.667 1135.33 500.667 1130 512C1125.33 522.667 1118.67 532.333 1110 541C1102 549 1092.33 555.667 1081 561C1070.33 565.667 1059.33 568 1048 568C1036.67 568 1025.33 565.667 1014 561C1003.33 555.667 993.667 549 985 541C976.333 532.333 969.333 522.667 964 512C958.667 500.667 956 488.667 956 476C956 463.333 958.333 451.333 963 440C968.333 428.667 975 418.667 983 410C991.667 401.333 1001.33 394.667 1012 390C1023.33 384.667 1035.33 382 1048 382C1060.67 382 1072.33 384.667 1083 390C1094.33 394.667 1104 401.333 1112 410C1120 418.667 1126.33 428.667 1131 440C1135.67 451.333 1138 463.333 1138 476ZM1013 474C1013 484 1016.33 492.333 1023 499C1029.67 505.667 1038 509 1048 509C1058 509 1066.33 505.667 1073 499C1079.67 492.333 1083 484 1083 474C1083 464 1079.67 455.667 1073 449C1066.33 442.333 1058 439 1048 439C1038 439 1029.67 442.333 1023 449C1016.33 455.667 1013 464 1013 474Z" fill="var(--dl-text)"/>
+                <path d="M841 518C841 551 842.5 578 845.5 599C849.5 619 856.5 635 866.5 647C877.5 659 892.5 667 911.5 671C930.5 675 955 677 985 677C1015 677 1039 679.5 1057 684.5C1076 689.5 1090.5 696 1100.5 704C1110.5 712 1117 721.5 1120 732.5C1124 742.5 1126 753 1126 764C1126 775 1124.5 786.5 1121.5 798.5C1119.5 809.5 1114 819.5 1105 828.5C1096 837.5 1082.5 845 1064.5 851C1046.5 857 1022 860 991 860C961 860 936 862 916 866C897 870 882 877.5 871 888.5C860 898.5 852 913 847 932C843 950 841 973 841 1001C841 1035 838.5 1061.5 833.5 1080.5C828.5 1099.5 821.5 1113.5 812.5 1122.5C804.5 1131.5 795 1137 784 1139C773 1141 762 1142 751 1142C721 1142 698.5 1133.5 683.5 1116.5C668.5 1098.5 661 1061 661 1004C661 951 651.5 914 632.5 893C614.5 871 580 860 529 860C481 860 443 854.5 415 843.5C387 831.5 373 806 373 767C373 737 383.5 714.5 404.5 699.5C426.5 684.5 466 677 523 677C551 677 574 675 592 671C610 666 624 658 634 647C645 635 652 619 655 599C659 579 661 553 661 521C661 493 663.5 470.5 668.5 453.5C673.5 436.5 680 423.5 688 414.5C696 405.5 705.5 399.5 716.5 396.5C727.5 393.5 739 392 751 392C784 392 807 403.5 820 426.5C834 448.5 841 479 841 518Z" fill="var(--dl-middle)"/>
+                <path d="M1138 476C1138 488.667 1135.33 500.667 1130 512C1125.33 522.667 1118.67 532.333 1110 541C1102 549 1092.33 555.667 1081 561C1070.33 565.667 1059.33 568 1048 568C1036.67 568 1025.33 565.667 1014 561C1003.33 555.667 993.667 549 985 541C976.333 532.333 969.333 522.667 964 512C958.667 500.667 956 488.667 956 476C956 463.333 958.333 451.333 963 440C968.333 428.667 975 418.667 983 410C991.667 401.333 1001.33 394.667 1012 390C1023.33 384.667 1035.33 382 1048 382C1060.67 382 1072.33 384.667 1083 390C1094.33 394.667 1104 401.333 1112 410C1120 418.667 1126.33 428.667 1131 440C1135.67 451.333 1138 463.333 1138 476ZM1013 474C1013 484 1016.33 492.333 1023 499C1029.67 505.667 1038 509 1048 509C1058 509 1066.33 505.667 1073 499C1079.67 492.333 1083 484 1083 474C1083 464 1079.67 455.667 1073 449C1066.33 442.333 1058 439 1048 439C1038 439 1029.67 442.333 1023 449C1016.33 455.667 1013 464 1013 474Z" fill="var(--dl-middle)"/>
               </svg>
             </button>
           </div>
@@ -278,7 +278,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
                     className="oura-token-input"
                     autoComplete="current-password"
                     style={{flex:1,minWidth:0,background:"var(--dl-surface)",border:`1px solid var(--dl-border2)`,
-                      borderRadius:5,outline:"none",color:"var(--dl-text)",fontFamily:mono,fontSize:F.sm,
+                      borderRadius:5,outline:"none",color:"var(--dl-middle)",fontFamily:mono,fontSize:F.sm,
                       padding:"5px 7px",boxSizing:"border-box",width:0}}/>
                 </form>
               )}
@@ -303,18 +303,18 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
                   placeholder="Email"
                   autoComplete="username"
                   style={{flex:1,minWidth:0,background:"var(--dl-surface)",border:`1px solid var(--dl-border2)`,
-                    borderRadius:5,outline:"none",color:"var(--dl-text)",fontFamily:mono,fontSize:F.sm,
+                    borderRadius:5,outline:"none",color:"var(--dl-middle)",fontFamily:mono,fontSize:F.sm,
                     padding:"5px 7px",boxSizing:"border-box"}}/>
                 <input type="password" value={garminPassword}
                   onChange={e=>setGarminPassword(e.target.value)}
                   placeholder="Password"
                   autoComplete="current-password"
                   style={{flex:1,minWidth:0,background:"var(--dl-surface)",border:`1px solid var(--dl-border2)`,
-                    borderRadius:5,outline:"none",color:"var(--dl-text)",fontFamily:mono,fontSize:F.sm,
+                    borderRadius:5,outline:"none",color:"var(--dl-middle)",fontFamily:mono,fontSize:F.sm,
                     padding:"5px 7px",boxSizing:"border-box"}}/>
               </form>
             )}
-            {!garminConnected && garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)",marginTop:4,display:"block"}}>Connecting…</span>}
+            {!garminConnected && garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",marginTop:4,display:"block"}}>Connecting…</span>}
             {!garminConnected && garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-red)",marginTop:4,display:"block"}}>{garminError}</span>}
           </div>
 
@@ -335,13 +335,13 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
 
           {/* Claude */}          <div style={row}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
-              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-muted)"}}>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-detail)"}}>
                 Claude MCP
               </span>
               {!claudeConnected && (
                 <a href="https://claude.ai/settings/connectors?modal=add-custom-connector"
                   target="_blank" rel="noreferrer"
-                  style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-dim)",textDecoration:"none",letterSpacing:"0.02em"}}>
+                  style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",textDecoration:"none",letterSpacing:"0.02em"}}>
                   add →
                 </a>
               )}
@@ -356,7 +356,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
             }}>
               <span style={{flex:1,fontFamily:mono,fontSize:F.sm,
                 userSelect:"all",letterSpacing:"0.02em",overflow:"hidden",
-                textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--dl-muted)"}}>
+                textOverflow:"ellipsis",whiteSpace:"nowrap",color:"var(--dl-detail)"}}>
                 {window.location.origin}/mcp
               </span>
               <button
@@ -366,7 +366,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
                 }}
                 title="Copy URL"
                 style={{background:"none",border:"none",cursor:"pointer",
-                  color:urlCopied?"var(--dl-green)":"var(--dl-dim)",padding:0,flexShrink:0,
+                  color:urlCopied?"var(--dl-green)":"var(--dl-muted)",padding:0,flexShrink:0,
                   display:"flex",alignItems:"center",lineHeight:1}}>
                 {urlCopied
                   ? <span style={{fontSize:11}}>✓</span>
@@ -380,7 +380,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
 
           {/* Theme */}
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:"var(--dl-muted)"}}>
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:"var(--dl-detail)"}}>
               {theme==="dark"?"Dark":"Light"} Mode
             </span>
             <button onClick={()=>onThemeChange(t=>t==="dark"?"light":"dark")}
@@ -397,14 +397,14 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
 
           {/* Downloads — label + small buttons inline */}
           <div style={{...row,display:"flex",alignItems:"center",gap:8}}>
-            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-muted)",flex:1}}>
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-detail)",flex:1}}>
               Downloads
             </span>
             <a href="https://github.com/malvidah/lifeos/releases/download/v1.0.2/Day.Lab-1.0.2-arm64.dmg" style={{
               display:"flex",alignItems:"center",gap:4,
               padding:"4px 9px",background:"var(--dl-surface)",
               border:`1px solid var(--dl-border2)`,borderRadius:5,textDecoration:"none",
-              color:"var(--dl-muted)",fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
+              color:"var(--dl-detail)",fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
@@ -415,7 +415,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
               display:"flex",alignItems:"center",gap:4,
               padding:"4px 9px",background:"var(--dl-surface)",
               border:`1px solid var(--dl-border2)`,borderRadius:5,textDecoration:"none",
-              color:"var(--dl-muted)",fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
+              color:"var(--dl-detail)",fontFamily:mono,fontSize:9,letterSpacing:"0.06em",textTransform:"uppercase",flexShrink:0}}>
               <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12" y2="18"/>
               </svg>
@@ -428,13 +428,13 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <a href="/about"
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
+                color:"var(--dl-muted)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",
                 textTransform:"uppercase",textDecoration:"none"}}>
               Learn More
             </a>
             <button onClick={async()=>{const s=createClient();await s.auth.signOut();}}
               style={{background:"none",border:"none",padding:0,cursor:"pointer",
-                color:"var(--dl-dim)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
+                color:"var(--dl-muted)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase"}}>
               Sign Out →
             </button>
           </div>
