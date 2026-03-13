@@ -477,7 +477,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 >
                   <button
                     onClick={() => selectNote(note.id)}
-                    style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.02em', color: note.id === activeNoteId ? "var(--dl-text)" : "var(--dl-muted)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}
+                    style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: note.id === activeNoteId ? "var(--dl-text)" : "var(--dl-muted)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}
                   >{noteName(note)}</button>
                   <button
                     onClick={e => { e.stopPropagation(); if (window.confirm(`Delete "${noteName(note)}"?`)) deleteNote(note.id); }}
@@ -534,7 +534,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               />
             ) : (
               <div onClick={() => addNote()} style={{ cursor: 'text', minHeight: 180, padding: '2px 0' }}>
-                <div style={{ fontFamily: mono, fontSize: F.md, fontWeight: 500, color: "var(--dl-dim)", lineHeight: 1.5, letterSpacing: '0.02em' }}>New note</div>
+                <div style={{ fontFamily: mono, fontSize: F.sm, fontWeight: 700, color: "var(--dl-dim)", lineHeight: 1.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>New note</div>
                 <div style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-dim)", lineHeight: 1.7, marginTop: 4 }}>Write something...</div>
               </div>
             )}
