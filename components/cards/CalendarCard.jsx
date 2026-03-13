@@ -210,7 +210,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
 
   // ── Helpers ────────────────────────────────────────────────────────────
   const today = todayKey();
-  const DAY_NAMES   = ['S','M','T','W','R','F','S']; // R=Thu to distinguish from T=Tue
+  const DAY_NAMES   = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
   const MONTH_NAMES = ["January","February","March","April","May","June",
                        "July","August","September","October","November","December"];
   const fracOff = displayOff - snappedIdx;
@@ -308,8 +308,8 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                       paddingRight: 4 }}>
           {DAY_NAMES.map((n, i) => (
             <div key={i} style={{
-              textAlign: 'center', fontFamily: mono, fontSize: '10px',
-              fontWeight: '500', letterSpacing: '0.08em', color: "var(--dl-middle)",
+              textAlign: 'center', fontFamily: mono, fontSize: '8px',
+              fontWeight: '500', letterSpacing: '0.06em', color: "var(--dl-middle)",
             }}>{n}</div>
           ))}
         </div>
