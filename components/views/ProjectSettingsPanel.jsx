@@ -4,6 +4,74 @@ import { useTheme } from "@/lib/theme";
 import { serif, mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
 
+// ─── HomeSettingsPanel ───────────────────────────────────────────────────────
+// Same slide-in chrome as ProjectSettingsPanel, blank body for now.
+export function HomeSettingsPanel({ open, onClose }) {
+  const { C } = useTheme();
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 640);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+
+  const overlayStyle = {
+    position: 'fixed', inset: 0, zIndex: 200,
+    background: 'rgba(0,0,0,0.45)',
+    opacity: open ? 1 : 0,
+    pointerEvents: open ? 'auto' : 'none',
+    transition: 'opacity 0.2s',
+  };
+
+  const panelStyle = isMobile ? {
+    position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 201,
+    height: 'calc(max(33vh, 260px))',
+    background: C.bg, borderTop: `1px solid ${C.border}`,
+    borderRadius: '14px 14px 0 0',
+    display: 'flex', flexDirection: 'column',
+    transform: open ? 'translateY(0)' : 'translateY(110%)',
+    transition: 'transform 0.25s cubic-bezier(0.32,0.72,0,1)',
+    overflow: 'hidden',
+  } : {
+    position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 201,
+    width: 300, background: C.bg, borderRight: `1px solid ${C.border}`,
+    display: 'flex', flexDirection: 'column',
+    transform: open ? 'translateX(0)' : 'translateX(-100%)',
+    transition: 'transform 0.22s cubic-bezier(0.32,0.72,0,1)',
+    overflow: 'hidden',
+  };
+
+  return (
+    <>
+      <div style={overlayStyle} onClick={onClose} />
+      <div style={panelStyle}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '14px 16px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+        }}>
+          <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted }}>
+            Home
+          </span>
+          <button onClick={onClose} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: C.muted, fontSize: 16, lineHeight: 1, padding: '2px 4px',
+          }}>×</button>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }} />
+      </div>
+    </>
+  );
+}
+
 // ─── ProjectSettingsPanel ────────────────────────────────────────────────────
 // Desktop: left slide-in panel (320px)
 // Mobile:  bottom sheet (1/3 page height)

@@ -71,7 +71,7 @@ export default function NavBar(props) {
     : tagDisplayName(activeProject);
 
   const titleColor = isProject ? projectColor(activeProject) : C.text;
-  const showGear   = isProject && !!onOpenSettings;
+  const showGear   = !!onOpenSettings;
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', height: 48, flexShrink: 0, position: 'relative' }}>

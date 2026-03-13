@@ -23,6 +23,7 @@ import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import ProjectView from "./views/ProjectView.jsx";
+import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import "./theme/theme.css";
 
 function DashboardInner() {
@@ -169,8 +170,9 @@ function DashboardInner() {
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [homeSettingsOpen, setHomeSettingsOpen] = useState(false);
   // Close settings whenever we navigate to a different project
-  useEffect(() => { setSettingsOpen(false); }, [activeProject]);
+  useEffect(() => { setSettingsOpen(false); setHomeSettingsOpen(false); }, [activeProject]);
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
   const collapseMap = {journal:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
@@ -342,6 +344,8 @@ function DashboardInner() {
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           display:"flex", flexDirection:"column", overflow:"hidden"}}>
 
+          <HomeSettingsPanel open={homeSettingsOpen} onClose={() => setHomeSettingsOpen(false)} />
+
           {/* ── Day View scroll — calendar, health, cards ── */}
           {!activeProject && (
             <div style={{
@@ -361,6 +365,7 @@ function DashboardInner() {
                 onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
                 onGoToProjects={() => setActiveProject('__graph__')}
                 onSelectDate={setSelected}
+                onOpenSettings={() => setHomeSettingsOpen(true)}
               />
                               {/* Cal + Health — hidden during search */}
                 {!searchOpen && (
