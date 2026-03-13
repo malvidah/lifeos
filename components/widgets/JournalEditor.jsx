@@ -7,7 +7,7 @@ import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/conte
 import { RichLine, Shimmer } from "../ui/primitives.jsx";
 import { SourceBadge } from "../cards/WorkoutsCard.jsx";
 import { estimateNutrition, uploadImageFile } from "@/lib/images";
-import { DayLabEditor } from "../DayLabEditor.jsx";
+import { Editor } from "../Editor.jsx";
 
 export function JournalEditor({date,userId,token}) {
   const { C } = useTheme();
@@ -25,7 +25,7 @@ export function JournalEditor({date,userId,token}) {
   const ctxProjects = useContext(ProjectNamesContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   return (
-    <DayLabEditor
+    <Editor
       value={value || ''}
       onBlur={text => setValue(text, {undoLabel: 'Edit notes'})}
       onImageUpload={file => uploadImageFile(file, token)}
@@ -172,7 +172,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
         ))}
         {safe.map((row, idx) => (
           <div key={row.id} style={rowStyle}>
-            <DayLabEditor
+            <Editor
               ref={el => refs.current[row.id] = el}
               value={row.text}
               singleLine

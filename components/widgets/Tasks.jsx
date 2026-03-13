@@ -5,7 +5,7 @@ import { mono, F, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Shimmer } from "../ui/primitives.jsx";
-import { DayLabEditor } from "../DayLabEditor.jsx";
+import { Editor } from "../Editor.jsx";
 
 export function NewProjectTask({ project, onAdd }) {
   const { C } = useTheme();
@@ -15,7 +15,7 @@ export function NewProjectTask({ project, onAdd }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 0' }}>
       <div style={{ width: 14, height: 14, flexShrink: 0, borderRadius: 3, border: `1.5px solid ${C.border2}`, background: 'transparent' }}/>
-      <DayLabEditor
+      <Editor
         singleLine
         placeholder="Add a task…"
         projectNames={ctxProjects}
@@ -143,7 +143,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
 
   return (
     <div data-filter={taskFilter} style={{'--task-border':C.border2,'--task-color':C.blue}}>
-      <DayLabEditor
+      <Editor
         taskList
         value={htmlValue}
         onUpdate={html => setValue(html)}

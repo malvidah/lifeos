@@ -14,7 +14,7 @@ function makeMatchRe(storedName) {
 const HEALTH_RE = /(?:\{health\}|#Health(?![A-Za-z0-9])|\b(health|workout|working out|worked out|run|ran|running|walk|walked|walking|bike|biked|biking|cycle|cycled|cycling|swim|swam|swimming|hike|hiked|hiking|gym|lift|lifted|lifting|yoga|stretch|stretching|sleep|slept|sleeping|recovery|recover|calories|calorie|nutrition|diet|meal|eat|ate|eating|exercise|exercised|exercising|weight|reps|sets|miles|km|heart rate|hrv|steps|active|activity|fitness|training|trained|train|breathwork|meditation|meditate|meditating|rest|resting|rested|sick|illness|pain|sore|soreness|energy|fatigue|tired|exhausted|hydrat|water|protein|macros|cardio|strength|endurance|mobility|flexibility|vo2|pace|distance)\b)/i;
 
 function isValidProject(name) {
-  if (name === '__everything__' || name === '__health__') return true;
+  if (name === '__everything__') return true;
   return /^[a-z0-9][a-z0-9 ]{0,38}[a-z0-9]$|^[a-z0-9]$/.test(name);
 }
 
@@ -24,7 +24,6 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'invalid project name', got: project }, { status: 400 });
 
   const isEverything = project === '__everything__';
-  const isHealth     = project === '__health__';
 
   const { data: notesRows, error: ne } = await supabase
     .from('entries').select('date, data')
@@ -32,7 +31,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .order('date', { ascending: true });
   if (ne) throw ne;
 
-  const matchRe = isEverything ? null : isHealth ? HEALTH_RE : makeMatchRe(project);
+  const matchRe = isEverything ? null : makeMatchRe(project);
 
   const journalEntries = [];
   for (const row of notesRows || []) {
@@ -68,5 +67,5 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  return Response.json({ journalEntries, taskEntries, isEverything, isHealth });
+  return Response.json({ journalEntries, taskEntries, isEverything });
 });

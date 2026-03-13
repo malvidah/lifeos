@@ -4,7 +4,7 @@ import { parseTasks } from '../_lib/parseTasks.js';
 const TAG_RE_NEW    = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
 const TAG_RE_LEGACY = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
 
-function canonical(lower) { return lower === 'health' ? '__health__' : lower; }
+function canonical(lower) { return lower; }
 
 function tagsIn(text) {
   const s = new Set();

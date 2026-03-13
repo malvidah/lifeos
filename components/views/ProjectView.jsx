@@ -9,7 +9,7 @@ import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card, Widget, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
-import { DayLabEditor } from "../DayLabEditor.jsx";
+import { Editor } from "../Editor.jsx";
 import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
@@ -19,13 +19,13 @@ import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksTo
 // Home:    [all-projects icon | project chips ···] [search icon]
 export function AddJournalLine({ project, onAdd, placeholder }) {
   const { C } = useTheme();
-  const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : C.accent;
+  const col = project && project !== '__everything__' ? projectColor(project) : C.accent;
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxNotes    = useContext(NoteContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
-      <DayLabEditor
+      <Editor
         singleLine
         placeholder={placeholder || 'Add an entry…'}
         projectNames={ctxProjects}
@@ -53,7 +53,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
 
   if (editing) {
     return (
-      <DayLabEditor
+      <Editor
         value={entry.text}
         onBlur={text => onSave(text)}
         placeholder=""
@@ -160,13 +160,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       const esc2 = oldName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const sb = createClient();
 
-      // ── Journal entries: replace [oldName] → [newName] in plain text ──
-      sb.from('entries').select('date, data').eq('type', 'journal')
+      // ── Journal blocks: replace [oldName] → [newName] in content ──
+      sb.from('journal_blocks').select('date, content').ilike('content', '%[' + oldName + ']%')
         .then(({ data: rows }) => {
           if (!rows) return;
           let anyChanged = false;
           rows.forEach(row => {
-            const text = typeof row.data === 'string' ? row.data : null;
+            const text = typeof row.content === 'string' ? row.content : null;
             if (!text || !text.includes('[' + oldName + ']')) return;
             const updated = text.replace(new RegExp('\\[' + esc2 + '\\]', 'g'), '[' + newName + ']');
             dbSave(row.date, 'journal', updated, token);
@@ -178,7 +178,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           if (anyChanged) window.dispatchEvent(new CustomEvent('lifeos:refresh', { detail: { types: ['journal'] } }));
         });
 
-      // ── Task entries: replace data-note-link attribute + inner text in TipTap HTML ──
+      // ── Tasks: replace data-note-link attribute + inner text in TipTap HTML ──
       // Stored HTML: <span data-note-link="NAME" style="...">NAME</span>
       const escHtml = oldName.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
       const newHtml = newName.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -190,11 +190,11 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       );
       const replaceNoteSpan = s => s.replace(noteSpanRe, 'data-note-link="' + newHtml + '"$1>' + newHtml + '</span>');
 
-      sb.from('entries').select('date, data').eq('type', 'tasks')
+      sb.from('tasks').select('date, html').ilike('html', '%data-note-link="' + escHtml + '"%')
         .then(({ data: rows }) => {
           if (!rows) return;
           rows.forEach(row => {
-            const html = typeof row.data === 'string' ? row.data : null;
+            const html = typeof row.html === 'string' ? row.html : null;
             if (!html || !html.includes('data-note-link="' + escHtml + '"')) return;
             const updated = replaceNoteSpan(html);
             dbSave(row.date, 'tasks', updated, token);
@@ -224,6 +224,22 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const newActive = remaining[0]?.id ?? null;
     setNotesStore({ notes: remaining, activeId: newActive }, { skipHistory: true });
   };
+
+  // Workouts + meals for this project
+  const [workoutItems, setWorkoutItems] = useState(null);
+  const [mealItems, setMealItems] = useState(null);
+  const [workoutsCollapsed, toggleWorkouts] = useCollapse(`pv:${project}:workouts`, false);
+  const [mealsCollapsed, toggleMeals] = useCollapse(`pv:${project}:meals`, false);
+
+  useEffect(() => {
+    if (!token || !project || project === '__everything__') return;
+    fetch(`/api/workouts?project=${encodeURIComponent(project)}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setWorkoutItems(d?.workouts ?? [])).catch(() => setWorkoutItems([]));
+    fetch(`/api/meals?project=${encodeURIComponent(project)}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setMealItems(d?.items ?? [])).catch(() => setMealItems([]));
+  }, [project, token]); // eslint-disable-line
 
   // Per-project collapse state (persisted)
   const [notesCollapsed,   toggleNotes]   = useCollapse(`pv:${project}:journal`,   false);
@@ -474,7 +490,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               {notesList.length === 0 ? (
                 <div style={{ fontFamily: serif, fontSize: F.md, color: C.dim, padding: '4px 0' }}>Select or create a note.</div>
               ) : activeNote ? (
-                <DayLabEditor
+                <Editor
                   key={activeNote.id}
                   value={activeNote.content || ''}
                   onBlur={text => updateNoteContent(activeNote.id, text)}
@@ -531,7 +547,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               }}>
                 <TaskCheckbox done={task.done} onToggle={() => toggleTask(task.date, task.id, task.done)} />
                 {editingTask?.date === task.date && editingTask?.id === task.id ? (
-                  <DayLabEditor
+                  <Editor
                     autoFocus singleLine
                     value={editingTask.text}
                     textColor={task.done ? C.muted : C.text}
@@ -664,6 +680,63 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           })()
         }
       </Widget>
+      {/* Workouts card */}
+      {workoutItems && workoutItems.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div onClick={toggleWorkouts} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', padding:'4px 0', marginBottom: workoutsCollapsed ? 0 : 8 }}>
+            <span style={{ fontFamily: mono, fontSize: 9, letterSpacing:'0.08em', textTransform:'uppercase', color: _pcol+'cc' }}>
+              {workoutsCollapsed ? '▸' : '▾'} Workouts
+            </span>
+          </div>
+          {!workoutsCollapsed && (() => {
+            const byDate = {};
+            workoutItems.forEach(w => { if (!byDate[w.date]) byDate[w.date] = []; byDate[w.date].push(w); });
+            return Object.entries(byDate).sort((a,b) => b[0].localeCompare(a[0])).map(([date, ws]) => (
+              <div key={date} style={{ marginBottom: 10 }}>
+                <div style={{ fontFamily: mono, fontSize: 9, color:'var(--dl-muted)', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom: 4 }}>{fmtDate(date)}</div>
+                {ws.map((w,i) => (
+                  <div key={i} style={{ fontFamily: serif, fontSize: F.md, color:'var(--dl-text)', lineHeight:1.5, padding:'3px 0' }}>
+                    {w.title}
+                    {(w.duration_min || w.distance_m) && (
+                      <span style={{ color:'var(--dl-muted)', fontSize: F.sm, marginLeft: 8 }}>
+                        {w.duration_min ? `${w.duration_min}min` : ''}
+                        {w.distance_m ? ` · ${(w.distance_m/1000).toFixed(1)}km` : ''}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
+
+      {/* Meals card */}
+      {mealItems && mealItems.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div onClick={toggleMeals} style={{ display:'flex', alignItems:'center', gap:6, cursor:'pointer', padding:'4px 0', marginBottom: mealsCollapsed ? 0 : 8 }}>
+            <span style={{ fontFamily: mono, fontSize: 9, letterSpacing:'0.08em', textTransform:'uppercase', color: _pcol+'cc' }}>
+              {mealsCollapsed ? '▸' : '▾'} Meals
+            </span>
+          </div>
+          {!mealsCollapsed && (() => {
+            const byDate = {};
+            mealItems.forEach(m => { if (!byDate[m.date]) byDate[m.date] = []; byDate[m.date].push(m); });
+            return Object.entries(byDate).sort((a,b) => b[0].localeCompare(a[0])).map(([date, ms]) => (
+              <div key={date} style={{ marginBottom: 10 }}>
+                <div style={{ fontFamily: mono, fontSize: 9, color:'var(--dl-muted)', letterSpacing:'0.06em', textTransform:'uppercase', marginBottom: 4 }}>{fmtDate(date)}</div>
+                {ms.map((m,i) => (
+                  <div key={i} style={{ fontFamily: serif, fontSize: F.md, color:'var(--dl-text)', lineHeight:1.5, padding:'3px 0' }}>
+                    {m.content}
+                    {m.ai_calories && <span style={{ color:'var(--dl-muted)', fontSize: F.sm, marginLeft: 8 }}>{m.ai_calories} kcal</span>}
+                  </div>
+                ))}
+              </div>
+            ));
+          })()}
+        </div>
+      )}
+
     </div>
     </NoteContext.Provider>
   );

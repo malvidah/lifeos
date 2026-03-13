@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/lib/theme";
 import { mono, F, R, blurweb } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
-import { dbLoad, dbSave } from "@/lib/db";
 import { ouraKey } from "@/lib/ouraCache";
 import { IntegrationToggle, IntegrationRow, InfoTip, Card, DayLabLoader } from "../ui/primitives.jsx";
 
@@ -34,10 +33,12 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
 
   useEffect(()=>{
     if(!token||!open)return;
-    dbLoad("global","settings",token).then(d=>{
-      if(d?.ouraToken){setOuraKey(d.ouraToken);setOuraConnected(true);}
-      if(d?.garminTokens?.oauth1){setGarminConnected(true);}
-    }).catch(()=>{});
+    fetch("/api/settings",{headers:{Authorization:`Bearer ${token}`}})
+      .then(r=>r.json()).then(d=>{
+        const settings = d?.data ?? {};
+        if(settings.ouraToken){setOuraKey(settings.ouraToken);setOuraConnected(true);}
+        if(settings.garminTokens?.oauth1){setGarminConnected(true);}
+      }).catch(()=>{});
     // Fetch plan status
     const _sbPlan = createClient();
     Promise.all([
@@ -54,10 +55,9 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
       .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
     // Check Apple Health data + Claude MCP connection (use singleton — no new GoTrueClient)
     const _sb = createClient();
-    _sb.from("entries").select("data").eq("type","health_apple").limit(5)
+    _sb.from("health_metrics").select("id").eq("source","apple").limit(5)
       .then(({data})=>{
-        const hasReal = data?.some(r => r.data && Object.keys(r.data).some(k=>r.data[k]));
-        if(hasReal) setAppleHealthHasData(true);
+        if(data?.length) setAppleHealthHasData(true);
       }).catch(()=>{});
     Promise.all([
       _sb.from("entries").select("date").eq("type","oauth_token").limit(1),
@@ -115,9 +115,9 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
     setSyncing("oura");
     try {
       // Save token
-      await fetch("/api/entries",{method:"POST",
+      await fetch("/api/settings",{method:"PATCH",
         headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
-        body:JSON.stringify({date:"global",type:"settings",data:{ouraToken:ouraKey.trim()}})});
+        body:JSON.stringify({ouraToken:ouraKey.trim()})});
       setOuraConnected(true);
       // Backfill history
       const res = await fetch("/api/oura-backfill",{method:"POST",
@@ -136,10 +136,9 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
 
   async function disconnectOura() {
     // disconnect immediately — no prompt (confirm() is blocked in WKWebView)
-    const sb = createClient();
-    const {data:s} = await sb.from("entries").select("data").eq("type","settings").eq("date","global").eq("user_id",userId).maybeSingle();
-    const updated = {...(s?.data||{})}; delete updated.ouraToken;
-    await sb.from("entries").upsert({user_id:userId,date:"global",type:"settings",data:updated,updated_at:new Date().toISOString()},{onConflict:"user_id,date,type"});
+    await fetch("/api/settings",{method:"PATCH",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+      body:JSON.stringify({ouraToken:null})});
     setOuraConnected(false); setOuraKey("");
   }
 
@@ -153,8 +152,8 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
       const poll = setInterval(async () => {
         attempts++;
         const sb = createClient();
-        const {data} = await sb.from("entries").select("data").eq("type","health_apple").limit(5);
-        const hasReal = data?.some(r=>r.data&&Object.keys(r.data).some(k=>r.data[k]));
+        const {data} = await sb.from("health_metrics").select("id").eq("source","apple").limit(5);
+        const hasReal = data?.length > 0;
         if(hasReal || attempts > 20) {
           clearInterval(poll);
           if(hasReal) setAppleHealthHasData(true);
@@ -167,7 +166,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
   async function disconnectAppleHealth() {
     // disconnect immediately
     const sb = createClient();
-    await sb.from("entries").delete().eq("type","health_apple").eq("user_id",userId);
+    await sb.from("health_metrics").delete().eq("source","apple").eq("user_id",userId);
     setAppleHealthHasData(false);
   }
 

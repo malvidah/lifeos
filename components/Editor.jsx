@@ -328,7 +328,7 @@ function SuggestionDropdown({ state, onSelect }) {
   );
 }
 
-// ── DayLabEditor ──────────────────────────────────────────────────────────────
+// ── Editor ──────────────────────────────────────────────────────────────
 // The single editing primitive for Day Lab.
 //
 // Slash commands:
@@ -344,7 +344,7 @@ function SuggestionDropdown({ state, onSelect }) {
 //   placeholder, singleLine, autoFocus
 //   style, color, textColor, mutedColor, editable
 
-export const DayLabEditor = forwardRef(function DayLabEditor({
+export const Editor = forwardRef(function Editor({
   value,
   onBlur,
   onEnterCommit,
@@ -463,6 +463,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   mutedColor = mutedColor || '#9A9088';
 
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: false, blockquote: false, bulletList: false, orderedList: false,

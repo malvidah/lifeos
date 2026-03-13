@@ -40,13 +40,11 @@ export default function NavBar(props) {
     </div>
   );
 
-  // ── Project / health / graph view ──
+  // ── Project / graph view ──
   if (activeProject) {
     const isGraph  = activeProject === '__graph__';
-    const isHealth = activeProject === '__health__';
-    const pcol = isHealth ? C.green : isGraph ? C.accent : projectColor(activeProject);
+    const pcol = isGraph ? "var(--dl-accent)" : projectColor(activeProject);
     const label = isGraph ? 'ALL PROJECTS'
-                : isHealth ? 'Health'
                 : activeProject === '__everything__' ? 'ALL'
                 : tagDisplayName(activeProject);
     return (
@@ -117,5 +115,5 @@ export default function NavBar(props) {
   );
 }
 
-// ─── AddJournalLine — single-line DayLabEditor that calls onAdd(text) on Enter or blur.
-// DayLabEditor self-clears after commit; callers do not need to maintain text state.
+// ─── AddJournalLine — single-line Editor that calls onAdd(text) on Enter or blur.
+// Editor self-clears after commit; callers do not need to maintain text state.
