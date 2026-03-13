@@ -15,8 +15,8 @@ export function SourceBadge({source}) {
   return (
     <span style={{
       fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", textTransform:"uppercase",
-      color: isStrava ? "#FC4C02" : "#B8A882",
-      border: `1px solid ${isStrava ? "#FC4C02" : "#B8A882"}`,
+      color: isStrava ? "#FC4C02" : "var(--dl-muted)",
+      border: `1px solid ${isStrava ? "#FC4C02" : "var(--dl-muted)"}`,
       borderRadius:3, padding:"1px 4px", flexShrink:0, opacity:0.8,
     }}>{isStrava ? "Strava" : "Oura"}</span>
   );

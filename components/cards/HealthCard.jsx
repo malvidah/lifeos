@@ -128,7 +128,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   },[date,loaded,token]); // eslint-disable-line
 
 
-  const purple = "#8B6BB5";
+  const purple = C.purple;
 
   // ── Computed scores from /api/scores ──────────────────────────────────────
   const [scores, setScores] = useState(null);

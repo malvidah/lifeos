@@ -158,7 +158,7 @@ export function NavBtn({onClick,title,children}) {
   );
 }
 
-export function DayLabLoader({ size = 32, color = "#EFDFC3" }) {
+export function DayLabLoader({ size = 32, color = "var(--dl-text)" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 1500 1500" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
       <style>{`@keyframes dlPulse{0%,100%{opacity:.15;transform:scale(.92)}50%{opacity:1;transform:scale(1)}}@keyframes dlDot{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}.dl-cross{animation:dlPulse 1.6s ease-in-out infinite;transform-origin:751px 767px}.dl-dot{animation:dlDot 1.6s ease-in-out infinite .3s;transform-origin:1048px 474px}`}</style>
@@ -199,7 +199,7 @@ export function RichLine({ text, dimTag = null }) {
     if (m[1]) {
       parts.push(<div key={k++} style={{ margin: '6px 0', lineHeight: 0 }}><img src={m[1]} alt="" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 8, display: 'block' }} /></div>);
     } else if (m[2]) {
-      parts.push(<a key={k++} href={m[2]} target="_blank" rel="noreferrer" style={{ color: '#C8820A', textDecoration: 'none' }}>{m[2]}</a>);
+      parts.push(<a key={k++} href={m[2]} target="_blank" rel="noreferrer" style={{ color: 'var(--dl-accent)', textDecoration: 'none' }}>{m[2]}</a>);
     } else if (m[3] !== undefined) {
       const name = m[3], isOwn = dimTag && name === dimTag.toLowerCase();
       parts.push(<TagChip key={k++} name={name} plain={isOwn} onClick={() => navigateToProject(name)}/>);

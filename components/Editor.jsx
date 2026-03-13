@@ -19,8 +19,8 @@ import { Suggestion } from '@tiptap/suggestion';
 const serif = "Georgia, 'Times New Roman', serif";
 const mono  = "'SF Mono', 'Fira Code', ui-monospace, monospace";
 const F = { lg: 18, md: 15, sm: 12 };
-const ACCENT = '#D08828';
-const WARM   = '#C8A87A';
+const ACCENT = '#D08828'; // must match --dl-accent token
+const WARM   = '#D08828'; // link color — matches --dl-accent
 
 const PROJECT_PALETTE = [
   '#C17B4A', '#7A9E6E', '#6B8EB8', '#A07AB0',
@@ -290,7 +290,7 @@ function SuggestionDropdown({ state, onSelect }) {
   return createPortal(
     <div style={{
       position: 'fixed', top, left, zIndex: 9999,
-      background: '#1E1C1A', border: '1px solid #2A2724', borderRadius: 10,
+      background: 'var(--dl-card)', border: '1px solid var(--dl-border)', borderRadius: 10,
       boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
       padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
@@ -317,7 +317,7 @@ function SuggestionDropdown({ state, onSelect }) {
               background: selected ? 'rgba(255,255,255,0.09)' : 'transparent',
               fontFamily: mono, fontSize: 12,
               letterSpacing: isProject && !isCreate ? '0.08em' : '0.04em',
-              color: isCreate ? '#9A9088' : col || '#EFDFC3',
+              color: isCreate ? 'var(--dl-muted)' : col || 'var(--dl-text)',
               transition: 'background 0.08s',
             }}
           >{label}</button>
@@ -460,7 +460,7 @@ export const Editor = forwardRef(function Editor({
   });
 
   textColor  = textColor  || 'inherit';
-  mutedColor = mutedColor || '#9A9088';
+  mutedColor = mutedColor || 'var(--dl-muted)';
 
   const editor = useEditor({
     immediatelyRender: false,

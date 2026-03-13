@@ -194,14 +194,14 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
               onBlur={handleRename}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); nameRef.current?.blur(); } }}
               disabled={renaming || project === '__everything__'}
-              style={{ ...input, borderColor: renameErr ? '#e05' : C.border }}
+              style={{ ...input, borderColor: renameErr ? C.red : C.border }}
               placeholder="project name"
             />
             {renaming && (
               <div style={{ fontFamily: mono, fontSize: 9, color: C.muted, marginTop: 6 }}>Renaming…</div>
             )}
             {renameErr && (
-              <div style={{ fontFamily: mono, fontSize: 9, color: '#e05', marginTop: 6 }}>{renameErr}</div>
+              <div style={{ fontFamily: mono, fontSize: 9, color: C.red, marginTop: 6 }}>{renameErr}</div>
             )}
           </div>
 

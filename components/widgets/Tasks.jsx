@@ -108,11 +108,11 @@ function injectTaskListStyles() {
     .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"] {
       -webkit-appearance:none; appearance:none;
       width:15px; height:15px; min-width:15px; border-radius:4px; margin:0;
-      border:1.5px solid var(--task-border,#4A4A52); background:transparent;
+      border:1.5px solid var(--task-border,var(--dl-border2)); background:transparent;
       cursor:pointer; transition:all 0.15s;
     }
     .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
-      background-color:var(--task-color,#4A90D9); border-color:var(--task-color,#4A90D9);
+      background-color:var(--task-color,var(--dl-blue)); border-color:var(--task-color,var(--dl-blue));
       background-image:url("data:image/svg+xml,%3Csvg width='9' height='9' viewBox='0 0 10 10' fill='none' stroke='%23111' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='1.5,5 4,7.5 8.5,2'/%3E%3C/svg%3E");
       background-repeat:no-repeat; background-position:center;
     }

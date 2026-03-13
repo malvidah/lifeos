@@ -433,7 +433,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                             {dots.sleep     >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.blue,    flexShrink: 0 }} />}
                             {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.green,   flexShrink: 0 }} />}
                             {dots.activity  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.accent,  flexShrink: 0 }} />}
-                            {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8B6BB5', flexShrink: 0 }} />}
+                            {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: C.purple, flexShrink: 0 }} />}
                           </div>
                         )}
 
@@ -754,7 +754,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.blue}}/>}
                     {k<=today && (healthDots[k]?.readiness >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.green}}/>}
                     {k<=today && (healthDots[k]?.activity >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.accent}}/>}
-                    {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"#8B6BB5"}}/>}
+                    {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:C.purple}}/>}
                   </div>
                 </div>
 
@@ -931,7 +931,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
         setEvents(prev=>({...prev,[selected]:[...(prev[selected]||[]),
           {id:data.eventId,title:form.title.trim(),
            time:form.allDay?'all day':to12h(form.startTime),
-           endTime:form.allDay?null:to12h(form.endTime),allDay:form.allDay,color:'#B8A882'}]}));
+           endTime:form.allDay?null:to12h(form.endTime),allDay:form.allDay,color:C.muted}]}));
         closePanel();
       } else {
         const res = await fetch('/api/calendar-update', {
@@ -1205,7 +1205,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
 
           </div>
 
-          {saveErr && <div style={{fontFamily:mono,fontSize:F.sm,color:'#A05050',marginTop:8}}>{saveErr}</div>}
+          {saveErr && <div style={{fontFamily:mono,fontSize:F.sm,color:C.red,marginTop:8}}>{saveErr}</div>}
         </div>
       )}
     </Card>
