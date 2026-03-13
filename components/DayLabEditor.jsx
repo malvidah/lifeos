@@ -476,7 +476,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           ? ({ node }) => node.type.name === 'heading' ? 'New note' : 'Write something...'
           : placeholder || '',
         emptyNodeClass: 'is-empty',
-        showOnlyCurrent: false,
       }),
 
       // Unified slash command: /p → project chip, /n → note chip
