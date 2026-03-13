@@ -28,7 +28,12 @@ export function parseTasks(data) {
       if (!attrs.includes('data-type="taskItem"')) continue;
       const doneMatch = attrs.match(/data-checked="(true|false)"/);
       const done = doneMatch?.[1] === 'true';
-      const text = m[2].replace(/<[^>]+>/g, '').trim();
+      // Preserve project/note chip attrs as {name}/[name] before stripping HTML —
+      // otherwise the regex in project-entries can't match chip-tagged tasks.
+      const inner = m[2]
+        .replace(/<span\b[^>]*\bdata-project-tag="([^"]*)"[^>]*>[^<]*<\/span>/g, '{$1}')
+        .replace(/<span\b[^>]*\bdata-note-link="([^"]*)"[^>]*>[^<]*<\/span>/g, '[$1]');
+      const text = inner.replace(/<[^>]+>/g, '').trim();
       if (text) tasks.push({ id: `html_${idx++}`, text, done });
     }
     return tasks;

@@ -15,6 +15,8 @@ import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksTo
 import { AddJournalLine } from "../widgets/JournalEditor.jsx";
 
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
+// EntryBlock — renders one paragraph block (may span multiple lines joined by \n).
+// In edit mode, opens a multi-line DayLabEditor for the whole block.
 function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   const baseStyle = { fontFamily: serif, fontSize: F.md, lineHeight: '1.7', padding: '2px 0', wordBreak: 'break-word' };
   const ctxProjects = useContext(ProjectNamesContext);
@@ -27,7 +29,6 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
         value={entry.text}
         onBlur={text => onSave(text)}
         placeholder=""
-        singleLine
         projectNames={ctxProjects}
         noteNames={ctxNotes.notes}
         onCreateNote={ctxNotes.onCreateNote}
@@ -40,9 +41,16 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
       />
     );
   }
+  // Multi-line blocks: render each line through RichLine, separated by line breaks
+  const lines = entry.text.split('\n');
   return (
-    <div style={{ ...baseStyle, color:"var(--dl-text)", cursor:'text', whiteSpace:'pre-wrap' }} onClick={onStartEdit}>
-      <RichLine text={entry.text} dimTag={dimTag}/>
+    <div style={{ ...baseStyle, color:"var(--dl-text)", cursor:'text' }} onClick={onStartEdit}>
+      {lines.map((line, i) => (
+        <Fragment key={i}>
+          {i > 0 && <br/>}
+          <RichLine text={line} dimTag={dimTag}/>
+        </Fragment>
+      ))}
     </div>
   );
 }
@@ -275,11 +283,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     setProjectsMeta(updated, { skipHistory: true });
   }
 
-  async function saveJournalEdit(date, lineIndex, newText) {
+  async function saveJournalEdit(date, lineIndex, newText, blockLength = 1) {
     const current = await dbLoad(date, 'journal', token);
     if (current === null) return;
     const lines = (current || '').split('\n');
-    lines[lineIndex] = newText;
+    // Replace the original block (blockLength lines starting at lineIndex) with
+    // the edited text (which may itself span multiple lines after editing).
+    lines.splice(lineIndex, blockLength, ...newText.split('\n'));
     const updated = lines.join('\n');
     await dbSave(date, 'journal', updated, token);
     // Update module-level cache so daily view reflects immediately
@@ -587,26 +597,15 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             const allDates = [[today, todayLines], ...otherDates];
 
             function renderLines(date, lines) {
-              const blocks = [];
-              let cur = [];
-              lines.forEach((entry, i) => {
-                if (i === 0 || entry.lineIndex === lines[i-1].lineIndex + 1) cur.push(entry);
-                else { if (cur.length) blocks.push(cur); cur = [entry]; }
-              });
-              if (cur.length) blocks.push(cur);
-              return blocks.map((block, bi) => (
-                <div key={bi} style={{ display:'flex', flexDirection:'column', gap:0 }}>
-                  {block.map(entry => (
-                    <EntryLine
-                      key={`${date}-${entry.lineIndex}`}
-                      entry={entry} date={date}
-                      editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
-                      onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
-                      onSave={async (text) => { await saveJournalEdit(date, entry.lineIndex, text); setEditingEntry(null); }}
-                      dimTag={project === '__everything__' ? null : project}
-                    />
-                  ))}
-                </div>
+              return lines.map(entry => (
+                <EntryLine
+                  key={`${date}-${entry.lineIndex}`}
+                  entry={entry} date={date}
+                  editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
+                  onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
+                  onSave={async (text) => { await saveJournalEdit(date, entry.lineIndex, text, entry.blockLength ?? 1); setEditingEntry(null); }}
+                  dimTag={project === '__everything__' ? null : project}
+                />
               ));
             }
 

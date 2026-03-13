@@ -73,21 +73,20 @@ export function tasksToHtml(tasks) {
 
 // ── Shared task checkbox — used in project view ──────────────────────────────
 export function TaskCheckbox({ done, onToggle }) {
-  const { C } = useTheme();
   return (
     <button
       onClick={onToggle}
       style={{
         width: 15, height: 15, flexShrink: 0, borderRadius: 4, padding: 0,
         cursor: 'pointer', marginTop: 4,
-        border: `1.5px solid ${done ? "var(--dl-blue)" : "var(--dl-border2)"}`,
-        background: done ? "var(--dl-blue)" : 'transparent',
+        border: `1.5px solid ${done ? "var(--dl-text)" : "var(--dl-border2)"}`,
+        background: done ? "var(--dl-text)" : 'transparent',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         transition: 'all 0.15s',
       }}
     >
       {done && (
-        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke={"var(--dl-bg)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke={"var(--dl-accent)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="1.5,5 4,7.5 8.5,2"/>
         </svg>
       )}
@@ -95,11 +94,13 @@ export function TaskCheckbox({ done, onToggle }) {
   );
 }
 
-function injectTaskListStyles() {
+// Called on every theme change — always updates the existing style element so the
+// checkmark SVG (data URI) can't use CSS vars and must be baked in with the accent hex.
+function injectTaskListStyles(accentHex) {
   if (typeof document === 'undefined') return;
-  if (document.getElementById('dl-tasklist-styles')) return;
-  const s = document.createElement('style');
-  s.id = 'dl-tasklist-styles';
+  let s = document.getElementById('dl-tasklist-styles');
+  if (!s) { s = document.createElement('style'); s.id = 'dl-tasklist-styles'; document.head.appendChild(s); }
+  const enc = encodeURIComponent(accentHex);
   s.textContent = `
     .dl-editor ul[data-type="taskList"] { list-style:none; padding:0; margin:0; }
     .dl-editor ul[data-type="taskList"] > li { display:flex; align-items:flex-start; gap:10px; padding:3px 0; }
@@ -107,12 +108,12 @@ function injectTaskListStyles() {
     .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"] {
       -webkit-appearance:none; appearance:none;
       width:15px; height:15px; min-width:15px; border-radius:4px; margin:0;
-      border:1.5px solid var(--task-border,#4A4A52); background:transparent;
+      border:1.5px solid var(--task-border,#888); background:transparent;
       cursor:pointer; transition:all 0.15s;
     }
     .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
-      background-color:var(--task-color,#4A90D9); border-color:var(--task-color,#4A90D9);
-      background-image:url("data:image/svg+xml,%3Csvg width='9' height='9' viewBox='0 0 10 10' fill='none' stroke='%23111' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='1.5,5 4,7.5 8.5,2'/%3E%3C/svg%3E");
+      background-color:var(--task-color); border-color:var(--task-color);
+      background-image:url("data:image/svg+xml,%3Csvg width='9' height='9' viewBox='0 0 10 10' fill='none' stroke='${enc}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='1.5%2C5 4%2C7.5 8.5%2C2'/%3E%3C/svg%3E");
       background-repeat:no-repeat; background-position:center;
     }
     .dl-editor ul[data-type="taskList"] > li > div { flex:1; min-width:0; }
@@ -120,7 +121,6 @@ function injectTaskListStyles() {
     [data-filter="open"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"] { display:none; }
     [data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="false"] { display:none; }
   `;
-  document.head.appendChild(s);
 }
 
 export default function Tasks({date, token, userId, taskFilter="all"}) {
@@ -130,7 +130,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   const {navigateToProject, navigateToNote} = useContext(NavigationContext);
   const {notes: ctxNotes} = useContext(NoteContext);
 
-  useEffect(injectTaskListStyles, []);
+  useEffect(() => injectTaskListStyles(C.accent), [C.accent]);
 
   const htmlValue = useMemo(() => migrateTasksToHtml(value) || '', [value]);
 
@@ -141,7 +141,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   );
 
   return (
-    <div data-filter={taskFilter} style={{'--task-border':C.border2,'--task-color':C.blue}}>
+    <div data-filter={taskFilter} style={{'--task-border':C.border2,'--task-color':C.text}}>
       <DayLabEditor
         taskList
         value={htmlValue}
@@ -151,7 +151,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
         noteNames={ctxNotes}
         textColor={C.text}
         mutedColor={C.dim}
-        color={C.blue}
+        color={C.accent}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
         style={{padding:0}}
