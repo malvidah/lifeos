@@ -613,7 +613,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
         paddingLeft: 10, paddingRight: 10,
-        paddingBottom: "env(safe-area-inset-bottom, 6px)",
+        paddingBottom: mobile ? "env(safe-area-inset-bottom, 6px)" : "16px",
         pointerEvents: "none",
       }}>
         <div style={{

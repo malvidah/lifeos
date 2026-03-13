@@ -11,6 +11,10 @@ import { DayLabEditor } from "../DayLabEditor.jsx";
 export function JournalEditor({date,userId,token}) {
   const { C } = useTheme();
   const {value, setValue, loaded} = useDbSave(date, 'journal', '', token, userId);
+  // Hooks must be called unconditionally (before any early return)
+  const { notes: ctxNotes } = useContext(NoteContext);
+  const ctxProjects = useContext(ProjectNamesContext);
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
@@ -20,9 +24,6 @@ export function JournalEditor({date,userId,token}) {
     </div>
   );
 
-  const { notes: ctxNotes } = useContext(NoteContext);
-  const ctxProjects = useContext(ProjectNamesContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   return (
     <DayLabEditor
       value={value || ''}
@@ -54,7 +55,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   const refs = useRef({});
   const [tick, setTick] = useState(0);
 
-  const safe = (Array.isArray(rows) && rows.length ? rows : [mkRow()]).map(r => r.estimating ? {...r, estimating:false} : r);
+  const safe = Array.isArray(rows) && rows.length ? rows : [mkRow()];
   const estMap = (estimatesLoaded && savedEstimates && typeof savedEstimates === "object") ? savedEstimates : {};
 
   // Merge saved AI estimates into synced rows
@@ -117,15 +118,16 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
 
   async function runEstimate(id, text) {
     estimating.current.add(id);
-    setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, estimating:true} : r));
+    setTick(t => t + 1);
     try {
       const result = await estimateNutrition(promptFn(text), token);
       estimating.current.delete(id);
-      setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null, estimating:false} : r));
+      setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null} : r));
+      setTick(t => t + 1);
     } catch(_) {
       estimating.current.delete(id);
       failed.current.add(id);
-      setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, estimating:false} : r));
+      setTick(t => t + 1);
     }
   }
 
@@ -179,6 +181,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
               ref={el => refs.current[row.id] = el}
               value={row.text}
               singleLine
+              clearOnEnter={false}
               placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+" : ""}
               textColor={"var(--dl-text)"}
               mutedColor={"var(--dl-dim)"}
@@ -188,7 +191,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
                 setRows(prev => {
                   const s = Array.isArray(prev) ? prev : safe;
                   const existing = s.find(r => r.id === row.id);
-                  if (!text.trim() && existing?.text?.trim()) return prev; // skip ghost blur after Enter
+                  if (text === existing?.text) return prev; // no change
                   return s.map(r => r.id===row.id ? {...r, text, kcal: text !== r.text ? null : r.kcal, protein: text !== r.text ? null : r.protein} : r);
                 });
                 if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
@@ -212,11 +215,11 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
             />
             {showProtein && (
               <span style={row.protein ? colProtein : colMutedProt}>
-                {!row.text ? "" : row.estimating ? "…" : row.protein ? `${row.protein}g` : "—"}
+                {!row.text ? "" : estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g` : "—"}
               </span>
             )}
             <span style={row.kcal ? colKcal : colMutedEnrg}>
-              {!row.text ? "" : row.estimating ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
+              {!row.text ? "" : estimating.current.has(row.id) ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
             </span>
           </div>
         ))}
