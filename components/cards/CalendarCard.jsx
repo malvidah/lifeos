@@ -7,7 +7,6 @@ import { toKey, todayKey, shift, dayOffset, offsetToDate, keyToDayNum, MONTHS_FU
 import { useIsMobile } from "@/lib/hooks";
 import { Card, NavBtn, ChevronBtn } from "../ui/primitives.jsx";
 import { api } from "@/lib/api";
-import { createClient } from "@/lib/supabase";
 
 const BIG_EVENT_KEYWORDS = /birthday|bday|anniversary|wedding|graduation|party|trip|camping|hike|concert|festival|game.?night|board.?game|vacation|holiday|travel|flight|conference|retreat|summit|christm|thanksgiv|new.?year|halloween|passover|hanukkah|diwali|eid|week.?off|day.?off|surgery|date.?night|show|performance|recital|marathon|race|gala|ceremony|opening.?night|potluck|picnic|reunion|sleepover|road.?trip/i;
 
@@ -792,7 +791,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
     </div>
   );
 }
-export default function CalendarCard({selected, onSelect, events, setEvents, healthDots, token, collapsed, onToggle, calView, onCalViewChange, needsAuth}) {
+export default function CalendarCard({selected, onSelect, events, setEvents, healthDots, token, collapsed, onToggle, calView, onCalViewChange}) {
   const { C } = useTheme();
   const mobile = useIsMobile();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -969,31 +968,8 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
   const SEL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const selPillLabel = `${SEL_MONTHS[selDateObj.getMonth()]} ${selDateObj.getDate()}, ${selDateObj.getFullYear()}`;
 
-  const reconnectGoogle = async () => {
-    const supabase = createClient();
-    await supabase.auth.signInWithOAuth({provider:"google",options:{
-      scopes:"https://www.googleapis.com/auth/calendar",
-      redirectTo:`${window.location.origin}/auth/callback`,
-      queryParams:{access_type:"offline",prompt:"consent"},
-    }});
-  };
-
   return (
     <Card>
-      {needsAuth && (
-        <div style={{padding:'12px 16px',borderBottom:'1px solid var(--dl-border)',
-          display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-muted)",letterSpacing:'0.04em'}}>
-            Google Calendar disconnected
-          </span>
-          <button onClick={reconnectGoogle}
-            style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',
-              background:'none',border:'1px solid var(--dl-border2)',borderRadius:6,
-              color:"var(--dl-accent)",padding:'5px 12px',cursor:'pointer'}}>
-            Reconnect
-          </button>
-        </div>
-      )}
       {calView === 'month' ? (
         <div style={{userSelect:'none',display:'flex',flexDirection:'column'}}>
           {/* Month header — same layout as day view */}
