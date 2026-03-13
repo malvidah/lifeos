@@ -1,5 +1,4 @@
 "use client";
-import { useTheme } from "@/lib/theme";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
 import { MONTHS_FULL } from "@/lib/dates";
@@ -21,12 +20,12 @@ function NavIconBtn({ onClick, active, C, title, children }) {
       style={{
         background: 'none', border: 'none', cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: active ? C.text : C.muted,
+        color: active ? "var(--dl-text)" : "var(--dl-muted)",
         width: 40, height: 48, flexShrink: 0,
         transition: 'color 0.15s',
       }}
-      onMouseEnter={e => e.currentTarget.style.color = C.text}
-      onMouseLeave={e => { e.currentTarget.style.color = active ? C.text : C.muted; }}
+      onMouseEnter={e => e.currentTarget.style.color = "var(--dl-text)"}
+      onMouseLeave={e => { e.currentTarget.style.color = active ? "var(--dl-text)" : "var(--dl-muted)"; }}
     >
       {children}
     </button>
@@ -51,7 +50,6 @@ function stepDateKey(dateKey, dir) {
 }
 
 export default function NavBar(props) {
-  const { C } = useTheme();
   const {
     activeProject, date,
     searchOpen, setSearchOpen, searchQuery, setSearchQuery, searchInputRef, srLoading,
@@ -70,7 +68,7 @@ export default function NavBar(props) {
     : isEverything                    ? 'ALL'
     : tagDisplayName(activeProject);
 
-  const titleColor = isProject ? projectColor(activeProject) : C.text;
+  const titleColor = isProject ? projectColor(activeProject) : "var(--dl-text)";
   const showGear   = !!onOpenSettings;
 
   return (
@@ -114,11 +112,11 @@ export default function NavBar(props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
             <button onClick={() => onSelectDate(stepDateKey(date, -1))} style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              color: C.muted, padding: '2px 6px', fontFamily: mono, fontSize: 16,
+              color: "var(--dl-muted)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
               lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
             }}
-              onMouseEnter={e => e.currentTarget.style.color = C.text}
-              onMouseLeave={e => e.currentTarget.style.color = C.muted}
+              onMouseEnter={e => e.currentTarget.style.color = "var(--dl-text)"}
+              onMouseLeave={e => e.currentTarget.style.color = "var(--dl-muted)"}
             >‹</button>
             <span style={{
               fontFamily: mono, fontSize: 13, fontWeight: 600, letterSpacing: '0.12em',
@@ -129,11 +127,11 @@ export default function NavBar(props) {
             </span>
             <button onClick={() => onSelectDate(stepDateKey(date, +1))} style={{
               background: 'none', border: 'none', cursor: 'pointer',
-              color: C.muted, padding: '2px 6px', fontFamily: mono, fontSize: 16,
+              color: "var(--dl-muted)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
               lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
             }}
-              onMouseEnter={e => e.currentTarget.style.color = C.text}
-              onMouseLeave={e => e.currentTarget.style.color = C.muted}
+              onMouseEnter={e => e.currentTarget.style.color = "var(--dl-text)"}
+              onMouseLeave={e => e.currentTarget.style.color = "var(--dl-muted)"}
             >›</button>
           </div>
         ) : (
@@ -157,12 +155,12 @@ export default function NavBar(props) {
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: C.muted, width: 40, height: 48, flexShrink: 0,
+              color: "var(--dl-muted)", width: 40, height: 48, flexShrink: 0,
               opacity: searchOpen ? 0 : 1, pointerEvents: searchOpen ? 'none' : 'auto',
               transition: 'color 0.15s, opacity 0.18s ease',
             }}
-            onMouseEnter={e => e.currentTarget.style.color = C.text}
-            onMouseLeave={e => e.currentTarget.style.color = C.muted}
+            onMouseEnter={e => e.currentTarget.style.color = "var(--dl-text)"}
+            onMouseLeave={e => e.currentTarget.style.color = "var(--dl-muted)"}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"/>
@@ -178,12 +176,12 @@ export default function NavBar(props) {
           style={{
             background: 'none', border: 'none', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: searchOpen ? C.text : C.muted,
+            color: searchOpen ? "var(--dl-text)" : "var(--dl-muted)",
             width: 40, height: 48, flexShrink: 0,
             transition: 'color 0.15s',
           }}
-          onMouseEnter={e => e.currentTarget.style.color = C.text}
-          onMouseLeave={e => { if (!searchOpen) e.currentTarget.style.color = C.muted; }}
+          onMouseEnter={e => e.currentTarget.style.color = "var(--dl-text)"}
+          onMouseLeave={e => { if (!searchOpen) e.currentTarget.style.color = "var(--dl-muted)"; }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -205,13 +203,13 @@ export default function NavBar(props) {
           display: 'flex', alignItems: 'center', gap: 8,
           backdropFilter: 'blur(20px) saturate(1.4)',
           WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-          background: `${C.surface}ee`,
-          border: `1px solid ${C.border}`,
+          background: `var(--dl-surface)ee`,
+          border: `1px solid var(--dl-border)`,
           borderRadius: 100,
           padding: '0 16px', height: 44,
-          boxShadow: C.shadow,
+          boxShadow: "var(--dl-shadow)",
         }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={"var(--dl-muted)"} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input
@@ -222,22 +220,22 @@ export default function NavBar(props) {
             placeholder="Search"
             style={{
               flex: 1, background: 'transparent', border: 'none', outline: 'none',
-              fontFamily: mono, fontSize: F.md, color: C.text, caretColor: C.accent,
+              fontFamily: mono, fontSize: F.md, color: "var(--dl-text)", caretColor: "var(--dl-accent)",
             }}
           />
           {srLoading && (
-            <span style={{ fontFamily: mono, fontSize: 8, color: C.muted, letterSpacing: '0.12em', flexShrink: 0 }}>…</span>
+            <span style={{ fontFamily: mono, fontSize: 8, color: "var(--dl-muted)", letterSpacing: '0.12em', flexShrink: 0 }}>…</span>
           )}
           <button
             onClick={closeSearch}
             aria-label="Close search"
             style={{
               background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px',
-              color: C.muted, display: 'flex', alignItems: 'center', flexShrink: 0,
+              color: "var(--dl-muted)", display: 'flex', alignItems: 'center', flexShrink: 0,
               transition: 'color 0.12s',
             }}
-            onMouseEnter={e => e.currentTarget.style.color = C.text}
-            onMouseLeave={e => e.currentTarget.style.color = C.muted}
+            onMouseEnter={e => e.currentTarget.style.color = "var(--dl-text)"}
+            onMouseLeave={e => e.currentTarget.style.color = "var(--dl-muted)"}
           >
             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6"  x2="6"  y2="18"/>

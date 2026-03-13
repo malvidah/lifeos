@@ -143,13 +143,13 @@ function injectTaskListStyles(accentHex) {
 }
 
 export default function Tasks({date, token, userId, taskFilter="all"}) {
-  const { C, theme } = useTheme();
+  const { theme } = useTheme();
   const {value, setValue, loaded} = useDbSave(date, 'tasks', '', token, userId);
   const taskProjectNames = useContext(ProjectNamesContext);
   const {navigateToProject, navigateToNote} = useContext(NavigationContext);
   const {notes: ctxNotes} = useContext(NoteContext);
 
-  useEffect(() => injectTaskListStyles(C.accent), [C.accent]);
+  useEffect(() => injectTaskListStyles("var(--dl-accent)"), ["var(--dl-accent)"]);
 
   const htmlValue = useMemo(() => migrateTasksToHtml(value) || '', [value]);
 
@@ -161,9 +161,9 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
 
   return (
     <div data-filter={taskFilter} style={{
-      '--task-border': C.border2,
-      '--task-color':  C.accent,
-      '--task-fill':   theme === 'light' ? C.bg : C.dim,
+      '--task-border': "var(--dl-border2)",
+      '--task-color':  "var(--dl-accent)",
+      '--task-fill':   theme === 'light' ? "var(--dl-bg)" : "var(--dl-dim)",
     }}>
       <DayLabEditor
         taskList
@@ -172,9 +172,9 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
         placeholder="Add a task…"
         projectNames={taskProjectNames}
         noteNames={ctxNotes}
-        textColor={C.text}
-        mutedColor={C.dim}
-        color={C.accent}
+        textColor={"var(--dl-text)"}
+        mutedColor={"var(--dl-dim)"}
+        color={"var(--dl-accent)"}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
         style={{padding:0}}
@@ -184,7 +184,6 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
 }
 
 export function TaskFilterBtns({ filter, setFilter }) {
-  const { C } = useTheme();
   const OpenIcon = () => (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="2" width="12" height="12" rx="2.5"/>
@@ -212,13 +211,13 @@ export function TaskFilterBtns({ filter, setFilter }) {
               padding: b.label ? '3px 8px' : '3px 6px',
               borderRadius: 4, cursor: 'pointer',
               minHeight: 22,
-              background: active ? C.accent+'22' : 'none',
+              background: active ? "var(--dl-accent-13)" : 'none',
               border: `1px solid ${active ? "var(--dl-accent)" : "var(--dl-border2)"}`,
               color: active ? "var(--dl-accent)" : "var(--dl-muted)",
               display: 'flex', alignItems: 'center', gap: 3,
               transition: 'all 0.15s',
             }}
-            onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor=C.accent+'66'; e.currentTarget.style.color="var(--dl-text)"; }}}
+            onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor="var(--dl-accent-40)"; e.currentTarget.style.color="var(--dl-text)"; }}}
             onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor="var(--dl-border2)"; e.currentTarget.style.color="var(--dl-muted)"; }}}
           >
             {b.label || b.icon}

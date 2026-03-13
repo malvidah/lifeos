@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
-import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { toKey, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { extractTags } from "@/lib/tags";
@@ -77,7 +76,6 @@ export function useSearch(query, token, userId) {
 
 // ─── SearchResults: renders result blocks with keyword highlight ──────────────
 export function SearchResults({ results, loading, query, onSelectDate }) {
-  const { C } = useTheme();
   const TYPE_LABEL = { journal: 'Journal', task: 'Task', meal: 'Meal', activity: 'Workout' };
   const TYPE_COLOR = { journal: "var(--dl-accent)", task: "var(--dl-accent)", meal: "var(--dl-red)", activity: "var(--dl-blue)" };
 

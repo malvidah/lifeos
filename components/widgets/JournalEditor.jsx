@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useContext, Fragment } from "react";
-import { useTheme } from "@/lib/theme";
 import { mono, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
@@ -9,7 +8,6 @@ import { estimateNutrition, uploadImageFile } from "@/lib/images";
 import { DayLabEditor } from "../Editor.jsx";
 
 export function JournalEditor({date,userId,token}) {
-  const { C } = useTheme();
   const {value, setValue, loaded} = useDbSave(date, 'journal', '', token, userId);
   // Hooks must be called unconditionally (before any early return)
   const { notes: ctxNotes } = useContext(NoteContext);
@@ -46,7 +44,6 @@ export function JournalEditor({date,userId,token}) {
 // syncedRows: live from API, may have native kcal (Strava) or need estimation (Oura)
 // AI estimates for synced rows persist to DB under type+"_kcal" key
 export function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[],showProtein=false}) {
-  const { C } = useTheme();
   const mkRow = () => ({id:Date.now(), text:"", kcal:null, protein:null});
   const {value:rows, setValue:setRows, loaded} = useDbSave(date, type, [mkRow()], token, userId);
   const {value:savedEstimates, setValue:setSavedEstimates, loaded:estimatesLoaded} = useDbSave(date, type+"_kcal", {}, token, userId);
@@ -241,10 +238,8 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   );
 }
 
-export function Meals({date,token,userId}) { const { C } = useTheme(); return <RowList date={date} type="meals" token={token} userId={userId} placeholder="What did you eat?" promptFn={t=>`Estimate for: "${t}". Return JSON: {"kcal":420,"protein":30}`} prefix="" color={"var(--dl-accent)"} showProtein/>; }
 
 export function AddJournalLine({ project, onAdd, placeholder }) {
-  const { C } = useTheme();
   const col = project && project !== '__everything__' ? projectColor(project) : "var(--dl-accent)";
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxNotes    = useContext(NoteContext);

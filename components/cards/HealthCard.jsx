@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey, shift } from "@/lib/dates";
 import { cachedOuraFetch, _ouraCache } from "@/lib/ouraCache";
@@ -14,7 +13,6 @@ const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rh
 const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
 
 export default function HealthCard({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,backAction}) {
-  const { C } = useTheme();
   // Load health data from health_metrics table (replaces useDbSave(date,"health",...))
   const [h, setH] = useState(H_EMPTY);
   const [loaded, setLoaded] = useState(false);
@@ -134,7 +132,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   },[date,loaded,token]); // eslint-disable-line
 
 
-  const purple = C.purple;
+  const purple = "var(--dl-purple)";
 
   // ── Computed scores from /api/scores ──────────────────────────────────────
   const [scores, setScores] = useState(null);

@@ -1,6 +1,5 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
-import { useTheme } from "@/lib/theme";
 import { mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey } from "@/lib/dates";
 import { useDbSave, dbLoad } from "@/lib/db";
@@ -56,7 +55,6 @@ function calcPace(w) {
 function isRun(w) { return (w.sport||w.type||w.name||"").toLowerCase().match(/run|jog/); }
 
 export default function WorkoutsCard({date,token,userId,stravaConnected}) {
-  const { C } = useTheme();
   const [syncedRows, setSyncedRows] = useState([]);
   const mkRow = () => ({id:Date.now(), text:"", dist:null, pace:null, kcal:null});
   const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "workouts", [mkRow()], token, userId);
@@ -259,13 +257,13 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
         <div style={{flexShrink:0,paddingTop:6,paddingBottom:2,display:"flex",alignItems:"center",borderTop:"1px solid var(--dl-border)"}}>
           <div style={{flex:1}}/>
           <div style={{width:DCOL,display:"flex",justifyContent:"center"}}>
-            {totalDistMi>0&&<span style={{...chipBase,background:C.blue+"22",color:"var(--dl-blue)"}}>{totalDistMi.toFixed(1)}mi</span>}
+            {totalDistMi>0&&<span style={{...chipBase,background:"var(--dl-blue)"+"22",color:"var(--dl-blue)"}}>{totalDistMi.toFixed(1)}mi</span>}
           </div>
           <div style={{width:PCOL,display:"flex",justifyContent:"center"}}>
-            {avgPaceFmt&&<span style={{...chipBase,background:C.green+"22",color:"var(--dl-green)"}}>{avgPaceFmt}/mi</span>}
+            {avgPaceFmt&&<span style={{...chipBase,background:"var(--dl-green-13)",color:"var(--dl-green)"}}>{avgPaceFmt}/mi</span>}
           </div>
           <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
-            {totalKcal>0&&<span style={{...chipBase,background:C.orange+"22",color:"var(--dl-orange)"}}>-{totalKcal}kcal</span>}
+            {totalKcal>0&&<span style={{...chipBase,background:"var(--dl-orange)"+"22",color:"var(--dl-orange)"}}>-{totalKcal}kcal</span>}
           </div>
         </div>
       )}

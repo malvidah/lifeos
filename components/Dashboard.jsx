@@ -26,7 +26,7 @@ import ProjectView from "./views/ProjectView.jsx";
 import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 
 function DashboardInner() {
-  const { theme, setTheme, C } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);

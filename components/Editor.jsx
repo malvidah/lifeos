@@ -14,9 +14,9 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Suggestion } from '@tiptap/suggestion';
-import { serif, mono, F, projectColor, CHIP_TOKENS, THEMES } from '@/lib/tokens';
+import { serif, mono, F, projectColor, CHIP_TOKENS } from '@/lib/tokens';
 
-const ACCENT = THEMES.dark.accent;
+const ACCENT = '#D08828'; // must match --dl-accent; used for CSS alpha concatenation only
 const WARM   = 'var(--dl-accent)';
 const EMPTY_TASK_LIST = '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>';
 

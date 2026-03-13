@@ -1,7 +1,6 @@
 "use client";
 import { pushHistory } from "@/lib/db";
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
-import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey, shift, dayOffset, offsetToDate, keyToDayNum, MONTHS_FULL, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { useIsMobile } from "@/lib/hooks";
@@ -17,7 +16,6 @@ function isBigEvent(ev) {
 }
 
 function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, healthDots, events, token }) {
-  const { C } = useTheme();
   const [summaries,    setSummaries]    = useState({});
   const [summaryCache, setSummaryCache] = useState({});
 
@@ -411,8 +409,8 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                         style={{
                           height: CELL_H, overflow: 'hidden', borderRadius: 5, padding: '4px 4px 3px',
                           cursor: 'pointer', boxSizing: 'border-box',
-                          background: isSelected ? C.accent+'1A' : isToday ? C.accent+'0D' : 'transparent',
-                          border: `1px solid ${isSelected ? C.accent+'66' : isToday ? C.accent+'33' : C.border+'25'}`,
+                          background: isSelected ? "var(--dl-accent-10)" : isToday ? "var(--dl-accent-05)" : 'transparent',
+                          border: `1px solid ${isSelected ? "var(--dl-accent-40)" : isToday ? "var(--dl-accent-20)" : "var(--dl-border-15)"}`,
                           display: 'flex', flexDirection: 'column', gap: 2,
                         }}
                       >
@@ -489,7 +487,6 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
 // Mobile date picker — horizontal day strip with physics momentum
 // Month and year are static labels (snap discretely). Only the day ribbon moves.
 function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false, onEventClick, onAddClick, collapsed, onToggle, calView, onCalViewChange}) {
-  const { C } = useTheme();
   const today = todayKey();
   const DAY_W = 175;
 
@@ -656,7 +653,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                 padding:'3px 8px',borderRadius:4,cursor:'pointer',
                 minHeight:22,minWidth:22,
-                background:C.accent+'22',border:"1px solid var(--dl-accent)",color:"var(--dl-accent)"}}>D</button>
+                background:"var(--dl-accent-13)",border:"1px solid var(--dl-accent)",color:"var(--dl-accent)"}}>D</button>
           </>}
         </div>
       </div>
@@ -701,9 +698,9 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   cursor: isCtr ? "default" : "pointer",
                   opacity,
                   transition: "opacity 0.15s",
-                  borderLeft: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
-                  borderRight: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
-                  background: isCtr ? C.accent+'08' : "transparent",
+                  borderLeft: isCtr ? `1px solid var(--dl-accent-13)` : "1px solid transparent",
+                  borderRight: isCtr ? `1px solid var(--dl-accent-13)` : "1px solid transparent",
+                  background: isCtr ? "var(--dl-accent-03)" : "transparent",
                   borderRadius: 6,
                   height: 272,
                   overflow: "hidden",
@@ -792,7 +789,6 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
   );
 }
 export default function CalendarCard({selected, onSelect, events, setEvents, healthDots, token, collapsed, onToggle, calView, onCalViewChange}) {
-  const { C } = useTheme();
   const mobile = useIsMobile();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -985,15 +981,15 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
                 display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
                 <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()-1);onSelect(toKey(n));}}
-                  style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
+                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>‹</button>
                 <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()+1);onSelect(toKey(n));}}
-                  style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
+                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
+                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>›</button>
               </div>
             ) : null}
             {/* M/D toggle — right, hidden when collapsed */}
@@ -1003,7 +999,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
                 style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                   padding:'3px 8px',borderRadius:4,cursor:'pointer',
                   minHeight:22,minWidth:22,
-                  background:C.accent+'22',border:"1px solid var(--dl-accent)",color:"var(--dl-accent)"}}>M</button>
+                  background:"var(--dl-accent-13)",border:"1px solid var(--dl-accent)",color:"var(--dl-accent)"}}>M</button>
               <button onClick={()=>onCalViewChange('day')}
                 style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                   padding:'3px 8px',borderRadius:4,cursor:'pointer',

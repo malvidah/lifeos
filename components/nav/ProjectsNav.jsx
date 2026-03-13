@@ -1,13 +1,11 @@
 "use client";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useTheme } from "@/lib/theme";
 import { mono, F } from "@/lib/tokens";
 import { extractTags, tagDisplayName } from "@/lib/tags";
 import { useDbSave } from "@/lib/db";
 import { useProjects } from "@/lib/useProjects";
 
 export default function ProjectsNav({ date, token, userId, onSelectProject }) {
-  const { C } = useTheme(); // needed for alpha hex: C.green+'11' etc.
   const { value: notes } = useDbSave(date, 'journal', '', token, userId);
   const { value: tasks }  = useDbSave(date, 'tasks', [], token, userId);
 
@@ -105,15 +103,15 @@ export default function ProjectsNav({ date, token, userId, onSelectProject }) {
         <button
           onClick={() => onSelectProject('health')}
           style={{
-            background: C.green+'11', border:"1px solid "+C.green+"33",
+            background: "var(--dl-green-07)", border:"1px solid "+"var(--dl-green-20)",
             borderRadius:20, padding:'2px 10px',
-            fontFamily:mono, fontSize:F.sm, color:C.green+'aa',
+            fontFamily:mono, fontSize:F.sm, color:"var(--dl-green-67)",
             cursor:'pointer', transition:'all 0.15s',
             letterSpacing:'0.03em', lineHeight:'1.8',
             whiteSpace:'nowrap', flexShrink:0,
           }}
-          onMouseEnter={e => { e.currentTarget.style.background=C.green+'22'; e.currentTarget.style.color=C.green; }}
-          onMouseLeave={e => { e.currentTarget.style.background=C.green+'11'; e.currentTarget.style.color=C.green+'aa'; }}
+          onMouseEnter={e => { e.currentTarget.style.background="var(--dl-green-13)"; e.currentTarget.style.color="var(--dl-green)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background="var(--dl-green-07)"; e.currentTarget.style.color="var(--dl-green-67)"; }}
         >HEALTH</button>
 
         {/* Divider between pinned and recent */}

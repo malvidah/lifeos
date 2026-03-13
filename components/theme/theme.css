@@ -23,6 +23,25 @@
   --dl-shadow-sm:0 1px 2px rgba(36,24,12,0.10);
   color-scheme:light
 }
+/* Alpha variants — color-mix adapts automatically to both themes */
+:root,[data-theme="dark"],[data-theme="light"]{
+  --dl-accent-03:color-mix(in srgb,var(--dl-accent) 3%,transparent);
+  --dl-accent-05:color-mix(in srgb,var(--dl-accent) 5%,transparent);
+  --dl-accent-10:color-mix(in srgb,var(--dl-accent) 10%,transparent);
+  --dl-accent-13:color-mix(in srgb,var(--dl-accent) 13%,transparent);
+  --dl-accent-15:color-mix(in srgb,var(--dl-accent) 15%,transparent);
+  --dl-accent-19:color-mix(in srgb,var(--dl-accent) 19%,transparent);
+  --dl-accent-20:color-mix(in srgb,var(--dl-accent) 20%,transparent);
+  --dl-accent-40:color-mix(in srgb,var(--dl-accent) 40%,transparent);
+  --dl-green-07:color-mix(in srgb,var(--dl-green) 7%,transparent);
+  --dl-green-13:color-mix(in srgb,var(--dl-green) 13%,transparent);
+  --dl-green-20:color-mix(in srgb,var(--dl-green) 20%,transparent);
+  --dl-green-67:color-mix(in srgb,var(--dl-green) 67%,transparent);
+  --dl-blue-13:color-mix(in srgb,var(--dl-blue) 13%,transparent);
+  --dl-orange-13:color-mix(in srgb,var(--dl-orange) 13%,transparent);
+  --dl-border-15:color-mix(in srgb,var(--dl-border) 15%,transparent);
+  --dl-surface-93:color-mix(in srgb,var(--dl-surface) 93%,transparent);
+}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 ::-webkit-scrollbar{display:none}*{scrollbar-width:none}
 button{border-radius:0}a{text-decoration:none}

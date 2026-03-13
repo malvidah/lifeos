@@ -1,13 +1,11 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useTheme } from "@/lib/theme";
 import { serif, mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
 
 // ─── HomeSettingsPanel ───────────────────────────────────────────────────────
 // Same slide-in chrome as ProjectSettingsPanel, blank body for now.
 export function HomeSettingsPanel({ open, onClose }) {
-  const { C } = useTheme();
 
   useEffect(() => {
     if (!open) return;
@@ -35,7 +33,7 @@ export function HomeSettingsPanel({ open, onClose }) {
   const panelStyle = isMobile ? {
     position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 201,
     height: 'calc(max(33vh, 260px))',
-    background: C.bg, borderTop: `1px solid ${C.border}`,
+    background: "var(--dl-bg)", borderTop: `1px solid var(--dl-border)`,
     borderRadius: '14px 14px 0 0',
     display: 'flex', flexDirection: 'column',
     transform: open ? 'translateY(0)' : 'translateY(110%)',
@@ -43,7 +41,7 @@ export function HomeSettingsPanel({ open, onClose }) {
     overflow: 'hidden',
   } : {
     position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 201,
-    width: 300, background: C.bg, borderRight: `1px solid ${C.border}`,
+    width: 300, background: "var(--dl-bg)", borderRight: `1px solid var(--dl-border)`,
     display: 'flex', flexDirection: 'column',
     transform: open ? 'translateX(0)' : 'translateX(-100%)',
     transition: 'transform 0.22s cubic-bezier(0.32,0.72,0,1)',
@@ -56,14 +54,14 @@ export function HomeSettingsPanel({ open, onClose }) {
       <div style={panelStyle}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 16px 12px', borderBottom: `1px solid ${C.border}`, flexShrink: 0,
+          padding: '14px 16px 12px', borderBottom: `1px solid var(--dl-border)`, flexShrink: 0,
         }}>
-          <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: C.muted }}>
+          <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: "var(--dl-muted)" }}>
             Home
           </span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: C.muted, fontSize: 16, lineHeight: 1, padding: '2px 4px',
+            color: "var(--dl-muted)", fontSize: 16, lineHeight: 1, padding: '2px 4px',
           }}>×</button>
         </div>
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }} />
@@ -84,8 +82,7 @@ export function HomeSettingsPanel({ open, onClose }) {
 //   onRenamed – (newSlug: string) => void  (called after successful rename)
 
 export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed }) {
-  const { C } = useTheme();
-  const pcol = project && project !== '__everything__' ? projectColor(project) : C.accent;
+  const pcol = project && project !== '__everything__' ? projectColor(project) : "var(--dl-accent)";
 
   // ── Name editing ────────────────────────────────────────────────────────────
   const [nameInput, setNameInput] = useState('');
@@ -196,8 +193,8 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
   const panelStyle = isMobile ? {
     position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 201,
     height: 'calc(max(33vh, 260px))',
-    background: C.bg,
-    borderTop: `1px solid ${C.border}`,
+    background: "var(--dl-bg)",
+    borderTop: `1px solid var(--dl-border)`,
     borderRadius: '14px 14px 0 0',
     display: 'flex', flexDirection: 'column',
     transform: open ? 'translateY(0)' : 'translateY(110%)',
@@ -206,8 +203,8 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
   } : {
     position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 201,
     width: 300,
-    background: C.bg,
-    borderRight: `1px solid ${C.border}`,
+    background: "var(--dl-bg)",
+    borderRight: `1px solid var(--dl-border)`,
     display: 'flex', flexDirection: 'column',
     transform: open ? 'translateX(0)' : 'translateX(-100%)',
     transition: 'transform 0.22s cubic-bezier(0.32,0.72,0,1)',
@@ -216,14 +213,14 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
 
   const sectionLabel = {
     fontFamily: mono, fontSize: 9, letterSpacing: '0.1em',
-    textTransform: 'uppercase', color: C.muted, marginBottom: 10,
+    textTransform: 'uppercase', color: "var(--dl-muted)", marginBottom: 10,
   };
 
   const input = {
     fontFamily: serif, fontSize: F.md,
-    background: C.well, border: `1px solid ${C.border}`,
+    background: "var(--dl-well)", border: `1px solid var(--dl-border)`,
     borderRadius: 6, padding: '7px 10px',
-    color: C.text, outline: 'none', width: '100%', boxSizing: 'border-box',
+    color: "var(--dl-text)", outline: 'none', width: '100%', boxSizing: 'border-box',
   };
 
   return (
@@ -237,7 +234,7 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '14px 16px 12px',
-          borderBottom: `1px solid ${C.border}`,
+          borderBottom: `1px solid var(--dl-border)`,
           flexShrink: 0,
         }}>
           <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: pcol }}>
@@ -245,7 +242,7 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
           </span>
           <button onClick={onClose} style={{
             background: 'none', border: 'none', cursor: 'pointer',
-            color: C.muted, fontSize: 16, lineHeight: 1, padding: '2px 4px',
+            color: "var(--dl-muted)", fontSize: 16, lineHeight: 1, padding: '2px 4px',
           }}>×</button>
         </div>
 
@@ -262,14 +259,14 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
               onBlur={handleRename}
               onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); nameRef.current?.blur(); } }}
               disabled={renaming || project === '__everything__'}
-              style={{ ...input, borderColor: renameErr ? C.red : C.border }}
+              style={{ ...input, borderColor: renameErr ? "var(--dl-red)" : "var(--dl-border)" }}
               placeholder="project name"
             />
             {renaming && (
-              <div style={{ fontFamily: mono, fontSize: 9, color: C.muted, marginTop: 6 }}>Renaming…</div>
+              <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-muted)", marginTop: 6 }}>Renaming…</div>
             )}
             {renameErr && (
-              <div style={{ fontFamily: mono, fontSize: 9, color: C.red, marginTop: 6 }}>{renameErr}</div>
+              <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-red)", marginTop: 6 }}>{renameErr}</div>
             )}
           </div>
 
@@ -333,7 +330,7 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
               </div>
 
               {saving && (
-                <div style={{ fontFamily: mono, fontSize: 9, color: C.muted, marginTop: 8 }}>Saving…</div>
+                <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-muted)", marginTop: 8 }}>Saving…</div>
               )}
             </div>
           )}
