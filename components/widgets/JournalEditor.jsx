@@ -116,11 +116,15 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   }, [loaded, token, showProtein]); // eslint-disable-line
 
   async function runEstimate(id, text) {
-    setRows(safe.map(r => r.id===id ? {...r, estimating:true} : r));
+    estimating.current.add(id);
+    setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, estimating:true} : r));
     try {
       const result = await estimateNutrition(promptFn(text), token);
+      estimating.current.delete(id);
       setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null, estimating:false} : r));
     } catch(_) {
+      estimating.current.delete(id);
+      failed.current.add(id);
       setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, estimating:false} : r));
     }
   }
@@ -187,7 +191,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
                   if (!text.trim() && existing?.text?.trim()) return prev; // skip ghost blur after Enter
                   return s.map(r => r.id===row.id ? {...r, text, kcal: text !== r.text ? null : r.kcal, protein: text !== r.text ? null : r.protein} : r);
                 });
-                if (text.trim()) { const r=safe.find(r=>r.id===row.id); if(r?.kcal===null&&!r?.estimating) runEstimate(row.id, text); }
+                if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
               }}
               onEnterCommit={text => {
                 const row2 = mkRow();
@@ -197,11 +201,12 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
                   const updated = s.map(r => r.id===row.id ? {...r, text} : r);
                   return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
                 });
+                if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
                 setTimeout(() => refs.current[row2.id]?.focus(), 30);
               }}
               onBackspaceEmpty={safe.length > 1 ? () => {
-                setRows(safe.filter(r => r.id!==row.id));
                 const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
+                setRows(prev => (Array.isArray(prev)?prev:safe).filter(r => r.id!==row.id));
                 setTimeout(() => refs.current[t]?.focus(), 30);
               } : undefined}
             />

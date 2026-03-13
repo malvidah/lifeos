@@ -145,9 +145,17 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     return { dist, pace };
   }
   async function runEstimate(id, text) {
-    setManualRows(safe.map(r=>r.id===id?{...r,estimating:true}:r));
-    const result = await estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token);
-    setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
+    estimating.current.add(id);
+    setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,estimating:true}:r));
+    try {
+      const result = await estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token);
+      estimating.current.delete(id);
+      setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
+    } catch(_) {
+      estimating.current.delete(id);
+      failed.current.add(id);
+      setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,estimating:false}:r));
+    }
   }
 
   const KCOL=72, DCOL=60, PCOL=100;
@@ -211,28 +219,26 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
                   const s = Array.isArray(prev) ? prev : safe;
                   const existing = s.find(r => r.id === row.id);
                   if (!text.trim() && existing?.text?.trim()) return prev; // skip ghost blur after Enter
-                  return s.map(r => r.id===row.id ? {...r, text} : r);
+                  const {dist, pace} = text.trim() ? parseActivityText(text) : {dist:null, pace:null};
+                  return s.map(r => r.id===row.id ? {...r, text, dist:dist||r.dist, pace:pace||r.pace} : r);
                 });
-                if (text.trim()) {
-                  const {dist,pace}=parseActivityText(text);
-                  setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(x=>x.id===row.id?{...x,dist:dist||x.dist,pace:pace||x.pace}:x));
-                  const r=safe.find(r=>r.id===row.id);
-                  if(r?.kcal===null&&!r?.estimating) runEstimate(row.id,text);
-                }
+                if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
               }}
               onEnterCommit={text => {
                 const row2 = mkRow();
                 const i = safe.findIndex(r => r.id===row.id);
+                const {dist, pace} = text.trim() ? parseActivityText(text) : {dist:null, pace:null};
                 setManualRows(prev => {
                   const s = Array.isArray(prev) ? prev : safe;
-                  const updated = s.map(r => r.id===row.id ? {...r, text} : r);
+                  const updated = s.map(r => r.id===row.id ? {...r, text, dist:dist||r.dist, pace:pace||r.pace} : r);
                   return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
                 });
+                if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
                 setTimeout(() => refs.current[row2.id]?.focus(), 30);
               }}
               onBackspaceEmpty={safe.length > 1 ? () => {
-                setManualRows(safe.filter(r => r.id!==row.id));
                 const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
+                setManualRows(prev => (Array.isArray(prev)?prev:safe).filter(r => r.id!==row.id));
                 setTimeout(() => refs.current[t]?.focus(), 30);
               } : undefined}
             />
