@@ -36,7 +36,7 @@ export const viewport = {
 const THEME_SCRIPT = `(function(){
   try {
     var t = localStorage.getItem("theme") || "dark";
-    var bg = t === "light" ? "#D4CCB8" : "#141412";
+    var bg = t === "light" ? "#D4CCB8" : "#111110";
     var el = document.documentElement;
     el.style.setProperty("background", bg, "important");
     el.style.setProperty("background-color", bg, "important");
@@ -60,8 +60,8 @@ export default function RootLayout({ children }) {
         <style dangerouslySetInnerHTML={{ __html: `
           html, body { margin: 0; padding: 0; }
           html[data-theme="light"], html[data-theme="light"] body { background: #D4CCB8 !important; }
-          html[data-theme="dark"], html[data-theme="dark"] body { background: #141412 !important; }
-          html:not([data-theme]) body { background: #141412 !important; }
+          html[data-theme="dark"], html[data-theme="dark"] body { background: #111110 !important; }
+          html:not([data-theme]) body { background: #111110 !important; }
         `}} />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>

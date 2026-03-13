@@ -216,7 +216,7 @@ export function RichLine({ text, dimTag = null }) {
     if (m[1]) {
       parts.push(<div key={k++} style={{ margin: '6px 0', lineHeight: 0 }}><img src={m[1]} alt="" style={{ maxWidth: '100%', maxHeight: 320, borderRadius: 8, display: 'block' }} /></div>);
     } else if (m[2]) {
-      parts.push(<a key={k++} href={m[2]} target="_blank" rel="noreferrer" style={{ color: '#C8820A', textDecoration: 'none' }}>{m[2]}</a>);
+      parts.push(<a key={k++} href={m[2]} target="_blank" rel="noreferrer" style={{ color: 'var(--dl-accent)', textDecoration: 'none' }}>{m[2]}</a>);
     } else if (m[3] !== undefined) {
       const name = m[3], isOwn = dimTag && name === dimTag.toLowerCase();
       parts.push(<TagChip key={k++} name={name} plain={isOwn} onClick={() => navigateToProject(name)}/>);
@@ -238,8 +238,8 @@ export function SourceBadge({source}) {
   return (
     <span style={{
       fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", textTransform:"uppercase",
-      color: isStrava ? "#FC4C02" : "#B8A882",
-      border: `1px solid ${isStrava ? "#FC4C02" : "#B8A882"}`,
+      color: isStrava ? "#FC4C02" : "var(--dl-muted)",
+      border: `1px solid ${isStrava ? "#FC4C02" : "var(--dl-border2)"}`,
       borderRadius:3, padding:"1px 4px", flexShrink:0, opacity:0.8,
     }}>{isStrava ? "Strava" : "Oura"}</span>
   );

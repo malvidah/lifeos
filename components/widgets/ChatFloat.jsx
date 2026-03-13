@@ -497,7 +497,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
             </div>
 
             {/* Date */}
-            <span style={{ fontFamily: blurweb, fontSize: F.lg, color: theme === "light" ? "#6B5440" : "#EFDFC3", letterSpacing: "0.06em" }}>
+            <span style={{ fontFamily: blurweb, fontSize: F.lg, color: "var(--dl-text)", letterSpacing: "0.06em" }}>
               {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
             </span>
           </div>
