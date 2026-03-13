@@ -213,9 +213,11 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   };
 
   // Per-project collapse state (persisted)
-  const [notesCollapsed,   toggleNotes]   = useCollapse(`pv:${project}:journal`,   false);
-  const [tasksCollapsed,   toggleTasks]   = useCollapse(`pv:${project}:tasks`,   false);
-  const [entriesCollapsed, toggleEntries] = useCollapse(`pv:${project}:entries`, false);
+  const [notesCollapsed,      toggleNotes]      = useCollapse(`pv:${project}:journal`,    false);
+  const [notesListCollapsed,  toggleNotesList]  = useCollapse(`pv:${project}:notes-list`, false);
+  const [tasksCollapsed,      toggleTasks]      = useCollapse(`pv:${project}:tasks`,      false);
+  const [entriesCollapsed,    toggleEntries]    = useCollapse(`pv:${project}:entries`,    false);
+  const [hoveredNoteId,       setHoveredNoteId] = useState(null);
 
   const meta = useMemo(() => ((projectsMeta || {})[project] || {}), [projectsMeta, project]);
 
@@ -410,78 +412,100 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     <NoteContext.Provider value={{ notes: noteNamesForContext, onCreateNote: (name, opts) => addNote(name, opts) }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
 
-      {/* Notes card — left 1/3: note list sorted by recency; right 2/3: editor */}
-      {true && (
-        <Card
-          label="Notes"
-          color={"var(--dl-muted)"}
-          collapsed={notesCollapsed}
-          onToggle={toggleNotes}
-          headerRight={
-            <button onClick={() => addNote()} style={{ background:'none', border:'none', cursor:'pointer', padding:'4px 8px', fontFamily:mono, fontSize:F.sm, color:"var(--dl-dim)", letterSpacing:'0.06em', display:'flex', alignItems:'center', gap:4 }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              note
-            </button>
-          }
-        >
-          <div style={{ display: 'flex', gap: 0, minHeight: 200 }}>
-            {/* Left: note list — 1/3 width, sorted by most recent */}
-            <div style={{ width: '33%', flexShrink: 0, borderRight: "1px solid var(--dl-border)", paddingRight: 10, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto', maxHeight: 400 }}>
-              {sortedNotes.length === 0 ? (
-                <div style={{ fontFamily: serif, fontSize: F.sm, color: "var(--dl-dim)", padding: '4px 0' }}>No notes yet.<br/>Use the + button or type <span style={{ fontFamily: mono }}>{'{Note Name}'}</span> in any editor.</div>
-              ) : sortedNotes.map(note => (
-                <div key={note.id} style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {/* Notes card */}
+      <Card
+        label="Notes"
+        color={"var(--dl-muted)"}
+        collapsed={notesCollapsed}
+        onToggle={toggleNotes}
+        headerRight={
+          <button
+            onClick={e => { e.stopPropagation(); addNote(); }}
+            title="New note"
+            style={{ background:'none', border:'none', cursor:'pointer', padding:'2px 8px', color:"var(--dl-dim)", display:'flex', alignItems:'center', borderRadius:4, transition:'color 0.12s' }}
+            onMouseEnter={e => e.currentTarget.style.color="var(--dl-text)"}
+            onMouseLeave={e => e.currentTarget.style.color="var(--dl-dim)"}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+        }
+      >
+        <div style={{ display: 'flex', minHeight: 220 }}>
+          {/* Left panel: note list — hidden when notesListCollapsed */}
+          {!notesListCollapsed && (
+            <div style={{ width: 164, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 440, paddingRight: 2 }}>
+              {sortedNotes.length === 0 && (
+                <div style={{ fontFamily: serif, fontSize: F.sm, color: "var(--dl-dim)", padding: '8px 6px', lineHeight: 1.5 }}>No notes yet.</div>
+              )}
+              {sortedNotes.map(note => (
+                <div
+                  key={note.id}
+                  style={{ display: 'flex', alignItems: 'center', borderRadius: 6, background: note.id === activeNoteId ? "var(--dl-well)" : 'transparent', transition: 'background 0.1s' }}
+                  onMouseEnter={() => setHoveredNoteId(note.id)}
+                  onMouseLeave={() => setHoveredNoteId(null)}
+                >
                   <button
                     onClick={() => selectNote(note.id)}
-                    style={{
-                      flex: 1, minWidth: 0, background: note.id === activeNoteId ? "var(--dl-well)" : 'none',
-                      border: note.id === activeNoteId ? "1px solid var(--dl-border)" : '1px solid transparent',
-                      borderRadius: 6, padding: '5px 8px', textAlign: 'left', cursor: 'pointer',
-                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.04em',
-                      color: note.id === activeNoteId ? "var(--dl-text)" : "var(--dl-muted)",
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                      transition: 'all 0.12s',
-                    }}
+                    style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.02em', color: note.id === activeNoteId ? "var(--dl-text)" : "var(--dl-muted)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}
                   >{noteName(note)}</button>
                   <button
-                    onClick={() => { if (window.confirm(`Delete "${noteName(note)}"?`)) deleteNote(note.id); }}
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: "var(--dl-dim)", fontSize: 10, lineHeight: 1, flexShrink: 0, opacity: 0.5 }}
-                    title="Delete note"
+                    onClick={e => { e.stopPropagation(); if (window.confirm(`Delete "${noteName(note)}"?`)) deleteNote(note.id); }}
+                    title="Delete"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: "var(--dl-dim)", fontSize: 14, lineHeight: 1, flexShrink: 0, opacity: hoveredNoteId === note.id ? 0.6 : 0, transition: 'opacity 0.12s', borderRadius: 4 }}
                     onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                    onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+                    onMouseLeave={e => e.currentTarget.style.opacity = hoveredNoteId === note.id ? '0.6' : '0'}
                   >×</button>
                 </div>
               ))}
             </div>
-            {/* Right: editor — 2/3 width. First line = note name. */}
-            <div style={{ flex: 1, minWidth: 0, paddingLeft: 12 }}>
-              {notesList.length === 0 ? (
-                <div style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-dim)", padding: '4px 0' }}>Select or create a note.</div>
-              ) : activeNote ? (
-                <DayLabEditor
-                  key={activeNote.id}
-                  value={activeNote.content || ''}
-                  onBlur={text => updateNoteContent(activeNote.id, text)}
-                  placeholder='Note name (first line)…'
-                  noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
-                  projectNames={pvProjectNames}
-                  onCreateNote={addNote}
-                  onProjectClick={name => navigateToProject(name)}
-                  onNoteClick={name => {
-                    const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
-                    if (match) selectNote(match.id);
-                    else addNote(name);
-                  }}
-                  textColor={"var(--dl-text)"}
-                  mutedColor={"var(--dl-dim)"}
-                  color={"var(--dl-muted)"}
-                  style={{ minHeight: 180, width: '100%' }}
-                />
-              ) : null}
+          )}
+
+          {/* Vertical divider with collapse chevron */}
+          <div
+            onClick={toggleNotesList}
+            title={notesListCollapsed ? 'Show list' : 'Hide list'}
+            style={{ width: 16, flexShrink: 0, position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+            onMouseEnter={e => e.currentTarget.querySelector('.notes-chevron').style.borderColor = "var(--dl-accent)"}
+            onMouseLeave={e => e.currentTarget.querySelector('.notes-chevron').style.borderColor = "var(--dl-border)"}
+          >
+            <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, background: 'var(--dl-border)' }}/>
+            <div className="notes-chevron" style={{ position: 'relative', zIndex: 1, width: 14, height: 22, background: 'var(--dl-card)', border: '1px solid var(--dl-border)', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color 0.15s' }}>
+              <svg width="7" height="10" viewBox="0 0 7 10" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                {notesListCollapsed
+                  ? <polyline points="1.5,1.5 5.5,5 1.5,8.5"/>
+                  : <polyline points="5.5,1.5 1.5,5 5.5,8.5"/>}
+              </svg>
             </div>
           </div>
-        </Card>
-      )}
+
+          {/* Right: editor — full width when list collapsed */}
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}>
+            {activeNote ? (
+              <DayLabEditor
+                key={activeNote.id}
+                value={activeNote.content || ''}
+                onBlur={text => updateNoteContent(activeNote.id, text)}
+                placeholder='Note name (first line)…'
+                noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
+                projectNames={pvProjectNames}
+                onCreateNote={addNote}
+                onProjectClick={name => navigateToProject(name)}
+                onNoteClick={name => {
+                  const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
+                  if (match) selectNote(match.id);
+                  else addNote(name);
+                }}
+                textColor={"var(--dl-text)"}
+                mutedColor={"var(--dl-dim)"}
+                color={"var(--dl-muted)"}
+                style={{ minHeight: 180, width: '100%' }}
+              />
+            ) : (
+              <div style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-dim)", padding: '8px 0', lineHeight: 1.7 }}>Press + to create a note.</div>
+            )}
+          </div>
+        </div>
+      </Card>
 
       {/* Tasks — all projects and specific projects */}
       <Card
