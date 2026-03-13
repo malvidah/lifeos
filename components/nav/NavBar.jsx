@@ -11,7 +11,7 @@ function fmtNavDate(dateKey) {
 }
 
 // ── NavIconBtn ────────────────────────────────────────────────────────────────
-function NavIconBtn({ onClick, active, C, title, children }) {
+function NavIconBtn({ onClick, active, title, children }) {
   return (
     <button
       onClick={onClick}
@@ -81,7 +81,7 @@ export default function NavBar(props) {
         transition: 'opacity 0.18s ease',
       }}>
         {/* Calendar → daily view */}
-        <NavIconBtn onClick={onGoHome} active={!activeProject} C={C} title="Daily view">
+        <NavIconBtn onClick={onGoHome} active={!activeProject} title="Daily view">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="4" width="18" height="18" rx="2"/>
             <line x1="3"  y1="9"  x2="21" y2="9"/>
@@ -90,7 +90,7 @@ export default function NavBar(props) {
           </svg>
         </NavIconBtn>
         {/* Grid → all projects */}
-        <NavIconBtn onClick={onGoToProjects} active={!!activeProject} C={C} title="All projects">
+        <NavIconBtn onClick={onGoToProjects} active={!!activeProject} title="All projects">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="2"  y="2"  width="9" height="9" rx="1.5"/>
             <rect x="13" y="2"  width="9" height="9" rx="1.5"/>
