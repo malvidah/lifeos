@@ -38,6 +38,7 @@ function DashboardInner() {
   const [lastSync,  setLastSync]  = useState(null);
   const [googleToken,setGoogleToken] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
+  const [calNeedsAuth, setCalNeedsAuth] = useState(false);
   const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -224,8 +225,14 @@ function DashboardInner() {
     const start=toKey(shift(new Date(),-30));
     const end=toKey(shift(new Date(),60));
 
-    const fetchCal=()=>api.get(`/api/calendar?start=${start}&end=${end}&tz=${encodeURIComponent(tz)}`,token)
-      .then(d=>{
+    const fetchCal=()=>fetch(`/api/calendar?start=${start}&end=${end}&tz=${encodeURIComponent(tz)}`,
+      {headers:{Authorization:`Bearer ${token}`}})
+      .then(async r=>{
+        const d=await r.json().catch(()=>null);
+        if(r.status===401 || d?.error==="No Google Calendar connection"){
+          setCalNeedsAuth(true); return;
+        }
+        setCalNeedsAuth(false);
         if(d?.events) setEvents(prev=>({...prev,...d.events}));
         if(d?.googleToken) setGoogleToken(d.googleToken);
       })
@@ -236,6 +243,7 @@ function DashboardInner() {
 
     // On fresh login, save the provider token first, then fetch
     if(sessionGoogleToken){
+      setCalNeedsAuth(false);
       api.post("/api/google-token",{googleToken:sessionGoogleToken,refreshToken:sessionRefreshToken},token)
         .then(()=>fetchCal()).catch(()=>fetchCal());
     } else {
@@ -373,7 +381,8 @@ function DashboardInner() {
                       <CalendarCard selected={selected} onSelect={setSelected}
                         events={events} setEvents={setEvents} healthDots={healthDots}
                         token={token} collapsed={calCollapsed} onToggle={toggleCal}
-                        calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
+                        calView={calView} onCalViewChange={v=>{setCalView(v);}}
+                        needsAuth={calNeedsAuth}/>
                     </div>
                     <div style={{flexShrink:0}}>
                       <HealthCard date={selected} token={token} userId={userId}
