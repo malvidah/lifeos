@@ -115,3 +115,47 @@ create index if not exists meal_items_tags on meal_items using gin(project_tags)
 alter table meal_items enable row level security;
 create policy if not exists "meal_items: owner only" on meal_items
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+
+-- ── health_metrics ────────────────────────────────────────────────────────────
+-- Raw health data per day per source (Oura, Apple Health, Garmin).
+create table if not exists health_metrics (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  date         text not null,          -- YYYY-MM-DD
+  source       text not null,          -- 'oura' | 'apple' | 'garmin'
+  hrv          numeric,
+  rhr          numeric,
+  sleep_hrs    numeric,
+  sleep_eff    numeric,
+  steps        numeric,
+  active_min   numeric,
+  raw          jsonb,
+  synced_at    timestamptz,
+  unique (user_id, date, source)
+);
+create index if not exists health_metrics_user_date on health_metrics(user_id, date);
+alter table health_metrics enable row level security;
+create policy if not exists "health_metrics: owner only" on health_metrics
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+
+-- ── health_scores ─────────────────────────────────────────────────────────────
+-- Computed daily scores (aggregated from health_metrics).
+create table if not exists health_scores (
+  user_id          uuid not null references auth.users(id) on delete cascade,
+  date             text not null,
+  winning_source   text,
+  sleep_score      numeric,
+  readiness_score  numeric,
+  activity_score   numeric,
+  recovery_score   numeric,
+  calibration_days integer,
+  calibrated       boolean,
+  contributors     jsonb,
+  primary key (user_id, date)
+);
+create index if not exists health_scores_user_date on health_scores(user_id, date);
+alter table health_scores enable row level security;
+create policy if not exists "health_scores: owner only" on health_scores
+  using (auth.uid() = user_id) with check (auth.uid() = user_id);

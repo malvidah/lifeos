@@ -14,6 +14,7 @@ const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rh
 const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
 
 export default function HealthCard({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,backAction}) {
+  const { C } = useTheme();
   // Load health data from health_metrics table (replaces useDbSave(date,"health",...))
   const [h, setH] = useState(H_EMPTY);
   const [loaded, setLoaded] = useState(false);
