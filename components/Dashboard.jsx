@@ -24,7 +24,6 @@ import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import ProjectView from "./views/ProjectView.jsx";
 import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
-import "./theme/theme.css";
 
 function DashboardInner() {
   const { theme, setTheme, C } = useTheme();
