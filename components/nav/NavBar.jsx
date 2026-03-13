@@ -43,12 +43,19 @@ function NavIconBtn({ onClick, active, C, title, children }) {
 //   onGoToProjects  – grid icon → all-projects / graph view
 //   onOpenSettings  – gear icon (only shown when truthy, i.e. real project view)
 //   searchOpen / setSearchOpen / searchQuery / setSearchQuery / searchInputRef / srLoading
+function stepDateKey(dateKey, dir) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + dir);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
 export default function NavBar(props) {
   const { C } = useTheme();
   const {
     activeProject, date,
     searchOpen, setSearchOpen, searchQuery, setSearchQuery, searchInputRef, srLoading,
-    onGoHome, onGoToProjects, onOpenSettings,
+    onGoHome, onGoToProjects, onOpenSettings, onSelectDate,
   } = props;
 
   const openSearch  = () => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); };
@@ -103,17 +110,41 @@ export default function NavBar(props) {
         opacity: searchOpen ? 0 : 1,
         transition: 'opacity 0.18s ease',
       }}>
-        <span style={{
-          fontFamily: mono,
-          fontSize: 13,
-          letterSpacing: '0.12em',
-          textTransform: 'uppercase',
-          color: titleColor,
-          whiteSpace: 'nowrap',
-          userSelect: 'none',
-        }}>
-          {centerLabel}
-        </span>
+        {!activeProject && onSelectDate ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
+            <button onClick={() => onSelectDate(stepDateKey(date, -1))} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: C.muted, padding: '2px 6px', fontFamily: mono, fontSize: 16,
+              lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
+            }}
+              onMouseEnter={e => e.currentTarget.style.color = C.text}
+              onMouseLeave={e => e.currentTarget.style.color = C.muted}
+            >‹</button>
+            <span style={{
+              fontFamily: mono, fontSize: 13, letterSpacing: '0.12em',
+              textTransform: 'uppercase', color: titleColor,
+              whiteSpace: 'nowrap', userSelect: 'none',
+            }}>
+              {centerLabel}
+            </span>
+            <button onClick={() => onSelectDate(stepDateKey(date, +1))} style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: C.muted, padding: '2px 6px', fontFamily: mono, fontSize: 16,
+              lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
+            }}
+              onMouseEnter={e => e.currentTarget.style.color = C.text}
+              onMouseLeave={e => e.currentTarget.style.color = C.muted}
+            >›</button>
+          </div>
+        ) : (
+          <span style={{
+            fontFamily: mono, fontSize: 13, letterSpacing: '0.12em',
+            textTransform: 'uppercase', color: titleColor,
+            whiteSpace: 'nowrap', userSelect: 'none',
+          }}>
+            {centerLabel}
+          </span>
+        )}
       </div>
 
       {/* ── Right icons ─────────────────────────────────────────────────── */}

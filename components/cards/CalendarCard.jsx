@@ -643,28 +643,6 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-muted)"}}>Calendar</span>
         </div>
 
-        {collapsed ? (
-          /* ── Collapsed: always day nav — ‹ MAR 10, 2026 › ── */
-          (()=>{
-            const stepDay = (d,dir) => { const n=new Date(d); n.setDate(n.getDate()+dir); return n; };
-            const isToday = toKey(selDate) === today;
-            return (
-              <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
-                display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
-                <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,-1)));}} style={{
-                  background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
-                  fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
-                <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,+1)));}} style={{
-                  background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
-                  fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
-                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
-              </div>
-            );
-          })()
-        ) : null}
 
         {/* RIGHT: M/D toggle — hidden when collapsed */}
         <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:4,alignItems:'center'}} onClick={e=>e.stopPropagation()}>

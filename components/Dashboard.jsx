@@ -360,6 +360,7 @@ function DashboardInner() {
                 searchInputRef={searchInputRef} srLoading={srLoading}
                 onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
                 onGoToProjects={() => setActiveProject('__graph__')}
+                onSelectDate={setSelected}
               />
                               {/* Cal + Health — hidden during search */}
                 {!searchOpen && (
