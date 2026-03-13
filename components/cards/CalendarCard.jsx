@@ -710,17 +710,15 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 {/* Date header */}
                 <div style={{textAlign:"center", marginBottom:6, paddingTop:2, flexShrink:0}}>
                   <div style={{
-                    fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em",
-                    color: (isCtr || isTdy) ? "var(--dl-accent)" : "var(--dl-muted)",
+                    fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em",
+                    fontWeight: (isCtr && isTdy) ? "700" : "normal",
+                    color: (isCtr && isTdy) ? "var(--dl-strong)"
+                         : isTdy           ? "var(--dl-orange)"
+                         : isCtr           ? "var(--dl-text)"
+                                           : "var(--dl-dim)",
                     marginBottom:3,
-                  }}>{DAY_NAMES[d.getDay()]}</div>
-                  <div style={{
-                    fontFamily:serif,
-                    fontSize: isCtr ? F.md : F.sm,
-                    fontWeight: isCtr ? "600" : "normal",
-                    lineHeight:1,
-                    color: isCtr ? "var(--dl-text)" : isTdy ? "var(--dl-accent)" : "var(--dl-muted)",
-                  }}>{d.getDate()}</div>
+                    textTransform:"uppercase",
+                  }}>{DAY_NAMES[d.getDay()]} {d.getDate()}</div>
                   {/* Health dots */}
                   <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
                     {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-blue)"}}/>}
