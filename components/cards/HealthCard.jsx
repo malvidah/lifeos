@@ -186,7 +186,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     {key:"readiness",label:"Readiness",color:"var(--dl-green)", score:scores?.readiness?.score,
       fields:[{label:"HRV",value:h.hrv,unit:"ms",ck:"hrv"},{label:"RHR",value:h.rhr,unit:"bpm",ck:"rhr"}],
       sparkline:scores?.readiness?.sparkline},
-    {key:"workouts", label:"Workouts", color:"var(--dl-accent)",score:scores?.activity?.score,
+    {key:"activity", label:"Activity", color:"var(--dl-accent)",score:scores?.activity?.score,
       fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",ck:"steps"},{label:"Active",value:h.activeMinutes,unit:"min",ck:"activeMinutes"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,

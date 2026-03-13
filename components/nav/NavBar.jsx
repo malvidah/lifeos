@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { serif, mono, F, R, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
 import { useNavigation } from "@/lib/contexts";
-import ProjectsCard from "../cards/ProjectsCard.jsx";
+import ProjectsNav from "./ProjectsNav.jsx";
 
 export default function NavBar(props) {
   const { activeProject, searchOpen, setSearchOpen, searchQuery, setSearchQuery, searchInputRef, srLoading, date, token, userId, onSelectProject, onBack } = props;
@@ -77,7 +77,7 @@ export default function NavBar(props) {
         opacity:searchOpen?0:1,pointerEvents:searchOpen?'none':'auto',
         transition:'opacity 0.18s ease',display:'flex',alignItems:'center'}}>
         <div style={{flex:1,minWidth:0}}>
-          <ProjectsCard date={date} token={token} userId={userId} onSelectProject={onSelectProject}/>
+          <ProjectsNav date={date} token={token} userId={userId} onSelectProject={onSelectProject}/>
         </div>
         <SearchBtn onClick={openSearch} />
       </div>

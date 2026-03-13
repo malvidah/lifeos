@@ -6,7 +6,7 @@ import { extractTags, tagDisplayName } from "@/lib/tags";
 import { useDbSave } from "@/lib/db";
 import { useProjects } from "@/lib/useProjects";
 
-export default function ProjectsCard({ date, token, userId, onSelectProject }) {
+export default function ProjectsNav({ date, token, userId, onSelectProject }) {
   const { C } = useTheme(); // needed for alpha hex: C.green+'11' etc.
   const { value: notes } = useDbSave(date, 'journal', '', token, userId);
   const { value: tasks }  = useDbSave(date, 'tasks', [], token, userId);
