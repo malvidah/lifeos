@@ -1,9 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
-import { batchComputeScores, n } from '@/lib/scoreCalc.js';
+import { batchComputeScores } from '@/lib/scoreCalc.js';
 
-// Backfills Oura historical data into Supabase entries table.
+// Backfills Oura historical data into health_metrics table.
 // Fetches in 90-day chunks to stay within Oura API limits.
 // Safe to run multiple times — uses upsert so no duplicates.
+
+const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
+
+function metricsToLegacy(row) {
+  const out = {};
+  if (row.hrv        != null) out.hrv          = String(row.hrv);
+  if (row.rhr        != null) out.rhr          = String(row.rhr);
+  if (row.sleep_hrs  != null) out.sleepHrs     = String(row.sleep_hrs);
+  if (row.sleep_eff  != null) { out.sleepQuality = String(row.sleep_eff); out.sleepEff = String(row.sleep_eff); }
+  if (row.steps      != null) out.steps        = String(row.steps);
+  if (row.active_min != null) out.activeMinutes = String(row.active_min);
+  return out;
+}
 
 export async function POST(request) {
   const authHeader = request.headers.get("authorization") || "";
@@ -19,9 +32,10 @@ export async function POST(request) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return Response.json({ error: "unauthorized" }, { status: 401 });
 
+  // Read Oura token from user_settings
   const { data: settingsRow } = await supabase
-    .from("entries").select("data")
-    .eq("type", "settings").eq("date", "global").eq("user_id", user.id)
+    .from("user_settings").select("data")
+    .eq("user_id", user.id)
     .maybeSingle();
 
   const ouraToken = settingsRow?.data?.ouraToken;
@@ -63,52 +77,49 @@ export async function POST(request) {
         sleepRes.json(), readRes.json(), actRes.json(), sessionRes.json(), stressRes.json(),
       ]);
 
+      // Build per-date metrics in health_metrics column format (numeric, snake_case)
       const byDate = {};
       const ensure = d => { if (!byDate[d]) byDate[d] = {}; };
 
       for (const r of sleepData.data ?? []) {
         ensure(r.day);
-        // Store sleep efficiency (used in our calcSleepScore as sleepQuality)
-        if (r.contributors?.sleep_efficiency != null) byDate[r.day].sleepQuality = String(r.contributors.sleep_efficiency);
-        // NOTE: Oura's r.score is intentionally NOT stored — we compute our own scores
-      }
-      for (const r of readData.data ?? []) {
-        ensure(r.day);
-        // Oura's readiness score intentionally NOT stored — computed from raw metrics
+        if (r.contributors?.sleep_efficiency != null) byDate[r.day].sleep_eff = r.contributors.sleep_efficiency;
       }
       for (const r of actData.data ?? []) {
         ensure(r.day);
-        // Oura's activity score intentionally NOT stored — computed from raw metrics
-        if (r.steps != null) byDate[r.day].steps = String(r.steps);
-        if (r.total_calories != null) byDate[r.day].totalCalories = String(Math.round(r.total_calories));
-        if (r.active_calories != null) byDate[r.day].activeCalories = String(Math.round(r.active_calories));
+        if (r.steps != null) byDate[r.day].steps = r.steps;
         const activeSecs = (r.medium_activity_time ?? 0) + (r.high_activity_time ?? 0);
-        if (activeSecs > 0) byDate[r.day].activeMinutes = String(Math.round(activeSecs / 60));
+        if (activeSecs > 0) byDate[r.day].active_min = Math.round(activeSecs / 60);
       }
       for (const r of sessionData.data ?? []) {
         if (r.type !== 'long_sleep') continue;
         ensure(r.day);
-        if (r.lowest_heart_rate != null) byDate[r.day].rhr = String(Math.round(r.lowest_heart_rate));
-        if (r.average_hrv != null) byDate[r.day].hrv = String(Math.round(r.average_hrv));
-        if (r.total_sleep_duration) byDate[r.day].sleepHrs = (r.total_sleep_duration / 3600).toFixed(1);
+        if (r.lowest_heart_rate != null) byDate[r.day].rhr = Math.round(r.lowest_heart_rate);
+        if (r.average_hrv != null) byDate[r.day].hrv = Math.round(r.average_hrv);
+        if (r.total_sleep_duration) byDate[r.day].sleep_hrs = parseFloat((r.total_sleep_duration / 3600).toFixed(1));
       }
       for (const r of stressData.data ?? []) {
         ensure(r.day);
-        if (r.stress_high != null) byDate[r.day].stressMins = String(Math.round(r.stress_high / 60));
-        if (r.recovery_high != null) byDate[r.day].recoveryMins = String(Math.round(r.recovery_high / 60));
+        if (r.stress_high != null || r.recovery_high != null) {
+          byDate[r.day].raw = {
+            stressMins:   r.stress_high   != null ? Math.round(r.stress_high / 60)   : null,
+            recoveryMins: r.recovery_high != null ? Math.round(r.recovery_high / 60) : null,
+          };
+        }
       }
 
       const rows = Object.entries(byDate)
         .filter(([, data]) => Object.keys(data).length > 0)
         .map(([date, data]) => ({
-          user_id: user.id, date, type: 'health', data,
-          updated_at: new Date().toISOString(),
+          user_id: user.id, date, source: 'oura',
+          ...data,
+          synced_at: new Date().toISOString(),
         }));
 
       if (rows.length > 0) {
         const { error: upsertErr } = await supabase
-          .from('entries')
-          .upsert(rows, { onConflict: 'user_id,date,type' });
+          .from('health_metrics')
+          .upsert(rows, { onConflict: 'user_id,date,source' });
         if (upsertErr) errors.push(`${s}-${e}: ${upsertErr.message}`);
         else totalUpserted += rows.length;
       }
@@ -117,43 +128,43 @@ export async function POST(request) {
     }
   }
 
-  // ── Batch compute our scores for ALL stored health data ──────────────────
-  // Fetch everything we have (not just this backfill window) so history is accurate
+  // ── Batch compute scores for ALL stored health data ────────────────────────
   try {
-    const { data: allHealth } = await supabase
-      .from('entries')
-      .select('date, data')
+    const { data: allMetrics } = await supabase
+      .from('health_metrics')
+      .select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min')
       .eq('user_id', user.id)
-      .eq('type', 'health')
       .order('date', { ascending: true });
 
-    if (allHealth && allHealth.length > 0) {
-      const byDateAll = {};
-      for (const row of allHealth) {
-        if (row.date && row.data) byDateAll[row.date] = row.data;
+    if (allMetrics?.length) {
+      // Best source per date → legacy format for scoreCalc.js
+      const bestByDate = {};
+      for (const r of allMetrics) {
+        const cur = bestByDate[r.date];
+        if (!cur || SOURCE_PRIORITY.indexOf(r.source) < SOURCE_PRIORITY.indexOf(cur.source)) {
+          bestByDate[r.date] = r;
+        }
       }
+      const legacyByDate = Object.fromEntries(
+        Object.entries(bestByDate).map(([d, r]) => [d, metricsToLegacy(r)])
+      );
+      const scored = batchComputeScores(legacyByDate, allMetrics.length);
 
-      const scored = batchComputeScores(byDateAll, allHealth.length);
-
-      // Upsert in batches of 200
       const BATCH = 200;
       for (let i = 0; i < scored.length; i += BATCH) {
         const chunk = scored.slice(i, i + BATCH).map(s => ({
-          user_id: user.id,
-          date: s.date,
-          type: 'scores',
-          data: {
-            sleepScore:     s.sleepScore,
-            readinessScore: s.readinessScore,
-            activityScore:  s.activityScore,
-            recoveryScore:  s.recoveryScore,
-            calibrated:     s.calibrated,
-            contributors:   s.contributors,
-            computedAt:     s.computedAt,
-          },
-          updated_at: new Date().toISOString(),
+          user_id:         user.id,
+          date:            s.date,
+          winning_source:  bestByDate[s.date]?.source ?? 'oura',
+          sleep_score:     s.sleepScore,
+          readiness_score: s.readinessScore,
+          activity_score:  s.activityScore,
+          recovery_score:  s.recoveryScore,
+          calibrated:      s.calibrated,
+          contributors:    s.contributors,
+          computed_at:     s.computedAt,
         }));
-        await supabase.from('entries').upsert(chunk, { onConflict: 'user_id,date,type' });
+        await supabase.from('health_scores').upsert(chunk, { onConflict: 'user_id,date' });
       }
     }
   } catch (scoreErr) {

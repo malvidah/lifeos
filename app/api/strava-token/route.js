@@ -31,17 +31,21 @@ export async function POST(request) {
       return Response.json({ error: tokenData.message || 'Token exchange failed' }, { status: 400 });
     }
 
-    await supabase.from('entries').upsert({
-      date: '0000-00-00', type: 'strava_token',
-      data: {
-        access_token: tokenData.access_token,
-        refresh_token: tokenData.refresh_token,
-        expires_at: tokenData.expires_at,
-        athlete: tokenData.athlete,
-      },
+    const { data: existing } = await supabase.from('user_settings')
+      .select('data').eq('user_id', user.id).maybeSingle();
+
+    await supabase.from('user_settings').upsert({
       user_id: user.id,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'date,type,user_id' });
+      data: {
+        ...(existing?.data || {}),
+        stravaToken: {
+          access_token:  tokenData.access_token,
+          refresh_token: tokenData.refresh_token,
+          expires_at:    tokenData.expires_at,
+          athlete:       tokenData.athlete,
+        },
+      },
+    }, { onConflict: 'user_id' });
 
     return Response.json({ ok: true, athlete: tokenData.athlete?.firstname });
   } catch (e) {

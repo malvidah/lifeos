@@ -66,12 +66,11 @@ function buildEventBody(params) {
 // Fetches stored Google token, calls fn(accessToken), refreshes once on 401.
 // Returns { ok, status, data, accessToken } — accessToken is always the current valid token.
 async function withGoogleToken(supabase, userId, fn, clientToken = null) {
-  const { data: stored } = await supabase.from("entries").select("data")
-    .eq("date", "0000-00-00").eq("type", "google_token").eq("user_id", userId)
-    .maybeSingle();
+  const { data: stored } = await supabase.from("user_settings").select("data")
+    .eq("user_id", userId).maybeSingle();
 
-  let accessToken = clientToken || stored?.data?.token;
-  const refreshToken = stored?.data?.refreshToken;
+  let accessToken = clientToken || stored?.data?.googleToken;
+  const refreshToken = stored?.data?.googleRefreshToken;
 
   if (!accessToken && !refreshToken) {
     return { ok: false, status: 401, error: "No Google Calendar connection" };

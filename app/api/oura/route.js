@@ -3,9 +3,9 @@ import { withAuth } from '../_lib/auth.js';
 export const GET = withAuth(async (req, { supabase, user }) => {
   const date = new URL(req.url).searchParams.get('date') || new Date().toISOString().split('T')[0];
 
-  // Get this user's Oura token from their settings
+  // Get this user's Oura token from user_settings
   const { data: settingsRow } = await supabase
-    .from('entries').select('data').eq('type', 'settings').eq('date', 'global').eq('user_id', user.id).maybeSingle();
+    .from('user_settings').select('data').eq('user_id', user.id).maybeSingle();
   const ouraToken = settingsRow?.data?.ouraToken;
   if (!ouraToken) return Response.json({ error: 'no_token' });
 
@@ -83,14 +83,39 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }));
   }
 
-  // Auto-save to Supabase
-  const saveData = { ...result };
-  delete saveData.workouts;
-  if (Object.keys(saveData).length > 0) {
-    supabase.from('entries').upsert({
-      user_id: user.id, date, type: 'health', data: saveData,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,date,type' }).then(() => {});
+  // ── Persist health metrics ────────────────────────────────────────────────
+  const metricsPayload = {
+    hrv:        result.hrv        ? Number(result.hrv)        : null,
+    rhr:        result.rhr        ? Number(result.rhr)        : null,
+    sleep_hrs:  result.sleepHrs   ? Number(result.sleepHrs)   : null,
+    sleep_eff:  result.sleepQuality ? Number(result.sleepQuality) : null,
+    steps:      result.steps      ? Number(result.steps)      : null,
+    active_min: result.activeMinutes ? Number(result.activeMinutes) : null,
+  };
+  if (Object.values(metricsPayload).some(v => v != null)) {
+    supabase.from('health_metrics').upsert({
+      user_id: user.id, date, source: 'oura',
+      ...metricsPayload,
+      raw: { sleep: sleepData, readiness: readinessData, activity: activityData, stress: stressData },
+      synced_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,date,source' }).then(() => {});
+  }
+
+  // ── Persist Oura workouts ─────────────────────────────────────────────────
+  const ouraWorkouts = (workoutData.data ?? []).filter(w => w.day === date);
+  for (const w of ouraWorkouts) {
+    supabase.from('workouts').upsert({
+      user_id:      user.id,
+      date:         w.day,
+      source:       'oura',
+      type:         w.activity || 'workout',
+      title:        (w.activity || 'workout').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+      duration_min: w.duration != null ? Math.round(w.duration / 60) : null,
+      distance_m:   w.distance != null ? Math.round(w.distance) : null,
+      calories:     w.calories != null ? Math.round(w.calories) : null,
+      external_id:  String(w.id),
+      raw:          w,
+    }, { onConflict: 'user_id,source,external_id' }).then(() => {});
   }
 
   return Response.json(result);

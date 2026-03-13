@@ -1,26 +1,18 @@
 import { withAuth } from '../_lib/auth.js';
-import { parseTasks } from '../_lib/parseTasks.js';
 
-function makeMatchRe(storedName) {
-  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // {chip} format (new)
-  const newFmt = `\\{${esc(storedName)}\\}`;
-  // #Hashtag legacy formats
-  const pascal = storedName.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
-  const camel  = storedName.split(/\s+/).join('');
-  const legacyParts = new Set([pascal, camel, storedName]);
-  const legacyAlts  = [...legacyParts].map(v => `#${esc(v)}(?![A-Za-z0-9])`);
-  // Plain-text keyword match — word boundary on each word, \s+ between words
-  // Matches "Big Think", "BIG THINK", "big think" etc. anywhere in text
-  const wordsEsc  = storedName.split(/\s+/).map(esc).join('\\s+');
-  const plainText = `\\b${wordsEsc}\\b`;
-  return new RegExp([newFmt, ...legacyAlts, plainText].join('|'), 'i');
-}
-
-const HEALTH_RE = /(?:\{health\}|#Health(?![A-Za-z0-9])|\b(health|workout|working out|worked out|run|ran|running|walk|walked|walking|bike|biked|biking|cycle|cycled|cycling|swim|swam|swimming|hike|hiked|hiking|gym|lift|lifted|lifting|yoga|stretch|stretching|sleep|slept|sleeping|recovery|recover|calories|calorie|nutrition|diet|meal|eat|ate|eating|exercise|exercised|exercising|weight|reps|sets|miles|km|heart rate|hrv|steps|active|activity|fitness|training|trained|train|breathwork|meditation|meditate|meditating|rest|resting|rested|sick|illness|pain|sore|soreness|energy|fatigue|tired|exhausted|hydrat|water|protein|macros|cardio|strength|endurance|mobility|flexibility|vo2|pace|distance)\b)/i;
+// GET /api/project-entries?project=big+think
+//   Returns all content tagged to that project, split by type.
+//   Special value: __everything__ (all content, no tag filter).
+//
+// Response shape:
+//   { journalBlocks, tasks, notes, isEverything }
+//
+// journalBlocks: [{ id, date, position, content, project_tags, note_tags }]
+// tasks:         [{ id, date, text, html, done, due_date, completed_at, project_tags }]
+// notes:         [{ id, title, content, project_tags, created_at, updated_at }]
 
 function isValidProject(name) {
-  if (name === '__everything__' || name === '__health__') return true;
+  if (name === '__everything__') return true;
   return /^[a-z0-9][a-z0-9 ]{0,38}[a-z0-9]$|^[a-z0-9]$/.test(name);
 }
 
@@ -30,59 +22,44 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'invalid project name', got: project }, { status: 400 });
 
   const isEverything = project === '__everything__';
-  const isHealth     = project === '__health__';
 
-  const { data: notesRows, error: ne } = await supabase
-    .from('entries').select('date, data')
-    .eq('user_id', user.id).eq('type', 'journal')
-    .order('date', { ascending: true });
-  if (ne) throw ne;
+  // Build three parallel queries, all using GIN-indexed project_tags contains filter
+  const filter = isEverything
+    ? (q) => q                                            // no filter
+    : (q) => q.contains('project_tags', [project]);      // GIN contains
 
-  const matchRe = isEverything ? null : isHealth ? HEALTH_RE : makeMatchRe(project);
+  const [blocksR, tasksR, notesR] = await Promise.all([
+    filter(
+      supabase.from('journal_blocks')
+        .select('id, date, position, content, project_tags, note_tags')
+        .eq('user_id', user.id)
+        .order('date', { ascending: true })
+        .order('position', { ascending: true })
+    ),
+    filter(
+      supabase.from('tasks')
+        .select('id, date, text, html, done, due_date, completed_at, project_tags')
+        .eq('user_id', user.id)
+        .order('date', { ascending: true })
+        .order('position', { ascending: true })
+    ),
+    // Notes only in named project view (not __everything__ which would be overwhelming)
+    isEverything ? { data: [] } : filter(
+      supabase.from('notes')
+        .select('id, title, content, project_tags, created_at, updated_at')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+    ),
+  ]);
 
-  const journalEntries = [];
-  for (const row of notesRows || []) {
-    const text = typeof row.data === 'string' ? row.data : '';
-    if (!text.trim()) continue;
-    if (matchRe && !matchRe.test(text)) continue;
+  if (blocksR.error) throw blocksR.error;
+  if (tasksR.error)  throw tasksR.error;
+  if (notesR.error)  throw notesR.error;
 
-    // Group consecutive non-empty lines into paragraphs (blocks).
-    // Return each matching block as a single entry with newline-joined text
-    // so the ProjectView can display full context, not just the matching line.
-    const lines = text.split('\n');
-    let i = 0;
-    while (i < lines.length) {
-      if (!lines[i].trim()) { i++; continue; }
-      const block = [];
-      const startIndex = i;
-      while (i < lines.length && lines[i].trim()) {
-        block.push(lines[i].trim());
-        i++;
-      }
-      if (!matchRe || block.some(l => matchRe.test(l))) {
-        journalEntries.push({
-          date: row.date,
-          text: block.join('\n'),          // full paragraph text
-          lineIndex: startIndex,           // first line — used for saves
-          blockLength: block.length,       // line count — used for splice saves
-        });
-      }
-    }
-  }
-
-  const { data: tasksRows, error: te } = await supabase
-    .from('entries').select('date, data')
-    .eq('user_id', user.id).eq('type', 'tasks')
-    .order('date', { ascending: true });
-  if (te) throw te;
-
-  const taskEntries = [];
-  for (const row of tasksRows || []) {
-    for (const task of parseTasks(row.data)) {
-      if (!matchRe || matchRe.test(task.text))
-        taskEntries.push({ date: row.date, id: task.id, text: task.text, done: task.done });
-    }
-  }
-
-  return Response.json({ journalEntries, taskEntries, isEverything, isHealth });
+  return Response.json({
+    journalBlocks: blocksR.data ?? [],
+    tasks:         tasksR.data  ?? [],
+    notes:         notesR.data  ?? [],
+    isEverything,
+  });
 });

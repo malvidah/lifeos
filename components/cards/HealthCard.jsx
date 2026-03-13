@@ -3,7 +3,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "@/lib/theme";
 import { serif, mono, F, R } from "@/lib/tokens";
 import { toKey, todayKey, shift } from "@/lib/dates";
-import { useDbSave, dbLoad } from "@/lib/db";
 import { cachedOuraFetch, _ouraCache } from "@/lib/ouraCache";
 import { createClient } from "@/lib/supabase";
 import { Ring, Card, CardHeader, Shimmer, InfoTip } from "../ui/primitives.jsx";
@@ -12,9 +11,12 @@ import { api } from "@/lib/api";
 
 const H_EMPTY={sleepScore:"",sleepHrs:"",sleepEff:"",readinessScore:"",hrv:"",rhr:"",activityScore:"",activeCalories:"",totalCalories:"",steps:"",activeMinutes:"",resilienceScore:"",stressMins:"",recoveryMins:""};
 
+const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
 
 export default function HealthCard({date,token,userId,onHealthChange,onScoresReady,onSyncStart,onSyncEnd,collapsed,onToggle,backAction}) {
-  const {value:h,setValue:setH,loaded}=useDbSave(date,"health",H_EMPTY,token,userId);
+  // Load health data from health_metrics table (replaces useDbSave(date,"health",...))
+  const [h, setH] = useState(H_EMPTY);
+  const [loaded, setLoaded] = useState(false);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
   // Reset to empty immediately on date change — never show stale previous-day data
@@ -23,8 +25,39 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     if(prevHealthDate.current !== date){
       prevHealthDate.current = date;
       setH(H_EMPTY);
+      setLoaded(false);
     }
   },[date]); // eslint-disable-line
+
+  // Load stored metrics from health_metrics for this date
+  useEffect(()=>{
+    if(!userId||!token)return;
+    const sb = createClient();
+    sb.from('health_metrics')
+      .select('source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min, raw')
+      .eq('user_id', userId).eq('date', date)
+      .then(({ data: rows })=>{
+        if(rows?.length){
+          let best = null;
+          for(const r of rows){
+            if(!best || SOURCE_PRIORITY.indexOf(r.source) < SOURCE_PRIORITY.indexOf(best.source)) best = r;
+          }
+          if(best){
+            setH(p=>({...p,
+              hrv:          best.hrv        != null ? String(best.hrv)        : p.hrv,
+              rhr:          best.rhr        != null ? String(best.rhr)        : p.rhr,
+              sleepHrs:     best.sleep_hrs  != null ? String(best.sleep_hrs)  : p.sleepHrs,
+              sleepEff:     best.sleep_eff  != null ? String(best.sleep_eff)  : p.sleepEff,
+              steps:        best.steps      != null ? String(best.steps)      : p.steps,
+              activeMinutes:best.active_min != null ? String(best.active_min) : p.activeMinutes,
+              stressMins:   best.raw?.stressMins   != null ? String(best.raw.stressMins)   : p.stressMins,
+              recoveryMins: best.raw?.recoveryMins != null ? String(best.raw.recoveryMins) : p.recoveryMins,
+            }));
+          }
+        }
+        setLoaded(true);
+      }).catch(()=>setLoaded(true));
+  },[date, userId, token]); // eslint-disable-line
 
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
 
@@ -54,19 +87,19 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
           }
           // No Garmin either — fall back to Apple Health data synced from iOS app
           const sb = createClient(); // singleton — already imported at top
-          const {data:row} = await sb.from("entries").select("data")
-            .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
-          if(row?.data) {
-            const d = row.data;
+          const {data:row} = await sb.from("health_metrics")
+            .select("hrv, rhr, sleep_hrs, sleep_eff, steps, active_min, raw")
+            .eq("source","apple").eq("date",date).eq("user_id",userId).maybeSingle();
+          if(row) {
             setH(p=>({...p,
-              sleepHrs:       d.sleepHrs       ?? "",
-              sleepEff:       d.sleepEff       ?? "",
-              hrv:            d.hrv            ?? "",
-              rhr:            d.rhr            ?? "",
-              activeCalories: d.activeCalories ?? "",
-              totalCalories:  d.totalCalories  ?? "",
-              steps:          d.steps          ?? "",
-              activeMinutes:  d.activeMinutes  ?? "",
+              sleepHrs:       row.sleep_hrs  != null ? String(row.sleep_hrs)  : "",
+              sleepEff:       row.sleep_eff  != null ? String(row.sleep_eff)  : "",
+              hrv:            row.hrv        != null ? String(row.hrv)        : "",
+              rhr:            row.rhr        != null ? String(row.rhr)        : "",
+              steps:          row.steps      != null ? String(row.steps)      : "",
+              activeMinutes:  row.active_min != null ? String(row.active_min) : "",
+              activeCalories: row.raw?.activeCalories != null ? String(row.raw.activeCalories) : "",
+              totalCalories:  row.raw?.totalCalories  != null ? String(row.raw.totalCalories)  : "",
             }));
             setDataSource("apple");
           }
@@ -75,8 +108,8 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
         if(data.error){ onSyncEnd("oura"); return; }
         // Oura connected — also check if Apple Health has data for this date (could have both)
         const sb2 = createClient(); // singleton — safe to call multiple times
-        const {data:appleRow} = await sb2.from("entries").select("date")
-          .eq("type","health_apple").eq("date",date).eq("user_id",userId).maybeSingle();
+        const {data:appleRow} = await sb2.from("health_metrics").select("date")
+          .eq("source","apple").eq("date",date).eq("user_id",userId).maybeSingle();
         setDataSource(appleRow ? "both" : "oura");
         // Nullish coalescing: only set a field if Oura returned a real value.
         // Never fall back to p.x — if Oura has no data for this date, leave it blank.
@@ -211,20 +244,20 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     const anchorDate = new Date(date + 'T12:00:00');
     const since = toKey(shift(anchorDate, -days));
     supabase
-      .from('entries').select('date,data')
-      .eq('user_id', userId).eq('type', 'scores')
+      .from('health_scores').select('date,sleep_score,readiness_score,activity_score,recovery_score')
+      .eq('user_id', userId)
       .gte('date', since).lte('date', date)
       .order('date', { ascending: true })
       .then(({ data: rows }) => {
         if (!rows) { setTrendLoading(false); return; }
         const map = {};
         rows.forEach(row => {
-          if (!row.date || !row.data) return;
+          if (!row.date) return;
           map[row.date] = {
-            sleep:     +row.data.sleepScore     || null,
-            readiness: +row.data.readinessScore || null,
-            activity:  +row.data.activityScore  || null,
-            recovery:  +row.data.recoveryScore  || null,
+            sleep:     row.sleep_score     ?? null,
+            readiness: row.readiness_score ?? null,
+            activity:  row.activity_score  ?? null,
+            recovery:  row.recovery_score  ?? null,
           };
         });
         setTrendData(prev => ({ ...prev, [cacheKey]: map }));

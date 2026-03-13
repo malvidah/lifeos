@@ -41,10 +41,8 @@ export default function NavBar(props) {
   // ── Project / health / graph view ──
   if (activeProject) {
     const isGraph  = activeProject === '__graph__';
-    const isHealth = activeProject === '__health__';
-    const pcol = isHealth ? "var(--dl-green)" : isGraph ? "var(--dl-accent)" : projectColor(activeProject);
+    const pcol = isGraph ? "var(--dl-accent)" : projectColor(activeProject);
     const label = isGraph ? 'ALL PROJECTS'
-                : isHealth ? 'Health'
                 : activeProject === '__everything__' ? 'ALL'
                 : tagDisplayName(activeProject);
     return (

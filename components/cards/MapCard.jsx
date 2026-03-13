@@ -16,7 +16,7 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
   const dragStart = useRef(null);
 
   useEffect(() => {
-    const tagList = ['__health__', ...(allTags || [])];
+    const tagList = allTags || [];
     const lower = tagList.map(t => t.toLowerCase());
     const idxOf = {};
     lower.forEach((t, i) => { idxOf[t] = i; });
@@ -40,8 +40,8 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
       const radius = 180 + (deg[i] / maxDeg) * 80;
       return {
         id: name,
-        label: name === '__health__' ? 'HEALTH' : tagDisplayName(name).toUpperCase(),
-        color: name === '__health__' ? "var(--dl-green)" : projectColor(name),
+        label: tagDisplayName(name).toUpperCase(),
+        color: projectColor(name),
         x: Math.cos(angle) * radius,
         y: Math.sin(angle) * radius,
         vx: 0, vy: 0,

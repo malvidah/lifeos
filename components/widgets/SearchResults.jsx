@@ -27,43 +27,44 @@ export function useSearch(query, token, userId) {
     try {
       const sb = createClient();
       await sb.auth.setSession({ access_token: token, refresh_token: '' });
-      const types = ['journal', 'tasks', 'meals', 'workouts'];
-      const rows = await Promise.all(
-        types.map(t => sb.from('entries').select('date, data, type')
-          .eq('user_id', userId).eq('type', t).order('date', { ascending: false }).limit(400)
-          .then(r => r.data || []))
-      );
-      const [notesR, tasksR, mealsR, activityR, workoutsR] = rows;
-      const qL = q.toLowerCase();
+      const like = `%${q}%`;
+
+      const [notesR, tasksR, mealsR, workoutsR] = await Promise.all([
+        sb.from('journal_blocks').select('date, content')
+          .eq('user_id', userId).ilike('content', like)
+          .order('date', { ascending: false }).limit(200)
+          .then(r => r.data || []),
+        sb.from('tasks').select('date, text, done')
+          .eq('user_id', userId).ilike('text', like)
+          .order('date', { ascending: false }).limit(200)
+          .then(r => r.data || []),
+        sb.from('meal_items').select('date, content, ai_calories')
+          .eq('user_id', userId).ilike('content', like)
+          .order('date', { ascending: false }).limit(200)
+          .then(r => r.data || []),
+        sb.from('workouts').select('date, title')
+          .eq('user_id', userId).ilike('title', like)
+          .order('date', { ascending: false }).limit(200)
+          .then(r => r.data || []),
+      ]);
+
       const hits = [];
       notesR.forEach(row => {
-        (typeof row.data === 'string' ? row.data : '').split('\n').filter(l => l.trim()).forEach(line => {
-          if (line.toLowerCase().includes(qL)) hits.push({ type: 'journal', date: row.date, text: line });
+        (row.content || '').split('\n').filter(l => l.trim()).forEach(line => {
+          hits.push({ type: 'journal', date: row.date, text: line });
         });
       });
       tasksR.forEach(row => {
-        (Array.isArray(row.data) ? row.data : []).forEach(task => {
-          if (task?.text?.toLowerCase().includes(qL))
-            hits.push({ type: 'task', date: row.date, text: task.text, done: task.done });
-        });
+        if (row.text?.trim())
+          hits.push({ type: 'task', date: row.date, text: row.text, done: row.done });
       });
       mealsR.forEach(row => {
-        (Array.isArray(row.data) ? row.data : []).forEach(meal => {
-          if (meal?.text?.toLowerCase().includes(qL))
-            hits.push({ type: 'meal', date: row.date, text: meal.text, kcal: meal.kcal });
-        });
-      });
-      activityR.forEach(row => {
-        (Array.isArray(row.data) ? row.data : []).forEach(act => {
-          if (act?.text?.toLowerCase().includes(qL))
-            hits.push({ type: 'workouts', date: row.date, text: act.text });
-        });
+        if (row.content?.trim())
+          hits.push({ type: 'meal', date: row.date, text: row.content, kcal: row.ai_calories });
       });
       workoutsR.forEach(row => {
-        (Array.isArray(row.data) ? row.data : []).forEach(w => {
-          const t = w?.name || w?.text || '';
-          if (t.toLowerCase().includes(qL)) hits.push({ type: 'workouts', date: row.date, text: t });
-        });
+        if (row.title?.trim())
+          hits.push({ type: 'workouts', date: row.date, text: row.title });
       });
       hits.sort((a, b) => b.date.localeCompare(a.date));
       setResults(hits.slice(0, 80));

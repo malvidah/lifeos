@@ -8,36 +8,51 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   const endDay = new Date(year, month + 1, 0).getDate();
   const endDate = `${year}-${String(month + 1).padStart(2,'0')}-${String(endDay).padStart(2,'0')}`;
 
-  const { data: rows } = await supabase.from('entries')
-    .select('date, type, data').eq('user_id', user.id).in('type', ['journal'])
+  // ── Check day_recaps cache first ──────────────────────────────────────────
+  // If all days in the range already have a recap, return those immediately.
+  const { data: existingRecaps } = await supabase
+    .from('day_recaps')
+    .select('date, content')
+    .eq('user_id', user.id)
     .gte('date', startDate).lte('date', endDate);
 
-  if (!rows || rows.length === 0) return Response.json({ summaries: {} });
+  const cachedSummaries = Object.fromEntries((existingRecaps ?? []).map(r => [r.date, r.content]));
 
-  // Build index of notes by date
-  const notesByDate = {};
-  for (const r of rows) {
-    if (!notesByDate[r.date]) notesByDate[r.date] = [];
-    const text = typeof r.data === 'string' ? r.data : (r.data?.text || '');
-    if (text.trim()) notesByDate[r.date].push(text.trim());
+  // ── Fetch journal_blocks for the month ────────────────────────────────────
+  const { data: blockRows } = await supabase
+    .from('journal_blocks')
+    .select('date, content')
+    .eq('user_id', user.id)
+    .gte('date', startDate).lte('date', endDate)
+    .order('date', { ascending: true })
+    .order('position', { ascending: true });
+
+  if (!blockRows || blockRows.length === 0) {
+    return Response.json({ summaries: cachedSummaries });
   }
-  const datesWithNotes = Object.keys(notesByDate).sort();
-  if (datesWithNotes.length === 0) return Response.json({ summaries: {} });
 
-  // Check cache
-  const cacheKey = `month_summaries_${year}_${month}`;
-  const { data: cached } = await supabase.from('entries')
-    .select('data, updated_at').eq('type', 'settings').eq('date', cacheKey).eq('user_id', user.id).maybeSingle();
+  // Group plain text by date
+  const notesByDate = {};
+  for (const r of blockRows) {
+    if (!notesByDate[r.date]) notesByDate[r.date] = [];
+    // Strip HTML tags for the summary prompt
+    const text = (r.content || '').replace(/<[^>]+>/g, '').trim();
+    if (text) notesByDate[r.date].push(text);
+  }
 
-  if (cached?.data?.summaries && cached?.data?.dates) {
-    if (cached.data.dates.sort().join(',') === datesWithNotes.join(','))
-      return Response.json({ summaries: cached.data.summaries });
+  // Only request AI summaries for dates that don't have a cached recap
+  const datesToSummarise = Object.keys(notesByDate)
+    .filter(d => !cachedSummaries[d])
+    .sort();
+
+  if (datesToSummarise.length === 0) {
+    return Response.json({ summaries: cachedSummaries });
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return Response.json({ summaries: {} });
+  if (!apiKey) return Response.json({ summaries: cachedSummaries });
 
-  const lines = datesWithNotes.map(d => `${d}: ${notesByDate[d].join(' ').slice(0, 300)}`).join('\n');
+  const lines = datesToSummarise.map(d => `${d}: ${notesByDate[d].join(' ').slice(0, 300)}`).join('\n');
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
@@ -49,15 +64,24 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   });
 
   const aiData = await res.json();
-  let summaries = {};
-  try { summaries = JSON.parse((aiData.content?.[0]?.text || '{}').replace(/```json|```/g, '').trim()); }
-  catch { summaries = {}; }
+  let newSummaries = {};
+  try { newSummaries = JSON.parse((aiData.content?.[0]?.text || '{}').replace(/```json|```/g, '').trim()); }
+  catch { newSummaries = {}; }
 
-  await supabase.from('entries').upsert({
-    user_id: user.id, date: cacheKey, type: 'settings',
-    data: { summaries, dates: datesWithNotes },
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,date,type' });
+  // ── Upsert new recaps to day_recaps ──────────────────────────────────────
+  const recapRows = Object.entries(newSummaries)
+    .filter(([, content]) => content?.trim())
+    .map(([date, content]) => ({
+      user_id: user.id,
+      date,
+      content: content.trim(),
+      generated_at: new Date().toISOString(),
+    }));
 
-  return Response.json({ summaries });
+  if (recapRows.length > 0) {
+    await supabase.from('day_recaps')
+      .upsert(recapRows, { onConflict: 'user_id,date' });
+  }
+
+  return Response.json({ summaries: { ...cachedSummaries, ...newSummaries } });
 });

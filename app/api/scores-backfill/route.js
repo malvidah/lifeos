@@ -1,10 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import { batchComputeScores } from '@/lib/scoreCalc.js';
 
-// Finds all dates with health/health_apple data but no scores entry,
+// Finds all dates with health_metrics data but no health_scores entry,
 // computes scores for those gaps, and upserts them.
 // Safe to run multiple times — upsert is idempotent.
 // Also accepts force=true to recompute ALL dates (full recalculation).
+
+const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
+
+function metricsToLegacy(row) {
+  const out = {};
+  if (row.hrv        != null) out.hrv          = String(row.hrv);
+  if (row.rhr        != null) out.rhr          = String(row.rhr);
+  if (row.sleep_hrs  != null) out.sleepHrs     = String(row.sleep_hrs);
+  if (row.sleep_eff  != null) { out.sleepQuality = String(row.sleep_eff); out.sleepEff = String(row.sleep_eff); }
+  if (row.steps      != null) out.steps        = String(row.steps);
+  if (row.active_min != null) out.activeMinutes = String(row.active_min);
+  return out;
+}
 
 export async function POST(request) {
   const authHeader = request.headers.get('authorization') || '';
@@ -21,46 +34,42 @@ export async function POST(request) {
   if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
   const body = await request.json().catch(() => ({}));
-  const force = body.force === true; // recompute all, not just gaps
+  const force = body.force === true;
 
   const now = new Date();
   const today = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
 
-  // Fetch all health rows (Oura + Apple Health), all time
-  const { data: healthRows, error: hErr } = await supabase
-    .from('entries')
-    .select('date, type, data')
+  // Fetch all health_metrics rows (all sources), all time
+  const { data: metricRows, error: hErr } = await supabase
+    .from('health_metrics')
+    .select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min')
     .eq('user_id', user.id)
-    .in('type', ['health', 'health_apple'])
     .lte('date', today)
     .order('date', { ascending: true });
 
   if (hErr) return Response.json({ error: hErr.message }, { status: 500 });
-  if (!healthRows?.length) return Response.json({ ok: true, scored: 0, message: 'no health data found' });
+  if (!metricRows?.length) return Response.json({ ok: true, scored: 0, message: 'no health data found' });
 
-  // Build byDate map (Oura wins per-field over Apple Health)
-  const byDate = {};
-  for (const row of healthRows) {
-    if (!byDate[row.date]) byDate[row.date] = {};
-    const d = row.data || {};
-    if (row.type === 'health') {
-      Object.assign(byDate[row.date], d);
-    } else {
-      for (const [k, v] of Object.entries(d)) {
-        if (!byDate[row.date][k]) byDate[row.date][k] = v;
-      }
+  // Best source per date, convert to legacy format for scoreCalc.js
+  const bestByDate = {};
+  for (const r of metricRows) {
+    const cur = bestByDate[r.date];
+    if (!cur || SOURCE_PRIORITY.indexOf(r.source) < SOURCE_PRIORITY.indexOf(cur.source)) {
+      bestByDate[r.date] = r;
     }
   }
+  const legacyByDate = Object.fromEntries(
+    Object.entries(bestByDate).map(([d, r]) => [d, metricsToLegacy(r)])
+  );
 
-  let datesToScore = Object.keys(byDate).sort();
+  let datesToScore = Object.keys(legacyByDate).sort();
 
   if (!force) {
-    // Only score dates that don't already have a scores entry
+    // Only score dates that don't already have a health_scores entry
     const { data: existingScores } = await supabase
-      .from('entries')
+      .from('health_scores')
       .select('date')
       .eq('user_id', user.id)
-      .eq('type', 'scores')
       .in('date', datesToScore);
 
     const scoredSet = new Set((existingScores || []).map(r => r.date));
@@ -71,33 +80,28 @@ export async function POST(request) {
     return Response.json({ ok: true, scored: 0, message: 'all dates already scored' });
   }
 
-  // Compute scores for the gap dates (batchComputeScores needs full byDate for history context)
-  const allScored = batchComputeScores(byDate, healthRows.length);
+  const allScored = batchComputeScores(legacyByDate, metricRows.length);
   const toUpsert = allScored.filter(s => datesToScore.includes(s.date));
 
-  // Upsert in batches of 200
   const BATCH = 200;
   for (let i = 0; i < toUpsert.length; i += BATCH) {
     const chunk = toUpsert.slice(i, i + BATCH).map(s => ({
-      user_id: user.id,
-      date: s.date,
-      type: 'scores',
-      data: {
-        sleepScore:     s.sleepScore,
-        readinessScore: s.readinessScore,
-        activityScore:  s.activityScore,
-        recoveryScore:  s.recoveryScore,
-        calibrated:     s.calibrated,
-        contributors:   s.contributors,
-        computedAt:     s.computedAt,
-      },
-      updated_at: new Date().toISOString(),
+      user_id:         user.id,
+      date:            s.date,
+      winning_source:  bestByDate[s.date]?.source ?? 'oura',
+      sleep_score:     s.sleepScore,
+      readiness_score: s.readinessScore,
+      activity_score:  s.activityScore,
+      recovery_score:  s.recoveryScore,
+      calibrated:      s.calibrated,
+      contributors:    s.contributors,
+      computed_at:     s.computedAt,
     }));
     const { error: uErr } = await supabase
-      .from('entries')
-      .upsert(chunk, { onConflict: 'user_id,date,type' });
+      .from('health_scores')
+      .upsert(chunk, { onConflict: 'user_id,date' });
     if (uErr) return Response.json({ error: uErr.message }, { status: 500 });
   }
 
-  return Response.json({ ok: true, scored: toUpsert.length, total: Object.keys(byDate).length });
+  return Response.json({ ok: true, scored: toUpsert.length, total: Object.keys(legacyByDate).length });
 }

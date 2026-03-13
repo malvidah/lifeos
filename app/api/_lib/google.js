@@ -45,15 +45,12 @@ export async function refreshGoogleToken(refreshToken) {
  * Keeps the existing refresh token — Google only sends it once.
  */
 export async function saveGoogleToken(supabase, userId, accessToken, refreshToken) {
-  await supabase.from('entries').upsert(
-    {
-      date: '0000-00-00', type: 'google_token',
-      data: { token: accessToken, refreshToken },
-      user_id: userId,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'date,type,user_id' }
-  );
+  const { data: existing } = await supabase.from('user_settings')
+    .select('data').eq('user_id', userId).maybeSingle();
+  await supabase.from('user_settings').upsert({
+    user_id: userId,
+    data: { ...(existing?.data || {}), googleToken: accessToken, googleRefreshToken: refreshToken },
+  }, { onConflict: 'user_id' });
 }
 
 /**

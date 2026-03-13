@@ -4,6 +4,32 @@ import {
   calcSleepScore, calcReadinessScore, calcActivityScore, calcRecoveryScore,
 } from '@/lib/scoreCalc.js';
 
+// Maps a health_metrics row (new schema) → the field names scoreCalc.js expects
+// (which use camelCase string values from the old entries schema)
+function metricsToLegacy(row) {
+  if (!row) return {};
+  return {
+    hrv:          row.hrv        != null ? String(row.hrv)       : undefined,
+    rhr:          row.rhr        != null ? String(row.rhr)       : undefined,
+    sleepHrs:     row.sleep_hrs  != null ? String(row.sleep_hrs) : undefined,
+    sleepQuality: row.sleep_eff  != null ? String(row.sleep_eff) : undefined,
+    sleepEff:     row.sleep_eff  != null ? String(row.sleep_eff) : undefined,
+    steps:        row.steps      != null ? String(row.steps)     : undefined,
+    activeMinutes:row.active_min != null ? String(row.active_min): undefined,
+  };
+}
+
+const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
+
+function pickBest(rows) {
+  if (!rows?.length) return null;
+  for (const src of SOURCE_PRIORITY) {
+    const r = rows.find(r => r.source === src);
+    if (r) return r;
+  }
+  return rows[0];
+}
+
 export const GET = withAuth(async (req, { supabase, user }) => {
   const { searchParams } = new URL(req.url);
   const now = new Date();
@@ -22,56 +48,67 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
     if (!hasOverrides) {
       const { data: stored } = await supabase
-        .from('entries').select('data')
-        .eq('user_id', user.id).eq('type', 'scores').eq('date', date).maybeSingle();
+        .from('health_scores')
+        .select('sleep_score, readiness_score, activity_score, recovery_score, calibration_days, calibrated, contributors')
+        .eq('user_id', user.id).eq('date', date).maybeSingle();
 
-      if (stored?.data?.sleepScore != null || stored?.data?.activityScore != null) {
-        const d = stored.data;
+      if (stored?.sleep_score != null || stored?.activity_score != null) {
         const spark7Since = new Date(date);
         spark7Since.setDate(spark7Since.getDate() - 7);
         const { data: sparkRows } = await supabase
-          .from('entries').select('date, data')
-          .eq('user_id', user.id).eq('type', 'scores')
+          .from('health_scores')
+          .select('date, sleep_score, readiness_score, activity_score, recovery_score')
+          .eq('user_id', user.id)
           .gte('date', spark7Since.toISOString().split('T')[0]).lte('date', date)
           .order('date', { ascending: true });
 
-        const sparkByDate = Object.fromEntries((sparkRows ?? []).map(r => [r.date, r.data || {}]));
+        const sparkByDate = Object.fromEntries((sparkRows ?? []).map(r => [r.date, r]));
         const sparkDates = (sparkRows ?? []).map(r => r.date).sort().slice(-7);
         const nv = v => (v != null && !isNaN(+v)) ? +v : null;
         const spark7 = sparkDates.map(sd => sparkByDate[sd] || {});
 
         return Response.json({
-          date, calibrationDays: d.calibrationDays ?? CALIBRATION_DAYS, calibrated: d.calibrated ?? true,
-          sleep:     { score: d.sleepScore,     contributors: d.contributors?.sleep,     sparkline: spark7.map(sd => nv(sd.sleepScore)) },
-          readiness: { score: d.readinessScore, contributors: d.contributors?.readiness, sparkline: spark7.map(sd => nv(sd.readinessScore)) },
-          activity:  { score: d.activityScore,  contributors: d.contributors?.activity,  sparkline: spark7.map(sd => nv(sd.activityScore)) },
-          recovery:  { score: d.recoveryScore,  contributors: d.contributors?.recovery,  sparkline: spark7.map(sd => nv(sd.recoveryScore)) },
+          date,
+          calibrationDays: stored.calibration_days ?? CALIBRATION_DAYS,
+          calibrated: stored.calibrated ?? true,
+          sleep:     { score: stored.sleep_score,     contributors: stored.contributors?.sleep,     sparkline: spark7.map(sd => nv(sd.sleep_score)) },
+          readiness: { score: stored.readiness_score, contributors: stored.contributors?.readiness, sparkline: spark7.map(sd => nv(sd.readiness_score)) },
+          activity:  { score: stored.activity_score,  contributors: stored.contributors?.activity,  sparkline: spark7.map(sd => nv(sd.activity_score)) },
+          recovery:  { score: stored.recovery_score,  contributors: stored.contributors?.recovery,  sparkline: spark7.map(sd => nv(sd.recovery_score)) },
           _cached: true,
         });
       }
     }
   }
 
-  // Full compute path
+  // ── Full compute path ─────────────────────────────────────────────────────
   const since = new Date(date);
   since.setDate(since.getDate() - 90);
-  const { data: rows, error: rowErr } = await supabase
-    .from('entries').select('date, type, data')
-    .eq('user_id', user.id).in('type', ['health', 'health_apple'])
-    .gte('date', since.toISOString().split('T')[0]).lte('date', date)
+  const sinceStr = since.toISOString().split('T')[0];
+
+  const { data: metricsRows, error: metricsErr } = await supabase
+    .from('health_metrics')
+    .select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min')
+    .eq('user_id', user.id)
+    .gte('date', sinceStr).lte('date', date)
     .order('date', { ascending: true });
-  if (rowErr) throw rowErr;
+  if (metricsErr) throw metricsErr;
 
   const { count: totalHealthRows } = await supabase
-    .from('entries').select('date', { count: 'exact', head: true })
-    .eq('user_id', user.id).in('type', ['health', 'health_apple']).lte('date', date);
+    .from('health_metrics')
+    .select('date', { count: 'exact', head: true })
+    .eq('user_id', user.id).lte('date', date);
 
-  // Merge Oura + Apple Health (Oura wins per-field)
+  // Group by date, pick best source per date, convert to legacy format
+  const rowsByDate = {};
+  for (const row of metricsRows ?? []) {
+    if (!rowsByDate[row.date]) rowsByDate[row.date] = [];
+    rowsByDate[row.date].push(row);
+  }
+
   const byDate = {};
-  for (const row of rows ?? []) {
-    if (!byDate[row.date]) byDate[row.date] = {};
-    if (row.type === 'health') Object.assign(byDate[row.date], row.data || {});
-    else for (const [k, v] of Object.entries(row.data || {})) if (!byDate[row.date][k]) byDate[row.date][k] = v;
+  for (const [d, rows] of Object.entries(rowsByDate)) {
+    byDate[d] = metricsToLegacy(pickBest(rows));
   }
 
   const dates = Object.keys(byDate).sort();
@@ -101,40 +138,49 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const activity  = calcActivityScore(todayMerged, history7d);
   const recovery  = calcRecoveryScore(todayMerged, history, calibrated);
 
-  // Build sparklines
+  // ── Build sparklines from health_scores ───────────────────────────────────
   const last7Dates = histDates.slice(-7);
-  const { data: sparkScoreRows } = await supabase
-    .from('entries').select('date, data')
-    .eq('user_id', user.id).eq('type', 'scores')
-    .gte('date', last7Dates[0]).lt('date', date)
-    .order('date', { ascending: true });
-  const sparkScoreByDate = Object.fromEntries((sparkScoreRows ?? []).map(r => [r.date, r.data || {}]));
+  const spark7StartDate = last7Dates[0];
+  const { data: sparkScoreRows } = spark7StartDate ? await supabase
+    .from('health_scores')
+    .select('date, sleep_score, readiness_score, activity_score, recovery_score')
+    .eq('user_id', user.id)
+    .gte('date', spark7StartDate).lt('date', date)
+    .order('date', { ascending: true }) : { data: [] };
+
+  const sparkScoreByDate = Object.fromEntries((sparkScoreRows ?? []).map(r => [r.date, r]));
   const allSparkDates = [...last7Dates.slice(0, -1).filter(d => sparkScoreByDate[d]), date];
   const spark7 = allSparkDates.slice(-7).map(dd => dd === date
-    ? { sleepScore: sleep.score, readinessScore: readiness.score, activityScore: activity.score, recoveryScore: recovery.score }
+    ? { sleep_score: sleep.score, readiness_score: readiness.score, activity_score: activity.score, recovery_score: recovery.score }
     : sparkScoreByDate[dd] || {}
   );
 
   const result = {
     date, calibrationDays, calibrated,
-    sleep:     { ...sleep,     sparkline: spark7.map(d => n(d.sleepScore)) },
-    readiness: { ...readiness, sparkline: spark7.map(d => n(d.readinessScore)) },
-    activity:  { ...activity,  sparkline: spark7.map(d => n(d.activityScore)) },
-    recovery:  { ...recovery,  sparkline: spark7.map(d => n(d.recoveryScore)) },
+    sleep:     { ...sleep,     sparkline: spark7.map(d => n(d.sleep_score)) },
+    readiness: { ...readiness, sparkline: spark7.map(d => n(d.readiness_score)) },
+    activity:  { ...activity,  sparkline: spark7.map(d => n(d.activity_score)) },
+    recovery:  { ...recovery,  sparkline: spark7.map(d => n(d.recovery_score)) },
   };
 
-  // Persist scores
-  supabase.from('entries').upsert({
-    user_id: user.id, date, type: 'scores',
-    data: {
-      sleepScore: sleep.score, readinessScore: readiness.score,
-      activityScore: activity.score, recoveryScore: recovery.score,
-      calibrationDays, calibrated,
-      contributors: { sleep: sleep.contributors, readiness: readiness.contributors, activity: activity.contributors, recovery: recovery.contributors },
-      computedAt: new Date().toISOString(),
+  // ── Persist scores to health_scores ──────────────────────────────────────
+  supabase.from('health_scores').upsert({
+    user_id: user.id, date,
+    winning_source: pickBest(rowsByDate[date] ?? [])?.source ?? null,
+    sleep_score:     sleep.score,
+    readiness_score: readiness.score,
+    activity_score:  activity.score,
+    recovery_score:  recovery.score,
+    calibration_days: calibrationDays,
+    calibrated,
+    contributors: {
+      sleep:     sleep.contributors,
+      readiness: readiness.contributors,
+      activity:  activity.contributors,
+      recovery:  recovery.contributors,
     },
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,date,type' }).then(() => {});
+    computed_at: new Date().toISOString(),
+  }, { onConflict: 'user_id,date' }).then(() => {});
 
   return Response.json(result);
 });

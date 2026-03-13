@@ -39,19 +39,23 @@ export async function POST(request) {
       process.env.SUPABASE_SERVICE_ROLE_KEY
     );
 
-    await adminSupabase.from('entries').upsert({
-      date: 'global', type: 'premium',
-      data: {
-        active: true,
-        plan: session.metadata?.plan || 'monthly',
-        grantedAt: new Date().toISOString(),
-        stripeSessionId: session.id,
-        stripeCustomerId: session.customer,
-        stripeSubscriptionId: session.subscription,
-      },
+    const { data: existing } = await adminSupabase.from('user_settings')
+      .select('data').eq('user_id', user.id).maybeSingle();
+
+    await adminSupabase.from('user_settings').upsert({
       user_id: user.id,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'date,type,user_id' });
+      data: {
+        ...(existing?.data || {}),
+        premium: {
+          active: true,
+          plan: session.metadata?.plan || 'monthly',
+          grantedAt: new Date().toISOString(),
+          stripeSessionId: session.id,
+          stripeCustomerId: session.customer,
+          stripeSubscriptionId: session.subscription,
+        },
+      },
+    }, { onConflict: 'user_id' });
 
     return Response.json({ ok: true });
   } catch (e) {

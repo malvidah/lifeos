@@ -1,53 +1,27 @@
 import { withAuth } from '../_lib/auth.js';
-import { parseTasks } from '../_lib/parseTasks.js';
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-const TAG_RE = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
-const TAG_RE_LEGACY = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
 const BUILTINS = new Set(['health']);
 
-function scanTags(text, out) {
-  if (typeof text !== 'string') return;
-  TAG_RE.lastIndex = 0;
-  let m;
-  while ((m = TAG_RE.exec(text)) !== null) {
-    const name = m[1].toLowerCase();
-    if (!BUILTINS.has(name)) out.add(name);
-  }
-  TAG_RE_LEGACY.lastIndex = 0;
-  while ((m = TAG_RE_LEGACY.exec(text)) !== null) {
-    const name = m[1].toLowerCase();
-    if (!BUILTINS.has(name)) out.add(name);
-  }
-}
-
 // ─── GET /api/projects ────────────────────────────────────────────────────────
-// Returns projects from the DB, augmented with any tags used in entries that
-// don't yet have a project record (lazy migration on read).
+// Returns projects from the DB, augmented with any tags used in the new typed
+// tables that don't yet have a project record (lazy migration on read).
 export const GET = withAuth(async (_req, { supabase, user }) => {
-  const [projR, journalR, tasksR] = await Promise.all([
+  const [projR, journalR, tasksR, notesR] = await Promise.all([
     supabase.from('projects').select('*').eq('user_id', user.id).order('last_active', { ascending: false, nullsFirst: false }),
-    supabase.from('entries').select('data').eq('user_id', user.id).eq('type', 'journal'),
-    supabase.from('entries').select('data').eq('user_id', user.id).eq('type', 'tasks'),
+    supabase.from('journal_blocks').select('project_tags').eq('user_id', user.id),
+    supabase.from('tasks').select('project_tags').eq('user_id', user.id),
+    supabase.from('notes').select('project_tags').eq('user_id', user.id),
   ]);
 
-  // If the projects table doesn't exist yet (migration unrun), fall back to
-  // returning synthetic project objects built from the tag scan below.
-  const tablesMissing = projR.error?.code === '42P01' || projR.error?.message?.includes('does not exist');
-
-  // Build set of all tag names used in entries
+  // Build set of all tag names used across content tables
   const usedTags = new Set();
-  for (const row of (journalR.data || [])) scanTags(typeof row.data === 'string' ? row.data : '', usedTags);
-  for (const row of (tasksR.data || [])) {
-    for (const task of parseTasks(row.data)) scanTags(task.text, usedTags);
-  }
-
-  // If the table doesn't exist, return synthetic project objects from the tag
-  // scan so the nav strip shows something useful while awaiting migration.
-  if (tablesMissing) {
-    const projects = [...usedTags].map(name => ({ name, color: null, last_active: null, created_at: null }));
-    return Response.json({ projects });
+  for (const result of [journalR, tasksR, notesR]) {
+    for (const row of result.data ?? []) {
+      for (const tag of row.project_tags ?? []) {
+        const lower = tag.toLowerCase().trim();
+        if (lower && !BUILTINS.has(lower)) usedTags.add(lower);
+      }
+    }
   }
 
   // Build map of existing project records
@@ -61,8 +35,6 @@ export const GET = withAuth(async (_req, { supabase, user }) => {
     for (const p of (created || [])) existing.set(p.name, p);
   }
 
-  // Return merged list: DB projects first (sorted by last_active), then any
-  // used tags without records (shouldn't happen after lazy creation above)
   const projects = [...existing.values()].sort((a, b) => {
     if (a.last_active && b.last_active) return b.last_active.localeCompare(a.last_active);
     if (a.last_active) return -1;

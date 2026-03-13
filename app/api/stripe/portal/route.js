@@ -16,11 +16,11 @@ export async function POST(request) {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
     if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-    // Look up the Stripe customer ID from their premium row
-    const { data: premRow } = await supabase.from('entries').select('data')
-      .eq('type', 'premium').eq('date', 'global').eq('user_id', user.id).maybeSingle();
+    // Look up the Stripe customer ID from user_settings.data.premium
+    const { data: settings } = await supabase.from('user_settings').select('data')
+      .eq('user_id', user.id).maybeSingle();
 
-    const customerId = premRow?.data?.stripeCustomerId;
+    const customerId = settings?.data?.premium?.stripeCustomerId;
     if (!customerId) return Response.json({ error: 'No billing account found' }, { status: 404 });
 
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);

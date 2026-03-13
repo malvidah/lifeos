@@ -15,13 +15,13 @@ export async function POST() {
   const now = new Date();
   const today = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
 
-  const { error } = await supabase
-    .from('entries')
-    .delete()
-    .eq('user_id', user.id)
-    .in('type', ['health', 'health_apple', 'scores'])
-    .gt('date', today);
+  // Delete future health_metrics and health_scores rows
+  const [metricsResult, scoresResult] = await Promise.all([
+    supabase.from('health_metrics').delete().eq('user_id', user.id).gt('date', today),
+    supabase.from('health_scores').delete().eq('user_id', user.id).gt('date', today),
+  ]);
 
+  const error = metricsResult.error || scoresResult.error;
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json({ ok: true, today });
 }

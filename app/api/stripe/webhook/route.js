@@ -24,36 +24,40 @@ export async function POST(request) {
     const userId = session.client_reference_id || session.metadata?.userId;
     if (!userId) return Response.json({ error: 'no userId' }, { status: 400 });
 
-    await supabase.from('entries').upsert({
-      date: 'global', type: 'premium',
-      data: {
-        active: true,
-        plan: session.metadata?.plan || 'monthly',
-        grantedAt: new Date().toISOString(),
-        stripeSessionId: session.id,
-        stripeCustomerId: session.customer,
-        stripeSubscriptionId: session.subscription,
-      },
+    const { data: existing } = await supabase.from('user_settings')
+      .select('data').eq('user_id', userId).maybeSingle();
+
+    await supabase.from('user_settings').upsert({
       user_id: userId,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'date,type,user_id' });
+      data: {
+        ...(existing?.data || {}),
+        premium: {
+          active: true,
+          plan: session.metadata?.plan || 'monthly',
+          grantedAt: new Date().toISOString(),
+          stripeSessionId: session.id,
+          stripeCustomerId: session.customer,
+          stripeSubscriptionId: session.subscription,
+        },
+      },
+    }, { onConflict: 'user_id' });
   }
 
   // Revoke premium if subscription is cancelled or payment fails
   if (event.type === 'customer.subscription.deleted' || event.type === 'invoice.payment_failed') {
     const obj = event.data.object;
     const customerId = obj.customer;
-    // Look up user by stripe customer ID
-    const { data: rows } = await supabase.from('entries')
-      .select('user_id, data').eq('type', 'premium').eq('date', 'global');
-    const match = rows?.find(r => r.data?.stripeCustomerId === customerId);
+    // Look up user by stripe customer ID stored in user_settings
+    const { data: rows } = await supabase.from('user_settings').select('user_id, data');
+    const match = rows?.find(r => r.data?.premium?.stripeCustomerId === customerId);
     if (match) {
-      await supabase.from('entries').upsert({
-        date: 'global', type: 'premium',
-        data: { ...match.data, active: false, revokedAt: new Date().toISOString() },
+      await supabase.from('user_settings').upsert({
         user_id: match.user_id,
-        updated_at: new Date().toISOString(),
-      }, { onConflict: 'date,type,user_id' });
+        data: {
+          ...match.data,
+          premium: { ...match.data.premium, active: false, revokedAt: new Date().toISOString() },
+        },
+      }, { onConflict: 'user_id' });
     }
   }
 

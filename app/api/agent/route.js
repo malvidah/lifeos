@@ -1,135 +1,174 @@
 import { createClient } from '@supabase/supabase-js';
-import { refreshGoogleToken, saveGoogleToken } from '../_lib/google.js';
+import { refreshGoogleToken } from '../_lib/google.js';
+import { getServiceClient } from '../_lib/auth.js';
 import { rateLimit } from '../_lib/rateLimit.js';
 
-const SERVICE = () => createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+// ── Agent token auth ─────────────────────────────────────────────────────────
+// Tokens are stored in user_settings.data.agentToken (service-role access required
+// because the request uses the dl_ token, not a Supabase JWT).
+
+async function resolveAgentToken(personalToken) {
+  if (!personalToken?.startsWith('dl_')) return null;
+  const svc = getServiceClient();
+  // Scan user_settings for a matching token (low-volume endpoint, acceptable)
+  const { data: rows } = await svc.from('user_settings').select('user_id, data');
+  const match = rows?.find(r => r.data?.agentToken?.token === personalToken);
+  return match ? { userId: match.user_id, svc } : null;
+}
+
+// ── READ helpers ─────────────────────────────────────────────────────────────
+
+async function readTyped(svc, userId, type, date) {
+  switch (type) {
+    case 'journal': {
+      const { data } = await svc.from('journal_blocks').select('content, position')
+        .eq('user_id', userId).eq('date', date).order('position');
+      return (data ?? []).map(r => r.content.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join('\n');
+    }
+    case 'tasks': {
+      const { data } = await svc.from('tasks').select('text, done, due_date')
+        .eq('user_id', userId).eq('date', date).order('position');
+      return data ?? [];
+    }
+    case 'meals': {
+      const { data } = await svc.from('meal_items').select('content, ai_calories, ai_protein')
+        .eq('user_id', userId).eq('date', date).order('position');
+      return (data ?? []).map(r => ({ text: r.content, kcal: r.ai_calories, protein: r.ai_protein }));
+    }
+    case 'workouts':
+    case 'activity': {
+      const { data } = await svc.from('workouts').select('name, sport, duration_mins, distance_m, avg_hr, calories, source')
+        .eq('user_id', userId).eq('date', date);
+      return data ?? [];
+    }
+    case 'health': {
+      const { data } = await svc.from('health_metrics').select('*')
+        .eq('user_id', userId).eq('date', date);
+      if (!data?.length) return null;
+      const priority = ['oura', 'apple', 'garmin'];
+      return data.sort((a, b) => priority.indexOf(a.source) - priority.indexOf(b.source))[0];
+    }
+    default:
+      return null;
+  }
+}
+
+async function readAll(svc, userId, date) {
+  const [journal, tasks, meals, workouts, health] = await Promise.all([
+    readTyped(svc, userId, 'journal',  date),
+    readTyped(svc, userId, 'tasks',    date),
+    readTyped(svc, userId, 'meals',    date),
+    readTyped(svc, userId, 'workouts', date),
+    readTyped(svc, userId, 'health',   date),
+  ]);
+  return { journal, tasks, meals, workouts, health };
+}
+
+// ── Main handler ─────────────────────────────────────────────────────────────
 
 export async function POST(request) {
   try {
-    // ── Auth: resolve personal token → user_id ──────────────────────────
     const auth = request.headers.get('authorization') || '';
     const personalToken = auth.replace('Bearer ', '').trim();
-    if (!personalToken?.startsWith('dl_')) {
-      return Response.json({ error: 'Invalid token' }, { status: 401 });
-    }
 
-    const svc = SERVICE();
-    const { data: tokenRow } = await svc
-      .from('entries')
-      .select('user_id')
-      .eq('type', 'agent_token')
-      .eq('date', 'global')
-      .eq('data->>token', personalToken)
-      .maybeSingle();
+    const resolved = await resolveAgentToken(personalToken);
+    if (!resolved) return Response.json({ error: 'Token not found' }, { status: 401 });
+    const { userId, svc } = resolved;
 
-    if (!tokenRow?.user_id) {
-      return Response.json({ error: 'Token not found' }, { status: 401 });
-    }
-    const userId = tokenRow.user_id;
-
-    // ── Rate limit: 120/hour per token ──────────────────────────────────
     const rl = rateLimit(`agent:${personalToken}`, { max: 120, windowMs: 60 * 60 * 1000 });
     if (!rl.ok) return Response.json({ error: `Rate limited. Retry in ${rl.retryAfter}s` }, { status: 429 });
 
-    const body = await request.json();
-    const { action, type, date, payload } = body;
+    const { action, type, date, payload } = await request.json();
 
-    // ── READ ────────────────────────────────────────────────────────────
+    // ── READ ──────────────────────────────────────────────────────────────
     if (action === 'read') {
       if (type === 'all') {
-        const { data: rows } = await svc.from('entries')
-          .select('type, data')
-          .eq('date', date)
-          .eq('user_id', userId);
-        const result = {};
-        for (const r of rows || []) result[r.type] = r.data;
-        return Response.json({ ok: true, date, data: result });
+        const data = await readAll(svc, userId, date);
+        return Response.json({ ok: true, date, data });
       }
-      const { data: row } = await svc.from('entries')
-        .select('data')
-        .eq('date', date)
-        .eq('type', type)
-        .eq('user_id', userId)
-        .maybeSingle();
-      return Response.json({ ok: true, date, type, data: row?.data ?? null });
+      const data = await readTyped(svc, userId, type, date);
+      return Response.json({ ok: true, date, type, data });
     }
 
-    // ── WRITE ───────────────────────────────────────────────────────────
+    // ── WRITE ─────────────────────────────────────────────────────────────
     if (action === 'write') {
       const targetDate = date || new Date().toISOString().split('T')[0];
 
       // tasks
       if (type === 'tasks') {
-        const { data: existing } = await svc.from('entries').select('data')
-          .eq('date', targetDate).eq('type', 'tasks').eq('user_id', userId).maybeSingle();
-        const current = Array.isArray(existing?.data) ? existing.data : [];
-        const cleaned = current.filter(r => r.text?.trim());
-
         if (payload.add) {
           const items = Array.isArray(payload.add) ? payload.add : [payload.add];
-          const newRows = items.map(t => ({ id: crypto.randomUUID(), text: t, done: false }));
-          await svc.from('entries').upsert(
-            { date: targetDate, type: 'tasks', data: [...cleaned, ...newRows], user_id: userId, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          return Response.json({ ok: true, added: items.length, tasks: newRows });
+          const { data: last } = await svc.from('tasks').select('position')
+            .eq('user_id', userId).eq('date', targetDate).order('position', { ascending: false }).limit(1);
+          let nextPos = (last?.[0]?.position ?? -1) + 1;
+          const rows = items.map(t => ({
+            user_id: userId, date: targetDate, position: nextPos++,
+            text: t, html: `<li data-type="taskItem" data-checked="false"><p>${t}</p></li>`, done: false,
+          }));
+          await svc.from('tasks').insert(rows);
+          return Response.json({ ok: true, added: items.length, tasks: rows.map(r => ({ text: r.text, done: false })) });
         }
         if (payload.complete) {
-          const updated = current.map(r =>
-            r.text?.toLowerCase().includes(payload.complete.toLowerCase()) ? { ...r, done: true } : r
-          );
-          await svc.from('entries').upsert(
-            { date: targetDate, type: 'tasks', data: updated, user_id: userId, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
+          const { data: rows } = await svc.from('tasks').select('id, text')
+            .eq('user_id', userId).eq('date', targetDate).eq('done', false);
+          const match = rows?.find(r => r.text?.toLowerCase().includes(payload.complete.toLowerCase()));
+          if (match) await svc.from('tasks').update({ done: true, completed_at: targetDate }).eq('id', match.id);
           return Response.json({ ok: true, action: 'completed', match: payload.complete });
         }
         if (payload.delete) {
-          const updated = current.filter(r => !r.text?.toLowerCase().includes(payload.delete.toLowerCase()));
-          await svc.from('entries').upsert(
-            { date: targetDate, type: 'tasks', data: updated, user_id: userId, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
+          const { data: rows } = await svc.from('tasks').select('id, text')
+            .eq('user_id', userId).eq('date', targetDate);
+          const match = rows?.find(r => r.text?.toLowerCase().includes(payload.delete.toLowerCase()));
+          if (match) await svc.from('tasks').delete().eq('id', match.id);
           return Response.json({ ok: true, action: 'deleted', match: payload.delete });
         }
       }
 
-      // notes
+      // notes / journal
       if (type === 'notes' || type === 'journal') {
-        const { data: existing } = await svc.from('entries').select('data')
-          .eq('date', targetDate).eq('type', 'journal').eq('user_id', userId).maybeSingle();
         if (payload.append) {
-          const current = existing?.data || '';
-          const updated = current ? current + '\n\n' + payload.append : payload.append;
-          await svc.from('entries').upsert(
-            { date: targetDate, type: 'journal', data: updated, user_id: userId, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
+          const { data: last } = await svc.from('journal_blocks').select('position')
+            .eq('user_id', userId).eq('date', targetDate).order('position', { ascending: false }).limit(1);
+          const nextPos = (last?.[0]?.position ?? -1) + 1;
+          await svc.from('journal_blocks').insert({
+            user_id: userId, date: targetDate, position: nextPos,
+            content: `<p>${payload.append}</p>`, project_tags: [], note_tags: [],
+          });
           return Response.json({ ok: true, action: 'appended' });
         }
         if (payload.set !== undefined) {
-          await svc.from('entries').upsert(
-            { date: targetDate, type: 'journal', data: payload.set, user_id: userId, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
+          // Full replace — delete blocks for date, insert single block
+          await svc.from('journal_blocks').delete().eq('user_id', userId).eq('date', targetDate);
+          if (payload.set) {
+            await svc.from('journal_blocks').insert({
+              user_id: userId, date: targetDate, position: 0,
+              content: `<p>${payload.set}</p>`, project_tags: [], note_tags: [],
+            });
+          }
           return Response.json({ ok: true, action: 'set' });
         }
       }
 
-      // meals / activity — add rows
-      if (type === 'meals' || type === 'activity' || type === 'workouts') {
-        const { data: existing } = await svc.from('entries').select('data')
-          .eq('date', targetDate).eq('type', type).eq('user_id', userId).maybeSingle();
-        const current = Array.isArray(existing?.data) ? existing.data : [];
+      // meals
+      if (type === 'meals') {
         if (payload.add) {
           const items = Array.isArray(payload.add) ? payload.add : [payload.add];
-          const newRows = items.map(t => ({ id: crypto.randomUUID(), text: t, kcal: null }));
-          await svc.from('entries').upsert(
-            { date: targetDate, type, data: [...current.filter(r => r.text?.trim()), ...newRows], user_id: userId, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
+          const { data: last } = await svc.from('meal_items').select('position')
+            .eq('user_id', userId).eq('date', targetDate).order('position', { ascending: false }).limit(1);
+          let nextPos = (last?.[0]?.position ?? -1) + 1;
+          await svc.from('meal_items').insert(
+            items.map(t => ({ user_id: userId, date: targetDate, position: nextPos++, content: t }))
+          );
+          return Response.json({ ok: true, added: items.length });
+        }
+      }
+
+      // activity / workouts
+      if (type === 'activity' || type === 'workouts') {
+        if (payload.add) {
+          const items = Array.isArray(payload.add) ? payload.add : [payload.add];
+          await svc.from('workouts').insert(
+            items.map(t => ({ user_id: userId, date: targetDate, name: t, source: 'manual' }))
           );
           return Response.json({ ok: true, added: items.length });
         }
@@ -137,17 +176,16 @@ export async function POST(request) {
 
       // calendar
       if (type === 'calendar') {
-        const { data: stored } = await svc.from('entries').select('data')
-          .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', userId).maybeSingle();
-        let accessToken = stored?.data?.token;
-        const refreshTok = stored?.data?.refreshToken;
+        const { data: settingsRow } = await svc.from('user_settings').select('data')
+          .eq('user_id', userId).maybeSingle();
+        let accessToken = settingsRow?.data?.googleToken;
+        const refreshTok = settingsRow?.data?.googleRefreshToken;
         if (!accessToken && refreshTok) accessToken = await refreshGoogleToken(refreshTok);
         if (!accessToken) return Response.json({ error: 'No Google Calendar token' }, { status: 400 });
 
         const events = Array.isArray(payload.events) ? payload.events : [payload.events];
         const tz = payload.tz || 'America/Los_Angeles';
         const results = [];
-
         for (const ev of events) {
           const evDate = ev.date || targetDate;
           let eventBody;
@@ -163,7 +201,7 @@ export async function POST(request) {
             eventBody = {
               summary: ev.title,
               start: { dateTime: `${evDate}T${ev.startTime}:00`, timeZone: tz },
-              end: { dateTime: `${evDate}T${endT}:00`, timeZone: tz },
+              end:   { dateTime: `${evDate}T${endT}:00`,         timeZone: tz },
             };
           }
           const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
@@ -184,51 +222,56 @@ export async function POST(request) {
   }
 }
 
-// ── Token management ────────────────────────────────────────────────────────
-export async function PUT(request) {
-  // Generate a new personal token for the authenticated user
-  const auth = request.headers.get('authorization') || '';
-  const sessionToken = auth.replace('Bearer ', '').trim();
-  if (!sessionToken) return Response.json({ error: 'unauthorized' }, { status: 401 });
+// ── Token management ─────────────────────────────────────────────────────────
 
-  const userClient = createClient(
+function getUserClient(sessionToken) {
+  return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     { global: { headers: { Authorization: `Bearer ${sessionToken}` } } }
   );
+}
+
+export async function PUT(request) {
+  const sessionToken = (request.headers.get('authorization') || '').replace('Bearer ', '').trim();
+  if (!sessionToken) return Response.json({ error: 'unauthorized' }, { status: 401 });
+
+  const userClient = getUserClient(sessionToken);
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const svc = SERVICE();
   const token = 'dl_' + Array.from(crypto.getRandomValues(new Uint8Array(24)))
     .map(b => b.toString(16).padStart(2, '0')).join('');
 
-  await svc.from('entries').upsert(
-    { date: 'global', type: 'agent_token', user_id: user.id, data: { token, createdAt: new Date().toISOString() }, updated_at: new Date().toISOString() },
-    { onConflict: 'date,type,user_id' }
-  );
+  const svc = getServiceClient();
+  const { data: existing } = await svc.from('user_settings').select('data')
+    .eq('user_id', user.id).maybeSingle();
+  await svc.from('user_settings').upsert({
+    user_id: user.id,
+    data: { ...(existing?.data || {}), agentToken: { token, createdAt: new Date().toISOString() } },
+  }, { onConflict: 'user_id' });
+
   return Response.json({ ok: true, token });
 }
 
 export async function GET(request) {
-  // Check if a token exists (return masked version)
-  const auth = request.headers.get('authorization') || '';
-  const sessionToken = auth.replace('Bearer ', '').trim();
+  const sessionToken = (request.headers.get('authorization') || '').replace('Bearer ', '').trim();
   if (!sessionToken) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const userClient = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { global: { headers: { Authorization: `Bearer ${sessionToken}` } } }
-  );
+  const userClient = getUserClient(sessionToken);
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const svc = SERVICE();
-  const { data: row } = await svc.from('entries').select('data')
-    .eq('date', 'global').eq('type', 'agent_token').eq('user_id', user.id).maybeSingle();
+  const svc = getServiceClient();
+  const { data: row } = await svc.from('user_settings').select('data')
+    .eq('user_id', user.id).maybeSingle();
+  const tokenData = row?.data?.agentToken;
 
-  if (!row?.data?.token) return Response.json({ exists: false });
-  const t = row.data.token;
-  return Response.json({ exists: true, masked: t.slice(0, 7) + '••••••••••••••••' + t.slice(-4), createdAt: row.data.createdAt });
+  if (!tokenData?.token) return Response.json({ exists: false });
+  const t = tokenData.token;
+  return Response.json({
+    exists: true,
+    masked: t.slice(0, 7) + '••••••••••••••••' + t.slice(-4),
+    createdAt: tokenData.createdAt,
+  });
 }

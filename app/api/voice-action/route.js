@@ -1,50 +1,52 @@
-import { createClient } from '@supabase/supabase-js';
-import { getUserClient, refreshGoogleToken } from '../_lib/google.js';
+import { withAuth } from '../_lib/auth.js';
+import { refreshGoogleToken } from '../_lib/google.js';
 import { isPremium } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
-import { parseTasks } from '../_lib/parseTasks.js';
 
-export async function POST(request) {
-  try {
-    const { supabase } = getUserClient(request);
-    if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+export const POST = withAuth(async (req, { supabase, user }) => {
+  const { text, date, tz } = await req.json();
+  if (!text?.trim() || !date) return Response.json({ error: 'text and date required' }, { status: 400 });
+  if (text.length > 2000) return Response.json({ error: 'Input too long' }, { status: 400 });
 
-    const { text, date, tz } = await request.json();
-    if (!text?.trim() || !date) return Response.json({ error: 'text and date required' }, { status: 400 });
+  const rl = rateLimit(`voice:${user.id}`, { max: 60, windowMs: 60 * 60 * 1000 });
+  if (!rl.ok) return Response.json({ error: `Too many requests. Try again in ${rl.retryAfter}s.` }, { status: 429 });
 
-    // Cap input length to prevent prompt injection via giant strings
-    if (text.length > 2000) return Response.json({ error: 'Input too long' }, { status: 400 });
+  const premium = await isPremium(supabase, user.id);
+  if (!premium) return Response.json({ tier: 'free', message: 'Voice entry requires a Premium account.' });
 
-    // Rate limit: 60 actions per user per hour
-    const rl = rateLimit(`voice:${user.id}`, { max: 60, windowMs: 60 * 60 * 1000 });
-    if (!rl.ok) return Response.json({ error: `Too many requests. Try again in ${rl.retryAfter}s.` }, { status: 429 });
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
 
-    // Voice entry is a premium feature
-    const premium = await isPremium(supabase, user.id);
-    if (!premium) {
-      return Response.json({ tier: 'free', message: 'Voice entry requires a Premium account.' });
-    }
+  // Build snapshot of today's data from typed tables
+  const [journalR, tasksR, mealsR, workoutsR] = await Promise.all([
+    supabase.from('journal_blocks').select('content').eq('user_id', user.id).eq('date', date).order('position'),
+    supabase.from('tasks').select('text, done').eq('user_id', user.id).eq('date', date).order('position'),
+    supabase.from('meal_items').select('content, ai_calories').eq('user_id', user.id).eq('date', date).order('position'),
+    supabase.from('workouts').select('name, sport, duration_mins').eq('user_id', user.id).eq('date', date),
+  ]);
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
+  const snapshot = [];
+  const mealItems = mealsR.data ?? [];
+  if (mealItems.length) {
+    snapshot.push(`Current meals: ${mealItems.filter(r => r.content?.trim()).map(r => r.content).join(', ')}`);
+  }
+  const taskItems = tasksR.data ?? [];
+  if (taskItems.length) {
+    snapshot.push(`Current tasks: ${taskItems.filter(r => r.text?.trim()).map(r => r.text).join(', ')}`);
+  }
+  const workoutItems = workoutsR.data ?? [];
+  if (workoutItems.length) {
+    snapshot.push(`Current activity: ${workoutItems.map(w => w.name || w.sport || 'workout').join(', ')}`);
+  }
+  const journalBlocks = journalR.data ?? [];
+  if (journalBlocks.length) {
+    const text = journalBlocks.map(r => r.content.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' ');
+    if (text) snapshot.push(`Current notes: ${text.slice(0, 300)}`);
+  }
 
-    // Build context snapshot of today's data so Claude can handle edits intelligently
-    const { data: todayEntries } = await supabase.from('entries')
-      .select('type, data').eq('date', date).eq('user_id', user.id);
-    const today = {};
-    for (const row of todayEntries || []) today[row.type] = row.data;
+  const contextSnippet = snapshot.length ? snapshot.join('\n') : 'No data logged yet today.';
 
-    const snapshot = [];
-    if (today.meals?.length) snapshot.push(`Current meals: ${today.meals.filter(r=>r.text?.trim()).map(r=>r.text).join(', ')}`);
-    if (today.tasks) { const tasks = parseTasks(today.tasks); if (tasks.length) snapshot.push(`Current tasks: ${tasks.filter(r=>r.text?.trim()).map(r=>r.text).join(', ')}`); }
-    if (today.activity?.length) snapshot.push(`Current activity: ${today.activity.filter(r=>r.text?.trim()).map(r=>r.text).join(', ')}`);
-    if (today.notes) snapshot.push(`Current notes: ${String(today.notes).slice(0, 300)}`);
-
-    const contextSnippet = snapshot.length ? snapshot.join('\n') : 'No data logged yet today.';
-
-    const systemPrompt = `You are a data entry assistant for a personal wellness dashboard. Your only job is to parse add/log/update/delete commands and write structured actions.
+  const systemPrompt = `You are a data entry assistant for a personal wellness dashboard. Your only job is to parse add/log/update/delete commands and write structured actions.
 
 Respond ONLY with valid JSON — no explanation, no markdown.
 
@@ -81,227 +83,198 @@ Keep summary short and conversational: "Added breakfast" not "Successfully added
 Today's existing data:
 ${contextSnippet}`;
 
-    const userMessage = [
-      snapshot.length ? `Today's data:\n${snapshot.join('\n')}` : '',
-      `New message: "${text}"`,
-    ].filter(Boolean).join('\n\n');
+  const userMessage = [
+    snapshot.length ? `Today's data:\n${snapshot.join('\n')}` : '',
+    `New message: "${text}"`,
+  ].filter(Boolean).join('\n\n');
 
-    const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 250,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userMessage }],
-      }),
-    });
+  const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 250,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }],
+    }),
+  });
 
-    const parseData = await parseRes.json();
-    if (parseData.error) {
-      return Response.json({ error: `AI error: ${parseData.error?.message || JSON.stringify(parseData.error)}` }, { status: 500 });
-    }
-    const rawText = parseData.content?.find(b => b.type === 'text')?.text || '{}';
-    let parsed;
-    try {
-      parsed = JSON.parse(rawText.match(/\{[\s\S]*\}/)?.[0] || '{}');
-    } catch {
-      return Response.json({ error: 'Failed to parse AI response' }, { status: 500 });
-    }
-
-    // If AI declined (question, vague, unsupported) — return message to show in status bar
-    if (!parsed.ok || parsed.ok === false) {
-      return Response.json({ ok: false, message: parsed.message || "I can only add data — try 'add a meal' or 'add a task'" });
-    }
-
-    const actions = parsed.actions || [];
-    const results = [];
-
-    for (const action of actions) {
-      const { type } = action;
-
-      // ── NOTES ──────────────────────────────────────────────────────────────
-      if ((type === 'notes' || type === 'journal') && action.append) {
-        const { data: existing } = await supabase.from('entries').select('data')
-          .eq('date', date).eq('type', 'journal').eq('user_id', user.id).maybeSingle();
-        const current = existing?.data || '';
-        const updated = current ? current + '\n\n' + action.append : action.append;
-        await supabase.from('entries').upsert(
-          { date, type: 'journal', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-          { onConflict: 'date,type,user_id' }
-        );
-        results.push({ type: 'journal', count: 1 });
-      }
-
-      // ── MEALS ──────────────────────────────────────────────────────────────
-      if (type === 'meals') {
-        const { data: existing } = await supabase.from('entries').select('data')
-          .eq('date', date).eq('type', 'meals').eq('user_id', user.id).maybeSingle();
-        const current = Array.isArray(existing?.data) ? existing.data : [];
-
-        if (action.entries?.length) {
-          const cleaned = current.filter(r => r.text?.trim());
-          const newRows = action.entries.map(text => ({ id: crypto.randomUUID(), text, kcal: null, protein: null }));
-          await supabase.from('entries').upsert(
-            { date, type: 'meals', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'meals', count: newRows.length });
-        }
-        if (action.edit) {
-          const updated = current.map(r =>
-            r.text?.toLowerCase().includes(action.edit.find.toLowerCase())
-              ? { ...r, text: action.edit.replace, kcal: null, protein: null }
-              : r
-          );
-          await supabase.from('entries').upsert(
-            { date, type: 'meals', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'meals', count: 1 });
-        }
-        if (action.delete) {
-          const updated = current.filter(r => !r.text?.toLowerCase().includes(action.delete.toLowerCase()));
-          await supabase.from('entries').upsert(
-            { date, type: 'meals', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'meals', count: 1 });
-        }
-      }
-
-      // ── TASKS ──────────────────────────────────────────────────────────────
-      if (type === 'tasks') {
-        const { data: existing } = await supabase.from('entries').select('data')
-          .eq('date', date).eq('type', 'tasks').eq('user_id', user.id).maybeSingle();
-        const current = Array.isArray(existing?.data) ? existing.data : [];
-
-        if (action.entries?.length) {
-          const cleaned = current.filter(r => r.text?.trim());
-          const newRows = action.entries.map(e => ({ id: crypto.randomUUID(), text: typeof e === 'string' ? e : e.text, done: false }));
-          await supabase.from('entries').upsert(
-            { date, type: 'tasks', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'tasks', count: newRows.length });
-        }
-        if (action.edit) {
-          const updated = current.map(r =>
-            r.text?.toLowerCase().includes(action.edit.find.toLowerCase())
-              ? { ...r, text: action.edit.replace }
-              : r
-          );
-          await supabase.from('entries').upsert(
-            { date, type: 'tasks', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'tasks', count: 1 });
-        }
-        if (action.delete) {
-          const updated = current.filter(r => !r.text?.toLowerCase().includes(action.delete.toLowerCase()));
-          await supabase.from('entries').upsert(
-            { date, type: 'tasks', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'tasks', count: 1 });
-        }
-      }
-
-      // ── ACTIVITY ───────────────────────────────────────────────────────────
-      if (type === 'activity' || type === 'workouts') {
-        const { data: existing } = await supabase.from('entries').select('data')
-          .eq('date', date).eq('type', 'workouts').eq('user_id', user.id).maybeSingle();
-        const current = Array.isArray(existing?.data) ? existing.data : [];
-
-        if (action.entries?.length) {
-          const cleaned = current.filter(r => r.text?.trim());
-          const newRows = action.entries.map(text => ({ id: crypto.randomUUID(), text, kcal: null }));
-          await supabase.from('entries').upsert(
-            { date, type: 'workouts', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'workouts', count: newRows.length });
-        }
-        if (action.edit) {
-          const updated = current.map(r =>
-            r.text?.toLowerCase().includes(action.edit.find.toLowerCase())
-              ? { ...r, text: action.edit.replace }
-              : r
-          );
-          await supabase.from('entries').upsert(
-            { date, type: 'workouts', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'workouts', count: 1 });
-        }
-        if (action.delete) {
-          const updated = current.filter(r => !r.text?.toLowerCase().includes(action.delete.toLowerCase()));
-          await supabase.from('entries').upsert(
-            { date, type: 'workouts', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-            { onConflict: 'date,type,user_id' }
-          );
-          results.push({ type: 'workouts', count: 1 });
-        }
-      }
-
-      // ── CALENDAR ───────────────────────────────────────────────────────────
-      if (type === 'calendar' && action.events?.length) {
-        const { data: stored } = await supabase.from('entries').select('data')
-          .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', user.id).maybeSingle();
-        let accessToken = stored?.data?.token;
-        const refreshTok = stored?.data?.refreshToken;
-        if (refreshTok && !accessToken) accessToken = await refreshGoogleToken(refreshTok);
-
-        const timezone = tz || 'America/Los_Angeles';
-        for (const ev of action.events) {
-          if (!accessToken) break;
-          let eventBody;
-          if (ev.allDay || !ev.startTime) {
-            const nextDay = new Date(date + 'T12:00:00');
-            nextDay.setDate(nextDay.getDate() + 1);
-            eventBody = { summary: ev.title, start: { date }, end: { date: nextDay.toISOString().split('T')[0] } };
-          } else {
-            const endT = ev.endTime || (() => {
-              const [h, m] = ev.startTime.split(':').map(Number);
-              return `${String((h+1)%24).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
-            })();
-            eventBody = {
-              summary: ev.title,
-              start: { dateTime: `${date}T${ev.startTime}:00`, timeZone: timezone },
-              end: { dateTime: `${date}T${endT}:00`, timeZone: timezone },
-            };
-          }
-          let res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(eventBody),
-          });
-          if (!res.ok && refreshTok) {
-            const newToken = await refreshGoogleToken(refreshTok);
-            if (newToken) {
-              accessToken = newToken;
-              await supabase.from('entries').upsert(
-                { date: '0000-00-00', type: 'google_token', data: { token: newToken, refreshToken: refreshTok }, user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(eventBody),
-              });
-            }
-          }
-          results.push({ type: 'calendar', title: ev.title, ok: res.ok });
-        }
-      }
-    }
-
-    return Response.json({ ok: true, results, summary: parsed.summary || 'Done.' });
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 });
+  const parseData = await parseRes.json();
+  if (parseData.error) {
+    return Response.json({ error: `AI error: ${parseData.error?.message || JSON.stringify(parseData.error)}` }, { status: 500 });
   }
-}
+  const rawText = parseData.content?.find(b => b.type === 'text')?.text || '{}';
+  let parsed;
+  try {
+    parsed = JSON.parse(rawText.match(/\{[\s\S]*\}/)?.[0] || '{}');
+  } catch {
+    return Response.json({ error: 'Failed to parse AI response' }, { status: 500 });
+  }
+
+  if (!parsed.ok) {
+    return Response.json({ ok: false, message: parsed.message || "I can only add data — try 'add a meal' or 'add a task'" });
+  }
+
+  const results = [];
+
+  for (const action of parsed.actions || []) {
+    const { type } = action;
+
+    // ── JOURNAL ──────────────────────────────────────────────────────────────
+    if ((type === 'notes' || type === 'journal') && action.append) {
+      const { data: last } = await supabase.from('journal_blocks').select('position')
+        .eq('user_id', user.id).eq('date', date).order('position', { ascending: false }).limit(1);
+      const nextPos = (last?.[0]?.position ?? -1) + 1;
+      await supabase.from('journal_blocks').insert({
+        user_id: user.id, date, position: nextPos,
+        content: `<p>${action.append}</p>`, project_tags: [], note_tags: [],
+      });
+      results.push({ type: 'journal', count: 1 });
+    }
+
+    // ── MEALS ────────────────────────────────────────────────────────────────
+    if (type === 'meals') {
+      if (action.entries?.length) {
+        const { data: last } = await supabase.from('meal_items').select('position')
+          .eq('user_id', user.id).eq('date', date).order('position', { ascending: false }).limit(1);
+        let nextPos = (last?.[0]?.position ?? -1) + 1;
+        await supabase.from('meal_items').insert(
+          action.entries.map(text => ({ user_id: user.id, date, position: nextPos++, content: text }))
+        );
+        results.push({ type: 'meals', count: action.entries.length });
+      }
+      if (action.edit) {
+        const { data: items } = await supabase.from('meal_items').select('id, content')
+          .eq('user_id', user.id).eq('date', date);
+        const match = items?.find(r => r.content?.toLowerCase().includes(action.edit.find.toLowerCase()));
+        if (match) await supabase.from('meal_items')
+          .update({ content: action.edit.replace, ai_calories: null, ai_protein: null })
+          .eq('id', match.id).eq('user_id', user.id);
+        results.push({ type: 'meals', count: 1 });
+      }
+      if (action.delete) {
+        const { data: items } = await supabase.from('meal_items').select('id, content')
+          .eq('user_id', user.id).eq('date', date);
+        const match = items?.find(r => r.content?.toLowerCase().includes(action.delete.toLowerCase()));
+        if (match) await supabase.from('meal_items').delete().eq('id', match.id).eq('user_id', user.id);
+        results.push({ type: 'meals', count: 1 });
+      }
+    }
+
+    // ── TASKS ────────────────────────────────────────────────────────────────
+    if (type === 'tasks') {
+      if (action.entries?.length) {
+        const { data: last } = await supabase.from('tasks').select('position')
+          .eq('user_id', user.id).eq('date', date).order('position', { ascending: false }).limit(1);
+        let nextPos = (last?.[0]?.position ?? -1) + 1;
+        await supabase.from('tasks').insert(action.entries.map(e => {
+          const taskText = typeof e === 'string' ? e : e.text;
+          return {
+            user_id: user.id, date, position: nextPos++, text: taskText, done: false,
+            html: `<li data-type="taskItem" data-checked="false"><p>${taskText}</p></li>`,
+          };
+        }));
+        results.push({ type: 'tasks', count: action.entries.length });
+      }
+      if (action.edit) {
+        const { data: rows } = await supabase.from('tasks').select('id, text, done')
+          .eq('user_id', user.id).eq('date', date);
+        const match = rows?.find(r => r.text?.toLowerCase().includes(action.edit.find.toLowerCase()));
+        if (match) await supabase.from('tasks').update({
+          text: action.edit.replace,
+          html: `<li data-type="taskItem" data-checked="${match.done}"><p>${action.edit.replace}</p></li>`,
+        }).eq('id', match.id).eq('user_id', user.id);
+        results.push({ type: 'tasks', count: 1 });
+      }
+      if (action.delete) {
+        const { data: rows } = await supabase.from('tasks').select('id, text')
+          .eq('user_id', user.id).eq('date', date);
+        const match = rows?.find(r => r.text?.toLowerCase().includes(action.delete.toLowerCase()));
+        if (match) await supabase.from('tasks').delete().eq('id', match.id).eq('user_id', user.id);
+        results.push({ type: 'tasks', count: 1 });
+      }
+    }
+
+    // ── WORKOUTS ─────────────────────────────────────────────────────────────
+    if (type === 'activity' || type === 'workouts') {
+      if (action.entries?.length) {
+        await supabase.from('workouts').insert(
+          action.entries.map(text => ({ user_id: user.id, date, name: text, source: 'manual' }))
+        );
+        results.push({ type: 'workouts', count: action.entries.length });
+      }
+      if (action.edit) {
+        const { data: rows } = await supabase.from('workouts').select('id, name')
+          .eq('user_id', user.id).eq('date', date);
+        const match = rows?.find(r => r.name?.toLowerCase().includes(action.edit.find.toLowerCase()));
+        if (match) await supabase.from('workouts').update({ name: action.edit.replace })
+          .eq('id', match.id).eq('user_id', user.id);
+        results.push({ type: 'workouts', count: 1 });
+      }
+      if (action.delete) {
+        const { data: rows } = await supabase.from('workouts').select('id, name')
+          .eq('user_id', user.id).eq('date', date);
+        const match = rows?.find(r => r.name?.toLowerCase().includes(action.delete.toLowerCase()));
+        if (match) await supabase.from('workouts').delete().eq('id', match.id).eq('user_id', user.id);
+        results.push({ type: 'workouts', count: 1 });
+      }
+    }
+
+    // ── CALENDAR ─────────────────────────────────────────────────────────────
+    if (type === 'calendar' && action.events?.length) {
+      const { data: settingsRow } = await supabase.from('user_settings')
+        .select('data').eq('user_id', user.id).maybeSingle();
+      let accessToken = settingsRow?.data?.googleToken;
+      const refreshTok = settingsRow?.data?.googleRefreshToken;
+      if (refreshTok && !accessToken) accessToken = await refreshGoogleToken(refreshTok);
+
+      const timezone = tz || 'America/Los_Angeles';
+      for (const ev of action.events) {
+        if (!accessToken) break;
+        let eventBody;
+        if (ev.allDay || !ev.startTime) {
+          const next = new Date(date + 'T12:00:00');
+          next.setDate(next.getDate() + 1);
+          eventBody = { summary: ev.title, start: { date }, end: { date: next.toISOString().split('T')[0] } };
+        } else {
+          const endT = ev.endTime || (() => {
+            const [h, m] = ev.startTime.split(':').map(Number);
+            return `${String((h+1)%24).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+          })();
+          eventBody = {
+            summary: ev.title,
+            start: { dateTime: `${date}T${ev.startTime}:00`, timeZone: timezone },
+            end:   { dateTime: `${date}T${endT}:00`,         timeZone: timezone },
+          };
+        }
+        let res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(eventBody),
+        });
+        // Retry with refreshed token on 401
+        if (!res.ok && refreshTok) {
+          const newToken = await refreshGoogleToken(refreshTok);
+          if (newToken) {
+            accessToken = newToken;
+            // Persist refreshed token
+            const { data: ex } = await supabase.from('user_settings').select('data')
+              .eq('user_id', user.id).maybeSingle();
+            await supabase.from('user_settings').upsert({
+              user_id: user.id,
+              data: { ...(ex?.data || {}), googleToken: newToken },
+            }, { onConflict: 'user_id' });
+            res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(eventBody),
+            });
+          }
+        }
+        results.push({ type: 'calendar', title: ev.title, ok: res.ok });
+      }
+    }
+  }
+
+  return Response.json({ ok: true, results, summary: parsed.summary || 'Done.' });
+});

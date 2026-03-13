@@ -1,4 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
 import { getUserClient } from '../_lib/google.js';
 
 export async function POST(req) {
@@ -10,20 +9,18 @@ export async function POST(req) {
   const { googleToken, refreshToken } = await req.json();
   if (!googleToken) return Response.json({ error: 'no token' }, { status: 400 });
 
-  // Never overwrite a saved refresh token with null — Google only sends it once
-  let finalRefresh = refreshToken || null;
-  if (!finalRefresh) {
-    const { data: existing } = await supabase.from('entries').select('data')
-      .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', user.id)
-      .maybeSingle();
-    finalRefresh = existing?.data?.refreshToken || null;
-  }
+  // Load existing settings — never overwrite a saved refresh token with null
+  const { data: existing } = await supabase.from('user_settings')
+    .select('data').eq('user_id', user.id).maybeSingle();
 
-  const { error } = await supabase.from('entries').upsert(
-    { date: '0000-00-00', type: 'google_token', data: { token: googleToken, refreshToken: finalRefresh }, user_id: user.id, updated_at: new Date().toISOString() },
-    { onConflict: 'date,type,user_id' }
-  );
+  const finalRefresh = refreshToken || existing?.data?.googleRefreshToken || null;
+
+  const { error } = await supabase.from('user_settings').upsert({
+    user_id: user.id,
+    data: { ...(existing?.data || {}), googleToken, googleRefreshToken: finalRefresh },
+  }, { onConflict: 'user_id' });
   if (error) return Response.json({ error: error.message }, { status: 500 });
+
   return Response.json({ ok: true });
 }
 
@@ -33,13 +30,12 @@ export async function GET(req) {
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
-  const { data, error } = await supabase
-    .from('entries').select('data')
-    .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', user.id)
-    .maybeSingle();
+  const { data, error } = await supabase.from('user_settings')
+    .select('data').eq('user_id', user.id).maybeSingle();
   if (error) return Response.json({ error: error.message }, { status: 500 });
+
   return Response.json({
-    googleToken: data?.data?.token || null,
-    refreshToken: data?.data?.refreshToken || null,
+    googleToken:  data?.data?.googleToken        || null,
+    refreshToken: data?.data?.googleRefreshToken || null,
   });
 }

@@ -50,6 +50,11 @@ enable_confirmations = false   # disable for local dev so you can sign in withou
 [auth.sms]
 enable_signup = false
 
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_CLIENT_ID)"
+secret = "env(GOOGLE_CLIENT_SECRET)"
+
 [edge_runtime]
 enabled = true
 policy = "per_worker"

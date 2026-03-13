@@ -27,11 +27,13 @@ export async function POST(req) {
     return Response.json({ error: data.error || 'refresh failed' }, { status: 400 });
   }
 
-  // Persist new access token, keep same refresh token
-  await supabase.from('entries').upsert(
-    { date: '0000-00-00', type: 'google_token', data: { token: data.access_token, refreshToken }, user_id: user.id, updated_at: new Date().toISOString() },
-    { onConflict: 'date,type,user_id' }
-  );
+  // Persist new access token to user_settings, keep same refresh token
+  const { data: existing } = await supabase.from('user_settings')
+    .select('data').eq('user_id', user.id).maybeSingle();
+  await supabase.from('user_settings').upsert({
+    user_id: user.id,
+    data: { ...(existing?.data || {}), googleToken: data.access_token, googleRefreshToken: refreshToken },
+  }, { onConflict: 'user_id' });
 
   return Response.json({ googleToken: data.access_token });
 }

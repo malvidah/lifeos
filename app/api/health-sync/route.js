@@ -1,5 +1,10 @@
 import { withAuth } from '../_lib/auth.js';
 
+// POST /api/health-sync
+// Called by the iOS Shortcut / Apple Health bridge to push Apple Health data.
+// Body: { date, hrv?, rhr?, sleep_hrs?, sleep_eff?, steps?, active_min? }
+// Writes to health_metrics with source='apple'.
+
 export const POST = withAuth(async (req, { supabase, user }) => {
   const { date, ...healthData } = await req.json();
   if (!date) return Response.json({ error: 'date required' }, { status: 400 });
@@ -9,10 +14,31 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   );
   if (!hasData) return Response.json({ ok: true, skipped: 'no data' });
 
-  const { error } = await supabase.from('entries').upsert({
-    user_id: user.id, date, type: 'health_apple', data: healthData,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,date,type' });
+  // Map incoming field names to health_metrics columns
+  const row = {
+    user_id:    user.id,
+    date,
+    source:     'apple',
+    hrv:        toNum(healthData.hrv),
+    rhr:        toNum(healthData.rhr),
+    sleep_hrs:  toNum(healthData.sleepHrs ?? healthData.sleep_hrs),
+    sleep_eff:  toNum(healthData.sleepQuality ?? healthData.sleepEff ?? healthData.sleep_eff),
+    steps:      toNum(healthData.steps),
+    active_min: toNum(healthData.activeMinutes ?? healthData.active_min),
+    raw:        healthData,
+    synced_at:  new Date().toISOString(),
+  };
+
+  const { error } = await supabase
+    .from('health_metrics')
+    .upsert(row, { onConflict: 'user_id,date,source' });
   if (error) throw error;
+
   return Response.json({ ok: true });
 });
+
+function toNum(v) {
+  if (v == null || v === '') return null;
+  const n = Number(v);
+  return isNaN(n) ? null : n;
+}

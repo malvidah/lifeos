@@ -245,7 +245,7 @@ export function Meals({date,token,userId}) { const { C } = useTheme(); return <R
 
 export function AddJournalLine({ project, onAdd, placeholder }) {
   const { C } = useTheme();
-  const col = project && project !== '__everything__' && project !== '__health__' ? projectColor(project) : "var(--dl-accent)";
+  const col = project && project !== '__everything__' ? projectColor(project) : "var(--dl-accent)";
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxNotes    = useContext(NoteContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);

@@ -1,15 +1,18 @@
 import { withAuth } from '../_lib/auth.js';
 
 async function getStravaTokens(supabase, userId) {
-  const { data } = await supabase.from('entries').select('data')
-    .eq('type', 'strava_token').eq('date', '0000-00-00').eq('user_id', userId).maybeSingle();
-  return data?.data || null;
+  const { data } = await supabase.from('user_settings').select('data')
+    .eq('user_id', userId).maybeSingle();
+  return data?.data?.stravaToken || null;
 }
 
 async function saveStravaTokens(supabase, userId, tokens) {
-  await supabase.from('entries').upsert(
-    { date: '0000-00-00', type: 'strava_token', data: tokens, user_id: userId, updated_at: new Date().toISOString() },
-    { onConflict: 'date,type,user_id' }
+  // Merge into user_settings.data.stravaToken
+  const { data: existing } = await supabase.from('user_settings').select('data')
+    .eq('user_id', userId).maybeSingle();
+  await supabase.from('user_settings').upsert(
+    { user_id: userId, data: { ...(existing?.data || {}), stravaToken: tokens } },
+    { onConflict: 'user_id' }
   );
 }
 
@@ -24,8 +27,8 @@ async function refreshStravaToken(clientId, clientSecret, refreshToken) {
 export const GET = withAuth(async (req, { supabase, user }) => {
   const date = new URL(req.url).searchParams.get('date') || new Date().toISOString().split('T')[0];
 
-  const { data: settingsRow } = await supabase.from('entries').select('data')
-    .eq('type', 'settings').eq('date', 'global').eq('user_id', user.id).maybeSingle();
+  const { data: settingsRow } = await supabase.from('user_settings').select('data')
+    .eq('user_id', user.id).maybeSingle();
   const settings = settingsRow?.data || {};
   const clientId = settings.stravaClientId || process.env.STRAVA_CLIENT_ID;
   const clientSecret = settings.stravaClientSecret || process.env.STRAVA_CLIENT_SECRET;
@@ -60,6 +63,23 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     avgSpeed: a.average_speed || null, maxHr: a.max_heartrate ? Math.round(a.max_heartrate) : null,
     kudos: a.kudos_count, startTime: a.start_date_local,
   })).filter(a => !a.startTime || a.startTime.slice(0, 10) === date);
+
+  // ── Persist to workouts table ─────────────────────────────────────────────
+  for (const a of result) {
+    supabase.from('workouts').upsert({
+      user_id:      user.id,
+      date:         a.startTime ? a.startTime.slice(0, 10) : date,
+      source:       'strava',
+      type:         a.sport || a.type || 'workout',
+      title:        a.name || null,
+      duration_min: a.duration != null ? Math.round(a.duration / 60) : null,
+      distance_m:   a.distance != null ? Math.round(a.distance * 1000) : null,
+      calories:     a.calories || null,
+      avg_hr:       a.avgHr || null,
+      external_id:  String(a.id),
+      raw:          a,
+    }, { onConflict: 'user_id,source,external_id' }).then(() => {});
+  }
 
   return Response.json({ activities: result });
 });

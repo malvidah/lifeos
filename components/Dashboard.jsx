@@ -23,7 +23,6 @@ import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import ProjectView from "./views/ProjectView.jsx";
-import HealthProjectView from "./views/HealthProjectView.jsx";
 import "./theme/theme.css";
 
 function DashboardInner() {
@@ -258,27 +257,26 @@ function DashboardInner() {
     }}));
   },[]);
 
-  // Load health dots from computed scores only (type='scores').
-  // Backfill now computes our own scores for all historical dates,
-  // so we never fall back to Oura's scoring system.
+  // Load health dots from health_scores table.
   useEffect(()=>{
     if(!token||!userId)return;
     const supabase=createClient();
     supabase.auth.setSession({access_token:token,refresh_token:''});
     const since=toKey(shift(new Date(),-180));
     const dotsToday = todayKey();
-    supabase.from('entries').select('date,data')
-      .eq('user_id',userId).eq('type','scores').gte('date',since).lte('date',dotsToday)
+    supabase.from('health_scores')
+      .select('date,sleep_score,readiness_score,activity_score,recovery_score')
+      .eq('user_id',userId).gte('date',since).lte('date',dotsToday)
       .then(({data})=>{
         if(!data)return;
         const dots={};
         data.forEach(row=>{
-          if(!row.date||!row.data)return;
+          if(!row.date)return;
           dots[row.date]={
-            sleep:    +row.data.sleepScore    ||0,
-            readiness:+row.data.readinessScore||0,
-            activity: +row.data.activityScore ||0,
-            recovery: +row.data.recoveryScore ||0,
+            sleep:    row.sleep_score     ||0,
+            readiness:row.readiness_score ||0,
+            activity: row.activity_score  ||0,
+            recovery: row.recovery_score  ||0,
           };
         });
         setHealthDots(dots);
@@ -455,8 +453,7 @@ function DashboardInner() {
           {activeProject && (
             (() => {
               const isGraph  = activeProject === '__graph__';
-              const isHealth = activeProject === '__health__';
-              const pcol = isHealth ? "var(--dl-green)" : isGraph ? "var(--dl-accent)" : projectColor(activeProject);
+              const pcol = isGraph ? "var(--dl-accent)" : projectColor(activeProject);
               return (
                 <>
                   {/* Scrollable content */}
@@ -498,17 +495,6 @@ function DashboardInner() {
                           taskFilter={taskFilter} setTaskFilter={setTaskFilter}
                         />
                       </div>
-                    ) : isHealth ? (
-                      <HealthProjectView
-                        token={token} userId={userId}
-                        onBack={() => setActiveProject(null)}
-                        onHealthChange={onHealthChange}
-                        onScoresReady={onScoresReady}
-                        startSync={startSync}
-                        endSync={endSync}
-                        onSelectDate={d => { setActiveProject(null); setSelected(d); }}
-                        taskFilter={taskFilter} setTaskFilter={setTaskFilter}
-                      />
                     ) : (
                       <ProjectView
                         project={activeProject}

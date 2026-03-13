@@ -1,34 +1,31 @@
 import { withAuth } from '../_lib/auth.js';
-import { parseTasks } from '../_lib/parseTasks.js';
 
-const TAG_RE_NEW    = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
-const TAG_RE_LEGACY = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
-const BUILTIN_LOWER = new Set(['health']);
+// GET /api/all-tags
+// Returns the deduplicated, sorted list of all project tags the user has ever used.
+// Reads from the project_tags[] columns in journal_blocks, tasks, meal_items, notes, workouts.
+
+const BUILTIN = new Set(['health']);
 
 export const GET = withAuth(async (req, { supabase, user }) => {
-  const [journalR, tasksR] = await Promise.all([
-    supabase.from('entries').select('data').eq('user_id', user.id).eq('type', 'journal'),
-    supabase.from('entries').select('data').eq('user_id', user.id).eq('type', 'tasks'),
+  // Fetch project_tags arrays from all typed tables in parallel
+  const [journalR, tasksR, mealsR, notesR, workoutsR] = await Promise.all([
+    supabase.from('journal_blocks').select('project_tags').eq('user_id', user.id),
+    supabase.from('tasks').select('project_tags').eq('user_id', user.id),
+    supabase.from('meal_items').select('project_tags').eq('user_id', user.id),
+    supabase.from('notes').select('project_tags').eq('user_id', user.id),
+    supabase.from('workouts').select('project_tags').eq('user_id', user.id),
   ]);
 
   const tags = new Set();
-  function scanText(text) {
-    if (typeof text !== 'string') return;
-    TAG_RE_NEW.lastIndex = 0;
-    let m;
-    while ((m = TAG_RE_NEW.exec(text)) !== null) {
-      const lower = m[1].toLowerCase();
-      if (!BUILTIN_LOWER.has(lower)) tags.add(lower);
-    }
-    TAG_RE_LEGACY.lastIndex = 0;
-    while ((m = TAG_RE_LEGACY.exec(text)) !== null) {
-      const lower = m[1].toLowerCase();
-      if (!BUILTIN_LOWER.has(lower)) tags.add(lower);
+
+  for (const result of [journalR, tasksR, mealsR, notesR, workoutsR]) {
+    for (const row of result.data ?? []) {
+      for (const tag of row.project_tags ?? []) {
+        const lower = tag.toLowerCase().trim();
+        if (lower && !BUILTIN.has(lower)) tags.add(lower);
+      }
     }
   }
-
-  for (const row of (journalR.data || [])) scanText(typeof row.data === 'string' ? row.data : '');
-  for (const row of (tasksR.data || [])) for (const task of parseTasks(row.data)) scanText(task.text);
 
   return Response.json({ tags: [...tags].sort() });
 });

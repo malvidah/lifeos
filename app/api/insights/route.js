@@ -1,21 +1,11 @@
-import { createClient } from '@supabase/supabase-js';
+import { withAuth } from '../_lib/auth.js';
 import { isPremium, ANTHROPIC_KEY } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
-import { parseTasks } from '../_lib/parseTasks.js';
 
 const CACHE_VERSION = 8;
-const FREE_LIMIT    = 10;   // free users get this many total insight generations
+const FREE_LIMIT    = 10;
 const DAY_NAMES     = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-
-function getUserClient(req) {
-  const token = (req.headers.get('authorization') || '').replace('Bearer ', '').trim();
-  if (!token) return null;
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { global: { headers: { Authorization: `Bearer ${token}` } } }
-  );
-}
+const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
 
 function dateOffset(dateStr, days) {
   const d = new Date(dateStr + 'T12:00:00');
@@ -23,227 +13,208 @@ function dateOffset(dateStr, days) {
   return d.toISOString().split('T')[0];
 }
 
-function formatDay(date, entries) {
+// Fetch a single day's data from typed tables
+async function fetchDay(supabase, userId, date) {
+  const [journalR, tasksR, mealsR, workoutsR, metricsR, scoresR] = await Promise.all([
+    supabase.from('journal_blocks').select('content').eq('user_id', userId).eq('date', date).order('position'),
+    supabase.from('tasks').select('text, done').eq('user_id', userId).eq('date', date).order('position'),
+    supabase.from('meal_items').select('content, ai_calories, ai_protein').eq('user_id', userId).eq('date', date).order('position'),
+    supabase.from('workouts').select('name, sport, duration_mins, distance_m, avg_hr, calories').eq('user_id', userId).eq('date', date),
+    supabase.from('health_metrics').select('source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min').eq('user_id', userId).eq('date', date),
+    supabase.from('health_scores').select('sleep_score, readiness_score, activity_score, recovery_score').eq('user_id', userId).eq('date', date).maybeSingle(),
+  ]);
+
+  // Best health source
+  let health = null;
+  for (const r of metricsR.data ?? []) {
+    if (!health || SOURCE_PRIORITY.indexOf(r.source) < SOURCE_PRIORITY.indexOf(health.source)) health = r;
+  }
+
+  return {
+    journal:  journalR.data ?? [],
+    tasks:    tasksR.data ?? [],
+    meals:    mealsR.data ?? [],
+    workouts: workoutsR.data ?? [],
+    health,
+    scores:   scoresR.data ?? null,
+  };
+}
+
+function formatDay(date, data) {
   const parts = [];
-  const h = entries.health;
-  const s = entries.scores;
+  const h = data.health;
+  const s = data.scores;
 
   if (h || s) {
     const scores = [
-      s?.sleepScore     && `sleep score ${s.sleepScore}${h?.sleepHrs ? ` (${h.sleepHrs}h${h.sleepEff ? ` ${h.sleepEff}% eff` : ''})` : ''}`,
-      s?.readinessScore && `readiness ${s.readinessScore}`,
-      h?.hrv            && `HRV ${h.hrv}ms`,
-      h?.rhr            && `RHR ${h.rhr}bpm`,
-      s?.activityScore  && `activity ${s.activityScore}${h?.steps ? ` (${Number(h.steps).toLocaleString()} steps)` : ''}`,
-      s?.recoveryScore  && `recovery ${s.recoveryScore}`,
-      !s && h?.sleepScore     && `sleep ${h.sleepScore}${h.sleepHrs ? ` (${h.sleepHrs}h)` : ''}`,
-      !s && h?.readinessScore && `readiness ${h.readinessScore}`,
-      !s && h?.activityScore  && `activity ${h.activityScore}`,
+      s?.sleep_score     && `sleep score ${s.sleep_score}${h?.sleep_hrs ? ` (${h.sleep_hrs}h${h?.sleep_eff ? ` ${h.sleep_eff}% eff` : ''})` : ''}`,
+      s?.readiness_score && `readiness ${s.readiness_score}`,
+      h?.hrv             && `HRV ${h.hrv}ms`,
+      h?.rhr             && `RHR ${h.rhr}bpm`,
+      s?.activity_score  && `activity ${s.activity_score}${h?.steps ? ` (${Number(h.steps).toLocaleString()} steps)` : ''}`,
+      s?.recovery_score  && `recovery ${s.recovery_score}`,
     ].filter(Boolean);
     if (scores.length) parts.push(scores.join(', '));
   }
 
-  const workouts = [
-    ...(Array.isArray(entries.workouts) ? entries.workouts.map(w =>
-      [w.name || w.sport, w.durationMins && `${w.durationMins}min`,
-       w.distance && `${(w.distance * 0.621371).toFixed(1)}mi`,
-       w.avgHr && `${w.avgHr}bpm`].filter(Boolean).join(' ')
-    ) : []),
-    ...(Array.isArray(entries.activity)
-      ? entries.activity.filter(r => r.text?.trim()).map(r => r.text) : []),
-  ];
+  const workouts = data.workouts.map(w =>
+    [w.name || w.sport, w.duration_mins && `${w.duration_mins}min`,
+     w.distance_m && `${(w.distance_m * 0.000621371).toFixed(1)}mi`,
+     w.avg_hr && `${w.avg_hr}bpm`].filter(Boolean).join(' ')
+  ).filter(Boolean);
   if (workouts.length) parts.push(`workout: ${workouts.join(', ')}`);
 
-  if (entries.meals?.length) {
-    const ms = entries.meals.filter(r => r.text?.trim())
-      .map(r => r.text + (r.kcal ? ` (${r.kcal}kcal)` : ''));
+  if (data.meals?.length) {
+    const ms = data.meals.filter(r => r.content?.trim())
+      .map(r => r.content + (r.ai_calories ? ` (${r.ai_calories}kcal)` : ''));
     if (ms.length) parts.push(`meals: ${ms.join(', ')}`);
   }
 
-  if (entries.tasks) {
-    const tasks = parseTasks(entries.tasks);
-    const done = tasks.filter(r => r.done  && r.text?.trim()).map(r => r.text);
-    const todo = tasks.filter(r => !r.done && r.text?.trim()).map(r => r.text);
+  if (data.tasks?.length) {
+    const done = data.tasks.filter(r => r.done  && r.text?.trim()).map(r => r.text);
+    const todo = data.tasks.filter(r => !r.done && r.text?.trim()).map(r => r.text);
     if (done.length) parts.push(`done: ${done.join(', ')}`);
     if (todo.length) parts.push(`todo: ${todo.join(', ')}`);
   }
 
-  if (entries.notes) {
-    const n = typeof entries.notes === 'string' ? entries.notes.trim() : '';
-    if (n) parts.push(`notes: "${n.slice(0, 250)}${n.length > 250 ? '…' : ''}"`);
+  if (data.journal?.length) {
+    const text = data.journal.map(r => r.content?.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' ');
+    if (text) parts.push(`notes: "${text.slice(0, 250)}${text.length > 250 ? '…' : ''}"`);
   }
 
   return parts.length ? parts.join(' | ') : null;
 }
 
-async function getInsightCount(supabase, userId) {
-  const { data } = await supabase.from('entries').select('data')
-    .eq('type', 'insight_usage').eq('date', 'global').eq('user_id', userId).maybeSingle();
-  return data?.data?.count || 0;
+// ── user_settings helpers for insights cache & usage ─────────────────────────
+
+async function readSettings(supabase, userId) {
+  const { data } = await supabase.from('user_settings').select('data')
+    .eq('user_id', userId).maybeSingle();
+  return data?.data || {};
 }
 
-async function incrementInsightCount(supabase, userId) {
-  const count = await getInsightCount(supabase, userId);
-  await supabase.from('entries').upsert(
-    { date: 'global', type: 'insight_usage', data: { count: count + 1, updatedAt: new Date().toISOString() }, user_id: userId, updated_at: new Date().toISOString() },
-    { onConflict: 'date,type,user_id' }
-  );
-  return count + 1;
+async function mergeSettings(supabase, userId, patch) {
+  const { data: existing } = await supabase.from('user_settings').select('data')
+    .eq('user_id', userId).maybeSingle();
+  await supabase.from('user_settings').upsert({
+    user_id: userId,
+    data: { ...(existing?.data || {}), ...patch },
+  }, { onConflict: 'user_id' });
 }
 
-export async function POST(request) {
-  try {
-    const supabase = getUserClient(request);
-    if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+export const POST = withAuth(async (req, { supabase, user }) => {
+  const { date, healthKey } = await req.json();
+  if (!date) return Response.json({ error: 'date required' }, { status: 400 });
 
-    const { date, healthKey } = await request.json();
-    if (!date) return Response.json({ error: 'date required' }, { status: 400 });
+  // Read user_settings once — used for cache, usage count, and premium check
+  const settings = await readSettings(supabase, user.id);
 
-    // ── Cache check (free AND premium — no AI call if cache is fresh) ─────────
-    const { data: cached } = await supabase.from('entries')
-      .select('data, updated_at').eq('type', 'insights').eq('date', date)
-      .eq('user_id', user.id).maybeSingle();
-    if (cached?.data?.text) {
-      const age = Date.now() - new Date(cached.updated_at).getTime();
-      if (age < 24 * 60 * 60 * 1000) {
-        return Response.json({ insight: cached.data.text, cached: true });
-      }
+  // ── Cache check ──────────────────────────────────────────────────────────
+  const cached = settings.insights_cache?.[date];
+  if (cached?.text && cached?.generatedAt) {
+    const age = Date.now() - new Date(cached.generatedAt).getTime();
+    if (age < 24 * 60 * 60 * 1000) {
+      return Response.json({ insight: cached.text, cached: true });
     }
-
-    // ── Tier check — only for NEW generations ─────────────────────────────────
-    const premium = await isPremium(supabase, user.id);
-    if (!premium) {
-      const usageCount = await getInsightCount(supabase, user.id);
-      if (usageCount >= FREE_LIMIT) {
-        return Response.json({ tier: 'free', usageCount, limit: FREE_LIMIT });
-      }
-    }
-
-    const rl = rateLimit(`insights:${user.id}`, { max: 100, windowMs: 60 * 60 * 1000 });
-    if (!rl.ok) return Response.json({ error: `Rate limited. Retry in ${rl.retryAfter}s.` }, { status: 429 });
-
-    const apiKey = ANTHROPIC_KEY();
-    if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
-
-    // ── Fetch context ──────────────────────────────────────────────────────────
-    const { data: todayRows } = await supabase.from('entries')
-      .select('type, data').eq('date', date).eq('user_id', user.id);
-    const today = {};
-    for (const row of todayRows || []) today[row.type] = row.data;
-
-    if (!today.health && healthKey) {
-      const [, sleep, readiness] = healthKey.split(':');
-      if (+sleep > 0 || +readiness > 0)
-        today.health = { sleepScore: +sleep || '', readinessScore: +readiness || '' };
-    }
-
-    // Fetch last 7 days in parallel — one query is cleaner but
-    // the existing per-date structure is kept to avoid changing downstream logic.
-    const recentDates = Array.from({ length: 7 }, (_, i) => dateOffset(date, -(i + 1)));
-    const recentResults = await Promise.all(
-      recentDates.map(d =>
-        supabase.from('entries').select('type, data').eq('date', d).eq('user_id', user.id)
-      )
-    );
-    const recentDays = [];
-    for (let i = 0; i < recentDates.length; i++) {
-      const { data: rows } = recentResults[i];
-      if (!rows?.length) continue;
-      const day = { date: recentDates[i] };
-      for (const row of rows) day[row.type] = row.data;
-      recentDays.push(day);
-    }
-
-    const lastYearDates = [dateOffset(date, -366), dateOffset(date, -365), dateOffset(date, -364)];
-    const lastYearResults = await Promise.all(
-      lastYearDates.map(d =>
-        supabase.from('entries').select('type, data').eq('date', d).eq('user_id', user.id)
-      )
-    );
-    const lastYearDays = [];
-    for (let i = 0; i < lastYearDates.length; i++) {
-      const { data: rows } = lastYearResults[i];
-      if (!rows?.length) continue;
-      const day = { date: lastYearDates[i] };
-      for (const row of rows) day[row.type] = row.data;
-      lastYearDays.push(day);
-    }
-
-    const dObj = new Date(date + 'T12:00:00');
-    const lines = [`${DAY_NAMES[dObj.getDay()]} ${date}`];
-
-    // Track real data lines separately — the "no Oura data" sentinel is not real data
-    let realDataCount = 0;
-
-    const todayLine = formatDay(date, today);
-    if (todayLine) { lines.push(`Today: ${todayLine}`); realDataCount++; }
-
-    const hasTodayHealth = !!(today.health && (today.health.sleepScore || today.health.sleepHrs || today.health.readinessScore));
-    if (!hasTodayHealth) {
-      lines.push(`Today: no Oura data for last night (ring not worn or not yet synced) — do not infer or assume last night's sleep from previous nights`);
-    }
-
-    if (recentDays.length) {
-      lines.push('');
-      for (const day of recentDays) {
-        const line = formatDay(day.date, day);
-        if (line) { lines.push(`${DAY_NAMES[new Date(day.date + 'T12:00:00').getDay()]} ${day.date}: ${line}`); realDataCount++; }
-      }
-    }
-
-    if (lastYearDays.length) {
-      lines.push('');
-      for (const day of lastYearDays) {
-        const line = formatDay(day.date, day);
-        if (line) { lines.push(`Last year ${day.date}: ${line}`); realDataCount++; }
-      }
-    }
-
-    const context = lines.join('\n');
-
-    // No data at all — show welcome, don't call AI
-    if (realDataCount === 0) {
-      const name = user.user_metadata?.name?.split(' ')[0] || 'there';
-      const welcome = `Welcome to Day Lab, ${name}. Connect your health data (Oura or Apple Health) and start logging meals, notes, and tasks — insights will start generating once there's data to work with.`;
-      await supabase.from('entries').upsert(
-        { date, type: 'insights', data: { text: welcome, generatedAt: new Date().toISOString(), isWelcome: true }, user_id: user.id, updated_at: new Date().toISOString() },
-        { onConflict: 'date,type,user_id' }
-      );
-      return Response.json({ insight: welcome });
-    }
-
-    // ── Generate ───────────────────────────────────────────────────────────────
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 160,
-        system: `You are a sharp, honest friend who reads someone's daily log and tells them one thing worth knowing. You never hype bad metrics — poor sleep, low recovery, or skipped workouts are noted plainly, not celebrated. When something is off, suggest one concrete thing they can do about it. When something is genuinely good, you can acknowledge it briefly. Speak to patterns over single days when possible. Use everything: scores, workouts, meals, notes, tasks. CRITICAL: sleep data is labeled by day — only reference "last night" sleep if today's entry explicitly contains sleep data. If today has no Oura/sleep data, speak to trends or other data instead — never assume last night's sleep matches a previous night. 2-3 sentences max. No markdown, no "Your [metric]" openers, no sycophantic openers.`,
-        messages: [{ role: 'user', content: context }],
-      }),
-    });
-
-    const aiData = await res.json();
-    if (aiData.error) return Response.json({ error: `AI error: ${aiData.error.message}` }, { status: 500 });
-
-    const insight = (aiData.content?.find(b => b.type === 'text')?.text || '')
-      .replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/^#{1,3}\s+/gm, '').trim();
-
-    // Increment usage count for free users (welcome message doesn't count)
-    if (!premium) {
-      await incrementInsightCount(supabase, user.id);
-    }
-
-    await supabase.from('entries').upsert(
-      { date, type: 'insights', data: { text: insight, generatedAt: new Date().toISOString(), v: CACHE_VERSION, healthKey: healthKey || '' }, user_id: user.id, updated_at: new Date().toISOString() },
-      { onConflict: 'date,type,user_id' }
-    );
-
-    return Response.json({ insight });
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 });
   }
-}
+
+  // ── Tier check — only for new generations ───────────────────────────────
+  const premium = settings.premium?.active === true;
+  if (!premium) {
+    const usageCount = settings.insightUsage?.count || 0;
+    if (usageCount >= FREE_LIMIT) {
+      return Response.json({ tier: 'free', usageCount, limit: FREE_LIMIT });
+    }
+  }
+
+  const rl = rateLimit(`insights:${user.id}`, { max: 100, windowMs: 60 * 60 * 1000 });
+  if (!rl.ok) return Response.json({ error: `Rate limited. Retry in ${rl.retryAfter}s.` }, { status: 429 });
+
+  const apiKey = ANTHROPIC_KEY();
+  if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
+
+  // ── Fetch context in parallel ────────────────────────────────────────────
+  const recentDates    = Array.from({ length: 7 }, (_, i) => dateOffset(date, -(i + 1)));
+  const lastYearDates  = [dateOffset(date, -366), dateOffset(date, -365), dateOffset(date, -364)];
+
+  const [todayData, ...allOtherData] = await Promise.all([
+    fetchDay(supabase, user.id, date),
+    ...recentDates.map(d => fetchDay(supabase, user.id, d)),
+    ...lastYearDates.map(d => fetchDay(supabase, user.id, d)),
+  ]);
+
+  const recentData   = allOtherData.slice(0, recentDates.length);
+  const lastYearData = allOtherData.slice(recentDates.length);
+
+  // ── Build prompt lines ───────────────────────────────────────────────────
+  const dObj = new Date(date + 'T12:00:00');
+  const lines = [`${DAY_NAMES[dObj.getDay()]} ${date}`];
+  let realDataCount = 0;
+
+  const todayLine = formatDay(date, todayData);
+  if (todayLine) { lines.push(`Today: ${todayLine}`); realDataCount++; }
+
+  const hasTodayHealth = !!(todayData.health && (todayData.health.sleep_hrs || todayData.health.hrv));
+  if (!hasTodayHealth) {
+    lines.push('Today: no Oura data for last night (ring not worn or not yet synced) — do not infer or assume last night\'s sleep from previous nights');
+  }
+
+  if (recentDates.length) {
+    lines.push('');
+    for (let i = 0; i < recentDates.length; i++) {
+      const line = formatDay(recentDates[i], recentData[i]);
+      if (line) {
+        lines.push(`${DAY_NAMES[new Date(recentDates[i] + 'T12:00:00').getDay()]} ${recentDates[i]}: ${line}`);
+        realDataCount++;
+      }
+    }
+  }
+
+  if (lastYearDates.length) {
+    lines.push('');
+    for (let i = 0; i < lastYearDates.length; i++) {
+      const line = formatDay(lastYearDates[i], lastYearData[i]);
+      if (line) { lines.push(`Last year ${lastYearDates[i]}: ${line}`); realDataCount++; }
+    }
+  }
+
+  // No data at all — show welcome
+  if (realDataCount === 0) {
+    const name = user.user_metadata?.name?.split(' ')[0] || 'there';
+    const welcome = `Welcome to Day Lab, ${name}. Connect your health data (Oura or Apple Health) and start logging meals, notes, and tasks — insights will start generating once there's data to work with.`;
+    await mergeSettings(supabase, user.id, {
+      insights_cache: {
+        ...(settings.insights_cache || {}),
+        [date]: { text: welcome, generatedAt: new Date().toISOString(), isWelcome: true },
+      },
+    });
+    return Response.json({ insight: welcome });
+  }
+
+  // ── Generate ─────────────────────────────────────────────────────────────
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 160,
+      system: `You are a sharp, honest friend who reads someone's daily log and tells them one thing worth knowing. You never hype bad metrics — poor sleep, low recovery, or skipped workouts are noted plainly, not celebrated. When something is off, suggest one concrete thing they can do about it. When something is genuinely good, you can acknowledge it briefly. Speak to patterns over single days when possible. Use everything: scores, workouts, meals, notes, tasks. CRITICAL: sleep data is labeled by day — only reference "last night" sleep if today's entry explicitly contains sleep data. If today has no Oura/sleep data, speak to trends or other data instead — never assume last night's sleep matches a previous night. 2-3 sentences max. No markdown, no "Your [metric]" openers, no sycophantic openers.`,
+      messages: [{ role: 'user', content: lines.join('\n') }],
+    }),
+  });
+
+  const aiData = await res.json();
+  if (aiData.error) return Response.json({ error: `AI error: ${aiData.error.message}` }, { status: 500 });
+
+  const insight = (aiData.content?.find(b => b.type === 'text')?.text || '')
+    .replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/^#{1,3}\s+/gm, '').trim();
+
+  // ── Persist cache and usage count ────────────────────────────────────────
+  const usageCount = settings.insightUsage?.count || 0;
+  const newCache   = { ...(settings.insights_cache || {}), [date]: { text: insight, generatedAt: new Date().toISOString(), v: CACHE_VERSION, healthKey: healthKey || '' } };
+  const newUsage   = premium ? (settings.insightUsage || {}) : { count: usageCount + 1, updatedAt: new Date().toISOString() };
+
+  await mergeSettings(supabase, user.id, { insights_cache: newCache, insightUsage: newUsage });
+
+  return Response.json({ insight });
+});

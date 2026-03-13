@@ -1,107 +1,137 @@
-import { createClient } from '@supabase/supabase-js';
-import { getUserClient, refreshGoogleToken } from '../_lib/google.js';
+import { withAuth } from '../_lib/auth.js';
+import { isPremium } from '../_lib/tier.js';
+import { refreshGoogleToken } from '../_lib/google.js';
 import { rateLimit } from '../_lib/rateLimit.js';
-import { parseTasks } from '../_lib/parseTasks.js';
 
-export async function POST(request) {
-  try {
-    const { supabase, token } = getUserClient(request);
-    if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
+// Context-builder: fetch 7 days from typed tables in parallel
+const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
 
-    const { data: { user }, error: authErr } = await supabase.auth.getUser();
-    if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
+async function buildContext(supabase, userId, fromDate, toDate) {
+  const [journalR, tasksR, mealsR, workoutsR, metricsR, scoresR] = await Promise.all([
+    supabase.from('journal_blocks').select('date, content')
+      .eq('user_id', userId).gte('date', fromDate).lte('date', toDate)
+      .order('date').order('position'),
+    supabase.from('tasks').select('date, text, done')
+      .eq('user_id', userId).gte('date', fromDate).lte('date', toDate)
+      .order('date').order('position'),
+    supabase.from('meal_items').select('date, content, ai_calories, ai_protein')
+      .eq('user_id', userId).gte('date', fromDate).lte('date', toDate)
+      .order('date').order('position'),
+    supabase.from('workouts').select('date, name, sport, duration_mins, calories, source')
+      .eq('user_id', userId).gte('date', fromDate).lte('date', toDate).order('date'),
+    supabase.from('health_metrics').select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min')
+      .eq('user_id', userId).gte('date', fromDate).lte('date', toDate),
+    supabase.from('health_scores').select('date, sleep_score, readiness_score, activity_score, recovery_score')
+      .eq('user_id', userId).gte('date', fromDate).lte('date', toDate),
+  ]);
 
-    // Rate limit: 80 messages per user per hour
-    const rl = rateLimit(`chat:${user.id}`, { max: 80, windowMs: 60 * 60 * 1000 });
-    if (!rl.ok) return Response.json({ error: `Rate limited. Retry in ${rl.retryAfter}s.` }, { status: 429 });
+  const byDate = {};
+  const ensure = (d) => {
+    if (!byDate[d]) byDate[d] = { journal: [], tasks: [], meals: [], workouts: [], health: null, scores: null };
+  };
 
-    // Check premium status
-    const { data: premRow } = await supabase.from('entries').select('data')
-      .eq('type', 'premium').eq('date', 'global').eq('user_id', user.id).maybeSingle();
-    const isPremium = premRow?.data?.active === true;
+  for (const r of journalR.data ?? []) { ensure(r.date); byDate[r.date].journal.push(r.content); }
+  for (const r of tasksR.data ?? []) { ensure(r.date); byDate[r.date].tasks.push(r); }
+  for (const r of mealsR.data ?? []) {
+    ensure(r.date);
+    byDate[r.date].meals.push({ text: r.content, kcal: r.ai_calories, protein: r.ai_protein });
+  }
+  for (const r of workoutsR.data ?? []) { ensure(r.date); byDate[r.date].workouts.push(r); }
 
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
-
-    const { messages, date, tz } = await request.json();
-    if (!messages?.length || !date) return Response.json({ error: 'messages and date required' }, { status: 400 });
-
-    // Build data context: today + last 6 days for trends
-    const startDate = new Date(date);
-    startDate.setDate(startDate.getDate() - 6);
-    const fromDate = startDate.toISOString().split('T')[0];
-
-    const { data: allEntries } = await supabase.from('entries')
-      .select('date, type, data')
-      .eq('user_id', user.id)
-      .gte('date', fromDate)
-      .lte('date', date)
-      .not('type', 'in', '("google_token","premium","settings")');
-
-    // Group by date
-    const byDate = {};
-    for (const row of allEntries || []) {
-      if (!byDate[row.date]) byDate[row.date] = {};
-      byDate[row.date][row.type] = row.data;
+  // Best health source per date: oura > apple > garmin
+  const metricsByDate = {};
+  for (const r of metricsR.data ?? []) {
+    const cur = metricsByDate[r.date];
+    if (!cur || SOURCE_PRIORITY.indexOf(r.source) < SOURCE_PRIORITY.indexOf(cur.source)) {
+      metricsByDate[r.date] = r;
     }
+  }
+  for (const [d, m] of Object.entries(metricsByDate)) { ensure(d); byDate[d].health = m; }
+  for (const r of scoresR.data ?? []) { ensure(r.date); byDate[r.date].scores = r; }
 
-    const formatDay = (d, data) => {
-      const isToday = d === date;
-      const tag = isToday ? `[TODAY ${d}]` : `[${d}]`;
-      const lines = [];
+  return byDate;
+}
 
-      if (data.health) {
-        const h = data.health;
-        const parts = [];
-        if (h.sleep_hours != null) parts.push(`${h.sleep_hours}h sleep`);
-        if (h.sleep_score) parts.push(`sleep score ${h.sleep_score}`);
-        if (h.sleep_efficiency) parts.push(`${h.sleep_efficiency}% efficiency`);
-        if (h.readiness_score) parts.push(`readiness ${h.readiness_score}`);
-        if (h.hrv) parts.push(`HRV ${h.hrv}ms`);
-        if (h.rhr) parts.push(`RHR ${h.rhr}bpm`);
-        if (h.steps) parts.push(`${h.steps} steps`);
-        if (parts.length) lines.push(`${tag} health: ${parts.join(', ')}`);
-        else if (isToday) lines.push(`${tag} health: no data synced for today`);
-      } else if (isToday) {
-        lines.push(`${tag} health: no data synced for today`);
-      }
+function formatDay(d, data, todayDate) {
+  const isToday = d === todayDate;
+  const tag = isToday ? `[TODAY ${d}]` : `[${d}]`;
+  const lines = [];
+  const h = data.health;
+  const s = data.scores;
 
-      if (data.meals?.length) {
-        const texts = data.meals.filter(r => r.text?.trim()).map(r => {
-          let s = r.text;
-          if (r.kcal) s += ` (${r.kcal}kcal${r.protein ? `, ${r.protein}g protein` : ''})`;
-          return s;
-        });
-        if (texts.length) lines.push(`${tag} meals: ${texts.join(', ')}`);
-      }
-      if (data.activity?.length) {
-        const texts = data.activity.filter(r => r.text?.trim()).map(r =>
-          r.kcal ? `${r.text} (${r.kcal}kcal)` : r.text
-        );
-        if (texts.length) lines.push(`${tag} activity: ${texts.join(', ')}`);
-      }
-      if (data.tasks) {
-        const tasks = parseTasks(data.tasks);
-        const texts = tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
-        if (texts.length) lines.push(`${tag} tasks: ${texts.join(', ')}`);
-      }
-      if (data.notes) lines.push(`${tag} notes: ${String(data.notes).slice(0, 300)}`);
+  if (h || s) {
+    const parts = [];
+    if (h?.sleep_hrs  != null) parts.push(`${h.sleep_hrs}h sleep`);
+    if (s?.sleep_score)        parts.push(`sleep score ${s.sleep_score}`);
+    if (h?.sleep_eff  != null) parts.push(`${h.sleep_eff}% efficiency`);
+    if (s?.readiness_score)    parts.push(`readiness ${s.readiness_score}`);
+    if (h?.hrv != null)        parts.push(`HRV ${h.hrv}ms`);
+    if (h?.rhr != null)        parts.push(`RHR ${h.rhr}bpm`);
+    if (h?.steps != null)      parts.push(`${h.steps} steps`);
+    if (parts.length) lines.push(`${tag} health: ${parts.join(', ')}`);
+    else if (isToday) lines.push(`${tag} health: no data synced for today`);
+  } else if (isToday) {
+    lines.push(`${tag} health: no data synced for today`);
+  }
 
-      if (!lines.length) {
-        if (isToday) lines.push(`${tag} (no data logged)`);
-        else return null;
-      }
-      return lines.join('\n');
-    };
+  if (data.meals?.length) {
+    const texts = data.meals
+      .filter(r => r.text?.trim())
+      .map(r => r.kcal ? `${r.text} (${r.kcal}kcal${r.protein ? `, ${r.protein}g protein` : ''})` : r.text);
+    if (texts.length) lines.push(`${tag} meals: ${texts.join(', ')}`);
+  }
 
-    // Always include today even if no DB entry
-    if (!byDate[date]) byDate[date] = {};
+  if (data.workouts?.length) {
+    const texts = data.workouts.map(w => {
+      const p = [w.name || w.sport].filter(Boolean);
+      if (w.duration_mins) p.push(`${w.duration_mins}min`);
+      if (w.calories)      p.push(`${w.calories}kcal`);
+      return p.join(' ') || 'workout';
+    });
+    lines.push(`${tag} activity: ${texts.join(', ')}`);
+  }
 
-    const sortedDates = Object.keys(byDate).sort();
-    const contextParts = sortedDates.map(d => formatDay(d, byDate[d])).filter(Boolean);
-    const contextBlock = contextParts.length ? contextParts.join('\n\n') : 'No data logged yet.';
+  if (data.tasks?.length) {
+    const texts = data.tasks.filter(r => r.text?.trim()).map(r => `${r.done ? '✓' : '○'} ${r.text}`);
+    if (texts.length) lines.push(`${tag} tasks: ${texts.join(', ')}`);
+  }
 
-    const systemPrompt = `You are the AI inside Day Lab — a personal wellness and productivity tracker. You have access to the user's real data.
+  if (data.journal?.length) {
+    const text = data.journal
+      .map(c => c.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' ').slice(0, 300);
+    if (text) lines.push(`${tag} notes: ${text}`);
+  }
+
+  if (!lines.length) {
+    if (isToday) lines.push(`${tag} (no data logged)`);
+    else return null;
+  }
+  return lines.join('\n');
+}
+
+export const POST = withAuth(async (req, { supabase, user }) => {
+  // Rate limit: 80 messages per user per hour
+  const rl = rateLimit(`chat:${user.id}`, { max: 80, windowMs: 60 * 60 * 1000 });
+  if (!rl.ok) return Response.json({ error: `Rate limited. Retry in ${rl.retryAfter}s.` }, { status: 429 });
+
+  const isPrem = await isPremium(supabase, user.id);
+
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return Response.json({ error: 'Service unavailable' }, { status: 503 });
+
+  const { messages, date, tz } = await req.json();
+  if (!messages?.length || !date) return Response.json({ error: 'messages and date required' }, { status: 400 });
+
+  // Build context: today + last 6 days
+  const fromDate = (() => { const d = new Date(date); d.setDate(d.getDate() - 6); return d.toISOString().split('T')[0]; })();
+  const byDate = await buildContext(supabase, user.id, fromDate, date);
+
+  if (!byDate[date]) byDate[date] = { journal: [], tasks: [], meals: [], workouts: [], health: null, scores: null };
+
+  const contextParts = Object.keys(byDate).sort().map(d => formatDay(d, byDate[d], date)).filter(Boolean);
+  const contextBlock = contextParts.length ? contextParts.join('\n\n') : 'No data logged yet.';
+
+  const systemPrompt = `You are the AI inside Day Lab — a personal wellness and productivity tracker. You have access to the user's real data.
 
 Today is ${date} (user timezone: ${tz || 'unknown'}).
 
@@ -132,195 +162,173 @@ Action formats:
 
 You can combine a reply and an actions block in the same response. Default calendar event duration is 1hr if no end time given.`;
 
-    // Clamp message history to last 12 turns to control token usage
-    const trimmed = messages.slice(-12);
+  const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 500,
+      system: systemPrompt,
+      messages: messages.slice(-12),
+    }),
+  });
 
-    const aiRes = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 500,
-        system: systemPrompt,
-        messages: trimmed,
-      }),
-    });
+  const aiData = await aiRes.json();
+  if (aiData.error) return Response.json({ error: aiData.error?.message || 'AI error' }, { status: 500 });
 
-    const aiData = await aiRes.json();
-    if (aiData.error) return Response.json({ error: aiData.error?.message || 'AI error' }, { status: 500 });
+  const rawReply = aiData.content?.find(b => b.type === 'text')?.text || '';
+  const actionsMatch = rawReply.match(/```actions\s*([\s\S]*?)```/);
+  let executedActions = [];
+  let summary = null;
+  const cleanReply = rawReply.replace(/```actions[\s\S]*?```/g, '').trim();
 
-    const rawReply = aiData.content?.find(b => b.type === 'text')?.text || '';
+  if (actionsMatch) {
+    try {
+      const parsed = JSON.parse(actionsMatch[1].trim());
+      summary = parsed.summary || null;
 
-    // Extract and execute any actions block
-    const actionsMatch = rawReply.match(/```actions\s*([\s\S]*?)```/);
-    let executedActions = [];
-    let summary = null;
-    let cleanReply = rawReply.replace(/```actions[\s\S]*?```/g, '').trim();
+      for (const action of parsed.actions || []) {
+        const { type } = action;
 
-    if (actionsMatch) {
-      try {
-        const parsed = JSON.parse(actionsMatch[1].trim());
-        summary = parsed.summary || null;
-        const actions = parsed.actions || [];
+        // ── JOURNAL ────────────────────────────────────────────────────────────
+        if ((type === 'notes' || type === 'journal') && action.append) {
+          const { data: last } = await supabase.from('journal_blocks')
+            .select('position').eq('user_id', user.id).eq('date', date)
+            .order('position', { ascending: false }).limit(1);
+          const nextPos = (last?.[0]?.position ?? -1) + 1;
+          await supabase.from('journal_blocks').insert({
+            user_id: user.id, date, position: nextPos,
+            content: `<p>${action.append}</p>`, project_tags: [], note_tags: [],
+          });
+          executedActions.push({ type: 'journal' });
+        }
 
-        for (const action of actions) {
-          const { type } = action;
-
-          if ((type === 'notes' || type === 'journal') && action.append) {
-            const { data: existing } = await supabase.from('entries').select('data')
-              .eq('date', date).eq('type', 'journal').eq('user_id', user.id).maybeSingle();
-            const current = existing?.data || '';
-            const updated = current ? current + '\n\n' + action.append : action.append;
-            await supabase.from('entries').upsert(
-              { date, type: 'journal', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-              { onConflict: 'date,type,user_id' }
+        // ── MEALS ──────────────────────────────────────────────────────────────
+        if (type === 'meals') {
+          if (action.entries?.length) {
+            const { data: last } = await supabase.from('meal_items')
+              .select('position').eq('user_id', user.id).eq('date', date)
+              .order('position', { ascending: false }).limit(1);
+            let nextPos = (last?.[0]?.position ?? -1) + 1;
+            await supabase.from('meal_items').insert(
+              action.entries.map(text => ({ user_id: user.id, date, position: nextPos++, content: text }))
             );
-            executedActions.push({ type: 'journal' });
+            executedActions.push({ type: 'meals', count: action.entries.length });
           }
-
-          if (type === 'meals') {
-            const { data: existing } = await supabase.from('entries').select('data')
-              .eq('date', date).eq('type', 'meals').eq('user_id', user.id).maybeSingle();
-            const current = Array.isArray(existing?.data) ? existing.data : [];
-            if (action.entries?.length) {
-              const cleaned = current.filter(r => r.text?.trim());
-              const newRows = action.entries.map(text => ({ id: crypto.randomUUID(), text, kcal: null, protein: null }));
-              await supabase.from('entries').upsert(
-                { date, type: 'meals', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              executedActions.push({ type: 'meals', count: newRows.length });
-            }
-            if (action.edit) {
-              const updated = current.map(r =>
-                r.text?.toLowerCase().includes(action.edit.find.toLowerCase())
-                  ? { ...r, text: action.edit.replace, kcal: null, protein: null } : r
-              );
-              await supabase.from('entries').upsert(
-                { date, type: 'meals', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              executedActions.push({ type: 'meals', edit: true });
-            }
-            if (action.delete) {
-              const updated = current.filter(r => !r.text?.toLowerCase().includes(action.delete.toLowerCase()));
-              await supabase.from('entries').upsert(
-                { date, type: 'meals', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              executedActions.push({ type: 'meals', delete: true });
-            }
+          if (action.edit) {
+            const { data: items } = await supabase.from('meal_items')
+              .select('id, content').eq('user_id', user.id).eq('date', date);
+            const match = items?.find(r => r.content?.toLowerCase().includes(action.edit.find.toLowerCase()));
+            if (match) await supabase.from('meal_items')
+              .update({ content: action.edit.replace, ai_calories: null, ai_protein: null })
+              .eq('id', match.id).eq('user_id', user.id);
+            executedActions.push({ type: 'meals', edit: true });
           }
-
-          if (type === 'tasks') {
-            const { data: existing } = await supabase.from('entries').select('data')
-              .eq('date', date).eq('type', 'tasks').eq('user_id', user.id).maybeSingle();
-            const current = Array.isArray(existing?.data) ? existing.data : [];
-            if (action.entries?.length) {
-              const cleaned = current.filter(r => r.text?.trim());
-              const newRows = action.entries.map(e => ({ id: crypto.randomUUID(), text: typeof e === 'string' ? e : e.text, done: e.done ?? false }));
-              await supabase.from('entries').upsert(
-                { date, type: 'tasks', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              executedActions.push({ type: 'tasks', count: newRows.length });
-            }
-            if (action.complete) {
-              const updated = current.map(r =>
-                r.text?.toLowerCase().includes(action.complete.toLowerCase()) ? { ...r, done: true } : r
-              );
-              await supabase.from('entries').upsert(
-                { date, type: 'tasks', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              executedActions.push({ type: 'tasks', complete: true });
-            }
-            if (action.edit) {
-              const updated = current.map(r =>
-                r.text?.toLowerCase().includes(action.edit.find.toLowerCase())
-                  ? { ...r, text: action.edit.replace } : r
-              );
-              await supabase.from('entries').upsert(
-                { date, type: 'tasks', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              executedActions.push({ type: 'tasks', edit: true });
-            }
-            if (action.delete) {
-              const updated = current.filter(r => !r.text?.toLowerCase().includes(action.delete.toLowerCase()));
-              await supabase.from('entries').upsert(
-                { date, type: 'tasks', data: updated, user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              executedActions.push({ type: 'tasks', delete: true });
-            }
-          }
-
-          if (type === 'activity' || type === 'workouts') {
-            const { data: existing } = await supabase.from('entries').select('data')
-              .eq('date', date).eq('type', 'workouts').eq('user_id', user.id).maybeSingle();
-            const current = Array.isArray(existing?.data) ? existing.data : [];
-            if (action.entries?.length) {
-              const cleaned = current.filter(r => r.text?.trim());
-              const newRows = action.entries.map(text => ({ id: crypto.randomUUID(), text, kcal: null }));
-              await supabase.from('entries').upsert(
-                { date, type: 'workouts', data: [...cleaned, ...newRows], user_id: user.id, updated_at: new Date().toISOString() },
-                { onConflict: 'date,type,user_id' }
-              );
-              executedActions.push({ type: 'workouts', count: newRows.length });
-            }
-          }
-
-          if (type === 'calendar' && action.events?.length) {
-            const { data: stored } = await supabase.from('entries').select('data')
-              .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', user.id).maybeSingle();
-            let accessToken = stored?.data?.token;
-            const refreshTok = stored?.data?.refreshToken;
-            if (!accessToken && refreshTok) accessToken = await refreshGoogleToken(refreshTok);
-            if (!accessToken) { executedActions.push({ type: 'calendar', error: 'no token' }); continue; }
-
-            const timezone = tz || 'America/Los_Angeles';
-            for (const ev of action.events) {
-              if (!accessToken) break;
-              let eventBody;
-              if (ev.allDay || !ev.startTime) {
-                const nextDay = new Date(date + 'T12:00:00');
-                nextDay.setDate(nextDay.getDate() + 1);
-                eventBody = { summary: ev.title, start: { date }, end: { date: nextDay.toISOString().split('T')[0] } };
-              } else {
-                const endT = ev.endTime || (() => {
-                  const [h, m] = ev.startTime.split(':').map(Number);
-                  return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-                })();
-                eventBody = {
-                  summary: ev.title,
-                  start: { dateTime: `${date}T${ev.startTime}:00`, timeZone: timezone },
-                  end: { dateTime: `${date}T${endT}:00`, timeZone: timezone },
-                };
-              }
-              const calRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify(eventBody),
-              });
-              executedActions.push({ type: 'calendar', title: ev.title, ok: calRes.ok });
-            }
+          if (action.delete) {
+            const { data: items } = await supabase.from('meal_items')
+              .select('id, content').eq('user_id', user.id).eq('date', date);
+            const match = items?.find(r => r.content?.toLowerCase().includes(action.delete.toLowerCase()));
+            if (match) await supabase.from('meal_items').delete().eq('id', match.id).eq('user_id', user.id);
+            executedActions.push({ type: 'meals', delete: true });
           }
         }
-      } catch (e) {
-        // Actions parse failed — still return the text reply
+
+        // ── TASKS ──────────────────────────────────────────────────────────────
+        if (type === 'tasks') {
+          if (action.entries?.length) {
+            const { data: last } = await supabase.from('tasks')
+              .select('position').eq('user_id', user.id).eq('date', date)
+              .order('position', { ascending: false }).limit(1);
+            let nextPos = (last?.[0]?.position ?? -1) + 1;
+            await supabase.from('tasks').insert(action.entries.map(e => {
+              const text = typeof e === 'string' ? e : e.text;
+              const done = e.done ?? false;
+              return {
+                user_id: user.id, date, position: nextPos++, text, done,
+                html: `<li data-type="taskItem" data-checked="${done}"><p>${text}</p></li>`,
+              };
+            }));
+            executedActions.push({ type: 'tasks', count: action.entries.length });
+          }
+          if (action.complete) {
+            const { data: rows } = await supabase.from('tasks').select('id, text')
+              .eq('user_id', user.id).eq('date', date).eq('done', false);
+            const match = rows?.find(r => r.text?.toLowerCase().includes(action.complete.toLowerCase()));
+            if (match) await supabase.from('tasks')
+              .update({ done: true, completed_at: date })
+              .eq('id', match.id).eq('user_id', user.id);
+            executedActions.push({ type: 'tasks', complete: true });
+          }
+          if (action.edit) {
+            const { data: rows } = await supabase.from('tasks').select('id, text, done')
+              .eq('user_id', user.id).eq('date', date);
+            const match = rows?.find(r => r.text?.toLowerCase().includes(action.edit.find.toLowerCase()));
+            if (match) await supabase.from('tasks').update({
+              text: action.edit.replace,
+              html: `<li data-type="taskItem" data-checked="${match.done}"><p>${action.edit.replace}</p></li>`,
+            }).eq('id', match.id).eq('user_id', user.id);
+            executedActions.push({ type: 'tasks', edit: true });
+          }
+          if (action.delete) {
+            const { data: rows } = await supabase.from('tasks').select('id, text')
+              .eq('user_id', user.id).eq('date', date);
+            const match = rows?.find(r => r.text?.toLowerCase().includes(action.delete.toLowerCase()));
+            if (match) await supabase.from('tasks').delete().eq('id', match.id).eq('user_id', user.id);
+            executedActions.push({ type: 'tasks', delete: true });
+          }
+        }
+
+        // ── WORKOUTS ───────────────────────────────────────────────────────────
+        if (type === 'activity' || type === 'workouts') {
+          if (action.entries?.length) {
+            await supabase.from('workouts').insert(
+              action.entries.map(text => ({ user_id: user.id, date, name: text, source: 'manual' }))
+            );
+            executedActions.push({ type: 'workouts', count: action.entries.length });
+          }
+        }
+
+        // ── CALENDAR ───────────────────────────────────────────────────────────
+        if (type === 'calendar' && action.events?.length) {
+          const { data: settings } = await supabase.from('user_settings')
+            .select('data').eq('user_id', user.id).maybeSingle();
+          let accessToken = settings?.data?.googleToken;
+          const refreshTok = settings?.data?.googleRefreshToken;
+          if (!accessToken && refreshTok) accessToken = await refreshGoogleToken(refreshTok);
+          if (!accessToken) { executedActions.push({ type: 'calendar', error: 'no token' }); continue; }
+
+          const timezone = tz || 'America/Los_Angeles';
+          for (const ev of action.events) {
+            let eventBody;
+            if (ev.allDay || !ev.startTime) {
+              const next = new Date(date + 'T12:00:00');
+              next.setDate(next.getDate() + 1);
+              eventBody = { summary: ev.title, start: { date }, end: { date: next.toISOString().split('T')[0] } };
+            } else {
+              const endT = ev.endTime || (() => {
+                const [h, m] = ev.startTime.split(':').map(Number);
+                return `${String((h + 1) % 24).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+              })();
+              eventBody = {
+                summary: ev.title,
+                start: { dateTime: `${date}T${ev.startTime}:00`, timeZone: timezone },
+                end:   { dateTime: `${date}T${endT}:00`,         timeZone: timezone },
+              };
+            }
+            const calRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify(eventBody),
+            });
+            executedActions.push({ type: 'calendar', title: ev.title, ok: calRes.ok });
+          }
+        }
       }
+    } catch {
+      // Actions parse failed — still return the text reply
     }
-
-    // Types that had changes — so the client can refresh them
-    const refreshTypes = [...new Set(executedActions.map(a => a.type))];
-
-    return Response.json({ reply: cleanReply, actions: executedActions, refreshTypes, summary, isPremium });
-  } catch (e) {
-    return Response.json({ error: e.message }, { status: 500 });
   }
-}
+
+  const refreshTypes = [...new Set(executedActions.map(a => a.type))];
+  return Response.json({ reply: cleanReply, actions: executedActions, refreshTypes, summary, isPremium: isPrem });
+});

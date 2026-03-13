@@ -101,9 +101,9 @@ export default function ProjectsNav({ date, token, userId, onSelectProject }) {
           flex:1, minWidth:0,
         }}
       >
-        {/* Health — pinned, always first */}
+        {/* Health — pinned shortcut to 'health' project */}
         <button
-          onClick={() => onSelectProject('__health__')}
+          onClick={() => onSelectProject('health')}
           style={{
             background: C.green+'11', border:"1px solid "+C.green+"33",
             borderRadius:20, padding:'2px 10px',

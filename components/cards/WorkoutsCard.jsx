@@ -60,7 +60,10 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   const [syncedRows, setSyncedRows] = useState([]);
   const mkRow = () => ({id:Date.now(), text:"", dist:null, pace:null, kcal:null});
   const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "workouts", [mkRow()], token, userId);
-  const {value:savedEstimates, setValue:setSavedEstimates, loaded:estLoaded} = useDbSave(date, "activity_kcal", {}, token, userId);
+  // AI calorie estimates for synced rows: stored in workouts.raw.kcalEst keyed by clientId.
+  // We keep a local map in state (not persisted to DB separately) and persist via the PUT call.
+  const [savedEstimates, setSavedEstimates] = useState({});
+  const estLoaded = true; // estimates are computed on the fly; always "loaded"
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
   const [tick, setTick] = useState(0);
@@ -92,12 +95,12 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
       }));
       setSyncedRows(rows);
       if (rows.length && token) {
-        // Save normalized display rows (same schema as manual activity rows) for history view
+        // Persist synced rows (oura/strava) to workouts table for history view.
         const summary = rows.map(r=>({
           id:r.id, text:r.text, source:r.source,
           dist:r.dist||null, pace:r.pace||null, kcal:r.kcal||null,
         }));
-        api.post('/api/entries', {date, type:'workouts', data:summary}, token).catch(()=>{});
+        api.patch('/api/workouts', {date, rows: summary}, token).catch(()=>{});
       }
     });
   },[date,token,userId,stravaConnected]); // eslint-disable-line
