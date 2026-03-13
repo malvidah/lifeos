@@ -29,7 +29,8 @@ function injectEditorStyles() {
   s.textContent = `
     .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
-    .dl-editor .ProseMirror p.is-empty:first-child::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
+    .dl-editor .ProseMirror .is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
+    .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: inherit; font-weight: 500; margin: 0 0 2px; padding: 0; letter-spacing: 0.02em; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
   `;
@@ -177,6 +178,19 @@ export function textToContent(text) {
   });
 }
 
+// Converts plain-text note content (title\nbody) or existing HTML to TipTap doc.
+// First line becomes an H1; remaining lines become paragraphs.
+function textToNoteContent(text) {
+  if (!text) return { type: 'doc', content: [{ type: 'heading', attrs: { level: 1 }, content: [] }, { type: 'paragraph', content: [] }] };
+  if (text.startsWith('<')) return text; // already HTML — let TipTap parse it
+  const [title, ...body] = text.split('\n');
+  const titleContent = parseLineContent(title || '');
+  const bodyNodes = body.length
+    ? body.map(line => { const c = parseLineContent(line); return { type: 'paragraph', content: c.length ? c : [] }; })
+    : [{ type: 'paragraph', content: [] }];
+  return { type: 'doc', content: [{ type: 'heading', attrs: { level: 1 }, content: titleContent }, ...bodyNodes] };
+}
+
 // ── Slash command suggestion ──────────────────────────────────────────────────
 // Triggers on /p (project) or /n (note) when preceded by whitespace or line start.
 // Safe against: URLs (https://), fractions (1/2), bare slash (/ ), unknown commands (/x).
@@ -321,6 +335,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onEnterCommit,
   onEnterSplit,
   onBackspaceEmpty,
+  onArrowUpAtStart,
   onImageUpload,
   noteNames,
   projectNames,
@@ -331,6 +346,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   placeholder,
   singleLine   = false,
   taskList     = false,
+  noteTitle    = false,
   autoFocus    = false,
   clearOnEnter = true,   // set false for inline row editors that keep their content after Enter
   style,
@@ -348,7 +364,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onBlurRef           = useRef(onBlur);
   const onEnterCommitRef    = useRef(onEnterCommit);
   const onEnterSplitRef     = useRef(onEnterSplit);
-  const onBackspaceEmptyRef = useRef(onBackspaceEmpty);
+  const onBackspaceEmptyRef  = useRef(onBackspaceEmpty);
+  const onArrowUpAtStartRef  = useRef(onArrowUpAtStart);
   const onImageUploadRef    = useRef(onImageUpload);
   const noteNamesRef        = useRef(noteNames || []);
   const projectNamesRef     = useRef(projectNames || []);
@@ -358,6 +375,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onCreateProjectRef  = useRef(onCreateProject);
   const onUpdateRef         = useRef(onUpdate);
   const taskListRef         = useRef(taskList);
+  const noteTitleRef        = useRef(noteTitle);
   const clearOnEnterRef     = useRef(clearOnEnter);
 
   useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
@@ -365,6 +383,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
   useEffect(() => { onEnterSplitRef.current      = onEnterSplit; },     [onEnterSplit]);
   useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
+  useEffect(() => { onArrowUpAtStartRef.current  = onArrowUpAtStart; }, [onArrowUpAtStart]);
   useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
   useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
@@ -439,7 +458,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: false, blockquote: false, bulletList: false, orderedList: false,
+        heading: noteTitle ? { levels: [1] } : false,
+        blockquote: false, bulletList: false, orderedList: false,
         listItem: false, codeBlock: false, code: false, horizontalRule: false,
         strike: false, bold: false, italic: false,
       }),
@@ -449,7 +469,12 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ...(singleLine ? [] : [ImageBlock]),
       ...(taskList ? [TaskList, TaskItem.configure({ nested: false })] : []),
 
-      Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
+      noteTitle
+        ? Placeholder.configure({
+            placeholder: ({ node }) => node.type.name === 'heading' ? 'Untitled note…' : 'Start writing…',
+            emptyNodeClass: 'is-empty',
+          })
+        : Placeholder.configure({ placeholder: placeholder || '', emptyEditorClass: 'is-empty' }),
 
       // Unified slash command: /p → project chip, /n → note chip
       createSuggestion({
@@ -519,7 +544,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       }),
     ],
 
-    content: taskList ? (value || EMPTY_TASK_LIST) : { type: 'doc', content: textToContent(value || '') },
+    content: noteTitle ? textToNoteContent(value) : taskList ? (value || EMPTY_TASK_LIST) : { type: 'doc', content: textToContent(value || '') },
     editable,
 
     editorProps: {
@@ -596,6 +621,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             }
           }
         }
+        if (e.key === 'ArrowUp' && onArrowUpAtStartRef.current) {
+          const { selection } = view.state;
+          if (selection.empty && selection.$from.pos <= 1) {
+            onArrowUpAtStartRef.current();
+            return true;
+          }
+        }
         if (e.key === 'Escape') { view.dom.blur(); return true; }
         return false;
       },
@@ -625,7 +657,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
 
     onBlur({ editor }) {
-      if (!taskListRef.current) onBlurRef.current?.(docToText(editor.getJSON()));
+      if (noteTitleRef.current) onBlurRef.current?.(editor.getHTML());
+      else if (!taskListRef.current) onBlurRef.current?.(docToText(editor.getJSON()));
     },
 
     onUpdate({ editor }) {
@@ -652,7 +685,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       const ed = editorRef.current;
       if (!ed || ed.isDestroyed) return;
       try {
-        if (taskListRef.current) {
+        if (noteTitleRef.current) {
+          onBlurRef.current?.(ed.getHTML());
+        } else if (taskListRef.current) {
           onUpdateRef.current?.(ed.getHTML());
         } else if (onBlurRef.current) {
           onBlurRef.current(docToText(ed.getJSON()));
@@ -680,7 +715,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
     if (!editor.isFocused) {
-      if (taskList) {
+      if (noteTitleRef.current) {
+        editor.commands.setContent(textToNoteContent(value));
+      } else if (taskList) {
         editor.commands.setContent(value || EMPTY_TASK_LIST);
       } else {
         editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });

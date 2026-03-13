@@ -84,8 +84,15 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const notesList   = Array.isArray(notesStore?.notes) ? notesStore.notes : [];
   const activeNoteId = notesStore?.activeId ?? notesList[0]?.id ?? null;
   const activeNote  = notesList.find(n => n.id === activeNoteId) ?? notesList[0] ?? null;
-  // Derive note name from first line of content
-  const noteName = (note) => (note?.content || '').split('\n')[0].trim() || 'Untitled';
+  // Derive note name from content (HTML with <h1> or plain text first line)
+  const noteName = (note) => {
+    const c = note?.content || '';
+    if (c.startsWith('<')) {
+      const m = c.match(/<h1[^>]*>(.*?)<\/h1>/s);
+      return m ? m[1].replace(/<[^>]+>/g, '').trim() || 'Untitled' : 'Untitled';
+    }
+    return c.split('\n')[0].trim() || 'Untitled';
+  };
   // Sorted by most recent first for the left panel
   const sortedNotes = [...notesList].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   // All current note names (for {note} autocomplete)
@@ -479,49 +486,28 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           </div>
 
           {/* Right: editor — full width when list collapsed */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {activeNote ? (() => {
-              const lines = (activeNote.content || '').split('\n');
-              const titleVal = lines[0] || '';
-              const bodyVal = lines.slice(1).join('\n');
-              return (
-                <>
-                  <input
-                    key={activeNote.id + ':title'}
-                    defaultValue={titleVal}
-                    placeholder="Untitled note…"
-                    onBlur={e => {
-                      const newTitle = e.target.value.trim();
-                      const body = (activeNote.content || '').split('\n').slice(1).join('\n');
-                      updateNoteContent(activeNote.id, newTitle ? newTitle + (body ? '\n' + body : '') : body);
-                    }}
-                    style={{ fontFamily: mono, fontSize: F.md, fontWeight: 500, letterSpacing: '0.02em', background: 'none', border: 'none', outline: 'none', color: 'var(--dl-text)', width: '100%', padding: '2px 0', lineHeight: 1.5 }}
-                  />
-                  <DayLabEditor
-                    key={activeNote.id + ':body'}
-                    value={bodyVal}
-                    onBlur={text => {
-                      const title = (activeNote.content || '').split('\n')[0] || '';
-                      updateNoteContent(activeNote.id, title ? title + (text ? '\n' + text : '') : text);
-                    }}
-                    placeholder='Start writing…'
-                    noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
-                    projectNames={pvProjectNames}
-                    onCreateNote={addNote}
-                    onProjectClick={name => navigateToProject(name)}
-                    onNoteClick={name => {
-                      const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
-                      if (match) selectNote(match.id);
-                      else addNote(name);
-                    }}
-                    textColor={"var(--dl-text)"}
-                    mutedColor={"var(--dl-dim)"}
-                    color={"var(--dl-muted)"}
-                    style={{ minHeight: 160, width: '100%' }}
-                  />
-                </>
-              );
-            })() : (
+          <div style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}>
+            {activeNote ? (
+              <DayLabEditor
+                key={activeNote.id}
+                value={activeNote.content || ''}
+                noteTitle
+                onBlur={html => updateNoteContent(activeNote.id, html)}
+                noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
+                projectNames={pvProjectNames}
+                onCreateNote={addNote}
+                onProjectClick={name => navigateToProject(name)}
+                onNoteClick={name => {
+                  const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
+                  if (match) selectNote(match.id);
+                  else addNote(name);
+                }}
+                textColor={"var(--dl-text)"}
+                mutedColor={"var(--dl-dim)"}
+                color={"var(--dl-muted)"}
+                style={{ minHeight: 180, width: '100%' }}
+              />
+            ) : (
               <div style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-dim)", padding: '8px 0', lineHeight: 1.7 }}>Press + to create a note.</div>
             )}
           </div>
