@@ -226,11 +226,11 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
           <div style={{flex:1}}/>
           {showProtein && (
             <div style={{width:PROT_W,display:"flex",justifyContent:"center"}}>
-              {totalProtein > 0 && <span style={{...chipBase,background:C.blue+"22",color:"var(--dl-blue)"}}>{totalProtein}g</span>}
+              {totalProtein > 0 && <span style={{...chipBase,background:"var(--dl-blue-13)",color:"var(--dl-blue)"}}>{totalProtein}g</span>}
             </div>
           )}
           <div style={{width:ENRG_W,display:"flex",justifyContent:"center"}}>
-            {totalKcal > 0 && <span style={{...chipBase,background:C.orange+"22",color:"var(--dl-orange)"}}>{totalKcal}kcal</span>}
+            {totalKcal > 0 && <span style={{...chipBase,background:"var(--dl-orange-13)",color:"var(--dl-orange)"}}>{totalKcal}kcal</span>}
           </div>
         </div>
       )}

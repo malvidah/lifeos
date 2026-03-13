@@ -86,7 +86,7 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
     return (
       <>
         {text.slice(0, idx)}
-        <mark style={{ background: C.accent + '30', color: "var(--dl-accent)", borderRadius: 2, padding: '0 1px', fontStyle: 'normal' }}>
+        <mark style={{ background: "var(--dl-accent-19)", color: "var(--dl-accent)", borderRadius: 2, padding: '0 1px', fontStyle: 'normal' }}>
           {text.slice(idx, idx + q.length)}
         </mark>
         {text.slice(idx + q.length)}
