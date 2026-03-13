@@ -63,10 +63,29 @@ export function clientParseTasks(data) {
 }
 
 // Serialise [{id,text,done}] back to TipTap HTML — exported for ProjectView.
+// {name} and [note] tokens in plain text are converted to TipTap chip spans so
+// DayLabEditor renders them as clickable chip nodes rather than literal text.
 export function tasksToHtml(tasks) {
   const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function inlineToHtml(text) {
+    const re = /\{([^}]+)\}|\[([^\]]+)\]/g;
+    let last = 0, out = '', m;
+    while ((m = re.exec(text)) !== null) {
+      if (m.index > last) out += esc(text.slice(last, m.index));
+      if (m[1] != null) {
+        const n = m[1];
+        out += `<span data-project-tag="${esc(n)}">${esc(n.toUpperCase())}</span>`;
+      } else {
+        const n = m[2];
+        out += `<span data-note-link="${esc(n)}">${esc(n)}</span>`;
+      }
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) out += esc(text.slice(last));
+    return out;
+  }
   const items = tasks.filter(t => t.text).map(t =>
-    `<li data-type="taskItem" data-checked="${t.done?'true':'false'}"><p>${esc(t.text)}</p></li>`
+    `<li data-type="taskItem" data-checked="${t.done?'true':'false'}"><p>${inlineToHtml(t.text)}</p></li>`
   ).join('');
   return items ? `<ul data-type="taskList">${items}</ul>` : '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>';
 }
@@ -112,7 +131,7 @@ function injectTaskListStyles(accentHex) {
       cursor:pointer; transition:all 0.15s;
     }
     .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
-      background-color:var(--task-color); border-color:var(--task-color);
+      background-color:var(--task-fill); border-color:var(--task-color);
       background-image:url("data:image/svg+xml,%3Csvg width='9' height='9' viewBox='0 0 10 10' fill='none' stroke='${enc}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='1.5%2C5 4%2C7.5 8.5%2C2'/%3E%3C/svg%3E");
       background-repeat:no-repeat; background-position:center;
     }
@@ -124,7 +143,7 @@ function injectTaskListStyles(accentHex) {
 }
 
 export default function Tasks({date, token, userId, taskFilter="all"}) {
-  const { C } = useTheme();
+  const { C, theme } = useTheme();
   const {value, setValue, loaded} = useDbSave(date, 'tasks', '', token, userId);
   const taskProjectNames = useContext(ProjectNamesContext);
   const {navigateToProject, navigateToNote} = useContext(NavigationContext);
@@ -141,7 +160,11 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   );
 
   return (
-    <div data-filter={taskFilter} style={{'--task-border':C.border2,'--task-color':C.text}}>
+    <div data-filter={taskFilter} style={{
+      '--task-border': C.border2,
+      '--task-color':  C.accent,
+      '--task-fill':   theme === 'light' ? C.bg : C.dim,
+    }}>
       <DayLabEditor
         taskList
         value={htmlValue}
