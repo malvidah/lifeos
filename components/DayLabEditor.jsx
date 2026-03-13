@@ -606,17 +606,17 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           }
           return true;
         }
-        if (e.key === 'Backspace' && taskListRef.current) {
+        if (taskListRef.current && !e.shiftKey && (e.key === 'Enter' || e.key === 'Backspace')) {
           const { selection } = view.state;
           if (selection.empty) {
             const $from = selection.$from;
-            // Block backspace only when at the start of the first task item's paragraph
-            // (prevents collapsing the task item structure, but allows character deletion)
-            if ($from.parentOffset === 0 && $from.depth >= 2) {
+            if ($from.depth >= 2) {
               const taskItemNode = $from.node($from.depth - 1);
-              if (taskItemNode?.type.name === 'taskItem') {
-                const taskItemIndex = $from.index($from.depth - 2);
-                if (taskItemIndex === 0) return true;
+              if (taskItemNode?.type.name === 'taskItem' && $from.index($from.depth - 2) === 0) {
+                // Backspace: block when cursor is at the very start of the first task item's paragraph
+                if (e.key === 'Backspace' && $from.parentOffset === 0) return true;
+                // Enter: block when the first task item's paragraph is empty (would lift it out of the list)
+                if (e.key === 'Enter' && $from.parent.content.size === 0) return true;
               }
             }
           }
