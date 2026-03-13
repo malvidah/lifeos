@@ -30,7 +30,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
-    .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
+    .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); font-weight: 400; }
     .dl-tasklist .ProseMirror > p.is-empty::before { content: none; }
     .dl-tasklist .ProseMirror [data-type="taskItem"]:only-child p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
@@ -475,7 +475,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
       Placeholder.configure({
         placeholder: noteTitle
-          ? ({ node }) => node.type.name === 'heading' ? 'New note' : 'Write something...'
+          ? ({ node }) => node.type.name === 'heading' ? 'Untitled' : 'Write something...'
           : placeholder || '',
         emptyNodeClass: 'is-empty',
         showOnlyCurrent: !noteTitle && !taskList,
