@@ -99,9 +99,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   // All current note names (for {note} autocomplete)
   const allNoteNames = notesList.map(noteName).filter(Boolean);
 
-  const addNote = (initialName = '', { silent = false } = {}) => {
+  const addNote = (initialName = '', { silent = false, initialContent } = {}) => {
     const id = `note_${Date.now()}`;
-    const content = initialName || '';
+    const content = initialContent || initialName || '';
     setNotesStore(current => {
       const list = Array.isArray(current?.notes) ? current.notes : [];
       return silent
@@ -534,9 +534,20 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 style={{ minHeight: 180, width: '100%' }}
               />
             ) : (
-              <div onClick={() => addNote()} style={{ cursor: 'text', minHeight: 180, padding: '2px 0' }}>
-                <div style={{ fontFamily: mono, fontSize: F.sm, fontWeight: 400, color: "var(--dl-dim)", lineHeight: 1.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Untitled</div>
-              </div>
+              <DayLabEditor
+                key="phantom"
+                value=""
+                noteTitle
+                onBlur={html => { if (html?.replace(/<[^>]*>/g, '').trim()) addNote('', { initialContent: html }); }}
+                noteNames={[]}
+                projectNames={pvProjectNames}
+                onCreateNote={addNote}
+                onProjectClick={name => navigateToProject(name)}
+                textColor={"var(--dl-text)"}
+                mutedColor={"var(--dl-dim)"}
+                color={"var(--dl-muted)"}
+                style={{ minHeight: 180, width: '100%' }}
+              />
             )}
           </div>
         </div>
