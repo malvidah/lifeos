@@ -5,7 +5,7 @@ import { mono, F, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Shimmer } from "../ui/primitives.jsx";
-import { DayLabEditor } from "../DayLabEditor.jsx";
+import { DayLabEditor } from "../Editor.jsx";
 
 export function NewProjectTask({ project, onAdd }) {
   const col = projectColor(project);

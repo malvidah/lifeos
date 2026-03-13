@@ -10,7 +10,7 @@ import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
-import { DayLabEditor } from "../DayLabEditor.jsx";
+import { DayLabEditor } from "../Editor.jsx";
 import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
 import { AddJournalLine } from "../widgets/JournalEditor.jsx";
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";

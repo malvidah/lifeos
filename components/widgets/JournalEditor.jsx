@@ -6,7 +6,7 @@ import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile } from "@/lib/images";
-import { DayLabEditor } from "../DayLabEditor.jsx";
+import { DayLabEditor } from "../Editor.jsx";
 
 export function JournalEditor({date,userId,token}) {
   const { C } = useTheme();

@@ -7,7 +7,7 @@ import { useDbSave, dbLoad } from "@/lib/db";
 import { fmtMins, sportEmoji, fmtMinsField, SPORT_EMOJI } from "@/lib/workouts";
 import { cachedOuraFetch } from "@/lib/ouraCache";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
-import { DayLabEditor } from "../DayLabEditor.jsx";
+import { DayLabEditor } from "../Editor.jsx";
 import { api } from "@/lib/api";
 import { estimateNutrition } from "@/lib/images";
 
