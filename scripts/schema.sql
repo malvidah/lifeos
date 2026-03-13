@@ -42,8 +42,10 @@ create table if not exists journal_blocks (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users(id) on delete cascade,
   date         text not null,          -- YYYY-MM-DD
+  position     integer,
   content      text not null default '',
   project_tags text[] not null default '{}',
+  note_tags    text[] not null default '{}',
   updated_at   timestamptz not null default now()
 );
 create index if not exists journal_blocks_user on journal_blocks(user_id);
@@ -59,10 +61,14 @@ create table if not exists tasks (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users(id) on delete cascade,
   date         text not null,          -- YYYY-MM-DD
+  position     integer,
   text         text not null default '',
   html         text,
   done         boolean not null default false,
+  due_date     text,                   -- YYYY-MM-DD, optional
+  completed_at timestamptz,
   project_tags text[] not null default '{}',
+  note_tags    text[] not null default '{}',
   updated_at   timestamptz not null default now()
 );
 create index if not exists tasks_user on tasks(user_id);
@@ -88,6 +94,7 @@ create table if not exists workouts (
   avg_hr       numeric,
   project_tags text[] not null default '{}',
   raw          jsonb,                  -- extra provider-specific fields
+  created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   unique (user_id, source, external_id)
 );
@@ -104,6 +111,7 @@ create table if not exists meal_items (
   id           uuid primary key default gen_random_uuid(),
   user_id      uuid not null references auth.users(id) on delete cascade,
   date         text not null,          -- YYYY-MM-DD
+  position     integer,
   content      text not null default '',
   ai_protein   numeric,                -- grams, AI estimate
   ai_calories  numeric,                -- kcal, AI estimate
@@ -159,3 +167,21 @@ create index if not exists health_scores_user_date on health_scores(user_id, dat
 alter table health_scores enable row level security;
 create policy if not exists "health_scores: owner only" on health_scores
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+
+-- ── Migrations (safe to run on existing databases) ────────────────────────────
+alter table journal_blocks
+  add column if not exists position  integer,
+  add column if not exists note_tags text[] not null default '{}';
+
+alter table tasks
+  add column if not exists position     integer,
+  add column if not exists due_date     text,
+  add column if not exists completed_at timestamptz,
+  add column if not exists note_tags    text[] not null default '{}';
+
+alter table meal_items
+  add column if not exists position integer;
+
+alter table workouts
+  add column if not exists created_at timestamptz not null default now();
