@@ -32,7 +32,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-tasklist .ProseMirror > p.is-empty::before { content: none; }
-    .dl-tasklist .ProseMirror [data-type="taskItem"]:first-child p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
+    .dl-tasklist .ProseMirror [data-type="taskItem"]:only-child p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-editor .ProseMirror h1 { font-family: ${serif}; font-size: 1.12em; font-weight: 700; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
@@ -617,10 +617,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             const $from = selection.$from;
             if ($from.depth >= 2) {
               const taskItemNode = $from.node($from.depth - 1);
-              if (taskItemNode?.type.name === 'taskItem' && $from.index($from.depth - 2) === 0) {
-                // Backspace: block when cursor is at the very start of the first task item's paragraph
-                if (e.key === 'Backspace' && $from.parentOffset === 0) return true;
-                // Enter: block when the first task item's paragraph is empty (would lift it out of the list)
+              if (taskItemNode?.type.name === 'taskItem') {
+                // Backspace: block at start of first task item only (prevents destroying list structure)
+                if (e.key === 'Backspace' && $from.parentOffset === 0 && $from.index($from.depth - 2) === 0) return true;
+                // Enter: block on ANY empty task item (must type something before creating a new task)
                 if (e.key === 'Enter' && $from.parent.content.size === 0) return true;
               }
             }
