@@ -33,7 +33,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
     .dl-tasklist .ProseMirror > p.is-empty::before { content: none; }
     .dl-tasklist .ProseMirror [data-type="taskItem"]:only-child p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-muted); }
-    .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
+    .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
   `;

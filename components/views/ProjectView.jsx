@@ -219,6 +219,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       });
     }
   };
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name }
   const deleteNote = (id) => {
     setNotesStore(current => {
       const list = Array.isArray(current?.notes) ? current.notes : [];
@@ -480,7 +481,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                     style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: note.id === activeNoteId ? "var(--dl-text)" : "var(--dl-muted)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}
                   >{noteName(note)}</button>
                   <button
-                    onClick={e => { e.stopPropagation(); if (window.confirm(`Delete "${noteName(note)}"?`)) deleteNote(note.id); }}
+                    onClick={e => { e.stopPropagation(); setDeleteConfirm({ id: note.id, name: noteName(note) }); }}
                     title="Delete"
                     style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: "var(--dl-dim)", fontSize: 14, lineHeight: 1, flexShrink: 0, opacity: hoveredNoteId === note.id ? 0.6 : 0, transition: 'opacity 0.12s', borderRadius: 4 }}
                     onMouseEnter={e => e.currentTarget.style.opacity = '1'}
@@ -780,6 +781,43 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           project={project} token={token}
           open={!!settingsOpen} onClose={onCloseSettings} onRenamed={onRenamed}
         />
+      )}
+
+      {/* ── Delete note confirmation ─────────────────────────────────────── */}
+      {deleteConfirm && (
+        <>
+          <div
+            onClick={() => setDeleteConfirm(null)}
+            style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+          />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+            zIndex: 301, width: 'min(340px, calc(100vw - 40px))',
+            background: 'var(--dl-bg)', border: '1px solid var(--dl-border)',
+            borderRadius: 14, padding: '24px 24px 20px',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
+            display: 'flex', flexDirection: 'column', gap: 8,
+          }}>
+            <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dl-muted)', marginBottom: 4 }}>Delete note</div>
+            <div style={{ fontFamily: mono, fontSize: 13, color: 'var(--dl-text)', lineHeight: 1.5 }}>
+              Delete <span style={{ color: 'var(--dl-accent)' }}>"{deleteConfirm.name}"</span>?
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                style={{ fontFamily: mono, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'none', border: '1px solid var(--dl-border)', borderRadius: 7, padding: '8px 16px', cursor: 'pointer', color: 'var(--dl-muted)', transition: 'color 0.12s, border-color 0.12s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--dl-text)'; e.currentTarget.style.borderColor = 'var(--dl-dim)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--dl-muted)'; e.currentTarget.style.borderColor = 'var(--dl-border)'; }}
+              >Cancel</button>
+              <button
+                onClick={() => { deleteNote(deleteConfirm.id); setDeleteConfirm(null); }}
+                style={{ fontFamily: mono, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', background: '#c0392b22', border: '1px solid #c0392b55', borderRadius: 7, padding: '8px 16px', cursor: 'pointer', color: '#e05', transition: 'background 0.12s' }}
+                onMouseEnter={e => e.currentTarget.style.background = '#c0392b44'}
+                onMouseLeave={e => e.currentTarget.style.background = '#c0392b22'}
+              >Delete</button>
+            </div>
+          </div>
+        </>
       )}
     </NoteContext.Provider>
   );
