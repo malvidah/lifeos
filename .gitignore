@@ -2,6 +2,9 @@ node_modules/
 .next/
 .env
 .env.local
+.env.development.local
+.env.production.local
+.env.test.local
 .vercel
 
 # macOS
@@ -14,6 +17,9 @@ xcuserdata/
 
 # Claude Code workspace
 .claude/
+
+# Local DB backups (stored outside repo at ~/lifeos-backups/)
+lifeos-backups/
 
 # Desktop build artifacts
 desktop/dist/
