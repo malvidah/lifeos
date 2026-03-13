@@ -431,7 +431,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                             {dots.sleep     >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-blue)",    flexShrink: 0 }} />}
                             {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-green)",   flexShrink: 0 }} />}
                             {dots.activity  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-accent)",  flexShrink: 0 }} />}
-                            {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#8B6BB5', flexShrink: 0 }} />}
+                            {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--dl-purple)', flexShrink: 0 }} />}
                           </div>
                         )}
 
@@ -730,7 +730,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-blue)"}}/>}
                     {k<=today && (healthDots[k]?.readiness >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-green)"}}/>}
                     {k<=today && (healthDots[k]?.activity >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-accent)"}}/>}
-                    {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"#8B6BB5"}}/>}
+                    {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-purple)"}}/>}
                   </div>
                 </div>
 

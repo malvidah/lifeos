@@ -175,7 +175,7 @@ export function NavBtn({onClick,title,children}) {
   );
 }
 
-export function DayLabLoader({ size = 32, color = "#EFDFC3" }) {
+export function DayLabLoader({ size = 32, color = "var(--dl-text)" }) {
   return (
     <svg width={size} height={size} viewBox="0 0 1500 1500" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "block" }}>
       <style>{"@keyframes dlPulse{0%,100%{opacity:.15;transform:scale(.92)}50%{opacity:1;transform:scale(1)}}@keyframes dlDot{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1.1)}}.dl-cross{animation:dlPulse 1.6s ease-in-out infinite;transform-origin:751px 767px}.dl-dot{animation:dlDot 1.6s ease-in-out infinite .3s;transform-origin:1048px 474px}"}</style>

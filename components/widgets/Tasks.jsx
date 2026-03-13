@@ -127,7 +127,7 @@ function injectTaskListStyles(accentHex) {
     .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"] {
       -webkit-appearance:none; appearance:none;
       width:15px; height:15px; min-width:15px; border-radius:4px; margin:0;
-      border:1.5px solid var(--task-border,#888); background:transparent;
+      border:1.5px solid var(--task-border,var(--dl-border2)); background:transparent;
       cursor:pointer; transition:all 0.15s;
     }
     .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
