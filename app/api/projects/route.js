@@ -32,11 +32,22 @@ export const GET = withAuth(async (_req, { supabase, user }) => {
     supabase.from('entries').select('data').eq('user_id', user.id).eq('type', 'tasks'),
   ]);
 
+  // If the projects table doesn't exist yet (migration unrun), fall back to
+  // returning synthetic project objects built from the tag scan below.
+  const tablesMissing = projR.error?.code === '42P01' || projR.error?.message?.includes('does not exist');
+
   // Build set of all tag names used in entries
   const usedTags = new Set();
   for (const row of (journalR.data || [])) scanTags(typeof row.data === 'string' ? row.data : '', usedTags);
   for (const row of (tasksR.data || [])) {
     for (const task of parseTasks(row.data)) scanTags(task.text, usedTags);
+  }
+
+  // If the table doesn't exist, return synthetic project objects from the tag
+  // scan so the nav strip shows something useful while awaiting migration.
+  if (tablesMissing) {
+    const projects = [...usedTags].map(name => ({ name, color: null, last_active: null, created_at: null }));
+    return Response.json({ projects });
   }
 
   // Build map of existing project records
@@ -56,7 +67,7 @@ export const GET = withAuth(async (_req, { supabase, user }) => {
     if (a.last_active && b.last_active) return b.last_active.localeCompare(a.last_active);
     if (a.last_active) return -1;
     if (b.last_active) return 1;
-    return b.created_at.localeCompare(a.created_at);
+    return b.created_at?.localeCompare(a.created_at) ?? 0;
   });
 
   return Response.json({ projects });
