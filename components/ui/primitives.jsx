@@ -26,8 +26,8 @@ export function Ring({score,color,size=48}) {
   const bubbleR = score ? r * Math.min(0.5 + 0.5*(val/85), 1.0) : 0;
   return (
     <svg width={size} height={size} style={{flexShrink:0}}>
-      <circle cx={size/2} cy={size/2} r={bubbleR} fill={color+"28"} style={{transition:"r 0.5s cubic-bezier(.4,0,.2,1)"}}/>
-      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color+"30"} strokeWidth={2.5} style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%"}}/>
+      <circle cx={size/2} cy={size/2} r={bubbleR} fill={color} fillOpacity={0.16} style={{transition:"r 0.5s cubic-bezier(.4,0,.2,1)"}}/>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeOpacity={0.19} strokeWidth={2.5} style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%"}}/>
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round"
         strokeDasharray={`${pct*circ} ${circ}`}
         style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%",transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>

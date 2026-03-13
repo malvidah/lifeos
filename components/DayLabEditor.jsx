@@ -17,7 +17,7 @@ import { Suggestion } from '@tiptap/suggestion';
 import { serif, mono, F, projectColor, CHIP_TOKENS, THEMES } from '@/lib/tokens';
 
 const ACCENT = THEMES.dark.accent;
-const WARM   = '#C8A87A';
+const WARM   = 'var(--dl-accent)';
 
 // ── CSS injection ─────────────────────────────────────────────────────────────
 function injectEditorStyles() {
@@ -260,8 +260,8 @@ function SuggestionDropdown({ state, onSelect }) {
   return createPortal(
     <div style={{
       position: 'fixed', top, left, zIndex: 9999,
-      background: '#1E1C1A', border: '1px solid #2A2724', borderRadius: 10,
-      boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+      background: 'var(--dl-surface)', border: '1px solid var(--dl-border)', borderRadius: 10,
+      boxShadow: 'var(--dl-shadow)',
       padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
       {state.items.map((item, i) => {
@@ -284,10 +284,10 @@ function SuggestionDropdown({ state, onSelect }) {
             style={{
               display: 'block', width: '100%', border: 'none', textAlign: 'left',
               padding: '7px 14px', cursor: 'pointer',
-              background: selected ? 'rgba(255,255,255,0.09)' : 'transparent',
+              background: selected ? 'var(--dl-border)' : 'transparent',
               fontFamily: mono, fontSize: 12,
               letterSpacing: isProject && !isCreate ? '0.08em' : '0.04em',
-              color: isCreate ? '#9A9088' : col || '#EFDFC3',
+              color: isCreate ? 'var(--dl-muted)' : col || 'var(--dl-text)',
               transition: 'background 0.08s',
             }}
           >{label}</button>
@@ -430,7 +430,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   });
 
   textColor  = textColor  || 'inherit';
-  mutedColor = mutedColor || '#9A9088';
+  mutedColor = mutedColor || 'var(--dl-muted)';
 
   const editor = useEditor({
     extensions: [
