@@ -359,9 +359,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   async function addNewTask(text) {
     if (!text.trim() || project === '__everything__') return;
     const today = todayKey(); // local date — avoids UTC midnight mismatch with day view
-    const taskText = text.trim().endsWith(`#${project}`)
-      ? text.trim()
-      : `${text.trim()} {${project.toLowerCase()}}`;
+    const chip = `{${project.toLowerCase()}}`;
+    const hasTag = text.trim().endsWith(`#${project}`) || text.includes(chip);
+    const taskText = hasTag ? text.trim() : `${text.trim()} ${chip}`;
     const current = await dbLoad(today, 'tasks', token);
     const existing = clientParseTasks(current);
     const newTask = { id: crypto.randomUUID(), text: taskText, done: false };
@@ -380,9 +380,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   async function addNewJournal(text) {
     if (!text.trim() || project === '__everything__') return;
     const today = todayKey();
-    const entryText = text.trim().endsWith(`#${project}`)
-      ? text.trim()
-      : `${text.trim()} {${project.toLowerCase()}}`;
+    const chip = `{${project.toLowerCase()}}`;
+    const hasTag = text.trim().endsWith(`#${project}`) || text.includes(chip);
+    const entryText = hasTag ? text.trim() : `${text.trim()} ${chip}`;
     const current = await dbLoad(today, 'journal', token);
     const existing = (typeof current === 'string' ? current : '') || '';
     const updated = existing ? existing.trimEnd() + '\n' + entryText : entryText;
