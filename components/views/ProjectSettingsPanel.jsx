@@ -203,24 +203,12 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
             {renameErr && (
               <div style={{ fontFamily: mono, fontSize: 9, color: '#e05', marginTop: 6 }}>{renameErr}</div>
             )}
-            {!renaming && !renameErr && (
-              <div style={{ fontFamily: mono, fontSize: 9, color: C.muted, marginTop: 6, lineHeight: 1.5 }}>
-                Renames across all notes, tasks, meals & workouts.
-              </div>
-            )}
           </div>
 
           {/* ── LOOK FOR ─────────────────────────────────────────────────── */}
           {project !== '__everything__' && (
             <div>
               <div style={sectionLabel}>Look For</div>
-              <div style={{
-                fontFamily: mono, fontSize: 9, color: C.muted,
-                lineHeight: 1.6, marginBottom: 12,
-              }}>
-                Pull in entries that mention these terms — even if they aren&apos;t tagged to this project.
-              </div>
-
               {/* Term chips */}
               {terms.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>

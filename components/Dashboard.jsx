@@ -173,6 +173,9 @@ function DashboardInner() {
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  // Close settings whenever we navigate to a different project
+  useEffect(() => { setSettingsOpen(false); }, [activeProject]);
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
   const collapseMap = {journal:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
@@ -357,13 +360,12 @@ function DashboardInner() {
               {/* NavBar — in scroll flow, same component on every page */}
               <NavBar
                 activeProject={activeProject}
+                date={selected}
                 searchOpen={searchOpen} setSearchOpen={setSearchOpen}
                 searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                 searchInputRef={searchInputRef} srLoading={srLoading}
-                date={selected} token={token} userId={userId}
-                onSelectProject={setActiveProject}
-                onBack={() => setActiveProject(null)}
-                tagDisplayName={tagDisplayName} projectColor={projectColor}
+                onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
+                onGoToProjects={() => setActiveProject('__graph__')}
               />
                               {/* Cal + Health — hidden during search */}
                 {!searchOpen && (
@@ -469,13 +471,13 @@ function DashboardInner() {
                     <div style={{height:25,flexShrink:0}}/>
                     <NavBar
                       activeProject={activeProject}
+                      date={selected}
                       searchOpen={searchOpen} setSearchOpen={setSearchOpen}
                       searchQuery={searchQuery} setSearchQuery={setSearchQuery}
                       searchInputRef={searchInputRef} srLoading={srLoading}
-                      date={selected} token={token} userId={userId}
-                      onSelectProject={setActiveProject}
-                      onBack={() => setActiveProject(null)}
-                      tagDisplayName={tagDisplayName} projectColor={projectColor}
+                      onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
+                      onGoToProjects={() => setActiveProject('__graph__')}
+                      onOpenSettings={() => setSettingsOpen(true)}
                     />
                     {isGraph ? (
                       <div style={{display:'flex',flexDirection:'column',gap:10}}>
@@ -509,6 +511,9 @@ function DashboardInner() {
                         onBack={() => setActiveProject(null)}
                         onSelectDate={d => { setActiveProject(null); setSelected(d); }}
                         taskFilter={taskFilter} setTaskFilter={setTaskFilter}
+                        settingsOpen={settingsOpen}
+                        onCloseSettings={() => setSettingsOpen(false)}
+                        onRenamed={slug => { setActiveProject(slug); setSettingsOpen(false); }}
                       />
                     )}
                   </div>
