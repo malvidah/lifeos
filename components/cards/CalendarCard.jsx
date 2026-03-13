@@ -652,38 +652,19 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
                 display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
                 <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,-1)));}} style={{
-                  background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
+                  background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
                   fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
-                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>‹</button>
-                <span style={{
-                  fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-                  color:isToday?"var(--dl-text)":"var(--dl-accent)",
-                  background:(isToday?C.text:C.accent)+"1A",
-                  borderRadius:6,padding:"4px 10px",
-                }}>{selMonth} {selDate.getDate()}, {selYear}</span>
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
                 <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,+1)));}} style={{
-                  background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
+                  background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
                   fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
-                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>›</button>
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
               </div>
             );
           })()
-        ) : (
-          /* ── Expanded: date centered, no arrows ── */
-          <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
-            pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
-            <span style={{
-              fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
-              color:toKey(selDate)===today?"var(--dl-text)":"var(--dl-accent)",
-              background:(toKey(selDate)===today?C.text:C.accent)+"1A",
-              borderRadius:6,padding:"4px 10px",
-            }}>
-              {selMonth} {selDate.getDate()}, {selYear}
-            </span>
-          </div>
-        )}
+        ) : null}
 
         {/* RIGHT: M/D toggle — hidden when collapsed */}
         <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:4,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
@@ -1022,33 +1003,21 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-muted)"}}>Calendar</span>
             </div>
             {collapsed ? (
-              /* Collapsed: always day nav — same as day view */
+              /* Collapsed: day nav arrows only */
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
                 display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
                 <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()-1);onSelect(toKey(n));}}
-                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
+                  style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
-                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>‹</button>
-                <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
-                  color:pillColor,background:pillColor+'1A',borderRadius:6,padding:'4px 10px'}}>
-                  {selPillLabel}
-                </span>
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>‹</button>
                 <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()+1);onSelect(toKey(n));}}
-                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-muted)",padding:'2px 6px',
+                  style={{background:'none',border:'none',cursor:'pointer',color:C.muted,padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-text)"}
-                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-muted)"}>›</button>
+                  onMouseEnter={e=>e.currentTarget.style.color=C.text}
+                  onMouseLeave={e=>e.currentTarget.style.color=C.muted}>›</button>
               </div>
-            ) : (
-              /* Expanded: selected date pill only */
-              <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',pointerEvents:'none',userSelect:'none',whiteSpace:'nowrap'}}>
-                <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.1em',textTransform:'uppercase',
-                  color:pillColor,background:pillColor+'1A',borderRadius:6,padding:'4px 10px'}}>
-                  {selPillLabel}
-                </span>
-              </div>
-            )}
+            ) : null}
             {/* M/D toggle — right, hidden when collapsed */}
             <div style={{marginLeft:'auto',display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
               {!collapsed && <>

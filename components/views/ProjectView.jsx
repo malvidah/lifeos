@@ -13,6 +13,7 @@ import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primit
 import { DayLabEditor } from "../DayLabEditor.jsx";
 import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
 import { AddJournalLine } from "../widgets/JournalEditor.jsx";
+import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";
 
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
 // EntryBlock — renders one paragraph block (may span multiple lines joined by \n).
@@ -56,7 +57,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
 }
 
 // ─── ProjectView ──────────────────────────────────────────────────────────────
-export default function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter }) {
+export default function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter, settingsOpen, onCloseSettings, onRenamed }) {
   const pvProjectNames = useContext(ProjectNamesContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   const { value: projectsMeta, setValue: setProjectsMeta } =
@@ -773,6 +774,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       )}
 
     </div>
+
+      {onCloseSettings && (
+        <ProjectSettingsPanel
+          project={project} token={token}
+          open={!!settingsOpen} onClose={onCloseSettings} onRenamed={onRenamed}
+        />
+      )}
     </NoteContext.Provider>
   );
 }
