@@ -45,7 +45,7 @@ export default function Header({session,token,userId,syncStatus,theme,onThemeCha
             fontSize: 22,
             letterSpacing: "normal",
             textTransform: "uppercase",
-            color: "var(--dl-middle)",
+            color: "var(--dl-strong)",
             userSelect: "none",
             lineHeight: 1,
             display: "block",

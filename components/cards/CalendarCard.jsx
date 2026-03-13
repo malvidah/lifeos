@@ -309,7 +309,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
           {DAY_NAMES.map((n, i) => (
             <div key={i} style={{
               textAlign: 'center', fontFamily: mono, fontSize: '10px',
-              fontWeight: '500', letterSpacing: '0.08em', color: "var(--dl-detail)",
+              fontWeight: '500', letterSpacing: '0.08em', color: "var(--dl-highlight)",
             }}>{n}</div>
           ))}
         </div>
@@ -342,7 +342,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
               width: scrubHover || scrubDragging ? 5 : 3,
               height: scrubHover || scrubDragging ? 20 : 14,
               borderRadius: 3,
-              background: scrubHover || scrubDragging ? "var(--dl-accent)" : "var(--dl-detail)",
+              background: scrubHover || scrubDragging ? "var(--dl-accent)" : "var(--dl-highlight)",
               transition: 'width 0.15s, height 0.15s, background 0.15s',
             }} />
           </div>
@@ -385,7 +385,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                 <div style={{
                   fontFamily: mono, fontSize: F.sm, fontWeight: 'normal',
                   letterSpacing: '0.06em', textTransform: 'uppercase',
-                  color: "var(--dl-detail)", marginTop: 2, marginBottom: 4, flexShrink: 0,
+                  color: "var(--dl-highlight)", marginTop: 2, marginBottom: 4, flexShrink: 0,
                   paddingLeft: 2, overflow: 'hidden', whiteSpace: 'nowrap',
                 }}>{MONTH_NAMES[mo]}</div>
 
@@ -418,7 +418,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                         <div style={{
                           fontFamily: serif, fontSize: '13px', lineHeight: 1,
                           fontWeight: isToday || isSelected ? '700' : 'normal',
-                          color: isToday ? "var(--dl-middle)" : isSelected ? "var(--dl-accent)" : "var(--dl-detail)",
+                          color: isToday ? "var(--dl-strong)" : isSelected ? "var(--dl-accent)" : "var(--dl-highlight)",
                           flexShrink: 0,
                         }}>{day}</div>
 
@@ -463,7 +463,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                         {/* AI summary — desktop only, too small to read on mobile */}
                         {vw >= 600 && summary && (
                           <div style={{
-                            fontFamily: mono, fontSize: '7.5px', color: "var(--dl-dim)",
+                            fontFamily: mono, fontSize: '7.5px', color: "var(--dl-middle)",
                             lineHeight: 1.25, overflow: 'hidden',
                             display: '-webkit-box', WebkitLineClamp: 2,
                             WebkitBoxOrient: 'vertical', flex: 1, minHeight: 0,
@@ -637,7 +637,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         {/* CALENDAR label — left */}
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-detail)"}}>Calendar</span>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-highlight)"}}>Calendar</span>
         </div>
 
 
@@ -648,7 +648,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
               style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                 padding:'3px 8px',borderRadius:4,cursor:'pointer',
                 minHeight:22,minWidth:22,
-                background:'none',border:"1px solid var(--dl-border2)",color:"var(--dl-detail)"}}>M</button>
+                background:'none',border:"1px solid var(--dl-border2)",color:"var(--dl-highlight)"}}>M</button>
             <button onClick={()=>onCalViewChange('day')}
               style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                 padding:'3px 8px',borderRadius:4,cursor:'pointer',
@@ -714,8 +714,8 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     fontWeight: (isCtr && isTdy) ? "700" : "normal",
                     color: (isCtr && isTdy) ? "var(--dl-strong)"
                          : isTdy           ? "var(--dl-orange)"
-                         : isCtr           ? "var(--dl-middle)"
-                                           : "var(--dl-dim)",
+                         : isCtr           ? "var(--dl-strong)"
+                                           : "var(--dl-middle)",
                     marginBottom:3,
                     textTransform:"uppercase",
                   }}>{DAY_NAMES[d.getDay()]} {d.getDate()}</div>
@@ -766,13 +766,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                       background:'none',
                       border:"1px solid var(--dl-border2)",
                       borderRadius:5,cursor:'pointer',
-                      color:"var(--dl-detail)",fontFamily:mono,fontSize:F.sm,
+                      color:"var(--dl-highlight)",fontFamily:mono,fontSize:F.sm,
                       letterSpacing:'0.04em',textTransform:'uppercase',
                       padding:'5px 0',width:'100%',textAlign:'center',
                       transition:'all 0.15s',
                     }}
-                    onMouseEnter={e=>{e.currentTarget.style.color="var(--dl-middle)";e.currentTarget.style.borderColor="var(--dl-middle)";}}
-                    onMouseLeave={e=>{e.currentTarget.style.color="var(--dl-detail)";e.currentTarget.style.borderColor="var(--dl-border2)";}}
+                    onMouseEnter={e=>{e.currentTarget.style.color="var(--dl-strong)";e.currentTarget.style.borderColor="var(--dl-strong)";}}
+                    onMouseLeave={e=>{e.currentTarget.style.color="var(--dl-highlight)";e.currentTarget.style.borderColor="var(--dl-border2)";}}
                   >+ add</button>
                 )}
                 </div>
@@ -952,13 +952,13 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
 
   const inputBase = {
     background:'transparent', border:'none', outline:'none',
-    padding:0, margin:0, color:"var(--dl-middle)",
+    padding:0, margin:0, color:"var(--dl-strong)",
   };
 
   // Derive selected date info for header pill
   const selDateObj = selected ? new Date(selected + 'T12:00:00') : new Date();
   const isSelToday = selected === todayKey();
-  const pillColor = isSelToday ? "var(--dl-middle)" : "var(--dl-accent)";
+  const pillColor = isSelToday ? "var(--dl-strong)" : "var(--dl-accent)";
   const SEL_MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const selPillLabel = `${SEL_MONTHS[selDateObj.getMonth()]} ${selDateObj.getDate()}, ${selDateObj.getFullYear()}`;
 
@@ -972,22 +972,22 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
             cursor:onToggle?'pointer':'default'}} onClick={onToggle}>
             <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
               {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-detail)"}}>Calendar</span>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-highlight)"}}>Calendar</span>
             </div>
             {collapsed ? (
               /* Collapsed: day nav arrows only */
               <div style={{position:'absolute',left:'50%',transform:'translateX(-50%)',
                 display:'flex',alignItems:'center',gap:10,userSelect:'none',whiteSpace:'nowrap'}}>
                 <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()-1);onSelect(toKey(n));}}
-                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-detail)",padding:'2px 6px',
+                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-middle)"}
-                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-detail)"}>‹</button>
+                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-strong)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-highlight)"}>‹</button>
                 <button onClick={e=>{e.stopPropagation();const n=new Date(selDateObj);n.setDate(n.getDate()+1);onSelect(toKey(n));}}
-                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-detail)",padding:'2px 6px',
+                  style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",padding:'2px 6px',
                     fontFamily:mono,fontSize:F.md,lineHeight:1,transition:'color 0.15s'}}
-                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-middle)"}
-                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-detail)"}>›</button>
+                  onMouseEnter={e=>e.currentTarget.style.color="var(--dl-strong)"}
+                  onMouseLeave={e=>e.currentTarget.style.color="var(--dl-highlight)"}>›</button>
               </div>
             ) : null}
             {/* M/D toggle — right, hidden when collapsed */}
@@ -1002,7 +1002,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
                 style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
                   padding:'3px 8px',borderRadius:4,cursor:'pointer',
                   minHeight:22,minWidth:22,
-                  background:'none',border:"1px solid var(--dl-border2)",color:"var(--dl-detail)"}}>D</button>
+                  background:'none',border:"1px solid var(--dl-border2)",color:"var(--dl-highlight)"}}>D</button>
               </>}
             </div>
           </div>
@@ -1054,7 +1054,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               ) : (
                 <div
                   onClick={()=>setEditingTitle(true)}
-                  style={{fontFamily:serif,fontSize:F.md,color:form.title?"var(--dl-middle)":"var(--dl-detail)",
+                  style={{fontFamily:serif,fontSize:F.md,color:form.title?"var(--dl-strong)":"var(--dl-highlight)",
                     marginBottom:5,cursor:'text',minHeight:'1.4em'}}
                 >
                   {form.title || 'Event title'}
@@ -1073,13 +1073,13 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
                 }}>
                   <input type='time' value={form.startTime}
                     onChange={e=>updateForm({startTime:e.target.value})}
-                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",
+                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)",
                       width:96,cursor:'text'}}
                   />
-                  <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",opacity:0.4}}>–</span>
+                  <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)",opacity:0.4}}>–</span>
                   <input type='time' value={form.endTime}
                     onChange={e=>updateForm({endTime:e.target.value})}
-                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",
+                    style={{...inputBase,fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)",
                       width:96,cursor:'text'}}
                   />
                 </div>
@@ -1088,15 +1088,15 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
                 <button onClick={()=>updateForm({allDay:!form.allDay})} style={{
                   background:'none',border:'none',cursor:'pointer',padding:0,
                   fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',
-                  color:form.allDay?"var(--dl-accent)":"var(--dl-detail)",
+                  color:form.allDay?"var(--dl-accent)":"var(--dl-highlight)",
                   transition:'color 0.2s',
                 }}
-                onMouseEnter={e=>{if(!form.allDay)e.currentTarget.style.color="var(--dl-middle)";}}
-                onMouseLeave={e=>{if(!form.allDay)e.currentTarget.style.color="var(--dl-detail)";}}>
+                onMouseEnter={e=>{if(!form.allDay)e.currentTarget.style.color="var(--dl-strong)";}}
+                onMouseLeave={e=>{if(!form.allDay)e.currentTarget.style.color="var(--dl-highlight)";}}>
                   all day
                 </button>
 
-                {saving && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",opacity:0.5}}>saving…</span>}
+                {saving && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)",opacity:0.5}}>saving…</span>}
               </div>
 
 
@@ -1130,11 +1130,11 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               {/* Cancel × */}
               <button onClick={closePanel} title="Cancel" style={{
                 background:'none',border:'none',cursor:'pointer',
-                color:"var(--dl-detail)",padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
+                color:"var(--dl-highlight)",padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
                 opacity:0.6,transition:'color 0.15s, opacity 0.15s',
               }}
-              onMouseEnter={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color="var(--dl-middle)";}}
-              onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.color="var(--dl-detail)";}}>
+              onMouseEnter={e=>{e.currentTarget.style.opacity='1';e.currentTarget.style.color="var(--dl-strong)";}}
+              onMouseLeave={e=>{e.currentTarget.style.opacity='0.6';e.currentTarget.style.color="var(--dl-highlight)";}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                 </svg>
@@ -1142,11 +1142,11 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               {/* Save ✓ */}
               <button onClick={async()=>{if(form.title.trim()){await save();closePanel();}}} disabled={saving||!form.title.trim()} title="Save" style={{
                 background:'none',border:'none',cursor:(saving||!form.title.trim())?'default':'pointer',
-                color:"var(--dl-detail)",padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
+                color:"var(--dl-highlight)",padding:6,lineHeight:0,display:'flex',alignItems:'center',justifyContent:'center',
                 opacity:(saving||!form.title.trim())?0.3:0.6,transition:'color 0.15s, opacity 0.15s',
               }}
               onMouseEnter={e=>{if(!saving&&form.title.trim()){e.currentTarget.style.opacity='1';e.currentTarget.style.color="var(--dl-green)";}}}
-              onMouseLeave={e=>{e.currentTarget.style.opacity=(saving||!form.title.trim())?'0.3':'0.6';e.currentTarget.style.color="var(--dl-detail)";}}>
+              onMouseLeave={e=>{e.currentTarget.style.opacity=(saving||!form.title.trim())?'0.3':'0.6';e.currentTarget.style.color="var(--dl-highlight)";}}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <polyline points="20 6 9 17 4 12"/>
                 </svg>

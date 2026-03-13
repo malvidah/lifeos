@@ -164,7 +164,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   const colDist  = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-blue)",   flexShrink:0, width:DCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colPace  = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-green)",  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal  = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-orange)", flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
-  const colMuted = (w) => ({fontFamily:mono, fontSize:F.sm, color:"var(--dl-detail)", flexShrink:0, width:w, textAlign:"center", whiteSpace:"nowrap"});
+  const colMuted = (w) => ({fontFamily:mono, fontSize:F.sm, color:"var(--dl-highlight)", flexShrink:0, width:w, textAlign:"center", whiteSpace:"nowrap"});
   const editCol  = (w, clr) => ({fontFamily:mono, fontSize:F.sm, color:clr, flexShrink:0, width:w, textAlign:"center",
     background:"transparent", border:"none", outline:"none", padding:0});
   const rowS = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
@@ -213,8 +213,8 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
               singleLine
               clearOnEnter={false}
               placeholder={idx===0&&mergedSynced.length===0?"What did you do?":""}
-              textColor={"var(--dl-middle)"}
-              mutedColor={"var(--dl-dim)"}
+              textColor={"var(--dl-strong)"}
+              mutedColor={"var(--dl-middle)"}
               color={"var(--dl-accent)"}
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {

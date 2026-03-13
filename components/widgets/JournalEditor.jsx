@@ -32,8 +32,8 @@ export function JournalEditor({date,userId,token}) {
       onProjectClick={name => navigateToProject(name)}
       onNoteClick={name => navigateToNote(name)}
       placeholder="What's on your mind?"
-      textColor={"var(--dl-middle)"}
-      mutedColor={"var(--dl-dim)"}
+      textColor={"var(--dl-strong)"}
+      mutedColor={"var(--dl-middle)"}
       color={"var(--dl-accent)"}
       style={{minHeight: 80, width: '100%'}}
     />
@@ -143,15 +143,15 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
     width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-orange)", flexShrink:0,
     width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
-  const colMutedProt = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-detail)", flexShrink:0,
+  const colMutedProt = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-highlight)", flexShrink:0,
     width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
-  const colMutedEnrg = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-detail)", flexShrink:0,
+  const colMutedEnrg = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-highlight)", flexShrink:0,
     width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
   const rowStyle = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
   const hdrColProt = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
-    color:"var(--dl-detail)", flexShrink:0, textAlign:"center", width:PROT_W};
+    color:"var(--dl-highlight)", flexShrink:0, textAlign:"center", width:PROT_W};
   const hdrColEnrg = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
-    color:"var(--dl-detail)", flexShrink:0, textAlign:"center", width:ENRG_W};
+    color:"var(--dl-highlight)", flexShrink:0, textAlign:"center", width:ENRG_W};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
@@ -180,8 +180,8 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
               singleLine
               clearOnEnter={false}
               placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+" : ""}
-              textColor={"var(--dl-middle)"}
-              mutedColor={"var(--dl-dim)"}
+              textColor={"var(--dl-strong)"}
+              mutedColor={"var(--dl-middle)"}
               color={"var(--dl-accent)"}
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {
@@ -253,8 +253,8 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         placeholder={placeholder || 'Add an entry…'}
         projectNames={ctxProjects}
         noteNames={ctxNotes.notes}
-        textColor={"var(--dl-middle)"}
-        mutedColor={"var(--dl-dim)"}
+        textColor={"var(--dl-strong)"}
+        mutedColor={"var(--dl-middle)"}
         color={col}
         style={{ flex: 1, padding: 0 }}
         onProjectClick={name => navigateToProject(name)}

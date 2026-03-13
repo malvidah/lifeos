@@ -1,16 +1,16 @@
-/* ── Unified contrast scale: muted › dim › detail › middle › strong ─────────
-   muted   = card/surface bg — near-invisible against page bg
-   dim     = subtle text (metadata labels, very secondary info)
-   detail  = secondary labels, captions
-   middle  = default body text
-   strong  = max emphasis (cream ivory / very dark brown — tonal with bg)
-   --dl-card and --dl-muted share the same value intentionally.               */
+/* ── Unified contrast scale: muted › dim › middle › highlight › strong ──────
+   muted     = page background — same value as --dl-bg
+   dim       = card bg, insets — same value as --dl-card
+   middle    = unimportant labels, outlines, section breaks
+   highlight = important labels, secondary text
+   strong    = body text and max emphasis (cream / dark brown)
+   --dl-bg / --dl-card / --dl-surface retained as semantic aliases.           */
 :root,[data-theme="dark"]{
   --dl-bg:#111110;
   --dl-surface:#161311;--dl-card:#161311;
   --dl-well:#0D0C0B;
   --dl-border:#1F1C18;--dl-border2:#2A2720;
-  --dl-strong:#FFF8F2;--dl-middle:#F2E0C8;--dl-detail:#9A8E80;--dl-dim:#60564E;--dl-muted:#161311;
+  --dl-strong:#F2E0C8;--dl-highlight:#9A8E80;--dl-middle:#60564E;--dl-dim:#161311;--dl-muted:#111110;
   --dl-accent:#D08828;--dl-orange:#D08828;--dl-yellow:#B88828;
   --dl-green:#4A9A68;--dl-blue:#4878A8;--dl-purple:#8860B8;--dl-red:#B04840;
   --dl-shadow:0 1px 3px rgba(0,0,0,0.55),0 2px 12px rgba(0,0,0,0.28);
@@ -22,15 +22,15 @@
   --dl-surface:#E4DCC8;--dl-card:#E4DCC8;
   --dl-well:#C8C0AA;
   --dl-border:#C0B89C;--dl-border2:#B0A88C;
-  --dl-strong:#180E08;--dl-middle:#26201A;--dl-detail:#78706A;--dl-dim:#9C9488;--dl-muted:#E4DCC8;
+  --dl-strong:#26201A;--dl-highlight:#78706A;--dl-middle:#9C9488;--dl-dim:#E4DCC8;--dl-muted:#D4CCB8;
   --dl-accent:#B87018;--dl-orange:#B87018;--dl-yellow:#806818;
   --dl-green:#38684A;--dl-blue:#386088;--dl-purple:#604888;--dl-red:#843830;
   --dl-shadow:0 1px 3px rgba(36,24,12,0.13),0 2px 10px rgba(36,24,12,0.09);
   --dl-shadow-sm:0 1px 2px rgba(36,24,12,0.10);
   color-scheme:light
 }
-/* ── Derived variants — color-mix adapts to both themes automatically ────────
-   -strong  = mixed 70% toward --dl-strong → brighter on dark, richer on light
+/* ── Derived accent variants ─────────────────────────────────────────────────
+   -strong  = mixed 70% toward --dl-strong → readable on dark, rich on light
    -detail  = 12% tint → soft background fills, subtle borders               */
 :root,[data-theme="dark"],[data-theme="light"]{
   --dl-accent-strong: color-mix(in srgb,var(--dl-accent)  70%,var(--dl-strong));
@@ -47,7 +47,7 @@
   --dl-purple-detail: color-mix(in srgb,var(--dl-purple)  12%,transparent);
   --dl-red-strong:    color-mix(in srgb,var(--dl-red)     70%,var(--dl-strong));
   --dl-red-detail:    color-mix(in srgb,var(--dl-red)     12%,transparent);
-  /* Legacy numeric alpha variants — kept for backward compat during migration */
+  /* Legacy numeric alpha variants — kept for backward compat */
   --dl-accent-03:color-mix(in srgb,var(--dl-accent)  3%,transparent);
   --dl-accent-05:color-mix(in srgb,var(--dl-accent)  5%,transparent);
   --dl-accent-10:color-mix(in srgb,var(--dl-accent) 10%,transparent);

@@ -35,8 +35,8 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
         onCreateNote={ctxNotes.onCreateNote}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
-        textColor={"var(--dl-middle)"}
-        mutedColor={"var(--dl-dim)"}
+        textColor={"var(--dl-strong)"}
+        mutedColor={"var(--dl-middle)"}
         color={"var(--dl-accent)"}
         style={{ width: '100%', minHeight: '1.7em' }}
       />
@@ -45,7 +45,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   // Multi-line blocks: render each line through RichLine, separated by line breaks
   const lines = entry.text.split('\n');
   return (
-    <div style={{ ...baseStyle, color:"var(--dl-middle)", cursor:'text' }} onClick={onStartEdit}>
+    <div style={{ ...baseStyle, color:"var(--dl-strong)", cursor:'text' }} onClick={onStartEdit}>
       {lines.map((line, i) => (
         <Fragment key={i}>
           {i > 0 && <br/>}
@@ -471,16 +471,16 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       {/* Notes card */}
       <Card
         label="Notes"
-        color={"var(--dl-detail)"}
+        color={"var(--dl-highlight)"}
         collapsed={notesCollapsed}
         onToggle={toggleNotes}
         headerRight={
           <button
             onClick={e => { e.stopPropagation(); skipPhantomBlur.current = true; addNote(); }}
             title="New note"
-            style={{ background:'none', border:'none', cursor:'pointer', padding:'2px 8px', color:"var(--dl-dim)", display:'flex', alignItems:'center', borderRadius:4, transition:'color 0.12s' }}
-            onMouseEnter={e => e.currentTarget.style.color="var(--dl-middle)"}
-            onMouseLeave={e => e.currentTarget.style.color="var(--dl-dim)"}
+            style={{ background:'none', border:'none', cursor:'pointer', padding:'2px 8px', color:"var(--dl-middle)", display:'flex', alignItems:'center', borderRadius:4, transition:'color 0.12s' }}
+            onMouseEnter={e => e.currentTarget.style.color="var(--dl-strong)"}
+            onMouseLeave={e => e.currentTarget.style.color="var(--dl-middle)"}
           >
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
@@ -491,7 +491,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           {!notesListCollapsed && (
             <div style={{ width: 164, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 440, paddingRight: 2 }}>
               {sortedNotes.length === 0 && (
-                <button onClick={() => { skipPhantomBlur.current = true; addNote(); }} style={{ background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'text', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: "var(--dl-dim)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}>Untitled</button>
+                <button onClick={() => { skipPhantomBlur.current = true; addNote(); }} style={{ background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'text', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: "var(--dl-middle)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}>Untitled</button>
               )}
               {sortedNotes.map(note => (
                 <div
@@ -502,12 +502,12 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 >
                   <button
                     onClick={() => selectNote(note.id)}
-                    style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: note.id === activeNoteId ? "var(--dl-middle)" : "var(--dl-detail)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}
+                    style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: note.id === activeNoteId ? "var(--dl-strong)" : "var(--dl-highlight)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}
                   >{noteName(note)}</button>
                   <button
                     onClick={e => { e.stopPropagation(); setDeleteConfirm({ id: note.id, name: noteName(note) }); }}
                     title="Delete"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: "var(--dl-dim)", fontSize: 14, lineHeight: 1, flexShrink: 0, opacity: hoveredNoteId === note.id ? 0.6 : 0, transition: 'opacity 0.12s', borderRadius: 4 }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: "var(--dl-middle)", fontSize: 14, lineHeight: 1, flexShrink: 0, opacity: hoveredNoteId === note.id ? 0.6 : 0, transition: 'opacity 0.12s', borderRadius: 4 }}
                     onMouseEnter={e => e.currentTarget.style.opacity = '1'}
                     onMouseLeave={e => e.currentTarget.style.opacity = hoveredNoteId === note.id ? '0.6' : '0'}
                   >×</button>
@@ -521,7 +521,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             onClick={toggleNotesList}
             title={notesListCollapsed ? 'Show list' : 'Hide list'}
             style={{ width: 16, flexShrink: 0, position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onMouseEnter={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-dim)"}
+            onMouseEnter={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-middle)"}
             onMouseLeave={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-border)"}
           >
             <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, background: 'var(--dl-border)' }}/>
@@ -552,9 +552,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                   if (match) selectNote(match.id);
                   else addNote(name);
                 }}
-                textColor={"var(--dl-middle)"}
-                mutedColor={"var(--dl-dim)"}
-                color={"var(--dl-detail)"}
+                textColor={"var(--dl-strong)"}
+                mutedColor={"var(--dl-middle)"}
+                color={"var(--dl-highlight)"}
                 style={{ minHeight: 180, width: '100%' }}
               />
             ) : (
@@ -567,9 +567,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 projectNames={pvProjectNames}
                 onCreateNote={addNote}
                 onProjectClick={name => navigateToProject(name)}
-                textColor={"var(--dl-middle)"}
-                mutedColor={"var(--dl-dim)"}
-                color={"var(--dl-detail)"}
+                textColor={"var(--dl-strong)"}
+                mutedColor={"var(--dl-middle)"}
+                color={"var(--dl-highlight)"}
                 style={{ minHeight: 180, width: '100%' }}
               />
             )}
@@ -590,7 +590,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           </div>
         ) : taskEntries.length === 0 ? (
           project === '__everything__' ? (
-            <div style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-dim)" }}>No tasks yet.</div>
+            <div style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)" }}>No tasks yet.</div>
           ) : (
             <NewProjectTask project={project} onAdd={addNewTask} />
           )
@@ -612,8 +612,8 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                   <DayLabEditor
                     autoFocus singleLine
                     value={editingTask.text}
-                    textColor={task.done ? "var(--dl-detail)" : "var(--dl-middle)"}
-                    mutedColor={"var(--dl-dim)"}
+                    textColor={task.done ? "var(--dl-highlight)" : "var(--dl-strong)"}
+                    mutedColor={"var(--dl-middle)"}
                     color={"var(--dl-blue)"}
                     style={{ flex: 1, padding: 0, minHeight: '1.7em',
                       textDecoration: task.done ? 'line-through' : 'none',
@@ -624,7 +624,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 ) : (
                   <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}
                     style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
-                      color: task.done ? "var(--dl-detail)" : "var(--dl-middle)", cursor:'text',
+                      color: task.done ? "var(--dl-highlight)" : "var(--dl-strong)", cursor:'text',
                       textDecoration: task.done ? 'line-through' : 'none',
                       opacity: task.done ? 0.45 : 1,
                       whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
@@ -654,13 +654,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                         onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
                         style={{
                           fontFamily: mono, fontSize: 10,
-                          color: isToday ? "var(--dl-accent)" : "var(--dl-detail)",
+                          color: isToday ? "var(--dl-accent)" : "var(--dl-highlight)",
                           letterSpacing: '0.06em', textTransform: 'uppercase',
                           cursor: (!isToday && onSelectDate) ? 'pointer' : 'default',
                           display: 'inline-block', transition: 'color 0.15s',
                         }}
-                        onMouseEnter={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = "var(--dl-middle)"; }}
-                        onMouseLeave={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = isToday ? "var(--dl-accent)" : "var(--dl-detail)"; }}
+                        onMouseEnter={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = "var(--dl-strong)"; }}
+                        onMouseLeave={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = isToday ? "var(--dl-accent)" : "var(--dl-highlight)"; }}
                       >{isToday ? 'Today' : fmtDate(date)}</div>
                     </div>
                     {isToday && project !== '__everything__' && pvTaskFilter !== 'done' && (
@@ -712,7 +712,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                     <div key={date}>
                       <div style={{
                         fontFamily: mono, fontSize: 10,
-                        color: isToday ? "var(--dl-accent)" : "var(--dl-detail)",
+                        color: isToday ? "var(--dl-accent)" : "var(--dl-highlight)",
                         letterSpacing: '0.06em', textTransform: 'uppercase',
                         marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 8,
                       }}>{isToday ? 'Today' : fmtDate(date)}</div>
@@ -749,21 +749,21 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               .sort(([a],[b]) => b.localeCompare(a))
               .map(([date, rows], di) => (
                 <div key={date}>
-                  <div style={{ fontFamily:mono, fontSize:10, color:"var(--dl-detail)",
+                  <div style={{ fontFamily:mono, fontSize:10, color:"var(--dl-highlight)",
                     letterSpacing:'0.06em', textTransform:'uppercase',
                     marginTop: di===0 ? 0 : 12, marginBottom:8 }}>{fmtDate(date)}</div>
                   {rows.map(w => (
                     <div key={w.id} style={{ display:'flex', alignItems:'baseline', gap:8, padding:'3px 0',
                       borderTop:"1px solid var(--dl-border)" }}>
-                      <span style={{ fontFamily:serif, fontSize:F.md, color:"var(--dl-middle)", flex:1 }}>{w.title}</span>
+                      <span style={{ fontFamily:serif, fontSize:F.md, color:"var(--dl-strong)", flex:1 }}>{w.title}</span>
                       {w.duration_min > 0 && (
-                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-dim)" }}>{w.duration_min}m</span>
+                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-middle)" }}>{w.duration_min}m</span>
                       )}
                       {w.distance_m > 0 && (
-                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-dim)" }}>{(w.distance_m/1000).toFixed(1)}km</span>
+                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-middle)" }}>{(w.distance_m/1000).toFixed(1)}km</span>
                       )}
                       {w.calories > 0 && (
-                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-dim)" }}>{w.calories} kcal</span>
+                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-middle)" }}>{w.calories} kcal</span>
                       )}
                     </div>
                   ))}
@@ -790,15 +790,15 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               .sort(([a],[b]) => b.localeCompare(a))
               .map(([date, rows], di) => (
                 <div key={date}>
-                  <div style={{ fontFamily:mono, fontSize:10, color:"var(--dl-detail)",
+                  <div style={{ fontFamily:mono, fontSize:10, color:"var(--dl-highlight)",
                     letterSpacing:'0.06em', textTransform:'uppercase',
                     marginTop: di===0 ? 0 : 12, marginBottom:8 }}>{fmtDate(date)}</div>
                   {rows.map(m => (
                     <div key={m.id} style={{ display:'flex', alignItems:'baseline', gap:8, padding:'3px 0',
                       borderTop:"1px solid var(--dl-border)" }}>
-                      <span style={{ fontFamily:serif, fontSize:F.md, color:"var(--dl-middle)", flex:1 }}>{m.content}</span>
+                      <span style={{ fontFamily:serif, fontSize:F.md, color:"var(--dl-strong)", flex:1 }}>{m.content}</span>
                       {m.ai_calories > 0 && (
-                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-dim)" }}>{m.ai_calories} kcal</span>
+                        <span style={{ fontFamily:mono, fontSize:10, color:"var(--dl-middle)" }}>{m.ai_calories} kcal</span>
                       )}
                     </div>
                   ))}
@@ -832,16 +832,16 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
             display: 'flex', flexDirection: 'column', gap: 8,
           }}>
-            <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dl-detail)', marginBottom: 4 }}>Delete note</div>
-            <div style={{ fontFamily: mono, fontSize: 13, color: 'var(--dl-middle)', lineHeight: 1.5 }}>
+            <div style={{ fontFamily: mono, fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--dl-highlight)', marginBottom: 4 }}>Delete note</div>
+            <div style={{ fontFamily: mono, fontSize: 13, color: 'var(--dl-strong)', lineHeight: 1.5 }}>
               Delete <span style={{ color: 'var(--dl-accent)' }}>"{deleteConfirm.name}"</span>?
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 12, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setDeleteConfirm(null)}
-                style={{ fontFamily: mono, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'none', border: '1px solid var(--dl-border)', borderRadius: 7, padding: '8px 16px', cursor: 'pointer', color: 'var(--dl-detail)', transition: 'color 0.12s, border-color 0.12s' }}
-                onMouseEnter={e => { e.currentTarget.style.color = 'var(--dl-middle)'; e.currentTarget.style.borderColor = 'var(--dl-dim)'; }}
-                onMouseLeave={e => { e.currentTarget.style.color = 'var(--dl-detail)'; e.currentTarget.style.borderColor = 'var(--dl-border)'; }}
+                style={{ fontFamily: mono, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', background: 'none', border: '1px solid var(--dl-border)', borderRadius: 7, padding: '8px 16px', cursor: 'pointer', color: 'var(--dl-highlight)', transition: 'color 0.12s, border-color 0.12s' }}
+                onMouseEnter={e => { e.currentTarget.style.color = 'var(--dl-strong)'; e.currentTarget.style.borderColor = 'var(--dl-middle)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color = 'var(--dl-highlight)'; e.currentTarget.style.borderColor = 'var(--dl-border)'; }}
               >Cancel</button>
               <button
                 onClick={() => { deleteNote(deleteConfirm.id); setDeleteConfirm(null); }}

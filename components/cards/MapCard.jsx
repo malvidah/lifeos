@@ -165,9 +165,9 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
         onClick={() => setGraphCollapsed(c => !c)}>
         <ChevronBtn collapsed={graphCollapsed} onToggle={e => { e.stopPropagation(); setGraphCollapsed(c => !c); }}/>
         <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
-          textTransform:'uppercase', color:"var(--dl-detail)", flex:1 }}>Map</span>
+          textTransform:'uppercase', color:"var(--dl-highlight)", flex:1 }}>Map</span>
         {!graphCollapsed && (
-          <span style={{ fontFamily:mono, fontSize:9, color:"var(--dl-dim)" }}>
+          <span style={{ fontFamily:mono, fontSize:9, color:"var(--dl-middle)" }}>
             {(allTags||[]).length + 1} projects · pinch/scroll to zoom
           </span>
         )}
@@ -186,7 +186,7 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
           {!ready && (
             <div style={{ position:'absolute', inset:0, display:'flex',
               alignItems:'center', justifyContent:'center',
-              fontFamily:mono, fontSize:F.sm, color:"var(--dl-dim)" }}>
+              fontFamily:mono, fontSize:F.sm, color:"var(--dl-middle)" }}>
               Laying out graph…
             </div>
           )}
@@ -264,7 +264,7 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
                 onClick={() => setScale(prev => Math.max(0.12, Math.min(3, prev * f)))}
                 style={{ width:30, height:30, background:"var(--dl-surface)",
                   border:"1px solid var(--dl-border2)", borderRadius:6,
-                  color:"var(--dl-detail)", fontFamily:mono, fontSize:16, cursor:'pointer',
+                  color:"var(--dl-highlight)", fontFamily:mono, fontSize:16, cursor:'pointer',
                   display:'flex', alignItems:'center', justifyContent:'center' }}>
                 {label}
               </button>
