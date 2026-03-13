@@ -331,6 +331,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   singleLine   = false,
   taskList     = false,
   autoFocus    = false,
+  clearOnEnter = true,   // set false for inline row editors that keep their content after Enter
   style,
   color        = ACCENT,
   textColor,
@@ -356,8 +357,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onCreateProjectRef  = useRef(onCreateProject);
   const onUpdateRef         = useRef(onUpdate);
   const taskListRef         = useRef(taskList);
+  const clearOnEnterRef     = useRef(clearOnEnter);
 
   useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
+  useEffect(() => { clearOnEnterRef.current     = clearOnEnter; },     [clearOnEnter]);
   useEffect(() => { onEnterCommitRef.current     = onEnterCommit; },    [onEnterCommit]);
   useEffect(() => { onEnterSplitRef.current      = onEnterSplit; },     [onEnterSplit]);
   useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
@@ -562,9 +565,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           const text = docToText(view.state.doc.toJSON());
           if (onEnterCommitRef.current) {
             onEnterCommitRef.current(text);
-            setTimeout(() => editorRef.current?.commands.setContent(
-              { type: 'doc', content: [{ type: 'paragraph' }] }
-            ), 0);
+            if (clearOnEnterRef.current) {
+              setTimeout(() => editorRef.current?.commands.setContent(
+                { type: 'doc', content: [{ type: 'paragraph' }] }
+              ), 0);
+            }
           } else if (onEnterSplitRef.current) {
             const { from } = view.state.selection;
             const para   = view.state.doc.child(0);

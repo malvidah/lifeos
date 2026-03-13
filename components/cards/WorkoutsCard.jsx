@@ -64,7 +64,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
   const [tick, setTick] = useState(0);
-  const safe = (Array.isArray(manualRows)&&manualRows.length ? manualRows : [mkRow()]).map(r => r.estimating ? {...r, estimating:false} : r);
+  const safe = Array.isArray(manualRows)&&manualRows.length ? manualRows : [mkRow()];
   const refs = useRef({});
   const estMap = (estLoaded && savedEstimates && typeof savedEstimates==="object") ? savedEstimates : {};
 
@@ -146,15 +146,16 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   }
   async function runEstimate(id, text) {
     estimating.current.add(id);
-    setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,estimating:true}:r));
+    setTick(t => t + 1);
     try {
       const result = await estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token);
       estimating.current.delete(id);
-      setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null,estimating:false}:r));
+      setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null}:r));
+      setTick(t => t + 1);
     } catch(_) {
       estimating.current.delete(id);
       failed.current.add(id);
-      setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,estimating:false}:r));
+      setTick(t => t + 1);
     }
   }
 
@@ -209,6 +210,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
               ref={el => refs.current[row.id] = el}
               value={row.text}
               singleLine
+              clearOnEnter={false}
               placeholder={idx===0&&mergedSynced.length===0?"What did you do?":""}
               textColor={"var(--dl-text)"}
               mutedColor={"var(--dl-dim)"}
@@ -218,7 +220,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
                 setManualRows(prev => {
                   const s = Array.isArray(prev) ? prev : safe;
                   const existing = s.find(r => r.id === row.id);
-                  if (!text.trim() && existing?.text?.trim()) return prev; // skip ghost blur after Enter
+                  if (text === existing?.text) return prev; // no change
                   const {dist, pace} = text.trim() ? parseActivityText(text) : {dist:null, pace:null};
                   return s.map(r => r.id===row.id ? {...r, text, dist:dist||r.dist, pace:pace||r.pace} : r);
                 });
@@ -245,7 +247,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
             <span style={row.dist ? colDist : colMuted(DCOL)}>{!row.text ? "" : row.dist||"—"}</span>
             <span style={row.pace ? colPace : colMuted(PCOL)}>{!row.text ? "" : row.pace?`${row.pace}/mi`:"—"}</span>
             <span style={row.kcal ? colKcal : colMuted(KCOL)}>
-              {!row.text ? "" : row.estimating?"…":row.kcal?`-${row.kcal}kcal`:"—"}
+              {!row.text ? "" : estimating.current.has(row.id)?"…":row.kcal?`-${row.kcal}kcal`:"—"}
             </span>
           </div>
         ))}
