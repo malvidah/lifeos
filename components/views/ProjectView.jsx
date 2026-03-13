@@ -11,6 +11,7 @@ import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, Navig
 import { Card, Widget, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { Editor } from "../Editor.jsx";
 import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
+import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";
 
 // ─── Nav ────────────────────────────────────────────────────────────────────
 // Unified nav bar — lives in scroll flow, inside each scroll container.
@@ -225,7 +226,29 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     setNotesStore({ notes: remaining, activeId: newActive }, { skipHistory: true });
   };
 
-  // Workouts + meals for this project
+  // ── Settings panel + search terms (LOOK FOR) ──────────────────────────────
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [searchTerms, setSearchTerms]   = useState([]);
+
+  // Load search terms whenever project changes
+  useEffect(() => {
+    if (!token || !project || project === '__everything__') { setSearchTerms([]); return; }
+    fetch('/api/settings', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        const ps = d?.data?.projectSettings ?? {};
+        setSearchTerms(ps[project]?.searchTerms ?? []);
+      }).catch(() => setSearchTerms([]));
+  }, [project, token]); // eslint-disable-line
+
+  function handleRenamed(newSlug) {
+    setSettingsOpen(false);
+    // Navigate to the renamed project
+    if (typeof window !== 'undefined')
+      window.dispatchEvent(new CustomEvent('daylab:navigate', { detail: { project: newSlug } }));
+  }
+
+  // Workouts + meals for this project (re-fetch when searchTerms change)
   const [workoutItems, setWorkoutItems] = useState(null);
   const [mealItems, setMealItems] = useState(null);
   const [workoutsCollapsed, toggleWorkouts] = useCollapse(`pv:${project}:workouts`, false);
@@ -233,13 +256,14 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
 
   useEffect(() => {
     if (!token || !project || project === '__everything__') return;
-    fetch(`/api/workouts?project=${encodeURIComponent(project)}`, { headers: { Authorization: `Bearer ${token}` } })
+    const termsParam = searchTerms.length ? `&terms=${encodeURIComponent(searchTerms.join(','))}` : '';
+    fetch(`/api/workouts?project=${encodeURIComponent(project)}${termsParam}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => setWorkoutItems(d?.workouts ?? [])).catch(() => setWorkoutItems([]));
-    fetch(`/api/meals?project=${encodeURIComponent(project)}`, { headers: { Authorization: `Bearer ${token}` } })
+    fetch(`/api/meals?project=${encodeURIComponent(project)}${termsParam}`, { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.json())
       .then(d => setMealItems(d?.items ?? [])).catch(() => setMealItems([]));
-  }, [project, token]); // eslint-disable-line
+  }, [project, token, searchTerms]); // eslint-disable-line
 
   // Per-project collapse state (persisted)
   const [notesCollapsed,   toggleNotes]   = useCollapse(`pv:${project}:journal`,   false);
@@ -252,7 +276,8 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   useEffect(() => {
     if (!token || !project) return;
     setEntries(null);
-    fetch(`/api/project-entries?project=${encodeURIComponent(project)}`, {
+    const termsParam = searchTerms.length ? `&terms=${encodeURIComponent(searchTerms.join(','))}` : '';
+    fetch(`/api/project-entries?project=${encodeURIComponent(project)}${termsParam}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(r => r.json())
@@ -441,6 +466,42 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   return (
     <NoteContext.Provider value={{ notes: noteNamesForContext, onCreateNote: (name, opts) => addNote(name, opts) }}>
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingBottom: 200 }}>
+
+      {/* Settings panel (portal-style, covers whole screen) */}
+      <ProjectSettingsPanel
+        project={project}
+        token={token}
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        onRenamed={handleRenamed}
+      />
+
+      {/* Project header row — name + gear icon */}
+      {project !== '__everything__' && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0 4px' }}>
+          <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase', color: _pcol }}>
+            {tagDisplayName(project)}
+            {searchTerms.length > 0 && (
+              <span style={{ color: C.muted, marginLeft: 8, fontSize: 9 }}>
+                + {searchTerms.length} term{searchTerms.length > 1 ? 's' : ''}
+              </span>
+            )}
+          </span>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            title="Project settings"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', color: C.muted, opacity: 0.5, display: 'flex', alignItems: 'center' }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+          >
+            {/* Gear icon */}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </button>
+        </div>
+      )}
 
       {/* Notes card — left 1/3: note list sorted by recency; right 2/3: editor */}
       {true && (

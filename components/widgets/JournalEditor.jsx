@@ -12,6 +12,9 @@ import { Editor } from "../Editor.jsx";
 export function JournalEditor({date,userId,token}) {
   const { C } = useTheme();
   const {value, setValue, loaded} = useDbSave(date, 'journal', '', token, userId);
+  const { notes: ctxNotes } = useContext(NoteContext);
+  const ctxProjects = useContext(ProjectNamesContext);
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
@@ -20,10 +23,6 @@ export function JournalEditor({date,userId,token}) {
       <Shimmer width="70%" height={14}/>
     </div>
   );
-
-  const { notes: ctxNotes } = useContext(NoteContext);
-  const ctxProjects = useContext(ProjectNamesContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   return (
     <Editor
       value={value || ''}

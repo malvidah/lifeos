@@ -1,71 +1,60 @@
 import { withAuth } from '../_lib/auth.js';
-import { parseTasks } from '../_lib/parseTasks.js';
-
-function makeMatchRe(storedName) {
-  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const newFmt = `\\{${esc(storedName)}\\}`;
-  const pascal = storedName.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
-  const camel  = storedName.split(/\s+/).join('');
-  const legacyParts = new Set([pascal, camel, storedName]);
-  const legacyAlts  = [...legacyParts].map(v => `#${esc(v)}(?![A-Za-z0-9])`);
-  return new RegExp([newFmt, ...legacyAlts].join('|'), 'i');
-}
-
-const HEALTH_RE = /(?:\{health\}|#Health(?![A-Za-z0-9])|\b(health|workout|working out|worked out|run|ran|running|walk|walked|walking|bike|biked|biking|cycle|cycled|cycling|swim|swam|swimming|hike|hiked|hiking|gym|lift|lifted|lifting|yoga|stretch|stretching|sleep|slept|sleeping|recovery|recover|calories|calorie|nutrition|diet|meal|eat|ate|eating|exercise|exercised|exercising|weight|reps|sets|miles|km|heart rate|hrv|steps|active|activity|fitness|training|trained|train|breathwork|meditation|meditate|meditating|rest|resting|rested|sick|illness|pain|sore|soreness|energy|fatigue|tired|exhausted|hydrat|water|protein|macros|cardio|strength|endurance|mobility|flexibility|vo2|pace|distance)\b)/i;
 
 function isValidProject(name) {
   if (name === '__everything__') return true;
   return /^[a-z0-9][a-z0-9 ]{0,38}[a-z0-9]$|^[a-z0-9]$/.test(name);
 }
 
+// GET /api/project-entries?project=health[&terms=sleep,running]
+// Returns journal blocks and tasks for a project from typed tables.
+// `terms` is a comma-separated list of extra search strings (from LOOK FOR settings).
 export const GET = withAuth(async (req, { supabase, user }) => {
-  const project = new URL(req.url).searchParams.get('project');
+  const params  = new URL(req.url).searchParams;
+  const project = params.get('project');
+  const terms   = (params.get('terms') || '').split(',').map(t => t.trim()).filter(Boolean);
+
   if (!project || !isValidProject(project))
     return Response.json({ error: 'invalid project name', got: project }, { status: 400 });
 
   const isEverything = project === '__everything__';
 
-  const { data: notesRows, error: ne } = await supabase
-    .from('entries').select('date, data')
-    .eq('user_id', user.id).eq('type', 'journal')
+  // ── Journal blocks ─────────────────────────────────────────────────────────
+  let journalQ = supabase.from('journal_blocks')
+    .select('date, content, project_tags')
+    .eq('user_id', user.id)
     .order('date', { ascending: true });
-  if (ne) throw ne;
 
-  const matchRe = isEverything ? null : makeMatchRe(project);
-
-  const journalEntries = [];
-  for (const row of notesRows || []) {
-    const text = typeof row.data === 'string' ? row.data : '';
-    if (!text.trim()) continue;
-    if (matchRe && !matchRe.test(text)) continue;
-
-    const lines = text.split('\n');
-    let i = 0;
-    while (i < lines.length) {
-      if (!lines[i].trim()) { i++; continue; }
-      const block = [];
-      while (i < lines.length && lines[i].trim()) {
-        block.push({ text: lines[i].trim(), lineIndex: i });
-        i++;
-      }
-      if (!matchRe || block.some(l => matchRe.test(l.text)))
-        block.forEach(l => journalEntries.push({ date: row.date, text: l.text, lineIndex: l.lineIndex }));
-    }
+  if (!isEverything) {
+    const filters = [`project_tags.cs.{${project}}`];
+    terms.forEach(t => filters.push(`content.ilike.%${t}%`));
+    journalQ = journalQ.or(filters.join(','));
   }
 
-  const { data: tasksRows, error: te } = await supabase
-    .from('entries').select('date, data')
-    .eq('user_id', user.id).eq('type', 'tasks')
+  const { data: journalRows, error: je } = await journalQ;
+  if (je) throw je;
+
+  const journalEntries = (journalRows || [])
+    .filter(r => r.content?.trim())
+    .map((r, i) => ({ date: r.date, text: r.content.trim(), lineIndex: i }));
+
+  // ── Tasks ──────────────────────────────────────────────────────────────────
+  let tasksQ = supabase.from('tasks')
+    .select('id, date, text, html, done, project_tags')
+    .eq('user_id', user.id)
     .order('date', { ascending: true });
+
+  if (!isEverything) {
+    const filters = [`project_tags.cs.{${project}}`];
+    terms.forEach(t => filters.push(`text.ilike.%${t}%`));
+    tasksQ = tasksQ.or(filters.join(','));
+  }
+
+  const { data: taskRows, error: te } = await tasksQ;
   if (te) throw te;
 
-  const taskEntries = [];
-  for (const row of tasksRows || []) {
-    for (const task of parseTasks(row.data)) {
-      if (!matchRe || matchRe.test(task.text))
-        taskEntries.push({ date: row.date, id: task.id, text: task.text, done: task.done });
-    }
-  }
+  const taskEntries = (taskRows || []).map(r => ({
+    date: r.date, id: r.id, text: r.text, done: r.done,
+  }));
 
   return Response.json({ journalEntries, taskEntries, isEverything });
 });
