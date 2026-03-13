@@ -659,7 +659,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 <span style={{
                   fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
                   color:isToday?"var(--dl-text)":"var(--dl-accent)",
-                  background:(isToday?"var(--dl-text)":"var(--dl-accent)")+"1A",
+                  background:(isToday?C.text:C.accent)+"1A",
                   borderRadius:6,padding:"4px 10px",
                 }}>{selMonth} {selDate.getDate()}, {selYear}</span>
                 <button onClick={e=>{e.stopPropagation();onSelect(toKey(stepDay(selDate,+1)));}} style={{
@@ -677,7 +677,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             <span style={{
               fontFamily:mono,fontSize:F.sm,letterSpacing:"0.1em",textTransform:"uppercase",
               color:toKey(selDate)===today?"var(--dl-text)":"var(--dl-accent)",
-              background:(toKey(selDate)===today?"var(--dl-text)":"var(--dl-accent)")+"1A",
+              background:(toKey(selDate)===today?C.text:C.accent)+"1A",
               borderRadius:6,padding:"4px 10px",
             }}>
               {selMonth} {selDate.getDate()}, {selYear}
@@ -742,9 +742,9 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   cursor: isCtr ? "default" : "pointer",
                   opacity,
                   transition: "opacity 0.15s",
-                  borderLeft: isCtr ? "1px solid var(--dl-accent)20" : "1px solid transparent",
-                  borderRight: isCtr ? "1px solid var(--dl-accent)20" : "1px solid transparent",
-                  background: isCtr ? "var(--dl-accent)08" : "transparent",
+                  borderLeft: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
+                  borderRight: isCtr ? `1px solid ${C.accent}20` : "1px solid transparent",
+                  background: isCtr ? C.accent+'08' : "transparent",
                   borderRadius: 6,
                   height: 272,
                   overflow: "hidden",
