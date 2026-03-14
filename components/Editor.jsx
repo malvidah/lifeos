@@ -731,12 +731,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
     if (!editor.isFocused) {
+      // Pass emitUpdate=false so programmatic syncs don't trigger onUpdate → setValue loops.
       if (noteTitleRef.current) {
-        editor.commands.setContent(textToNoteContent(value));
+        editor.commands.setContent(textToNoteContent(value), false);
       } else if (taskList) {
-        editor.commands.setContent(value || EMPTY_TASK_LIST);
+        editor.commands.setContent(value || EMPTY_TASK_LIST, false);
       } else {
-        editor.commands.setContent({ type: 'doc', content: textToContent(value || '') });
+        editor.commands.setContent({ type: 'doc', content: textToContent(value || '') }, false);
       }
     }
   }, [value, editor]); // eslint-disable-line
