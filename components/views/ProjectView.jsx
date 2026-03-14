@@ -83,6 +83,18 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const { value: notesStore, setValue: setNotesStore } =
     useDbSave(project || '__none__', 'project-notes', NOTES_EMPTY, token, userId);
   const notesList   = Array.isArray(notesStore?.notes) ? notesStore.notes : [];
+
+  // Linked notes — notes from other projects that tag this project
+  const [linkedNotes, setLinkedNotes] = useState([]);
+  useEffect(() => {
+    if (!project || project.startsWith('__') || !token) return;
+    let stale = false;
+    api.get(`/api/notes/tagged?project=${encodeURIComponent(project)}`, token)
+      .then(res => { if (!stale) setLinkedNotes(res?.linkedNotes || []); })
+      .catch(() => {});
+    return () => { stale = true; };
+  }, [project, token]);
+
   const activeNoteId = notesStore?.activeId ?? notesList[0]?.id ?? null;
   const activeNote  = notesList.find(n => n.id === activeNoteId)
     ?? linkedNotes.find(n => n.id === activeNoteId)
@@ -97,16 +109,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     }
     return c.split('\n')[0].trim() || 'Untitled';
   };
-  // Linked notes — notes from other projects that tag this project
-  const [linkedNotes, setLinkedNotes] = useState([]);
-  useEffect(() => {
-    if (!project || project.startsWith('__') || !token) return;
-    let stale = false;
-    api.get(`/api/notes/tagged?project=${encodeURIComponent(project)}`, token)
-      .then(res => { if (!stale) setLinkedNotes(res?.linkedNotes || []); })
-      .catch(() => {});
-    return () => { stale = true; };
-  }, [project, token]);
 
   // Sorted by most recent first for the left panel
   const sortedNotes = [...notesList].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
