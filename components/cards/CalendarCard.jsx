@@ -681,6 +681,11 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
           transform:`translateX(${-fracSlot * DAY_W}px)`,
           willChange:"transform",
         }}>
+          {/* Left / right vignette overlays */}
+          <div style={{position:"absolute",top:0,bottom:0,left:0,width:120,pointerEvents:"none",zIndex:2,
+            background:"linear-gradient(to right, var(--dl-bg) 0%, transparent 100%)"}}/>
+          <div style={{position:"absolute",top:0,bottom:0,right:0,width:120,pointerEvents:"none",zIndex:2,
+            background:"linear-gradient(to left, var(--dl-bg) 0%, transparent 100%)"}}/>
           {dayItems.map(({d, i}) => {
             const k      = toKey(d);
             const isCtr  = i === 0;
