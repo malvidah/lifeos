@@ -6,16 +6,18 @@ const BUILTINS = new Set(['health']);
 // Returns projects from the DB, augmented with any tags used in the new typed
 // tables that don't yet have a project record (lazy migration on read).
 export const GET = withAuth(async (_req, { supabase, user }) => {
-  const [projR, journalR, tasksR, notesR] = await Promise.all([
+  const [projR, journalR, tasksR, notesR, workoutsR, mealsR] = await Promise.all([
     supabase.from('projects').select('*').eq('user_id', user.id).order('last_active', { ascending: false, nullsFirst: false }),
     supabase.from('journal_blocks').select('project_tags').eq('user_id', user.id),
     supabase.from('tasks').select('project_tags').eq('user_id', user.id),
     supabase.from('notes').select('project_tags').eq('user_id', user.id),
+    supabase.from('workouts').select('project_tags').eq('user_id', user.id),
+    supabase.from('meal_items').select('project_tags').eq('user_id', user.id),
   ]);
 
   // Build set of all tag names used across content tables
   const usedTags = new Set();
-  for (const result of [journalR, tasksR, notesR]) {
+  for (const result of [journalR, tasksR, notesR, workoutsR, mealsR]) {
     for (const row of result.data ?? []) {
       for (const tag of row.project_tags ?? []) {
         const lower = tag.toLowerCase().trim();
@@ -33,6 +35,17 @@ export const GET = withAuth(async (_req, { supabase, user }) => {
     const rows = missing.map(name => ({ user_id: user.id, name }));
     const { data: created } = await supabase.from('projects').insert(rows).select();
     for (const p of (created || [])) existing.set(p.name, p);
+  }
+
+  // Auto-delete orphaned projects: no references in any content table and no notes
+  const orphaned = [...existing.entries()]
+    .filter(([name, p]) => !usedTags.has(name) && !p.notes?.trim())
+    .map(([, p]) => p.id);
+  if (orphaned.length > 0) {
+    await supabase.from('projects').delete().in('id', orphaned);
+    for (const id of orphaned) {
+      for (const [name, p] of existing) { if (p.id === id) existing.delete(name); }
+    }
   }
 
   const projects = [...existing.values()].sort((a, b) => {
