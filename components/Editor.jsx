@@ -673,11 +673,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
 
     onSelectionUpdate({ editor }) {
-      // In task list mode, if cursor lands on a bare paragraph, wrap it into the task list
+      // In task list mode, if cursor lands on a bare paragraph, wrap it into the task list.
+      // Suppress onUpdate so toggleTaskList doesn't trigger a save → re-render → loop.
       if (!taskListRef.current) return;
       const { $from } = editor.state.selection;
       if ($from.parent.type.name === 'paragraph' && $from.depth === 1) {
-        // Suppress onUpdate so toggleTaskList doesn't trigger a save → re-render → loop
         suppressOnUpdateRef.current = true;
         editor.chain().focus().toggleTaskList().run();
         suppressOnUpdateRef.current = false;
