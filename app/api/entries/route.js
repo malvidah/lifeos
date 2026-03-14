@@ -1,10 +1,11 @@
 import { withAuth } from '../_lib/auth.js';
+import { isValidDate } from '@/lib/validate.js';
 
 export const GET = withAuth(async (req, { supabase, user }) => {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
   const type = searchParams.get('type');
-  if (!date) return Response.json({ error: 'date required' }, { status: 400 });
+  if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) required' }, { status: 400 });
 
   if (type) {
     const { data, error } = await supabase
@@ -26,8 +27,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
 export const POST = withAuth(async (req, { supabase, user }) => {
   const { date, type, data } = await req.json();
-  if (!date || !type || data === undefined)
-    return Response.json({ error: 'date, type, data required' }, { status: 400 });
+  if (!date || !isValidDate(date) || !type || data === undefined)
+    return Response.json({ error: 'valid date (YYYY-MM-DD), type, data required' }, { status: 400 });
 
   const { error } = await supabase.from('entries').upsert(
     { date, type, data, user_id: user.id, updated_at: new Date().toISOString() },

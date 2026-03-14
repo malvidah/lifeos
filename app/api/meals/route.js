@@ -1,5 +1,6 @@
 import { withAuth } from '../_lib/auth.js';
 import { parseMealItems, mealItemsToArray } from '@/lib/parseBlocks.js';
+import { isValidDate } from '@/lib/validate.js';
 
 // GET /api/meals?date=YYYY-MM-DD
 //   → { data: [{id, text, kcal, protein}, ...] }  (same shape as before)
@@ -32,7 +33,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   }
 
   // ── Day view ──────────────────────────────────────────────────────────────
-  if (!date) return Response.json({ error: 'date or project required' }, { status: 400 });
+  if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) or project required' }, { status: 400 });
 
   const { data, error } = await supabase
     .from('meal_items')
@@ -47,7 +48,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
 export const POST = withAuth(async (req, { supabase, user }) => {
   const { date, data: items } = await req.json();
-  if (!date) return Response.json({ error: 'date required' }, { status: 400 });
+  if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) required' }, { status: 400 });
 
   const parsed = parseMealItems(items);
 
@@ -60,7 +61,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       content:      p.content,
       ai_calories:  p.ai_calories ?? null,
       ai_protein:   p.ai_protein ?? null,
-      ai_parsed_at: (p.ai_calories || p.ai_protein) ? new Date().toISOString() : null,
+      ai_parsed_at: new Date().toISOString(),
     })),
   });
   if (rpcErr) throw rpcErr;

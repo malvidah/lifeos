@@ -1,5 +1,6 @@
 import { withAuth } from '../_lib/auth.js';
 import { parseTaskBlocks, tasksToHtml } from '@/lib/parseBlocks.js';
+import { isValidDate } from '@/lib/validate.js';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -39,7 +40,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   }
 
   // ── Day view ──────────────────────────────────────────────────────────────
-  if (!date) return Response.json({ error: 'date or project required' }, { status: 400 });
+  if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) or project required' }, { status: 400 });
 
   // 1. Tasks written on this date
   const { data: ownTasks, error: e1 } = await supabase
@@ -68,7 +69,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
 export const POST = withAuth(async (req, { supabase, user }) => {
   const { date, data: html } = await req.json();
-  if (!date) return Response.json({ error: 'date required' }, { status: 400 });
+  if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) required' }, { status: 400 });
 
   const parsed = parseTaskBlocks(html || '');
   const today  = TODAY();

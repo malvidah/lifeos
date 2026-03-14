@@ -1,4 +1,5 @@
 import { withAuth } from '../_lib/auth.js';
+import { isValidDate } from '@/lib/validate.js';
 
 // POST /api/health-sync
 // Called by the iOS Shortcut / Apple Health bridge to push Apple Health data.
@@ -7,7 +8,7 @@ import { withAuth } from '../_lib/auth.js';
 
 export const POST = withAuth(async (req, { supabase, user }) => {
   const { date, ...healthData } = await req.json();
-  if (!date) return Response.json({ error: 'date required' }, { status: 400 });
+  if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) required' }, { status: 400 });
 
   const hasData = Object.keys(healthData).some(k =>
     healthData[k] !== null && healthData[k] !== undefined && healthData[k] !== ''
@@ -22,7 +23,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     hrv:        toNum(healthData.hrv),
     rhr:        toNum(healthData.rhr),
     sleep_hrs:  toNum(healthData.sleepHrs ?? healthData.sleep_hrs),
-    sleep_eff:  toNum(healthData.sleepQuality ?? healthData.sleepEff ?? healthData.sleep_eff),
+    sleep_eff:  toNum(healthData.sleepEff ?? healthData.sleep_eff),
     steps:      toNum(healthData.steps),
     active_min: toNum(healthData.activeMinutes ?? healthData.active_min),
     raw:        healthData,
