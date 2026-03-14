@@ -10,7 +10,7 @@ import { bustOuraCache } from "@/lib/ouraCache";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
 import { NavigationContext, ProjectNamesContext } from "@/lib/contexts";
-import { Card } from "./ui/primitives.jsx";
+import { Card, ErrorBoundary } from "./ui/primitives.jsx";
 import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
@@ -370,15 +370,19 @@ function DashboardInner() {
                 {!searchOpen && (
                   <>
                     <div style={{flexShrink:0}}>
+                      <ErrorBoundary label="Calendar">
                       <CalendarCard selected={selected} onSelect={setSelected}
                         events={events} setEvents={setEvents} healthDots={healthDots}
                         token={token} collapsed={calCollapsed} onToggle={toggleCal}
                         calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
+                      </ErrorBoundary>
                     </div>
                     <div style={{flexShrink:0}}>
+                      <ErrorBoundary label="Health">
                       <HealthCard date={selected} token={token} userId={userId}
                         onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
                         collapsed={healthCollapsed} onToggle={toggleHealth}/>
+                      </ErrorBoundary>
                     </div>
                   </>
                 )}
@@ -397,19 +401,23 @@ function DashboardInner() {
               {/* Widgets — row on wide, flat stack on narrow */}
               {mobile ? (
                 <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
+                  <ErrorBoundary label={leftWidget.label}>
                   <Card label={leftWidget.label} color={leftWidget.color()}
                     collapsed={collapseMap[leftWidget.id]}
                     onToggle={toggleMap[leftWidget.id]}
                     headerRight={leftWidget.headerRight?.()} autoHeight>
                     <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
                   </Card>
+                  </ErrorBoundary>
                   {rightWidgets.map(w=>(
-                    <Card key={w.id} label={w.label} color={w.color()}
+                    <ErrorBoundary key={w.id} label={w.label}>
+                    <Card label={w.label} color={w.color()}
                       collapsed={collapseMap[w.id]}
                       onToggle={toggleMap[w.id]}
                       headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
                       <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
                     </Card>
+                    </ErrorBoundary>
                   ))}
                 </div>
               ) : (
@@ -422,12 +430,14 @@ function DashboardInner() {
                     display:"flex", flexDirection:"column", gap:10,
                     paddingBottom:180}}>
                     <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
+                      <ErrorBoundary label={leftWidget.label}>
                       <Card label={leftWidget.label} color={leftWidget.color()}
                         collapsed={collapseMap[leftWidget.id]}
                         onToggle={toggleMap[leftWidget.id]}
                         headerRight={leftWidget.headerRight?.()}>
                         <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
                       </Card>
+                      </ErrorBoundary>
                     </div>
                   </div>
 
@@ -440,12 +450,14 @@ function DashboardInner() {
                         display:"flex", flexDirection:"column",
                         flex: (!collapseMap[w.id] && i === rightWidgets.length - 1) ? 1 : "0 0 auto",
                         minHeight: collapseMap[w.id]?0:200}}>
+                        <ErrorBoundary label={w.label}>
                         <Card label={w.label} color={w.color()}
                           collapsed={collapseMap[w.id]}
                           onToggle={toggleMap[w.id]}
                           headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
                           <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
                         </Card>
+                        </ErrorBoundary>
                       </div>
                     ))}
                   </div>
@@ -494,6 +506,7 @@ function DashboardInner() {
                               fontFamily:mono,fontSize:F.sm,color:"var(--dl-middle)"}}>Loading graph…</div>
                           </Card>
                         )}
+                        <ErrorBoundary label="Project">
                         <ProjectView
                           project="__everything__"
                           token={token} userId={userId}
@@ -501,8 +514,10 @@ function DashboardInner() {
                           onSelectDate={d => { setActiveProject(null); setSelected(d); }}
                           taskFilter={taskFilter} setTaskFilter={setTaskFilter}
                         />
+                        </ErrorBoundary>
                       </div>
                     ) : (
+                      <ErrorBoundary label="Project">
                       <ProjectView
                         project={activeProject}
                         token={token}
@@ -514,6 +529,7 @@ function DashboardInner() {
                         onCloseSettings={() => setSettingsOpen(false)}
                         onRenamed={slug => { setActiveProject(slug); setSettingsOpen(false); }}
                       />
+                      </ErrorBoundary>
                     )}
                   </div>
                 </>

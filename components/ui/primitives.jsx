@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, Fragment } from "react";
+import { Component, useState, useRef, Fragment } from "react";
 import { mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { useNavigation } from "@/lib/contexts";
 
@@ -244,4 +244,41 @@ export function SourceBadge({source}) {
       borderRadius:3, padding:"1px 4px", flexShrink:0, opacity:0.8,
     }}>{isStrava ? "Strava" : "Oura"}</span>
   );
+}
+
+// ─── ErrorBoundary ─────────────────────────────────────────────────────────
+// Catches render errors in children; shows a minimal fallback instead of
+// crashing the entire app. Use: <ErrorBoundary label="Tasks">...</ErrorBoundary>
+export class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    console.error(`[ErrorBoundary${this.props.label ? `: ${this.props.label}` : ''}]`, error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{
+          padding: 16, textAlign: 'center',
+          fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)',
+        }}>
+          Something went wrong{this.props.label ? ` in ${this.props.label}` : ''}.{' '}
+          <button
+            onClick={() => this.setState({ hasError: false })}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--dl-accent)', fontFamily: mono, fontSize: F.sm,
+              textDecoration: 'underline', padding: 0,
+            }}
+          >Retry</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
