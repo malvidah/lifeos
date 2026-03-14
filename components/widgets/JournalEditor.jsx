@@ -8,7 +8,7 @@ import { estimateNutrition, uploadImageFile } from "@/lib/images";
 import { DayLabEditor } from "../Editor.jsx";
 
 export function JournalEditor({date,userId,token}) {
-  const {value, setValue, loaded} = useDbSave(date, 'journal', '', token, userId);
+  const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   // Hooks must be called unconditionally (before any early return)
   const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
@@ -25,7 +25,8 @@ export function JournalEditor({date,userId,token}) {
   return (
     <DayLabEditor
       value={value || ''}
-      onBlur={text => setValue(text, {undoLabel: 'Edit notes'})}
+      onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
+      onUpdate={html => markDirty(html)}
       onImageUpload={file => uploadImageFile(file, token)}
       noteNames={ctxNotes}
       projectNames={ctxProjects}
