@@ -5,10 +5,7 @@ import { withAuth } from '../_lib/auth.js';
 //   Special value: __everything__ (all content, no tag filter).
 //   `terms` is a comma-separated list of extra search strings (from LOOK FOR settings).
 //
-// Data lives in the `entries` table (type='journal' and type='tasks').
-// Journal entries: one row per day, data = plain text with \n-separated lines.
-//   Project tags are stored as {tagname} in the text.
-// Task entries: one row per day, data = HTML string (TipTap) or old [{id,text,done}] array.
+// Data lives in `journal_blocks` and `tasks` tables (new schema).
 //
 // Response shape:
 //   { journalEntries, taskEntries, notes, isEverything }
@@ -17,7 +14,24 @@ import { withAuth } from '../_lib/auth.js';
 // taskEntries:    [{ date, id, text, done, project_tags }]
 // notes:          [] (notes are loaded client-side via useDbSave)
 
-// ── Tag extraction — mirrors lib/tags.js ────────────────────────────────────
+function isValidProject(name) {
+  if (name === '__everything__') return true;
+  return /^[a-z0-9][a-z0-9 ]{0,38}[a-z0-9]$|^[a-z0-9]$/.test(name);
+}
+
+// Convert TipTap HTML to plain text, preserving {project} and [note] markers
+function htmlToText(html) {
+  if (!html || typeof html !== 'string') return '';
+  return html
+    .replace(/<span[^>]*data-project-tag="([^"]+)"[^>]*>[^<]*<\/span>/g, '{$1}')
+    .replace(/<span[^>]*data-note-link="([^"]+)"[^>]*>[^<]*<\/span>/g, '[$1]')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/\s+/g, ' ').trim();
+}
+
+// Extract {project} tags from text
 function extractTags(text) {
   if (!text || typeof text !== 'string') return [];
   const seen = new Set(); const tags = [];
@@ -35,43 +49,6 @@ function extractTags(text) {
   return tags;
 }
 
-// Convert TipTap task HTML to plain text, preserving {project} markers
-function taskHtmlToText(html) {
-  if (!html || typeof html !== 'string') return '';
-  return html
-    .replace(/<span[^>]*data-project-tag="([^"]+)"[^>]*>[^<]*<\/span>/g, '{$1}')
-    .replace(/<span[^>]*data-note-link="([^"]+)"[^>]*>[^<]*<\/span>/g, '[$1]')
-    .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-    .replace(/\s+/g, ' ').trim();
-}
-
-// Parse task data — handles old JSON array and new TipTap HTML
-function parseTasks(data) {
-  if (Array.isArray(data)) {
-    return data.filter(t => t?.text).map((t, i) => ({
-      id: t.id ?? `old_${i}`, text: t.text, done: !!t.done,
-    }));
-  }
-  if (typeof data === 'string' && data.includes('data-type="taskItem"')) {
-    const tasks = [];
-    const liRe = /<li[^>]*data-type="taskItem"[^>]*data-checked="(true|false)"[^>]*>([\s\S]*?)<\/li>/g;
-    let m, idx = 0;
-    while ((m = liRe.exec(data)) !== null) {
-      const text = taskHtmlToText(m[2]);
-      if (text) tasks.push({ id: `html_${idx++}`, text, done: m[1] === 'true' });
-    }
-    return tasks;
-  }
-  return [];
-}
-
-function isValidProject(name) {
-  if (name === '__everything__') return true;
-  return /^[a-z0-9][a-z0-9 ]{0,38}[a-z0-9]$|^[a-z0-9]$/.test(name);
-}
-
 export const GET = withAuth(async (req, { supabase, user }) => {
   const params  = new URL(req.url).searchParams;
   const project = params.get('project');
@@ -82,53 +59,107 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   const isEverything = project === '__everything__';
 
-  // Fetch raw journal and task entries from the entries table
-  const [journalR, tasksR] = await Promise.all([
-    supabase.from('entries')
-      .select('date, data')
-      .eq('user_id', user.id)
-      .eq('type', 'journal')
-      .order('date', { ascending: true }),
-    supabase.from('entries')
-      .select('date, data')
-      .eq('user_id', user.id)
-      .eq('type', 'tasks')
-      .order('date', { ascending: true }),
-  ]);
+  // ── Fetch from new typed tables ─────────────────────────────────────────────
+  const journalQuery = supabase.from('journal_blocks')
+    .select('id, date, position, content, project_tags, note_tags')
+    .eq('user_id', user.id)
+    .order('date', { ascending: true })
+    .order('position', { ascending: true });
 
+  const tasksQuery = supabase.from('tasks')
+    .select('id, date, position, text, html, done, project_tags, note_tags')
+    .eq('user_id', user.id)
+    .order('date', { ascending: true })
+    .order('position', { ascending: true });
+
+  // For specific projects, filter by project_tags using contains
+  if (!isEverything) {
+    journalQuery.contains('project_tags', [project.toLowerCase()]);
+    tasksQuery.contains('project_tags', [project.toLowerCase()]);
+  }
+
+  const [journalR, tasksR] = await Promise.all([journalQuery, tasksQuery]);
   if (journalR.error) throw journalR.error;
   if (tasksR.error)   throw tasksR.error;
 
-  // ── Journal: split each day's text into lines, filter by project/terms ──────
+  // ── Journal blocks → entries ──────────────────────────────────────────────
   const journalEntries = [];
-  for (const row of (journalR.data || [])) {
-    const text = typeof row.data === 'string' ? row.data : '';
-    if (!text) continue;
-    const lines = text.split('\n');
-    lines.forEach((line, lineIndex) => {
-      if (!line.trim()) return;
-      const tags = extractTags(line);
+  // Group blocks by date to compute lineIndex
+  const blocksByDate = {};
+  for (const block of (journalR.data || [])) {
+    if (!blocksByDate[block.date]) blocksByDate[block.date] = [];
+    blocksByDate[block.date].push(block);
+  }
+  for (const [date, blocks] of Object.entries(blocksByDate)) {
+    blocks.forEach((block, lineIndex) => {
+      const text = htmlToText(block.content);
+      if (!text) return;
+      const tags = block.project_tags || extractTags(text);
       const matchesProject = isEverything || tags.includes(project);
-      const matchesTerms   = terms.length > 0 && terms.some(t => line.toLowerCase().includes(t.toLowerCase()));
+      const matchesTerms = terms.length > 0 && terms.some(t => text.toLowerCase().includes(t.toLowerCase()));
       if (matchesProject || (!isEverything && matchesTerms)) {
-        journalEntries.push({ date: row.date, lineIndex, text: line, project_tags: tags });
+        journalEntries.push({ date, lineIndex, text, project_tags: tags, blockLength: 1 });
       }
     });
   }
 
-  // ── Tasks: parse each day's tasks, filter by project/terms ──────────────────
+  // ── Tasks ─────────────────────────────────────────────────────────────────
   const taskEntries = [];
-  for (const row of (tasksR.data || [])) {
-    const tasks = parseTasks(row.data);
-    tasks.forEach(task => {
-      const tags = extractTags(task.text);
-      const matchesProject = isEverything || tags.includes(project);
-      const matchesTerms   = terms.length > 0 && terms.some(t => task.text.toLowerCase().includes(t.toLowerCase()));
-      if (matchesProject || (!isEverything && matchesTerms)) {
-        taskEntries.push({ date: row.date, id: task.id, text: task.text, done: task.done, project_tags: tags });
-      }
-    });
+  for (const task of (tasksR.data || [])) {
+    const text = task.text || htmlToText(task.html);
+    if (!text) continue;
+    const tags = task.project_tags || extractTags(text);
+    const matchesProject = isEverything || tags.includes(project);
+    const matchesTerms = terms.length > 0 && terms.some(t => text.toLowerCase().includes(t.toLowerCase()));
+    if (matchesProject || (!isEverything && matchesTerms)) {
+      taskEntries.push({ date: task.date, id: task.id, text, done: task.done, project_tags: tags });
+    }
   }
+
+  // ── Also check legacy entries table for older data ─────────────────────────
+  // This ensures data written before the migration still shows up.
+  try {
+    const [legacyJournal, legacyTasks] = await Promise.all([
+      supabase.from('entries').select('date, data')
+        .eq('user_id', user.id).eq('type', 'journal')
+        .order('date', { ascending: true }),
+      supabase.from('entries').select('date, data')
+        .eq('user_id', user.id).eq('type', 'tasks')
+        .order('date', { ascending: true }),
+    ]);
+
+    // Only include legacy entries for dates NOT already covered by new tables
+    const journalDates = new Set(Object.keys(blocksByDate));
+    const taskDates = new Set((tasksR.data || []).map(t => t.date));
+
+    for (const row of (legacyJournal.data || [])) {
+      if (journalDates.has(row.date)) continue;
+      const text = typeof row.data === 'string' ? row.data : '';
+      if (!text) continue;
+      text.split('\n').forEach((line, lineIndex) => {
+        if (!line.trim()) return;
+        const tags = extractTags(line);
+        const matchesProject = isEverything || tags.includes(project);
+        const matchesTerms = terms.length > 0 && terms.some(t => line.toLowerCase().includes(t.toLowerCase()));
+        if (matchesProject || (!isEverything && matchesTerms)) {
+          journalEntries.push({ date: row.date, lineIndex, text: line, project_tags: tags });
+        }
+      });
+    }
+
+    for (const row of (legacyTasks.data || [])) {
+      if (taskDates.has(row.date)) continue;
+      const tasks = parseLegacyTasks(row.data);
+      tasks.forEach(task => {
+        const tags = extractTags(task.text);
+        const matchesProject = isEverything || tags.includes(project);
+        const matchesTerms = terms.length > 0 && terms.some(t => task.text.toLowerCase().includes(t.toLowerCase()));
+        if (matchesProject || (!isEverything && matchesTerms)) {
+          taskEntries.push({ date: row.date, id: task.id, text: task.text, done: task.done, project_tags: tags });
+        }
+      });
+    }
+  } catch (_) { /* entries table might not exist or have different schema */ }
 
   return Response.json({
     journalEntries,
@@ -137,3 +168,23 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     isEverything,
   });
 });
+
+// Parse legacy task data from entries table (old JSON array or old TipTap HTML)
+function parseLegacyTasks(data) {
+  if (Array.isArray(data)) {
+    return data.filter(t => t?.text).map((t, i) => ({
+      id: t.id ?? `old_${i}`, text: t.text, done: !!t.done,
+    }));
+  }
+  if (typeof data === 'string' && data.includes('data-type="taskItem"')) {
+    const tasks = [];
+    const liRe = /<li[^>]*data-type="taskItem"[^>]*data-checked="(true|false)"[^>]*>([\s\S]*?)<\/li>/g;
+    let m, idx = 0;
+    while ((m = liRe.exec(data)) !== null) {
+      const text = htmlToText(m[2]);
+      if (text) tasks.push({ id: `html_${idx++}`, text, done: m[1] === 'true' });
+    }
+    return tasks;
+  }
+  return [];
+}
