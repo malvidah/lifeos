@@ -119,7 +119,7 @@ export default function NavBar(props) {
               onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
             >‹</button>
             <span style={{
-              fontFamily: mono, fontSize: 13, fontWeight: 600, letterSpacing: '0.12em',
+              fontFamily: mono, fontSize: 13, fontWeight: 400, letterSpacing: '0.12em',
               textTransform: 'uppercase', color: titleColor,
               whiteSpace: 'nowrap', userSelect: 'none',
             }}>
