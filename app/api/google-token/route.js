@@ -1,11 +1,6 @@
-import { getUserClient } from '../_lib/google.js';
+import { withAuth } from '../_lib/auth.js';
 
-export async function POST(req) {
-  const { supabase } = getUserClient(req);
-  if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
-
+export const POST = withAuth(async (req, { supabase, user }) => {
   const { googleToken, refreshToken } = await req.json();
   if (!googleToken) return Response.json({ error: 'no token' }, { status: 400 });
 
@@ -22,14 +17,9 @@ export async function POST(req) {
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
   return Response.json({ ok: true });
-}
+});
 
-export async function GET(req) {
-  const { supabase } = getUserClient(req);
-  if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
-
+export const GET = withAuth(async (req, { supabase, user }) => {
   const { data, error } = await supabase.from('user_settings')
     .select('data').eq('user_id', user.id).maybeSingle();
   if (error) return Response.json({ error: error.message }, { status: 500 });
@@ -38,4 +28,4 @@ export async function GET(req) {
     googleToken:  data?.data?.googleToken        || null,
     refreshToken: data?.data?.googleRefreshToken || null,
   });
-}
+});

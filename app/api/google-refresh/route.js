@@ -1,13 +1,7 @@
 // Exchanges a Google refresh token for a new access token
-import { createClient } from '@supabase/supabase-js';
-import { getUserClient } from '../_lib/google.js';
+import { withAuth } from '../_lib/auth.js';
 
-export async function POST(req) {
-  const { supabase } = getUserClient(req);
-  if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
-
+export const POST = withAuth(async (req, { supabase, user }) => {
   const { refreshToken } = await req.json();
   if (!refreshToken) return Response.json({ error: 'no refresh token' }, { status: 400 });
 
@@ -36,4 +30,4 @@ export async function POST(req) {
   }, { onConflict: 'user_id' });
 
   return Response.json({ googleToken: data.access_token });
-}
+});

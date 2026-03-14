@@ -1,25 +1,6 @@
 // ─── Shared Google helpers ────────────────────────────────────────────────────
-// Used across calendar-*, chat, voice-action, agent routes.
-// Keep this the single source of truth — do not copy-paste into route files.
-
-import { createClient } from '@supabase/supabase-js';
-
-/**
- * Build a Supabase browser client authenticated as the requesting user.
- * Returns { supabase, token } or { supabase: null, token: null } if no token.
- */
-export function getUserClient(req) {
-  const token = (req.headers.get('authorization') || '').replace('Bearer ', '').trim();
-  if (!token) return { supabase: null, token: null };
-  return {
-    token,
-    supabase: createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-      { global: { headers: { Authorization: `Bearer ${token}` } } }
-    ),
-  };
-}
+// Used across calendar, chat, voice-action, agent routes.
+// Auth is handled by withAuth() from _lib/auth.js — these are Google-specific utilities.
 
 /**
  * Exchange a Google refresh token for a new access token.

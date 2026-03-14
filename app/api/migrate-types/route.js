@@ -6,20 +6,7 @@
  * POST ?cleanup=1   — delete old rows after confirming migration looks good
  */
 
-import { createClient } from '@supabase/supabase-js';
-
-function getUserClient(req) {
-  const auth = req.headers.get('authorization') || '';
-  const { searchParams } = new URL(req.url);
-  const token = auth.replace('Bearer ', '').trim() || searchParams.get('token') || '';
-  if (!token) return { supabase: null };
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    { global: { headers: { Authorization: `Bearer ${token}` } } }
-  );
-  return { supabase };
-}
+import { withAuth } from '../_lib/auth.js';
 
 // ── Text rewriters ─────────────────────────────────────────────────────────────
 
@@ -82,13 +69,7 @@ async function safeUpsertRows(supabase, newRows, keyField = 'date') {
 }
 
 // ── GET preview ────────────────────────────────────────────────────────────────
-export async function GET(req) {
-  try {
-    const { supabase } = getUserClient(req);
-    if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
-
+export const GET = withAuth(async (req, { supabase, user }) => {
     const uid = user.id;
     const count = async (type) => {
       const { count: c } = await supabase
@@ -105,19 +86,10 @@ export async function GET(req) {
     };
 
     return Response.json({ preview: true, user: uid, report });
-  } catch (e) {
-    return Response.json({ error: e.message, stack: e.stack?.slice(0, 400) }, { status: 500 });
-  }
-}
+});
 
 // ── POST migrate / cleanup ─────────────────────────────────────────────────────
-export async function POST(req) {
-  try {
-    const { supabase } = getUserClient(req);
-    if (!supabase) return Response.json({ error: 'unauthorized' }, { status: 401 });
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error || !user) return Response.json({ error: 'unauthorized' }, { status: 401 });
-
+export const POST = withAuth(async (req, { supabase, user }) => {
     const { searchParams } = new URL(req.url);
     const cleanup = searchParams.get('cleanup') === '1';
     const uid = user.id;
@@ -233,8 +205,4 @@ export async function POST(req) {
     }
 
     return Response.json({ user: uid, results });
-
-  } catch (e) {
-    return Response.json({ error: e.message, stack: e.stack?.slice(0, 600) }, { status: 500 });
-  }
-}
+});
