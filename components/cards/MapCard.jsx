@@ -128,7 +128,8 @@ export function MapCard({ allTags, connections, onSelectProject }) {
   }, [allTags, connections]); // eslint-disable-line
 
   // ── Interaction handlers ────────────────────────────────────────────────────
-  function handleWheel(e) {
+  const handleWheelRef = useRef();
+  handleWheelRef.current = (e) => {
     e.preventDefault();
     if (!containerRef.current) return;
     const rect   = containerRef.current.getBoundingClientRect();
@@ -137,7 +138,14 @@ export function MapCard({ allTags, connections, onSelectProject }) {
     setScale(p => Math.max(0.12, Math.min(4, p * factor)));
     setTx(p => mx - (mx - p) * factor);
     setTy(p => my - (my - p) * factor);
-  }
+  };
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (e) => handleWheelRef.current(e);
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, []);
   function handleMouseDown(e) {
     if (e.target.closest('[data-node]')) return;
     dragStart.current = { cx: e.clientX, cy: e.clientY, ox: tx, oy: ty };
@@ -184,7 +192,6 @@ export function MapCard({ allTags, connections, onSelectProject }) {
         <div ref={containerRef}
           style={{ height:400, position:'relative', overflow:'hidden',
             cursor: dragStart.current ? 'grabbing' : 'grab' }}
-          onWheel={handleWheel}
           onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
           onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}
