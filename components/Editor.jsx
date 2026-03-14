@@ -550,7 +550,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       }),
     ],
 
-    content: noteTitle ? textToNoteContent(value) : taskList ? (value || EMPTY_TASK_LIST) : { type: 'doc', content: textToContent(value || '') },
+    content: noteTitle ? textToNoteContent(value)
+      : taskList ? (value || EMPTY_TASK_LIST)
+      : (singleLine || !value?.startsWith('<')) ? { type: 'doc', content: textToContent(value || '') }
+      : (value || ''),
     editable,
 
     editorProps: {
@@ -744,8 +747,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         editor.commands.setContent(textToNoteContent(value), false);
       } else if (taskList) {
         editor.commands.setContent(value || EMPTY_TASK_LIST, false);
-      } else {
+      } else if (singleLine || !value?.startsWith('<')) {
         editor.commands.setContent({ type: 'doc', content: textToContent(value || '') }, false);
+      } else {
+        editor.commands.setContent(value, false);
       }
     }
   }, [value, editor]); // eslint-disable-line
