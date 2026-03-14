@@ -277,11 +277,19 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
 
   const meta = useMemo(() => ((projectsMeta || {})[project] || {}), [projectsMeta, project]);
 
-  // Load entries when project changes
+  // Load entries when project changes — includes LOOK FOR search terms from settings
   useEffect(() => {
     if (!token || !project) return;
     setEntries(null);
-    api.get(`/api/project-entries?project=${encodeURIComponent(project)}`, token)
+    // Load search terms for this project first, then fetch entries
+    api.get('/api/settings', token)
+      .then(s => {
+        const terms = s?.data?.projectSettings?.[project]?.searchTerms ?? [];
+        const termsParam = terms.length
+          ? `&terms=${terms.map(t => encodeURIComponent(t)).join(',')}`
+          : '';
+        return api.get(`/api/project-entries?project=${encodeURIComponent(project)}${termsParam}`, token);
+      })
       .then(d => {
         if (d.error) { setEntries({ journalEntries: [], taskEntries: [] }); return; }
         // Auto-delete project if it has no entries AND was previously registered in

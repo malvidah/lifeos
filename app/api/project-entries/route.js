@@ -6,11 +6,11 @@ import { withAuth } from '../_lib/auth.js';
 //   `terms` is a comma-separated list of extra search strings (from LOOK FOR settings).
 //
 // Response shape:
-//   { journalBlocks, tasks, notes, isEverything }
+//   { journalEntries, taskEntries, notes, isEverything }
 //
-// journalBlocks: [{ id, date, position, content, project_tags, note_tags }]
-// tasks:         [{ id, date, text, html, done, due_date, completed_at, project_tags }]
-// notes:         [{ id, title, content, project_tags, created_at, updated_at }]
+// journalEntries: [{ id, date, position, content, project_tags, note_tags }]
+// taskEntries:    [{ id, date, text, html, done, due_date, completed_at, project_tags }]
+// notes:          [{ id, title, content, project_tags, created_at, updated_at }]
 
 function isValidProject(name) {
   if (name === '__everything__') return true;
@@ -68,9 +68,9 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (notesR.error)  throw notesR.error;
 
   return Response.json({
-    journalBlocks: blocksR.data ?? [],
-    tasks:         tasksR.data  ?? [],
-    notes:         notesR.data  ?? [],
+    journalEntries: blocksR.data ?? [],
+    taskEntries:    tasksR.data  ?? [],
+    notes:          notesR.data  ?? [],
     isEverything,
   });
 });

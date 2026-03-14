@@ -252,14 +252,9 @@ export function MapCard({ allTags, connections, onSelectProject }) {
                       onClick={() => onSelectProject(node.id)}
                       onMouseEnter={() => setHovered(i)}
                       onMouseLeave={() => setHovered(null)}>
-                      {/* Soft glow behind hovered pill */}
-                      {isHov && (
-                        <ellipse rx={pw / 2 + 10} ry={PILL_H / 2 + 10}
-                          fill={col} fillOpacity={0.10}/>
-                      )}
                       {/* Pill body */}
                       <rect x={-pw / 2} y={-PILL_H / 2} width={pw} height={PILL_H} rx={PILL_RX}
-                        fill={isHov ? col + '2a' : col + '16'}
+                        fill={isHov ? col + '38' : col + '16'}
                         stroke={isHov ? col : col + '60'}
                         strokeWidth={isHov ? 1.5 : 1}/>
                       {/* Label */}
