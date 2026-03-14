@@ -443,11 +443,15 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       if (!s || s.key !== key) return false;
       const len = Math.max(s.items.length, 1);
       if (event.key === 'ArrowDown') {
-        setSugg(p => p ? { ...p, selectedIndex: (p.selectedIndex + 1) % len } : p);
+        const next = (s.selectedIndex + 1) % len;
+        suggRef.current = { ...s, selectedIndex: next };
+        setSugg(p => p ? { ...p, selectedIndex: next } : p);
         return true;
       }
       if (event.key === 'ArrowUp') {
-        setSugg(p => p ? { ...p, selectedIndex: (p.selectedIndex - 1 + len) % len } : p);
+        const next = (s.selectedIndex - 1 + len) % len;
+        suggRef.current = { ...s, selectedIndex: next };
+        setSugg(p => p ? { ...p, selectedIndex: next } : p);
         return true;
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
