@@ -116,51 +116,6 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  // ── Also check legacy entries table for older data ─────────────────────────
-  // This ensures data written before the migration still shows up.
-  try {
-    const [legacyJournal, legacyTasks] = await Promise.all([
-      supabase.from('entries').select('date, data')
-        .eq('user_id', user.id).eq('type', 'journal')
-        .order('date', { ascending: true }),
-      supabase.from('entries').select('date, data')
-        .eq('user_id', user.id).eq('type', 'tasks')
-        .order('date', { ascending: true }),
-    ]);
-
-    // Only include legacy entries for dates NOT already covered by new tables
-    const journalDates = new Set(Object.keys(blocksByDate));
-    const taskDates = new Set((tasksR.data || []).map(t => t.date));
-
-    for (const row of (legacyJournal.data || [])) {
-      if (journalDates.has(row.date)) continue;
-      const text = typeof row.data === 'string' ? row.data : '';
-      if (!text) continue;
-      text.split('\n').forEach((line, lineIndex) => {
-        if (!line.trim()) return;
-        const tags = extractTags(line);
-        const matchesProject = isEverything || tags.includes(project);
-        const matchesTerms = terms.length > 0 && terms.some(t => line.toLowerCase().includes(t.toLowerCase()));
-        if (matchesProject || (!isEverything && matchesTerms)) {
-          journalEntries.push({ date: row.date, lineIndex, text: line, project_tags: tags });
-        }
-      });
-    }
-
-    for (const row of (legacyTasks.data || [])) {
-      if (taskDates.has(row.date)) continue;
-      const tasks = parseLegacyTasks(row.data);
-      tasks.forEach(task => {
-        const tags = extractTags(task.text);
-        const matchesProject = isEverything || tags.includes(project);
-        const matchesTerms = terms.length > 0 && terms.some(t => task.text.toLowerCase().includes(t.toLowerCase()));
-        if (matchesProject || (!isEverything && matchesTerms)) {
-          taskEntries.push({ date: row.date, id: task.id, text: task.text, done: task.done, project_tags: tags });
-        }
-      });
-    }
-  } catch (_) { /* entries table might not exist or have different schema */ }
-
   return Response.json({
     journalEntries,
     taskEntries,
@@ -168,23 +123,3 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     isEverything,
   });
 });
-
-// Parse legacy task data from entries table (old JSON array or old TipTap HTML)
-function parseLegacyTasks(data) {
-  if (Array.isArray(data)) {
-    return data.filter(t => t?.text).map((t, i) => ({
-      id: t.id ?? `old_${i}`, text: t.text, done: !!t.done,
-    }));
-  }
-  if (typeof data === 'string' && data.includes('data-type="taskItem"')) {
-    const tasks = [];
-    const liRe = /<li[^>]*data-type="taskItem"[^>]*data-checked="(true|false)"[^>]*>([\s\S]*?)<\/li>/g;
-    let m, idx = 0;
-    while ((m = liRe.exec(data)) !== null) {
-      const text = htmlToText(m[2]);
-      if (text) tasks.push({ id: `html_${idx++}`, text, done: m[1] === 'true' });
-    }
-    return tasks;
-  }
-  return [];
-}
