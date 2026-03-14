@@ -163,7 +163,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   };
 
   // ── Persist scores to health_scores ──────────────────────────────────────
-  supabase.from('health_scores').upsert({
+  await supabase.from('health_scores').upsert({
     user_id: user.id, date,
     winning_source: pickBest(rowsByDate[date] ?? [])?.source ?? null,
     sleep_score:     sleep.score,
@@ -179,7 +179,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       recovery:  recovery.contributors,
     },
     computed_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,date' }).then(() => {});
+  }, { onConflict: 'user_id,date' });
 
   return Response.json(result);
 });
