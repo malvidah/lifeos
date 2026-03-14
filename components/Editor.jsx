@@ -406,6 +406,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   // Blocks handleClick for 150ms after chip insertion so the trailing mouse-click
   // event (from dropdown selection) does not immediately navigate away.
   const justInsertedRef = useRef(false);
+  const suppressOnUpdateRef = useRef(false);
 
   const renderRef = useRef({
     onStart(props, key) {
@@ -668,7 +669,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
 
     onUpdate({ editor }) {
-      if (taskListRef.current) onUpdateRef.current?.(editor.getHTML());
+      if (taskListRef.current && !suppressOnUpdateRef.current) onUpdateRef.current?.(editor.getHTML());
     },
 
     onSelectionUpdate({ editor }) {
@@ -676,8 +677,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       if (!taskListRef.current) return;
       const { $from } = editor.state.selection;
       if ($from.parent.type.name === 'paragraph' && $from.depth === 1) {
-        // Cursor is on a top-level paragraph outside the task list — convert it
+        // Suppress onUpdate so toggleTaskList doesn't trigger a save → re-render → loop
+        suppressOnUpdateRef.current = true;
         editor.chain().focus().toggleTaskList().run();
+        suppressOnUpdateRef.current = false;
       }
     },
   });
