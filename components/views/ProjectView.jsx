@@ -84,7 +84,10 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     useDbSave(project || '__none__', 'project-notes', NOTES_EMPTY, token, userId);
   const notesList   = Array.isArray(notesStore?.notes) ? notesStore.notes : [];
   const activeNoteId = notesStore?.activeId ?? notesList[0]?.id ?? null;
-  const activeNote  = notesList.find(n => n.id === activeNoteId) ?? notesList[0] ?? null;
+  const activeNote  = notesList.find(n => n.id === activeNoteId)
+    ?? linkedNotes.find(n => n.id === activeNoteId)
+    ?? notesList[0] ?? null;
+  const isLinkedNote = !!activeNote?.sourceProject;
   // Derive note name from content (HTML with <h1> or plain text first line)
   const noteName = (note) => {
     const c = note?.content || '';
@@ -94,10 +97,21 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     }
     return c.split('\n')[0].trim() || 'Untitled';
   };
+  // Linked notes — notes from other projects that tag this project
+  const [linkedNotes, setLinkedNotes] = useState([]);
+  useEffect(() => {
+    if (!project || project.startsWith('__') || !token) return;
+    let stale = false;
+    api.get(`/api/notes/tagged?project=${encodeURIComponent(project)}`, token)
+      .then(res => { if (!stale) setLinkedNotes(res?.linkedNotes || []); })
+      .catch(() => {});
+    return () => { stale = true; };
+  }, [project, token]);
+
   // Sorted by most recent first for the left panel
   const sortedNotes = [...notesList].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  // All current note names (for {note} autocomplete)
-  const allNoteNames = notesList.map(noteName).filter(Boolean);
+  // All current note names (for {note} autocomplete) — include linked note names
+  const allNoteNames = [...notesList, ...linkedNotes].map(noteName).filter(Boolean);
 
   const getUniqueName = (baseName, existingNames) => {
     const lower = existingNames.map(n => n.toLowerCase());
@@ -140,7 +154,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   useEffect(() => {
     const goHandler = (e) => {
       const targetName = e.detail?.name || '';
-      const match = notesList.find(n => noteName(n).toLowerCase() === targetName.toLowerCase());
+      const match = [...notesList, ...linkedNotes].find(n => noteName(n).toLowerCase() === targetName.toLowerCase());
       if (match) selectNote(match.id);
       else addNote(targetName);
     };
@@ -529,6 +543,24 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                   >×</button>
                 </div>
               ))}
+              {linkedNotes.length > 0 && sortedNotes.length > 0 && (
+                <div style={{ height: 1, background: 'var(--dl-border)', margin: '4px 8px' }}/>
+              )}
+              {linkedNotes.map(note => {
+                const col = projectColor(note.sourceProject);
+                return (
+                  <div
+                    key={`linked-${note.id}`}
+                    style={{ display: 'flex', alignItems: 'center', borderRadius: 6, background: note.id === activeNoteId ? "var(--dl-well)" : 'transparent', transition: 'background 0.1s' }}
+                  >
+                    <button
+                      onClick={() => selectNote(note.id)}
+                      style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: note.id === activeNoteId ? "var(--dl-strong)" : "var(--dl-highlight)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}
+                    >{noteName(note)}</button>
+                    <span title={`From ${tagDisplayName(note.sourceProject)}`} style={{ flexShrink: 0, width: 7, height: 7, borderRadius: '50%', background: col, marginRight: 8, opacity: 0.7 }}/>
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -552,7 +584,37 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
 
           {/* Right: editor — full width when list collapsed */}
           <div style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}>
-            {activeNote ? (
+            {activeNote && isLinkedNote ? (
+              <div>
+                <button
+                  onClick={() => navigateToProject(activeNote.sourceProject)}
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', fontFamily: mono, fontSize: F.xs, letterSpacing: '0.06em', color: projectColor(activeNote.sourceProject), padding: '2px 0', marginBottom: 6, transition: 'opacity 0.12s' }}
+                  onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
+                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: projectColor(activeNote.sourceProject) }}/>
+                  {tagDisplayName(activeNote.sourceProject)}
+                  <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3l5 5-5 5"/></svg>
+                </button>
+                <DayLabEditor
+                  key={activeNote.id}
+                  value={activeNote.content || ''}
+                  noteTitle
+                  editable={false}
+                  noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
+                  projectNames={pvProjectNames}
+                  onProjectClick={name => navigateToProject(name)}
+                  onNoteClick={name => {
+                    const match = [...notesList, ...linkedNotes].find(n => noteName(n).toLowerCase() === name.toLowerCase());
+                    if (match) selectNote(match.id);
+                  }}
+                  textColor={"var(--dl-strong)"}
+                  mutedColor={"var(--dl-middle)"}
+                  color={"var(--dl-highlight)"}
+                  style={{ minHeight: 160, width: '100%' }}
+                />
+              </div>
+            ) : activeNote ? (
               <DayLabEditor
                 key={activeNote.id}
                 value={activeNote.content || ''}
@@ -564,7 +626,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 onCreateNote={addNote}
                 onProjectClick={name => navigateToProject(name)}
                 onNoteClick={name => {
-                  const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
+                  const match = [...notesList, ...linkedNotes].find(n => noteName(n).toLowerCase() === name.toLowerCase());
                   if (match) selectNote(match.id);
                   else addNote(name);
                 }}
