@@ -11,7 +11,8 @@ import { createClient } from "@/lib/supabase";
 import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
-import { TaskFilterBtns, NewProjectTask, TaskCheckbox, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
+import { useTheme } from "@/lib/theme";
+import { TaskFilterBtns, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
 import { AddJournalLine } from "../widgets/JournalEditor.jsx";
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";
 
@@ -56,6 +57,108 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   );
 }
 
+// ─── ProjectDateTaskEditor ────────────────────────────────────────────────────
+// Per-date TipTap task list editor for the project view. Works like the daily
+// view editor but only shows tasks tagged to this project, merging changes back
+// into the full day's task list on save.
+function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksChanged, taskFilter }) {
+  const { theme } = useTheme();
+  const ctxProjects = useContext(ProjectNamesContext);
+  const ctxNotes    = useContext(NoteContext);
+  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+  const saveTimer = useRef(null);
+  const latestHtml = useRef(null);
+  const chip = `{${project}}`;
+
+  // Build initial HTML from the project's tasks for this date
+  const initialHtml = useMemo(() => {
+    if (!tasks || tasks.length === 0) return tasksToHtml([]);
+    return tasksToHtml(tasks.map(t => ({ id: t.id, text: t.text, done: !!t.done })));
+  }, []); // eslint-disable-line
+
+  // Inject task list styles (same as daily view)
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    let s = document.getElementById('dl-tasklist-styles');
+    if (!s) { s = document.createElement('style'); s.id = 'dl-tasklist-styles'; document.head.appendChild(s); }
+    const enc = encodeURIComponent("var(--dl-accent)");
+    s.textContent = `
+      .dl-editor ul[data-type="taskList"] { list-style:none; padding:0; margin:0; }
+      .dl-editor ul[data-type="taskList"] > li { display:flex; align-items:flex-start; gap:10px; padding:3px 0; }
+      .dl-editor ul[data-type="taskList"] > li > label { display:flex; align-items:center; margin-top:4px; flex-shrink:0; cursor:pointer; }
+      .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"] {
+        -webkit-appearance:none; appearance:none;
+        width:15px; height:15px; min-width:15px; border-radius:4px; margin:0;
+        border:1.5px solid var(--task-border,var(--dl-border2)); background:transparent;
+        cursor:pointer; transition:all 0.15s;
+      }
+      .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
+        background-color:var(--task-fill); border-color:var(--task-color);
+        background-image:url("data:image/svg+xml,%3Csvg width='9' height='9' viewBox='0 0 10 10' fill='none' stroke='${enc}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='1.5%2C5 4%2C7.5 8.5%2C2'/%3E%3C/svg%3E");
+        background-repeat:no-repeat; background-position:center;
+      }
+      .dl-editor ul[data-type="taskList"] > li > div { flex:1; min-width:0; }
+      .dl-editor ul[data-type="taskList"] > li[data-checked="true"] > div { color:var(--dl-strong); text-decoration:line-through; }
+      [data-filter="open"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"] { display:none; }
+      [data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="false"] { display:none; }
+    `;
+  }, []);
+
+  useEffect(() => () => clearTimeout(saveTimer.current), []);
+
+  async function mergeAndSave(newHtml) {
+    let editorTasks = clientParseTasks(newHtml);
+    // Auto-tag tasks that don't reference this project
+    editorTasks = editorTasks.map(t => {
+      if (!t.text.toLowerCase().includes(chip)) return { ...t, text: `${t.text} ${chip}` };
+      return t;
+    });
+    // Load full day's tasks and replace the project-tagged ones
+    const raw = await dbLoad(date, 'tasks', token);
+    const allTasks = clientParseTasks(raw);
+    const nonProject = allTasks.filter(t => !t.text.toLowerCase().includes(chip));
+    // Insert project tasks where the first one used to be, or at end
+    const firstIdx = allTasks.findIndex(t => t.text.toLowerCase().includes(chip));
+    const merged = firstIdx >= 0
+      ? [...nonProject.slice(0, firstIdx), ...editorTasks, ...nonProject.slice(firstIdx)]
+      : [...nonProject, ...editorTasks];
+    const mergedHtml = tasksToHtml(merged);
+    await dbSave(date, 'tasks', mergedHtml, token);
+    MEM[`${userId}:${date}:tasks`] = mergedHtml;
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'] } }));
+    if (onTasksChanged) onTasksChanged(date, editorTasks);
+  }
+
+  function handleUpdate(newHtml) {
+    latestHtml.current = newHtml;
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => mergeAndSave(newHtml), 400);
+  }
+
+  return (
+    <div data-filter={taskFilter} style={{
+      '--task-border': "var(--dl-border2)",
+      '--task-color':  "var(--dl-accent)",
+      '--task-fill':   theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
+    }}>
+      <DayLabEditor
+        taskList
+        value={initialHtml}
+        onUpdate={handleUpdate}
+        placeholder=""
+        projectNames={ctxProjects}
+        noteNames={ctxNotes.notes}
+        textColor={"var(--dl-strong)"}
+        mutedColor={"var(--dl-middle)"}
+        color={"var(--dl-accent)"}
+        onProjectClick={name => navigateToProject(name)}
+        onNoteClick={name => navigateToNote(name)}
+        style={{ padding: 0 }}
+      />
+    </div>
+  );
+}
+
 // ─── ProjectView ──────────────────────────────────────────────────────────────
 export default function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter, settingsOpen, onCloseSettings, onRenamed }) {
   const pvProjectNames = useContext(ProjectNamesContext);
@@ -74,7 +177,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const pvTaskFilter = taskFilter;
   const setPvTaskFilter = setTaskFilter;
   const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}
-  const [editingTask, setEditingTask]   = useState(null); // {date,id,text}
 
   // Notes — independent entities from the `notes` table, tagged to projects via project_tags
   const [notesList, setNotesList] = useState([]);
@@ -356,76 +458,15 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     } : prev);
   }
 
-  async function toggleTask(date, taskId, currentDone) {
-    const raw = await dbLoad(date, 'tasks', token);
-    if (raw === null) return;
-    // Parse handles both old array format and new TipTap HTML — save back as HTML
-    const tasks = clientParseTasks(raw);
-    // Match by id (new format) or by position (old format ids may differ from API ids)
-    let matched = false;
-    const updated = tasks.map((t, i) => {
-      if (t.id === taskId || (!matched && `html_${i}` === taskId)) {
-        matched = true;
-        return { ...t, done: !currentDone };
-      }
-      return t;
-    });
-    const html = tasksToHtml(updated);
-    await dbSave(date, 'tasks', html, token);
-    MEM[`${userId}:${date}:tasks`] = html;
-    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'] } }));
+  // Called by ProjectDateTaskEditor when tasks are saved for a date
+  function handleTasksChanged(date, updatedTasks) {
+    registerNewTags(updatedTasks.map(t => t.text).join(' '));
     setEntries(prev => prev ? {
       ...prev,
-      taskEntries: prev.taskEntries.map(t =>
-        (t.date === date && t.id === taskId) ? { ...t, done: !currentDone } : t
-      ),
-    } : prev);
-  }
-
-  async function saveTaskEdit(date, taskId, newText) {
-    const raw = await dbLoad(date, 'tasks', token);
-    if (raw === null) return;
-    const tasks = clientParseTasks(raw);
-    let matched = false;
-    const updated = tasks.map((t, i) => {
-      if (t.id === taskId || (!matched && `html_${i}` === taskId)) {
-        matched = true;
-        return { ...t, text: newText };
-      }
-      return t;
-    });
-    const html = tasksToHtml(updated);
-    await dbSave(date, 'tasks', html, token);
-    MEM[`${userId}:${date}:tasks`] = html;
-    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'] } }));
-    registerNewTags(newText);
-    setEntries(prev => prev ? {
-      ...prev,
-      taskEntries: prev.taskEntries.map(t =>
-        (t.date === date && t.id === taskId) ? { ...t, text: newText } : t
-      ),
-    } : prev);
-  }
-
-  // Add a brand-new task to today's date with the project tag appended
-  async function addNewTask(text) {
-    if (!text.trim() || project === '__everything__') return;
-    const today = todayKey(); // local date — avoids UTC midnight mismatch with day view
-    const chip = `{${project.toLowerCase()}}`;
-    const hasTag = text.trim().endsWith(`#${project}`) || text.includes(chip);
-    const taskText = hasTag ? text.trim() : `${text.trim()} ${chip}`;
-    const current = await dbLoad(today, 'tasks', token);
-    const existing = clientParseTasks(current);
-    const newTask = { id: crypto.randomUUID(), text: taskText, done: false };
-    const html = tasksToHtml([...existing, newTask]);
-    await dbSave(today, 'tasks', html, token);
-    const cacheKey = `${userId}:${today}:tasks`;
-    MEM[cacheKey] = html; // Zustand proxy notifies all subscribers
-    registerNewTags(taskText);
-    // Append to local project-view entries so it appears immediately here too
-    setEntries(prev => prev ? {
-      ...prev,
-      taskEntries: [...(prev.taskEntries || []), { date: today, id: newTask.id, text: taskText, done: false }],
+      taskEntries: [
+        ...prev.taskEntries.filter(t => t.date !== date),
+        ...updatedTasks.map(t => ({ date, id: t.id, text: t.text, done: !!t.done })),
+      ],
     } : prev);
   }
 
@@ -590,52 +631,19 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/>
           </div>
-        ) : taskEntries.length === 0 ? (
-          project === '__everything__' ? (
-            <div style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)" }}>No tasks yet.</div>
-          ) : (
-            <NewProjectTask project={project} onAdd={addNewTask} />
-          )
+        ) : project === '__everything__' && taskEntries.length === 0 ? (
+          <div style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)" }}>No tasks yet.</div>
         ) : (() => {
           const todayStr = todayKey();
           const otherDates = tasksByDate.filter(([d]) => d !== todayStr).sort(([a],[b]) => b.localeCompare(a));
           const todayEntry = tasksByDate.find(([d]) => d === todayStr);
-          const allDates = todayEntry
-            ? [[todayStr, todayEntry[1]], ...otherDates]
-            : [[todayStr, { all:[], open:[], done:[] }], ...otherDates];
-
-          function renderTaskRow(task) {
-            return (
-              <div key={task.id} style={{
-                display:'flex', alignItems:'flex-start', gap:10, padding:'3px 0',
-              }}>
-                <TaskCheckbox done={task.done} onToggle={() => toggleTask(task.date, task.id, task.done)} />
-                {editingTask?.date === task.date && editingTask?.id === task.id ? (
-                  <DayLabEditor
-                    autoFocus singleLine
-                    value={editingTask.text}
-                    textColor={task.done ? "var(--dl-highlight)" : "var(--dl-strong)"}
-                    mutedColor={"var(--dl-middle)"}
-                    color={"var(--dl-blue)"}
-                    style={{ flex: 1, padding: 0, minHeight: '1.7em',
-                      textDecoration: task.done ? 'line-through' : 'none',
-                      opacity: task.done ? 0.6 : 1 }}
-                    onBlur={async text => { await saveTaskEdit(task.date, task.id, text); setEditingTask(null); }}
-                    onEnterCommit={async text => { await saveTaskEdit(task.date, task.id, text); setEditingTask(null); }}
-                  />
-                ) : (
-                  <div onClick={() => setEditingTask({ date:task.date, id:task.id, text:task.text })}
-                    style={{ flex:1, fontFamily:serif, fontSize:F.md, lineHeight:'1.7',
-                      color: task.done ? "var(--dl-highlight)" : "var(--dl-strong)", cursor:'text',
-                      textDecoration: task.done ? 'line-through' : 'none',
-                      opacity: task.done ? 0.45 : 1,
-                      whiteSpace:'pre-wrap', wordBreak:'break-word' }}>
-                    <RichLine text={task.text} dimTag={project==='__everything__' ? null : project}/>
-                  </div>
-                )}
-              </div>
-            );
-          }
+          const allDates = project !== '__everything__'
+            ? (todayEntry
+                ? [[todayStr, todayEntry[1]], ...otherDates]
+                : [[todayStr, { all:[], open:[], done:[] }], ...otherDates])
+            : otherDates.length || todayEntry
+              ? (todayEntry ? [[todayStr, todayEntry[1]], ...otherDates] : otherDates)
+              : [];
 
           return (
             <div>
@@ -644,10 +652,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 pvTaskFilter === 'done' ? (done.length > 0 || date === todayStr) : true
               ).map(([date, { all }], dateIdx) => {
                 const isToday = date === todayStr;
-                const filtered = all.filter(t =>
-                  pvTaskFilter === 'open' ? !t.done :
-                  pvTaskFilter === 'done' ? t.done : true
-                );
                 return (
                   <div key={date}>
                     <div style={{ display:'flex', alignItems:'center', gap:8,
@@ -665,10 +669,16 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                         onMouseLeave={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = isToday ? "var(--dl-accent)" : "var(--dl-highlight)"; }}
                       >{isToday ? 'Today' : fmtDate(date)}</div>
                     </div>
-                    {isToday && project !== '__everything__' && pvTaskFilter !== 'done' && (
-                      <NewProjectTask project={project} onAdd={addNewTask} />
-                    )}
-                    {filtered.map(task => renderTaskRow(task))}
+                    <ProjectDateTaskEditor
+                      key={`${project}-${date}`}
+                      date={date}
+                      project={project}
+                      tasks={all}
+                      token={token}
+                      userId={userId}
+                      onTasksChanged={handleTasksChanged}
+                      taskFilter={pvTaskFilter}
+                    />
                     <div style={{ borderTop:"1px solid var(--dl-border)", marginTop:12, marginBottom:4 }}/>
                   </div>
                 );
