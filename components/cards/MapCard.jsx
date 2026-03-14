@@ -4,128 +4,138 @@ import { mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
 import { Card, ChevronBtn } from "../ui/primitives.jsx";
 
-export function MapCard({ allTags, connections, onSelectProject, token, userId, taskFilter, setTaskFilter }) {
+const CHAR_W = 7.4, PILL_PAD = 28, PILL_H = 26, PILL_RX = 13;
+
+export function MapCard({ allTags, connections, onSelectProject }) {
   const graphRef = useRef(null);
-  const [ready, setReady] = useState(false);
-  const [tx, setTx] = useState(0);
-  const [ty, setTy] = useState(0);
-  const [scale, setScale] = useState(1);
-  const [hovered, setHovered] = useState(null);
+  const [ready, setReady]               = useState(false);
+  const [tx, setTx]                     = useState(0);
+  const [ty, setTy]                     = useState(0);
+  const [scale, setScale]               = useState(1);
+  const [hovered, setHovered]           = useState(null);
   const [graphCollapsed, setGraphCollapsed] = useState(false);
   const containerRef = useRef(null);
-  const dragStart = useRef(null);
+  const dragStart    = useRef(null);
+  const touchStart   = useRef(null);
 
   useEffect(() => {
     const tagList = allTags || [];
-    const lower = tagList.map(t => t.toLowerCase());
-    const idxOf = {};
-    lower.forEach((t, i) => { idxOf[t] = i; });
+    if (!tagList.length) return;
 
-    const deg = new Array(tagList.length).fill(0);
+    const idxOf = {};
+    tagList.forEach((t, i) => { idxOf[t.toLowerCase()] = i; });
+
+    // Build edges + weighted degree
+    const wdeg = new Array(tagList.length).fill(0);
     const edges = [];
     for (const c of (connections || [])) {
-      const si = idxOf[c.source];
-      const ti = idxOf[c.target];
+      const si = idxOf[c.source?.toLowerCase()];
+      const ti = idxOf[c.target?.toLowerCase()];
       if (si == null || ti == null) continue;
-      const w = Math.min(c.weight, 10);
+      const w = Math.min(c.weight || 1, 10);
       edges.push({ si, ti, w });
-      deg[si]++;
-      deg[ti]++;
+      wdeg[si] += w;
+      wdeg[ti] += w;
     }
-    const maxDeg = Math.max(1, ...deg);
+    const maxDeg = Math.max(1, ...wdeg);
 
     const n = tagList.length;
     const nodes = tagList.map((name, i) => {
+      const label = tagDisplayName(name).toUpperCase();
+      const pw    = label.length * CHAR_W + PILL_PAD;
       const angle = (i / n) * Math.PI * 2;
-      const radius = 180 + (deg[i] / maxDeg) * 80;
+      const radius = 220 + (wdeg[i] / maxDeg) * 120;
       return {
-        id: name,
-        label: tagDisplayName(name).toUpperCase(),
-        color: projectColor(name),
+        id: name, label, color: projectColor(name),
         x: Math.cos(angle) * radius,
         y: Math.sin(angle) * radius,
         vx: 0, vy: 0,
-        r: 16 + (deg[i] / maxDeg) * 14,
+        pw, // half-width used for repulsion
       };
     });
 
-    const K = Math.sqrt((700 * 700) / Math.max(n, 1)) * 0.9;
-    for (let iter = 0; iter < 280; iter++) {
-      const alpha = (1 - iter / 280) * (1 - iter / 280);
-      for (let a = 0; a < nodes.length; a++) {
-        for (let b = a + 1; b < nodes.length; b++) {
-          const na = nodes[a]; const nb = nodes[b];
-          let ddx = nb.x - na.x || 0.1; let ddy = nb.y - na.y || 0.1;
-          const dd = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
-          const ff = (K * K / dd) * alpha * 0.5;
-          na.vx -= (ddx / dd) * ff; na.vy -= (ddy / dd) * ff;
-          nb.vx += (ddx / dd) * ff; nb.vy += (ddy / dd) * ff;
+    // Force-directed layout — pill-aware repulsion so labels never overlap
+    const K = Math.sqrt((900 * 700) / Math.max(n, 1)) * 1.05;
+    for (let iter = 0; iter < 320; iter++) {
+      const alpha = Math.pow(1 - iter / 320, 1.8);
+
+      // Repulsion
+      for (let a = 0; a < n; a++) {
+        for (let b = a + 1; b < n; b++) {
+          const na = nodes[a], nb = nodes[b];
+          let dx = nb.x - na.x || 0.1, dy = nb.y - na.y || 0.1;
+          const d = Math.sqrt(dx * dx + dy * dy) || 1;
+          const minD = (na.pw + nb.pw) / 2 + 36;
+          const rep  = (K * K / d) * alpha * 0.5;
+          const ovlp = d < minD ? (minD - d) * 2.5 * alpha : 0;
+          const f = rep + ovlp;
+          na.vx -= (dx / d) * f; na.vy -= (dy / d) * f;
+          nb.vx += (dx / d) * f; nb.vy += (dy / d) * f;
         }
       }
-      for (const edge of edges) {
-        const na = nodes[edge.si]; const nb = nodes[edge.ti];
-        let ddx = nb.x - na.x; let ddy = nb.y - na.y;
-        const dd = Math.sqrt(ddx * ddx + ddy * ddy) || 1;
-        const rest = K * (1.1 - edge.w * 0.04);
-        const ff = (dd - rest) * 0.2 * alpha;
-        na.vx += (ddx / dd) * ff; na.vy += (ddy / dd) * ff;
-        nb.vx -= (ddx / dd) * ff; nb.vy -= (ddy / dd) * ff;
+
+      // Attraction along edges
+      for (const e of edges) {
+        const na = nodes[e.si], nb = nodes[e.ti];
+        const dx = nb.x - na.x, dy = nb.y - na.y;
+        const d  = Math.sqrt(dx * dx + dy * dy) || 1;
+        const rest = K * Math.max(0.35, 1.15 - e.w * 0.05);
+        const f = (d - rest) * 0.18 * alpha;
+        na.vx += (dx / d) * f; na.vy += (dy / d) * f;
+        nb.vx -= (dx / d) * f; nb.vy -= (dy / d) * f;
       }
+
+      // Centre gravity + integrate
       for (const node of nodes) {
-        node.vx -= node.x * 0.012 * alpha;
-        node.vy -= node.y * 0.012 * alpha;
-        node.x += node.vx * 0.4;
-        node.y += node.vy * 0.4;
-        node.vx *= 0.7;
-        node.vy *= 0.7;
+        node.vx -= node.x * 0.011 * alpha;
+        node.vy -= node.y * 0.011 * alpha;
+        node.x  += node.vx * 0.42;
+        node.y  += node.vy * 0.42;
+        node.vx *= 0.68;
+        node.vy *= 0.68;
       }
     }
 
-    {
-      const xs = nodes.map(nd => nd.x), ys = nodes.map(nd => nd.y);
-      const mnX = Math.min(...xs), mxX = Math.max(...xs);
-      const mnY = Math.min(...ys), mxY = Math.max(...ys);
-      const spanX = mxX - mnX || 1, spanY = mxY - mnY || 1;
-      nodes.forEach(nd => {
-        nd.x = ((nd.x - mnX) / spanX - 0.5) * 600;
-        nd.y = ((nd.y - mnY) / spanY - 0.5) * 400;
-      });
-    }
+    // Normalise to canvas space
+    const xs = nodes.map(nd => nd.x), ys = nodes.map(nd => nd.y);
+    const mnX = Math.min(...xs), mxX = Math.max(...xs);
+    const mnY = Math.min(...ys), mxY = Math.max(...ys);
+    const spanX = mxX - mnX || 1, spanY = mxY - mnY || 1;
+    nodes.forEach(nd => {
+      nd.x = ((nd.x - mnX) / spanX - 0.5) * 740;
+      nd.y = ((nd.y - mnY) / spanY - 0.5) * 520;
+    });
 
     graphRef.current = { nodes, edges };
     setReady(true);
 
     function doFit() {
       if (!containerRef.current) return;
-      var rect = containerRef.current.getBoundingClientRect();
-      if (rect.width === 0 || rect.height === 0) { requestAnimationFrame(doFit); return; }
-      var allX = nodes.map(nd => nd.x);
-      var allY = nodes.map(nd => nd.y);
-      var minX = Math.min.apply(null, allX) - 40;
-      var maxX = Math.max.apply(null, allX) + 40;
-      var minY = Math.min.apply(null, allY) - 40;
-      var maxY = Math.max.apply(null, allY) + 40;
-      var gW = maxX - minX, gH = maxY - minY;
-      var newScale = Math.min(rect.width / gW, rect.height / gH) * 0.92;
+      const rect = containerRef.current.getBoundingClientRect();
+      if (!rect.width || !rect.height) { requestAnimationFrame(doFit); return; }
+      const pad = 56;
+      const minX = Math.min(...nodes.map(nd => nd.x - nd.pw / 2)) - pad;
+      const maxX = Math.max(...nodes.map(nd => nd.x + nd.pw / 2)) + pad;
+      const minY = Math.min(...nodes.map(nd => nd.y - PILL_H / 2)) - pad;
+      const maxY = Math.max(...nodes.map(nd => nd.y + PILL_H / 2)) + pad;
+      const newScale = Math.min(rect.width / (maxX - minX), rect.height / (maxY - minY)) * 0.94;
       setScale(newScale);
-      setTx(rect.width / 2 - ((minX + maxX) / 2) * newScale);
+      setTx(rect.width  / 2 - ((minX + maxX) / 2) * newScale);
       setTy(rect.height / 2 - ((minY + maxY) / 2) * newScale);
     }
     requestAnimationFrame(doFit);
   }, []); // eslint-disable-line
 
-  const PILL_SCALE = 0.85;
-  const edgeAlpha = Math.max(0, Math.min(1, (scale - 0.2) / 0.4));
-
+  // ── Interaction handlers ────────────────────────────────────────────────────
   function handleWheel(e) {
     e.preventDefault();
     if (!containerRef.current) return;
-    var rect = containerRef.current.getBoundingClientRect();
-    var mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    var factor = e.deltaY < 0 ? 1.12 : 0.89;
-    setScale(prev => Math.max(0.12, Math.min(3, prev * factor)));
-    setTx(prev => mx - (mx - prev) * factor);
-    setTy(prev => my - (my - prev) * factor);
+    const rect   = containerRef.current.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    const factor = e.deltaY < 0 ? 1.12 : 0.89;
+    setScale(p => Math.max(0.12, Math.min(4, p * factor)));
+    setTx(p => mx - (mx - p) * factor);
+    setTy(p => my - (my - p) * factor);
   }
   function handleMouseDown(e) {
     if (e.target.closest('[data-node]')) return;
@@ -137,13 +147,9 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
     setTy(dragStart.current.oy + e.clientY - dragStart.current.cy);
   }
   function handleMouseUp() { dragStart.current = null; }
-
-  // Touch pan support for mobile
-  const touchStart = useRef(null);
   function handleTouchStart(e) {
-    if (e.touches.length === 1) {
+    if (e.touches.length === 1)
       touchStart.current = { cx: e.touches[0].clientX, cy: e.touches[0].clientY, ox: tx, oy: ty };
-    }
   }
   function handleTouchMove(e) {
     if (!touchStart.current || e.touches.length !== 1) return;
@@ -155,10 +161,9 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
 
   const { nodes, edges } = graphRef.current || { nodes: [], edges: [] };
 
-  // Render as a plain Widget-style card — no outer wrapper, no rogue margins
   return (
     <Card style={{ height: 'auto' }}>
-      {/* Header */}
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 14px',
         borderBottom: graphCollapsed ? 'none' : "1px solid var(--dl-border)",
         flexShrink:0, cursor:'pointer' }}
@@ -168,21 +173,22 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
           textTransform:'uppercase', color:"var(--dl-highlight)", flex:1 }}>Map</span>
         {!graphCollapsed && (
           <span style={{ fontFamily:mono, fontSize:9, color:"var(--dl-middle)" }}>
-            {(allTags||[]).length + 1} projects · pinch/scroll to zoom
+            {(allTags||[]).length} projects · scroll to zoom
           </span>
         )}
       </div>
 
-      {/* Canvas */}
+      {/* ── Canvas ─────────────────────────────────────────────────────────── */}
       {!graphCollapsed && (
         <div ref={containerRef}
-          style={{ height: 340, position:'relative', overflow:'hidden',
+          style={{ height:400, position:'relative', overflow:'hidden',
             cursor: dragStart.current ? 'grabbing' : 'grab' }}
           onWheel={handleWheel}
           onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
           onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}>
+
           {!ready && (
             <div style={{ position:'absolute', inset:0, display:'flex',
               alignItems:'center', justifyContent:'center',
@@ -190,32 +196,55 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
               Laying out graph…
             </div>
           )}
+
           {ready && (
-            <svg width="100%" height="100%" style={{ display:'block' }}>
+            <svg width="100%" height="100%" style={{ display:'block', position:'absolute', inset:0 }}>
+              {/* Dot-grid background */}
               <defs>
-                <pattern id="dotgrid" x={tx % (24 * scale)} y={ty % (24 * scale)}
+                <pattern id="mapgrid" x={tx % (24 * scale)} y={ty % (24 * scale)}
                   width={24 * scale} height={24 * scale} patternUnits="userSpaceOnUse">
                   <circle cx={12 * scale} cy={12 * scale}
-                    r={Math.max(0.6, scale * 0.7)} fill={"var(--dl-border2)"} opacity="0.7"/>
+                    r={Math.max(0.5, scale * 0.65)} fill="var(--dl-border2)" opacity="0.6"/>
                 </pattern>
               </defs>
-              <rect width="100%" height="100%" fill="url(#dotgrid)"/>
+              <rect width="100%" height="100%" fill="url(#mapgrid)"/>
+
               <g transform={`translate(${tx},${ty}) scale(${scale})`}>
-                {edgeAlpha > 0 && edges.map((edge, i) => {
-                  const na = nodes[edge.si]; const nb = nodes[edge.ti];
+                {/* Gradient defs live inside the transform so userSpaceOnUse coords match */}
+                <defs>
+                  {edges.map((e, i) => {
+                    const na = nodes[e.si], nb = nodes[e.ti];
+                    if (!na || !nb) return null;
+                    return (
+                      <linearGradient key={i} id={`eg${i}`} gradientUnits="userSpaceOnUse"
+                        x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}>
+                        <stop offset="0%"   stopColor={na.color} stopOpacity={0.55}/>
+                        <stop offset="100%" stopColor={nb.color} stopOpacity={0.55}/>
+                      </linearGradient>
+                    );
+                  })}
+                </defs>
+
+                {/* Edges */}
+                {edges.map((e, i) => {
+                  const na = nodes[e.si], nb = nodes[e.ti];
                   if (!na || !nb) return null;
+                  const isHovEdge = hovered === e.si || hovered === e.ti;
+                  const baseOp    = Math.min(0.55, 0.08 + e.w * 0.04);
                   return (
                     <line key={i} x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}
-                      stroke={na.color}
-                      strokeWidth={Math.max(0.4, edge.w * 0.35)}
-                      strokeOpacity={edgeAlpha * 0.15 * Math.min(1, edge.w / 2)}/>
+                      stroke={`url(#eg${i})`}
+                      strokeWidth={isHovEdge ? Math.max(1, e.w * 0.55) : Math.max(0.5, e.w * 0.3)}
+                      strokeOpacity={isHovEdge ? Math.min(0.85, baseOp * 2.5) : baseOp}
+                      strokeLinecap="round"/>
                   );
                 })}
+
+                {/* Pill nodes */}
                 {nodes.map((node, i) => {
-                  const isPill = scale >= PILL_SCALE;
                   const isHov = hovered === i;
-                  const col = node.color;
-                  const pw = node.label.length * 7.2 + 26;
+                  const col   = node.color;
+                  const pw    = node.pw;
                   return (
                     <g key={node.id} data-node="1"
                       transform={`translate(${node.x},${node.y})`}
@@ -223,49 +252,40 @@ export function MapCard({ allTags, connections, onSelectProject, token, userId, 
                       onClick={() => onSelectProject(node.id)}
                       onMouseEnter={() => setHovered(i)}
                       onMouseLeave={() => setHovered(null)}>
-                      {isPill ? (
-                        <>
-                          <rect x={-pw/2} y={-13} width={pw} height={26} rx={13}
-                            fill={isHov ? col+'33' : col+'18'}
-                            stroke={isHov ? col : col+'55'}
-                            strokeWidth={isHov ? 1.5 : 1}/>
-                          <text x={0} y={4} textAnchor="middle"
-                            style={{ fontFamily:mono, fontSize:10.5, fill:isHov ? col : col+'cc',
-                              letterSpacing:'0.06em', pointerEvents:'none', userSelect:'none' }}>
-                            {node.label}
-                          </text>
-                        </>
-                      ) : (
-                        <>
-                          <circle r={node.r}
-                            fill={isHov ? col+'33' : col+'18'}
-                            stroke={isHov ? col : col+'55'}
-                            strokeWidth={isHov ? 2 : 1.5}/>
-                          {scale >= 0.32 && (
-                            <text y={node.r + 11} textAnchor="middle"
-                              style={{ fontFamily:mono, fontSize:Math.max(8, 9 / scale),
-                                fill:col+'99', pointerEvents:'none', userSelect:'none' }}>
-                              {node.label.length > 9 ? node.label.slice(0,8)+'…' : node.label}
-                            </text>
-                          )}
-                        </>
+                      {/* Soft glow behind hovered pill */}
+                      {isHov && (
+                        <ellipse rx={pw / 2 + 10} ry={PILL_H / 2 + 10}
+                          fill={col} fillOpacity={0.10}/>
                       )}
+                      {/* Pill body */}
+                      <rect x={-pw / 2} y={-PILL_H / 2} width={pw} height={PILL_H} rx={PILL_RX}
+                        fill={isHov ? col + '2a' : col + '16'}
+                        stroke={isHov ? col : col + '60'}
+                        strokeWidth={isHov ? 1.5 : 1}/>
+                      {/* Label */}
+                      <text x={0} y={4} textAnchor="middle"
+                        style={{ fontFamily:mono, fontSize:10, letterSpacing:'0.055em',
+                          fill: isHov ? col : col + 'bb',
+                          pointerEvents:'none', userSelect:'none' }}>
+                        {node.label}
+                      </text>
                     </g>
                   );
                 })}
               </g>
             </svg>
           )}
+
           {/* Zoom buttons */}
           <div style={{ position:'absolute', bottom:12, right:12,
             display:'flex', flexDirection:'column', gap:4 }}>
             {[{label:'+',f:1.25},{label:'−',f:0.8}].map(({label,f}) => (
               <button key={label}
-                onClick={() => setScale(prev => Math.max(0.12, Math.min(3, prev * f)))}
+                onClick={() => setScale(p => Math.max(0.12, Math.min(4, p * f)))}
                 style={{ width:30, height:30, background:"var(--dl-surface)",
                   border:"1px solid var(--dl-border2)", borderRadius:6,
-                  color:"var(--dl-highlight)", fontFamily:mono, fontSize:16, cursor:'pointer',
-                  display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  color:"var(--dl-highlight)", fontFamily:mono, fontSize:16,
+                  cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
                 {label}
               </button>
             ))}
