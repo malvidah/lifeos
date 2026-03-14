@@ -218,7 +218,11 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   // Build a 42-cell (6-row) continuous grid for a given year/month.
   // Cells before day 1 come from the previous month; cells after the last day
   // come from the next month. Each cell: { day, dateKey, isOverflow }.
+  // Memoized — grid structure only depends on year/month, not render state.
+  const gridCache = useRef({});
   function buildGrid(yr, mo) {
+    const cacheKey = `${yr}-${mo}`;
+    if (gridCache.current[cacheKey]) return gridCache.current[cacheKey];
     const firstDow   = new Date(yr, mo, 1).getDay();
     const daysInMonth = new Date(yr, mo + 1, 0).getDate();
 
@@ -252,6 +256,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
       cells.push({ day: nextDay, dateKey: key, isOverflow: true });
       nextDay++;
     }
+    gridCache.current[cacheKey] = cells;
     return cells;
   }
 
