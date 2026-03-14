@@ -1,14 +1,16 @@
 import { withAuth } from '../_lib/auth.js';
+import { extractProjectTags, extractTitle } from '@/lib/parseBlocks.js';
 
 // GET /api/notes?project=big+think  → notes tagged to that project
 // GET /api/notes                    → all notes (global / all-projects view)
 // GET /api/notes?id=UUID            → single note
 //
-// POST /api/notes  { title, content, project_tags? }
-//   Create a new note. Notes are NOT date-scoped — they live in project space.
-//   Link to a note from journal/tasks via the /n chip; that sets data-note-link.
+// POST /api/notes  { content, origin_project? }
+//   Create a new note. project_tags derived from content + origin_project.
 //
-// PATCH /api/notes  { id, title?, content?, project_tags? }
+// PATCH /api/notes  { id, content }
+//   Update a note. project_tags and title recomputed from content.
+//
 // DELETE /api/notes?id=UUID
 
 export const GET = withAuth(async (req, { supabase, user }) => {
@@ -30,7 +32,6 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (project) {
     query = query.contains('project_tags', [project.toLowerCase()]);
   }
-  // else: no filter → all notes (global view)
 
   const { data, error } = await query.order('updated_at', { ascending: false });
   if (error) throw error;
@@ -38,15 +39,21 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 });
 
 export const POST = withAuth(async (req, { supabase, user }) => {
-  const { title = '', content = '', project_tags = [] } = await req.json();
+  const { content = '', origin_project } = await req.json();
+
+  // Derive project_tags from content chips + origin_project
+  const contentTags = extractProjectTags(content);
+  const tags = origin_project
+    ? [...new Set([...contentTags, origin_project.toLowerCase()])]
+    : contentTags;
 
   const { data, error } = await supabase
     .from('notes')
     .insert({
       user_id:      user.id,
-      title,
+      title:        extractTitle(content),
       content,
-      project_tags: project_tags.map(t => t.toLowerCase()),
+      project_tags: tags,
     })
     .select('id, title, content, project_tags, created_at, updated_at')
     .single();
@@ -56,13 +63,15 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 });
 
 export const PATCH = withAuth(async (req, { supabase, user }) => {
-  const { id, title, content, project_tags } = await req.json();
+  const { id, content } = await req.json();
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
 
   const patch = {};
-  if (title        !== undefined) patch.title        = title;
-  if (content      !== undefined) patch.content      = content;
-  if (project_tags !== undefined) patch.project_tags = project_tags.map(t => t.toLowerCase());
+  if (content !== undefined) {
+    patch.content      = content;
+    patch.title        = extractTitle(content);
+    patch.project_tags = extractProjectTags(content);
+  }
 
   const { data, error } = await supabase
     .from('notes').update(patch)
