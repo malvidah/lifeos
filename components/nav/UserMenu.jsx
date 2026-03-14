@@ -36,6 +36,7 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
         const settings = d?.data ?? {};
         if(settings.ouraToken){setOuraKey(settings.ouraToken);setOuraConnected(true);}
         if(settings.garminTokens?.oauth1){setGarminConnected(true);}
+        if(settings.stravaToken?.access_token){setStravaConnected(true);}
       }).catch(()=>{});
     // Fetch plan status
     const _sbPlan = createClient();
@@ -49,8 +50,6 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
         plan: premRow.data?.data?.plan || null,
       });
     }).catch(()=>{});
-    fetch("/api/entries?date=0000-00-00&type=strava_token",{headers:{Authorization:`Bearer ${token}`}})
-      .then(r=>r.json()).then(d=>{if(d?.data?.access_token)setStravaConnected(true);}).catch(()=>{});
     // Check Apple Health data + Claude MCP connection (use singleton — no new GoTrueClient)
     const _sb = createClient();
     _sb.from("health_metrics").select("id").eq("source","apple").limit(5)
