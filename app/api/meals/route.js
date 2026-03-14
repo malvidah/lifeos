@@ -51,24 +51,21 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) required' }, { status: 400 });
 
   const parsed = parseMealItems(items);
-  // Full-replace: delete existing items for this date, insert new ones
-  const { error: delErr } = await supabase
-    .from('meal_items').delete()
-    .eq('user_id', user.id).eq('date', date);
-  if (delErr) throw delErr;
 
-  if (parsed.length > 0) {
-    const rows = parsed.map(p => ({
-      user_id:     user.id,
-      date,
-      position:    p.position,
-      content:     p.content,
-      ai_calories: p.ai_calories,
-      ai_protein:  p.ai_protein,
-    }));
-    const { error: insErr } = await supabase.from('meal_items').insert(rows);
-    if (insErr) throw insErr;
-  }
+  // Atomic replace via RPC — DELETE+INSERT in one Postgres transaction.
+  const rows = parsed.map(p => ({
+    position:    p.position,
+    content:     p.content,
+    ai_calories: p.ai_calories ?? null,
+    ai_protein:  p.ai_protein ?? null,
+  }));
+
+  const { error: rpcErr } = await supabase.rpc('batch_replace_meal_items', {
+    p_user_id: user.id,
+    p_date:    date,
+    p_items:   rows,
+  });
+  if (rpcErr) throw rpcErr;
 
   return Response.json({ ok: true, items: parsed.length });
 });
