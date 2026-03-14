@@ -34,10 +34,9 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
   const [displayOff, setDisplayOff] = useState(initYear * 12 + initMonth);
 
   // Responsive sizing — derive CELL_H from available height so months pack tight
-  // SSR-safe: start at 1200 to avoid hydration mismatch; real value set after mount
-  const [vw, setVw] = useState(1200);
+  // Component is loaded with ssr:false, so window is always available at init
+  const [vw, setVw] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1200);
   useEffect(()=>{
-    setVw(window.innerWidth); // sync on first client render
     const onResize = () => setVw(window.innerWidth);
     window.addEventListener('resize', onResize);
     return ()=>window.removeEventListener('resize', onResize);
