@@ -73,7 +73,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
           if(garminData && !garminData.error && Object.keys(garminData).length > 0) {
             setH(p=>({...p,
               sleepHrs:       garminData.sleepHrs        ?? "",
-              sleepEff:       garminData.sleepQuality     ?? "",
+              sleepEff:       garminData.sleepEff          ?? "",
               hrv:            garminData.hrv              ?? "",
               rhr:            garminData.rhr              ?? "",
               activeCalories: garminData.activeCalories   ?? "",
@@ -115,7 +115,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
         setH(p=>({...p,
           sleepScore:     data.sleepScore      ?? "",
           sleepHrs:       data.sleepHrs        ?? "",
-          sleepEff:       data.sleepQuality    ?? "",
+          sleepEff:       data.sleepEff        ?? "",
           readinessScore: data.readinessScore  ?? "",
           hrv:            data.hrv             ?? "",
           rhr:            data.rhr             ?? "",

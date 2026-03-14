@@ -44,12 +44,12 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .sort((a, b) => (b.total_sleep_duration ?? 0) - (a.total_sleep_duration ?? 0))[0] ?? null;
 
   const result = {};
-  if (daily) result.sleepQuality = daily.contributors?.sleep_efficiency != null ? String(daily.contributors.sleep_efficiency) : '';
+  if (daily) result.sleepEff = daily.contributors?.sleep_efficiency != null ? String(daily.contributors.sleep_efficiency) : '';
   if (mainSession) {
     if (mainSession.lowest_heart_rate != null)  result.rhr = String(Math.round(mainSession.lowest_heart_rate));
     if (mainSession.average_hrv != null)        result.hrv = String(Math.round(mainSession.average_hrv));
     if (mainSession.total_sleep_duration)       result.sleepHrs = (mainSession.total_sleep_duration / 3600).toFixed(1);
-    if (!result.sleepQuality && mainSession.efficiency) result.sleepQuality = String(mainSession.efficiency);
+    if (!result.sleepEff && mainSession.efficiency) result.sleepEff = String(mainSession.efficiency);
   }
 
   const activity = (activityData.data ?? []).find(d => d.day === date) ?? null;
@@ -90,7 +90,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     hrv:        result.hrv        ? Number(result.hrv)        : null,
     rhr:        result.rhr        ? Number(result.rhr)        : null,
     sleep_hrs:  result.sleepHrs   ? Number(result.sleepHrs)   : null,
-    sleep_eff:  result.sleepQuality ? Number(result.sleepQuality) : null,
+    sleep_eff:  result.sleepEff ? Number(result.sleepEff) : null,
     steps:      result.steps      ? Number(result.steps)      : null,
     active_min: result.activeMinutes ? Number(result.activeMinutes) : null,
   };

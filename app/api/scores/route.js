@@ -12,7 +12,6 @@ function metricsToLegacy(row) {
     hrv:          row.hrv        != null ? String(row.hrv)       : undefined,
     rhr:          row.rhr        != null ? String(row.rhr)       : undefined,
     sleepHrs:     row.sleep_hrs  != null ? String(row.sleep_hrs) : undefined,
-    sleepQuality: row.sleep_eff  != null ? String(row.sleep_eff) : undefined,
     sleepEff:     row.sleep_eff  != null ? String(row.sleep_eff) : undefined,
     steps:        row.steps      != null ? String(row.steps)     : undefined,
     activeMinutes:row.active_min != null ? String(row.active_min): undefined,

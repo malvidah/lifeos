@@ -36,7 +36,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       if (sleepSecs > 0) result.sleepHrs = (sleepSecs / 3600).toFixed(1);
       const awakeSecs = dto?.awakeSleepSeconds ?? 0;
       const totalBed = sleepSecs + awakeSecs;
-      if (totalBed > 0) result.sleepQuality = String(Math.round((sleepSecs / totalBed) * 100));
+      if (totalBed > 0) result.sleepEff = String(Math.round((sleepSecs / totalBed) * 100));
       if (sleepData.avgOvernightHrv > 0) result.hrv = String(Math.round(sleepData.avgOvernightHrv));
       if (sleepData.restingHeartRate > 0) result.rhr = String(sleepData.restingHeartRate);
     }
@@ -75,7 +75,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       hrv:        result.hrv        ? Number(result.hrv)        : null,
       rhr:        result.rhr        ? Number(result.rhr)        : null,
       sleep_hrs:  result.sleepHrs   ? Number(result.sleepHrs)   : null,
-      sleep_eff:  result.sleepQuality ? Number(result.sleepQuality) : null,
+      sleep_eff:  result.sleepEff ? Number(result.sleepEff) : null,
       steps:      result.steps      ? Number(result.steps)      : null,
       active_min: result.activeMinutes ? Number(result.activeMinutes) : null,
     };

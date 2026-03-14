@@ -14,7 +14,7 @@ function metricsToLegacy(row) {
   if (row.hrv        != null) out.hrv          = String(row.hrv);
   if (row.rhr        != null) out.rhr          = String(row.rhr);
   if (row.sleep_hrs  != null) out.sleepHrs     = String(row.sleep_hrs);
-  if (row.sleep_eff  != null) { out.sleepQuality = String(row.sleep_eff); out.sleepEff = String(row.sleep_eff); }
+  if (row.sleep_eff  != null) out.sleepEff = String(row.sleep_eff);
   if (row.steps      != null) out.steps        = String(row.steps);
   if (row.active_min != null) out.activeMinutes = String(row.active_min);
   return out;
