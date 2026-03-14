@@ -352,11 +352,14 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   async function saveJournalEdit(date, lineIndex, newText, blockLength = 1) {
     const current = await dbLoad(date, 'journal', token);
     if (current === null) return;
-    const lines = (current || '').split('\n');
-    // Replace the original block (blockLength lines starting at lineIndex) with
-    // the edited text (which may itself span multiple lines after editing).
-    lines.splice(lineIndex, blockLength, ...newText.split('\n'));
-    const updated = lines.join('\n');
+    // Journal content is HTML (<p>…</p> blocks). Split into blocks for editing.
+    const paraRe = /<p\b[^>]*>[\s\S]*?<\/p>/gi;
+    const blocks = (current || '').match(paraRe) || [];
+    // Build new block HTML for the edited text
+    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const newBlocks = newText.split('\n').map(line => `<p>${escHtml(line)}</p>`);
+    blocks.splice(lineIndex, blockLength, ...newBlocks);
+    const updated = blocks.join('');
     await dbSave(date, 'journal', updated, token);
     // Update module-level cache so daily view reflects immediately
     MEM[`${userId}:${date}:journal`] = updated;
@@ -451,8 +454,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const entryText = hasTag ? text.trim() : `${text.trim()} ${chip}`;
     const current = await dbLoad(today, 'journal', token);
     const existing = (typeof current === 'string' ? current : '') || '';
-    const updated = existing ? existing.trimEnd() + '\n' + entryText : entryText;
-    const newLineIndex = updated.split('\n').lastIndexOf(entryText);
+    // Journal content is HTML — append as a new <p> block
+    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const newBlock = `<p>${escHtml(entryText)}</p>`;
+    const updated = existing ? existing + newBlock : newBlock;
+    const paraRe = /<p\b[^>]*>[\s\S]*?<\/p>/gi;
+    const allBlocks = updated.match(paraRe) || [];
+    const newLineIndex = allBlocks.length - 1;
     await dbSave(today, 'journal', updated, token);
     MEM[`${userId}:${today}:journal`] = updated;
     window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
