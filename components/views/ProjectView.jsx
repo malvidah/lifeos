@@ -28,8 +28,8 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   if (editing) {
     return (
       <DayLabEditor
-        value={entry.text}
-        onBlur={text => onSave(text)}
+        value={entry.content || entry.text}
+        onBlur={html => onSave(html)}
         placeholder=""
         projectNames={ctxProjects}
         noteNames={ctxNotes.notes}
@@ -174,6 +174,18 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   }, [project, token]); // eslint-disable-line
 
   const [entries, setEntries] = useState(null); // null=loading, obj=loaded
+  const [entriesRev, setEntriesRev] = useState(0);
+
+  // Listen for daylab:refresh events to refetch entries when journal/tasks change
+  useEffect(() => {
+    const handler = (e) => {
+      if (!e.detail?.types || e.detail.types.includes('journal') || e.detail.types.includes('tasks')) {
+        setEntriesRev(r => r + 1);
+      }
+    };
+    window.addEventListener('daylab:refresh', handler);
+    return () => window.removeEventListener('daylab:refresh', handler);
+  }, []);
   const pvTaskFilter = taskFilter;
   const setPvTaskFilter = setTaskFilter;
   const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}
@@ -371,9 +383,11 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const meta = useMemo(() => ((projectsMeta || {})[project] || {}), [projectsMeta, project]);
 
   // Load entries when project changes — includes LOOK FOR search terms from settings
+  // Also refetches when entriesRev bumps (daylab:refresh events)
   useEffect(() => {
     if (!token || !project) return;
-    setEntries(null);
+    // Only show loading skeleton on initial load, not on refresh
+    if (entriesRev === 0) setEntries(null);
     // Load search terms for this project first, then fetch entries
     api.get('/api/settings', token)
       .then(s => {
@@ -399,7 +413,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
         setEntries(d);
       })
       .catch(() => setEntries({ journalEntries: [], taskEntries: [] }));
-  }, [project, token]); // eslint-disable-line
+  }, [project, token, entriesRev]); // eslint-disable-line
 
   // Group journal entries by date (oldest first)
   const journalByDate = useMemo(() => {
@@ -442,26 +456,32 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     setProjectsMeta(updated, { skipHistory: true });
   }
 
-  async function saveJournalEdit(date, lineIndex, newText, blockLength = 1) {
+  async function saveJournalEdit(date, lineIndex, newHtml, blockLength = 1) {
     const current = await dbLoad(date, 'journal', token);
     if (current === null) return;
     // Journal content is HTML (<p>…</p> blocks). Split into blocks for editing.
     const paraRe = /<p\b[^>]*>[\s\S]*?<\/p>/gi;
     const blocks = (current || '').match(paraRe) || [];
-    // Build new block HTML for the edited text
-    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const newBlocks = newText.split('\n').map(line => `<p>${escHtml(line)}</p>`);
+    // Editor returns HTML — extract <p> blocks from it
+    const newBlocks = newHtml.match(paraRe) || [`<p>${newHtml}</p>`];
     blocks.splice(lineIndex, blockLength, ...newBlocks);
     const updated = blocks.join('');
     await dbSave(date, 'journal', updated, token);
     // Update module-level cache so daily view reflects immediately
     MEM[`${userId}:${date}:journal`] = updated;
     window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
+    // Convert HTML to plain text for local state + tag registration
+    const newText = newHtml
+      .replace(/<span[^>]*data-project-tag="([^"]+)"[^>]*>[^<]*<\/span>/g, '{$1}')
+      .replace(/<span[^>]*data-note-link="([^"]+)"[^>]*>[^<]*<\/span>/g, '[$1]')
+      .replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+      .replace(/\s+/g, ' ').trim();
     registerNewTags(newText);
     setEntries(prev => prev ? {
       ...prev,
       journalEntries: prev.journalEntries.map(e =>
-        (e.date === date && e.lineIndex === lineIndex) ? { ...e, text: newText } : e
+        (e.date === date && e.lineIndex === lineIndex) ? { ...e, text: newText, content: newHtml } : e
       ),
     } : prev);
   }
@@ -716,7 +736,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                   key={`${date}-${entry.lineIndex}`}
                   entry={entry} date={date}
                   editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
-                  onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text })}
+                  onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text, content: entry.content })}
                   onSave={async (text) => { await saveJournalEdit(date, entry.lineIndex, text, entry.blockLength ?? 1); setEditingEntry(null); }}
                   dimTag={project === '__everything__' ? null : project}
                 />

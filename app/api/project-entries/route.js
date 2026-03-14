@@ -98,7 +98,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       const matchesProject = isEverything || tags.includes(project);
       const matchesTerms = terms.length > 0 && terms.some(t => text.toLowerCase().includes(t.toLowerCase()));
       if (matchesProject || (!isEverything && matchesTerms)) {
-        journalEntries.push({ date, lineIndex, text, project_tags: tags, blockLength: 1 });
+        journalEntries.push({ date, lineIndex, text, content: block.content, project_tags: tags, blockLength: 1 });
       }
     });
   }
