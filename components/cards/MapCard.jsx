@@ -19,6 +19,7 @@ export function MapCard({ allTags, connections, onSelectProject }) {
   const touchStart   = useRef(null);
 
   useEffect(() => {
+    setReady(false);
     const tagList = allTags || [];
     if (!tagList.length) return;
 
@@ -124,7 +125,7 @@ export function MapCard({ allTags, connections, onSelectProject }) {
       setTy(rect.height / 2 - ((minY + maxY) / 2) * newScale);
     }
     requestAnimationFrame(doFit);
-  }, []); // eslint-disable-line
+  }, [allTags, connections]); // eslint-disable-line
 
   // ── Interaction handlers ────────────────────────────────────────────────────
   function handleWheel(e) {
