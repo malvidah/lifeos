@@ -408,6 +408,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   // event (from dropdown selection) does not immediately navigate away.
   const justInsertedRef = useRef(false);
   const suppressOnUpdateRef = useRef(false);
+  // Block onUpdate during initial editor mount — TipTap may fire onUpdate when
+  // extensions process the initial content, which stashes normalized HTML in
+  // pendingRef via markDirty. On hard refresh the flush then re-saves (duplicate).
+  const initialLoadDoneRef = useRef(false);
 
   const renderRef = useRef({
     onStart(props, key) {
@@ -676,6 +680,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
     onUpdate({ editor }) {
       if (suppressOnUpdateRef.current) return;
+      if (!initialLoadDoneRef.current) return;  // skip initial mount noise
       onUpdateRef.current?.(editor.getHTML());
     },
 
@@ -693,6 +698,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   });
 
   useEffect(() => { editorRef.current = editor; }, [editor]);
+
+  // Mark editor as initialized after mount settles — unblocks onUpdate
+  useEffect(() => {
+    if (!editor) return;
+    const id = requestAnimationFrame(() => { initialLoadDoneRef.current = true; });
+    return () => cancelAnimationFrame(id);
+  }, [editor]);
 
   useEffect(() => {
     if (!editor || !autoFocus) return;
@@ -745,6 +757,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => {
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
+    flushedRef.current = false; // reset for new content
     if (!editor.isFocused) {
       // Pass emitUpdate=false so programmatic syncs don't trigger onUpdate → setValue loops.
       if (noteTitleRef.current) {
