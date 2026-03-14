@@ -159,84 +159,101 @@ async function executeTool(name, input, userId) {
   const date = input.date || today;
 
   if (name === 'get_today') {
-    const { data: rows } = await svc.from('entries')
-      .select('type, data').eq('date', date).eq('user_id', userId);
-    const result = {};
-    for (const r of rows || []) result[r.type] = r.data;
-
-    const tasks = (result.tasks || []).filter(t => t.text?.trim());
-    const meals = (result.meals || []).filter(m => m.text?.trim());
-    const activity = (result.activity || []).filter(a => a.text?.trim());
-    const notes = result.notes || '';
+    const [journalR, tasksR, mealsR] = await Promise.all([
+      svc.from('journal_blocks').select('content, position')
+        .eq('user_id', userId).eq('date', date).order('position'),
+      svc.from('tasks').select('text, done')
+        .eq('user_id', userId).eq('date', date).order('position'),
+      svc.from('meal_items').select('content')
+        .eq('user_id', userId).eq('date', date).order('position'),
+    ]);
 
     return {
       date,
-      tasks: tasks.map(t => ({ text: t.text, done: t.done })),
-      meals: meals.map(m => m.text),
-      activity: activity.map(a => a.text),
-      notes: notes || null,
+      notes: (journalR.data ?? []).map(r => r.content?.replace(/<[^>]+>/g, '').trim()).filter(Boolean).join('\n') || null,
+      tasks: (tasksR.data ?? []).filter(t => t.text?.trim()).map(t => ({ text: t.text, done: t.done })),
+      meals: (mealsR.data ?? []).filter(m => m.content?.trim()).map(m => m.content),
     };
   }
 
   if (name === 'add_task') {
-    const { data: existing } = await svc.from('entries').select('data')
-      .eq('date', date).eq('type', 'tasks').eq('user_id', userId).maybeSingle();
-    const current = Array.isArray(existing?.data) ? existing.data.filter(r => r.text?.trim()) : [];
-    const newRows = (input.tasks || []).map(t => ({
-      id: Date.now() + Math.random(), text: t, done: false
+    // Find the next position for this date
+    const { count } = await svc.from('tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).eq('date', date);
+    const startPos = count ?? 0;
+
+    const rows = (input.tasks || []).map((text, i) => ({
+      user_id: userId, date,
+      position: startPos + i,
+      text,
+      html: `<p>${text.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>`,
+      done: false,
     }));
-    await svc.from('entries').upsert(
-      { date, type: 'tasks', data: [...current, ...newRows], user_id: userId, updated_at: new Date().toISOString() },
-      { onConflict: 'date,type,user_id' }
-    );
-    return { added: newRows.length, tasks: newRows.map(r => r.text) };
+    if (rows.length) {
+      const { error } = await svc.from('tasks').insert(rows);
+      if (error) throw error;
+    }
+    return { added: rows.length, tasks: rows.map(r => r.text) };
   }
 
   if (name === 'complete_task') {
-    const { data: existing } = await svc.from('entries').select('data')
-      .eq('date', date).eq('type', 'tasks').eq('user_id', userId).maybeSingle();
-    const current = Array.isArray(existing?.data) ? existing.data : [];
     const done = input.done !== false;
-    const updated = current.map(r =>
-      r.text?.toLowerCase().includes(input.match.toLowerCase()) ? { ...r, done } : r
-    );
-    const matched = updated.filter((r, i) => r.done !== current[i]?.done || (done && r.text?.toLowerCase().includes(input.match.toLowerCase())));
-    await svc.from('entries').upsert(
-      { date, type: 'tasks', data: updated, user_id: userId, updated_at: new Date().toISOString() },
-      { onConflict: 'date,type,user_id' }
-    );
+    const { data: tasks } = await svc.from('tasks')
+      .select('id, text, done')
+      .eq('user_id', userId).eq('date', date);
+
+    const match = input.match.toLowerCase();
+    const matched = (tasks ?? []).filter(t => t.text?.toLowerCase().includes(match));
+    for (const t of matched) {
+      await svc.from('tasks').update({
+        done,
+        completed_at: done ? today : null,
+      }).eq('id', t.id);
+    }
     return { updated: matched.length, match: input.match, done };
   }
 
   if (name === 'add_note') {
-    const { data: existing } = await svc.from('entries').select('data')
-      .eq('date', date).eq('type', 'notes').eq('user_id', userId).maybeSingle();
-    const current = existing?.data || '';
-    const updated = current ? current + '\n\n' + input.text : input.text;
-    await svc.from('entries').upsert(
-      { date, type: 'notes', data: updated, user_id: userId, updated_at: new Date().toISOString() },
-      { onConflict: 'date,type,user_id' }
-    );
+    // Append as a new journal block
+    const { count } = await svc.from('journal_blocks')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).eq('date', date);
+    const pos = count ?? 0;
+
+    const { error } = await svc.from('journal_blocks').insert({
+      user_id: userId, date,
+      position: pos,
+      content: `<p>${input.text.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>`,
+    });
+    if (error) throw error;
     return { appended: true, date };
   }
 
   if (name === 'add_meal') {
-    const { data: existing } = await svc.from('entries').select('data')
-      .eq('date', date).eq('type', 'meals').eq('user_id', userId).maybeSingle();
-    const current = Array.isArray(existing?.data) ? existing.data.filter(r => r.text?.trim()) : [];
-    const newRows = (input.meals || []).map(t => ({ id: Date.now() + Math.random(), text: t, kcal: null }));
-    await svc.from('entries').upsert(
-      { date, type: 'meals', data: [...current, ...newRows], user_id: userId, updated_at: new Date().toISOString() },
-      { onConflict: 'date,type,user_id' }
-    );
-    return { added: newRows.length, meals: newRows.map(r => r.text) };
+    const { count } = await svc.from('meal_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId).eq('date', date);
+    const startPos = count ?? 0;
+
+    const rows = (input.meals || []).map((text, i) => ({
+      user_id: userId, date,
+      position: startPos + i,
+      content: text,
+    }));
+    if (rows.length) {
+      const { error } = await svc.from('meal_items').insert(rows);
+      if (error) throw error;
+    }
+    return { added: rows.length, meals: rows.map(r => r.content) };
   }
 
   if (name === 'add_calendar_event') {
-    const { data: stored } = await svc.from('entries').select('data')
-      .eq('date', '0000-00-00').eq('type', 'google_token').eq('user_id', userId).maybeSingle();
-    let accessToken = stored?.data?.token;
-    const refreshTok = stored?.data?.refreshToken;
+    // Read Google token from user_settings
+    const { data: settingsRow } = await svc.from('user_settings')
+      .select('data').eq('user_id', userId).maybeSingle();
+    let accessToken = settingsRow?.data?.googleToken;
+    const refreshTok = settingsRow?.data?.googleRefreshToken;
 
     if (!accessToken && refreshTok) {
       const r = await fetch('https://oauth2.googleapis.com/token', {
