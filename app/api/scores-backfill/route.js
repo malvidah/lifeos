@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { batchComputeScores } from '@/lib/scoreCalc.js';
+import { persistScores } from '@/lib/persistScores.js';
 
 // Finds all dates with health_metrics data but no health_scores entry,
 // computes scores for those gaps, and upserts them.
@@ -81,27 +82,7 @@ export async function POST(request) {
   }
 
   const allScored = batchComputeScores(legacyByDate, metricRows.length);
-  const toUpsert = allScored.filter(s => datesToScore.includes(s.date));
+  const count = await persistScores(supabase, user.id, allScored, bestByDate, datesToScore);
 
-  const BATCH = 200;
-  for (let i = 0; i < toUpsert.length; i += BATCH) {
-    const chunk = toUpsert.slice(i, i + BATCH).map(s => ({
-      user_id:         user.id,
-      date:            s.date,
-      winning_source:  bestByDate[s.date]?.source ?? 'oura',
-      sleep_score:     s.sleepScore,
-      readiness_score: s.readinessScore,
-      activity_score:  s.activityScore,
-      recovery_score:  s.recoveryScore,
-      calibrated:      s.calibrated,
-      contributors:    s.contributors,
-      computed_at:     s.computedAt,
-    }));
-    const { error: uErr } = await supabase
-      .from('health_scores')
-      .upsert(chunk, { onConflict: 'user_id,date' });
-    if (uErr) return Response.json({ error: uErr.message }, { status: 500 });
-  }
-
-  return Response.json({ ok: true, scored: toUpsert.length, total: Object.keys(legacyByDate).length });
+  return Response.json({ ok: true, scored: count, total: Object.keys(legacyByDate).length });
 }

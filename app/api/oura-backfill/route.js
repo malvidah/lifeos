@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { batchComputeScores } from '@/lib/scoreCalc.js';
+import { persistScores } from '@/lib/persistScores.js';
 
 // Backfills Oura historical data into health_metrics table.
 // Fetches in 90-day chunks to stay within Oura API limits.
@@ -149,23 +150,7 @@ export async function POST(request) {
         Object.entries(bestByDate).map(([d, r]) => [d, metricsToLegacy(r)])
       );
       const scored = batchComputeScores(legacyByDate, allMetrics.length);
-
-      const BATCH = 200;
-      for (let i = 0; i < scored.length; i += BATCH) {
-        const chunk = scored.slice(i, i + BATCH).map(s => ({
-          user_id:         user.id,
-          date:            s.date,
-          winning_source:  bestByDate[s.date]?.source ?? 'oura',
-          sleep_score:     s.sleepScore,
-          readiness_score: s.readinessScore,
-          activity_score:  s.activityScore,
-          recovery_score:  s.recoveryScore,
-          calibrated:      s.calibrated,
-          contributors:    s.contributors,
-          computed_at:     s.computedAt,
-        }));
-        await supabase.from('health_scores').upsert(chunk, { onConflict: 'user_id,date' });
-      }
+      await persistScores(supabase, user.id, scored, bestByDate);
     }
   } catch (scoreErr) {
     errors.push(`score_batch: ${scoreErr.message}`);

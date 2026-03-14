@@ -4,6 +4,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { batchComputeScores } from '@/lib/scoreCalc.js';
+import { persistScores } from '@/lib/persistScores.js';
 
 const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
 
@@ -82,24 +83,10 @@ export async function GET(request) {
         const legacyByDate = Object.fromEntries(
           Object.entries(bestByDate).map(([d, r]) => [d, metricsToLegacy(r)])
         );
-        const computed = batchComputeScores(legacyByDate, metricRows.length)
-          .filter(s => s.date >= yesterday);
-
-        if (computed.length) {
-          await sb.from('health_scores').upsert(
-            computed.map(s => ({
-              user_id, date: s.date,
-              winning_source: bestByDate[s.date]?.source ?? 'oura',
-              sleep_score:     s.sleepScore,
-              readiness_score: s.readinessScore,
-              activity_score:  s.activityScore,
-              recovery_score:  s.recoveryScore,
-              calibrated:      s.calibrated,
-              contributors:    s.contributors,
-              computed_at:     s.computedAt,
-            })),
-            { onConflict: 'user_id,date' }
-          );
+        const computed = batchComputeScores(legacyByDate, metricRows.length);
+        const recentDates = computed.filter(s => s.date >= yesterday).map(s => s.date);
+        if (recentDates.length) {
+          await persistScores(sb, user_id, computed, bestByDate, recentDates);
         }
       }
 
