@@ -575,10 +575,14 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           // so TipTap's onBlur never fires. Without this explicit flush the useDbSave
           // 200ms debounce timer never executes and the entry is lost on unmount.
           if (onBlurRef.current && editorRef.current) {
-            const serialised = docToText(editorRef.current.getJSON());
-            // Call onBlur synchronously — this writes to MEM and starts the 200ms
-            // debounce timer. We then also fire a synthetic blur on the DOM element
-            // so any outer focus-tracking (useDbSave DIRTY flag etc.) sees the blur.
+            // Use the same serialisation as the normal onBlur for this editor type:
+            // singleLine → plain text, everything else → HTML. Using docToText for
+            // non-singleLine editors saved plain text where HTML was expected, which
+            // corrupted note chip names on reload when timing races prevented the
+            // subsequent TipTap onBlur from overwriting with the correct HTML.
+            const serialised = singleLineRef.current
+              ? docToText(editorRef.current.getJSON())
+              : editorRef.current.getHTML();
             onBlurRef.current(serialised);
             editorRef.current.view?.dom?.blur();
           }
@@ -587,9 +591,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         }
         const noteEl = t.closest?.('[data-note-link]');
         if (noteEl && onNoteClickRef.current) {
-          // Same flush before navigating to a note
           if (onBlurRef.current && editorRef.current) {
-            const serialised = docToText(editorRef.current.getJSON());
+            const serialised = singleLineRef.current
+              ? docToText(editorRef.current.getJSON())
+              : editorRef.current.getHTML();
             onBlurRef.current(serialised);
             editorRef.current.view?.dom?.blur();
           }
