@@ -24,6 +24,7 @@ import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import ProjectView from "./views/ProjectView.jsx";
 import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
+import { ToastContainer } from "./ui/Toast.jsx";
 
 function DashboardInner() {
   const { theme, setTheme } = useTheme();
@@ -313,6 +314,7 @@ function DashboardInner() {
 
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
+    <ToastContainer/>
     <NavigationContext.Provider value={{
       navigateToProject: (name) => setActiveProject(name),
       navigateToNote: (name) => {
