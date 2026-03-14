@@ -156,11 +156,15 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     try {
       const result = await estimateNutrition(text, token);
       estimating.current.delete(id);
+      // Only apply AI dist/pace if the text actually mentions distance or pace
+      const parsed = parseActivityText(text);
+      const textHasDist = !!parsed.dist;
+      const textHasPace = !!parsed.pace;
       setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{
         ...r,
         kcal:result?.kcal||null,
-        dist:r.dist||( result?.dist_mi ? `${Number(result.dist_mi).toFixed(2)}mi` : null ),
-        pace:r.pace||( result?.pace || null ),
+        dist:r.dist||( textHasDist && result?.dist_mi ? `${Number(result.dist_mi).toFixed(2)}mi` : null ),
+        pace:r.pace||( textHasPace && result?.pace || null ),
       }:r));
       setTick(t => t + 1);
     } catch(_) {
