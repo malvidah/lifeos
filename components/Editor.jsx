@@ -587,6 +587,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       },
 
       handleKeyDown(view, e) {
+        // Block Cmd/Ctrl+Shift+9 in task list mode — prevents removing checkboxes
+        if (taskList && e.key === '9' && e.shiftKey && (e.metaKey || e.ctrlKey)) { e.preventDefault(); return true; }
         // Defer to suggestion plugin when dropdown is open
         if (suggRef.current && (e.key === 'Enter' || e.key === 'Tab')) return false;
 
