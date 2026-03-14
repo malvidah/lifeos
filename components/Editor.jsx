@@ -378,6 +378,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onUpdateRef         = useRef(onUpdate);
   const taskListRef         = useRef(taskList);
   const noteTitleRef        = useRef(noteTitle);
+  const singleLineRef       = useRef(singleLine);
   const clearOnEnterRef     = useRef(clearOnEnter);
 
   useEffect(() => { onBlurRef.current           = onBlur; },           [onBlur]);
@@ -665,11 +666,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
     onBlur({ editor }) {
       if (noteTitleRef.current) onBlurRef.current?.(editor.getHTML());
-      else if (!taskListRef.current) onBlurRef.current?.(docToText(editor.getJSON()));
+      else if (singleLineRef.current) onBlurRef.current?.(docToText(editor.getJSON()));
+      else if (!taskListRef.current) onBlurRef.current?.(editor.getHTML());
     },
 
     onUpdate({ editor }) {
-      if (taskListRef.current && !suppressOnUpdateRef.current) onUpdateRef.current?.(editor.getHTML());
+      if (suppressOnUpdateRef.current) return;
+      onUpdateRef.current?.(editor.getHTML());
     },
 
     onSelectionUpdate({ editor }) {
@@ -708,8 +711,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           onBlurRef.current?.(ed.getHTML());
         } else if (taskListRef.current) {
           onUpdateRef.current?.(ed.getHTML());
+        } else if (singleLineRef.current) {
+          onBlurRef.current?.(docToText(ed.getJSON()));
         } else if (onBlurRef.current) {
-          onBlurRef.current(docToText(ed.getJSON()));
+          onBlurRef.current(ed.getHTML());
         }
       } catch (_) { /* editor already destroyed — ignore */ }
     };
