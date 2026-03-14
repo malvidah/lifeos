@@ -564,7 +564,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 key="phantom"
                 value=""
                 noteTitle
-                onBlur={html => { if (skipPhantomBlur.current) { skipPhantomBlur.current = false; return; } if (html?.replace(/<[^>]*>/g, '').trim()) { skipPhantomBlur.current = true; addNote('', { initialContent: html }); } }}
+                onBlur={html => { if (skipPhantomBlur.current) { skipPhantomBlur.current = false; return; } const text = html?.replace(/<[^>]*>/g, '').trim(); if (text && text !== 'Untitled') { skipPhantomBlur.current = true; addNote('', { initialContent: html }); } }}
                 noteNames={[]}
                 projectNames={pvProjectNames}
                 onCreateNote={addNote}
