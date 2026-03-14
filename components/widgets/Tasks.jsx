@@ -152,7 +152,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   const {navigateToProject, navigateToNote} = useContext(NavigationContext);
   const {notes: ctxNotes} = useContext(NoteContext);
 
-  useEffect(() => injectTaskListStyles("var(--dl-accent)"), ["var(--dl-accent)"]);
+  useEffect(() => injectTaskListStyles("var(--dl-accent)"), []); // eslint-disable-line
 
   const htmlValue = useMemo(() => migrateTasksToHtml(value) || '', [value]);
 
