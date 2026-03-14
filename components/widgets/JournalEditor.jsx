@@ -52,8 +52,17 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   const failed = useRef(new Set());
   const refs = useRef({});
   const [tick, setTick] = useState(0);
+  const fallbackRef = useRef(null);
 
-  const safe = Array.isArray(rows) && rows.length ? rows : [mkRow()];
+  // Stabilize the fallback row so it keeps the same id across renders.
+  // Without this, mkRow() generates a new Date.now() id every render,
+  // and setRows(prev => ...) can't find the virtual row in the store.
+  if (Array.isArray(rows) && rows.length) {
+    fallbackRef.current = null; // real data exists, clear fallback
+  } else if (!fallbackRef.current) {
+    fallbackRef.current = [mkRow()];
+  }
+  const safe = Array.isArray(rows) && rows.length ? rows : fallbackRef.current;
   const estMap = (estimatesLoaded && savedEstimates && typeof savedEstimates === "object") ? savedEstimates : {};
 
   // Merge saved AI estimates into synced rows
@@ -75,7 +84,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
         estimating.current.add(row.id);
         estimateNutrition(promptFn(row.text), token).then(result => {
           estimating.current.delete(row.id);
-          if (result) setRows(prev => (Array.isArray(prev)?prev:safe).map(r =>
+          if (result) setRows(prev => (Array.isArray(prev)&&prev.length?prev:safe).map(r =>
             r.id===row.id ? {...r, kcal:result.kcal||null, protein:result.protein||null} : r));
           else failed.current.add(row.id);
         });
@@ -107,7 +116,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
         estimateNutrition(promptFn(row.text), token).then(result => {
           estimating.current.delete(row.id);
           if (result?.protein) {
-            setRows(prev => (Array.isArray(prev)?prev:safe).map(r =>
+            setRows(prev => (Array.isArray(prev)&&prev.length?prev:safe).map(r =>
               r.id===row.id ? {...r, protein:result.protein, kcal:result.kcal||r.kcal} : r));
           } else failed.current.add(row.id);
         });
@@ -120,7 +129,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
     try {
       const result = await estimateNutrition(promptFn(text), token);
       estimating.current.delete(id);
-      setRows(prev => (Array.isArray(prev)?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null} : r));
+      setRows(prev => (Array.isArray(prev)&&prev.length?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null} : r));
       setTick(t => t + 1);
     } catch(_) {
       estimating.current.delete(id);
@@ -187,7 +196,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
               style={{ flex: 1, padding: 0 }}
               onBlur={text => {
                 setRows(prev => {
-                  const s = Array.isArray(prev) ? prev : safe;
+                  const s = Array.isArray(prev) && prev.length ? prev : safe;
                   const existing = s.find(r => r.id === row.id);
                   if (text === existing?.text) return prev; // no change
                   return s.map(r => r.id===row.id ? {...r, text, kcal: text !== r.text ? null : r.kcal, protein: text !== r.text ? null : r.protein} : r);
@@ -198,7 +207,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
                 const row2 = mkRow();
                 const i = safe.findIndex(r => r.id===row.id);
                 setRows(prev => {
-                  const s = Array.isArray(prev) ? prev : safe;
+                  const s = Array.isArray(prev) && prev.length ? prev : safe;
                   const updated = s.map(r => r.id===row.id ? {...r, text} : r);
                   return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
                 });
@@ -207,7 +216,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
               }}
               onBackspaceEmpty={safe.length > 1 ? () => {
                 const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
-                setRows(prev => (Array.isArray(prev)?prev:safe).filter(r => r.id!==row.id));
+                setRows(prev => (Array.isArray(prev)&&prev.length?prev:safe).filter(r => r.id!==row.id));
                 setTimeout(() => refs.current[t]?.focus(), 30);
               } : undefined}
             />
