@@ -264,10 +264,15 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
         : MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
       const recorder = new MediaRecorder(stream, { mimeType });
       audioChunksRef.current = [];
+      recordingCancelledRef.current = false; // reset for this new session
       recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data); };
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
-        if (recordingCancelledRef.current) { recordingCancelledRef.current = false; setListening(false); setTranscribing(false); return; }
+        // Capture cancelled state NOW — before any async work. A new recording
+        // session may reset the ref before we check it otherwise.
+        const wasCancelled = recordingCancelledRef.current;
+        recordingCancelledRef.current = false;
+        if (wasCancelled) { setListening(false); setTranscribing(false); return; }
         setListening(false);
         setTranscribing(true);
         try {

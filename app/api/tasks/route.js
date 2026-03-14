@@ -12,7 +12,7 @@ const TODAY = () => new Date().toISOString().slice(0, 10);
 //
 // POST /api/tasks  { date, data: '<ul ...>' }
 //   Full-replace all tasks written on that date.
-//   Preserves due_date on existing rows by matching on (user_id, date, position).
+//   Preserves due_date on existing rows by matching on text content.
 //
 // PATCH /api/tasks  { id, done, completed_at?, due_date?, text?, html? }
 //   Update a single task row (toggle done, set due date, edit text).
@@ -77,16 +77,29 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // (due_date is not stored in the HTML, only in the DB row)
   const { data: existing } = await supabase
     .from('tasks')
-    .select('id, position, due_date, completed_at')
+    .select('id, position, text, due_date, completed_at')
     .eq('user_id', user.id)
     .eq('date', date)
     .order('position', { ascending: true });
 
-  const existingByPos = Object.fromEntries((existing ?? []).map(r => [r.position, r]));
+  // Match by text content (not position) so reordering tasks doesn't
+  // shuffle due_dates. Each matched row is consumed to handle duplicates.
+  const existingByText = new Map();
+  for (const r of (existing ?? [])) {
+    const key = r.text?.trim();
+    if (!key) continue;
+    if (!existingByText.has(key)) existingByText.set(key, []);
+    existingByText.get(key).push(r);
+  }
+  function matchExisting(text) {
+    const key = text?.trim();
+    const arr = key && existingByText.get(key);
+    return arr?.length ? arr.shift() : null;
+  }
 
   // Atomic delete + insert in a single transaction
   const rows = parsed.map(t => {
-    const prev = existingByPos[t.position];
+    const prev = matchExisting(t.text);
     return {
       position:     t.position,
       html:         t.html,
