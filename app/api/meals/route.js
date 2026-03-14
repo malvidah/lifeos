@@ -75,8 +75,8 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     console.log('[meals POST] inserting rows:', JSON.stringify(rows).slice(0, 500));
     const { error: insErr } = await supabase.from('meal_items').insert(rows);
     if (insErr) {
-      console.error('[meals POST] INSERT error:', JSON.stringify(insErr));
-      throw insErr;
+      console.error('[meals POST] INSERT error:', insErr.code, insErr.message, insErr.details, insErr.hint);
+      return Response.json({ error: `INSERT: ${insErr.code} ${insErr.message} | ${insErr.details || ''} | ${insErr.hint || ''}` }, { status: 500 });
     }
   }
 
