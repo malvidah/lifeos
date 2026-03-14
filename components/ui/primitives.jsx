@@ -218,13 +218,14 @@ export function RichLine({ text, dimTag = null }) {
     } else if (m[2]) {
       parts.push(<a key={k++} href={m[2]} target="_blank" rel="noreferrer" style={{ color: 'var(--dl-accent)', textDecoration: 'none' }}>{m[2]}</a>);
     } else if (m[3] !== undefined) {
-      const name = m[3], isOwn = dimTag && name === dimTag.toLowerCase();
-      parts.push(<TagChip key={k++} name={name} plain={isOwn} onClick={() => navigateToProject(name)}/>);
+      const tagName = m[3], isOwn = dimTag && tagName === dimTag.toLowerCase();
+      parts.push(<TagChip key={k++} name={tagName} plain={isOwn} onClick={() => navigateToProject(tagName)}/>);
     } else if (m[4]) {
-      const name = m[4].slice(1).toLowerCase(), isOwn = dimTag && name === dimTag.toLowerCase();
-      parts.push(<TagChip key={k++} name={name} plain={isOwn} onClick={() => navigateToProject(name)}/>);
+      const tagName = m[4].slice(1).toLowerCase(), isOwn = dimTag && tagName === dimTag.toLowerCase();
+      parts.push(<TagChip key={k++} name={tagName} plain={isOwn} onClick={() => navigateToProject(tagName)}/>);
     } else if (m[5]) {
-      parts.push(<NoteChip key={k++} name={m[5]} onClick={() => navigateToNote(m[5])}/>);
+      const noteName = m[5];
+      parts.push(<NoteChip key={k++} name={noteName} onClick={() => navigateToNote(noteName)}/>);
     }
     last = m.index + m[0].length;
   }
