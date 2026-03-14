@@ -67,6 +67,7 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
   const ctxNotes    = useContext(NoteContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
   const saveTimer = useRef(null);
+  const savingRef = useRef(false);
   const latestHtml = useRef(null);
   const chip = `{${project}}`;
 
@@ -107,32 +108,37 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
   useEffect(() => () => clearTimeout(saveTimer.current), []);
 
   async function mergeAndSave(newHtml) {
-    let editorTasks = clientParseTasks(newHtml);
-    // Auto-tag tasks that don't reference this project
-    editorTasks = editorTasks.map(t => {
-      if (!t.text.toLowerCase().includes(chip)) return { ...t, text: `${t.text} ${chip}` };
-      return t;
-    });
-    // Load full day's tasks and replace the project-tagged ones
-    const raw = await dbLoad(date, 'tasks', token);
-    const allTasks = clientParseTasks(raw);
-    const nonProject = allTasks.filter(t => !t.text.toLowerCase().includes(chip));
-    // Insert project tasks where the first one used to be, or at end
-    const firstIdx = allTasks.findIndex(t => t.text.toLowerCase().includes(chip));
-    const merged = firstIdx >= 0
-      ? [...nonProject.slice(0, firstIdx), ...editorTasks, ...nonProject.slice(firstIdx)]
-      : [...nonProject, ...editorTasks];
-    const mergedHtml = tasksToHtml(merged);
-    await dbSave(date, 'tasks', mergedHtml, token);
-    MEM[`${userId}:${date}:tasks`] = mergedHtml;
-    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'] } }));
-    if (onTasksChanged) onTasksChanged(date, editorTasks);
+    if (savingRef.current) return; // prevent overlapping saves
+    savingRef.current = true;
+    try {
+      let editorTasks = clientParseTasks(newHtml);
+      // Auto-tag tasks that don't reference this project
+      editorTasks = editorTasks.map(t => {
+        if (!t.text.toLowerCase().includes(chip)) return { ...t, text: `${t.text} ${chip}` };
+        return t;
+      });
+      // Load full day's tasks and replace the project-tagged ones
+      const raw = await dbLoad(date, 'tasks', token);
+      const allTasks = clientParseTasks(raw);
+      const nonProject = allTasks.filter(t => !t.text.toLowerCase().includes(chip));
+      // Insert project tasks where the first one used to be, or at end
+      const firstIdx = allTasks.findIndex(t => t.text.toLowerCase().includes(chip));
+      const merged = firstIdx >= 0
+        ? [...nonProject.slice(0, firstIdx), ...editorTasks, ...nonProject.slice(firstIdx)]
+        : [...nonProject, ...editorTasks];
+      const mergedHtml = tasksToHtml(merged);
+      await dbSave(date, 'tasks', mergedHtml, token);
+      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'], date } }));
+      if (onTasksChanged) onTasksChanged(date, editorTasks);
+    } finally {
+      savingRef.current = false;
+    }
   }
 
   function handleUpdate(newHtml) {
     latestHtml.current = newHtml;
     clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => mergeAndSave(newHtml), 400);
+    saveTimer.current = setTimeout(() => mergeAndSave(newHtml), 800);
   }
 
   return (

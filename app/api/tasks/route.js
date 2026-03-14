@@ -97,7 +97,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return arr?.length ? arr.shift() : null;
   }
 
-  // Atomic delete + insert in a single transaction
+  // Build rows with preserved due_date/completed_at, then atomic replace via RPC
   const rows = parsed.map(t => {
     const prev = matchExisting(t.text);
     return {
@@ -106,13 +106,12 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       text:         t.text,
       done:         t.done,
       due_date:     t.due_date ?? prev?.due_date ?? null,
-      completed_at: t.done
-        ? (prev?.completed_at ?? today)
-        : null,
-      project_tags: t.project_tags,
-      note_tags:    t.note_tags,
+      completed_at: t.done ? (prev?.completed_at ?? today) : null,
+      project_tags: t.project_tags ?? [],
+      note_tags:    t.note_tags ?? [],
     };
   });
+
   const { error: rpcErr } = await supabase.rpc('batch_replace_tasks', {
     p_user_id: user.id,
     p_date:    date,

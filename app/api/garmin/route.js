@@ -61,14 +61,16 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     try {
       const newTokens = GCClient.exportToken();
       if (newTokens?.oauth2?.access_token !== tokens?.oauth2?.access_token) {
-        supabase.from('user_settings').upsert({
+        await supabase.from('user_settings').upsert({
           user_id: user.id,
           data: { ...(settingsRow?.data || {}), garminTokens: newTokens },
-        }, { onConflict: 'user_id' }).then(() => {});
+        }, { onConflict: 'user_id' });
       }
     } catch { /* safe to ignore */ }
 
-    // ── Persist health metrics ────────────────────────────────────────────────
+    // ── Persist health metrics & Garmin workouts ──────────────────────────────
+    const persistPromises = [];
+
     const metricsPayload = {
       hrv:        result.hrv        ? Number(result.hrv)        : null,
       rhr:        result.rhr        ? Number(result.rhr)        : null,
@@ -78,17 +80,16 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       active_min: result.activeMinutes ? Number(result.activeMinutes) : null,
     };
     if (Object.values(metricsPayload).some(v => v != null)) {
-      supabase.from('health_metrics').upsert({
+      persistPromises.push(supabase.from('health_metrics').upsert({
         user_id: user.id, date, source: 'garmin',
         ...metricsPayload,
         raw: { sleep: sleepData, steps: stepsCount },
         synced_at: new Date().toISOString(),
-      }, { onConflict: 'user_id,date,source' }).then(() => {});
+      }, { onConflict: 'user_id,date,source' }));
     }
 
-    // ── Persist Garmin workouts ───────────────────────────────────────────────
     for (const a of dayActivities) {
-      supabase.from('workouts').upsert({
+      persistPromises.push(supabase.from('workouts').upsert({
         user_id:      user.id,
         date,
         source:       'garmin',
@@ -100,8 +101,10 @@ export const GET = withAuth(async (req, { supabase, user }) => {
         avg_hr:       a.averageHR != null ? Math.round(a.averageHR) : null,
         external_id:  String(a.activityId || a.activityName || date),
         raw:          a,
-      }, { onConflict: 'user_id,source,external_id' }).then(() => {});
+      }, { onConflict: 'user_id,source,external_id' }));
     }
+
+    await Promise.all(persistPromises);
 
     return Response.json(result);
   } catch (e) {

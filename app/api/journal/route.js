@@ -48,15 +48,15 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 
   const blocks = parseJournalBlocks(html || '');
 
-  // Full-replace: atomic delete + insert in a single transaction
+  // Atomic replace via RPC — DELETE+INSERT in one transaction
   const { error: rpcErr } = await supabase.rpc('batch_replace_journal_blocks', {
     p_user_id: user.id,
     p_date:    date,
     p_blocks:  blocks.map(b => ({
       position:     b.position,
       content:      b.content,
-      project_tags: b.project_tags,
-      note_tags:    b.note_tags,
+      project_tags: b.project_tags ?? [],
+      note_tags:    b.note_tags ?? [],
     })),
   });
   if (rpcErr) throw rpcErr;

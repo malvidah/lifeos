@@ -83,7 +83,9 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }));
   }
 
-  // ── Persist health metrics ────────────────────────────────────────────────
+  // ── Persist health metrics & Oura workouts ───────────────────────────────
+  const persistPromises = [];
+
   const metricsPayload = {
     hrv:        result.hrv        ? Number(result.hrv)        : null,
     rhr:        result.rhr        ? Number(result.rhr)        : null,
@@ -93,18 +95,17 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     active_min: result.activeMinutes ? Number(result.activeMinutes) : null,
   };
   if (Object.values(metricsPayload).some(v => v != null)) {
-    supabase.from('health_metrics').upsert({
+    persistPromises.push(supabase.from('health_metrics').upsert({
       user_id: user.id, date, source: 'oura',
       ...metricsPayload,
       raw: { sleep: sleepData, readiness: readinessData, activity: activityData, stress: stressData },
       synced_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,date,source' }).then(() => {});
+    }, { onConflict: 'user_id,date,source' }));
   }
 
-  // ── Persist Oura workouts ─────────────────────────────────────────────────
   const ouraWorkouts = (workoutData.data ?? []).filter(w => w.day === date);
   for (const w of ouraWorkouts) {
-    supabase.from('workouts').upsert({
+    persistPromises.push(supabase.from('workouts').upsert({
       user_id:      user.id,
       date:         w.day,
       source:       'oura',
@@ -115,8 +116,10 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       calories:     w.calories != null ? Math.round(w.calories) : null,
       external_id:  String(w.id),
       raw:          w,
-    }, { onConflict: 'user_id,source,external_id' }).then(() => {});
+    }, { onConflict: 'user_id,source,external_id' }));
   }
+
+  await Promise.all(persistPromises);
 
   return Response.json(result);
 });

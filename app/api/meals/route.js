@@ -51,7 +51,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 
   const parsed = parseMealItems(items);
 
-  // Atomic delete + insert in a single transaction
+  // Atomic replace via RPC — DELETE+INSERT in one transaction
   const { error: rpcErr } = await supabase.rpc('batch_replace_meal_items', {
     p_user_id: user.id,
     p_date:    date,

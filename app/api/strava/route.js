@@ -65,7 +65,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   })).filter(a => !a.startTime || a.startTime.slice(0, 10) === date);
 
   // ── Persist to workouts table ─────────────────────────────────────────────
-  for (const a of result) {
+  await Promise.all(result.map(a =>
     supabase.from('workouts').upsert({
       user_id:      user.id,
       date:         a.startTime ? a.startTime.slice(0, 10) : date,
@@ -78,8 +78,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       avg_hr:       a.avgHr || null,
       external_id:  String(a.id),
       raw:          a,
-    }, { onConflict: 'user_id,source,external_id' }).then(() => {});
-  }
+    }, { onConflict: 'user_id,source,external_id' })
+  ));
 
   return Response.json({ activities: result });
 });

@@ -17,18 +17,11 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 export const PATCH = withAuth(async (req, { supabase, user }) => {
   const patch = await req.json();
 
-  // Read current data first so we can merge
-  const { data: row } = await supabase
-    .from('user_settings')
-    .select('data')
-    .eq('user_id', user.id)
-    .single();
-
-  const merged = { ...(row?.data ?? {}), ...patch };
-
-  const { error } = await supabase
-    .from('user_settings')
-    .upsert({ user_id: user.id, data: merged }, { onConflict: 'user_id' });
+  // Atomic merge via RPC — no read-then-write race
+  const { data: merged, error } = await supabase.rpc('merge_user_settings', {
+    p_user_id: user.id,
+    p_patch:   patch,
+  });
 
   if (error) throw error;
   return Response.json({ ok: true, data: merged });

@@ -7,7 +7,7 @@ import { useProjects } from "@/lib/useProjects";
 
 export default function ProjectsNav({ date, token, userId, onSelectProject }) {
   const { value: notes } = useDbSave(date, 'journal', '', token, userId);
-  const { value: tasks }  = useDbSave(date, 'tasks', [], token, userId);
+  const { value: tasks }  = useDbSave(date, 'tasks', '', token, userId);
 
   const { projects, loaded, getColor, upsertProject } = useProjects(token);
 
@@ -15,9 +15,7 @@ export default function ProjectsNav({ date, token, userId, onSelectProject }) {
   const todayTags = useMemo(() => {
     const s = new Set();
     extractTags(notes || '').forEach(t => s.add(t.toLowerCase()));
-    (Array.isArray(tasks) ? tasks : []).forEach(r => {
-      if (r?.text) extractTags(r.text).forEach(t => s.add(t.toLowerCase()));
-    });
+    extractTags(tasks || '').forEach(t => s.add(t.toLowerCase()));
     return s;
   }, [notes, tasks]);
 
