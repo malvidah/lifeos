@@ -1,6 +1,5 @@
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
 
 export async function GET(request) {
   const { searchParams, origin } = new URL(request.url);
@@ -24,7 +23,13 @@ export async function GET(request) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  const next = searchParams.get('next');
-  if (next) return NextResponse.redirect(origin + next);
-  return NextResponse.redirect(origin);
+  // Use location.replace() instead of a server redirect so the Google OAuth
+  // URL is replaced in browser history — prevents "400 malformed request"
+  // when the user presses the back button after login.
+  const dest = searchParams.get('next') || '/';
+  const target = dest.startsWith('/') ? origin + dest : origin;
+  return new Response(
+    `<!DOCTYPE html><html><head><script>window.location.replace(${JSON.stringify(target)})</script></head><body></body></html>`,
+    { headers: { 'Content-Type': 'text/html' } }
+  );
 }
