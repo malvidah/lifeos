@@ -47,18 +47,26 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   if (!date) return Response.json({ error: 'date required' }, { status: 400 });
   if (!Array.isArray(blocks)) return Response.json({ error: 'blocks array required' }, { status: 400 });
 
-  // Client sends pre-split blocks — pass directly to RPC
-  const { error: rpcErr } = await supabase.rpc('batch_replace_journal_blocks', {
-    p_user_id: user.id,
-    p_date:    date,
-    p_blocks:  blocks.map((b, i) => ({
+  // Full-replace: delete existing blocks for this date, insert new ones
+  const { error: delErr } = await supabase
+    .from('journal_blocks')
+    .delete()
+    .eq('user_id', user.id)
+    .eq('date', date);
+  if (delErr) throw delErr;
+
+  if (blocks.length > 0) {
+    const rows = blocks.map((b, i) => ({
+      user_id:      user.id,
+      date,
       position:     b.position ?? i,
       content:      b.content,
       project_tags: b.project_tags ?? [],
       note_tags:    b.note_tags ?? [],
-    })),
-  });
-  if (rpcErr) throw rpcErr;
+    }));
+    const { error: insErr } = await supabase.from('journal_blocks').insert(rows);
+    if (insErr) throw insErr;
+  }
 
   return Response.json({ ok: true, blocks: blocks.length });
 });

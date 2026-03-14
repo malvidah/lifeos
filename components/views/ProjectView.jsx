@@ -112,15 +112,17 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
     savingRef.current = true;
     try {
       let editorTasks = clientParseTasks(newHtml);
-      // Auto-tag tasks that don't reference this project
-      editorTasks = editorTasks.map(t => {
-        if (!t.text.toLowerCase().includes(chip)) return { ...t, text: `${t.text} ${chip}` };
-        return t;
-      });
+      // Auto-tag tasks that don't reference this project (skip for __everything__)
+      if (project !== '__everything__') {
+        editorTasks = editorTasks.map(t => {
+          if (!t.text.toLowerCase().includes(chip)) return { ...t, text: `${t.text} ${chip}` };
+          return t;
+        });
+      }
       // Load full day's tasks and replace the project-tagged ones
       const raw = await dbLoad(date, 'tasks', token);
       const allTasks = clientParseTasks(raw);
-      const nonProject = allTasks.filter(t => !t.text.toLowerCase().includes(chip));
+      const nonProject = project === '__everything__' ? [] : allTasks.filter(t => !t.text.toLowerCase().includes(chip));
       // Insert project tasks where the first one used to be, or at end
       const firstIdx = allTasks.findIndex(t => t.text.toLowerCase().includes(chip));
       const merged = firstIdx >= 0
@@ -452,7 +454,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
 
   // Register any new tags found in edited text into projectsMeta
   function registerNewTags(text) {
-    const tags = extractTags(text);
+    const tags = extractTags(text).filter(t => !t.startsWith('__'));
     if (!tags.length) return;
     const meta = projectsMeta || {};
     const newTags = tags.filter(t => !meta[t]);
