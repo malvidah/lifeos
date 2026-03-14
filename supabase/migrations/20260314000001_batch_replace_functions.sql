@@ -102,3 +102,9 @@ BEGIN
   END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ── Permissions ─────────────────────────────────────────────────────────────
+GRANT EXECUTE ON FUNCTION batch_replace_journal_blocks(uuid, date, jsonb) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION batch_replace_tasks(uuid, date, jsonb) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION batch_replace_meal_items(uuid, date, jsonb) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION batch_replace_workouts(uuid, date, text[], jsonb) TO authenticated, anon;
