@@ -5,7 +5,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const { searchParams } = new URL(req.url);
   const date = searchParams.get('date');
   const type = searchParams.get('type');
-  if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) required' }, { status: 400 });
+  if (!date || (!isValidDate(date) && date !== 'global')) return Response.json({ error: 'valid date (YYYY-MM-DD) required' }, { status: 400 });
 
   if (type) {
     const { data, error } = await supabase
@@ -27,7 +27,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
 export const POST = withAuth(async (req, { supabase, user }) => {
   const { date, type, data } = await req.json();
-  if (!date || !isValidDate(date) || !type || data === undefined)
+  if (!date || (!isValidDate(date) && date !== 'global') || !type || data === undefined)
     return Response.json({ error: 'valid date (YYYY-MM-DD), type, data required' }, { status: 400 });
 
   const { error } = await supabase.from('entries').upsert(
