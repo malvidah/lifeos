@@ -182,6 +182,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const [notesList, setNotesList] = useState([]);
   const [notesLoaded, setNotesLoaded] = useState(false);
   const [activeNoteId, setActiveNoteId] = useState(null);
+  const deletedNoteIds = useRef(new Set()); // guards against unmount flush re-saving
 
   // Load notes for this project
   useEffect(() => {
@@ -245,7 +246,11 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     };
   }, [notesList]); // eslint-disable-line
   const updateNoteContent = (id, newContent) => {
+    // Skip if note was just deleted — prevents unmount flush from re-saving
+    if (deletedNoteIds.current.has(id)) return;
+
     const oldNote = notesList.find(n => n.id === id);
+    if (!oldNote) return; // note not in list (already removed)
     const oldName = noteName(oldNote);
     const newName = newContent
       ? (newContent.match(/<h1[^>]*>(.*?)<\/h1>/s)?.[1]?.replace(/<[^>]+>/g, '').trim() || newContent.split('\n')[0].trim() || 'Untitled')
@@ -257,7 +262,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     ));
     // Persist — server extracts title + project_tags from content
     api.patch('/api/notes', { id, content: newContent }, token).then(res => {
-      // Update with server response (includes recomputed project_tags)
+      if (deletedNoteIds.current.has(id)) return; // deleted while saving
       if (res?.note) {
         setNotesList(prev => prev.map(n => n.id === id ? { ...n, ...res.note } : n));
       }
@@ -328,12 +333,15 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     }
   };
   const [deleteConfirm, setDeleteConfirm] = useState(null); // { id, name }
-  const deleteNote = (id) => {
-    setNotesList(prev => prev.filter(n => n.id !== id));
-    if (activeNoteId === id) {
-      setActiveNoteId(notesList.find(n => n.id !== id)?.id ?? null);
-    }
-    api.delete(`/api/notes?id=${id}`, token);
+  const deleteNote = async (id) => {
+    // Mark as deleted BEFORE state update so unmount flush skips this note
+    deletedNoteIds.current.add(id);
+    setNotesList(prev => {
+      const remaining = prev.filter(n => n.id !== id);
+      setActiveNoteId(remaining[0]?.id ?? null);
+      return remaining;
+    });
+    await api.delete(`/api/notes?id=${id}`, token);
   };
 
   // Per-project collapse state (persisted)
