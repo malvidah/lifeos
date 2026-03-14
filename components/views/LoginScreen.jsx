@@ -19,7 +19,7 @@ export default function LoginScreen() {
           lineHeight: 1,
           marginBottom: 28,
         }}>DAY LAB</div>
-        <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-middle)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
+        <div style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-detail)",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:48}}>your ai dashboard</div>
         <button disabled={loading} onClick={async()=>{
           setLoading(true);
           const supabase=createClient();
@@ -31,15 +31,15 @@ export default function LoginScreen() {
             queryParams:{access_type:"offline",prompt:"consent"},
           }});
         }} style={{background:"none",border:"1px solid var(--dl-border2)",borderRadius:8,
-          color:loading?"var(--dl-middle)":"var(--dl-strong)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+          color:loading?"var(--dl-detail)":"var(--dl-middle)",fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
           textTransform:"uppercase",padding:"13px 32px",cursor:loading?"not-allowed":"pointer"}}>
           {loading?"redirecting…":"sign in with google"}
         </button>
 
       </div>
       <div style={{position:"absolute",bottom:24,left:0,right:0,display:"flex",justifyContent:"center",gap:24}}>
-        <a href="/privacy" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-middle)",textDecoration:"none",opacity:0.6}}>Privacy</a>
-        <a href="/terms" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-middle)",textDecoration:"none",opacity:0.6}}>Terms</a>
+        <a href="/privacy" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-detail)",textDecoration:"none",opacity:0.6}}>Privacy</a>
+        <a href="/terms" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-detail)",textDecoration:"none",opacity:0.6}}>Terms</a>
       </div>
     </div>
   );
