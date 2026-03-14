@@ -9,12 +9,11 @@ export const POST = withAuth(async (request, { supabase, user }) => {
   const clientSecret = s.stravaClientSecret || process.env.STRAVA_CLIENT_SECRET;
   if (!clientId || !clientSecret) return Response.json({ error: 'no_strava_creds' }, { status: 404 });
 
-  // Strava token still stored in entries (strava-connect not yet migrated)
-  const { data: tokenRow } = await supabase.from('entries').select('data')
-    .eq('type', 'strava_token').eq('date', '0000-00-00').eq('user_id', user.id).maybeSingle();
-  if (!tokenRow?.data?.access_token) return Response.json({ error: 'not_connected' }, { status: 404 });
+  // Read Strava tokens from user_settings (same as /api/strava)
+  let tokens = s.stravaToken;
+  if (!tokens?.access_token) return Response.json({ error: 'not_connected' }, { status: 404 });
 
-  let { access_token, refresh_token, expires_at } = tokenRow.data;
+  let { access_token, refresh_token, expires_at } = tokens;
 
   // Refresh token if expired
   if (Date.now() / 1000 > expires_at - 300) {
@@ -25,14 +24,14 @@ export const POST = withAuth(async (request, { supabase, user }) => {
     });
     const refreshed = await r.json();
     if (refreshed.access_token) {
-      access_token    = refreshed.access_token;
-      refresh_token   = refreshed.refresh_token;
-      expires_at      = refreshed.expires_at;
-      await supabase.from('entries').upsert(
-        { date: '0000-00-00', type: 'strava_token', user_id: user.id,
-          data: { access_token, refresh_token, expires_at }, updated_at: new Date().toISOString() },
-        { onConflict: 'date,type,user_id' }
-      );
+      access_token  = refreshed.access_token;
+      refresh_token = refreshed.refresh_token || refresh_token;
+      expires_at    = refreshed.expires_at;
+      // Persist refreshed tokens to user_settings
+      await supabase.from('user_settings').upsert({
+        user_id: user.id,
+        data: { ...s, stravaToken: { access_token, refresh_token, expires_at } },
+      }, { onConflict: 'user_id' });
     }
   }
 
