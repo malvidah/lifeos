@@ -51,25 +51,19 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 
   const parsed = parseMealItems(items);
 
-  // Full-replace
-  const { error: delErr } = await supabase
-    .from('meal_items').delete()
-    .eq('user_id', user.id).eq('date', date);
-  if (delErr) throw delErr;
-
-  if (parsed.length > 0) {
-    const rows = parsed.map(p => ({
-      user_id:     user.id,
-      date,
-      position:    p.position,
-      content:     p.content,
-      ai_calories: p.ai_calories,
-      ai_protein:  p.ai_protein,
+  // Atomic delete + insert in a single transaction
+  const { error: rpcErr } = await supabase.rpc('batch_replace_meal_items', {
+    p_user_id: user.id,
+    p_date:    date,
+    p_items:   parsed.map(p => ({
+      position:     p.position,
+      content:      p.content,
+      ai_calories:  p.ai_calories ?? null,
+      ai_protein:   p.ai_protein ?? null,
       ai_parsed_at: (p.ai_calories || p.ai_protein) ? new Date().toISOString() : null,
-    }));
-    const { error: insErr } = await supabase.from('meal_items').insert(rows);
-    if (insErr) throw insErr;
-  }
+    })),
+  });
+  if (rpcErr) throw rpcErr;
 
   return Response.json({ ok: true, items: parsed.length });
 });

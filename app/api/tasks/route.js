@@ -84,35 +84,28 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 
   const existingByPos = Object.fromEntries((existing ?? []).map(r => [r.position, r]));
 
-  // Delete existing rows for this date
-  const { error: delErr } = await supabase
-    .from('tasks').delete()
-    .eq('user_id', user.id).eq('date', date);
-  if (delErr) throw delErr;
-
-  if (parsed.length > 0) {
-    const rows = parsed.map(t => {
-      const prev = existingByPos[t.position];
-      return {
-        user_id:      user.id,
-        date,
-        position:     t.position,
-        html:         t.html,
-        text:         t.text,
-        done:         t.done,
-        // Preserve due_date from DB if HTML doesn't contain @date syntax
-        due_date:     t.due_date ?? prev?.due_date ?? null,
-        // Set completed_at to today when task is newly checked
-        completed_at: t.done
-          ? (prev?.completed_at ?? today)
-          : null,
-        project_tags: t.project_tags,
-        note_tags:    t.note_tags,
-      };
-    });
-    const { error: insErr } = await supabase.from('tasks').insert(rows);
-    if (insErr) throw insErr;
-  }
+  // Atomic delete + insert in a single transaction
+  const rows = parsed.map(t => {
+    const prev = existingByPos[t.position];
+    return {
+      position:     t.position,
+      html:         t.html,
+      text:         t.text,
+      done:         t.done,
+      due_date:     t.due_date ?? prev?.due_date ?? null,
+      completed_at: t.done
+        ? (prev?.completed_at ?? today)
+        : null,
+      project_tags: t.project_tags,
+      note_tags:    t.note_tags,
+    };
+  });
+  const { error: rpcErr } = await supabase.rpc('batch_replace_tasks', {
+    p_user_id: user.id,
+    p_date:    date,
+    p_tasks:   rows,
+  });
+  if (rpcErr) throw rpcErr;
 
   return Response.json({ ok: true, tasks: parsed.length });
 });

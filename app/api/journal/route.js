@@ -48,26 +48,18 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 
   const blocks = parseJournalBlocks(html || '');
 
-  // Full-replace: delete existing blocks for this date, insert new ones
-  const { error: delErr } = await supabase
-    .from('journal_blocks')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('date', date);
-  if (delErr) throw delErr;
-
-  if (blocks.length > 0) {
-    const rows = blocks.map(b => ({
-      user_id:      user.id,
-      date,
+  // Full-replace: atomic delete + insert in a single transaction
+  const { error: rpcErr } = await supabase.rpc('batch_replace_journal_blocks', {
+    p_user_id: user.id,
+    p_date:    date,
+    p_blocks:  blocks.map(b => ({
       position:     b.position,
       content:      b.content,
       project_tags: b.project_tags,
       note_tags:    b.note_tags,
-    }));
-    const { error: insErr } = await supabase.from('journal_blocks').insert(rows);
-    if (insErr) throw insErr;
-  }
+    })),
+  });
+  if (rpcErr) throw rpcErr;
 
   return Response.json({ ok: true, blocks: blocks.length });
 });
