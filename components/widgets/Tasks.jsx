@@ -54,7 +54,10 @@ export function clientParseTasks(data) {
       const attrs = m[1];
       if (!attrs.includes('data-type="taskItem"')) continue;
       const doneMatch = attrs.match(/data-checked="(true|false)"/);
-      const text = m[2].replace(/<[^>]+>/g, '').trim();
+      const inner = m[2]
+        .replace(/<span\b[^>]*\bdata-project-tag="([^"]*)"[^>]*>[^<]*<\/span>/g, '{$1}')
+        .replace(/<span\b[^>]*\bdata-note-link="([^"]*)"[^>]*>[^<]*<\/span>/g, '[$1]');
+      const text = inner.replace(/<[^>]+>/g, '').trim();
       if (text) tasks.push({ id: `html_${idx++}`, text, done: doneMatch?.[1] === 'true' });
     }
     return tasks;
