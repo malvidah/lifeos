@@ -98,27 +98,31 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return arr?.length ? arr.shift() : null;
   }
 
-  // Build rows with preserved due_date/completed_at, then atomic replace via RPC
-  const rows = parsed.map(t => {
-    const prev = matchExisting(t.text);
-    return {
-      position:     t.position,
-      html:         t.html,
-      text:         t.text,
-      done:         t.done,
-      due_date:     t.due_date ?? prev?.due_date ?? null,
-      completed_at: t.done ? (prev?.completed_at ?? today) : null,
-      project_tags: t.project_tags ?? [],
-      note_tags:    t.note_tags ?? [],
-    };
-  });
+  // Delete existing rows for this date, then insert new ones
+  const { error: delErr } = await supabase
+    .from('tasks').delete()
+    .eq('user_id', user.id).eq('date', date);
+  if (delErr) throw delErr;
 
-  const { error: rpcErr } = await supabase.rpc('batch_replace_tasks', {
-    p_user_id: user.id,
-    p_date:    date,
-    p_tasks:   rows,
-  });
-  if (rpcErr) throw rpcErr;
+  if (parsed.length > 0) {
+    const rows = parsed.map(t => {
+      const prev = matchExisting(t.text);
+      return {
+        user_id:      user.id,
+        date,
+        position:     t.position,
+        html:         t.html,
+        text:         t.text,
+        done:         t.done,
+        due_date:     t.due_date ?? prev?.due_date ?? null,
+        completed_at: t.done ? (prev?.completed_at ?? today) : null,
+        project_tags: t.project_tags,
+        note_tags:    t.note_tags,
+      };
+    });
+    const { error: insErr } = await supabase.from('tasks').insert(rows);
+    if (insErr) throw insErr;
+  }
 
   return Response.json({ ok: true, tasks: parsed.length });
 });

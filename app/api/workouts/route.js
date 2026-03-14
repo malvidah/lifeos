@@ -72,19 +72,25 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // ── Card batch format: { date, data: [{id, text, dist, pace, kcal}, ...] } ──
   // Full-replace all source='manual' rows for the date (called by useDbSave).
   if (Array.isArray(body.data)) {
+    const { error: delErr } = await supabase
+      .from('workouts').delete()
+      .eq('user_id', user.id).eq('date', date).eq('source', 'manual');
+    if (delErr) return Response.json({ error: delErr.message }, { status: 500 });
+
     const rows = body.data.filter(r => r.text?.trim());
-    const { error: rpcErr } = await supabase.rpc('batch_replace_workouts', {
-      p_user_id: user.id,
-      p_date:    date,
-      p_sources: ['manual'],
-      p_rows:    rows.map(r => ({
-        title:    r.text,
-        source:   'manual',
-        calories: r.kcal ? Number(r.kcal) : null,
-        raw:      { dist: r.dist ?? null, pace: r.pace ?? null },
-      })),
-    });
-    if (rpcErr) return Response.json({ error: rpcErr.message }, { status: 500 });
+    if (rows.length) {
+      const { error: insErr } = await supabase.from('workouts').insert(
+        rows.map(r => ({
+          user_id:  user.id,
+          date,
+          title:    r.text,
+          source:   'manual',
+          calories: r.kcal ? Number(r.kcal) : null,
+          raw:      { dist: r.dist ?? null, pace: r.pace ?? null },
+        }))
+      );
+      if (insErr) return Response.json({ error: insErr.message }, { status: 500 });
+    }
     return Response.json({ ok: true });
   }
 
@@ -133,19 +139,26 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     const { date, rows } = body;
     if (!date) return Response.json({ error: 'date required' }, { status: 400 });
 
+    const { error: delErr } = await supabase
+      .from('workouts').delete()
+      .eq('user_id', user.id).eq('date', date)
+      .in('source', ['oura', 'strava']);
+    if (delErr) return Response.json({ error: delErr.message }, { status: 500 });
+
     const toInsert = (rows || []).filter(r => r.text?.trim() && r.source !== 'manual');
-    const { error: rpcErr } = await supabase.rpc('batch_replace_workouts', {
-      p_user_id: user.id,
-      p_date:    date,
-      p_sources: ['oura', 'strava'],
-      p_rows:    toInsert.map(r => ({
-        title:    r.text,
-        source:   r.source || 'oura',
-        calories: r.kcal ? Number(r.kcal) : null,
-        raw:      { clientId: r.id ?? null, dist: r.dist ?? null, pace: r.pace ?? null },
-      })),
-    });
-    if (rpcErr) return Response.json({ error: rpcErr.message }, { status: 500 });
+    if (toInsert.length) {
+      const { error: insErr } = await supabase.from('workouts').insert(
+        toInsert.map(r => ({
+          user_id:  user.id,
+          date,
+          title:    r.text,
+          source:   r.source || 'oura',
+          calories: r.kcal ? Number(r.kcal) : null,
+          raw:      { clientId: r.id ?? null, dist: r.dist ?? null, pace: r.pace ?? null },
+        }))
+      );
+      if (insErr) return Response.json({ error: insErr.message }, { status: 500 });
+    }
     return Response.json({ ok: true });
   }
 
