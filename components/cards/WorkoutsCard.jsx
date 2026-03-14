@@ -103,14 +103,19 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     });
   },[date,token,userId,stravaConnected]); // eslint-disable-line
 
-  // AI kcal estimation for manual rows with no kcal (e.g. added via voice/chat)
+  // AI estimation for manual rows missing kcal (e.g. added via voice/chat)
   useEffect(()=>{
     if(!token||!loaded)return;
     safe.filter(r=>r.text?.trim()&&!r.kcal&&!estimating.current.has(r.id)&&!failed.current.has(r.id)).forEach(row=>{
       estimating.current.add(row.id);
-      estimateNutrition(`Calories burned for: "${row.text}" for a typical adult. Return JSON: {"kcal":300}`, token).then(result=>{
+      estimateNutrition(row.text, token).then(result=>{
         estimating.current.delete(row.id);
-        if(result?.kcal) setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===row.id?{...r,kcal:result.kcal||null}:r));
+        if(result?.kcal) setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===row.id?{
+          ...r,
+          kcal:result.kcal||null,
+          dist:r.dist||( result.dist_mi ? `${Number(result.dist_mi).toFixed(2)}mi` : null ),
+          pace:r.pace||( result.pace || null ),
+        }:r));
         else failed.current.add(row.id);
       });
     });
@@ -121,7 +126,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     if(!token||!loaded||!estLoaded)return;
     mergedSynced.filter(r=>!r.kcal&&r.text&&!estimating.current.has(r.id)&&!failed.current.has(r.id)).forEach(row=>{
       estimating.current.add(row.id);
-      estimateNutrition(`Calories burned for: "${row.text}"${row.dist?` (${row.dist})`:""} for a typical adult. Return JSON: {"kcal":300}`, token).then(result=>{
+      estimateNutrition(`${row.text}${row.dist?` (${row.dist})`:""}`, token).then(result=>{
         estimating.current.delete(row.id);
         if(result?.kcal) setSavedEstimates(prev=>({...(typeof prev==="object"&&prev?prev:{}), [row.id]:result}));
         else failed.current.add(row.id);
@@ -149,9 +154,14 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     estimating.current.add(id);
     setTick(t => t + 1);
     try {
-      const result = await estimateNutrition(`Calories burned for: "${text}" for a typical adult. Return JSON: {"kcal":300}`, token);
+      const result = await estimateNutrition(text, token);
       estimating.current.delete(id);
-      setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{...r,kcal:result?.kcal||null}:r));
+      setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{
+        ...r,
+        kcal:result?.kcal||null,
+        dist:r.dist||( result?.dist_mi ? `${Number(result.dist_mi).toFixed(2)}mi` : null ),
+        pace:r.pace||( result?.pace || null ),
+      }:r));
       setTick(t => t + 1);
     } catch(_) {
       estimating.current.delete(id);

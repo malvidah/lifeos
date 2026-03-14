@@ -29,11 +29,20 @@ export async function POST(request) {
 
     const body = await request.json();
 
-    // Cap max_tokens so callers can't accidentally burn large token budgets
-    const safeBody = {
-      ...body,
-      max_tokens: Math.min(body.max_tokens ?? MAX_TOKENS_CAP, MAX_TOKENS_CAP),
-    };
+    // ── Prompt shorthand: { prompt } → proper Messages API body ──────────
+    let apiBody;
+    if (body.prompt && !body.messages) {
+      apiBody = {
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: MAX_TOKENS_CAP,
+        messages: [{ role: 'user', content: body.prompt }],
+      };
+    } else {
+      apiBody = {
+        ...body,
+        max_tokens: Math.min(body.max_tokens ?? MAX_TOKENS_CAP, MAX_TOKENS_CAP),
+      };
+    }
 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -42,10 +51,20 @@ export async function POST(request) {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
       },
-      body: JSON.stringify(safeBody),
+      body: JSON.stringify(apiBody),
     });
 
     const data = await r.json();
+
+    // ── For prompt shorthand, extract JSON from the response text ─────────
+    if (body.prompt && !body.messages && data.content?.[0]?.text) {
+      const text = data.content[0].text;
+      const match = text.match(/\{[\s\S]*\}/);
+      if (match) {
+        try { return Response.json(JSON.parse(match[0])); } catch (_) {}
+      }
+    }
+
     return Response.json(data, { status: r.status });
   } catch (e) {
     return Response.json({ error: e.message }, { status: 500 });
