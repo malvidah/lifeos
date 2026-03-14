@@ -670,6 +670,16 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     onUpdate({ editor }) {
       if (taskListRef.current) onUpdateRef.current?.(editor.getHTML());
     },
+
+    onSelectionUpdate({ editor }) {
+      // In task list mode, if cursor lands on a bare paragraph, wrap it into the task list
+      if (!taskListRef.current) return;
+      const { $from } = editor.state.selection;
+      if ($from.parent.type.name === 'paragraph' && $from.depth === 1) {
+        // Cursor is on a top-level paragraph outside the task list — convert it
+        editor.chain().focus().toggleTaskList().run();
+      }
+    },
   });
 
   useEffect(() => { editorRef.current = editor; }, [editor]);
