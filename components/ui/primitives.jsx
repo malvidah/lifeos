@@ -187,20 +187,28 @@ export function DayLabLoader({ size = 32, color = "var(--dl-strong)" }) {
 
 export function TagChip({ name, onClick, plain = false }) {
   return (
-    <span onClick={onClick} style={{
-      ...CHIP_TOKENS.project(projectColor(name)),
-      cursor: onClick ? 'pointer' : 'default',
-      opacity: plain ? 0.4 : 1,
-    }}>{name.toUpperCase()}</span>
+    <span onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } } : undefined}
+      style={{
+        ...CHIP_TOKENS.project(projectColor(name)),
+        cursor: onClick ? 'pointer' : 'default',
+        opacity: plain ? 0.4 : 1,
+      }}>{name.toUpperCase()}</span>
   );
 }
 
 export function NoteChip({ name, onClick }) {
   return (
-    <span onClick={onClick} style={{
-      ...CHIP_TOKENS.note,
-      cursor: onClick ? 'pointer' : 'default',
-    }}>{name}</span>
+    <span onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(e); } } : undefined}
+      style={{
+        ...CHIP_TOKENS.note,
+        cursor: onClick ? 'pointer' : 'default',
+      }}>{name}</span>
   );
 }
 
