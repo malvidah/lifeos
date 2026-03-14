@@ -158,8 +158,11 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
         body: JSON.stringify({ oldName: project, newName: newSlug }),
       });
       const d = await res.json();
-      if (d.ok) onRenamed(newSlug);
-      else setRenameErr(d.error || 'Rename failed.');
+      if (d.ok) {
+        // Clear cached journal/task data so day view re-fetches with new tag names
+        window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal', 'tasks'] } }));
+        onRenamed(newSlug);
+      } else setRenameErr(d.error || 'Rename failed.');
     } catch { setRenameErr('Network error.'); }
     finally { setRenaming(false); }
   }
