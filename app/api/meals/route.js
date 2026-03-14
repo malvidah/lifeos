@@ -52,20 +52,24 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 
   const parsed = parseMealItems(items);
 
-  // Atomic replace via RPC — DELETE+INSERT in one Postgres transaction.
-  const rows = parsed.map(p => ({
-    position:    p.position,
-    content:     p.content,
-    ai_calories: p.ai_calories ?? null,
-    ai_protein:  p.ai_protein ?? null,
-  }));
+  // Full-replace: delete existing items for this date, insert new ones
+  const { error: delErr } = await supabase
+    .from('meal_items').delete()
+    .eq('user_id', user.id).eq('date', date);
+  if (delErr) throw delErr;
 
-  const { error: rpcErr } = await supabase.rpc('batch_replace_meal_items', {
-    p_user_id: user.id,
-    p_date:    date,
-    p_items:   rows,
-  });
-  if (rpcErr) throw rpcErr;
+  if (parsed.length > 0) {
+    const rows = parsed.map(p => ({
+      user_id:     user.id,
+      date,
+      position:    p.position,
+      content:     p.content,
+      ai_calories: p.ai_calories,
+      ai_protein:  p.ai_protein,
+    }));
+    const { error: insErr } = await supabase.from('meal_items').insert(rows);
+    if (insErr) throw insErr;
+  }
 
   return Response.json({ ok: true, items: parsed.length });
 });
