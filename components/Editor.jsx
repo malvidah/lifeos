@@ -668,6 +668,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
 
     onBlur({ editor }) {
+      flushedRef.current = true; // prevent duplicate save from unmount flush
       if (noteTitleRef.current) onBlurRef.current?.(editor.getHTML());
       else if (singleLineRef.current) onBlurRef.current?.(docToText(editor.getJSON()));
       else if (!taskListRef.current) onBlurRef.current?.(editor.getHTML());
@@ -705,8 +706,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   // runs BEFORE the DOM is removed in React 18, so the native blur event never fires
   // and the last unsaved text is silently dropped.
   // Fix: explicitly flush on unmount via a cleanup with an empty deps array.
+  // flushedRef prevents double-save when TipTap's onBlur fires right before unmount.
+  const flushedRef = useRef(false);
   useEffect(() => {
     return () => {
+      if (flushedRef.current) return; // onBlur already saved
       const ed = editorRef.current;
       if (!ed || ed.isDestroyed) return;
       try {
