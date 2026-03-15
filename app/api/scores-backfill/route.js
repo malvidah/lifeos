@@ -16,9 +16,11 @@ function metricsToLegacy(row) {
   if (row.hrv        != null) out.hrv          = String(row.hrv);
   if (row.rhr        != null) out.rhr          = String(row.rhr);
   if (row.sleep_hrs  != null) out.sleepHrs     = String(row.sleep_hrs);
-  if (row.sleep_eff  != null) out.sleepEff = String(row.sleep_eff);
+  if (row.sleep_eff  != null) out.sleepEff     = String(row.sleep_eff);
   if (row.steps      != null) out.steps        = String(row.steps);
   if (row.active_min != null) out.activeMinutes = String(row.active_min);
+  if (row.raw?.stressMins   != null) out.stressMins   = String(row.raw.stressMins);
+  if (row.raw?.recoveryMins != null) out.recoveryMins = String(row.raw.recoveryMins);
   return out;
 }
 
@@ -46,7 +48,7 @@ export async function POST(request) {
   // Supabase defaults to 1000 rows; raise limit for multi-year history
   const { data: metricRows, error: hErr } = await supabase
     .from('health_metrics')
-    .select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min')
+    .select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min, raw')
     .eq('user_id', user.id)
     .lte('date', today)
     .order('date', { ascending: true })

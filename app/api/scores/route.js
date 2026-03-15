@@ -15,6 +15,8 @@ function metricsToLegacy(row) {
     sleepEff:     row.sleep_eff  != null ? String(row.sleep_eff) : undefined,
     steps:        row.steps      != null ? String(row.steps)     : undefined,
     activeMinutes:row.active_min != null ? String(row.active_min): undefined,
+    stressMins:   row.raw?.stressMins   != null ? String(row.raw.stressMins)   : undefined,
+    recoveryMins: row.raw?.recoveryMins != null ? String(row.raw.recoveryMins) : undefined,
   };
 }
 
@@ -42,7 +44,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   // For past dates: return cached scores if available
   if (!isToday) {
-    const hasOverrides = ['sleepHrs','sleepEff','hrv','rhr','steps','activeMinutes']
+    const hasOverrides = ['sleepHrs','sleepEff','hrv','rhr','steps','activeMinutes','stressMins','recoveryMins']
       .some(k => searchParams.get(k) != null && searchParams.get(k) !== '');
 
     if (!hasOverrides) {
@@ -87,7 +89,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   const { data: metricsRows, error: metricsErr } = await supabase
     .from('health_metrics')
-    .select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min')
+    .select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min, raw')
     .eq('user_id', user.id)
     .gte('date', sinceStr).lte('date', date)
     .order('date', { ascending: true });
@@ -113,7 +115,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const dates = Object.keys(byDate).sort();
   const todayData = byDate[date] || {};
   const overrides = {};
-  ['sleepHrs','sleepEff','hrv','rhr','steps','activeMinutes'].forEach(k => {
+  ['sleepHrs','sleepEff','hrv','rhr','steps','activeMinutes','stressMins','recoveryMins'].forEach(k => {
     const v = searchParams.get(k);
     if (v != null && v !== '') overrides[k] = v;
   });

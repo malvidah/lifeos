@@ -184,7 +184,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
 
   // Stable fingerprint — only refetch scores when the fields that affect computation change
   const scoreFingerprint = loaded
-    ? [h.sleepHrs,h.sleepEff,h.hrv,h.rhr,h.steps,h.activeMinutes].join(':')
+    ? [h.sleepHrs,h.sleepEff,h.hrv,h.rhr,h.steps,h.activeMinutes,h.stressMins,h.recoveryMins].join(':')
     : null;
 
   useEffect(()=>{
@@ -204,6 +204,8 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     if(h.rhr)            p.set('rhr',            h.rhr);
     if(h.steps)          p.set('steps',          h.steps);
     if(h.activeMinutes)  p.set('activeMinutes',  h.activeMinutes);
+    if(h.stressMins)     p.set('stressMins',     h.stressMins);
+    if(h.recoveryMins)   p.set('recoveryMins',   h.recoveryMins);
     api.get(`/api/scores?${p}`, token)
       .then(d => {
         if (d && !d.error) {
