@@ -537,7 +537,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           // Command menu selection — replace bare / with /p or /n to re-trigger
           if (name.startsWith('__cmd__:')) {
             const cmd = name.slice(8); // 'p' or 'n'
-            editor.chain().focus().deleteRange(range).insertContent('/' + cmd + ' ').run();
+            editor.chain().focus().deleteRange(range).insertContent('/' + cmd).run();
+            // Re-insert after a tick so the suggestion plugin sees it as a fresh edit
+            // (inserting in the same transaction as onExit suppresses re-triggering)
+            setTimeout(() => editor.chain().focus().insertContent(' ').run(), 0);
             return;
           }
 
