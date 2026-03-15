@@ -41,12 +41,14 @@ export async function POST(request) {
   const today = [now.getFullYear(), String(now.getMonth()+1).padStart(2,'0'), String(now.getDate()).padStart(2,'0')].join('-');
 
   // Fetch all health_metrics rows (all sources), all time
+  // Supabase defaults to 1000 rows; raise limit for multi-year history
   const { data: metricRows, error: hErr } = await supabase
     .from('health_metrics')
     .select('date, source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min')
     .eq('user_id', user.id)
     .lte('date', today)
-    .order('date', { ascending: true });
+    .order('date', { ascending: true })
+    .limit(5000);
 
   if (hErr) return Response.json({ error: hErr.message }, { status: 500 });
   if (!metricRows?.length) return Response.json({ ok: true, scored: 0, message: 'no health data found' });

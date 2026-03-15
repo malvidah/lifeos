@@ -273,7 +273,7 @@ function DashboardInner() {
     if(!token||!userId)return;
     const supabase=createClient();
     supabase.auth.setSession({access_token:token,refresh_token:''});
-    const since=toKey(shift(new Date(),-180));
+    const since=toKey(shift(new Date(),-730)); // ~2 years of history
     supabase.from('health_scores')
       .select('date,sleep_score,readiness_score,activity_score,recovery_score')
       .eq('user_id',userId).gte('date',since).lte('date',todayKey())

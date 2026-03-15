@@ -424,13 +424,13 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                           flexShrink: 0,
                         }}>{day}</div>
 
-                        {/* Health dots — always show 4 placeholders for past dates */}
+                        {/* Health dots — full size when >= 85, half when below, tiny grey when no data */}
                         {dateKey <= today && (
-                          <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                            <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dots.sleep>0?"var(--dl-blue)":"var(--dl-middle)", opacity:!dots.sleep?0.25:dots.sleep>=85?1:0.4 }} />
-                            <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dots.readiness>0?"var(--dl-green)":"var(--dl-middle)", opacity:!dots.readiness?0.25:dots.readiness>=85?1:0.4 }} />
-                            <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dots.activity>0?"var(--dl-accent)":"var(--dl-middle)", opacity:!dots.activity?0.25:dots.activity>=85?1:0.4 }} />
-                            <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dots.recovery>0?"var(--dl-purple)":"var(--dl-middle)", opacity:!dots.recovery?0.25:dots.recovery>=85?1:0.4 }} />
+                          <div style={{ display: 'flex', gap: 2, flexShrink: 0, alignItems: 'center' }}>
+                            <div style={{ width: dots.sleep>=85?5:3, height: dots.sleep>=85?5:3, borderRadius: '50%', flexShrink: 0, background: dots.sleep>0?"var(--dl-blue)":"var(--dl-middle)", opacity: dots.sleep>0?1:0.25 }} />
+                            <div style={{ width: dots.readiness>=85?5:3, height: dots.readiness>=85?5:3, borderRadius: '50%', flexShrink: 0, background: dots.readiness>0?"var(--dl-green)":"var(--dl-middle)", opacity: dots.readiness>0?1:0.25 }} />
+                            <div style={{ width: dots.activity>=85?5:3, height: dots.activity>=85?5:3, borderRadius: '50%', flexShrink: 0, background: dots.activity>0?"var(--dl-accent)":"var(--dl-middle)", opacity: dots.activity>0?1:0.25 }} />
+                            <div style={{ width: dots.recovery>=85?5:3, height: dots.recovery>=85?5:3, borderRadius: '50%', flexShrink: 0, background: dots.recovery>0?"var(--dl-purple)":"var(--dl-middle)", opacity: dots.recovery>0?1:0.25 }} />
                           </div>
                         )}
 
@@ -726,12 +726,12 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     marginBottom:3,
                     textTransform:"uppercase",
                   }}>{DAY_NAMES[d.getDay()]} {d.getDate()}</div>
-                  {/* Health score dots — always show 4 placeholders, colored when data exists */}
-                  {k<=today && <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:4,height:10}}>
-                    <div style={{width:9,height:9,borderRadius:"50%",background:healthDots[k]?.sleep>0?"var(--dl-blue)":"var(--dl-middle)",opacity:!healthDots[k]?.sleep?0.25:healthDots[k].sleep>=85?1:0.4}}/>
-                    <div style={{width:9,height:9,borderRadius:"50%",background:healthDots[k]?.readiness>0?"var(--dl-green)":"var(--dl-middle)",opacity:!healthDots[k]?.readiness?0.25:healthDots[k].readiness>=85?1:0.4}}/>
-                    <div style={{width:9,height:9,borderRadius:"50%",background:healthDots[k]?.activity>0?"var(--dl-accent)":"var(--dl-middle)",opacity:!healthDots[k]?.activity?0.25:healthDots[k].activity>=85?1:0.4}}/>
-                    <div style={{width:9,height:9,borderRadius:"50%",background:healthDots[k]?.recovery>0?"var(--dl-purple)":"var(--dl-middle)",opacity:!healthDots[k]?.recovery?0.25:healthDots[k].recovery>=85?1:0.4}}/>
+                  {/* Health score dots — full size when >= 85, half size when below, tiny grey when no data */}
+                  {k<=today && <div style={{display:"flex",gap:4,justifyContent:"center",alignItems:"center",marginTop:4,height:10}}>
+                    <div style={{width:healthDots[k]?.sleep>=85?9:5,height:healthDots[k]?.sleep>=85?9:5,borderRadius:"50%",background:healthDots[k]?.sleep>0?"var(--dl-blue)":"var(--dl-middle)",opacity:healthDots[k]?.sleep>0?1:0.25}}/>
+                    <div style={{width:healthDots[k]?.readiness>=85?9:5,height:healthDots[k]?.readiness>=85?9:5,borderRadius:"50%",background:healthDots[k]?.readiness>0?"var(--dl-green)":"var(--dl-middle)",opacity:healthDots[k]?.readiness>0?1:0.25}}/>
+                    <div style={{width:healthDots[k]?.activity>=85?9:5,height:healthDots[k]?.activity>=85?9:5,borderRadius:"50%",background:healthDots[k]?.activity>0?"var(--dl-accent)":"var(--dl-middle)",opacity:healthDots[k]?.activity>0?1:0.25}}/>
+                    <div style={{width:healthDots[k]?.recovery>=85?9:5,height:healthDots[k]?.recovery>=85?9:5,borderRadius:"50%",background:healthDots[k]?.recovery>0?"var(--dl-purple)":"var(--dl-middle)",opacity:healthDots[k]?.recovery>0?1:0.25}}/>
                   </div>}
                 </div>
 
