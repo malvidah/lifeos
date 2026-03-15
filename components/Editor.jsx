@@ -460,7 +460,17 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         const item = s.items[s.selectedIndex];
-        if (item != null) { s.command(item); setSugg(null); event.preventDefault(); }
+        if (item != null) {
+          // Command menu item (bare /) — type the letter to refine the query
+          // instead of calling command (which exits the suggestion)
+          if (item.startsWith('__cmd__:')) {
+            const cmd = item.slice(8); // 'p' or 'n'
+            editorRef.current?.commands.insertContent(cmd);
+            event.preventDefault();
+            return true;
+          }
+          s.command(item); setSugg(null); event.preventDefault();
+        }
         return true;
       }
       if (event.key === 'Escape') { setSugg(null); return true; }
@@ -534,15 +544,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           return [];
         },
         commandFn: ({ editor, range, name }) => {
-          // Command menu selection — replace bare / with /p or /n to re-trigger
-          if (name.startsWith('__cmd__:')) {
-            const cmd = name.slice(8); // 'p' or 'n'
-            editor.chain().focus().deleteRange(range).insertContent('/' + cmd).run();
-            // Re-insert after a tick so the suggestion plugin sees it as a fresh edit
-            // (inserting in the same transaction as onExit suppresses re-triggering)
-            setTimeout(() => editor.chain().focus().insertContent(' ').run(), 0);
-            return;
-          }
+          // __cmd__ items are handled in onKeyDown/onSelect — they never reach here.
+          // But guard just in case:
+          if (name.startsWith('__cmd__:')) return;
 
           justInsertedRef.current = true;
           setTimeout(() => { justInsertedRef.current = false; }, 150);
@@ -812,7 +816,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       </div>
       <SuggestionDropdown
         state={sugg}
-        onSelect={item => { sugg?.command(item); setSugg(null); }}
+        onSelect={item => {
+          if (item.startsWith('__cmd__:')) {
+            editorRef.current?.commands.insertContent(item.slice(8));
+            return;
+          }
+          sugg?.command(item); setSugg(null);
+        }}
       />
     </>
   );
