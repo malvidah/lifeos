@@ -427,11 +427,11 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
             ))}
           </svg>
 
-          {/* Today dot */}
+          {/* Today dot — sits on the smoothed line (12M) or raw line (30D) */}
           <div style={{
             position: 'absolute',
-            left: `${(last.i / span) * 100}%`,
-            top: `${(yOf(last.v) / H) * 80}px`,
+            left: `${((trendRange === "12m" ? maLast : last).i / span) * 100}%`,
+            top: `${(yOf((trendRange === "12m" ? maLast : last).v) / H) * 80}px`,
             transform: 'translate(-50%, -50%)',
             width: 7, height: 7, borderRadius: '50%',
             background: color,
