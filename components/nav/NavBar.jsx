@@ -28,8 +28,10 @@ function fmtRelative(dateKey, todayKey) {
   // Past dates
   if (diffDays > 0) {
     if (absDays <= 6) return `LAST ${dayName}`;
-    if (absDays <= 13) return `1 WEEK AGO`;
-    if (absDays < 30) return `${Math.round(absDays / 7)} WEEKS AGO`;
+    if (absDays < 30) {
+      const half = Math.round(absDays / 7 * 2) / 2; // round to nearest 0.5
+      return `${half} WEEK${half === 1 ? '' : 'S'} AGO`;
+    }
     const totalMonths = (t.getFullYear() - d.getFullYear()) * 12 + (t.getMonth() - d.getMonth());
     if (totalMonths < 2) return 'LAST MONTH';
     if (totalMonths < 12) return `${totalMonths} MONTHS AGO`;
@@ -41,8 +43,10 @@ function fmtRelative(dateKey, todayKey) {
 
   // Future dates
   if (absDays <= 6) return `THIS ${dayName}`;
-  if (absDays <= 13) return `NEXT WEEK`;
-  if (absDays < 30) return `IN ${Math.round(absDays / 7)} WEEKS`;
+  if (absDays < 30) {
+    const half = Math.round(absDays / 7 * 2) / 2;
+    return `IN ${half} WEEK${half === 1 ? '' : 'S'}`;
+  }
   const totalMonths = (d.getFullYear() - t.getFullYear()) * 12 + (d.getMonth() - t.getMonth());
   if (totalMonths < 2) return 'NEXT MONTH';
   if (totalMonths < 12) return `IN ${totalMonths} MONTHS`;
