@@ -173,7 +173,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
         taskList
         value={htmlValue}
         onUpdate={html => setValue(html)}
-        placeholder=""
+        placeholder="Add a task. Use / for commands."
         projectNames={taskProjectNames}
         noteNames={ctxNotes}
         textColor={"var(--dl-strong)"}

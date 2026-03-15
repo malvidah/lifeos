@@ -31,7 +31,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-weight: 400; }
-    .dl-tasklist .ProseMirror .is-empty::before { content: none !important; }
+    .dl-tasklist .ProseMirror li p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
@@ -501,7 +501,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           ? ({ node }) => node.type.name === 'heading' ? 'Untitled' : 'Write something...'
           : placeholder || '',
         emptyNodeClass: 'is-empty',
-        showOnlyCurrent: !noteTitle && !taskList,
+        showOnlyCurrent: !noteTitle,
       }),
 
       // Unified slash command: /p → project chip, /n → note chip
@@ -794,7 +794,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       if (noteTitleRef.current) {
         editor.commands.setContent(textToNoteContent(value), false);
       } else if (taskList) {
-        editor.commands.setContent(value || EMPTY_TASK_LIST, false);
+        editor.commands.setContent(value || '', false);
       } else if (singleLine || !value?.startsWith('<')) {
         editor.commands.setContent({ type: 'doc', content: textToContent(value || '') }, false);
       } else {
