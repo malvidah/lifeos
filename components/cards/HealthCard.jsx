@@ -18,15 +18,19 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   const [loaded, setLoaded] = useState(false);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
-  // Load stored metrics + cached scores together on date change to avoid flicker.
-  // Shows DB-cached values instantly, then live sync refines them.
+  // Reset to empty immediately on date change — never show stale previous-day data
   const prevHealthDate = useRef(date);
   useEffect(()=>{
-    if(!userId||!token)return;
     if(prevHealthDate.current !== date){
       prevHealthDate.current = date;
+      setH(H_EMPTY);
       setLoaded(false);
     }
+  },[date]); // eslint-disable-line
+
+  // Load stored metrics from health_metrics for this date
+  useEffect(()=>{
+    if(!userId||!token)return;
     const sb = createClient();
     sb.from('health_metrics')
       .select('source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min, raw')
@@ -38,24 +42,20 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
             if(!best || SOURCE_PRIORITY.indexOf(r.source) < SOURCE_PRIORITY.indexOf(best.source)) best = r;
           }
           if(best){
-            setH(p=>({...H_EMPTY,
-              hrv:          best.hrv        != null ? String(best.hrv)        : "",
-              rhr:          best.rhr        != null ? String(best.rhr)        : "",
-              sleepHrs:     best.sleep_hrs  != null ? String(best.sleep_hrs)  : "",
-              sleepEff:     best.sleep_eff  != null ? String(best.sleep_eff)  : "",
-              steps:        best.steps      != null ? String(best.steps)      : "",
-              activeMinutes:best.active_min != null ? String(best.active_min) : "",
-              stressMins:   best.raw?.stressMins   != null ? String(best.raw.stressMins)   : "",
-              recoveryMins: best.raw?.recoveryMins != null ? String(best.raw.recoveryMins) : "",
+            setH(p=>({...p,
+              hrv:          best.hrv        != null ? String(best.hrv)        : p.hrv,
+              rhr:          best.rhr        != null ? String(best.rhr)        : p.rhr,
+              sleepHrs:     best.sleep_hrs  != null ? String(best.sleep_hrs)  : p.sleepHrs,
+              sleepEff:     best.sleep_eff  != null ? String(best.sleep_eff)  : p.sleepEff,
+              steps:        best.steps      != null ? String(best.steps)      : p.steps,
+              activeMinutes:best.active_min != null ? String(best.active_min) : p.activeMinutes,
+              stressMins:   best.raw?.stressMins   != null ? String(best.raw.stressMins)   : p.stressMins,
+              recoveryMins: best.raw?.recoveryMins != null ? String(best.raw.recoveryMins) : p.recoveryMins,
             }));
-          } else {
-            setH(H_EMPTY);
           }
-        } else {
-          setH(H_EMPTY);
         }
         setLoaded(true);
-      }).catch(()=>{ setH(H_EMPTY); setLoaded(true); });
+      }).catch(()=>setLoaded(true));
   },[date, userId, token]); // eslint-disable-line
 
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
@@ -136,27 +136,31 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
 
   // ── Computed scores from /api/scores ──────────────────────────────────────
   const [scores, setScores] = useState(null);
-  // Load cached scores from DB on date change — instant, no flicker
   const prevScoreDate = useRef(date);
   useEffect(()=>{
-    if(prevScoreDate.current === date) return;
-    prevScoreDate.current = date;
-    if (!token) { setScores(null); return; }
-    api.get(`/api/health/scores?start=${date}&end=${date}`, token)
-      .then(data => {
-        const row = data?.rows?.[0];
-        if (row && (row.sleep_score || row.readiness_score || row.activity_score || row.recovery_score)) {
-          setScores({
-            sleep:     {score: row.sleep_score     || null},
-            readiness: {score: row.readiness_score || null},
-            activity:  {score: row.activity_score  || null},
-            recovery:  {score: row.recovery_score  || null},
+    if(prevScoreDate.current !== date){
+      prevScoreDate.current = date;
+      // Load cached scores from DB instantly so we don't flash "—" while /api/scores computes
+      if (token) {
+        api.get(`/api/health/scores?start=${date}&end=${date}`, token)
+          .then(data => {
+            const row = data?.rows?.[0];
+            if (row && (row.sleep_score != null || row.readiness_score != null || row.activity_score != null || row.recovery_score != null)) {
+              setScores({
+                sleep:     {score: row.sleep_score     ?? null},
+                readiness: {score: row.readiness_score ?? null},
+                activity:  {score: row.activity_score  ?? null},
+                recovery:  {score: row.recovery_score  ?? null},
+              });
+            } else {
+              setScores(null);
+            }
           });
-        } else {
-          setScores(null);
-        }
-      });
-  },[date, token]); // eslint-disable-line
+      } else {
+        setScores(null);
+      }
+    }
+  },[date]); // eslint-disable-line
 
   // ── Apple Health connect prompt (iOS only) ────────────────────────────────
   const [hkStatus, setHkStatus] = useState(null); // null | 'not_determined' | 'authorized' | 'denied'
