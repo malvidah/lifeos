@@ -523,11 +523,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             const matches = names
               .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
               .map(n => `__project__:${n}`);
-            // Allow creating a new project that doesn't exist yet
             if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
               matches.push(`__create_project__:${qTrim}`);
             }
-            return matches;
+            // Never return empty — keeps the suggestion plugin alive while typing
+            return matches.length ? matches : ['__create_project__:' + (qTrim || 'project')];
           }
           if (cmd === 'n') {
             const names   = noteNamesRef.current || [];
@@ -536,11 +536,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             const matches = names
               .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
               .map(n => `__note__:${n}`);
-            // Always show create option when there's search text and no exact match
             if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
               matches.push(`__create__:${qTrim}`);
             }
-            return matches;
+            // Never return empty — keeps the suggestion plugin alive while typing
+            return matches.length ? matches : ['__create__:' + (qTrim || 'note')];
           }
           return [];
         },
