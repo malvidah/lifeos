@@ -24,7 +24,8 @@ export function Ring({score,color,size=48}) {
   const val=parseFloat(score)||0;
   const pct=Math.min(val/100,1);
   const high = val >= 85;
-  const bubbleR = score ? r * Math.min(0.5 + 0.5*(val/85), 1.0) : 0;
+  const hasScore = score != null && score !== '';
+  const bubbleR = hasScore ? r * Math.min(0.5 + 0.5*(val/85), 1.0) : 0;
   return (
     <svg width={size} height={size} style={{flexShrink:0}}>
       {/* Background fill — stronger when score >= 85 */}
@@ -35,8 +36,8 @@ export function Ring({score,color,size=48}) {
         style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%",transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
       {/* Score text — always uses ring color */}
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:score?color:"var(--dl-middle)",fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
-        {score||"—"}
+        style={{fill:hasScore?color:"var(--dl-middle)",fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
+        {hasScore ? score : "—"}
       </text>
     </svg>
   );
