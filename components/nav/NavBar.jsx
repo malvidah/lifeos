@@ -1,7 +1,7 @@
 "use client";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
-import { MONTHS_FULL } from "@/lib/dates";
+import { MONTHS_FULL, todayKey } from "@/lib/dates";
 
 // ── Format date key → "MARCH 13, 2026" ───────────────────────────────────────
 function fmtNavDate(dateKey) {
@@ -63,6 +63,11 @@ export default function NavBar(props) {
   const isEverything = activeProject === '__everything__';
   const isProject    = activeProject && !isGraph && !isEverything;
 
+  const today = todayKey();
+  const relLabel = !activeProject && date === today ? 'TODAY'
+    : !activeProject && date === stepDateKey(today, -1) ? 'YESTERDAY'
+    : !activeProject && date === stepDateKey(today, +1) ? 'TOMORROW'
+    : null;
   const centerLabel = !activeProject  ? fmtNavDate(date)
     : isGraph                         ? 'ALL PROJECTS'
     : isEverything                    ? 'ALL'
@@ -118,17 +123,25 @@ export default function NavBar(props) {
               onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
               onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
             >‹</button>
-            <button onClick={onGoHome} style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
-              fontFamily: mono, fontSize: 13, fontWeight: 400, letterSpacing: '0.12em',
-              textTransform: 'uppercase', color: titleColor,
-              whiteSpace: 'nowrap', userSelect: 'none', transition: 'opacity 0.15s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >
-              {centerLabel}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+              {relLabel && (
+                <span style={{
+                  fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
+                  color: "var(--dl-orange)", lineHeight: 1, marginBottom: -1,
+                }}>{relLabel}</span>
+              )}
+              <button onClick={onGoHome} style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
+                fontFamily: mono, fontSize: 13, fontWeight: 400, letterSpacing: '0.12em',
+                textTransform: 'uppercase', color: titleColor,
+                whiteSpace: 'nowrap', userSelect: 'none', transition: 'opacity 0.15s',
+              }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                {centerLabel}
+              </button>
+            </div>
             <button onClick={() => onSelectDate(stepDateKey(date, +1))} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: "var(--dl-highlight)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
