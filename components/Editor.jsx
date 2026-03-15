@@ -465,7 +465,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           // instead of calling command (which exits the suggestion)
           if (item.startsWith('__cmd__:')) {
             const cmd = item.slice(8); // 'p' or 'n'
-            editorRef.current?.commands.insertContent(cmd);
+            editorRef.current?.commands.insertContent(cmd + ' ');
             event.preventDefault();
             return true;
           }
@@ -532,10 +532,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           if (cmd === 'n') {
             const names   = noteNamesRef.current || [];
             const q       = search.toLowerCase().replace(/\s/g, '');
+            const qTrim   = search.trim();
             const matches = names
               .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
               .map(n => `__note__:${n}`);
-            const qTrim = search.trim();
+            // Always show create option when there's search text and no exact match
             if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
               matches.push(`__create__:${qTrim}`);
             }
@@ -818,7 +819,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         state={sugg}
         onSelect={item => {
           if (item.startsWith('__cmd__:')) {
-            editorRef.current?.commands.insertContent(item.slice(8));
+            editorRef.current?.commands.insertContent(item.slice(8) + ' ');
             return;
           }
           sugg?.command(item); setSugg(null);
