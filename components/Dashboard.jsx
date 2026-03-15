@@ -150,10 +150,11 @@ function DashboardInner() {
     sessionStorage.setItem(key, '1');
     api.post('/api/scores-backfill', {}, token)
       .then(d => {
-        if (d?.scored > 0) console.log(`[daylab] backfilled ${d.scored} score entries`);
+        console.log(`[daylab] scores-backfill result:`, d);
         loadDots(); // always reload — shows correct colored vs grey dots
       })
-      .catch(() => {
+      .catch(e => {
+        console.warn('[daylab] scores-backfill failed:', e);
         // Backfill failed (likely timeout) — clear flag so it retries next session
         sessionStorage.removeItem(key);
       });
@@ -276,6 +277,7 @@ function DashboardInner() {
     // to avoid session/RLS issues with the browser client
     api.get(`/api/health/scores?start=${since}&end=${todayKey()}`, token)
       .then(data=>{
+        console.log(`[daylab] loadDots: ${data?.rows?.length ?? 0} score rows loaded`);
         if(!data?.rows)return;
         setHealthDots(prev => {
           const next = {...prev};

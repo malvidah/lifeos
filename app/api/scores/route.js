@@ -163,7 +163,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   };
 
   // ── Persist scores to health_scores ──────────────────────────────────────
-  const { error: upsertErr } = await supabase.from('health_scores').upsert({
+  const scoreRow = {
     user_id: user.id, date,
     winning_source: pickBest(rowsByDate[date] ?? [])?.source ?? null,
     sleep_score:     sleep.score,
@@ -179,8 +179,25 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       recovery:  recovery.contributors,
     },
     computed_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,date' });
-  if (upsertErr) console.error('[scores] persist failed:', upsertErr.message, { date, userId: user.id });
+  };
 
+  // Try upsert first, fall back to delete+insert if conflict handling fails
+  let { error: upsertErr } = await supabase
+    .from('health_scores').upsert(scoreRow, { onConflict: 'user_id,date' });
+
+  if (upsertErr) {
+    console.error('[scores] upsert failed, trying delete+insert:', upsertErr.message);
+    await supabase.from('health_scores').delete()
+      .eq('user_id', user.id).eq('date', date);
+    const { error: insErr } = await supabase.from('health_scores').insert(scoreRow);
+    if (insErr) {
+      console.error('[scores] insert also failed:', insErr.message);
+      result._persistError = insErr.message;
+    } else {
+      upsertErr = null; // succeeded via fallback
+    }
+  }
+
+  result._persisted = !upsertErr;
   return Response.json(result);
 });
