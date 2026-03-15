@@ -354,7 +354,7 @@ function DashboardInner() {
         }, 150);
       },
     }}>
-    <div style={{background:activeProject?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative",zIndex:1}}>
+    <div style={{background:activeProject?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
       {/* Weather gradient — full viewport, behind everything. Visible through
           glassmorphic elements (nav bar, chat float) that use backdrop-filter.
           Cards have opaque backgrounds and sit on top. */}
@@ -371,7 +371,7 @@ function DashboardInner() {
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
-        <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch"}}>
+        <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
         <div style={{
           flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
           display:"flex", flexDirection:"column", overflow:"hidden"}}>
