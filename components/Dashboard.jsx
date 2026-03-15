@@ -11,6 +11,7 @@ import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
 import { NavigationContext, ProjectNamesContext } from "@/lib/contexts";
 import { Card, ErrorBoundary } from "./ui/primitives.jsx";
+import WeatherBackground from "./ui/WeatherBackground.jsx";
 import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
@@ -353,8 +354,9 @@ function DashboardInner() {
         }, 150);
       },
     }}>
-    <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
-      {/* Global styles now in theme.css */}
+    <div style={{background:activeProject?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative",zIndex:1}}>
+      {/* Weather-responsive ambient background — only on daily view */}
+      {!activeProject && <WeatherBackground date={selected} theme={theme}/>}
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
