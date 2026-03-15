@@ -11,31 +11,49 @@ function fmtNavDate(dateKey) {
 }
 
 // ── Relative date label ──────────────────────────────────────────────────────
+const DAYS_SHORT = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
 function fmtRelative(dateKey, todayKey) {
   if (!dateKey || !todayKey) return null;
   if (dateKey === todayKey) return 'TODAY';
   const d = new Date(dateKey + 'T12:00:00');
   const t = new Date(todayKey + 'T12:00:00');
-  const diffMs = t - d;
-  const diffDays = Math.round(diffMs / 86400000);
+  const diffDays = Math.round((t - d) / 86400000);
+
   if (diffDays === 1) return 'YESTERDAY';
   if (diffDays === -1) return 'TOMORROW';
 
   const absDays = Math.abs(diffDays);
-  const suffix = diffDays > 0 ? 'AGO' : 'FROM NOW';
+  const dayName = DAYS_SHORT[d.getDay()];
 
-  if (absDays < 7) return `${absDays} DAYS ${suffix}`;
-  if (absDays < 14) return `1 WK ${suffix}`;
-  if (absDays < 30) return `${Math.floor(absDays / 7)} WKS ${suffix}`;
+  // Past dates
+  if (diffDays > 0) {
+    // "Last Thursday" for 2-6 days ago (same week or last week feel)
+    if (absDays <= 6) return `LAST ${dayName}`;
+    // "2 Thursdays ago" for 7-13 days
+    if (absDays <= 13) return `2 ${dayName}S AGO`;
+    // "3 weeks ago" for 14-29 days
+    if (absDays < 30) return `${Math.round(absDays / 7)} WEEKS AGO`;
+    // Months/years
+    const totalMonths = (t.getFullYear() - d.getFullYear()) * 12 + (t.getMonth() - d.getMonth());
+    if (totalMonths < 2) return 'LAST MONTH';
+    if (totalMonths < 12) return `${totalMonths} MONTHS AGO`;
+    const yrs = Math.floor(totalMonths / 12);
+    const mos = totalMonths % 12;
+    if (mos === 0) return yrs === 1 ? 'LAST YEAR' : `${yrs} YEARS AGO`;
+    return yrs === 1 ? `1 YR ${mos} MO AGO` : `${yrs} YR ${mos} MO AGO`;
+  }
 
-  const totalMonths = (t.getFullYear() - d.getFullYear()) * 12 + (t.getMonth() - d.getMonth());
-  const absMonths = Math.abs(totalMonths);
-  if (absMonths < 1) return `${absDays} DAYS ${suffix}`;
-  const yrs = Math.floor(absMonths / 12);
-  const mos = absMonths % 12;
-  if (yrs === 0) return `${mos} MO ${suffix}`;
-  if (mos === 0) return `${yrs} YR ${suffix}`;
-  return `${yrs} YR ${mos} MO ${suffix}`;
+  // Future dates
+  if (absDays <= 6) return `THIS ${dayName}`;
+  if (absDays <= 13) return `NEXT ${dayName}`;
+  if (absDays < 30) return `IN ${Math.round(absDays / 7)} WEEKS`;
+  const totalMonths = (d.getFullYear() - t.getFullYear()) * 12 + (d.getMonth() - t.getMonth());
+  if (totalMonths < 2) return 'NEXT MONTH';
+  if (totalMonths < 12) return `IN ${totalMonths} MONTHS`;
+  const yrs = Math.floor(totalMonths / 12);
+  const mos = totalMonths % 12;
+  if (mos === 0) return yrs === 1 ? 'NEXT YEAR' : `IN ${yrs} YEARS`;
+  return `IN ${yrs} YR ${mos} MO`;
 }
 
 // ── NavIconBtn ────────────────────────────────────────────────────────────────
