@@ -541,7 +541,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                         <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:"var(--dl-middle)",marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
                         <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                           <span style={{fontFamily:serif,fontSize:F.md,color:fc}}>{f.value||"—"}</span>
-                          {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:fc,opacity:0.7}}>{f.unit}</span>}
+                          {f.unit&&<span style={{fontFamily:mono,fontSize:F.sm,color:hasVal?fc:"transparent",opacity:0.7}}>{f.unit}</span>}
                         </div>
                       </div>
                     );
