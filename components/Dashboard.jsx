@@ -354,9 +354,7 @@ function DashboardInner() {
         }, 150);
       },
     }}>
-    <div style={{background:activeProject?"var(--dl-bg)":"none",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative",zIndex:1}}>
-      {/* Weather-responsive ambient background — visible in gaps between opaque cards */}
-      {!activeProject && <WeatherBackground date={selected} theme={theme}/>}
+    <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
@@ -364,9 +362,7 @@ function DashboardInner() {
       <div style={{
         position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 38px)", left:0, right:0,
         height:80, pointerEvents:"none", zIndex:48,
-        background:activeProject
-          ? "linear-gradient(to bottom, var(--dl-bg) 0%, var(--dl-bg) 30%, transparent 100%)"
-          : "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, transparent 100%)",
+        background:"linear-gradient(to bottom, var(--dl-bg) 0%, var(--dl-bg) 30%, transparent 100%)",
       }}/>
 
 
@@ -384,7 +380,11 @@ function DashboardInner() {
               flex:1, minHeight:0, overflowY:"auto",
               padding:10, paddingTop:0,
               paddingBottom:mobile?200:0,
-              display:"flex", flexDirection:"column", gap:8}}>
+              display:"flex", flexDirection:"column", gap:8,
+              position:"relative"}}>
+              {/* Weather gradient — sticky behind scroll content, shows through
+                  glassmorphic elements (nav bar, chat float, search) */}
+              <WeatherBackground date={selected} theme={theme}/>
               {/* 25px breathing room under the top-bar vignette */}
               <div style={{height:25,flexShrink:0}}/>
               {/* NavBar — in scroll flow, same component on every page */}
@@ -577,9 +577,7 @@ function DashboardInner() {
       <div style={{
         position:"fixed", bottom:0, left:0, right:0,
         height:120, pointerEvents:"none", zIndex:96,
-        background:activeProject
-          ? "linear-gradient(to top, var(--dl-bg) 0%, var(--dl-bg)99 35%, transparent 100%)"
-          : "linear-gradient(to top, rgba(0,0,0,0.1) 0%, transparent 50%)",
+        background:"linear-gradient(to top, var(--dl-bg) 0%, var(--dl-bg)99 35%, transparent 100%)",
       }}/>
 
       {/* Floating chat pill — hidden during search */}

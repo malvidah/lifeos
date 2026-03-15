@@ -91,12 +91,17 @@ export default function WeatherBackground({ date, theme }) {
     <div
       aria-hidden="true"
       style={{
-        position: 'fixed',
-        inset: 0,
+        position: 'sticky',
+        top: 0,
+        left: 0,
+        right: 0,
+        height: '100vh',
+        marginBottom: '-100vh', // collapse so it doesn't push content down
         zIndex: 0,
         background: bg,
         transition: 'background 2s ease',
         pointerEvents: 'none',
+        flexShrink: 0,
       }}
     />
   );
