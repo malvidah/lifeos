@@ -414,6 +414,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   // extensions process the initial content, which stashes normalized HTML in
   // pendingRef via markDirty. On hard refresh the flush then re-saves (duplicate).
   const initialLoadDoneRef = useRef(false);
+  // Block onSelectionUpdate auto-wrap during programmatic setContent and initial mount.
+  // TipTap fires onSelectionUpdate after setContent, which would convert a bare
+  // paragraph into a task list checkbox even though the user didn't interact.
+  const suppressAutoWrapRef = useRef(true); // starts true — mount is programmatic
 
   const renderRef = useRef({
     onStart(props, key) {
@@ -716,8 +720,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     onSelectionUpdate({ editor }) {
       // In task list mode, if cursor lands on a bare paragraph, wrap it into the task list.
       // Suppress onUpdate so toggleTaskList doesn't trigger a save → re-render → loop.
-      // Only when focused — programmatic setContent('') shouldn't create phantom checkboxes.
-      if (!taskListRef.current || !editor.isFocused) return;
+      // Skip during programmatic updates (mount, setContent) — suppressAutoWrapRef blocks.
+      if (!taskListRef.current || suppressAutoWrapRef.current) return;
       const { $from } = editor.state.selection;
       if ($from.parent.type.name === 'paragraph' && $from.depth === 1) {
         suppressOnUpdateRef.current = true;
@@ -729,10 +733,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
   useEffect(() => { editorRef.current = editor; }, [editor]);
 
-  // Mark editor as initialized after mount settles — unblocks onUpdate
+  // Mark editor as initialized after mount settles — unblocks onUpdate and auto-wrap
   useEffect(() => {
     if (!editor) return;
-    const id = requestAnimationFrame(() => { initialLoadDoneRef.current = true; });
+    const id = requestAnimationFrame(() => {
+      initialLoadDoneRef.current = true;
+      suppressAutoWrapRef.current = false;
+    });
     return () => cancelAnimationFrame(id);
   }, [editor]);
 
@@ -790,6 +797,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     flushedRef.current = false; // reset for new content
     if (!editor.isFocused) {
       // Pass emitUpdate=false so programmatic syncs don't trigger onUpdate → setValue loops.
+      // Block auto-wrap during setContent so bare paragraphs don't become phantom checkboxes.
+      suppressAutoWrapRef.current = true;
       if (noteTitleRef.current) {
         editor.commands.setContent(textToNoteContent(value), false);
       } else if (taskList) {
@@ -799,6 +808,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       } else {
         editor.commands.setContent(value, false);
       }
+      requestAnimationFrame(() => { suppressAutoWrapRef.current = false; });
     }
   }, [value, editor]); // eslint-disable-line
 
