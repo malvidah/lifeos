@@ -121,11 +121,13 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
         headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify({})});
       const d = await res.json();
       if(!d.ok) console.warn("Oura backfill error:", d.error);
-      // Also recompute all scores from the fresh data
+      // Also recompute all scores from the fresh data, then reload calendar dots
       fetch('/api/scores-backfill', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ force: true }),
+      }).then(() => {
+        window.dispatchEvent(new CustomEvent('daylab:reload-dots'));
       }).catch(() => {});
     } catch(e) { console.warn("Oura connect failed:", e); }
     setSyncing(null);
