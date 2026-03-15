@@ -42,7 +42,6 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       user_id: user.id, date, winning_source,
       sleep_score, readiness_score, activity_score, recovery_score,
       contributors, calibrated, calibration_days,
-      computed_at: new Date().toISOString(),
     }, { onConflict: 'user_id,date' })
     .select()
     .single();

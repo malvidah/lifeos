@@ -178,7 +178,6 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       activity:  activity.contributors,
       recovery:  recovery.contributors,
     },
-    computed_at: new Date().toISOString(),
   };
 
   // Try upsert first, fall back to delete+insert if conflict handling fails

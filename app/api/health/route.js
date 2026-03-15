@@ -49,7 +49,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
         .eq('date', date),
       supabase
         .from('health_scores')
-        .select('id, date, winning_source, sleep_score, readiness_score, activity_score, recovery_score, contributors, calibrated, calibration_days, computed_at')
+        .select('id, date, winning_source, sleep_score, readiness_score, activity_score, recovery_score, contributors, calibrated, calibration_days')
         .eq('user_id', user.id)
         .eq('date', date)
         .maybeSingle(),
@@ -77,7 +77,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
         .gte('date', start).lte('date', end),
       supabase
         .from('health_scores')
-        .select('id, date, winning_source, sleep_score, readiness_score, activity_score, recovery_score, contributors, calibrated, calibration_days, computed_at')
+        .select('id, date, winning_source, sleep_score, readiness_score, activity_score, recovery_score, contributors, calibrated, calibration_days')
         .eq('user_id', user.id)
         .gte('date', start).lte('date', end),
     ]);
@@ -141,7 +141,6 @@ export const POST = withAuth(async (req, { supabase, user }) => {
         user_id: user.id, date, winning_source,
         sleep_score, readiness_score, activity_score, recovery_score,
         contributors, calibrated, calibration_days,
-        computed_at: new Date().toISOString(),
       }, { onConflict: 'user_id,date' })
       .select()
       .single();
