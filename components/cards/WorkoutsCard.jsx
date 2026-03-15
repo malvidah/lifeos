@@ -137,7 +137,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   function parseActivityText(text) {
     const t = text.toLowerCase();
     // Distance: "5 mi", "5.2mi", "5 miles", "8 km", "8km"
-    const distMi = t.match(/(\d+\.?\d*)\s*mi(?:les?)?/);
+    const distMi = t.match(/(\d+\.?\d*)\s*mi(?:les?)?(?!n)/);
     const distKm  = t.match(/(\d+\.?\d*)\s*km/);
     let dist = null;
     if (distMi) dist = `${parseFloat(distMi[1]).toFixed(2)}mi`;
