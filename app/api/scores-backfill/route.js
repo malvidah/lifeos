@@ -2,6 +2,8 @@ import { createClient } from '@supabase/supabase-js';
 import { batchComputeScores } from '@/lib/scoreCalc.js';
 import { persistScores } from '@/lib/persistScores.js';
 
+export const maxDuration = 60; // seconds — 730+ dates × score computation needs time
+
 // Finds all dates with health_metrics data but no health_scores entry,
 // computes scores for those gaps, and upserts them.
 // Safe to run multiple times — upsert is idempotent.

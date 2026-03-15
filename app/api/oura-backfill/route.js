@@ -6,6 +6,8 @@ import { persistScores } from '@/lib/persistScores.js';
 // Fetches in 90-day chunks to stay within Oura API limits.
 // Safe to run multiple times — uses upsert so no duplicates.
 
+export const maxDuration = 60; // seconds — 2 years of 90-day chunks needs time
+
 const SOURCE_PRIORITY = ['oura', 'apple', 'garmin'];
 
 function metricsToLegacy(row) {

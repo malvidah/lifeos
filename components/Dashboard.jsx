@@ -141,9 +141,8 @@ function DashboardInner() {
   }, [token, userId, bustTodayCacheAndSync]); // eslint-disable-line
 
   // ── Silent background scores backfill — runs once per session ──────────
-  // Finds any health/health_apple rows that don't have a computed scores entry
-  // and fills them in. This is what populates historical trend data.
-  // After backfill, reload dots so calendar reflects new scores.
+  // Finds any health_metrics rows that don't have a computed scores entry
+  // and fills them in. Always reloads dots afterward so calendar is current.
   useEffect(() => {
     if (!token || !userId) return;
     const key = `scores_backfill_done:${userId}`;
@@ -151,12 +150,13 @@ function DashboardInner() {
     sessionStorage.setItem(key, '1');
     api.post('/api/scores-backfill', {}, token)
       .then(d => {
-        if (d?.scored > 0) {
-          console.log(`[daylab] backfilled ${d.scored} score entries`);
-          loadDots(); // reload dots so newly backfilled scores appear on calendar
-        }
+        if (d?.scored > 0) console.log(`[daylab] backfilled ${d.scored} score entries`);
+        loadDots(); // always reload — shows correct colored vs grey dots
       })
-      .catch(() => {}); // silent — never block the UI
+      .catch(() => {
+        // Backfill failed (likely timeout) — clear flag so it retries next session
+        sessionStorage.removeItem(key);
+      });
   }, [token, userId]); // eslint-disable-line
 
   // ── Pull-to-refresh from native iOS app ────────────────────────────────
