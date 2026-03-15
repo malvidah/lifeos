@@ -504,7 +504,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           ? ({ node }) => node.type.name === 'heading' ? 'Untitled' : 'Write something...'
           : placeholder || '',
         emptyNodeClass: 'is-empty',
-        showOnlyCurrent: !noteTitle,
+        showOnlyCurrent: !noteTitle && !taskList,
       }),
 
       // Unified slash command: /p → project chip, /n → note chip
