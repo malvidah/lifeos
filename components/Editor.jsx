@@ -29,8 +29,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-weight: 400; }
-    .dl-tasklist .ProseMirror p.is-empty::before { content: none !important; }
-    .dl-tasklist .ProseMirror > p:only-child.is-empty::before { content: attr(data-placeholder) !important; pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
+    .dl-tasklist .ProseMirror p.is-empty::before { content: none; }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
@@ -411,14 +410,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   // event (from dropdown selection) does not immediately navigate away.
   const justInsertedRef = useRef(false);
   const suppressOnUpdateRef = useRef(false);
-  // Block onUpdate during initial editor mount — TipTap may fire onUpdate when
-  // extensions process the initial content, which stashes normalized HTML in
-  // pendingRef via markDirty. On hard refresh the flush then re-saves (duplicate).
-  const initialLoadDoneRef = useRef(false);
-  // Block onSelectionUpdate auto-wrap during programmatic setContent and initial mount.
-  // TipTap fires onSelectionUpdate after setContent, which would convert a bare
-  // paragraph into a task list checkbox even though the user didn't interact.
-  const suppressAutoWrapRef = useRef(true); // starts true — mount is programmatic
+  // True during mount and programmatic setContent — blocks onUpdate and
+  // onSelectionUpdate auto-wrap until the next animation frame settles.
+  const programmaticRef = useRef(true);
 
   const renderRef = useRef({
     onStart(props, key) {
@@ -502,9 +496,16 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       Placeholder.configure({
         placeholder: noteTitle
           ? ({ node }) => node.type.name === 'heading' ? 'Untitled' : 'Write something...'
+          : taskList
+          ? ({ editor }) => {
+              // Only show when the doc is a single empty paragraph (no task list exists)
+              const doc = editor.state.doc;
+              return doc.childCount === 1 && doc.firstChild?.content.size === 0
+                ? (placeholder || '') : '';
+            }
           : placeholder || '',
         emptyNodeClass: 'is-empty',
-        showOnlyCurrent: !noteTitle && !taskList,
+        showOnlyCurrent: !noteTitle,
       }),
 
       // Unified slash command: /p → project chip, /n → note chip
@@ -714,15 +715,15 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
     onUpdate({ editor }) {
       if (suppressOnUpdateRef.current) return;
-      if (!initialLoadDoneRef.current) return;  // skip initial mount noise
+      if (programmaticRef.current) return;  // skip mount and programmatic setContent
       onUpdateRef.current?.(editor.getHTML());
     },
 
     onSelectionUpdate({ editor }) {
       // In task list mode, if cursor lands on a bare paragraph, wrap it into the task list.
       // Suppress onUpdate so toggleTaskList doesn't trigger a save → re-render → loop.
-      // Skip during programmatic updates (mount, setContent) — suppressAutoWrapRef blocks.
-      if (!taskListRef.current || suppressAutoWrapRef.current) return;
+      // Skip during programmatic updates (mount, setContent).
+      if (!taskListRef.current || programmaticRef.current) return;
       const { $from } = editor.state.selection;
       if ($from.parent.type.name === 'paragraph' && $from.depth === 1) {
         suppressOnUpdateRef.current = true;
@@ -734,12 +735,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
   useEffect(() => { editorRef.current = editor; }, [editor]);
 
-  // Mark editor as initialized after mount settles — unblocks onUpdate and auto-wrap
+  // Mark editor as initialized after mount settles — unblocks onUpdate and onSelectionUpdate
   useEffect(() => {
     if (!editor) return;
     const id = requestAnimationFrame(() => {
-      initialLoadDoneRef.current = true;
-      suppressAutoWrapRef.current = false;
+      programmaticRef.current = false;
     });
     return () => cancelAnimationFrame(id);
   }, [editor]);
@@ -798,8 +798,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     flushedRef.current = false; // reset for new content
     if (!editor.isFocused) {
       // Pass emitUpdate=false so programmatic syncs don't trigger onUpdate → setValue loops.
-      // Block auto-wrap during setContent so bare paragraphs don't become phantom checkboxes.
-      suppressAutoWrapRef.current = true;
+      programmaticRef.current = true;
       if (noteTitleRef.current) {
         editor.commands.setContent(textToNoteContent(value), false);
       } else if (taskList) {
@@ -809,7 +808,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       } else {
         editor.commands.setContent(value, false);
       }
-      requestAnimationFrame(() => { suppressAutoWrapRef.current = false; });
+      requestAnimationFrame(() => { programmaticRef.current = false; });
     }
   }, [value, editor]); // eslint-disable-line
 
