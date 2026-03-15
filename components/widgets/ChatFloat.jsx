@@ -627,7 +627,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
           display: "flex", flexDirection: "row", alignItems: "center",
           backdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
-          background: expanded ? "var(--dl-bg)" : "var(--dl-bg)ee",
+          background: expanded ? "var(--dl-bg)" : "var(--dl-glass)",
           border: "1px solid var(--dl-border)",
           borderRadius: 100,
           minHeight: 52,
