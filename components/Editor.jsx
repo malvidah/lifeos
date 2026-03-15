@@ -511,6 +511,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           : placeholder || '',
         emptyNodeClass: 'is-empty',
         showOnlyCurrent: !noteTitle && !taskList,
+        includeChildren: taskList,
       }),
 
       // Unified slash command: /p → project chip, /n → note chip
