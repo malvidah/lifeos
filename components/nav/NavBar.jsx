@@ -118,13 +118,17 @@ export default function NavBar(props) {
               onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
               onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
             >‹</button>
-            <span style={{
+            <button onClick={onGoHome} style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
               fontFamily: mono, fontSize: 13, fontWeight: 400, letterSpacing: '0.12em',
               textTransform: 'uppercase', color: titleColor,
-              whiteSpace: 'nowrap', userSelect: 'none',
-            }}>
+              whiteSpace: 'nowrap', userSelect: 'none', transition: 'opacity 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >
               {centerLabel}
-            </span>
+            </button>
             <button onClick={() => onSelectDate(stepDateKey(date, +1))} style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: "var(--dl-highlight)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
