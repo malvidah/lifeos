@@ -246,7 +246,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
       fields:[{label:"Steps",value:h.steps?Number(h.steps).toLocaleString():"",ck:"steps"},{label:"Active",value:h.activeMinutes,unit:"min",ck:"activeMinutes"}],
       sparkline:scores?.activity?.sparkline},
     {key:"recovery", label:"Recovery", color:purple,  score:scores?.recovery?.score,
-      fields:[{label:"Calm",value:h.recoveryMins?String(Math.round(+h.recoveryMins)):"",unit:h.recoveryMins?"min":"",ck:"hrvTrend"},{label:"Stress",value:h.stressMins?String(Math.round(+h.stressMins)):"",unit:h.stressMins?"min":"",ck:"rhrTrend"}],
+      fields:[{label:"Calm",value:h.recoveryMins?String(Math.round(+h.recoveryMins)):"",unit:"min",ck:"hrvTrend"},{label:"Stress",value:h.stressMins?String(Math.round(+h.stressMins)):"",unit:"min",ck:"rhrTrend"}],
       sparkline:scores?.recovery?.sparkline},
   ];
 
@@ -527,9 +527,9 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                   <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                  {m.sparkline && (
-                    <Sparkline data={m.sparkline} color={m.color} width={46} height={18}/>
-                  )}
+                  <div style={{width:46,height:18,flexShrink:0}}>
+                    {m.sparkline && <Sparkline data={m.sparkline} color={m.color} width={46} height={18}/>}
+                  </div>
                 </div>
                 <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                   {m.fields.map(f=>{
@@ -537,7 +537,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                     const hasVal = f.value && f.value !== "—" && f.value !== "";
                     const fc = !hasVal ? "var(--dl-middle)" : sub == null ? "var(--dl-middle)" : sub >= 70 ? "var(--dl-green)" : sub < 45 ? "var(--dl-red)" : "var(--dl-highlight)";
                     return (
-                      <div key={f.label}>
+                      <div key={f.label} style={{minWidth:38}}>
                         <div style={{fontFamily:mono,fontSize:F.sm,textTransform:"uppercase",color:"var(--dl-middle)",marginBottom:1,letterSpacing:"0.04em"}}>{f.label}</div>
                         <div style={{display:"flex",alignItems:"baseline",gap:2}}>
                           <span style={{fontFamily:serif,fontSize:F.md,color:fc}}>{f.value||"—"}</span>
