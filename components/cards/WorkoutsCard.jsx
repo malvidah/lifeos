@@ -184,7 +184,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   const rowS = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0, borderRadius:4, padding:"2px 8px", whiteSpace:"nowrap"};
 
-  const allRows = [...mergedSynced, ...safe];
+  const allRows = [...mergedSynced, ...safe.filter(r => r.text?.trim())];
   const totalKcal = allRows.reduce((s,r)=>s+(r.kcal||0),0);
 
   // Parse distances like "3.50mi" → number
@@ -236,8 +236,11 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
                   const s = Array.isArray(prev) ? prev : safe;
                   const existing = s.find(r => r.id === row.id);
                   if (text === existing?.text) return prev; // no change
-                  const {dist, pace} = text.trim() ? parseActivityText(text) : {dist:null, pace:null};
-                  return s.map(r => r.id===row.id ? {...r, text, dist:dist||r.dist, pace:pace||r.pace} : r);
+                  if (!text.trim()) {
+                    return s.map(r => r.id===row.id ? {...r, text, dist:null, pace:null, kcal:null} : r);
+                  }
+                  const {dist, pace} = parseActivityText(text);
+                  return s.map(r => r.id===row.id ? {...r, text, dist:dist||r.dist, pace:pace||r.pace, kcal: text !== existing?.text ? null : r.kcal} : r);
                 });
                 if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
               }}
