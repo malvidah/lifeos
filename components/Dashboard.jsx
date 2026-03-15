@@ -143,13 +143,41 @@ function DashboardInner() {
   // ── Silent background scores backfill — runs once per session ──────────
   // Finds any health/health_apple rows that don't have a computed scores entry
   // and fills them in. This is what populates historical trend data.
+  // After backfill, reload dots so calendar reflects new scores.
   useEffect(() => {
     if (!token || !userId) return;
     const key = `scores_backfill_done:${userId}`;
     if (sessionStorage.getItem(key)) return; // already ran this session
     sessionStorage.setItem(key, '1');
     api.post('/api/scores-backfill', {}, token)
-      .then(d => { if (d?.scored > 0) console.log(`[daylab] backfilled ${d.scored} score entries`); })
+      .then(d => {
+        if (d?.scored > 0) {
+          console.log(`[daylab] backfilled ${d.scored} score entries`);
+          // Reload dots from DB so newly backfilled scores appear on calendar
+          const supabase = createClient();
+          supabase.auth.setSession({access_token:token,refresh_token:''});
+          const since = toKey(shift(new Date(), -180));
+          supabase.from('health_scores')
+            .select('date,sleep_score,readiness_score,activity_score,recovery_score')
+            .eq('user_id',userId).gte('date',since).lte('date',todayKey())
+            .then(({data}) => {
+              if (!data) return;
+              setHealthDots(prev => {
+                const next = {...prev};
+                data.forEach(row => {
+                  if (!row.date) return;
+                  next[row.date] = {
+                    sleep:    row.sleep_score     || 0,
+                    readiness:row.readiness_score || 0,
+                    activity: row.activity_score  || 0,
+                    recovery: row.recovery_score  || 0,
+                  };
+                });
+                return next;
+              });
+            });
+        }
+      })
       .catch(() => {}); // silent — never block the UI
   }, [token, userId]); // eslint-disable-line
 
@@ -274,17 +302,19 @@ function DashboardInner() {
       .eq('user_id',userId).gte('date',since).lte('date',dotsToday)
       .then(({data})=>{
         if(!data)return;
-        const dots={};
-        data.forEach(row=>{
-          if(!row.date)return;
-          dots[row.date]={
-            sleep:    row.sleep_score     ||0,
-            readiness:row.readiness_score ||0,
-            activity: row.activity_score  ||0,
-            recovery: row.recovery_score  ||0,
-          };
+        setHealthDots(prev => {
+          const next = {...prev};
+          data.forEach(row=>{
+            if(!row.date)return;
+            next[row.date]={
+              sleep:    row.sleep_score     ||0,
+              readiness:row.readiness_score ||0,
+              activity: row.activity_score  ||0,
+              recovery: row.recovery_score  ||0,
+            };
+          });
+          return next;
         });
-        setHealthDots(dots);
       }).catch(()=>{});
   },[token,userId]); // eslint-disable-line
 

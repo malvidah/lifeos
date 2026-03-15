@@ -404,8 +404,6 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                     const dots       = dateKey <= today ? (healthDots[dateKey] || {}) : {};
                     const summary    = summaries[dateKey];
                     const bigEvents  = (events[dateKey] || []).filter(isBigEvent).slice(0, 2);
-                    const hasDots    = dots.sleep >= 85 || dots.readiness >= 85 ||
-                                       dots.activity >= 85 || dots.recovery >= 85;
 
                     return (
                       <div key={dateKey}
@@ -426,13 +424,13 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
                           flexShrink: 0,
                         }}>{day}</div>
 
-                        {/* Health dots */}
-                        {hasDots && (
+                        {/* Health dots — always show 4 placeholders for past dates */}
+                        {dateKey <= today && (
                           <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                            {dots.sleep     >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-blue)",    flexShrink: 0 }} />}
-                            {dots.readiness >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-green)",   flexShrink: 0 }} />}
-                            {dots.activity  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: "var(--dl-accent)",  flexShrink: 0 }} />}
-                            {dots.recovery  >= 85 && <div style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--dl-purple)', flexShrink: 0 }} />}
+                            <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dots.sleep>0?"var(--dl-blue)":"var(--dl-middle)", opacity:!dots.sleep?0.25:dots.sleep>=85?1:0.4 }} />
+                            <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dots.readiness>0?"var(--dl-green)":"var(--dl-middle)", opacity:!dots.readiness?0.25:dots.readiness>=85?1:0.4 }} />
+                            <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dots.activity>0?"var(--dl-accent)":"var(--dl-middle)", opacity:!dots.activity?0.25:dots.activity>=85?1:0.4 }} />
+                            <div style={{ width: 4, height: 4, borderRadius: '50%', flexShrink: 0, background: dots.recovery>0?"var(--dl-purple)":"var(--dl-middle)", opacity:!dots.recovery?0.25:dots.recovery>=85?1:0.4 }} />
                           </div>
                         )}
 
@@ -728,12 +726,12 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     marginBottom:3,
                     textTransform:"uppercase",
                   }}>{DAY_NAMES[d.getDay()]} {d.getDate()}</div>
-                  {/* Health score dots — filled when score exists, bright when >= 85, dim when below */}
-                  {k<=today && healthDots[k] && <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:4,height:10}}>
-                    {healthDots[k].sleep > 0 && <div style={{width:9,height:9,borderRadius:"50%",background:"var(--dl-blue)",opacity:healthDots[k].sleep>=85?1:0.35}}/>}
-                    {healthDots[k].readiness > 0 && <div style={{width:9,height:9,borderRadius:"50%",background:"var(--dl-green)",opacity:healthDots[k].readiness>=85?1:0.35}}/>}
-                    {healthDots[k].activity > 0 && <div style={{width:9,height:9,borderRadius:"50%",background:"var(--dl-accent)",opacity:healthDots[k].activity>=85?1:0.35}}/>}
-                    {healthDots[k].recovery > 0 && <div style={{width:9,height:9,borderRadius:"50%",background:"var(--dl-purple)",opacity:healthDots[k].recovery>=85?1:0.35}}/>}
+                  {/* Health score dots — always show 4 placeholders, colored when data exists */}
+                  {k<=today && <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:4,height:10}}>
+                    <div style={{width:9,height:9,borderRadius:"50%",background:healthDots[k]?.sleep>0?"var(--dl-blue)":"var(--dl-middle)",opacity:!healthDots[k]?.sleep?0.25:healthDots[k].sleep>=85?1:0.4}}/>
+                    <div style={{width:9,height:9,borderRadius:"50%",background:healthDots[k]?.readiness>0?"var(--dl-green)":"var(--dl-middle)",opacity:!healthDots[k]?.readiness?0.25:healthDots[k].readiness>=85?1:0.4}}/>
+                    <div style={{width:9,height:9,borderRadius:"50%",background:healthDots[k]?.activity>0?"var(--dl-accent)":"var(--dl-middle)",opacity:!healthDots[k]?.activity?0.25:healthDots[k].activity>=85?1:0.4}}/>
+                    <div style={{width:9,height:9,borderRadius:"50%",background:healthDots[k]?.recovery>0?"var(--dl-purple)":"var(--dl-middle)",opacity:!healthDots[k]?.recovery?0.25:healthDots[k].recovery>=85?1:0.4}}/>
                   </div>}
                 </div>
 
