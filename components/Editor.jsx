@@ -498,15 +498,14 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         placeholder: noteTitle
           ? ({ node }) => node.type.name === 'heading' ? 'Untitled' : 'Write something...'
           : taskList
-          ? ({ editor }) => {
-              // Show placeholder when the task list has a single empty item
-              const doc = editor.state.doc;
-              const list = doc.firstChild;
+          ? ({ node, pos, editor }) => {
+              if (node.type.name !== 'paragraph') return '';
+              // Only show inside a taskItem, not on trailing top-level paragraphs
+              const $pos = editor.state.doc.resolve(pos);
+              if ($pos.depth < 2 || $pos.node($pos.depth - 1)?.type.name !== 'taskItem') return '';
+              const list = editor.state.doc.firstChild;
               if (!list || list.type.name !== 'taskList' || list.childCount !== 1) return '';
-              const item = list.firstChild;
-              if (!item || item.type.name !== 'taskItem') return '';
-              const para = item.firstChild;
-              return para?.content.size === 0 ? (placeholder || '') : '';
+              return (placeholder || '');
             }
           : placeholder || '',
         emptyNodeClass: 'is-empty',
