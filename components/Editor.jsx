@@ -18,6 +18,7 @@ import { serif, mono, F, projectColor, CHIP_TOKENS } from '@/lib/tokens';
 
 const ACCENT = '#D08828'; // must match --dl-accent; used for CSS alpha concatenation only
 const WARM   = 'var(--dl-accent)';
+const EMPTY_TASK_LIST = '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>';
 // ── CSS injection ─────────────────────────────────────────────────────────────
 function injectEditorStyles() {
   if (typeof document === 'undefined') return;
@@ -29,7 +30,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-weight: 400; }
-    .dl-tasklist .ProseMirror p.is-empty::before { content: none; }
+    .dl-tasklist .ProseMirror p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
@@ -498,10 +499,14 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           ? ({ node }) => node.type.name === 'heading' ? 'Untitled' : 'Write something...'
           : taskList
           ? ({ editor }) => {
-              // Only show when the doc is a single empty paragraph (no task list exists)
+              // Show placeholder when the task list has a single empty item
               const doc = editor.state.doc;
-              return doc.childCount === 1 && doc.firstChild?.content.size === 0
-                ? (placeholder || '') : '';
+              const list = doc.firstChild;
+              if (!list || list.type.name !== 'taskList' || list.childCount !== 1) return '';
+              const item = list.firstChild;
+              if (!item || item.type.name !== 'taskItem') return '';
+              const para = item.firstChild;
+              return para?.content.size === 0 ? (placeholder || '') : '';
             }
           : placeholder || '',
         emptyNodeClass: 'is-empty',
@@ -585,7 +590,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     ],
 
     content: noteTitle ? textToNoteContent(value)
-      : taskList ? (value || '')
+      : taskList ? (value || EMPTY_TASK_LIST)
       : (singleLine || !value?.startsWith('<')) ? { type: 'doc', content: textToContent(value || '') }
       : (value || ''),
     editable,
@@ -720,9 +725,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
 
     onSelectionUpdate({ editor }) {
-      // In task list mode, if cursor lands on a bare paragraph, wrap it into the task list.
-      // Suppress onUpdate so toggleTaskList doesn't trigger a save → re-render → loop.
-      // Skip during programmatic updates (mount, setContent).
+      // In task list mode, if cursor somehow lands on a bare paragraph (outside the
+      // task list), wrap it back. Skip during programmatic updates (mount, setContent).
       if (!taskListRef.current || programmaticRef.current) return;
       const { $from } = editor.state.selection;
       if ($from.parent.type.name === 'paragraph' && $from.depth === 1) {
@@ -802,7 +806,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       if (noteTitleRef.current) {
         editor.commands.setContent(textToNoteContent(value), false);
       } else if (taskList) {
-        editor.commands.setContent(value || '', false);
+        editor.commands.setContent(value || EMPTY_TASK_LIST, false);
       } else if (singleLine || !value?.startsWith('<')) {
         editor.commands.setContent({ type: 'doc', content: textToContent(value || '') }, false);
       } else {
