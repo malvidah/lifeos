@@ -1,5 +1,5 @@
 "use client";
-import { mono, F, projectColor } from "@/lib/tokens";
+import { mono, serif, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
 import { MONTHS_FULL, todayKey } from "@/lib/dates";
 
@@ -135,30 +135,32 @@ export default function NavBar(props) {
   // ── Search mode: replace entire nav bar with search input ──────────
   if (searchOpen) {
     return (
-      <div style={{ ...glassBar, padding: '0 6px 0 16px', gap: 8 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={"var(--dl-highlight)"} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
-          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-        </svg>
-        <input
-          ref={searchInputRef}
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Escape') closeSearch(); }}
-          placeholder="Search"
-          style={{
-            flex: 1, background: 'transparent', border: 'none', outline: 'none',
-            fontFamily: mono, fontSize: F.md, color: "var(--dl-strong)", caretColor: "var(--dl-accent)",
-          }}
-        />
-        {srLoading && (
-          <span style={{ fontFamily: mono, fontSize: 8, color: "var(--dl-highlight)", letterSpacing: '0.12em', flexShrink: 0 }}>…</span>
-        )}
-        <NavIconBtn onClick={closeSearch} title="Close search">
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="18" y1="6"  x2="6"  y2="18"/>
-            <line x1="6"  y1="6"  x2="18" y2="18"/>
+      <div style={{ display: 'flex', justifyContent: 'center', flexShrink: 0 }}>
+        <div style={{ ...glassBar, padding: '0 6px 0 16px', gap: 8, width: '100%', maxWidth: 560 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={"var(--dl-highlight)"} strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
-        </NavIconBtn>
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Escape') closeSearch(); }}
+            placeholder="Search"
+            style={{
+              flex: 1, background: 'transparent', border: 'none', outline: 'none',
+              fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", caretColor: "var(--dl-accent)",
+            }}
+          />
+          {srLoading && (
+            <span style={{ fontFamily: mono, fontSize: 8, color: "var(--dl-highlight)", letterSpacing: '0.12em', flexShrink: 0 }}>…</span>
+          )}
+          <NavIconBtn onClick={closeSearch} title="Close search">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6"  x2="6"  y2="18"/>
+              <line x1="6"  y1="6"  x2="18" y2="18"/>
+            </svg>
+          </NavIconBtn>
+        </div>
       </div>
     );
   }
