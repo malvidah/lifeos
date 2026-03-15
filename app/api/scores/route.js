@@ -163,7 +163,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   };
 
   // ── Persist scores to health_scores ──────────────────────────────────────
-  await supabase.from('health_scores').upsert({
+  const { error: upsertErr } = await supabase.from('health_scores').upsert({
     user_id: user.id, date,
     winning_source: pickBest(rowsByDate[date] ?? [])?.source ?? null,
     sleep_score:     sleep.score,
@@ -180,6 +180,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     },
     computed_at: new Date().toISOString(),
   }, { onConflict: 'user_id,date' });
+  if (upsertErr) console.error('[scores] persist failed:', upsertErr.message, { date, userId: user.id });
 
   return Response.json(result);
 });

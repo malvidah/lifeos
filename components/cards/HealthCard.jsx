@@ -141,12 +141,10 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     if(prevScoreDate.current !== date){
       prevScoreDate.current = date;
       // Load cached scores from DB instantly so we don't flash "—" while /api/scores computes
-      if (userId) {
-        const sb = createClient();
-        sb.from('health_scores')
-          .select('sleep_score,readiness_score,activity_score,recovery_score')
-          .eq('user_id', userId).eq('date', date).maybeSingle()
-          .then(({data: row}) => {
+      if (token) {
+        api.get(`/api/health/scores?start=${date}&end=${date}`, token)
+          .then(data => {
+            const row = data?.rows?.[0];
             if (row && (row.sleep_score || row.readiness_score || row.activity_score || row.recovery_score)) {
               setScores({
                 sleep:     {score: row.sleep_score     || null},

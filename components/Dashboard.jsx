@@ -271,17 +271,15 @@ function DashboardInner() {
   // Load health dots from health_scores table.
   const loadDots = useCallback(()=>{
     if(!token||!userId)return;
-    const supabase=createClient();
-    supabase.auth.setSession({access_token:token,refresh_token:''});
     const since=toKey(shift(new Date(),-730)); // ~2 years of history
-    supabase.from('health_scores')
-      .select('date,sleep_score,readiness_score,activity_score,recovery_score')
-      .eq('user_id',userId).gte('date',since).lte('date',todayKey())
-      .then(({data})=>{
-        if(!data)return;
+    // Use the API helper (authenticated fetch) instead of direct Supabase client
+    // to avoid session/RLS issues with the browser client
+    api.get(`/api/health/scores?start=${since}&end=${todayKey()}`, token)
+      .then(data=>{
+        if(!data?.rows)return;
         setHealthDots(prev => {
           const next = {...prev};
-          data.forEach(row=>{
+          data.rows.forEach(row=>{
             if(!row.date)return;
             next[row.date]={
               sleep:    row.sleep_score     ||0,
