@@ -73,7 +73,7 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
 
   // Build initial HTML from the project's tasks for this date
   const initialHtml = useMemo(() => {
-    if (!tasks || tasks.length === 0) return tasksToHtml([]);
+    if (!tasks || tasks.length === 0) return '';
     return tasksToHtml(tasks.map(t => ({ id: t.id, text: t.text, done: !!t.done })));
   }, []); // eslint-disable-line
 
@@ -122,12 +122,26 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
       // Load full day's tasks and replace the project-tagged ones
       const raw = await dbLoad(date, 'tasks', token);
       const allTasks = clientParseTasks(raw);
-      const nonProject = project === '__everything__' ? [] : allTasks.filter(t => !t.text.toLowerCase().includes(chip));
-      // Insert project tasks where the first one used to be, or at end
-      const firstIdx = allTasks.findIndex(t => t.text.toLowerCase().includes(chip));
-      const merged = firstIdx >= 0
-        ? [...nonProject.slice(0, firstIdx), ...editorTasks, ...nonProject.slice(firstIdx)]
-        : [...nonProject, ...editorTasks];
+      let merged;
+      if (project === '__everything__') {
+        merged = editorTasks;
+      } else {
+        // Build merged list: keep non-project tasks in place, swap project tasks
+        merged = [];
+        let projectTasksInserted = false;
+        for (const t of allTasks) {
+          if (t.text.toLowerCase().includes(chip)) {
+            if (!projectTasksInserted) {
+              merged.push(...editorTasks);
+              projectTasksInserted = true;
+            }
+            // Skip original project task (replaced by editorTasks)
+          } else {
+            merged.push(t);
+          }
+        }
+        if (!projectTasksInserted) merged.push(...editorTasks);
+      }
       const mergedHtml = tasksToHtml(merged);
       await dbSave(date, 'tasks', mergedHtml, token);
       window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'], date } }));
