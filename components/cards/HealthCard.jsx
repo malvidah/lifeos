@@ -136,29 +136,12 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
 
   // ── Computed scores from /api/scores ──────────────────────────────────────
   const [scores, setScores] = useState(null);
+  // Reset scores on date change — fresh scores arrive from /api/scores below
   const prevScoreDate = useRef(date);
   useEffect(()=>{
     if(prevScoreDate.current !== date){
       prevScoreDate.current = date;
-      // Load cached scores from DB instantly so we don't flash "—" while /api/scores computes
-      if (token) {
-        api.get(`/api/health/scores?start=${date}&end=${date}`, token)
-          .then(data => {
-            const row = data?.rows?.[0];
-            if (row && (row.sleep_score != null || row.readiness_score != null || row.activity_score != null || row.recovery_score != null)) {
-              setScores({
-                sleep:     {score: row.sleep_score     ?? null},
-                readiness: {score: row.readiness_score ?? null},
-                activity:  {score: row.activity_score  ?? null},
-                recovery:  {score: row.recovery_score  ?? null},
-              });
-            } else {
-              setScores(null);
-            }
-          });
-      } else {
-        setScores(null);
-      }
+      setScores(null);
     }
   },[date]); // eslint-disable-line
 
