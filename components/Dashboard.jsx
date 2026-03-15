@@ -34,7 +34,11 @@ function DashboardInner() {
   const [selected,  setSelected]  = useState(todayKey);
   const [calView,   setCalView]   = useState(() => localStorage.getItem('calView') || 'day');
   const [events,    setEvents]    = useState({});
-  const [healthDots,setHealthDots]= useState({});
+  const [healthDots,setHealthDots]= useState(()=>{
+    // Load cached dots from localStorage for instant display — no grey flash
+    try { const c = localStorage.getItem('daylab:healthDots'); return c ? JSON.parse(c) : {}; }
+    catch { return {}; }
+  });
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
   const [googleToken,setGoogleToken] = useState(null);
@@ -268,6 +272,13 @@ function DashboardInner() {
       recovery: d.recovery?.score ?? prev[date]?.recovery ?? 0,
     }}));
   },[]);
+
+  // Persist dots to localStorage so they're instant on next page load
+  useEffect(()=>{
+    if(Object.keys(healthDots).length > 0) {
+      try { localStorage.setItem('daylab:healthDots', JSON.stringify(healthDots)); } catch {}
+    }
+  },[healthDots]);
 
   // Load health dots from health_scores table.
   const loadDots = useCallback(()=>{

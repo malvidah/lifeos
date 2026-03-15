@@ -18,44 +18,41 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   const [loaded, setLoaded] = useState(false);
   const [dataSource, setDataSource] = useState(null); // null | 'oura' | 'apple' | 'both'
 
-  // Reset to empty immediately on date change — never show stale previous-day data
+  // Load stored metrics from health_metrics for this date.
+  // Combines reset + load in ONE effect so there's no render gap showing "—".
   const prevHealthDate = useRef(date);
   useEffect(()=>{
-    if(prevHealthDate.current !== date){
+    if(!userId||!token)return;
+    const dateChanged = prevHealthDate.current !== date;
+    if (dateChanged) {
       prevHealthDate.current = date;
-      setH(H_EMPTY);
       setLoaded(false);
     }
-  },[date]); // eslint-disable-line
-
-  // Load stored metrics from health_metrics for this date
-  useEffect(()=>{
-    if(!userId||!token)return;
     const sb = createClient();
     sb.from('health_metrics')
       .select('source, hrv, rhr, sleep_hrs, sleep_eff, steps, active_min, raw')
       .eq('user_id', userId).eq('date', date)
       .then(({ data: rows })=>{
+        let best = null;
         if(rows?.length){
-          let best = null;
           for(const r of rows){
             if(!best || SOURCE_PRIORITY.indexOf(r.source) < SOURCE_PRIORITY.indexOf(best.source)) best = r;
           }
-          if(best){
-            setH(p=>({...p,
-              hrv:          best.hrv        != null ? String(best.hrv)        : p.hrv,
-              rhr:          best.rhr        != null ? String(best.rhr)        : p.rhr,
-              sleepHrs:     best.sleep_hrs  != null ? String(best.sleep_hrs)  : p.sleepHrs,
-              sleepEff:     best.sleep_eff  != null ? String(best.sleep_eff)  : p.sleepEff,
-              steps:        best.steps      != null ? String(best.steps)      : p.steps,
-              activeMinutes:best.active_min != null ? String(best.active_min) : p.activeMinutes,
-              stressMins:   best.raw?.stressMins   != null ? String(best.raw.stressMins)   : p.stressMins,
-              recoveryMins: best.raw?.recoveryMins != null ? String(best.raw.recoveryMins) : p.recoveryMins,
-            }));
-          }
         }
+        // Set to DB values or empty — single setState, no intermediate "—" flash
+        setH(best ? {
+          ...H_EMPTY,
+          hrv:          best.hrv        != null ? String(best.hrv)        : "",
+          rhr:          best.rhr        != null ? String(best.rhr)        : "",
+          sleepHrs:     best.sleep_hrs  != null ? String(best.sleep_hrs)  : "",
+          sleepEff:     best.sleep_eff  != null ? String(best.sleep_eff)  : "",
+          steps:        best.steps      != null ? String(best.steps)      : "",
+          activeMinutes:best.active_min != null ? String(best.active_min) : "",
+          stressMins:   best.raw?.stressMins   != null ? String(best.raw.stressMins)   : "",
+          recoveryMins: best.raw?.recoveryMins != null ? String(best.raw.recoveryMins) : "",
+        } : H_EMPTY);
         setLoaded(true);
-      }).catch(()=>setLoaded(true));
+      }).catch(()=>{ setH(H_EMPTY); setLoaded(true); });
   },[date, userId, token]); // eslint-disable-line
 
   useEffect(()=>{if(loaded)onHealthChange(date,h);},[h,loaded]); // eslint-disable-line
