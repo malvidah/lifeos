@@ -512,11 +512,15 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   }
 
   async function addNewJournal(text) {
-    if (!text.trim() || project === '__everything__') return;
+    if (!text.trim()) return;
     const today = todayKey();
-    const chip = `{${project.toLowerCase()}}`;
-    const hasTag = text.trim().endsWith(`#${project}`) || text.includes(chip);
-    const entryText = hasTag ? text.trim() : `${text.trim()} ${chip}`;
+    let entryText = text.trim();
+    // Auto-tag with project chip (skip for __everything__ — no project to tag)
+    if (project !== '__everything__') {
+      const chip = `{${project.toLowerCase()}}`;
+      const hasTag = entryText.endsWith(`#${project}`) || entryText.includes(chip);
+      if (!hasTag) entryText = `${entryText} ${chip}`;
+    }
     const current = await dbLoad(today, 'journal', token);
     const existing = (typeof current === 'string' ? current : '') || '';
     // Journal content is HTML — append as a new <p> block
@@ -672,19 +676,14 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/>
           </div>
-        ) : project === '__everything__' && taskEntries.length === 0 ? (
-          <div style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)" }}>No tasks yet.</div>
         ) : (() => {
           const todayStr = todayKey();
           const otherDates = tasksByDate.filter(([d]) => d !== todayStr).sort(([a],[b]) => b.localeCompare(a));
           const todayEntry = tasksByDate.find(([d]) => d === todayStr);
-          const allDates = project !== '__everything__'
-            ? (todayEntry
-                ? [[todayStr, todayEntry[1]], ...otherDates]
-                : [[todayStr, { all:[], open:[], done:[] }], ...otherDates])
-            : otherDates.length || todayEntry
-              ? (todayEntry ? [[todayStr, todayEntry[1]], ...otherDates] : otherDates)
-              : [];
+          // Always include Today section with editor (even when empty)
+          const allDates = todayEntry
+            ? [[todayStr, todayEntry[1]], ...otherDates]
+            : [[todayStr, { all:[], open:[], done:[] }], ...otherDates];
 
           return (
             <div>
@@ -769,7 +768,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                         letterSpacing: '0.06em', textTransform: 'uppercase',
                         marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 8,
                       }}>{isToday ? 'Today' : fmtDate(date)}</div>
-                      {isToday && project !== '__everything__' && (
+                      {isToday && (
                         <AddJournalLine project={project} onAdd={addNewJournal} />
                       )}
                       <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
