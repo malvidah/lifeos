@@ -33,9 +33,9 @@ export function Ring({score,color,size=48}) {
       <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round"
         strokeDasharray={`${pct*circ} ${circ}`}
         style={{transform:"rotate(-90deg)",transformOrigin:"50% 50%",transition:"stroke-dasharray 0.5s cubic-bezier(.4,0,.2,1)"}}/>
-      {/* Score text — light on dark fill when >= 85, colored otherwise */}
+      {/* Score text — always uses ring color */}
       <text x={size/2} y={size/2} textAnchor="middle" dominantBaseline="central"
-        style={{fill:!score?"var(--dl-middle)":high?"var(--dl-bg)":color,fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
+        style={{fill:score?color:"var(--dl-middle)",fontSize:F.sm,fontFamily:mono,letterSpacing:"-0.02em"}}>
         {score||"—"}
       </text>
     </svg>
