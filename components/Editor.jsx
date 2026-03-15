@@ -18,8 +18,6 @@ import { serif, mono, F, projectColor, CHIP_TOKENS } from '@/lib/tokens';
 
 const ACCENT = '#D08828'; // must match --dl-accent; used for CSS alpha concatenation only
 const WARM   = 'var(--dl-accent)';
-const EMPTY_TASK_LIST = '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p></p></li></ul>';
-
 // ── CSS injection ─────────────────────────────────────────────────────────────
 function injectEditorStyles() {
   if (typeof document === 'undefined') return;
@@ -581,7 +579,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     ],
 
     content: noteTitle ? textToNoteContent(value)
-      : taskList ? (value || EMPTY_TASK_LIST)
+      : taskList ? (value || '')
       : (singleLine || !value?.startsWith('<')) ? { type: 'doc', content: textToContent(value || '') }
       : (value || ''),
     editable,
@@ -718,7 +716,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     onSelectionUpdate({ editor }) {
       // In task list mode, if cursor lands on a bare paragraph, wrap it into the task list.
       // Suppress onUpdate so toggleTaskList doesn't trigger a save → re-render → loop.
-      if (!taskListRef.current) return;
+      // Only when focused — programmatic setContent('') shouldn't create phantom checkboxes.
+      if (!taskListRef.current || !editor.isFocused) return;
       const { $from } = editor.state.selection;
       if ($from.parent.type.name === 'paragraph' && $from.depth === 1) {
         suppressOnUpdateRef.current = true;
