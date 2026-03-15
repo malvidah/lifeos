@@ -138,8 +138,31 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   const [scores, setScores] = useState(null);
   const prevScoreDate = useRef(date);
   useEffect(()=>{
-    if(prevScoreDate.current !== date){ prevScoreDate.current = date; setScores(null); }
-  },[date]);
+    if(prevScoreDate.current !== date){
+      prevScoreDate.current = date;
+      // Load cached scores from DB instantly so we don't flash "—" while /api/scores computes
+      if (userId) {
+        const sb = createClient();
+        sb.from('health_scores')
+          .select('sleep_score,readiness_score,activity_score,recovery_score')
+          .eq('user_id', userId).eq('date', date).maybeSingle()
+          .then(({data: row}) => {
+            if (row && (row.sleep_score || row.readiness_score || row.activity_score || row.recovery_score)) {
+              setScores({
+                sleep:     {score: row.sleep_score     || null},
+                readiness: {score: row.readiness_score || null},
+                activity:  {score: row.activity_score  || null},
+                recovery:  {score: row.recovery_score  || null},
+              });
+            } else {
+              setScores(null);
+            }
+          });
+      } else {
+        setScores(null);
+      }
+    }
+  },[date]); // eslint-disable-line
 
   // ── Apple Health connect prompt (iOS only) ────────────────────────────────
   const [hkStatus, setHkStatus] = useState(null); // null | 'not_determined' | 'authorized' | 'denied'

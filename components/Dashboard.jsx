@@ -153,29 +153,7 @@ function DashboardInner() {
       .then(d => {
         if (d?.scored > 0) {
           console.log(`[daylab] backfilled ${d.scored} score entries`);
-          // Reload dots from DB so newly backfilled scores appear on calendar
-          const supabase = createClient();
-          supabase.auth.setSession({access_token:token,refresh_token:''});
-          const since = toKey(shift(new Date(), -180));
-          supabase.from('health_scores')
-            .select('date,sleep_score,readiness_score,activity_score,recovery_score')
-            .eq('user_id',userId).gte('date',since).lte('date',todayKey())
-            .then(({data}) => {
-              if (!data) return;
-              setHealthDots(prev => {
-                const next = {...prev};
-                data.forEach(row => {
-                  if (!row.date) return;
-                  next[row.date] = {
-                    sleep:    row.sleep_score     || 0,
-                    readiness:row.readiness_score || 0,
-                    activity: row.activity_score  || 0,
-                    recovery: row.recovery_score  || 0,
-                  };
-                });
-                return next;
-              });
-            });
+          loadDots(); // reload dots so newly backfilled scores appear on calendar
         }
       })
       .catch(() => {}); // silent — never block the UI
@@ -291,15 +269,14 @@ function DashboardInner() {
   },[]);
 
   // Load health dots from health_scores table.
-  useEffect(()=>{
+  const loadDots = useCallback(()=>{
     if(!token||!userId)return;
     const supabase=createClient();
     supabase.auth.setSession({access_token:token,refresh_token:''});
     const since=toKey(shift(new Date(),-180));
-    const dotsToday = todayKey();
     supabase.from('health_scores')
       .select('date,sleep_score,readiness_score,activity_score,recovery_score')
-      .eq('user_id',userId).gte('date',since).lte('date',dotsToday)
+      .eq('user_id',userId).gte('date',since).lte('date',todayKey())
       .then(({data})=>{
         if(!data)return;
         setHealthDots(prev => {
@@ -316,7 +293,16 @@ function DashboardInner() {
           return next;
         });
       }).catch(()=>{});
-  },[token,userId]); // eslint-disable-line
+  },[token,userId]);
+
+  useEffect(()=>{ loadDots(); },[loadDots]);
+
+  // Reload dots when integrations finish backfilling (e.g. Oura connect)
+  useEffect(()=>{
+    const handler = () => loadDots();
+    window.addEventListener('daylab:reload-dots', handler);
+    return () => window.removeEventListener('daylab:reload-dots', handler);
+  },[loadDots]);
 
   const mobile = useIsMobile();
   if(!authReady) return (
