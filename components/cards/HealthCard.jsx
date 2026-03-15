@@ -131,66 +131,50 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
 
   const purple = "var(--dl-purple)";
 
-  // ── Computed scores from /api/scores ──────────────────────────────────────
+  // ── Scores: single unified effect ────────────────────────────────────────
+  // For past dates: load cached scores from DB → done (one fetch, one render).
+  // For today: load cached first, then recompute once when metrics are loaded.
+  // This eliminates the 3-cycle flicker caused by racing async effects.
   const [scores, setScores] = useState(null);
-  const hasCachedScoresRef = useRef(false); // true if DB had scores for this date
+  const scoreComputedForDate = useRef(null); // tracks which date we've computed for
+
+  // Step 1: On date change, load cached scores from DB immediately
   const prevScoreDate = useRef(date);
   useEffect(()=>{
-    if(prevScoreDate.current !== date){
-      prevScoreDate.current = date;
-      hasCachedScoresRef.current = false;
-      // Load cached scores from DB instantly — no flicker
-      if (token) {
-        api.get(`/api/health/scores?start=${date}&end=${date}`, token)
-          .then(data => {
-            const row = data?.rows?.[0];
-            if (row && (row.sleep_score != null || row.readiness_score != null || row.activity_score != null || row.recovery_score != null)) {
-              hasCachedScoresRef.current = true;
-              setScores({
-                sleep:     {score: row.sleep_score     ?? null},
-                readiness: {score: row.readiness_score ?? null},
-                activity:  {score: row.activity_score  ?? null},
-                recovery:  {score: row.recovery_score  ?? null},
-              });
-            } else {
-              setScores(null);
-            }
+    if(prevScoreDate.current === date) return;
+    prevScoreDate.current = date;
+    scoreComputedForDate.current = null;
+    if (!token) { setScores(null); return; }
+    api.get(`/api/health/scores?start=${date}&end=${date}`, token)
+      .then(data => {
+        const row = data?.rows?.[0];
+        if (row && (row.sleep_score != null || row.readiness_score != null)) {
+          setScores({
+            sleep:     {score: row.sleep_score     ?? null},
+            readiness: {score: row.readiness_score ?? null},
+            activity:  {score: row.activity_score  ?? null},
+            recovery:  {score: row.recovery_score  ?? null},
           });
-      } else {
-        setScores(null);
-      }
-    }
+          // For past dates, cached scores are final — mark as computed
+          if (date !== todayKey()) scoreComputedForDate.current = date;
+        } else {
+          setScores(null);
+        }
+      });
   },[date, token]); // eslint-disable-line
 
-  // ── Apple Health connect prompt (iOS only) ────────────────────────────────
-  const [hkStatus, setHkStatus] = useState(null); // null | 'not_determined' | 'authorized' | 'denied'
-  useEffect(()=>{
-    if(typeof window === 'undefined') return;
-    const handler = e => setHkStatus(e.detail?.status ?? null);
-    window.addEventListener('daylabHealthKit', handler);
-    return () => window.removeEventListener('daylabHealthKit', handler);
-  },[]);
-
-  const connectAppleHealth = () => {
-    // Send message to iOS native layer — include token so native doesn't need to re-fetch it
-    if(window.webkit?.messageHandlers?.daylabRequestHealthKit) {
-      window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: token||localStorage.getItem('daylab:token')||''});
-    }
-  };
-
-  // Stable fingerprint — only refetch scores when the fields that affect computation change
+  // Step 2: Compute fresh scores — only for today, or dates without cached scores
   const scoreFingerprint = loaded
     ? [h.sleepHrs,h.sleepEff,h.hrv,h.rhr,h.steps,h.activeMinutes,h.stressMins,h.recoveryMins].join(':')
     : null;
 
   useEffect(()=>{
     if(!token||!loaded||scoreFingerprint===null) return;
-    if(date > todayKey()) return; // never request scores for future dates
-    // Past dates with cached scores: skip recompute — scores don't change.
-    // Only recompute for today (live data) or dates without cached scores.
-    const isToday = date === todayKey();
-    if (!isToday && hasCachedScoresRef.current) return;
-    const ctrl = new AbortController();
+    if(date > todayKey()) return;
+    // Already computed for this date — don't recompute
+    if(scoreComputedForDate.current === date) return;
+    scoreComputedForDate.current = date;
+    let cancelled = false;
     const tzOffset = new Date().getTimezoneOffset() * -1;
     const p = new URLSearchParams({ date, tzOffset });
     if(h.sleepHrs)       p.set('sleepHrs',      h.sleepHrs);
@@ -203,15 +187,29 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     if(h.recoveryMins)   p.set('recoveryMins',   h.recoveryMins);
     api.get(`/api/scores?${p}`, token)
       .then(d => {
-        if (d && !d.error) {
-          setScores(d);
-          if (d.sleep?.score != null || d.readiness?.score != null || d.activity?.score != null || d.recovery?.score != null) {
-            onScoresReady(date, d);
-          }
+        if (cancelled || !d || d.error) return;
+        setScores(d);
+        if (d.sleep?.score != null || d.readiness?.score != null || d.activity?.score != null || d.recovery?.score != null) {
+          onScoresReady(date, d);
         }
-      }).catch(e => { if (e.name !== 'AbortError') console.warn('scores fetch', e); });
-    return ()=>ctrl.abort();
+      }).catch(() => {});
+    return () => { cancelled = true; };
   },[date,token,scoreFingerprint,loaded]); // eslint-disable-line
+
+  // ── Apple Health connect prompt (iOS only) ────────────────────────────────
+  const [hkStatus, setHkStatus] = useState(null);
+  useEffect(()=>{
+    if(typeof window === 'undefined') return;
+    const handler = e => setHkStatus(e.detail?.status ?? null);
+    window.addEventListener('daylabHealthKit', handler);
+    return () => window.removeEventListener('daylabHealthKit', handler);
+  },[]);
+
+  const connectAppleHealth = () => {
+    if(window.webkit?.messageHandlers?.daylabRequestHealthKit) {
+      window.webkit.messageHandlers.daylabRequestHealthKit.postMessage({token: token||localStorage.getItem('daylab:token')||''});
+    }
+  };
 
   // ── Sparkline SVG ─────────────────────────────────────────────────────────
   function Sparkline({data, color, width=52, height=20}) {
