@@ -354,7 +354,11 @@ function DashboardInner() {
         }, 150);
       },
     }}>
-    <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden"}}>
+    <div style={{background:activeProject?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative",zIndex:1}}>
+      {/* Weather gradient — full viewport, behind everything. Visible through
+          glassmorphic elements (nav bar, chat float) that use backdrop-filter.
+          Cards have opaque backgrounds and sit on top. */}
+      {!activeProject && <WeatherBackground date={selected} theme={theme}/>}
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
@@ -380,11 +384,7 @@ function DashboardInner() {
               flex:1, minHeight:0, overflowY:"auto",
               padding:10, paddingTop:0,
               paddingBottom:mobile?200:0,
-              display:"flex", flexDirection:"column", gap:8,
-              position:"relative"}}>
-              {/* Weather gradient — sticky behind scroll content, shows through
-                  glassmorphic elements (nav bar, chat float, search) */}
-              <WeatherBackground date={selected} theme={theme}/>
+              display:"flex", flexDirection:"column", gap:8}}>
               {/* 25px breathing room under the top-bar vignette */}
               <div style={{height:25,flexShrink:0}}/>
               {/* NavBar — in scroll flow, same component on every page */}
