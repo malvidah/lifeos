@@ -10,6 +10,34 @@ function fmtNavDate(dateKey) {
   return `${MONTHS_FULL[m - 1].toUpperCase()} ${d}, ${y}`;
 }
 
+// ── Relative date label ──────────────────────────────────────────────────────
+function fmtRelative(dateKey, todayKey) {
+  if (!dateKey || !todayKey) return null;
+  if (dateKey === todayKey) return 'TODAY';
+  const d = new Date(dateKey + 'T12:00:00');
+  const t = new Date(todayKey + 'T12:00:00');
+  const diffMs = t - d;
+  const diffDays = Math.round(diffMs / 86400000);
+  if (diffDays === 1) return 'YESTERDAY';
+  if (diffDays === -1) return 'TOMORROW';
+
+  const absDays = Math.abs(diffDays);
+  const suffix = diffDays > 0 ? 'AGO' : 'FROM NOW';
+
+  if (absDays < 7) return `${absDays} DAYS ${suffix}`;
+  if (absDays < 14) return `1 WK ${suffix}`;
+  if (absDays < 30) return `${Math.floor(absDays / 7)} WKS ${suffix}`;
+
+  const totalMonths = (t.getFullYear() - d.getFullYear()) * 12 + (t.getMonth() - d.getMonth());
+  const absMonths = Math.abs(totalMonths);
+  if (absMonths < 1) return `${absDays} DAYS ${suffix}`;
+  const yrs = Math.floor(absMonths / 12);
+  const mos = absMonths % 12;
+  if (yrs === 0) return `${mos} MO ${suffix}`;
+  if (mos === 0) return `${yrs} YR ${suffix}`;
+  return `${yrs} YR ${mos} MO ${suffix}`;
+}
+
 // ── NavIconBtn ────────────────────────────────────────────────────────────────
 function NavIconBtn({ onClick, active, title, children }) {
   return (
@@ -64,10 +92,8 @@ export default function NavBar(props) {
   const isProject    = activeProject && !isGraph && !isEverything;
 
   const today = todayKey();
-  const relLabel = !activeProject && date === today ? 'TODAY'
-    : !activeProject && date === stepDateKey(today, -1) ? 'YESTERDAY'
-    : !activeProject && date === stepDateKey(today, +1) ? 'TOMORROW'
-    : null;
+  const relLabel = !activeProject ? fmtRelative(date, today) : null;
+  const isToday = date === today;
   const centerLabel = !activeProject  ? fmtNavDate(date)
     : isGraph                         ? 'ALL PROJECTS'
     : isEverything                    ? 'ALL'
@@ -127,7 +153,8 @@ export default function NavBar(props) {
               {relLabel && (
                 <span style={{
                   fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
-                  color: "var(--dl-orange)", lineHeight: 1, marginBottom: -1,
+                  color: isToday ? "var(--dl-orange)" : "var(--dl-middle)",
+                  lineHeight: 1, marginBottom: -1,
                 }}>{relLabel}</span>
               )}
               <button onClick={onGoHome} style={{
