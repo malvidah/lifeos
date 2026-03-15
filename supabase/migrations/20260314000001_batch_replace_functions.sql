@@ -3,8 +3,8 @@
 -- Wraps DELETE + INSERT in a single transaction to prevent data loss
 -- if a crash occurs between the two operations.
 --
--- p_date is text (not date) because the Supabase JS client sends JSON
--- strings for all RPC parameters. Explicit ::date casts handle conversion.
+-- All date columns are text in the actual DB schema. No ::date casts needed.
+-- completed_at is timestamptz.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 -- ── journal_blocks ──────────────────────────────────────────────────────────
@@ -14,13 +14,13 @@ CREATE OR REPLACE FUNCTION batch_replace_journal_blocks(
   p_blocks  jsonb DEFAULT '[]'::jsonb
 ) RETURNS void AS $$
 BEGIN
-  DELETE FROM journal_blocks WHERE user_id = p_user_id AND date = p_date::date;
+  DELETE FROM journal_blocks WHERE user_id = p_user_id AND date = p_date;
 
   IF jsonb_array_length(p_blocks) > 0 THEN
     INSERT INTO journal_blocks (user_id, date, position, content, project_tags, note_tags)
     SELECT
       p_user_id,
-      p_date::date,
+      p_date,
       (b->>'position')::integer,
       b->>'content',
       ARRAY(SELECT jsonb_array_elements_text(b->'project_tags')),
@@ -37,19 +37,19 @@ CREATE OR REPLACE FUNCTION batch_replace_tasks(
   p_tasks   jsonb DEFAULT '[]'::jsonb
 ) RETURNS void AS $$
 BEGIN
-  DELETE FROM tasks WHERE user_id = p_user_id AND date = p_date::date;
+  DELETE FROM tasks WHERE user_id = p_user_id AND date = p_date;
 
   IF jsonb_array_length(p_tasks) > 0 THEN
     INSERT INTO tasks (user_id, date, position, html, text, done, due_date, completed_at, project_tags, note_tags)
     SELECT
       p_user_id,
-      p_date::date,
+      p_date,
       (t->>'position')::integer,
       t->>'html',
       t->>'text',
       (t->>'done')::boolean,
-      CASE WHEN t->>'due_date' IS NOT NULL AND t->>'due_date' != '' THEN (t->>'due_date')::date ELSE NULL END,
-      CASE WHEN t->>'completed_at' IS NOT NULL AND t->>'completed_at' != '' THEN (t->>'completed_at')::date ELSE NULL END,
+      CASE WHEN t->>'due_date' IS NOT NULL AND t->>'due_date' != '' THEN t->>'due_date' ELSE NULL END,
+      CASE WHEN t->>'completed_at' IS NOT NULL AND t->>'completed_at' != '' THEN (t->>'completed_at')::timestamptz ELSE NULL END,
       ARRAY(SELECT jsonb_array_elements_text(t->'project_tags')),
       ARRAY(SELECT jsonb_array_elements_text(t->'note_tags'))
     FROM jsonb_array_elements(p_tasks) AS t;
@@ -64,13 +64,13 @@ CREATE OR REPLACE FUNCTION batch_replace_meal_items(
   p_items   jsonb DEFAULT '[]'::jsonb
 ) RETURNS void AS $$
 BEGIN
-  DELETE FROM meal_items WHERE user_id = p_user_id AND date = p_date::date;
+  DELETE FROM meal_items WHERE user_id = p_user_id AND date = p_date;
 
   IF jsonb_array_length(p_items) > 0 THEN
     INSERT INTO meal_items (user_id, date, position, content, ai_calories, ai_protein, ai_parsed_at)
     SELECT
       p_user_id,
-      p_date::date,
+      p_date,
       (m->>'position')::integer,
       m->>'content',
       CASE WHEN m->>'ai_calories' IS NOT NULL THEN (m->>'ai_calories')::integer ELSE NULL END,
@@ -90,13 +90,13 @@ CREATE OR REPLACE FUNCTION batch_replace_workouts(
   p_rows    jsonb DEFAULT '[]'::jsonb
 ) RETURNS void AS $$
 BEGIN
-  DELETE FROM workouts WHERE user_id = p_user_id AND date = p_date::date AND source = ANY(p_sources);
+  DELETE FROM workouts WHERE user_id = p_user_id AND date = p_date AND source = ANY(p_sources);
 
   IF jsonb_array_length(p_rows) > 0 THEN
     INSERT INTO workouts (user_id, date, title, source, calories, raw)
     SELECT
       p_user_id,
-      p_date::date,
+      p_date,
       w->>'title',
       w->>'source',
       CASE WHEN w->>'calories' IS NOT NULL THEN (w->>'calories')::integer ELSE NULL END,
