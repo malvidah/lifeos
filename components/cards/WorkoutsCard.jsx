@@ -170,10 +170,10 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     return { dist, pace };
   }
   // Convert editor HTML → rows array, preserving stats for unchanged lines
-  function handleBlur(html) {
+  function parseEditorHtml(html) {
     const lines = htmlToLines(html);
     const usedTexts = new Set();
-    const newRows = lines.map(text => {
+    return lines.map(text => {
       const existing = rowByText.current.get(text);
       if (existing && !usedTexts.has(text)) {
         usedTexts.add(text);
@@ -182,7 +182,12 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
       const {dist, pace} = parseActivityText(text);
       return { id: Date.now() + Math.random(), text, dist, pace, kcal: null };
     });
-    setManualRows(newRows);
+  }
+  function handleBlur(html) { setManualRows(parseEditorHtml(html)); }
+  const updateTimer = useRef(null);
+  function handleUpdate(html) {
+    clearTimeout(updateTimer.current);
+    updateTimer.current = setTimeout(() => setManualRows(parseEditorHtml(html)), 400);
   }
 
   const KCOL=72, DCOL=60, PCOL=100;
@@ -234,6 +239,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
           <DayLabEditor
             value={rowsToHtml(safe)}
             onBlur={handleBlur}
+            onUpdate={handleUpdate}
             placeholder={mergedSynced.length===0?"What did you do?":""}
             textColor={"var(--dl-strong)"}
             mutedColor={"var(--dl-middle)"}

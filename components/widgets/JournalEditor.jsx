@@ -142,10 +142,10 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   }, [loaded, token, showProtein]); // eslint-disable-line
 
   // Convert editor HTML → rows array, preserving kcal for unchanged lines
-  function handleBlur(html) {
+  function parseEditorHtml(html) {
     const lines = htmlToLines(html);
     const usedTexts = new Set();
-    const newRows = lines.map(text => {
+    return lines.map(text => {
       const existing = rowByText.current.get(text);
       if (existing && !usedTexts.has(text)) {
         usedTexts.add(text);
@@ -153,7 +153,12 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
       }
       return { id: Date.now() + Math.random(), text, kcal: null, protein: null };
     });
-    setRows(newRows);
+  }
+  function handleBlur(html) { setRows(parseEditorHtml(html)); }
+  const updateTimer = useRef(null);
+  function handleUpdate(html) {
+    clearTimeout(updateTimer.current);
+    updateTimer.current = setTimeout(() => setRows(parseEditorHtml(html)), 400);
   }
 
   if (!loaded) return (
@@ -200,6 +205,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
           <DayLabEditor
             value={rowsToHtml(safe)}
             onBlur={handleBlur}
+            onUpdate={handleUpdate}
             placeholder={merged.length === 0 ? placeholder : ""}
             textColor={"var(--dl-strong)"}
             mutedColor={"var(--dl-middle)"}
