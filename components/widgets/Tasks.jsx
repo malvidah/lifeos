@@ -156,6 +156,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   useEffect(() => injectTaskListStyles(accentHex), [accentHex]);
 
   const htmlValue = useMemo(() => migrateTasksToHtml(value) || '', [value]);
+  const isEmpty = useMemo(() => clientParseTasks(htmlValue).length === 0, [htmlValue]);
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}>
@@ -169,20 +170,33 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
       '--task-color':  "var(--dl-accent)",
       '--task-fill':   theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
     }}>
-      <DayLabEditor
-        taskList
-        value={htmlValue}
-        onUpdate={html => setValue(html)}
-        placeholder="Add a task. Use / for commands."
-        projectNames={taskProjectNames}
-        noteNames={ctxNotes}
-        textColor={"var(--dl-strong)"}
-        mutedColor={"var(--dl-middle)"}
-        color={"var(--dl-accent)"}
-        onProjectClick={name => navigateToProject(name)}
-        onNoteClick={name => navigateToNote(name)}
-        style={{padding:0}}
-      />
+      <div style={{ position: 'relative' }}>
+        <DayLabEditor
+          taskList
+          value={htmlValue}
+          onUpdate={html => setValue(html)}
+          placeholder=""
+          projectNames={taskProjectNames}
+          noteNames={ctxNotes}
+          textColor={"var(--dl-strong)"}
+          mutedColor={"var(--dl-middle)"}
+          color={"var(--dl-accent)"}
+          onProjectClick={name => navigateToProject(name)}
+          onNoteClick={name => navigateToNote(name)}
+          style={{padding:0}}
+        />
+        {isEmpty && (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            display: 'flex', alignItems: 'flex-start',
+            paddingTop: 3, paddingLeft: 25,
+            color: 'var(--dl-middle)', pointerEvents: 'none',
+            fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
+          }}>
+            Add a task. Use / for commands.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

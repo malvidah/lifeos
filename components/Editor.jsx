@@ -30,8 +30,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-weight: 400; }
-    .dl-tasklist .ProseMirror > p.is-empty::before { content: none !important; }
-    .dl-tasklist .ProseMirror li p.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
+    .dl-tasklist .ProseMirror p.is-empty::before { content: none !important; }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
@@ -498,20 +497,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       Placeholder.configure({
         placeholder: noteTitle
           ? ({ node }) => node.type.name === 'heading' ? 'Untitled' : 'Write something...'
-          : taskList
-          ? ({ node, pos, editor }) => {
-              if (node.type.name !== 'paragraph') return '';
-              // Only show inside a taskItem, not on trailing top-level paragraphs
-              const $pos = editor.state.doc.resolve(pos);
-              if ($pos.depth < 2 || $pos.node($pos.depth - 1)?.type.name !== 'taskItem') return '';
-              const list = editor.state.doc.firstChild;
-              if (!list || list.type.name !== 'taskList' || list.childCount !== 1) return '';
-              return (placeholder || '');
-            }
-          : placeholder || '',
+          : taskList ? '' : placeholder || '',
         emptyNodeClass: 'is-empty',
-        showOnlyCurrent: !noteTitle && !taskList,
-        includeChildren: taskList,
+        showOnlyCurrent: !noteTitle,
       }),
 
       // Unified slash command: /p → project chip, /n → note chip
