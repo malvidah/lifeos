@@ -399,17 +399,14 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                 <stop offset="100%" stopColor={color} stopOpacity="0"/>
               </linearGradient>
             </defs>
-            {/* Gradient fill under the moving average curve */}
-            <path d={maFillPath} fill={`url(#tg-${metricKey})`} stroke="none"/>
+            {/* Gradient fill — follows smoothed curve on 12M, raw on 30D */}
+            <path d={trendRange === "12m" ? maFillPath : fillPath} fill={`url(#tg-${metricKey})`} stroke="none"/>
             {/* Overall average reference line */}
             <line x1="0" y1={avgY} x2={W} y2={avgY}
               stroke="rgba(255,255,255,0.2)" strokeWidth="1"
               strokeDasharray="4,4" vectorEffect="non-scaling-stroke"/>
-            {/* Raw daily line — faded for context */}
-            <polyline points={linePts} fill="none" stroke={color} strokeWidth="1" strokeOpacity="0.25"
-              strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
-            {/* Moving average — the main visible trend line */}
-            <polyline points={maLinePts} fill="none" stroke={color} strokeWidth="2"
+            {/* 12M: smoothed 7-day MA only. 30D: raw daily scores only. */}
+            <polyline points={trendRange === "12m" ? maLinePts : linePts} fill="none" stroke={color} strokeWidth="1.5"
               strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/>
             {/* X-axis tick marks */}
             {ticks.map(t => (
