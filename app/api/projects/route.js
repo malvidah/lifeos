@@ -105,10 +105,11 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'no updatable fields provided' }, { status: 400 });
   }
 
+  // Upsert so the project is auto-created if it doesn't exist yet
+  // (e.g. PATCH races ahead of the POST that creates the project)
+  const safeName = name.toLowerCase().trim();
   const { data, error } = await supabase.from('projects')
-    .update(patch)
-    .eq('user_id', user.id)
-    .eq('name', name.toLowerCase())
+    .upsert({ user_id: user.id, name: safeName, ...patch }, { onConflict: 'user_id,name' })
     .select()
     .single();
 
