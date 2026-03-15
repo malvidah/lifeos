@@ -67,15 +67,14 @@ BEGIN
   DELETE FROM meal_items WHERE user_id = p_user_id AND date = p_date;
 
   IF jsonb_array_length(p_items) > 0 THEN
-    INSERT INTO meal_items (user_id, date, position, content, ai_calories, ai_protein, ai_parsed_at)
+    INSERT INTO meal_items (user_id, date, position, content, ai_calories, ai_protein)
     SELECT
       p_user_id,
       p_date,
       (m->>'position')::integer,
       m->>'content',
       CASE WHEN m->>'ai_calories' IS NOT NULL THEN (m->>'ai_calories')::integer ELSE NULL END,
-      CASE WHEN m->>'ai_protein'  IS NOT NULL THEN (m->>'ai_protein')::numeric  ELSE NULL END,
-      CASE WHEN m->>'ai_parsed_at' IS NOT NULL THEN (m->>'ai_parsed_at')::timestamptz ELSE NULL END
+      CASE WHEN m->>'ai_protein'  IS NOT NULL THEN (m->>'ai_protein')::numeric  ELSE NULL END
     FROM jsonb_array_elements(p_items) AS m;
   END IF;
 END;
