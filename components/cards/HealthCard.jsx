@@ -131,39 +131,13 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
 
   const purple = "var(--dl-purple)";
 
-  // ── Scores: single unified effect ────────────────────────────────────────
-  // For past dates: load cached scores from DB → done (one fetch, one render).
-  // For today: load cached first, then recompute once when metrics are loaded.
-  // This eliminates the 3-cycle flicker caused by racing async effects.
+  // ── Scores: single /api/scores call per date ─────────────────────────────
+  // /api/scores handles everything: for past dates it returns cached scores
+  // WITH sparklines in one fast DB read. For today it computes fresh.
+  // One call, one setScores — no flicker, no lost sparklines.
   const [scores, setScores] = useState(null);
-  const scoreComputedForDate = useRef(null); // tracks which date we've computed for
+  const scoreFetchedForDate = useRef(null);
 
-  // Step 1: On date change, load cached scores from DB immediately
-  const prevScoreDate = useRef(date);
-  useEffect(()=>{
-    if(prevScoreDate.current === date) return;
-    prevScoreDate.current = date;
-    scoreComputedForDate.current = null;
-    if (!token) { setScores(null); return; }
-    api.get(`/api/health/scores?start=${date}&end=${date}`, token)
-      .then(data => {
-        const row = data?.rows?.[0];
-        if (row && (row.sleep_score != null || row.readiness_score != null)) {
-          setScores({
-            sleep:     {score: row.sleep_score     ?? null},
-            readiness: {score: row.readiness_score ?? null},
-            activity:  {score: row.activity_score  ?? null},
-            recovery:  {score: row.recovery_score  ?? null},
-          });
-          // For past dates, cached scores are final — mark as computed
-          if (date !== todayKey()) scoreComputedForDate.current = date;
-        } else {
-          setScores(null);
-        }
-      });
-  },[date, token]); // eslint-disable-line
-
-  // Step 2: Compute fresh scores — only for today, or dates without cached scores
   const scoreFingerprint = loaded
     ? [h.sleepHrs,h.sleepEff,h.hrv,h.rhr,h.steps,h.activeMinutes,h.stressMins,h.recoveryMins].join(':')
     : null;
@@ -171,9 +145,11 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   useEffect(()=>{
     if(!token||!loaded||scoreFingerprint===null) return;
     if(date > todayKey()) return;
-    // Already computed for this date — don't recompute
-    if(scoreComputedForDate.current === date) return;
-    scoreComputedForDate.current = date;
+    // For past dates: fetch once per date (cached on server, includes sparklines).
+    // For today: refetch when fingerprint changes (live data updates).
+    const isToday = date === todayKey();
+    if (scoreFetchedForDate.current === date && !isToday) return;
+    scoreFetchedForDate.current = date;
     let cancelled = false;
     const tzOffset = new Date().getTimezoneOffset() * -1;
     const p = new URLSearchParams({ date, tzOffset });
@@ -195,6 +171,13 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
       }).catch(() => {});
     return () => { cancelled = true; };
   },[date,token,scoreFingerprint,loaded]); // eslint-disable-line
+
+  // Reset scores ref when date changes so next date gets a fresh fetch
+  const prevScoreDate = useRef(date);
+  if (prevScoreDate.current !== date) {
+    prevScoreDate.current = date;
+    scoreFetchedForDate.current = null;
+  }
 
   // ── Apple Health connect prompt (iOS only) ────────────────────────────────
   const [hkStatus, setHkStatus] = useState(null);
