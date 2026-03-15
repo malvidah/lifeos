@@ -12,7 +12,7 @@ import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, Navig
 import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
 import { useTheme } from "@/lib/theme";
-import { TaskFilterBtns, clientParseTasks, tasksToHtml } from "../widgets/Tasks.jsx";
+import { TaskFilterBtns, clientParseTasks, tasksToHtml, injectTaskListStyles } from "../widgets/Tasks.jsx";
 import { AddJournalLine } from "../widgets/JournalEditor.jsx";
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";
 
@@ -77,34 +77,11 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
     return tasksToHtml(tasks.map(t => ({ id: t.id, text: t.text, done: !!t.done })));
   }, []); // eslint-disable-line
 
+  const isEmpty = useMemo(() => clientParseTasks(initialHtml).length === 0, [initialHtml]);
+
   // Inject task list styles (same as daily view)
   const accentHex = theme === 'light' ? '#B87018' : '#D08828';
-  useEffect(() => {
-    if (typeof document === 'undefined') return;
-    let s = document.getElementById('dl-tasklist-styles');
-    if (!s) { s = document.createElement('style'); s.id = 'dl-tasklist-styles'; document.head.appendChild(s); }
-    const enc = encodeURIComponent(accentHex);
-    s.textContent = `
-      .dl-editor ul[data-type="taskList"] { list-style:none; padding:0; margin:0; }
-      .dl-editor ul[data-type="taskList"] > li { display:flex; align-items:flex-start; gap:10px; padding:3px 0; }
-      .dl-editor ul[data-type="taskList"] > li > label { display:flex; align-items:center; margin-top:4px; flex-shrink:0; cursor:pointer; }
-      .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"] {
-        -webkit-appearance:none; appearance:none;
-        width:15px; height:15px; min-width:15px; border-radius:4px; margin:0;
-        border:1.5px solid var(--task-border,var(--dl-border2)); background:transparent;
-        cursor:pointer; transition:all 0.15s;
-      }
-      .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
-        background-color:var(--task-fill); border-color:var(--task-color);
-        background-image:url("data:image/svg+xml,%3Csvg width='9' height='9' viewBox='0 0 10 10' fill='none' stroke='${enc}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='1.5%2C5 4%2C7.5 8.5%2C2'/%3E%3C/svg%3E");
-        background-repeat:no-repeat; background-position:center;
-      }
-      .dl-editor ul[data-type="taskList"] > li > div { flex:1; min-width:0; }
-      .dl-editor ul[data-type="taskList"] > li[data-checked="true"] > div { color:var(--dl-strong); text-decoration:line-through; }
-      [data-filter="open"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"] { display:none; }
-      [data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="false"] { display:none; }
-    `;
-  }, [accentHex]);
+  useEffect(() => injectTaskListStyles(accentHex), [accentHex]);
 
   useEffect(() => () => clearTimeout(saveTimer.current), []);
 
@@ -164,20 +141,33 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
       '--task-color':  "var(--dl-accent)",
       '--task-fill':   theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
     }}>
-      <DayLabEditor
-        taskList
-        value={initialHtml}
-        onUpdate={handleUpdate}
-        placeholder=""
-        projectNames={ctxProjects}
-        noteNames={ctxNotes.notes}
-        textColor={"var(--dl-strong)"}
-        mutedColor={"var(--dl-middle)"}
-        color={"var(--dl-accent)"}
-        onProjectClick={name => navigateToProject(name)}
-        onNoteClick={name => navigateToNote(name)}
-        style={{ padding: 0 }}
-      />
+      <div style={{ position: 'relative' }}>
+        <DayLabEditor
+          taskList
+          value={initialHtml}
+          onUpdate={handleUpdate}
+          placeholder=""
+          projectNames={ctxProjects}
+          noteNames={ctxNotes.notes}
+          textColor={"var(--dl-strong)"}
+          mutedColor={"var(--dl-middle)"}
+          color={"var(--dl-accent)"}
+          onProjectClick={name => navigateToProject(name)}
+          onNoteClick={name => navigateToNote(name)}
+          style={{ padding: 0 }}
+        />
+        {isEmpty && (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            display: 'flex', alignItems: 'flex-start',
+            paddingTop: 3, paddingLeft: 25,
+            color: 'var(--dl-middle)', pointerEvents: 'none',
+            fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
+          }}>
+            Add a task. Use / for commands.
+          </div>
+        )}
+      </div>
     </div>
   );
 }

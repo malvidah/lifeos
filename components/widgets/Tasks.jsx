@@ -118,7 +118,7 @@ export function TaskCheckbox({ done, onToggle }) {
 
 // Called on every theme change — always updates the existing style element so the
 // checkmark SVG (data URI) can't use CSS vars and must be baked in with the accent hex.
-function injectTaskListStyles(accentHex) {
+export function injectTaskListStyles(accentHex) {
   if (typeof document === 'undefined') return;
   let s = document.getElementById('dl-tasklist-styles');
   if (!s) { s = document.createElement('style'); s.id = 'dl-tasklist-styles'; document.head.appendChild(s); }
