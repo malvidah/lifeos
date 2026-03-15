@@ -204,6 +204,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
                 if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
               }}
               onEnterCommit={text => {
+                if (!text.trim()) return; // require text before creating a new row
                 const row2 = mkRow();
                 const i = safe.findIndex(r => r.id===row.id);
                 setRows(prev => {
@@ -211,7 +212,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
                   const updated = s.map(r => r.id===row.id ? {...r, text} : r);
                   return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
                 });
-                if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
+                if (!estimating.current.has(row.id)) runEstimate(row.id, text);
                 setTimeout(() => refs.current[row2.id]?.focus(), 30);
               }}
               onBackspaceEmpty={safe.length > 1 ? () => {

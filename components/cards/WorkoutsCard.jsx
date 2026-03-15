@@ -245,15 +245,16 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
                 if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
               }}
               onEnterCommit={text => {
+                if (!text.trim()) return; // require text before creating a new row
                 const row2 = mkRow();
                 const i = safe.findIndex(r => r.id===row.id);
-                const {dist, pace} = text.trim() ? parseActivityText(text) : {dist:null, pace:null};
+                const {dist, pace} = parseActivityText(text);
                 setManualRows(prev => {
                   const s = Array.isArray(prev) ? prev : safe;
                   const updated = s.map(r => r.id===row.id ? {...r, text, dist:dist||r.dist, pace:pace||r.pace} : r);
                   return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
                 });
-                if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
+                if (!estimating.current.has(row.id)) runEstimate(row.id, text);
                 setTimeout(() => refs.current[row2.id]?.focus(), 30);
               }}
               onBackspaceEmpty={safe.length > 1 ? () => {
@@ -274,13 +275,13 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
         <div style={{flexShrink:0,paddingTop:6,paddingBottom:2,display:"flex",alignItems:"center",borderTop:"1px solid var(--dl-border)"}}>
           <div style={{flex:1}}/>
           <div style={{width:DCOL,display:"flex",justifyContent:"center"}}>
-            {totalDistMi>0&&<span style={{...chipBase,background:"var(--dl-blue)"+"22",color:"var(--dl-blue)"}}>{totalDistMi.toFixed(1)}mi</span>}
+            {totalDistMi>0&&<span style={{...chipBase,background:"var(--dl-blue-13)",color:"var(--dl-blue)"}}>{totalDistMi.toFixed(1)}mi</span>}
           </div>
           <div style={{width:PCOL,display:"flex",justifyContent:"center"}}>
             {avgPaceFmt&&<span style={{...chipBase,background:"var(--dl-green-13)",color:"var(--dl-green)"}}>{avgPaceFmt}/mi</span>}
           </div>
           <div style={{width:KCOL,display:"flex",justifyContent:"center"}}>
-            {totalKcal>0&&<span style={{...chipBase,background:"var(--dl-orange)"+"22",color:"var(--dl-orange)"}}>-{totalKcal}kcal</span>}
+            {totalKcal>0&&<span style={{...chipBase,background:"var(--dl-orange-13)",color:"var(--dl-orange)"}}>-{totalKcal}kcal</span>}
           </div>
         </div>
       )}
