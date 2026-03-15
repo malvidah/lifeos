@@ -17,12 +17,23 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 export const PATCH = withAuth(async (req, { supabase, user }) => {
   const patch = await req.json();
 
-  // Atomic merge via RPC — no read-then-write race
-  const { data: merged, error } = await supabase.rpc('merge_user_settings', {
+  // Try atomic merge via RPC first — falls back to read-then-write if RPC not deployed
+  const { data: merged, error: rpcErr } = await supabase.rpc('merge_user_settings', {
     p_user_id: user.id,
     p_patch:   patch,
   });
 
-  if (error) throw error;
-  return Response.json({ ok: true, data: merged });
+  if (!rpcErr) return Response.json({ ok: true, data: merged });
+
+  // Fallback: read current, merge, write back
+  console.warn('[settings] RPC fallback:', rpcErr.message);
+  const { data: row } = await supabase
+    .from('user_settings').select('data').eq('user_id', user.id).maybeSingle();
+  const current = row?.data ?? {};
+  const next = { ...current, ...patch };
+  const { error: upsErr } = await supabase
+    .from('user_settings')
+    .upsert({ user_id: user.id, data: next }, { onConflict: 'user_id' });
+  if (upsErr) throw upsErr;
+  return Response.json({ ok: true, data: next });
 });
