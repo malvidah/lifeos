@@ -62,6 +62,9 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   // We keep a local map in state (not persisted to DB separately) and persist via the PUT call.
   const [savedEstimates, setSavedEstimates] = useState({});
   const estLoaded = true; // estimates are computed on the fly; always "loaded"
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState(new Set());
+  const longPressTimer = useRef(null);
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
   const [tick, setTick] = useState(0);
@@ -197,12 +200,41 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   const avgPaceFmt = avgPaceSecs ? `${Math.floor(avgPaceSecs/60)}:${String(Math.round(avgPaceSecs%60)).padStart(2,"0")}` : null;
   const showTotals = totalKcal>0||totalDistMi>0||avgPaceFmt;
 
+  function toggleSelect(id) {
+    setSelected(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  }
+  function deleteSelected() {
+    setManualRows(prev => {
+      const s = Array.isArray(prev) ? prev : safe;
+      const remaining = s.filter(r => !selected.has(r.id));
+      return remaining.length ? remaining : [mkRow()];
+    });
+    setSelected(new Set());
+    setSelecting(false);
+  }
+  function startLongPress(id) {
+    longPressTimer.current = setTimeout(() => { setSelecting(true); setSelected(new Set([id])); }, 400);
+  }
+  function cancelLongPress() { clearTimeout(longPressTimer.current); }
+
   if(!loaded) return (<div style={{display:"flex",flexDirection:"column",gap:8,padding:"4px 0"}}>
     <Shimmer width="75%" height={13}/><Shimmer width="55%" height={13}/>
   </div>);
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
+      {selecting && (
+        <div style={{display:"flex",alignItems:"center",gap:8,padding:"4px 0",flexShrink:0}}>
+          <button onClick={deleteSelected} disabled={!selected.size}
+            style={{background:"none",border:"1px solid var(--dl-border2)",borderRadius:4,cursor:"pointer",
+              fontFamily:mono,fontSize:F.sm,color:selected.size?"var(--dl-orange)":"var(--dl-middle)",padding:"2px 8px"}}>
+            Delete {selected.size||""}</button>
+          <div style={{flex:1}}/>
+          <button onClick={()=>{setSelecting(false);setSelected(new Set());}}
+            style={{background:"none",border:"none",cursor:"pointer",fontFamily:mono,fontSize:F.sm,color:"var(--dl-middle)",padding:"2px 4px"}}>
+            Cancel</button>
+        </div>
+      )}
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
         {mergedSynced.map(row=>(
           <div key={row.id} style={rowS}>
@@ -220,7 +252,13 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
           </div>
         ))}
         {safe.map((row,idx)=>(
-          <div key={row.id} style={rowS}>
+          <div key={row.id} style={rowS}
+            onPointerDown={row.text?.trim() ? ()=>startLongPress(row.id) : undefined}
+            onPointerUp={cancelLongPress} onPointerLeave={cancelLongPress}>
+            {selecting && row.text?.trim() && (
+              <input type="checkbox" checked={selected.has(row.id)} onChange={()=>toggleSelect(row.id)}
+                style={{marginRight:6,flexShrink:0,accentColor:"var(--dl-accent)"}}/>
+            )}
             <DayLabEditor
               ref={el => refs.current[row.id] = el}
               value={row.text}
