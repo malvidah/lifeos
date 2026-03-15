@@ -11,7 +11,7 @@ function fmtNavDate(dateKey) {
 }
 
 // ── Relative date label ──────────────────────────────────────────────────────
-const DAYS_SHORT = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+const DAYS_FULL = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
 function fmtRelative(dateKey, todayKey) {
   if (!dateKey || !todayKey) return null;
   if (dateKey === todayKey) return 'TODAY';
@@ -23,29 +23,25 @@ function fmtRelative(dateKey, todayKey) {
   if (diffDays === -1) return 'TOMORROW';
 
   const absDays = Math.abs(diffDays);
-  const dayName = DAYS_SHORT[d.getDay()];
+  const dayName = DAYS_FULL[d.getDay()];
 
   // Past dates
   if (diffDays > 0) {
-    // "Last Thursday" for 2-6 days ago (same week or last week feel)
     if (absDays <= 6) return `LAST ${dayName}`;
-    // "2 Thursdays ago" for 7-13 days
-    if (absDays <= 13) return `2 ${dayName}S AGO`;
-    // "3 weeks ago" for 14-29 days
+    if (absDays <= 13) return `1 WEEK AGO`;
     if (absDays < 30) return `${Math.round(absDays / 7)} WEEKS AGO`;
-    // Months/years
     const totalMonths = (t.getFullYear() - d.getFullYear()) * 12 + (t.getMonth() - d.getMonth());
     if (totalMonths < 2) return 'LAST MONTH';
     if (totalMonths < 12) return `${totalMonths} MONTHS AGO`;
     const yrs = Math.floor(totalMonths / 12);
     const mos = totalMonths % 12;
     if (mos === 0) return yrs === 1 ? 'LAST YEAR' : `${yrs} YEARS AGO`;
-    return yrs === 1 ? `1 YR ${mos} MO AGO` : `${yrs} YR ${mos} MO AGO`;
+    return `${yrs} YEAR${yrs > 1 ? 'S' : ''} ${mos} MONTH${mos > 1 ? 'S' : ''} AGO`;
   }
 
   // Future dates
   if (absDays <= 6) return `THIS ${dayName}`;
-  if (absDays <= 13) return `NEXT ${dayName}`;
+  if (absDays <= 13) return `NEXT WEEK`;
   if (absDays < 30) return `IN ${Math.round(absDays / 7)} WEEKS`;
   const totalMonths = (d.getFullYear() - t.getFullYear()) * 12 + (d.getMonth() - t.getMonth());
   if (totalMonths < 2) return 'NEXT MONTH';
@@ -53,7 +49,7 @@ function fmtRelative(dateKey, todayKey) {
   const yrs = Math.floor(totalMonths / 12);
   const mos = totalMonths % 12;
   if (mos === 0) return yrs === 1 ? 'NEXT YEAR' : `IN ${yrs} YEARS`;
-  return `IN ${yrs} YR ${mos} MO`;
+  return `IN ${yrs} YEAR${yrs > 1 ? 'S' : ''} ${mos} MONTH${mos > 1 ? 'S' : ''}`;
 }
 
 // ── NavIconBtn ────────────────────────────────────────────────────────────────
