@@ -136,14 +136,35 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
 
   // ── Computed scores from /api/scores ──────────────────────────────────────
   const [scores, setScores] = useState(null);
-  // Reset scores on date change — fresh scores arrive from /api/scores below
+  // Track the fingerprint that the current scores were computed from.
+  // Only recompute when the fingerprint changes (i.e., Oura sync brought new data).
+  const scoredFingerprintRef = useRef(null);
   const prevScoreDate = useRef(date);
   useEffect(()=>{
     if(prevScoreDate.current !== date){
       prevScoreDate.current = date;
-      setScores(null);
+      scoredFingerprintRef.current = null;
+      // Load cached scores from DB instantly — no flicker
+      if (token) {
+        api.get(`/api/health/scores?start=${date}&end=${date}`, token)
+          .then(data => {
+            const row = data?.rows?.[0];
+            if (row && (row.sleep_score != null || row.readiness_score != null || row.activity_score != null || row.recovery_score != null)) {
+              setScores({
+                sleep:     {score: row.sleep_score     ?? null},
+                readiness: {score: row.readiness_score ?? null},
+                activity:  {score: row.activity_score  ?? null},
+                recovery:  {score: row.recovery_score  ?? null},
+              });
+            } else {
+              setScores(null);
+            }
+          });
+      } else {
+        setScores(null);
+      }
     }
-  },[date]); // eslint-disable-line
+  },[date, token]); // eslint-disable-line
 
   // ── Apple Health connect prompt (iOS only) ────────────────────────────────
   const [hkStatus, setHkStatus] = useState(null); // null | 'not_determined' | 'authorized' | 'denied'
@@ -170,6 +191,10 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     // Wait until h is loaded from DB — prevents H_EMPTY first-fire from corrupting dots
     if(!token||!loaded||scoreFingerprint===null) return;
     if(date > todayKey()) return; // never request scores for future dates
+    // Skip if the fingerprint hasn't changed since the last score computation —
+    // prevents flicker when DB-cached scores are already displayed
+    if(scoreFingerprint === scoredFingerprintRef.current) return;
+    scoredFingerprintRef.current = scoreFingerprint;
     const ctrl = new AbortController();
     const tzOffset = new Date().getTimezoneOffset() * -1;
     const p = new URLSearchParams({ date, tzOffset });
