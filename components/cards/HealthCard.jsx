@@ -403,7 +403,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
             <path d={trendRange === "12m" ? maFillPath : fillPath} fill={`url(#tg-${metricKey})`} stroke="none"/>
             {/* Overall average reference line */}
             <line x1="0" y1={avgY} x2={W} y2={avgY}
-              stroke="rgba(255,255,255,0.2)" strokeWidth="1"
+              stroke="var(--dl-middle)" strokeWidth="1" strokeOpacity="0.5"
               strokeDasharray="4,4" vectorEffect="non-scaling-stroke"/>
             {/* 12M: smoothed 7-day MA only. 30D: raw daily scores only. */}
             <polyline points={trendRange === "12m" ? maLinePts : linePts} fill="none" stroke={color} strokeWidth="1.5"
