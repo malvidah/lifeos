@@ -728,13 +728,13 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     marginBottom:3,
                     textTransform:"uppercase",
                   }}>{DAY_NAMES[d.getDay()]} {d.getDate()}</div>
-                  {/* Health dots */}
-                  <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:4,height:8}}>
-                    {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:7,height:7,borderRadius:"50%",background:"var(--dl-blue)"}}/>}
-                    {k<=today && (healthDots[k]?.readiness >= 85) && <div style={{width:7,height:7,borderRadius:"50%",background:"var(--dl-green)"}}/>}
-                    {k<=today && (healthDots[k]?.activity >= 85) && <div style={{width:7,height:7,borderRadius:"50%",background:"var(--dl-accent)"}}/>}
-                    {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:7,height:7,borderRadius:"50%",background:"var(--dl-purple)"}}/>}
-                  </div>
+                  {/* Health score dots — filled when score exists, bright when >= 85, dim when below */}
+                  {k<=today && healthDots[k] && <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:4,height:10}}>
+                    {healthDots[k].sleep > 0 && <div style={{width:9,height:9,borderRadius:"50%",background:"var(--dl-blue)",opacity:healthDots[k].sleep>=85?1:0.35}}/>}
+                    {healthDots[k].readiness > 0 && <div style={{width:9,height:9,borderRadius:"50%",background:"var(--dl-green)",opacity:healthDots[k].readiness>=85?1:0.35}}/>}
+                    {healthDots[k].activity > 0 && <div style={{width:9,height:9,borderRadius:"50%",background:"var(--dl-accent)",opacity:healthDots[k].activity>=85?1:0.35}}/>}
+                    {healthDots[k].recovery > 0 && <div style={{width:9,height:9,borderRadius:"50%",background:"var(--dl-purple)",opacity:healthDots[k].recovery>=85?1:0.35}}/>}
+                  </div>}
                 </div>
 
                 {/* Event cards — scrollable, fixed + button below */}
