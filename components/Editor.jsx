@@ -207,16 +207,17 @@ function makeSlashSuggestionMatch() {
     const nodeText  = nodeBefore.text;
     const nodeStart = $position.pos - nodeBefore.nodeSize;
 
-    // Scan backward for /p or /n preceded by whitespace or at paragraph start
+    // Scan backward for / preceded by whitespace or at paragraph start
     for (let i = nodeText.length - 1; i >= 0; i--) {
       if (nodeText[i] !== '/') continue;
       const prev = i > 0 ? nodeText[i - 1] : ' ';
       if (!/\s/.test(prev) && i !== 0) continue; // require space-before or line start
       const after = nodeText.slice(i + 1);
-      if (!/^[pn]/i.test(after)) continue;        // require p or n immediately after /
+      // Match bare / (show command menu), /p..., or /n...
+      if (after.length > 0 && !/^[pn]/i.test(after)) continue;
       return {
         range: { from: nodeStart + i, to: $position.pos },
-        query: after,           // e.g. "p", "p big think", "n", "n my note"
+        query: after,           // "" (bare /), "p", "p big think", "n", "n my note"
         text:  '/' + after,
       };
     }
@@ -282,15 +283,18 @@ function SuggestionDropdown({ state, onSelect }) {
       padding: '4px 0', minWidth: 180, maxWidth: 300, maxHeight: 240, overflowY: 'auto',
     }}>
       {state.items.map((item, i) => {
+        const isCmd              = item.startsWith('__cmd__:');
         const isExistingProject  = item.startsWith('__project__:');
         const isNewProject       = item.startsWith('__create_project__:');
         const isProject          = isExistingProject || isNewProject;
         const isCreate           = item.startsWith('__create__:') || isNewProject;
-        const rawLabel           = isNewProject ? item.slice(19)
+        const rawLabel           = isCmd ? item.slice(8)
+                                 : isNewProject ? item.slice(19)
                                  : isExistingProject ? item.slice(12)
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9); // __note__: = 9
-        const label              = isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : '/n  Note')
+                                 : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
         const col                = isProject ? projectColor(rawLabel) : null;
         const selected  = i === state.selectedIndex;
         return (
@@ -304,7 +308,7 @@ function SuggestionDropdown({ state, onSelect }) {
               background: selected ? 'var(--dl-border)' : 'transparent',
               fontFamily: mono, fontSize: 12,
               letterSpacing: isProject && !isCreate ? '0.08em' : '0.04em',
-              color: isCreate ? 'var(--dl-highlight)' : col || 'var(--dl-strong)',
+              color: isCmd ? 'var(--dl-highlight)' : isCreate ? 'var(--dl-highlight)' : col || 'var(--dl-strong)',
               transition: 'background 0.08s',
             }}
           >{label}</button>
@@ -496,6 +500,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         suggKey: 'slash',
         renderRef,
         itemsFn: (query) => {
+          // Bare / — show command menu
+          if (!query) return ['__cmd__:p', '__cmd__:n'];
+
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
 
@@ -527,6 +534,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           return [];
         },
         commandFn: ({ editor, range, name }) => {
+          // Command menu selection — replace bare / with /p or /n to re-trigger
+          if (name.startsWith('__cmd__:')) {
+            const cmd = name.slice(8); // 'p' or 'n'
+            editor.chain().focus().deleteRange(range).insertContent('/' + cmd + ' ').run();
+            return;
+          }
+
           justInsertedRef.current = true;
           setTimeout(() => { justInsertedRef.current = false; }, 150);
 

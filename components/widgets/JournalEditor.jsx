@@ -32,7 +32,7 @@ export function JournalEditor({date,userId,token}) {
       projectNames={ctxProjects}
       onProjectClick={name => navigateToProject(name)}
       onNoteClick={name => navigateToNote(name)}
-      placeholder="What's on your mind?"
+      placeholder="What's on your mind?  Use / to tag"
       textColor={"var(--dl-strong)"}
       mutedColor={"var(--dl-middle)"}
       color={"var(--dl-accent)"}
