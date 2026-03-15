@@ -78,11 +78,12 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
   }, []); // eslint-disable-line
 
   // Inject task list styles (same as daily view)
+  const accentHex = theme === 'light' ? '#B87018' : '#D08828';
   useEffect(() => {
     if (typeof document === 'undefined') return;
     let s = document.getElementById('dl-tasklist-styles');
     if (!s) { s = document.createElement('style'); s.id = 'dl-tasklist-styles'; document.head.appendChild(s); }
-    const enc = encodeURIComponent("var(--dl-accent)");
+    const enc = encodeURIComponent(accentHex);
     s.textContent = `
       .dl-editor ul[data-type="taskList"] { list-style:none; padding:0; margin:0; }
       .dl-editor ul[data-type="taskList"] > li { display:flex; align-items:flex-start; gap:10px; padding:3px 0; }
@@ -103,7 +104,7 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
       [data-filter="open"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"] { display:none; }
       [data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="false"] { display:none; }
     `;
-  }, []);
+  }, [accentHex]);
 
   useEffect(() => () => clearTimeout(saveTimer.current), []);
 

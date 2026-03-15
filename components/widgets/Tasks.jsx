@@ -152,7 +152,8 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   const {navigateToProject, navigateToNote} = useContext(NavigationContext);
   const {notes: ctxNotes} = useContext(NoteContext);
 
-  useEffect(() => injectTaskListStyles("var(--dl-accent)"), []); // eslint-disable-line
+  const accentHex = theme === 'light' ? '#B87018' : '#D08828';
+  useEffect(() => injectTaskListStyles(accentHex), [accentHex]);
 
   const htmlValue = useMemo(() => migrateTasksToHtml(value) || '', [value]);
 
