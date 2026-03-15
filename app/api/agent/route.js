@@ -137,14 +137,15 @@ export async function POST(request) {
           return Response.json({ ok: true, action: 'appended' });
         }
         if (payload.set !== undefined) {
-          // Full replace — delete blocks for date, insert single block
-          await svc.from('journal_blocks').delete().eq('user_id', userId).eq('date', targetDate);
-          if (payload.set) {
-            await svc.from('journal_blocks').insert({
-              user_id: userId, date: targetDate, position: 0,
-              content: `<p>${payload.set}</p>`, project_tags: [], note_tags: [],
-            });
-          }
+          // Full replace via atomic RPC (DELETE+INSERT in one transaction)
+          const setBlocks = payload.set
+            ? [{ position: 0, content: `<p>${payload.set}</p>`, project_tags: [], note_tags: [] }]
+            : [];
+          await svc.rpc('batch_replace_journal_blocks', {
+            p_user_id: userId,
+            p_date:    targetDate,
+            p_blocks:  setBlocks,
+          });
           return Response.json({ ok: true, action: 'set' });
         }
       }
