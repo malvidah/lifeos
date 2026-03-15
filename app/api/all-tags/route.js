@@ -5,7 +5,7 @@ import { withAuth } from '../_lib/auth.js';
 // Reads from the project_tags[] columns in typed tables + the projects table directly
 // so MapCard and editor autocomplete work even when project_tags[] isn't yet populated.
 
-const BUILTIN = new Set(['health', '__everything__']);
+const BUILTIN = new Set(['__everything__']);
 
 export const GET = withAuth(async (req, { supabase, user }) => {
   // Fetch project_tags arrays from all typed tables + explicit projects table in parallel
