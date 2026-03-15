@@ -42,28 +42,43 @@ export function JournalEditor({date,userId,token}) {
 }
 
 // ─── RowList ─────────────────────────────────────────────────────────────────
-// syncedRows: live from API, may have native kcal (Strava) or need estimation (Oura)
-// AI estimates for synced rows persist to DB under type+"_kcal" key
+// Single multi-line editor where each paragraph = one item.
+// syncedRows: live from API, rendered read-only above the editor.
+// AI estimates for synced rows persist to DB under type+"_kcal" key.
+
+function htmlToLines(html) {
+  if (!html || typeof html !== 'string') return [];
+  return html.split(/<\/p>\s*<p[^>]*>|<br\s*\/?>/)
+    .map(s => s.replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").trim())
+    .filter(Boolean);
+}
+
+function linesToHtml(lines) {
+  return lines.map(l => `<p>${l.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>`).join('');
+}
+
+function rowsToHtml(rows) {
+  const lines = (rows || []).filter(r => r.text?.trim()).map(r => r.text);
+  return lines.length ? linesToHtml(lines) : '';
+}
+
 export function RowList({date,type,placeholder,promptFn,prefix,color,token,userId,syncedRows=[],showProtein=false}) {
-  const mkRow = () => ({id:Date.now(), text:"", kcal:null, protein:null});
-  const {value:rows, setValue:setRows, loaded} = useDbSave(date, type, [mkRow()], token, userId);
+  const {value:rows, setValue:setRows, loaded} = useDbSave(date, type, [], token, userId);
   const {value:savedEstimates, setValue:setSavedEstimates, loaded:estimatesLoaded} = useDbSave(date, type+"_kcal", {}, token, userId);
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
-  const refs = useRef({});
   const [tick, setTick] = useState(0);
-  const fallbackRef = useRef(null);
 
-  // Stabilize the fallback row so it keeps the same id across renders.
-  // Without this, mkRow() generates a new Date.now() id every render,
-  // and setRows(prev => ...) can't find the virtual row in the store.
-  if (Array.isArray(rows) && rows.length) {
-    fallbackRef.current = null; // real data exists, clear fallback
-  } else if (!fallbackRef.current) {
-    fallbackRef.current = [mkRow()];
-  }
-  const safe = Array.isArray(rows) && rows.length ? rows : fallbackRef.current;
+  const safe = Array.isArray(rows) ? rows : [];
   const estMap = (estimatesLoaded && savedEstimates && typeof savedEstimates === "object") ? savedEstimates : {};
+
+  // Build a lookup from text → row data for preserving kcal/protein across edits
+  const rowByText = useRef(new Map());
+  useEffect(() => {
+    const m = new Map();
+    for (const r of safe) { if (r.text?.trim()) m.set(r.text.trim(), r); }
+    rowByText.current = m;
+  }, [safe]);
 
   // Merge saved AI estimates into synced rows
   const merged = syncedRows.map(r => {
@@ -75,21 +90,22 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   const totalKcal = [...safe, ...merged].reduce((s,r) => s + (r.kcal||0), 0);
   const totalProtein = showProtein ? [...safe, ...merged].reduce((s,r) => s + (r.protein||0), 0) : 0;
 
-  // Estimate for manual rows with no kcal (e.g. added via voice/chat, no blur fired)
+  // Estimate for manual rows with no kcal
   useEffect(() => {
     if (!token || !loaded) return;
     safe
-      .filter(r => r.text?.trim() && !r.kcal && !estimating.current.has(r.id) && !failed.current.has(r.id))
+      .filter(r => r.text?.trim() && !r.kcal && !estimating.current.has(r.text) && !failed.current.has(r.text))
       .forEach(row => {
-        estimating.current.add(row.id);
+        estimating.current.add(row.text);
         estimateNutrition(promptFn(row.text), token).then(result => {
-          estimating.current.delete(row.id);
-          if (result) setRows(prev => (Array.isArray(prev)&&prev.length?prev:safe).map(r =>
-            r.id===row.id ? {...r, kcal:result.kcal||null, protein:result.protein||null} : r));
-          else failed.current.add(row.id);
+          estimating.current.delete(row.text);
+          if (result) setRows(prev => (Array.isArray(prev)?prev:[]).map(r =>
+            r.text===row.text ? {...r, kcal:result.kcal||null, protein:result.protein||null} : r));
+          else failed.current.add(row.text);
+          setTick(t => t + 1);
         });
       });
-  }, [safe.map(r=>r.id+r.text).join(","), loaded, token]); // eslint-disable-line
+  }, [safe.map(r=>r.text).join("\n"), loaded, token]); // eslint-disable-line
 
   // Estimate for synced rows with no native calories
   useEffect(() => {
@@ -102,40 +118,42 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
           estimating.current.delete(row.id);
           if (result) setSavedEstimates(prev => ({...(typeof prev==="object"&&prev?prev:{}), [row.id]:result}));
           else failed.current.add(row.id);
+          setTick(t => t + 1);
         });
       });
   }, [syncedRows, loaded, estimatesLoaded, token]); // eslint-disable-line
 
-  // Auto-fill missing protein for rows that already have kcal but no protein
+  // Auto-fill missing protein
   useEffect(() => {
     if (!showProtein || !token || !loaded) return;
     safe
-      .filter(r => r.text?.trim() && r.kcal && !r.protein && !estimating.current.has(r.id) && !failed.current.has(r.id))
+      .filter(r => r.text?.trim() && r.kcal && !r.protein && !estimating.current.has(r.text+"_p") && !failed.current.has(r.text+"_p"))
       .forEach(row => {
-        estimating.current.add(row.id);
+        estimating.current.add(row.text+"_p");
         estimateNutrition(promptFn(row.text), token).then(result => {
-          estimating.current.delete(row.id);
+          estimating.current.delete(row.text+"_p");
           if (result?.protein) {
-            setRows(prev => (Array.isArray(prev)&&prev.length?prev:safe).map(r =>
-              r.id===row.id ? {...r, protein:result.protein, kcal:result.kcal||r.kcal} : r));
-          } else failed.current.add(row.id);
+            setRows(prev => (Array.isArray(prev)?prev:[]).map(r =>
+              r.text===row.text ? {...r, protein:result.protein, kcal:result.kcal||r.kcal} : r));
+          } else failed.current.add(row.text+"_p");
+          setTick(t => t + 1);
         });
       });
   }, [loaded, token, showProtein]); // eslint-disable-line
 
-  async function runEstimate(id, text) {
-    estimating.current.add(id);
-    setTick(t => t + 1);
-    try {
-      const result = await estimateNutrition(promptFn(text), token);
-      estimating.current.delete(id);
-      setRows(prev => (Array.isArray(prev)&&prev.length?prev:safe).map(r => r.id===id ? {...r, kcal:result?.kcal||null, protein:result?.protein||null} : r));
-      setTick(t => t + 1);
-    } catch(_) {
-      estimating.current.delete(id);
-      failed.current.add(id);
-      setTick(t => t + 1);
-    }
+  // Convert editor HTML → rows array, preserving kcal for unchanged lines
+  function handleBlur(html) {
+    const lines = htmlToLines(html);
+    const usedTexts = new Set();
+    const newRows = lines.map(text => {
+      const existing = rowByText.current.get(text);
+      if (existing && !usedTexts.has(text)) {
+        usedTexts.add(text);
+        return existing;
+      }
+      return { id: Date.now() + Math.random(), text, kcal: null, protein: null };
+    });
+    setRows(newRows);
   }
 
   if (!loaded) return (
@@ -146,26 +164,21 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
     </div>
   );
 
+  // Per-line stats for the stats column
+  const manualLines = safe.filter(r => r.text?.trim());
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0,
     borderRadius:4, padding:"2px 8px", whiteSpace:"nowrap"};
   const PROT_W = 50, ENRG_W = 72;
-  const colProtein = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-blue)", flexShrink:0,
-    width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
-  const colKcal = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-orange)", flexShrink:0,
-    width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
-  const colMutedProt = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-highlight)", flexShrink:0,
-    width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
-  const colMutedEnrg = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-highlight)", flexShrink:0,
-    width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
+  const statStyle = {display:"flex",alignItems:"center",justifyContent:"center",height:28};
+  const colProtein = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-blue)", width:PROT_W, textAlign:"center", whiteSpace:"nowrap"};
+  const colKcal = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-orange)", width:ENRG_W, textAlign:"center", whiteSpace:"nowrap"};
+  const colMuted = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-highlight)", textAlign:"center", whiteSpace:"nowrap"};
   const rowStyle = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
-  const hdrColProt = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
-    color:"var(--dl-highlight)", flexShrink:0, textAlign:"center", width:PROT_W};
-  const hdrColEnrg = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em", textTransform:"uppercase",
-    color:"var(--dl-highlight)", flexShrink:0, textAlign:"center", width:ENRG_W};
 
   return (
     <div style={{display:"flex",flexDirection:"column",height:"100%",minHeight:0}}>
       <div style={{flex:1,overflowY:"auto",minHeight:0}}>
+        {/* Synced rows (read-only) */}
         {merged.map(row => (
           <div key={row.id} style={rowStyle}>
             <span style={{lineHeight:1.7,flex:1,minWidth:0}}>
@@ -173,64 +186,43 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
             </span>
             <SourceBadge source={row.source}/>
             {showProtein && (
-              <span style={row.protein ? colProtein : colMutedProt}>
+              <span style={row.protein ? colProtein : {...colMuted,width:PROT_W}}>
                 {estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g` : "—"}
               </span>
             )}
-            <span style={row.kcal ? colKcal : colMutedEnrg}>
+            <span style={row.kcal ? colKcal : {...colMuted,width:ENRG_W}}>
               {estimating.current.has(row.id) ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
             </span>
           </div>
         ))}
-        {safe.map((row, idx) => (
-          <div key={row.id} style={rowStyle}>
-            <DayLabEditor
-              ref={el => refs.current[row.id] = el}
-              value={row.text}
-              singleLine
-              clearOnEnter={false}
-              placeholder={idx===0 && merged.length===0 ? placeholder : idx===0 ? "+" : ""}
-              textColor={"var(--dl-strong)"}
-              mutedColor={"var(--dl-middle)"}
-              color={"var(--dl-accent)"}
-              style={{ flex: 1, padding: 0 }}
-              onBlur={text => {
-                setRows(prev => {
-                  const s = Array.isArray(prev) && prev.length ? prev : safe;
-                  const existing = s.find(r => r.id === row.id);
-                  if (text === existing?.text) return prev; // no change
-                  return s.map(r => r.id===row.id ? {...r, text, kcal: text !== r.text ? null : r.kcal, protein: text !== r.text ? null : r.protein} : r);
-                });
-                if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
-              }}
-              onEnterCommit={text => {
-                if (!text.trim()) return; // require text before creating a new row
-                const row2 = mkRow();
-                const i = safe.findIndex(r => r.id===row.id);
-                setRows(prev => {
-                  const s = Array.isArray(prev) && prev.length ? prev : safe;
-                  const updated = s.map(r => r.id===row.id ? {...r, text} : r);
-                  return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
-                });
-                if (!estimating.current.has(row.id)) runEstimate(row.id, text);
-                setTimeout(() => refs.current[row2.id]?.focus(), 30);
-              }}
-              onBackspaceEmpty={safe.length > 1 ? () => {
-                const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
-                setRows(prev => (Array.isArray(prev)&&prev.length?prev:safe).filter(r => r.id!==row.id));
-                setTimeout(() => refs.current[t]?.focus(), 30);
-              } : undefined}
-            />
-            {showProtein && (
-              <span style={row.protein ? colProtein : colMutedProt}>
-                {!row.text ? "" : estimating.current.has(row.id) ? "…" : row.protein ? `${row.protein}g` : "—"}
-              </span>
-            )}
-            <span style={row.kcal ? colKcal : colMutedEnrg}>
-              {!row.text ? "" : estimating.current.has(row.id) ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
-            </span>
-          </div>
-        ))}
+        {/* Manual entries — single multi-line editor + stats column */}
+        <div style={{display:"flex",gap:0}}>
+          <DayLabEditor
+            value={rowsToHtml(safe)}
+            onBlur={handleBlur}
+            placeholder={merged.length === 0 ? placeholder : ""}
+            textColor={"var(--dl-strong)"}
+            mutedColor={"var(--dl-middle)"}
+            color={"var(--dl-accent)"}
+            style={{flex:1,padding:0,minHeight:28}}
+          />
+          {manualLines.length > 0 && (
+            <div style={{flexShrink:0,display:"flex",flexDirection:"column"}}>
+              {manualLines.map((row,i) => (
+                <div key={i} style={{...statStyle,gap:0}}>
+                  {showProtein && (
+                    <span style={row.protein ? colProtein : {...colMuted,width:PROT_W}}>
+                      {estimating.current.has(row.text) ? "…" : row.protein ? `${row.protein}g` : "—"}
+                    </span>
+                  )}
+                  <span style={row.kcal ? colKcal : {...colMuted,width:ENRG_W}}>
+                    {estimating.current.has(row.text) ? "…" : row.kcal ? `${row.kcal}kcal` : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {(totalKcal > 0 || totalProtein > 0) && (
         <div style={{flexShrink:0,paddingTop:6,display:"flex",alignItems:"center",gap:0,borderTop:"1px solid var(--dl-border)"}}>

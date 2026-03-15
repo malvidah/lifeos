@@ -10,6 +10,18 @@ import { DayLabEditor } from "../Editor.jsx";
 import { api } from "@/lib/api";
 import { estimateNutrition } from "@/lib/images";
 
+function htmlToLines(html) {
+  if (!html || typeof html !== 'string') return [];
+  return html.split(/<\/p>\s*<p[^>]*>|<br\s*\/?>/)
+    .map(s => s.replace(/<[^>]*>/g, '').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'").trim())
+    .filter(Boolean);
+}
+
+function rowsToHtml(rows) {
+  const lines = (rows || []).filter(r => r.text?.trim()).map(r => r.text);
+  return lines.length ? lines.map(l => `<p>${l.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p>`).join('') : '';
+}
+
 // Merge Oura workouts + Strava activities, deduplicating by overlapping type+time
 function normalizeType(str) {
   return (str||"").toLowerCase().replace(/[^a-z]/g,"");
@@ -56,18 +68,22 @@ function isRun(w) { return (w.sport||w.type||w.name||"").toLowerCase().match(/ru
 
 export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   const [syncedRows, setSyncedRows] = useState([]);
-  const mkRow = () => ({id:Date.now(), text:"", dist:null, pace:null, kcal:null});
-  const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "workouts", [mkRow()], token, userId);
-  // AI calorie estimates for synced rows: stored in workouts.raw.kcalEst keyed by clientId.
-  // We keep a local map in state (not persisted to DB separately) and persist via the PUT call.
+  const {value:manualRows, setValue:setManualRows, loaded} = useDbSave(date, "workouts", [], token, userId);
   const [savedEstimates, setSavedEstimates] = useState({});
-  const estLoaded = true; // estimates are computed on the fly; always "loaded"
+  const estLoaded = true;
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
   const [tick, setTick] = useState(0);
-  const safe = Array.isArray(manualRows)&&manualRows.length ? manualRows : [mkRow()];
-  const refs = useRef({});
+  const safe = Array.isArray(manualRows) ? manualRows : [];
   const estMap = (estLoaded && savedEstimates && typeof savedEstimates==="object") ? savedEstimates : {};
+
+  // Build text→row lookup for preserving stats across edits
+  const rowByText = useRef(new Map());
+  useEffect(() => {
+    const m = new Map();
+    for (const r of safe) { if (r.text?.trim()) m.set(r.text.trim(), r); }
+    rowByText.current = m;
+  }, [safe]);
 
   // Merge saved kcal estimates into synced rows
   const mergedSynced = syncedRows.map(r => ({
@@ -103,23 +119,26 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     });
   },[date,token,userId,stravaConnected]); // eslint-disable-line
 
-  // AI estimation for manual rows missing kcal (e.g. added via voice/chat)
+  // AI estimation for manual rows missing kcal
   useEffect(()=>{
     if(!token||!loaded)return;
-    safe.filter(r=>r.text?.trim()&&!r.kcal&&!estimating.current.has(r.id)&&!failed.current.has(r.id)).forEach(row=>{
-      estimating.current.add(row.id);
+    safe.filter(r=>r.text?.trim()&&!r.kcal&&!estimating.current.has(r.text)&&!failed.current.has(r.text)).forEach(row=>{
+      estimating.current.add(row.text);
       estimateNutrition(row.text, token).then(result=>{
-        estimating.current.delete(row.id);
-        if(result?.kcal) setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===row.id?{
-          ...r,
-          kcal:result.kcal||null,
-          dist:r.dist||( result.dist_mi ? `${Number(result.dist_mi).toFixed(2)}mi` : null ),
-          pace:r.pace||( result.pace || null ),
-        }:r));
-        else failed.current.add(row.id);
+        estimating.current.delete(row.text);
+        if(result?.kcal) {
+          const parsed = parseActivityText(row.text);
+          setManualRows(prev=>(Array.isArray(prev)?prev:[]).map(r=>r.text===row.text?{
+            ...r,
+            kcal:result.kcal||null,
+            dist:r.dist||( parsed.dist && result.dist_mi ? `${Number(result.dist_mi).toFixed(2)}mi` : null ),
+            pace:r.pace||( parsed.pace && result.pace || null ),
+          }:r));
+        } else failed.current.add(row.text);
+        setTick(t => t + 1);
       });
     });
-  },[safe.map(r=>r.id+r.text).join(","),loaded,token]); // eslint-disable-line
+  },[safe.map(r=>r.text).join("\n"),loaded,token]); // eslint-disable-line
 
   // AI kcal estimation for synced rows without native calories
   useEffect(()=>{
@@ -150,28 +169,20 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
     else if (paceMin) { const tot=parseFloat(paceMin[1])*60; pace=`${Math.floor(tot/60)}:${String(Math.round(tot%60)).padStart(2,'0')}`; }
     return { dist, pace };
   }
-  async function runEstimate(id, text) {
-    estimating.current.add(id);
-    setTick(t => t + 1);
-    try {
-      const result = await estimateNutrition(text, token);
-      estimating.current.delete(id);
-      // Only apply AI dist/pace if the text actually mentions distance or pace
-      const parsed = parseActivityText(text);
-      const textHasDist = !!parsed.dist;
-      const textHasPace = !!parsed.pace;
-      setManualRows(prev=>(Array.isArray(prev)?prev:safe).map(r=>r.id===id?{
-        ...r,
-        kcal:result?.kcal||null,
-        dist:r.dist||( textHasDist && result?.dist_mi ? `${Number(result.dist_mi).toFixed(2)}mi` : null ),
-        pace:r.pace||( textHasPace && result?.pace || null ),
-      }:r));
-      setTick(t => t + 1);
-    } catch(_) {
-      estimating.current.delete(id);
-      failed.current.add(id);
-      setTick(t => t + 1);
-    }
+  // Convert editor HTML → rows array, preserving stats for unchanged lines
+  function handleBlur(html) {
+    const lines = htmlToLines(html);
+    const usedTexts = new Set();
+    const newRows = lines.map(text => {
+      const existing = rowByText.current.get(text);
+      if (existing && !usedTexts.has(text)) {
+        usedTexts.add(text);
+        return existing;
+      }
+      const {dist, pace} = parseActivityText(text);
+      return { id: Date.now() + Math.random(), text, dist, pace, kcal: null };
+    });
+    setManualRows(newRows);
   }
 
   const KCOL=72, DCOL=60, PCOL=100;
@@ -179,12 +190,11 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   const colPace  = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-green)",  flexShrink:0, width:PCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colKcal  = {fontFamily:mono, fontSize:F.sm, color:"var(--dl-orange)", flexShrink:0, width:KCOL, textAlign:"center", whiteSpace:"nowrap"};
   const colMuted = (w) => ({fontFamily:mono, fontSize:F.sm, color:"var(--dl-highlight)", flexShrink:0, width:w, textAlign:"center", whiteSpace:"nowrap"});
-  const editCol  = (w, clr) => ({fontFamily:mono, fontSize:F.sm, color:clr, flexShrink:0, width:w, textAlign:"center",
-    background:"transparent", border:"none", outline:"none", padding:0});
   const rowS = {display:"flex", alignItems:"center", gap:0, padding:"3px 0", minHeight:28};
   const chipBase = {fontFamily:mono, fontSize:F.sm, letterSpacing:"0.04em", flexShrink:0, borderRadius:4, padding:"2px 8px", whiteSpace:"nowrap"};
 
-  const allRows = [...mergedSynced, ...safe.filter(r => r.text?.trim())];
+  const manualLines = safe.filter(r => r.text?.trim());
+  const allRows = [...mergedSynced, ...manualLines];
   const totalKcal = allRows.reduce((s,r)=>s+(r.kcal||0),0);
 
   // Parse distances like "3.50mi" → number
@@ -219,57 +229,31 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
             </span>
           </div>
         ))}
-        {safe.map((row,idx)=>(
-          <div key={row.id} style={rowS}>
-            <DayLabEditor
-              ref={el => refs.current[row.id] = el}
-              value={row.text}
-              singleLine
-              clearOnEnter={false}
-              placeholder={idx===0&&mergedSynced.length===0?"What did you do?":""}
-              textColor={"var(--dl-strong)"}
-              mutedColor={"var(--dl-middle)"}
-              color={"var(--dl-accent)"}
-              style={{ flex: 1, padding: 0 }}
-              onBlur={text => {
-                setManualRows(prev => {
-                  const s = Array.isArray(prev) ? prev : safe;
-                  const existing = s.find(r => r.id === row.id);
-                  if (text === existing?.text) return prev; // no change
-                  if (!text.trim()) {
-                    return s.map(r => r.id===row.id ? {...r, text, dist:null, pace:null, kcal:null} : r);
-                  }
-                  const {dist, pace} = parseActivityText(text);
-                  return s.map(r => r.id===row.id ? {...r, text, dist:dist||r.dist, pace:pace||r.pace, kcal: text !== existing?.text ? null : r.kcal} : r);
-                });
-                if (text.trim() && !estimating.current.has(row.id)) runEstimate(row.id, text);
-              }}
-              onEnterCommit={text => {
-                if (!text.trim()) return; // require text before creating a new row
-                const row2 = mkRow();
-                const i = safe.findIndex(r => r.id===row.id);
-                const {dist, pace} = parseActivityText(text);
-                setManualRows(prev => {
-                  const s = Array.isArray(prev) ? prev : safe;
-                  const updated = s.map(r => r.id===row.id ? {...r, text, dist:dist||r.dist, pace:pace||r.pace} : r);
-                  return i >= 0 ? [...updated.slice(0,i+1), row2, ...updated.slice(i+1)] : [...updated, row2];
-                });
-                if (!estimating.current.has(row.id)) runEstimate(row.id, text);
-                setTimeout(() => refs.current[row2.id]?.focus(), 30);
-              }}
-              onBackspaceEmpty={safe.length > 1 ? () => {
-                const t = safe[idx-1]?.id ?? safe[idx+1]?.id;
-                setManualRows(prev => (Array.isArray(prev)?prev:safe).filter(r => r.id!==row.id));
-                setTimeout(() => refs.current[t]?.focus(), 30);
-              } : undefined}
-            />
-            <span style={row.dist ? colDist : colMuted(DCOL)}>{!row.text ? "" : row.dist||"—"}</span>
-            <span style={row.pace ? colPace : colMuted(PCOL)}>{!row.text ? "" : row.pace?`${row.pace}/mi`:"—"}</span>
-            <span style={row.kcal ? colKcal : colMuted(KCOL)}>
-              {!row.text ? "" : estimating.current.has(row.id)?"…":row.kcal?`-${row.kcal}kcal`:"—"}
-            </span>
-          </div>
-        ))}
+        {/* Manual entries — single multi-line editor + stats columns */}
+        <div style={{display:"flex",gap:0}}>
+          <DayLabEditor
+            value={rowsToHtml(safe)}
+            onBlur={handleBlur}
+            placeholder={mergedSynced.length===0?"What did you do?":""}
+            textColor={"var(--dl-strong)"}
+            mutedColor={"var(--dl-middle)"}
+            color={"var(--dl-accent)"}
+            style={{flex:1,padding:0,minHeight:28}}
+          />
+          {manualLines.length > 0 && (
+            <div style={{flexShrink:0,display:"flex",flexDirection:"column"}}>
+              {manualLines.map((row,i) => (
+                <div key={i} style={{display:"flex",alignItems:"center",height:28}}>
+                  <span style={row.dist ? colDist : colMuted(DCOL)}>{row.dist||"—"}</span>
+                  <span style={row.pace ? colPace : colMuted(PCOL)}>{row.pace?`${row.pace}/mi`:"—"}</span>
+                  <span style={row.kcal ? colKcal : colMuted(KCOL)}>
+                    {estimating.current.has(row.text)?"…":row.kcal?`-${row.kcal}kcal`:"—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {showTotals && (
         <div style={{flexShrink:0,paddingTop:6,paddingBottom:2,display:"flex",alignItems:"center",borderTop:"1px solid var(--dl-border)"}}>
