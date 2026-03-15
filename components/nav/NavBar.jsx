@@ -56,7 +56,7 @@ function fmtRelative(dateKey, todayKey) {
   return `IN ${yrs} YEAR${yrs > 1 ? 'S' : ''} ${mos} MONTH${mos > 1 ? 'S' : ''}`;
 }
 
-// ── NavIconBtn ────────────────────────────────────────────────────────────────
+// ── Glassmorphic icon button ──────────────────────────────────────────────────
 function NavIconBtn({ onClick, active, title, children }) {
   return (
     <button
@@ -64,14 +64,17 @@ function NavIconBtn({ onClick, active, title, children }) {
       aria-label={title}
       title={title}
       style={{
-        background: 'none', border: 'none', cursor: 'pointer',
+        background: active ? 'var(--dl-glass-active)' : 'var(--dl-glass)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid var(--dl-glass-border)',
+        borderRadius: 10, cursor: 'pointer',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: active ? "var(--dl-strong)" : "var(--dl-highlight)",
-        width: 40, height: 48, flexShrink: 0,
-        transition: 'color 0.15s',
+        width: 36, height: 36, flexShrink: 0,
+        transition: 'background 0.15s, color 0.15s, border-color 0.15s',
       }}
-      onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-      onMouseLeave={e => { e.currentTarget.style.color = active ? "var(--dl-strong)" : "var(--dl-highlight)"; }}
+      onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = 'var(--dl-glass-active)'; }}
+      onMouseLeave={e => { e.currentTarget.style.color = active ? "var(--dl-strong)" : "var(--dl-highlight)"; e.currentTarget.style.background = active ? 'var(--dl-glass-active)' : 'var(--dl-glass)'; }}
     >
       {children}
     </button>
@@ -121,7 +124,12 @@ export default function NavBar(props) {
   const showGear   = !!onOpenSettings;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', height: 48, flexShrink: 0, position: 'relative' }}>
+    <div style={{
+      display: 'flex', alignItems: 'center', height: 48, flexShrink: 0, position: 'relative',
+      background: 'var(--dl-glass)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+      border: '1px solid var(--dl-glass-border)', borderRadius: 14,
+      padding: '0 4px',
+    }}>
 
       {/* ── Left icons ──────────────────────────────────────────────────── */}
       <div style={{
@@ -215,14 +223,15 @@ export default function NavBar(props) {
             onClick={onOpenSettings}
             aria-label="Project settings"
             style={{
-              background: 'none', border: 'none', cursor: 'pointer',
+              background: 'var(--dl-glass)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid var(--dl-glass-border)', borderRadius: 10, cursor: 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: "var(--dl-highlight)", width: 40, height: 48, flexShrink: 0,
+              color: "var(--dl-highlight)", width: 36, height: 36, flexShrink: 0,
               opacity: searchOpen ? 0 : 1, pointerEvents: searchOpen ? 'none' : 'auto',
-              transition: 'color 0.15s, opacity 0.18s ease',
+              transition: 'background 0.15s, color 0.15s, opacity 0.18s ease',
             }}
-            onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-            onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+            onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = 'var(--dl-glass-active)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-highlight)"; e.currentTarget.style.background = 'var(--dl-glass)'; }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"/>
@@ -236,14 +245,16 @@ export default function NavBar(props) {
           onClick={searchOpen ? closeSearch : openSearch}
           aria-label={searchOpen ? 'Close search' : 'Search'}
           style={{
-            background: 'none', border: 'none', cursor: 'pointer',
+            background: searchOpen ? 'var(--dl-glass-active)' : 'var(--dl-glass)',
+            backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid var(--dl-glass-border)', borderRadius: 10, cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             color: searchOpen ? "var(--dl-strong)" : "var(--dl-highlight)",
-            width: 40, height: 48, flexShrink: 0,
-            transition: 'color 0.15s',
+            width: 36, height: 36, flexShrink: 0,
+            transition: 'background 0.15s, color 0.15s',
           }}
-          onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-          onMouseLeave={e => { if (!searchOpen) e.currentTarget.style.color = "var(--dl-highlight)"; }}
+          onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = 'var(--dl-glass-active)'; }}
+          onMouseLeave={e => { if (!searchOpen) { e.currentTarget.style.color = "var(--dl-highlight)"; e.currentTarget.style.background = 'var(--dl-glass)'; } }}
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
