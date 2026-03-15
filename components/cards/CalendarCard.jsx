@@ -729,11 +729,11 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                     textTransform:"uppercase",
                   }}>{DAY_NAMES[d.getDay()]} {d.getDate()}</div>
                   {/* Health dots */}
-                  <div style={{display:"flex",gap:2,justifyContent:"center",marginTop:4,height:4}}>
-                    {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-blue)"}}/>}
-                    {k<=today && (healthDots[k]?.readiness >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-green)"}}/>}
-                    {k<=today && (healthDots[k]?.activity >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-accent)"}}/>}
-                    {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:3,height:3,borderRadius:"50%",background:"var(--dl-purple)"}}/>}
+                  <div style={{display:"flex",gap:4,justifyContent:"center",marginTop:4,height:8}}>
+                    {k<=today && (healthDots[k]?.sleep >= 85) && <div style={{width:7,height:7,borderRadius:"50%",background:"var(--dl-blue)"}}/>}
+                    {k<=today && (healthDots[k]?.readiness >= 85) && <div style={{width:7,height:7,borderRadius:"50%",background:"var(--dl-green)"}}/>}
+                    {k<=today && (healthDots[k]?.activity >= 85) && <div style={{width:7,height:7,borderRadius:"50%",background:"var(--dl-accent)"}}/>}
+                    {k<=today && (healthDots[k]?.recovery >= 85) && <div style={{width:7,height:7,borderRadius:"50%",background:"var(--dl-purple)"}}/>}
                   </div>
                 </div>
 
