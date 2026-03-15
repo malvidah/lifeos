@@ -510,7 +510,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
               <div style={{flex:1,minWidth:0}}>
                 <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:4}}>
                   <div style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:m.color}}>{m.label}</div>
-                  <div style={{width:52,height:20,flexShrink:0,overflow:'visible'}}>
+                  <div style={{width:52,height:20,flexShrink:0,overflow:'visible',marginRight:4}}>
                     {m.sparkline && <Sparkline data={m.sparkline} color={m.color} width={52} height={20}/>}
                   </div>
                 </div>
