@@ -199,7 +199,7 @@ function Water() {
 function Labels({ projects, onSelect, hovered, setHovered }) {
   return projects.map(p => (
     <Html key={p.tag} position={[p.x, p.height + 0.5, p.z]} center
-      style={{ pointerEvents: 'auto' }} zIndexRange={[3, 0]}>
+      occlude style={{ pointerEvents: 'auto' }} zIndexRange={[3, 0]}>
       <div onClick={() => onSelect(p.tag)}
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
