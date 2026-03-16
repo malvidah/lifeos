@@ -76,8 +76,8 @@ function EdgeDetection() {
   const effect = useMemo(
     () => new SobelEdgeEffect({
       resolution: new THREE.Vector2(size.width, size.height),
-      edgeStrength: 0.55,
-      threshold: 0.06,
+      edgeStrength: 0.45,
+      threshold: 0.1,
     }),
     [] // eslint-disable-line
   );
@@ -398,15 +398,15 @@ function CelSun({ position, visible }) {
   if (!visible) return null;
   return (
     <group position={position}>
-      {/* Outer glow */}
+      {/* Soft glow sphere (larger, transparent) */}
       <mesh>
-        <ringGeometry args={[1.0, 1.4, 32]} />
-        <meshBasicMaterial color="#FFE080" transparent opacity={0.2} side={THREE.DoubleSide} />
+        <sphereGeometry args={[1.6, 16, 12]} />
+        <meshBasicMaterial color="#FFE8A0" transparent opacity={0.15} depthWrite={false} />
       </mesh>
-      {/* Core */}
+      {/* Core — meshBasicMaterial so edge detection doesn't outline it */}
       <mesh>
-        <sphereGeometry args={[0.8, 8, 6]} />
-        <meshToonMaterial color="#FFD060" gradientMap={toonGrad} emissive="#FFA030" emissiveIntensity={0.6} />
+        <sphereGeometry args={[0.7, 16, 12]} />
+        <meshBasicMaterial color="#FFD860" />
       </mesh>
     </group>
   );
