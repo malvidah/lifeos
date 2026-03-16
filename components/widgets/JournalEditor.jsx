@@ -85,23 +85,7 @@ function Slideshow({ images, index, onClose }) {
         touchStart.current = null;
       }}
     >
-      <img src={images[idx]} alt="" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', display: 'block' }} />
-
-      {/* Close X — top right */}
-      <button onClick={onClose} style={{
-        position: 'absolute', top: 8, right: 8,
-        background: 'rgba(0,0,0,0.4)', border: 'none', borderRadius: 100,
-        width: 28, height: 28, cursor: 'pointer',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        color: 'rgba(255,255,255,0.6)', transition: 'color 0.15s, background 0.15s',
-      }}
-        onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; }}
-        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.background = 'rgba(0,0,0,0.4)'; }}
-      >
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
+      <img src={images[idx]} alt="" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'contain', display: 'block' }} />
 
       {/* Left chevron */}
       {images.length > 1 && (
@@ -117,10 +101,10 @@ function Slideshow({ images, index, onClose }) {
         </div>
       )}
 
-      {/* Right chevron */}
+      {/* Right chevron — stops below the X button area */}
       {images.length > 1 && (
         <div onClick={next} style={{
-          position: 'absolute', right: 0, top: 0, bottom: 0, width: 48,
+          position: 'absolute', right: 0, top: 40, bottom: 0, width: 48,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s',
         }}
@@ -130,6 +114,22 @@ function Slideshow({ images, index, onClose }) {
           <span style={{ fontSize: 22, fontFamily: mono, textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>›</span>
         </div>
       )}
+
+      {/* Close X — top right, above chevrons */}
+      <button onClick={e => { e.stopPropagation(); onClose(); }} style={{
+        position: 'absolute', top: 8, right: 8, zIndex: 2,
+        background: 'rgba(0,0,0,0.4)', border: 'none', borderRadius: 100,
+        width: 28, height: 28, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'rgba(255,255,255,0.6)', transition: 'color 0.15s, background 0.15s',
+      }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.background = 'rgba(0,0,0,0.4)'; }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
 
       {/* Dots */}
       {images.length > 1 && (
