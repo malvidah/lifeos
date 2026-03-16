@@ -57,75 +57,94 @@ export function extractImages(content) {
 }
 
 // ── Photo Strip ───────────────────────────────────────────────────────────────
-// Horizontal scroll row. Click opens slideshow. Drag to reorder — the dragged
-// photo follows your cursor and the remaining items shift to show the drop slot.
+// Horizontal scroll row. Click opens slideshow. Drag to reorder (requires 8px
+// movement threshold so clicks aren't intercepted). Dragged photo follows
+// cursor as a ghost; remaining items shift to preview the new order.
 const SIZE = 140;
 const GAP = 4;
+const DRAG_THRESHOLD = 8; // px of movement before drag activates
 
 export function PhotoStrip({ images, onViewImage, onReorder }) {
   const containerRef = useRef(null);
-  const [dragIdx, setDragIdx] = useState(null);   // original index being dragged
-  const [overIdx, setOverIdx] = useState(null);    // insertion target
+  const [dragging, setDragging] = useState(false);   // true once threshold exceeded
+  const [dragIdx, setDragIdx] = useState(null);       // index being dragged
+  const [overIdx, setOverIdx] = useState(null);        // drop target index
   const [cursorX, setCursorX] = useState(0);
   const [cursorY, setCursorY] = useState(0);
-  const pointerIdRef = useRef(null);
-  const didDrag = useRef(false);
-  const startX = useRef(0);
+  const pendingRef = useRef(null); // { idx, pointerId, startX, startY }
 
   if (!images.length) return null;
   const canReorder = !!onReorder && images.length > 1;
 
-  // Build the display order: remove dragged item and insert at overIdx
+  // Build display order: move dragIdx item to overIdx position
   let displayOrder = images.map((url, i) => ({ url, orig: i }));
-  if (dragIdx != null && overIdx != null && dragIdx !== overIdx) {
+  if (dragging && dragIdx != null && overIdx != null && dragIdx !== overIdx) {
     const item = displayOrder[dragIdx];
     displayOrder = displayOrder.filter((_, i) => i !== dragIdx);
     displayOrder.splice(overIdx, 0, item);
   }
 
+  const calcOverIdx = (clientX) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const relX = clientX - rect.left + (containerRef.current?.scrollLeft || 0);
+    return Math.max(0, Math.min(images.length - 1, Math.floor(relX / (SIZE + GAP))));
+  };
+
   const handlePointerDown = (e, i) => {
     if (!canReorder) return;
-    startX.current = e.clientX;
-    didDrag.current = false;
-    pointerIdRef.current = e.pointerId;
-    // Capture pointer on the container so move/up fire even outside
+    e.preventDefault();
+    pendingRef.current = { idx: i, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY };
     containerRef.current?.setPointerCapture(e.pointerId);
-    setDragIdx(i);
-    setOverIdx(i);
-    setCursorX(e.clientX);
-    setCursorY(e.clientY);
   };
 
   const handlePointerMove = (e) => {
-    if (dragIdx == null) return;
-    if (Math.abs(e.clientX - startX.current) > 3) didDrag.current = true;
+    const p = pendingRef.current;
+    if (!p && !dragging) return;
+
+    // Not yet dragging — check threshold
+    if (p && !dragging) {
+      const dx = e.clientX - p.startX;
+      const dy = e.clientY - p.startY;
+      if (Math.abs(dx) < DRAG_THRESHOLD && Math.abs(dy) < DRAG_THRESHOLD) return;
+      // Threshold exceeded — activate drag
+      setDragging(true);
+      setDragIdx(p.idx);
+      setOverIdx(p.idx);
+      pendingRef.current = null;
+    }
+
     setCursorX(e.clientX);
     setCursorY(e.clientY);
-    // Figure out which slot we're over
-    const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const relX = e.clientX - rect.left + (containerRef.current?.scrollLeft || 0);
-    const idx = Math.max(0, Math.min(images.length - 1, Math.floor(relX / (SIZE + GAP))));
-    if (idx !== overIdx) setOverIdx(idx);
+    setOverIdx(calcOverIdx(e.clientX));
   };
 
-  const handlePointerUp = () => {
-    if (pointerIdRef.current != null) {
-      try { containerRef.current?.releasePointerCapture(pointerIdRef.current); } catch {}
-      pointerIdRef.current = null;
+  const handlePointerUp = (e) => {
+    const wasPending = pendingRef.current;
+    const wasDragging = dragging;
+
+    // Release pointer capture
+    if (wasPending?.pointerId != null) {
+      try { containerRef.current?.releasePointerCapture(wasPending.pointerId); } catch {}
     }
-    if (dragIdx != null && overIdx != null && dragIdx !== overIdx && onReorder) {
+
+    // Commit reorder
+    if (wasDragging && dragIdx != null && overIdx != null && dragIdx !== overIdx && onReorder) {
       const arr = [...images];
       const [moved] = arr.splice(dragIdx, 1);
       arr.splice(overIdx, 0, moved);
       onReorder(arr);
     }
-    const wasDrag = didDrag.current;
+
+    // If it was a click (no drag activated), open slideshow
+    if (wasPending && !wasDragging) {
+      onViewImage(wasPending.idx);
+    }
+
+    pendingRef.current = null;
+    setDragging(false);
     setDragIdx(null);
     setOverIdx(null);
-    // Delay clearing so click handler can check
-    setTimeout(() => { didDrag.current = false; }, 100);
-    return wasDrag;
   };
 
   return (
@@ -133,32 +152,33 @@ export function PhotoStrip({ images, onViewImage, onReorder }) {
       ref={containerRef}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       style={{
-        display: 'flex', gap: GAP, overflowX: dragIdx != null ? 'hidden' : 'auto', overflowY: 'hidden',
+        display: 'flex', gap: GAP, overflowX: dragging ? 'hidden' : 'auto', overflowY: 'hidden',
         marginBottom: 12, borderRadius: 10,
         scrollbarWidth: 'none', msOverflowStyle: 'none',
         WebkitOverflowScrolling: 'touch',
         userSelect: 'none', position: 'relative',
-        touchAction: dragIdx != null ? 'none' : 'pan-x',
+        touchAction: dragging ? 'none' : 'pan-x',
       }}
     >
-      {displayOrder.map(({ url, orig }, i) => {
-        const isDragged = orig === dragIdx;
+      {displayOrder.map(({ url, orig }) => {
+        const isDragged = dragging && orig === dragIdx;
         return (
           <div
             key={url}
             onPointerDown={canReorder ? e => handlePointerDown(e, orig) : undefined}
-            onClick={() => { if (!didDrag.current) onViewImage(orig); }}
+            onClick={!canReorder ? () => onViewImage(images.indexOf(url)) : undefined}
             style={{
               width: SIZE, height: SIZE, flexShrink: 0,
               borderRadius: 10, overflow: 'hidden',
-              cursor: dragIdx != null ? 'grabbing' : 'pointer',
+              cursor: dragging ? 'grabbing' : 'pointer',
               background: 'var(--dl-well)',
               opacity: isDragged ? 0.25 : 1,
-              transition: dragIdx != null ? 'transform 0.2s ease, opacity 0.15s' : 'none',
+              transition: dragging ? 'transform 0.2s ease, opacity 0.15s' : 'none',
             }}
-            onMouseEnter={e => { if (dragIdx == null) e.currentTarget.style.opacity = '0.85'; }}
-            onMouseLeave={e => { if (dragIdx == null) e.currentTarget.style.opacity = '1'; }}
+            onMouseEnter={e => { if (!dragging) e.currentTarget.style.opacity = '0.85'; }}
+            onMouseLeave={e => { if (!dragging) e.currentTarget.style.opacity = '1'; }}
           >
             <img src={url} alt="" loading="lazy" draggable="false" style={{
               width: '100%', height: '100%', objectFit: 'cover', display: 'block',
@@ -168,8 +188,8 @@ export function PhotoStrip({ images, onViewImage, onReorder }) {
         );
       })}
 
-      {/* Floating drag ghost that follows the cursor */}
-      {dragIdx != null && (
+      {/* Floating drag ghost */}
+      {dragging && dragIdx != null && (
         <div style={{
           position: 'fixed',
           left: cursorX - SIZE / 2,
@@ -177,9 +197,8 @@ export function PhotoStrip({ images, onViewImage, onReorder }) {
           width: SIZE, height: SIZE,
           borderRadius: 10, overflow: 'hidden',
           boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-          opacity: 0.9, pointerEvents: 'none',
-          zIndex: 9999,
-          transform: 'scale(1.08)',
+          opacity: 0.85, pointerEvents: 'none',
+          zIndex: 9999, transform: 'scale(1.08)',
         }}>
           <img src={images[dragIdx]} alt="" draggable="false" style={{
             width: '100%', height: '100%', objectFit: 'cover', display: 'block',
@@ -318,7 +337,7 @@ export function JournalEditor({date,userId,token}) {
     try { return localStorage.getItem('daylab:photoMode') === 'slideshow' ? 0 : null; }
     catch { return null; }
   });
-  const [editorRev, setEditorRev] = useState(0); // bump to force editor remount after reorder
+  const editorRef = useRef(null);
   const dragCounter = useRef(0);
 
   const images = useMemo(() => extractImages(value), [value]);
@@ -349,30 +368,28 @@ export function JournalEditor({date,userId,token}) {
 
   // Reorder images in journal content to match new order
   const reorderImages = useCallback((newOrder) => {
-    setValue(prev => {
-      if (!prev) return prev;
-      let content = prev;
-      // Remove all image references (chips with nested spans, imageblocks, [img:] tags)
-      content = stripImageChips(content);
-      content = content.replace(/<div\s+data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '');
-      content = content.replace(/\[img:https?:\/\/[^\]]+\]\n?/g, '');
-      // Clean up empty paragraphs left behind
-      content = content.replace(/<p>\s*<\/p>/g, '');
-      // Re-add images in new order as chips
-      const chips = newOrder.map(url =>
-        `<span data-image-chip="${url}" data-chip-label="${chipDate}">\u{1F4F7}</span> `
-      ).join('');
-      if (chips) {
-        if (content.includes('</p>')) {
-          content = content.replace(/<\/p>\s*$/, chips + '</p>');
-        } else {
-          content = (content || '') + `<p>${chips}</p>`;
-        }
+    let content = value || '';
+    // Remove all image references (chips with nested spans, imageblocks, [img:] tags)
+    content = stripImageChips(content);
+    content = content.replace(/<div\s+data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '');
+    content = content.replace(/\[img:https?:\/\/[^\]]+\]\n?/g, '');
+    content = content.replace(/<p>\s*<\/p>/g, '');
+    // Re-add in new order
+    const chips = newOrder.map(url =>
+      `<span data-image-chip="${url}" data-chip-label="${chipDate}">\u{1F4F7}</span> `
+    ).join('');
+    if (chips) {
+      if (content.includes('</p>')) {
+        content = content.replace(/<\/p>\s*$/, chips + '</p>');
+      } else {
+        content = (content || '') + `<p>${chips}</p>`;
       }
-      return content;
-    }, { undoLabel: 'Reorder photos' });
-    setEditorRev(r => r + 1); // force editor to remount with new chip order
-  }, [setValue, chipDate]);
+    }
+    // Update backing store
+    setValue(content, { undoLabel: 'Reorder photos' });
+    // Sync editor's internal state so it won't overwrite on next blur
+    editorRef.current?.setContent?.(content);
+  }, [value, setValue, chipDate]);
 
   // Append image chip to journal content
   const addImage = useCallback((url) => {
@@ -438,7 +455,8 @@ export function JournalEditor({date,userId,token}) {
         <DropZone uploading={uploading} />
       ) : (
         <DayLabEditor
-          key={`${date}:${editorRev}`}
+          ref={editorRef}
+          key={date}
           value={value || ''}
           onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
           onUpdate={html => markDirty(html)}

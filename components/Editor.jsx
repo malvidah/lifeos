@@ -567,6 +567,14 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
   useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.commands.focus('end'),
+    setContent: (html) => {
+      const ed = editorRef.current;
+      if (!ed || ed.isDestroyed) return;
+      programmaticRef.current = true;
+      ed.commands.setContent(html, false);
+      lastExternalValue.current = html;
+      requestAnimationFrame(() => { programmaticRef.current = false; });
+    },
   }), []); // eslint-disable-line
 
   // Suggestion state — suggRef kept in sync synchronously so handleKeyDown
