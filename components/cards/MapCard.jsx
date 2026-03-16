@@ -1,7 +1,9 @@
 "use client";
-import { useState, useMemo, useRef, Suspense } from "react";
+import { useState, useMemo, useRef, Suspense, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
+import { EffectComposer } from "@react-three/postprocessing";
+import { Effect } from "postprocessing";
 import { createNoise2D } from "simplex-noise";
 import * as THREE from "three";
 import { mono, F, projectColor } from "@/lib/tokens";
@@ -17,6 +19,130 @@ function makeToonGradient() {
   return tex;
 }
 const toonGrad = typeof window !== 'undefined' ? makeToonGradient() : null;
+
+// ── Edge detection effect (Sobel on depth + normals) ─────────────────────────
+// Custom postprocessing Effect that detects edges from the depth buffer and
+// a separately-rendered normals buffer, then draws dark outlines.
+
+const edgeFragmentFull = /* glsl */`
+uniform sampler2D normalTexture;
+uniform vec2 resolution;
+uniform float edgeStrength;
+uniform float depthThreshold;
+uniform float normalThreshold;
+
+vec3 getNormal(vec2 uv) {
+  return texture2D(normalTexture, uv).rgb;
+}
+
+float sobelNormal(vec2 uv, vec2 texel) {
+  vec3 tl = getNormal(uv + vec2(-texel.x, texel.y));
+  vec3 t  = getNormal(uv + vec2(0.0, texel.y));
+  vec3 tr = getNormal(uv + vec2(texel.x, texel.y));
+  vec3 l  = getNormal(uv + vec2(-texel.x, 0.0));
+  vec3 r  = getNormal(uv + vec2(texel.x, 0.0));
+  vec3 bl = getNormal(uv + vec2(-texel.x, -texel.y));
+  vec3 b  = getNormal(uv + vec2(0.0, -texel.y));
+  vec3 br = getNormal(uv + vec2(texel.x, -texel.y));
+  vec3 gx = -tl - 2.0*l - bl + tr + 2.0*r + br;
+  vec3 gy = -tl - 2.0*t - tr + bl + 2.0*b + br;
+  return length(gx) + length(gy);
+}
+
+void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
+  vec2 texel = 1.0 / resolution;
+
+  // Depth-based edge detection using the scene depth
+  float dC = depth;
+  float dL = texture2D(inputBuffer, uv + vec2(-texel.x, 0.0)).a;
+  float dR = texture2D(inputBuffer, uv + vec2(texel.x, 0.0)).a;
+  float dT = texture2D(inputBuffer, uv + vec2(0.0, texel.y)).a;
+  float dB = texture2D(inputBuffer, uv + vec2(0.0, -texel.y)).a;
+  float depthEdge = abs(dL - dC) + abs(dR - dC) + abs(dT - dC) + abs(dB - dC);
+
+  // Normal-based edge detection
+  float nEdge = sobelNormal(uv, texel);
+
+  float edge = smoothstep(0.001, 0.004, depthEdge) * 0.6
+             + smoothstep(normalThreshold, normalThreshold * 2.5, nEdge);
+  edge = clamp(edge, 0.0, 1.0) * edgeStrength;
+
+  vec3 lineColor = vec3(0.08, 0.06, 0.04);
+  outputColor = vec4(mix(inputColor.rgb, lineColor, edge), inputColor.a);
+}
+`;
+
+class SobelEdgeEffect extends Effect {
+  constructor({ normalTexture, resolution, edgeStrength = 0.7, normalThreshold = 0.3 }) {
+    super("SobelEdgeEffect", edgeFragmentFull, {
+      uniforms: new Map([
+        ["normalTexture", new THREE.Uniform(normalTexture)],
+        ["resolution", new THREE.Uniform(resolution)],
+        ["edgeStrength", new THREE.Uniform(edgeStrength)],
+        ["normalThreshold", new THREE.Uniform(normalThreshold)],
+      ]),
+    });
+  }
+}
+
+// Component that renders the scene normals to a render target
+function NormalsRenderer({ normalTarget }) {
+  const { scene, camera, gl } = useThree();
+  const normalMat = useMemo(() => new THREE.MeshNormalMaterial({ flatShading: true, side: THREE.DoubleSide }), []);
+
+  useFrame(() => {
+    const prev = scene.overrideMaterial;
+    scene.overrideMaterial = normalMat;
+    gl.setRenderTarget(normalTarget);
+    gl.render(scene, camera);
+    gl.setRenderTarget(null);
+    scene.overrideMaterial = prev;
+  }, -1); // run before main render
+
+  return null;
+}
+
+// Wrapper component for the edge detection effect
+function EdgeDetection() {
+  const { size } = useThree();
+  const normalTarget = useMemo(
+    () => new THREE.WebGLRenderTarget(size.width, size.height, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      type: THREE.HalfFloatType,
+    }),
+    [] // eslint-disable-line
+  );
+
+  // Resize target when canvas resizes
+  useEffect(() => {
+    normalTarget.setSize(size.width, size.height);
+  }, [size, normalTarget]);
+
+  const effect = useMemo(
+    () => new SobelEdgeEffect({
+      normalTexture: normalTarget.texture,
+      resolution: new THREE.Vector2(size.width, size.height),
+      edgeStrength: 0.65,
+      normalThreshold: 0.25,
+    }),
+    [normalTarget] // eslint-disable-line
+  );
+
+  // Update resolution uniform when size changes
+  useEffect(() => {
+    effect.uniforms.get("resolution").value.set(size.width, size.height);
+  }, [size, effect]);
+
+  return (
+    <>
+      <NormalsRenderer normalTarget={normalTarget} />
+      <EffectComposer>
+        <primitive object={effect} />
+      </EffectComposer>
+    </>
+  );
+}
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 function layoutProjects(tags, connections, recency) {
@@ -441,6 +567,7 @@ function Scene({ projects, radius, onSelect, hovered, setHovered, hour }) {
         target={[0, peakY, 0]}
         autoRotate autoRotateSpeed={0.3}
       />
+      <EdgeDetection />
     </>
   );
 }
