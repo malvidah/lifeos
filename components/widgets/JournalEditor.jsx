@@ -281,9 +281,12 @@ export function JournalEditor({date,userId,token}) {
 
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  // null = strip mode (default), 0+ = slideshow at that index.
-  // Always starts in strip — slideshow only opens on explicit user click.
-  const [lightboxIdx, setLightboxIdx] = useState(null);
+  // null = strip mode, 0+ = slideshow at that index.
+  // Read persisted mode synchronously so there's no strip→slideshow flash.
+  const [lightboxIdx, setLightboxIdx] = useState(() => {
+    try { return localStorage.getItem('daylab:photoMode') === 'slideshow' ? 0 : null; }
+    catch { return null; }
+  });
   const dragCounter = useRef(0);
 
   const images = useMemo(() => extractImages(value), [value]);
