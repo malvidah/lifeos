@@ -155,7 +155,7 @@ export default function SharedProjectPage() {
         .share-chip { display:inline; font-family:${mono}; font-size:0.8em; letter-spacing:0.06em; padding:1px 6px; border-radius:999px; text-transform:uppercase; white-space:nowrap; }
       `}</style>
 
-      <div style={{ maxWidth: 620, margin: '0 auto', padding: '16px 12px 200px', minHeight: '100vh', background: 'var(--dl-bg)' }}>
+      <div style={{ maxWidth: 1200, width: '100%', margin: '0 auto', padding: '16px 16px 200px', minHeight: '100vh', background: 'var(--dl-bg)' }}>
         {/* Header — matches ProjectView header style */}
         <div style={{
           padding: '10px 0 14px',
