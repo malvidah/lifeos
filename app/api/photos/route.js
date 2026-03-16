@@ -11,6 +11,14 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   const [year, month, day] = date.split('-').map(Number);
 
+  // Debug: check token scopes
+  const { data: settings } = await supabase.from('user_settings').select('data').eq('user_id', user.id).maybeSingle();
+  const storedToken = settings?.data?.googleToken;
+  if (storedToken) {
+    const scopeCheck = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${storedToken}`).then(r => r.json()).catch(() => ({}));
+    console.log('[photos] Token scopes:', scopeCheck.scope, 'Error:', scopeCheck.error_description);
+  }
+
   const { ok, status, data, error } = await withGoogleToken(supabase, user.id, async (token) => {
     const res = await fetch('https://photoslibrary.googleapis.com/v1/mediaItems:search', {
       method: 'POST',
@@ -42,8 +50,13 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   });
 
   if (!ok) {
-    console.error('[photos] withGoogleToken failed:', { status, error });
-    return Response.json({ photos: [], error: error || `google_api_${status}` });
+    // Include token scope info for debugging
+    let tokenScopes = null;
+    if (storedToken) {
+      const info = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${storedToken}`).then(r => r.json()).catch(() => ({}));
+      tokenScopes = info.scope || info.error_description || 'unknown';
+    }
+    return Response.json({ photos: [], error: error || `google_api_${status}`, tokenScopes });
   }
 
   const items = data?.mediaItems || [];
