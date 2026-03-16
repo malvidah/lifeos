@@ -62,7 +62,7 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
 // Per-date TipTap task list editor for the project view. Works like the daily
 // view editor but only shows tasks tagged to this project, merging changes back
 // into the full day's task list on save.
-function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksChanged, taskFilter }) {
+function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksChanged, taskFilter, pvSource }) {
   const { theme } = useTheme();
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxNotes    = useContext(NoteContext);
@@ -123,7 +123,7 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
       }
       const mergedHtml = tasksToHtml(merged);
       await dbSave(date, 'tasks', mergedHtml, token);
-      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'], date } }));
+      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'], date, _pvSource: pvSource } }));
       if (onTasksChanged) onTasksChanged(date, editorTasks);
     } finally {
       savingRef.current = false;
@@ -189,10 +189,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
 
   const [entries, setEntries] = useState(null); // null=loading, obj=loaded
   const [entriesRev, setEntriesRev] = useState(0);
+  const pvId = useRef(Math.random()); // unique ID to identify our own refresh events
 
   // Listen for daylab:refresh events to refetch entries when journal/tasks change
+  // Skip events we dispatched ourselves (source === pvId) to avoid save loops
   useEffect(() => {
     const handler = (e) => {
+      if (e.detail?._pvSource === pvId.current) return;
       if (!e.detail?.types || e.detail.types.includes('journal') || e.detail.types.includes('tasks')) {
         setEntriesRev(r => r + 1);
       }
@@ -321,7 +324,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           Promise.all(updates).then(() => {
             const affectedDates = [...new Set(rows.map(r => r.date))];
             affectedDates.forEach(d => { delete MEM[userId + ':' + d + ':journal']; });
-            window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
+            window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'], _pvSource: pvId.current } }));
           });
         });
 
@@ -555,7 +558,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     await dbSave(date, 'journal', updated, token);
     // Update module-level cache so daily view reflects immediately
     MEM[`${userId}:${date}:journal`] = updated;
-    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'], _pvSource: pvId.current } }));
     // Convert HTML to plain text for local state + tag registration
     const newText = newHtml
       .replace(/<span[^>]*data-project-tag="([^"]+)"[^>]*>[^<]*<\/span>/g, '{$1}')
@@ -605,7 +608,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     const newLineIndex = allBlocks.length - 1;
     await dbSave(today, 'journal', updated, token);
     MEM[`${userId}:${today}:journal`] = updated;
-    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'] } }));
+    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'], _pvSource: pvId.current } }));
     registerNewTags(entryText);
     setEntries(prev => prev ? {
       ...prev,
@@ -813,6 +816,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                       userId={userId}
                       onTasksChanged={handleTasksChanged}
                       taskFilter={pvTaskFilter}
+                      pvSource={pvId.current}
                     />
                     <div style={{ borderTop:"1px solid var(--dl-border)", marginTop:12, marginBottom:4 }}/>
                   </div>
