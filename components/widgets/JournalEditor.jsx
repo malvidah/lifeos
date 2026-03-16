@@ -219,6 +219,11 @@ export function JournalEditor({date,userId,token}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
+  // Close slideshow when navigating to a date with no images
+  useEffect(() => {
+    if (images.length === 0 && lightboxIdx != null) setLightboxIdx(null);
+  }, [images.length]); // eslint-disable-line
+
   // Format date for chip label: "Mar 16"
   const chipDate = useMemo(() => {
     if (!date) return '';
@@ -282,11 +287,11 @@ export function JournalEditor({date,userId,token}) {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {lightboxIdx != null ? (
+      {lightboxIdx != null && images.length > 0 ? (
         <Slideshow images={images} index={lightboxIdx} onClose={() => setLightboxIdx(null)} />
-      ) : (
+      ) : images.length > 0 ? (
         <PhotoStrip images={images} onViewImage={i => setLightboxIdx(i)} />
-      )}
+      ) : null}
       {(dragging || uploading) ? (
         <DropZone uploading={uploading} />
       ) : (
