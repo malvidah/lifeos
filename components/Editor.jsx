@@ -2,6 +2,7 @@
 
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { Extension, Node } from '@tiptap/core';
@@ -227,6 +228,65 @@ const URLExtension = Extension.create({
     })];
   },
 });
+
+// ── Format toolbar (appears on text selection in noteTitle mode) ──────────────
+function FormatToolbar({ editor }) {
+  const [pos, setPos] = useState(null);
+  const toolbarRef = useRef(null);
+
+  useEffect(() => {
+    if (!editor) return;
+    const update = () => {
+      const { from, to, empty } = editor.state.selection;
+      if (empty || !editor.isFocused) { setPos(null); return; }
+      const coords = editor.view.coordsAtPos(from);
+      const endCoords = editor.view.coordsAtPos(to);
+      const editorRect = editor.view.dom.getBoundingClientRect();
+      setPos({
+        top: coords.top - editorRect.top - 38,
+        left: (coords.left + endCoords.left) / 2 - editorRect.left,
+      });
+    };
+    editor.on('selectionUpdate', update);
+    editor.on('blur', () => setPos(null));
+    return () => {
+      editor.off('selectionUpdate', update);
+      editor.off('blur', () => setPos(null));
+    };
+  }, [editor]);
+
+  if (!pos || !editor) return null;
+
+  const btn = (label, cmd, isActive) => (
+    <button
+      key={label}
+      onMouseDown={e => { e.preventDefault(); cmd(); }}
+      style={{
+        background: isActive ? 'var(--dl-accent-20, rgba(208,136,40,0.2))' : 'transparent',
+        border: 'none', cursor: 'pointer', borderRadius: 4,
+        padding: '2px 7px', fontFamily: serif, fontSize: 13,
+        color: 'var(--dl-strong)', lineHeight: 1.4,
+        fontWeight: label === 'B' ? 700 : 400,
+        fontStyle: label === 'I' ? 'italic' : 'normal',
+        textDecoration: label === 'U' ? 'underline' : 'none',
+      }}
+    >{label}</button>
+  );
+
+  return (
+    <div ref={toolbarRef} style={{
+      position: 'absolute', top: pos.top, left: pos.left, transform: 'translateX(-50%)',
+      display: 'flex', gap: 2, padding: '3px 4px',
+      background: 'var(--dl-card, #1a1a1a)', border: '1px solid var(--dl-border)',
+      borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+      zIndex: 50, whiteSpace: 'nowrap',
+    }}>
+      {btn('B', () => editor.chain().focus().toggleBold().run(), editor.isActive('bold'))}
+      {btn('I', () => editor.chain().focus().toggleItalic().run(), editor.isActive('italic'))}
+      {btn('U', () => editor.chain().focus().toggleUnderline().run(), editor.isActive('underline'))}
+    </div>
+  );
+}
 
 // ── Serialisation ─────────────────────────────────────────────────────────────
 // Storage format (plain text):
@@ -606,8 +666,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         heading: noteTitle ? { levels: [1] } : false,
         blockquote: false, bulletList: false, orderedList: false,
         listItem: false, codeBlock: false, code: false, horizontalRule: false,
-        strike: false, bold: false, italic: false,
+        strike: false,
+        bold: noteTitle ? {} : false,
+        italic: noteTitle ? {} : false,
       }),
+      ...(noteTitle ? [Underline] : []),
       URLExtension,
       ProjectTagNode,
       NoteLinkNode,
@@ -968,8 +1031,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
         color: textColor, caretColor: color,
         '--dl-muted': mutedColor,
+        position: noteTitle ? 'relative' : undefined,
         ...style,
       }}>
+        {noteTitle && <FormatToolbar editor={editor} />}
         <EditorContent editor={editor} />
       </div>
       {/* Hidden file input for /m media upload */}
