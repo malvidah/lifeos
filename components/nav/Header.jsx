@@ -29,7 +29,7 @@ export default function Header({session,token,userId,syncStatus,theme,onThemeCha
       WebkitAppRegion: "drag", userSelect: "none",
     }}>
       {/* Pull-down overscroll patch */}
-      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:"var(--dl-bg)",zIndex:99}}/>
+      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:"transparent",zIndex:99}}/>
       {/* DAY LAB wordmark — full-width centered, click = go home */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",

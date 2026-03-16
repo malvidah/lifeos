@@ -362,12 +362,7 @@ function DashboardInner() {
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
-      {/* Vignette — fixed, same on every page */}
-      <div style={{
-        position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 38px)", left:0, right:0,
-        height:80, pointerEvents:"none", zIndex:48,
-        background:"linear-gradient(to bottom, var(--dl-bg) 0%, var(--dl-bg) 30%, transparent 100%)",
-      }}/>
+      {/* Top vignette removed — transparent header shows background */}
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
