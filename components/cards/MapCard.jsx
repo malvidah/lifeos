@@ -383,15 +383,19 @@ function DepthLabel({ p, onSelect, isHov, setHovered }) {
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: isHov ? p.color : 'var(--dl-card, #1a1a1a)',
-          border: `1px solid ${p.color}${isHov ? '' : '55'}`,
-          borderRadius: 100, padding: '4px 14px',
-          fontFamily: mono, fontSize: 12, letterSpacing: '0.06em',
+          background: isHov ? p.color + 'DD' : 'rgba(255,255,255,0.12)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: `1px solid ${isHov ? p.color : 'rgba(255,255,255,0.2)'}`,
+          borderRadius: 999, padding: '3px 12px',
+          fontFamily: mono, fontSize: 11, letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
           color: isHov ? '#fff' : p.color,
-          cursor: 'pointer', fontWeight: isHov ? 600 : 400,
-          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
-          transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+          cursor: 'pointer',
+          boxShadow: isHov
+            ? `0 4px 16px ${p.color}44`
+            : '0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15)',
+          transition: 'all 0.15s',
           userSelect: 'none',
         }}>
         {p.isActive && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: isHov ? '#fff' : p.color, marginRight: 6, verticalAlign: 'middle' }} />}
