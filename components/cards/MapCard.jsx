@@ -253,6 +253,32 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
       const snowBlend = Math.min(1, (h - snowThreshold) / 0.4);
       return base.map(c => c + (0.92 - c) * snowBlend + noise2D(x * 4, z * 4) * 0.02);
     }
+
+    // Foliage brushstrokes: green tints around mountain bases from completed tasks
+    // More completed tasks = wider, more intense green patches
+    let foliageBlend = 0;
+    for (const p of projects) {
+      if (!p.completedTasks) continue;
+      const dx = x - p.x, dz = z - p.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      // Foliage radius grows with completed tasks (0.5 to 1.5 units)
+      const foliageR = 0.5 + Math.min(20, p.completedTasks) / 20 * 1.0;
+      if (dist < foliageR) {
+        // Organic shape: use noise to break up the circle into natural patches
+        const patchNoise = noise2D(x * 3 + p.x * 7, z * 3 + p.z * 7) * 0.5 + 0.5;
+        const falloff = 1 - (dist / foliageR);
+        const intensity = falloff * falloff * patchNoise;
+        // Scale intensity with task count — more tasks = more vivid
+        foliageBlend = Math.max(foliageBlend, intensity * Math.min(1, p.completedTasks / 8));
+      }
+    }
+    if (foliageBlend > 0.05 && ht < 0.5) {
+      // Blend toward rich green — varies with noise for texture
+      const greenVar = noise2D(x * 5, z * 5) * 0.08;
+      const green = [0.15 + greenVar, 0.38 + greenVar, 0.12 + greenVar];
+      return base.map((c, i) => c + (green[i] - c) * foliageBlend * 0.7);
+    }
+
     return base;
   }
 
@@ -379,76 +405,6 @@ function Terrain({ projects, radius, vitality }) {
     <mesh geometry={geo} receiveShadow castShadow>
       <meshToonMaterial vertexColors gradientMap={toonGrad} side={THREE.DoubleSide} />
     </mesh>
-  );
-}
-
-// ── Trees — procedural low-poly, instanced per project ───────────────────────
-// Three tree variants (different height/width ratios). Count scales with
-// completed tasks tagged to each project. Uses InstancedMesh for performance.
-function Trees({ projects, radius }) {
-  const { foliageGeo, trunkGeo } = useMemo(() => ({
-    foliageGeo: new THREE.ConeGeometry(0.18, 0.4, 5),  // low-poly cone
-    trunkGeo:   new THREE.CylinderGeometry(0.03, 0.04, 0.15, 4),
-  }), []);
-
-  const { foliageData, trunkData } = useMemo(() => {
-    const noise = createNoise2D();
-    const foliage = [];
-    const trunks = [];
-    const dummy = new THREE.Object3D();
-
-    for (const p of projects) {
-      const count = Math.min(15, Math.floor((p.completedTasks || 0) / 2));
-      if (count === 0) continue;
-
-      for (let i = 0; i < count; i++) {
-        // Place trees in a ring around the mountain base
-        const angle = (i / count) * Math.PI * 2 + noise(p.x + i * 0.5, p.z) * 0.8;
-        const dist = 0.7 + noise(i * 0.3, p.x) * 0.3 + 0.4;
-        const tx = p.x + Math.cos(angle) * dist;
-        const tz = p.z + Math.sin(angle) * dist;
-        // Skip if outside island
-        if (Math.sqrt(tx * tx + tz * tz) > radius * 0.85) continue;
-
-        const scale = 0.7 + noise(tx, tz) * 0.6; // size variation
-        const ty = noise(tx * 0.3, tz * 0.3) * 0.3 + 0.05; // approximate terrain height at base
-
-        // Foliage (cone) — sits on top of trunk
-        dummy.position.set(tx, ty + 0.2 * scale, tz);
-        dummy.scale.set(scale, scale, scale);
-        dummy.rotation.y = noise(tx * 2, tz * 2) * Math.PI;
-        dummy.updateMatrix();
-        foliage.push(dummy.matrix.clone());
-
-        // Trunk (cylinder) — below foliage
-        dummy.position.set(tx, ty + 0.02 * scale, tz);
-        dummy.scale.set(scale, scale * 0.8, scale);
-        dummy.updateMatrix();
-        trunks.push(dummy.matrix.clone());
-      }
-    }
-    return { foliageData: foliage, trunkData: trunks };
-  }, [projects, radius]);
-
-  if (foliageData.length === 0) return null;
-
-  return (
-    <group>
-      <instancedMesh args={[foliageGeo, undefined, foliageData.length]} castShadow ref={ref => {
-        if (!ref) return;
-        foliageData.forEach((m, i) => ref.setMatrixAt(i, m));
-        ref.instanceMatrix.needsUpdate = true;
-      }}>
-        <meshToonMaterial color="#3A6830" gradientMap={toonGrad} />
-      </instancedMesh>
-      <instancedMesh args={[trunkGeo, undefined, trunkData.length]} ref={ref => {
-        if (!ref) return;
-        trunkData.forEach((m, i) => ref.setMatrixAt(i, m));
-        ref.instanceMatrix.needsUpdate = true;
-      }}>
-        <meshToonMaterial color="#5A4030" gradientMap={toonGrad} />
-      </instancedMesh>
-    </group>
   );
 }
 
@@ -618,7 +574,6 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour
     <>
       <Environment hour={hour} />
       <Terrain projects={projects} radius={radius} vitality={vitality} />
-      <Trees projects={projects} radius={radius} />
       <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} />
       <OrbitControls
         enablePan enableZoom enableRotate
