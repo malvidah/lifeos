@@ -261,7 +261,7 @@ function Scene({ projects, onSelect, hovered, setHovered, hour }) {
         minDistance={6} maxDistance={22}
         maxPolarAngle={Math.PI / 2.3}
         minPolarAngle={Math.PI / 8}
-        target={[0, 0.5, 0]}
+        target={[0, -0.5, 0]}
         autoRotate autoRotateSpeed={0.3}
       />
     </>
@@ -301,7 +301,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
     }}>
       <Canvas
         shadows
-        camera={{ position: [10, 7, 10], fov: 30, near: 0.1, far: 100 }}
+        camera={{ position: [10, 10, 10], fov: 30, near: 0.1, far: 100 }}
         style={{ width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
