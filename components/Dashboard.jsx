@@ -395,8 +395,8 @@ function DashboardInner() {
               maxWidth:1200, width:"100%", margin:"0 auto",
               padding:10, paddingTop:0,
               display:"flex", flexDirection:"column", gap:8}}>
-              {/* Spacer for fixed header — clears header + breathing room */}
-              <div style={{height:70,flexShrink:0}}/>
+              {/* Spacer for fixed header — clears header + safe area + breathing room */}
+              <div style={{height:"calc(env(safe-area-inset-top, 0px) + 70px)",flexShrink:0}}/>
               {/* NavBar — in scroll flow, same component on every page */}
               <NavBar
                 activeProject={activeProject}
@@ -524,7 +524,7 @@ function DashboardInner() {
                   <div style={{maxWidth:1200,width:"100%",margin:"0 auto",padding:10,paddingTop:0,boxSizing:'border-box',
                     display:'flex',flexDirection:'column',gap:8}}>
                     {/* Spacer for fixed header — same as day view */}
-                    <div style={{height:70,flexShrink:0}}/>
+                    <div style={{height:"calc(env(safe-area-inset-top, 0px) + 70px)",flexShrink:0}}/>
                     <NavBar
                       activeProject={activeProject}
                       date={selected}
