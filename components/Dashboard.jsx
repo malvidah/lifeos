@@ -373,10 +373,8 @@ function DashboardInner() {
         }, 150);
       },
     }}>
-    <div style={{background:activeProject && activeProject !== '__graph__'?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
-      {/* Weather/mountain background — full viewport, behind everything */}
+    <div style={{background:activeProject?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
       {!activeProject && <WeatherBackground date={selected} theme={theme}/>}
-      {/* MapCard now renders its own full-viewport 3D background */}
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
@@ -522,7 +520,7 @@ function DashboardInner() {
               return (
                 <>
                   {/* Scrollable content — full width scroll, max-width content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto',position:'relative',zIndex:10}}>
+                  <div style={{flex:1,minHeight:0,overflow:'auto'}}>
                   <div style={{maxWidth:1200,width:"100%",margin:"0 auto",padding:10,paddingTop:0,boxSizing:'border-box',
                     display:'flex',flexDirection:'column',gap:8}}>
                     {/* Spacer for fixed header — same as day view */}
@@ -548,8 +546,6 @@ function DashboardInner() {
                             onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                           />
                         )}
-                        {/* Spacer — transparent, pointer events pass through to 3D terrain */}
-                        <div style={{height: 300, pointerEvents: 'none'}} />
                         <ErrorBoundary label="Project">
                         <ProjectView
                           project="__everything__"

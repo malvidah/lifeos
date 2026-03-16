@@ -304,7 +304,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 2,
+      height: 450, borderRadius: 12, overflow: 'hidden',
       background: `linear-gradient(180deg, ${skyTop} 0%, ${skyBot} 100%)`,
     }}>
       <Canvas
