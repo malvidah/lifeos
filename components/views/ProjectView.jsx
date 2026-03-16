@@ -13,7 +13,8 @@ import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primit
 import { DayLabEditor } from "../Editor.jsx";
 import { useTheme } from "@/lib/theme";
 import { TaskFilterBtns, clientParseTasks, tasksToHtml, injectTaskListStyles } from "../widgets/Tasks.jsx";
-import { AddJournalLine } from "../widgets/JournalEditor.jsx";
+import { AddJournalLine, extractImages, PhotoStrip, Slideshow, DropZone } from "../widgets/JournalEditor.jsx";
+import { uploadImageFile, deleteImageFile } from "@/lib/images";
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";
 
 // ─── HealthAllMeals ───────────────────────────────────────────────────────────
@@ -209,6 +210,12 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const [activeNoteId, setActiveNoteId] = useState(null);
   const deletedNoteIds = useRef(new Set()); // guards against unmount flush re-saving
 
+  // Note photos state
+  const [noteLightbox, setNoteLightbox] = useState(null); // null=strip, number=slideshow index
+  const [noteDragging, setNoteDragging] = useState(false);
+  const [noteUploading, setNoteUploading] = useState(false);
+  const noteDragCounter = useRef(0);
+
   // Load notes for this project
   useEffect(() => {
     if (!project || project.startsWith('__') || !token) return;
@@ -368,6 +375,48 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     });
     await api.delete(`/api/notes?id=${id}`, token);
   };
+
+  // Note images — derived from active note content
+  const noteImages = useMemo(() => extractImages(activeNote?.content), [activeNote?.content]);
+
+  // Reset lightbox when switching notes or when images change
+  useEffect(() => {
+    if (noteImages.length === 0) setNoteLightbox(null);
+    else if (noteLightbox != null && noteLightbox >= noteImages.length) setNoteLightbox(0);
+  }, [noteImages.length, activeNoteId]); // eslint-disable-line
+
+  const addImageToNote = useCallback((url) => {
+    if (!activeNote) return;
+    const content = activeNote.content || '';
+    if (content.includes(url)) return;
+    const chipHtml = `<span data-image-chip="${url}">\u{1F4F7}</span> `;
+    const newContent = content.includes('</p>')
+      ? content.replace(/<\/p>\s*$/, chipHtml + '</p>')
+      : content + `<p>${chipHtml}</p>`;
+    updateNoteContent(activeNote.id, newContent);
+  }, [activeNote, updateNoteContent]);
+
+  const handleNoteDrop = useCallback(async (e) => {
+    e.preventDefault(); e.stopPropagation();
+    noteDragCounter.current = 0; setNoteDragging(false);
+    const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+    if (!files.length || !token || !activeNote) return;
+    setNoteUploading(true);
+    try {
+      const urls = await Promise.all(files.map(f => uploadImageFile(f, token)));
+      urls.filter(Boolean).forEach(url => addImageToNote(url));
+    } finally { setNoteUploading(false); }
+  }, [token, activeNote, addImageToNote]);
+
+  const handleNoteDragEnter = useCallback((e) => {
+    e.preventDefault(); noteDragCounter.current++;
+    if (e.dataTransfer?.types?.includes('Files')) setNoteDragging(true);
+  }, []);
+  const handleNoteDragLeave = useCallback((e) => {
+    e.preventDefault(); noteDragCounter.current--;
+    if (noteDragCounter.current <= 0) { noteDragCounter.current = 0; setNoteDragging(false); }
+  }, []);
+  const handleNoteDragOver = useCallback((e) => { e.preventDefault(); }, []);
 
   // Per-project collapse state (persisted)
   const [notesCollapsed,      toggleNotes]      = useCollapse(`pv:${project}:journal`,    false);
@@ -622,15 +671,31 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             </div>
           </div>
 
-          {/* Right: editor — full width when list collapsed */}
-          <div style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}>
-            {activeNote ? (
+          {/* Right: editor + photos — full width when list collapsed */}
+          <div
+            style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}
+            onDragEnter={handleNoteDragEnter}
+            onDragLeave={handleNoteDragLeave}
+            onDragOver={handleNoteDragOver}
+            onDrop={handleNoteDrop}
+          >
+            {/* Photos for current note */}
+            {noteImages.length > 0 && (
+              noteLightbox != null
+                ? <Slideshow images={noteImages} index={noteLightbox} onClose={() => setNoteLightbox(null)} />
+                : <PhotoStrip images={noteImages} onViewImage={i => setNoteLightbox(i)} />
+            )}
+            {(noteDragging || noteUploading) ? (
+              <DropZone uploading={noteUploading} />
+            ) : activeNote ? (
               <DayLabEditor
                 key={activeNote.id}
                 value={activeNote.content || ''}
                 noteTitle
                 autoFocus
                 onBlur={html => updateNoteContent(activeNote.id, html)}
+                onImageUpload={file => uploadImageFile(file, token)}
+                onImageDelete={src => deleteImageFile(src, token)}
                 noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
                 projectNames={pvProjectNames}
                 onCreateNote={addNote}
@@ -643,6 +708,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 textColor={"var(--dl-strong)"}
                 mutedColor={"var(--dl-middle)"}
                 color={"var(--dl-highlight)"}
+                hideInlineImages
                 style={{ minHeight: 180, width: '100%' }}
               />
             ) : (
@@ -651,6 +717,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 value=""
                 noteTitle
                 onBlur={html => { if (skipPhantomBlur.current) { skipPhantomBlur.current = false; return; } const text = html?.replace(/<[^>]*>/g, '').trim(); if (text && text !== 'Untitled') { skipPhantomBlur.current = true; addNote('', { initialContent: html }); } }}
+                onImageUpload={file => uploadImageFile(file, token)}
                 noteNames={[]}
                 projectNames={pvProjectNames}
                 onCreateNote={addNote}

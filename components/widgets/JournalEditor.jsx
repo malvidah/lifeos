@@ -7,8 +7,8 @@ import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
 import { DayLabEditor } from "../Editor.jsx";
 
-// Extract image URLs from journal content
-function extractImages(content) {
+// Extract image URLs from journal/note content
+export function extractImages(content) {
   if (!content) return [];
   const urls = [];
   let m;
@@ -27,7 +27,7 @@ function extractImages(content) {
 // ── Photo Strip ───────────────────────────────────────────────────────────────
 // Horizontal scroll row of filled rounded squares. Click to open slideshow.
 // Supports mouse drag-to-scroll on desktop + native touch scroll on mobile.
-function PhotoStrip({ images, onViewImage }) {
+export function PhotoStrip({ images, onViewImage }) {
   const scrollRef = useRef(null);
   const dragState = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
 
@@ -94,7 +94,7 @@ function PhotoStrip({ images, onViewImage }) {
 
 // ── Slideshow ─────────────────────────────────────────────────────────────────
 // Wide rectangle with chevrons, dots, and X to close.
-function Slideshow({ images, index, onClose }) {
+export function Slideshow({ images, index, onClose }) {
   const [idx, setIdx] = useState(index);
   const pointerStart = useRef(null);
 
@@ -188,7 +188,7 @@ function Slideshow({ images, index, onClose }) {
 }
 
 // ── Drop Zone ─────────────────────────────────────────────────────────────────
-function DropZone({ uploading }) {
+export function DropZone({ uploading }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
