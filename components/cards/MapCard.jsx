@@ -131,6 +131,18 @@ function buildTopGeo(projects, radius, noise2D, edgeR) {
     else { colors[i*3]=0.85+n; colors[i*3+1]=0.78+n; colors[i*3+2]=0.7+n; }
   }
   top.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+  // Remove triangles that touch invisible vertices (y=-20) — these create
+  // the vertical wall artifacts at the island boundary.
+  const oldIdx = top.index.array;
+  const newIdx = [];
+  for (let i = 0; i < oldIdx.length; i += 3) {
+    const a = oldIdx[i], b = oldIdx[i+1], c = oldIdx[i+2];
+    if (pos.getY(a) < -10 || pos.getY(b) < -10 || pos.getY(c) < -10) continue;
+    newIdx.push(a, b, c);
+  }
+  top.setIndex(newIdx);
+
   top.computeVertexNormals();
   return top;
 }
