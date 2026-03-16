@@ -11,11 +11,14 @@ import { DayLabEditor } from "../Editor.jsx";
 function extractImages(content) {
   if (!content) return [];
   const urls = [];
-  // [img:url] text format
-  const txtRe = /\[img:(https?:\/\/[^\]]+)\]/g;
   let m;
+  // Image chip format (inline spans)
+  const chipRe = /data-image-chip="([^"]+)"/g;
+  while ((m = chipRe.exec(content)) !== null) urls.push(m[1]);
+  // Legacy: [img:url] text format
+  const txtRe = /\[img:(https?:\/\/[^\]]+)\]/g;
   while ((m = txtRe.exec(content)) !== null) urls.push(m[1]);
-  // HTML imageblock format
+  // Legacy: HTML imageblock format
   const htmlRe = /data-imageblock="([^"]+)"/g;
   while ((m = htmlRe.exec(content)) !== null) urls.push(m[1]);
   return [...new Set(urls)];
@@ -179,12 +182,16 @@ export function JournalEditor({date,userId,token}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
-  // Append image to journal content (as imageblock HTML for persistence)
+  // Append image chip to journal content
   const addImage = useCallback((url) => {
     setValue(prev => {
       if (prev && prev.includes(url)) return prev;
-      const imgHtml = `<div data-imageblock="${url}" style="margin:4px 0;line-height:0"><img src="${url}" style="max-width:100%;border-radius:8px;display:block" /></div>`;
-      return (prev || '') + imgHtml;
+      const chipHtml = `<span data-image-chip="${url}">\u{1F4F7}</span> `;
+      // Append chip inside the last <p>, or create a new one
+      if (prev && prev.includes('</p>')) {
+        return prev.replace(/<\/p>\s*$/, chipHtml + '</p>');
+      }
+      return (prev || '') + `<p>${chipHtml}</p>`;
     }, { undoLabel: 'Add photo' });
   }, [setValue]);
 

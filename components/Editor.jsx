@@ -81,6 +81,36 @@ const NoteLinkNode = Node.create({
   },
 });
 
+// ImageChip: inline atom node displayed as a small pill in text flow.
+// Source of truth for the photos section — deleting a chip removes the image.
+const ImageChip = Node.create({
+  name: 'imageChip', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() {
+    return {
+      src: {
+        default: null,
+        parseHTML: el => el.getAttribute('data-image-chip'),
+      },
+    };
+  },
+  parseHTML() { return [{ tag: 'span[data-image-chip]' }]; },
+  renderHTML({ node }) {
+    return ['span', {
+      'data-image-chip': node.attrs.src,
+      style: [
+        'display:inline-flex', 'align-items:center', 'gap:3px',
+        'vertical-align:middle',
+        'background:var(--dl-border)', 'border-radius:4px',
+        'padding:1px 7px', 'font-family:var(--dl-mono,' + mono + ')',
+        'font-size:11px', 'letter-spacing:0.04em', 'line-height:1.65',
+        'color:var(--dl-highlight)', 'white-space:nowrap', 'cursor:default',
+        'user-select:none', 'flex-shrink:0',
+      ].join(';'),
+    }, '\u{1F4F7}'];  // 📷
+  },
+});
+
 // ImageBlock: stored as [img:url], rendered as block image atom node.
 const ImageBlock = Node.create({
   name: 'imageBlock', group: 'block', atom: true, selectable: true, draggable: false,
@@ -516,7 +546,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       URLExtension,
       ProjectTagNode,
       NoteLinkNode,
-      ...(singleLine ? [] : [ImageBlock]),
+      ...(singleLine ? [] : [ImageBlock, ImageChip]),
       ...(taskList ? [TaskList, TaskItem.configure({ nested: false })] : []),
 
       Placeholder.configure({
@@ -722,7 +752,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           if (!img) return false;
           e.preventDefault();
           onImageUploadRef.current(img.getAsFile()).then(url => {
-            if (url) editorRef.current?.commands.insertContent({ type: 'imageBlock', attrs: { src: url } });
+            if (url) editorRef.current?.commands.insertContent([
+              { type: 'imageChip', attrs: { src: url } },
+              { type: 'text', text: ' ' },
+            ]);
           });
           return true;
         },
@@ -733,8 +766,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           e.preventDefault();
           // Upload all dropped files, not just the first
           Promise.all(files.map(f => onImageUploadRef.current(f))).then(urls => {
-            const blocks = urls.filter(Boolean).map(url => ({ type: 'imageBlock', attrs: { src: url } }));
-            if (blocks.length) editorRef.current?.commands.insertContent(blocks);
+            const chips = urls.filter(Boolean).flatMap(url => [
+              { type: 'imageChip', attrs: { src: url } },
+              { type: 'text', text: ' ' },
+            ]);
+            if (chips.length) editorRef.current?.commands.insertContent(chips);
           });
           return true;
         },
@@ -868,7 +904,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           const file = e.target.files?.[0];
           if (file && onImageUploadRef.current) {
             onImageUploadRef.current(file).then(url => {
-              if (url) editorRef.current?.commands.insertContent({ type: 'imageBlock', attrs: { src: url } });
+              if (url) editorRef.current?.commands.insertContent([
+                { type: 'imageChip', attrs: { src: url } },
+                { type: 'text', text: ' ' },
+              ]);
             });
           }
           e.target.value = ''; // reset so same file can be re-selected
