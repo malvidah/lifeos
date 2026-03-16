@@ -294,7 +294,7 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : isExistingProject ? item.slice(12)
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9); // __note__: = 9
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : '/n  Note')
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : '/m  Media')
                                  : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
         const col                = isProject ? projectColor(rawLabel) : null;
         const selected  = i === state.selectedIndex;
@@ -368,6 +368,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
   // Stable refs — avoid stale closures in TipTap plugins
   const editorRef           = useRef(null);
+  const fileInputRef        = useRef(null);
   const lastExternalValue   = useRef(value);
   const onBlurRef           = useRef(onBlur);
   const onEnterCommitRef    = useRef(onEnterCommit);
@@ -465,7 +466,21 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           // Command menu item (bare /) — type the letter to refine the query
           // instead of calling command (which exits the suggestion)
           if (item.startsWith('__cmd__:')) {
-            const cmd = item.slice(8); // 'p' or 'n'
+            const cmd = item.slice(8); // 'p', 'n', or 'm'
+            if (cmd === 'm') {
+              // Media: close dropdown, delete the /, trigger file picker
+              s.command({ id: '__noop__' }); // close suggestion
+              setSugg(null); suggRef.current = null;
+              const from = editorRef.current?.state.selection.from;
+              if (from != null) {
+                editorRef.current?.chain().focus()
+                  .deleteRange({ from: Math.max(0, from - 1), to: from })
+                  .run();
+              }
+              if (fileInputRef.current) fileInputRef.current.click();
+              event.preventDefault();
+              return true;
+            }
             editorRef.current?.commands.insertContent(cmd + ' ');
             event.preventDefault();
             return true;
@@ -512,11 +527,25 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         renderRef,
         itemsFn: (query) => {
           // Bare / — show command menu
-          if (!query) return ['__cmd__:p', '__cmd__:n'];
+          if (!query) return ['__cmd__:p', '__cmd__:n', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
 
+          if (cmd === 'm') {
+            // /m — trigger file picker for media upload
+            if (onImageUploadRef.current && fileInputRef.current) {
+              // Delete the /m text, then trigger picker
+              const from = editorRef.current?.state.selection.from;
+              if (from != null) {
+                editorRef.current?.chain().focus()
+                  .deleteRange({ from: Math.max(0, from - 3), to: from })
+                  .run();
+              }
+              fileInputRef.current.click();
+            }
+            return [];
+          }
           if (cmd === 'p') {
             const q      = search.toLowerCase().replace(/\s/g, '');
             const qTrim  = search.trim();
@@ -822,11 +851,39 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       }}>
         <EditorContent editor={editor} />
       </div>
+      {/* Hidden file input for /m media upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={e => {
+          const file = e.target.files?.[0];
+          if (file && onImageUploadRef.current) {
+            onImageUploadRef.current(file).then(url => {
+              if (url) editorRef.current?.commands.insertContent({ type: 'imageBlock', attrs: { src: url } });
+            });
+          }
+          e.target.value = ''; // reset so same file can be re-selected
+        }}
+      />
       <SuggestionDropdown
         state={sugg}
         onSelect={item => {
           if (item.startsWith('__cmd__:')) {
-            editorRef.current?.commands.insertContent(item.slice(8) + ' ');
+            const cmd = item.slice(8);
+            if (cmd === 'm') {
+              setSugg(null); suggRef.current = null;
+              const from = editorRef.current?.state.selection.from;
+              if (from != null) {
+                editorRef.current?.chain().focus()
+                  .deleteRange({ from: Math.max(0, from - 1), to: from })
+                  .run();
+              }
+              if (fileInputRef.current) fileInputRef.current.click();
+              return;
+            }
+            editorRef.current?.commands.insertContent(cmd + ' ');
             return;
           }
           sugg?.command(item); setSugg(null);
