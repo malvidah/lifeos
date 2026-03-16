@@ -2,10 +2,22 @@
 import { useState, useMemo, useRef, Suspense } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
+import { EffectComposer, N8AO, ToneMapping } from "@react-three/postprocessing";
 import { createNoise2D } from "simplex-noise";
 import * as THREE from "three";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
+
+// 3-step toon gradient (hard shadow/mid/lit bands for cel-shaded look)
+function makeToonGradient() {
+  const data = new Uint8Array([50, 140, 220]);
+  const tex = new THREE.DataTexture(data, 3, 1, THREE.RedFormat);
+  tex.minFilter = THREE.NearestFilter;
+  tex.magFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  return tex;
+}
+const toonGrad = typeof window !== 'undefined' ? makeToonGradient() : null;
 
 // ── Layout ───────────────────────────────────────────────────────────────────
 function layoutProjects(tags, connections, recency) {
@@ -294,18 +306,16 @@ function Terrain({ projects, radius }) {
   const { top, cliffGeo, skirtGeo } = useMemo(
     () => buildIslandGeo(projects, radius), [projects, radius]
   );
-  const topMat = { flatShading: true, vertexColors: true, roughness: 0.85, metalness: 0.02 };
-  const cliffMat = { flatShading: true, vertexColors: true, roughness: 0.95, metalness: 0.01 };
   return (
     <group>
       <mesh geometry={top} receiveShadow castShadow>
-        <meshStandardMaterial {...topMat} />
+        <meshToonMaterial vertexColors gradientMap={toonGrad} />
       </mesh>
       <mesh geometry={cliffGeo} receiveShadow castShadow>
-        <meshStandardMaterial {...cliffMat} side={THREE.DoubleSide} />
+        <meshToonMaterial vertexColors gradientMap={toonGrad} side={THREE.DoubleSide} />
       </mesh>
       <mesh geometry={skirtGeo} receiveShadow>
-        <meshStandardMaterial {...cliffMat} side={THREE.DoubleSide} />
+        <meshToonMaterial vertexColors gradientMap={toonGrad} side={THREE.DoubleSide} />
       </mesh>
     </group>
   );
@@ -371,18 +381,21 @@ function Environment({ hour }) {
   const isNight = h < 6 || h > 20;
   const isDusk = (h >= 17 && h <= 20) || (h >= 5 && h < 7);
 
+  // Cairn/Moebius lighting: strong key + cool fill for hard toon bands
   return (
     <>
-      <ambientLight intensity={isNight ? 0.15 : 0.45} color={isNight ? '#4455AA' : '#D4C8B0'} />
+      <ambientLight intensity={isNight ? 0.08 : 0.25} color={isNight ? '#3344AA' : '#B8A890'} />
       <directionalLight
         position={[sunX, sunY, 4]}
-        intensity={isNight ? 0.1 : isDusk ? 0.8 : 1.1}
-        color={isDusk ? '#FF9050' : isNight ? '#6677BB' : '#FFE4C0'}
+        intensity={isNight ? 0.08 : isDusk ? 1.0 : 1.4}
+        color={isDusk ? '#FF8040' : isNight ? '#5566AA' : '#FFD8A8'}
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={2048}
+        shadow-mapSize-height={2048}
+        shadow-bias={-0.001}
       />
-      <directionalLight position={[-4, 2, -3]} intensity={0.15} color="#8090B0" />
+      <directionalLight position={[-5, 3, -4]} intensity={isNight ? 0.05 : 0.2} color="#6080B0" />
+      <directionalLight position={[0, 2, -8]} intensity={0.12} color="#A0B0D0" />
     </>
   );
 }
@@ -455,6 +468,10 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
             hovered={hovered} setHovered={setHovered} hour={hour} />
         </Suspense>
         <fog attach="fog" args={[isNight ? '#0A0A1A' : isDusk ? '#C07040' : '#C4B8A4', 18, 40]} />
+        <EffectComposer>
+          <N8AO aoRadius={0.6} intensity={2.0} distanceFalloff={0.4} />
+          <ToneMapping />
+        </EffectComposer>
       </Canvas>
     </div>
   );
