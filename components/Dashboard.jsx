@@ -17,7 +17,7 @@ import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
 import HealthCard from "./cards/HealthCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
-import { MapCard, MountainBackground } from "./cards/MapCard.jsx";
+import { MapCard } from "./cards/MapCard.jsx";
 import { JournalEditor, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";

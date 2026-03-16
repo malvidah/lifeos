@@ -2,7 +2,6 @@
 import { useState, useMemo, useRef, Suspense } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import { EffectComposer, N8AO, ToneMapping } from "@react-three/postprocessing";
 import { createNoise2D } from "simplex-noise";
 import * as THREE from "three";
 import { mono, F, projectColor } from "@/lib/tokens";
@@ -41,8 +40,9 @@ function layoutProjects(tags, connections, recency) {
       const a = placed.get(source), b = placed.get(target);
       if (!a || !b) return;
       const pull = 0.015 * Math.min(weight, 5);
-      a.x += (b.x - a.x) * pull; a.z += (b.z - a.z) * pull;
-      b.x -= (b.x - a.x) * pull; b.z -= (b.z - a.z) * pull;
+      const dx = b.x - a.x, dz = b.z - a.z;
+      a.x += dx * pull; a.z += dz * pull;
+      b.x -= dx * pull; b.z -= dz * pull;
     });
     const entries = [...placed.entries()];
     for (let j = 0; j < entries.length; j++) {
@@ -76,6 +76,18 @@ function layoutProjects(tags, connections, recency) {
 
 function islandRadius(projectCount) {
   return 3.5 + Math.sqrt(Math.max(1, projectCount)) * 1.8;
+}
+
+// Shared sky/fog colors based on time of day
+function skyColors(hour) {
+  const isNight = hour < 6 || hour > 20;
+  const isDusk = (hour >= 17 && hour <= 20) || (hour >= 5 && hour < 7);
+  return {
+    isNight, isDusk,
+    skyTop: isNight ? '#0A0A1A' : isDusk ? '#2A1520' : '#8AAAC8',
+    skyBot: isNight ? '#1A1A30' : isDusk ? '#C07040' : '#C4B8A4',
+    fog:    isNight ? '#0A0A1A' : isDusk ? '#C07040' : '#C4B8A4',
+  };
 }
 
 // ── Top surface (PlaneGeometry for full terrain detail) ──────────────────────
@@ -246,9 +258,12 @@ function Terrain({ projects, radius }) {
 // ── Labels ───────────────────────────────────────────────────────────────────
 function DepthLabel({ p, onSelect, isHov, setHovered }) {
   const htmlRef = useRef();
+  const frameCount = useRef(0);
   const pos = useMemo(() => new THREE.Vector3(p.x, p.height + 0.5, p.z), [p.x, p.height, p.z]);
 
   useFrame(({ camera }) => {
+    // Throttle DOM writes to every 3rd frame
+    if (++frameCount.current % 3 !== 0) return;
     const wrapper = htmlRef.current?.parentElement;
     if (!wrapper) return;
     const dist = camera.position.distanceTo(pos);
@@ -369,17 +384,13 @@ function Stars({ visible }) {
 // ── Environment ──────────────────────────────────────────────────────────────
 function Environment({ hour }) {
   const h = hour ?? 14;
-  const sunAngle = ((h - 6) / 12) * Math.PI; // 6am=horizon, noon=top, 6pm=horizon
+  const { isNight, isDusk } = skyColors(h);
+  const sunAngle = ((h - 6) / 12) * Math.PI;
   const sunX = Math.cos(sunAngle) * 14;
   const sunY = Math.sin(sunAngle) * 14;
-  const isNight = h < 6 || h > 20;
-  const isDusk = (h >= 17 && h <= 20) || (h >= 5 && h < 7);
-
-  // Moon is opposite the sun
   const moonAngle = sunAngle + Math.PI;
   const moonX = Math.cos(moonAngle) * 14;
   const moonY = Math.max(2, Math.sin(moonAngle) * 14);
-
   return (
     <>
       <ambientLight intensity={isNight ? 0.08 : 0.25} color={isNight ? '#3344AA' : '#B8A890'} />
@@ -388,8 +399,8 @@ function Environment({ hour }) {
         intensity={isNight ? 0.08 : isDusk ? 1.0 : 1.4}
         color={isDusk ? '#FF8040' : isNight ? '#5566AA' : '#FFD8A8'}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
         shadow-bias={-0.001}
       />
       <directionalLight position={[-5, 3, -4]} intensity={isNight ? 0.05 : 0.2} color="#6080B0" />
@@ -449,15 +460,12 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
     );
   }
 
-  const isNight = hour < 6 || hour > 20;
-  const isDusk = (hour >= 17 && hour <= 20) || (hour >= 5 && hour < 7);
-  const skyTop = isNight ? '#0A0A1A' : isDusk ? '#2A1520' : '#8AAAC8';
-  const skyBot = isNight ? '#1A1A30' : isDusk ? '#C07040' : '#C4B8A4';
+  const sky = skyColors(hour);
 
   return (
     <div style={{
       height: 450, borderRadius: 12, overflow: 'hidden',
-      background: `linear-gradient(180deg, ${skyTop} 0%, ${skyBot} 100%)`,
+      background: `linear-gradient(180deg, ${sky.skyTop} 0%, ${sky.skyBot} 100%)`,
     }}>
       <Canvas
         shadows
@@ -468,14 +476,9 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
           <Scene projects={projects} radius={radius} onSelect={onSelectProject}
             hovered={hovered} setHovered={setHovered} hour={hour} />
         </Suspense>
-        <fog attach="fog" args={[isNight ? '#0A0A1A' : isDusk ? '#C07040' : '#C4B8A4', 18, 40]} />
-        <EffectComposer>
-          <N8AO aoRadius={0.6} intensity={2.0} distanceFalloff={0.4} />
-          <ToneMapping />
-        </EffectComposer>
+        <fog attach="fog" args={[sky.fog, 18, 40]} />
       </Canvas>
     </div>
   );
 }
 
-export function MountainBackground() { return null; }
