@@ -91,6 +91,26 @@ export default function SharedProjectPage() {
       .catch(() => setError(true));
   }, [token]);
 
+  const { project, journalEntries, taskEntries, notes } = data || {};
+  const accent = project?.color || (project?.name ? projectColor(project.name) : 'var(--dl-accent)');
+
+  // Group journal by date — hooks must be called unconditionally
+  const journalByDate = useMemo(() => {
+    if (!journalEntries?.length) return [];
+    const map = {};
+    journalEntries.forEach(e => { (map[e.date] ||= []).push(e); });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+  }, [journalEntries]);
+
+  // Group tasks by date
+  const openTasks = (taskEntries || []).filter(t => !t.done);
+  const tasksByDate = useMemo(() => {
+    if (!taskEntries?.length) return [];
+    const map = {};
+    taskEntries.forEach(t => { (map[t.date] ||= []).push(t); });
+    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
+  }, [taskEntries]);
+
   if (error) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'var(--dl-bg)' }}>
@@ -108,26 +128,6 @@ export default function SharedProjectPage() {
       </div>
     );
   }
-
-  const { project, journalEntries, taskEntries, notes } = data;
-  const accent = project.color || projectColor(project.name);
-
-  // Group journal by date
-  const journalByDate = useMemo(() => {
-    if (!journalEntries?.length) return [];
-    const map = {};
-    journalEntries.forEach(e => { (map[e.date] ||= []).push(e); });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
-  }, [journalEntries]);
-
-  // Group tasks by date
-  const openTasks = (taskEntries || []).filter(t => !t.done);
-  const tasksByDate = useMemo(() => {
-    if (!taskEntries?.length) return [];
-    const map = {};
-    taskEntries.forEach(t => { (map[t.date] ||= []).push(t); });
-    return Object.entries(map).sort(([a], [b]) => b.localeCompare(a));
-  }, [taskEntries]);
 
   const hasNotes = notes?.length > 0;
   const hasTasks = taskEntries?.length > 0;
