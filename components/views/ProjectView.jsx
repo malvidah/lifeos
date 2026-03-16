@@ -294,6 +294,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       n.id === id ? { ...n, content: newContent, updated_at: new Date().toISOString() } : n
     ));
     // Persist — server extracts title + project_tags from content
+    console.log('[notes] saving:', id, 'content length:', newContent?.length, 'preview:', newContent?.slice(0, 80));
     api.patch('/api/notes', { id, content: newContent }, token).then(res => {
       if (deletedNoteIds.current.has(id)) return; // deleted while saving
       if (res?.note) {
