@@ -95,7 +95,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
   if (!name) return Response.json({ error: 'name is required' }, { status: 400 });
 
   // Whitelist updatable fields
-  const allowed = ['color', 'notes', 'status', 'last_active'];
+  const allowed = ['color', 'notes', 'status', 'last_active', 'is_public'];
   const patch = {};
   for (const k of allowed) {
     if (k in updates) patch[k] = updates[k];
@@ -103,6 +103,15 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
 
   if (Object.keys(patch).length === 0) {
     return Response.json({ error: 'no updatable fields provided' }, { status: 400 });
+  }
+
+  // Generate or clear share_token based on is_public toggle
+  if ('is_public' in patch) {
+    if (patch.is_public) {
+      patch.share_token = crypto.randomUUID();
+    } else {
+      patch.share_token = null;
+    }
   }
 
   // Upsert so the project is auto-created if it doesn't exist yet

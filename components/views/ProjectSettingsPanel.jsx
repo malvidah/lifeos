@@ -81,7 +81,7 @@ export function HomeSettingsPanel({ open, onClose }) {
 //   onClose   – () => void
 //   onRenamed – (newSlug: string) => void  (called after successful rename)
 
-export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed }) {
+export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed, projectData }) {
   const pcol = project && project !== '__everything__' ? projectColor(project) : "var(--dl-accent)";
 
   // ── Name editing ────────────────────────────────────────────────────────────
@@ -89,6 +89,12 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
   const [renaming, setRenaming]   = useState(false);
   const [renameErr, setRenameErr] = useState('');
   const nameRef = useRef(null);
+
+  // ── Sharing ────────────────────────────────────────────────────────────────
+  const [isPublic, setIsPublic]     = useState(false);
+  const [shareToken, setShareToken] = useState(null);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [copied, setCopied]         = useState(false);
 
   // ── Search terms (LOOK FOR) ────────────────────────────────────────────────
   const [terms, setTerms]         = useState([]);
@@ -101,6 +107,9 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
     if (!open) return;
     setNameInput(tagDisplayName(project));
     setRenameErr('');
+    setIsPublic(!!projectData?.is_public);
+    setShareToken(projectData?.share_token ?? null);
+    setCopied(false);
     loadTerms();
   }, [open, project]);
 
@@ -142,6 +151,33 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
 
   function removeTerm(t) {
     saveTerms(terms.filter(x => x !== t));
+  }
+
+  async function toggleShare() {
+    const next = !isPublic;
+    setShareLoading(true);
+    setCopied(false);
+    try {
+      const res = await fetch('/api/projects', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: project, is_public: next }),
+      });
+      const d = await res.json();
+      if (d?.project) {
+        setIsPublic(!!d.project.is_public);
+        setShareToken(d.project.share_token);
+      }
+    } finally { setShareLoading(false); }
+  }
+
+  function copyShareLink() {
+    if (!shareToken) return;
+    const url = `${window.location.origin}/share/${shareToken}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   }
 
   async function handleRename() {
@@ -334,6 +370,54 @@ export function ProjectSettingsPanel({ project, token, open, onClose, onRenamed 
 
               {saving && (
                 <div style={{ fontFamily: mono, fontSize: 9, color: "var(--dl-highlight)", marginTop: 8 }}>Saving…</div>
+              )}
+            </div>
+          )}
+
+          {/* ── SHARE ──────────────────────────────────────────────────── */}
+          {project !== '__everything__' && (
+            <div style={{ marginTop: 24 }}>
+              <div style={sectionLabel}>Share</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                <button
+                  onClick={toggleShare}
+                  disabled={shareLoading}
+                  style={{
+                    width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer',
+                    background: isPublic ? pcol : 'var(--dl-border)',
+                    position: 'relative', transition: 'background 0.2s',
+                    flexShrink: 0, padding: 0,
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 2, left: isPublic ? 20 : 2,
+                    width: 18, height: 18, borderRadius: 9,
+                    background: '#fff', transition: 'left 0.2s',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </button>
+                <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-highlight)' }}>
+                  {shareLoading ? 'Saving…' : isPublic ? 'Public' : 'Private'}
+                </span>
+              </div>
+              {isPublic && shareToken && (
+                <div style={{ display: 'flex', gap: 6 }}>
+                  <input
+                    readOnly
+                    value={`${typeof window !== 'undefined' ? window.location.origin : ''}/share/${shareToken}`}
+                    style={{ ...input, flex: 1, fontSize: 11, color: 'var(--dl-highlight)' }}
+                    onFocus={e => e.target.select()}
+                  />
+                  <button
+                    onClick={copyShareLink}
+                    style={{
+                      background: pcol + '22', border: `1px solid ${pcol}44`,
+                      borderRadius: 6, padding: '7px 12px',
+                      fontFamily: mono, fontSize: 9, letterSpacing: '0.06em',
+                      color: pcol, cursor: 'pointer', whiteSpace: 'nowrap',
+                    }}
+                  >{copied ? 'Copied!' : 'Copy'}</button>
+                </div>
               )}
             </div>
           )}

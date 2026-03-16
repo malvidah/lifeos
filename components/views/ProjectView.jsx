@@ -180,7 +180,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     useDbSave('global', 'projects', {}, token, userId);
 
   // Track project recency — updates last_active whenever the user opens a project view
-  const { updateProject } = useProjects(token);
+  const { projects: projectsMap, updateProject } = useProjects(token);
   useEffect(() => {
     if (!project || project.startsWith('__') || !token) return;
     updateProject(project, { last_active: todayKey() });
@@ -865,6 +865,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       {onCloseSettings && (
         <ProjectSettingsPanel
           project={project} token={token}
+          projectData={projectsMap?.get(project)}
           open={!!settingsOpen} onClose={onCloseSettings} onRenamed={onRenamed}
         />
       )}
