@@ -181,8 +181,8 @@ function buildUndersideGeo(radius, noise2D, edgeR) {
       const angle = (seg / SEGS) * Math.PI * 2;
 
       // Base radius from edge shape, scaled by taper
-      // First 2 rings extend slightly wider/higher to overlap with top surface
-      const overlap = ring < 2 ? 1.05 : 1.0;
+      // First 3 rings extend wider to generously overlap with top surface
+      const overlap = ring === 0 ? 1.12 : ring === 1 ? 1.08 : ring === 2 ? 1.04 : 1.0;
       const r = edgeR(angle) * taper * overlap;
 
       // Rock displacement proportional to current radius (shrinks with taper)
@@ -197,8 +197,8 @@ function buildUndersideGeo(radius, noise2D, edgeR) {
 
       const x = Math.cos(angle) * finalR;
       const z = Math.sin(angle) * finalR;
-      // First ring pushed slightly above y=0 to overlap terrain edge
-      const yOffset = ring === 0 ? 0.15 : ring === 1 ? 0.05 : 0;
+      // First rings pushed above y=0 to overlap terrain surface
+      const yOffset = ring === 0 ? 0.25 : ring === 1 ? 0.15 : ring === 2 ? 0.05 : 0;
       verts.push(x, y + yOffset + yN * t * 0.5, z);
 
       // Color: warm brown at top → dark charcoal at bottom
@@ -231,10 +231,10 @@ function Terrain({ projects, radius }) {
   const { topGeo, undersideGeo } = useMemo(() => {
     const noise2D = createNoise2D();
     function edgeR(angle) {
-      return radius * (0.82
-        + noise2D(Math.cos(angle) * 2.2, Math.sin(angle) * 2.2) * 0.18
-        + noise2D(Math.cos(angle * 2.7) * 1.8, Math.sin(angle * 2.7) * 1.8) * 0.1
-        + noise2D(Math.cos(angle * 5) * 1.2, Math.sin(angle * 5) * 1.2) * 0.05
+      // Gentle wobble — mostly round with subtle irregularity
+      return radius * (0.90
+        + noise2D(Math.cos(angle) * 1.5, Math.sin(angle) * 1.5) * 0.07
+        + noise2D(Math.cos(angle * 2) * 1.2, Math.sin(angle * 2) * 1.2) * 0.04
       );
     }
     return {
