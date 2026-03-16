@@ -181,9 +181,7 @@ export default function NavBar(props) {
         </NavIconBtn>
         <NavIconBtn onClick={onGoToProjects} active={!!activeProject} title="All projects">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M8 20L1 20L6.5 10L10 16L14 8L23 20L16 20"/>
-            <path d="M8 20L10 16"/>
-            <path d="M16 20L14 8"/>
+            <polygon points="12,4 2,20 22,20"/>
           </svg>
         </NavIconBtn>
       </div>
