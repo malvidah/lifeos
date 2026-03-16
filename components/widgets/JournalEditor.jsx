@@ -101,10 +101,10 @@ function Slideshow({ images, index, onClose }) {
         </div>
       )}
 
-      {/* Right chevron — stops below the X button area */}
+      {/* Right chevron */}
       {images.length > 1 && (
         <div onClick={next} style={{
-          position: 'absolute', right: 0, top: 40, bottom: 0, width: 48,
+          position: 'absolute', right: 0, top: 0, bottom: 0, width: 48,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s',
         }}
