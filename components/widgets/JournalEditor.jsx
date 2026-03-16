@@ -29,31 +29,30 @@ function PhotoGrid({ images, onRemove }) {
     return <Lightbox images={images} index={viewIdx} onClose={() => setViewIdx(null)} />;
   }
 
+  const cols = images.length === 1 ? '1fr'
+    : images.length === 2 ? '1fr 1fr'
+    : 'repeat(auto-fill, minmax(100px, 1fr))';
+
   return (
     <div style={{
-      display: 'grid',
-      gridTemplateColumns: images.length === 1 ? '1fr' : 'repeat(auto-fill, minmax(100px, 1fr))',
-      gap: 4, marginBottom: 8,
+      display: 'grid', gridTemplateColumns: cols,
+      gap: 3, marginBottom: 6, borderRadius: 10, overflow: 'hidden',
     }}>
       {images.map((url, i) => (
         <button
           key={url}
           onClick={() => setViewIdx(i)}
           style={{
-            background: 'var(--dl-well)', border: 'none', borderRadius: 8,
-            overflow: 'hidden', cursor: 'pointer', padding: 0, position: 'relative',
-            aspectRatio: images.length === 1 ? 'auto' : '1',
-            transition: 'opacity 0.15s',
+            background: 'var(--dl-well)', border: 'none', padding: 0, cursor: 'pointer',
+            aspectRatio: images.length === 1 ? '16/10' : '1',
+            overflow: 'hidden', transition: 'opacity 0.15s',
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
           onMouseLeave={e => e.currentTarget.style.opacity = '1'}
         >
           <img src={url} alt="" loading="lazy" style={{
-            width: '100%',
-            height: images.length === 1 ? 'auto' : '100%',
-            maxHeight: images.length === 1 ? 280 : undefined,
-            objectFit: images.length === 1 ? 'contain' : 'cover',
-            display: 'block', borderRadius: 8,
+            width: '100%', height: '100%',
+            objectFit: 'cover', display: 'block',
           }} />
         </button>
       ))}
@@ -91,7 +90,7 @@ function Lightbox({ images, index, onClose }) {
         }}
         onClick={next}
       >
-        <img src={images[idx]} alt="" style={{ width: '100%', maxHeight: 420, objectFit: 'contain', display: 'block' }} />
+        <img src={images[idx]} alt="" style={{ width: '100%', maxHeight: 480, objectFit: 'contain', display: 'block', background: 'var(--dl-well)' }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
         <span style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', letterSpacing: '0.06em' }}>
@@ -132,36 +131,17 @@ function LbBtn({ onClick, children }) {
 function DropZone({ uploading }) {
   return (
     <div style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      gap: 12, padding: '32px 16px', minHeight: 120,
-      border: '2px dashed var(--dl-border2)', borderRadius: 12,
-      background: 'var(--dl-well)',
-      animation: uploading ? 'none' : undefined,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      minHeight: 80, padding: '24px 0',
+      opacity: 0.5,
     }}>
-      {uploading ? (
-        <>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--dl-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-            style={{ animation: 'pulse 1.2s ease-in-out infinite' }}>
-            <circle cx="12" cy="12" r="10" strokeOpacity="0.3"/>
-            <path d="M12 6v6l4 2" />
-          </svg>
-          <span style={{ fontFamily: serif, fontSize: F.md, color: 'var(--dl-middle)' }}>
-            Uploading...
-          </span>
-          <style>{`@keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }`}</style>
-        </>
-      ) : (
-        <>
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="2"/>
-            <circle cx="8.5" cy="8.5" r="1.5"/>
-            <polyline points="21 15 16 10 5 21"/>
-          </svg>
-          <span style={{ fontFamily: serif, fontSize: F.md, color: 'var(--dl-middle)' }}>
-            Drop photos here
-          </span>
-        </>
-      )}
+      <span style={{
+        fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
+        textTransform: 'uppercase',
+        color: uploading ? 'var(--dl-accent)' : 'var(--dl-middle)',
+      }}>
+        {uploading ? 'uploading…' : 'drop photos'}
+      </span>
     </div>
   );
 }
@@ -180,13 +160,12 @@ export function JournalEditor({date,userId,token}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
-  // Helper: append an image to the journal value
+  // Helper: append an image to the journal value as HTML imageblock
   const addImage = useCallback((url) => {
     setValue(prev => {
-      const imgBlock = `[img:${url}]`;
-      // Don't add duplicate
-      if (prev && prev.includes(imgBlock)) return prev;
-      return (prev || '') + '\n' + imgBlock;
+      if (prev && prev.includes(url)) return prev; // no duplicate
+      const imgHtml = `<div data-imageblock="${url}" style="margin:4px 0;line-height:0"><img src="${url}" style="max-width:100%;border-radius:8px;display:block" /></div>`;
+      return (prev || '') + imgHtml;
     }, { undoLabel: 'Add photo' });
   }, [setValue]);
 
