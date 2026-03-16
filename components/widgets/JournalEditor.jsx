@@ -21,118 +21,45 @@ function extractImages(content) {
   return [...new Set(urls)];
 }
 
-// ── Photo Carousel ────────────────────────────────────────────────────────────
-// Rounded square at top of journal. Layout adapts to image count.
-function PhotoCarousel({ images, onViewImage }) {
-  const [idx, setIdx] = useState(0);
-  const touchStart = useRef(null);
-
-  useEffect(() => { setIdx(0); }, [images.length]);
-
+// ── Photo Strip ───────────────────────────────────────────────────────────────
+// Horizontal scroll row of filled rounded squares. Click to open slideshow.
+function PhotoStrip({ images, onViewImage }) {
   if (!images.length) return null;
-
-  const prev = () => setIdx(i => (i - 1 + images.length) % images.length);
-  const next = () => setIdx(i => (i + 1) % images.length);
-
-  // 1 image: full square
-  if (images.length === 1) {
-    return (
-      <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 6, position: 'relative', cursor: 'pointer' }}
-        onClick={() => onViewImage(0)}>
-        <div style={{ aspectRatio: '1', background: 'var(--dl-well)' }}>
-          <img src={images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-        </div>
-      </div>
-    );
-  }
-
-  // 2-3 images: carousel with chevrons
-  if (images.length <= 3) {
-    return (
-      <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 6, position: 'relative' }}>
-        <div style={{ aspectRatio: '1', background: 'var(--dl-well)', cursor: 'pointer' }}
-          onClick={() => onViewImage(idx)}
-          onTouchStart={e => { touchStart.current = e.touches[0].clientX; }}
-          onTouchEnd={e => {
-            if (touchStart.current == null) return;
-            const diff = e.changedTouches[0].clientX - touchStart.current;
-            if (diff > 50) prev(); else if (diff < -50) next();
-            touchStart.current = null;
-          }}>
-          <img src={images[idx]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'opacity 0.2s' }} />
-        </div>
-        {/* Left vignette + chevron */}
-        <div onClick={e => { e.stopPropagation(); prev(); }} style={{
-          position: 'absolute', left: 0, top: 0, bottom: 0, width: '15%',
-          background: 'linear-gradient(to right, rgba(0,0,0,0.3), transparent)',
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 8,
-          cursor: 'pointer', opacity: 0.5, transition: 'opacity 0.2s',
-        }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}>
-          <span style={{ color: '#fff', fontSize: 20, fontFamily: mono, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>‹</span>
-        </div>
-        {/* Right vignette + chevron */}
-        <div onClick={e => { e.stopPropagation(); next(); }} style={{
-          position: 'absolute', right: 0, top: 0, bottom: 0, width: '15%',
-          background: 'linear-gradient(to left, rgba(0,0,0,0.3), transparent)',
-          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8,
-          cursor: 'pointer', opacity: 0.5, transition: 'opacity 0.2s',
-        }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}>
-          <span style={{ color: '#fff', fontSize: 20, fontFamily: mono, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>›</span>
-        </div>
-        {/* Dots indicator */}
-        <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 5 }}>
-          {images.map((_, i) => (
-            <div key={i} onClick={e => { e.stopPropagation(); setIdx(i); }} style={{
-              width: 6, height: 6, borderRadius: '50%', cursor: 'pointer',
-              background: i === idx ? '#fff' : 'rgba(255,255,255,0.4)',
-              transition: 'background 0.2s',
-            }} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // 4+ images: hero left + 3 stacked right (Instagram style)
+  // Height: ~half the card width. Using a fixed-ish height that feels compact.
+  const SIZE = 140;
   return (
-    <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 6, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr 1fr', aspectRatio: '1', gap: 2 }}>
-      {/* Hero: spans all 3 rows on the left */}
-      <div style={{ gridRow: '1 / 4', cursor: 'pointer', background: 'var(--dl-well)' }}
-        onClick={() => onViewImage(0)}>
-        <img src={images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-      </div>
-      {/* Right column: 3 stacked */}
-      {[1, 2, 3].map(i => (
-        <div key={i} style={{ cursor: 'pointer', background: 'var(--dl-well)', position: 'relative', overflow: 'hidden' }}
-          onClick={() => onViewImage(i < images.length ? i : 0)}>
-          {i < images.length ? (
-            <img src={images[i]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-          ) : (
-            <div style={{ width: '100%', height: '100%', background: 'var(--dl-well)' }} />
-          )}
-          {/* "+N more" overlay on last tile */}
-          {i === 3 && images.length > 4 && (
-            <div style={{
-              position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
-              <span style={{ color: '#fff', fontFamily: mono, fontSize: F.md, letterSpacing: '0.04em' }}>
-                +{images.length - 4}
-              </span>
-            </div>
-          )}
+    <div style={{
+      display: 'flex', gap: 4, overflowX: 'auto', overflowY: 'hidden',
+      marginBottom: 6, borderRadius: 10,
+      scrollbarWidth: 'none', msOverflowStyle: 'none',
+      WebkitOverflowScrolling: 'touch',
+    }}>
+      {images.map((url, i) => (
+        <div
+          key={url}
+          onClick={() => onViewImage(i)}
+          style={{
+            width: images.length === 1 ? '100%' : SIZE,
+            height: SIZE, flexShrink: 0,
+            borderRadius: 10, overflow: 'hidden',
+            cursor: 'pointer', background: 'var(--dl-well)',
+            transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+        >
+          <img src={url} alt="" loading="lazy" style={{
+            width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+          }} />
         </div>
       ))}
     </div>
   );
 }
 
-// ── Lightbox ──────────────────────────────────────────────────────────────────
-function Lightbox({ images, index, onClose }) {
+// ── Slideshow ─────────────────────────────────────────────────────────────────
+// Full-width image view with counter, swipe, keyboard nav.
+function Slideshow({ images, index, onClose }) {
   const [idx, setIdx] = useState(index);
   const touchStart = useRef(null);
   const prev = () => setIdx(i => (i - 1 + images.length) % images.length);
@@ -149,7 +76,7 @@ function Lightbox({ images, index, onClose }) {
   }, [onClose]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
+    <div style={{ marginBottom: 6 }}>
       <div
         style={{ borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'pointer', position: 'relative' }}
         onTouchStart={e => { touchStart.current = e.touches[0].clientX; }}
@@ -159,42 +86,32 @@ function Lightbox({ images, index, onClose }) {
           if (Math.abs(diff) > 50) { diff > 0 ? prev() : next(); }
           touchStart.current = null;
         }}
-        onClick={next}
+        onClick={() => { if (images.length > 1) next(); }}
       >
-        <img src={images[idx]} alt="" style={{ width: '100%', maxHeight: 520, objectFit: 'contain', display: 'block' }} />
-      </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
-        <span style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', letterSpacing: '0.06em' }}>
-          {idx + 1} / {images.length}
-        </span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          {images.length > 1 && (
-            <>
-              <LbBtn onClick={e => { e.stopPropagation(); prev(); }}>‹</LbBtn>
-              <LbBtn onClick={e => { e.stopPropagation(); next(); }}>›</LbBtn>
-            </>
-          )}
-          <LbBtn onClick={e => { e.stopPropagation(); onClose(); }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-            </svg>
-          </LbBtn>
+        <img src={images[idx]} alt="" style={{ width: '100%', display: 'block' }} />
+        {/* Counter badge */}
+        <div style={{
+          position: 'absolute', top: 8, right: 8,
+          background: 'rgba(0,0,0,0.5)', borderRadius: 100,
+          padding: '3px 10px',
+          fontFamily: mono, fontSize: 11, color: '#fff', letterSpacing: '0.04em',
+        }}>
+          {idx + 1}/{images.length}
         </div>
       </div>
+      {/* Close — tapping below the image */}
+      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 6 }}>
+        <button onClick={onClose} style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)',
+          letterSpacing: '0.08em', textTransform: 'uppercase',
+          transition: 'color 0.15s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+        >close</button>
+      </div>
     </div>
-  );
-}
-
-function LbBtn({ onClick, children }) {
-  return (
-    <button onClick={onClick} style={{
-      background: 'var(--dl-glass-active)', border: 'none', borderRadius: 100,
-      width: 26, height: 26, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--dl-strong)', fontFamily: mono, fontSize: 13, transition: 'background 0.15s',
-    }}
-      onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-border2)'}
-      onMouseLeave={e => e.currentTarget.style.background = 'var(--dl-glass-active)'}
-    >{children}</button>
   );
 }
 
@@ -283,9 +200,9 @@ export function JournalEditor({date,userId,token}) {
       onDrop={handleDrop}
     >
       {lightboxIdx != null ? (
-        <Lightbox images={images} index={lightboxIdx} onClose={() => setLightboxIdx(null)} />
+        <Slideshow images={images} index={lightboxIdx} onClose={() => setLightboxIdx(null)} />
       ) : (
-        <PhotoCarousel images={images} onViewImage={i => setLightboxIdx(i)} />
+        <PhotoStrip images={images} onViewImage={i => setLightboxIdx(i)} />
       )}
       {(dragging || uploading) ? (
         <DropZone uploading={uploading} />
