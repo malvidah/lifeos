@@ -15,6 +15,7 @@ function fmtDate(d) {
   return `${months[m - 1]} ${day}`;
 }
 
+<<<<<<< HEAD
 // Sanitize HTML for display: strip image chips (shown in PhotoStrip), replace
 // project/note chips with styled spans, remove inline styles and data attrs.
 function sanitizeHtml(html) {
@@ -38,14 +39,19 @@ function sanitizeHtml(html) {
   return s;
 }
 
-function textOnly(html) {
-  if (!html) return '';
-  return html
-    .replace(/<span[^>]*data-project-tag="([^"]*)"[^>]*>[^<]*<\/span>/g, '{$1}')
-    .replace(/<span[^>]*data-note-link="([^"]*)"[^>]*>[^<]*<\/span>/g, '[$1]')
+// Strip HTML + plain-text chip syntax ({project} and [note]) from task text
+function textOnly(text) {
+  if (!text) return '';
+  return text
+    .replace(/<span[^>]*data-project-tag="[^"]*"[^>]*>[^<]*<\/span>/g, '')
+    .replace(/<span[^>]*data-note-link="[^"]*"[^>]*>[^<]*<\/span>/g, '')
     .replace(/<span[^>]*data-image-chip="[^"]*"[^>]*>[\s\S]*?<\/span>/g, '')
-    .replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
+    .replace(/<[^>]+>/g, '')
+    .replace(/\{[a-z0-9][a-z0-9 ]*[a-z0-9]\}|\{[a-z0-9]\}/g, '') // {project tags}
+    .replace(/\[[^\]]+\]/g, '') // [note links]
+    .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/\s{2,}/g, ' ').trim();
 }
 
 // ── Note Photos ──────────────────────────────────────────────────────────────
