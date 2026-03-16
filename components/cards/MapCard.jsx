@@ -306,7 +306,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
     }}>
       <Canvas
         shadows
-        camera={{ position: [13, 13, 13], fov: 30, near: 0.1, far: 100 }}
+        camera={{ position: [14, 8, 14], fov: 30, near: 0.1, far: 100 }}
         style={{ width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
