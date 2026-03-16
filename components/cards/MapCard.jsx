@@ -455,11 +455,8 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
   const radius = useMemo(() => islandRadius(projects.length), [projects.length]);
 
-  const camDist = useMemo(() => {
-    const maxSpread = projects.reduce((m, p) => Math.max(m, Math.abs(p.x), Math.abs(p.z)), radius * 0.5);
-    const dist = (maxSpread + 2) / Math.tan((15 * Math.PI) / 180);
-    return Math.max(8, Math.min(30, dist * 0.55));
-  }, [projects, radius]);
+  // Default to max zoom-out so the full island + underside is visible
+  const camDist = 30;
 
   if (!projects.length) {
     return (
