@@ -25,7 +25,7 @@ export default function Header({session,token,userId,syncStatus,theme,onThemeCha
       paddingBottom: 10,
       flexShrink: 0,
       position: "sticky", top: 0, zIndex: 100,
-      background: "var(--dl-bg)",
+      background: "transparent",
       WebkitAppRegion: "drag", userSelect: "none",
     }}>
       {/* Pull-down overscroll patch */}
