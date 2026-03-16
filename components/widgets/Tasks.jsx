@@ -213,7 +213,24 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   );
 }
 
-// ── Habit Instances — recurring tasks with flag icons ─────────────────────────
+// ── Habit schedule label ──────────────────────────────────────────────────────
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function scheduleLabel(rec) {
+  if (!rec) return '';
+  if (rec.rule === 'daily') return 'Daily';
+  if (rec.rule === 'weekly') {
+    const days = (rec.days || []).map(d => DAY_NAMES[d]);
+    if (days.length === 5 && !rec.days.includes(0) && !rec.days.includes(6)) return 'Weekdays';
+    if (days.length === 2 && rec.days.includes(0) && rec.days.includes(6)) return 'Weekends';
+    if (days.length === 1) return `Every ${DAY_NAMES[rec.days[0]]}`;
+    return days.join(' · ');
+  }
+  if (rec.rule === 'biweekly') return `Biweekly ${DAY_NAMES[rec.days?.[0]] || ''}`;
+  if (rec.rule === 'monthly') return `Monthly ${rec.dayOfMonth}`;
+  return '';
+}
+
+// ── Habit Instances — recurring tasks with flag chip ──────────────────────────
 function HabitInstances({ date, token }) {
   const [instances, setInstances] = useState([]);
 
@@ -231,21 +248,29 @@ function HabitInstances({ date, token }) {
     await api.patch('/api/habits', { id, done: !currentDone }, token);
   };
 
+  const flagColor = 'var(--dl-green)';
+
   return (
     <div style={{ borderTop: '1px solid var(--dl-border)', marginTop: 6, paddingTop: 6 }}>
       {instances.map(inst => (
         <div key={inst.id} style={{
-          display: 'flex', alignItems: 'center', gap: 10, padding: '3px 0',
+          display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
         }}>
-          {/* Flag icon instead of checkbox */}
+          {/* Flag button */}
           <button onClick={() => toggleFlag(inst.id, inst.done)} style={{
-            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-            fontSize: 16, lineHeight: 1, flexShrink: 0,
-            filter: inst.done ? 'none' : 'grayscale(1) opacity(0.4)',
-            transition: 'filter 0.15s',
+            width: 16, height: 16, flexShrink: 0, borderRadius: 4, padding: 0,
+            cursor: 'pointer', border: `1.5px solid ${inst.done ? flagColor : 'var(--dl-border2)'}`,
+            background: inst.done ? flagColor : 'transparent',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'all 0.15s',
           }}>
-            {inst.done ? '\u{1F6A9}' : '\u{1F3F3}'}
+            {inst.done && (
+              <svg width="9" height="9" viewBox="0 0 16 16" fill="var(--dl-bg)" stroke="none">
+                <path d="M3 2v12M3 2h8l-2 3 2 3H3"/>
+              </svg>
+            )}
           </button>
+          {/* Task text */}
           <span style={{
             fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
             color: 'var(--dl-strong)',
@@ -254,6 +279,21 @@ function HabitInstances({ date, token }) {
           }}>
             {inst.text}
           </span>
+          {/* Schedule chip */}
+          {inst.recurrence && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontFamily: mono, fontSize: 11, letterSpacing: '0.06em',
+              color: flagColor, background: flagColor + '18',
+              borderRadius: 4, padding: '1px 7px', lineHeight: '1.65',
+              textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0,
+            }}>
+              <svg width="8" height="8" viewBox="0 0 16 16" fill={flagColor} stroke="none" style={{flexShrink:0}}>
+                <path d="M3 1v14M3 1h9l-2.5 3.5L12 8H3"/>
+              </svg>
+              {scheduleLabel(inst.recurrence)}
+            </span>
+          )}
         </div>
       ))}
     </div>

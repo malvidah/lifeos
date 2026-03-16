@@ -100,7 +100,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     await supabase.from('tasks').insert(toCreate);
   }
 
-  // Return all instances for this date (existing + newly created)
+  // Return all instances for this date with recurrence info from parent
   const { data: allInstances } = await supabase
     .from('tasks')
     .select('id, text, html, done, project_tags, recurrence_parent_id, date')
@@ -108,7 +108,20 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .eq('date', date)
     .not('recurrence_parent_id', 'is', null);
 
-  return Response.json({ instances: allInstances || [] });
+  // Attach recurrence schedule from parent templates
+  const parentIds = [...new Set((allInstances || []).map(i => i.recurrence_parent_id))];
+  const templateMap = {};
+  if (parentIds.length) {
+    const { data: parents } = await supabase
+      .from('tasks').select('id, recurrence').in('id', parentIds);
+    (parents || []).forEach(p => { templateMap[p.id] = p.recurrence; });
+  }
+  const enriched = (allInstances || []).map(i => ({
+    ...i,
+    recurrence: templateMap[i.recurrence_parent_id] || null,
+  }));
+
+  return Response.json({ instances: enriched });
 });
 
 export const POST = withAuth(async (req, { supabase, user }) => {
