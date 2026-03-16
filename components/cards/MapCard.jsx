@@ -455,8 +455,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
   const radius = useMemo(() => islandRadius(projects.length), [projects.length]);
 
-  // Default to max zoom-out so the full island + underside is visible
-  const camDist = 30;
+  const camDist = 25;
 
   if (!projects.length) {
     return (
@@ -477,7 +476,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         dpr={[1, 1.5]}
-        camera={{ position: [camDist * 0.66, camDist * 0.38, camDist * 0.66], fov: 30, near: 0.1, far: 100 }}
+        camera={{ position: [camDist * 0.66, camDist * 0.30, camDist * 0.66], fov: 30, near: 0.1, far: 100 }}
         style={{ width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
