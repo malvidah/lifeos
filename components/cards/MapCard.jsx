@@ -287,6 +287,15 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
   // Current hour for lighting
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
 
+  // Compute camera distance to just fit all projects (with fov 30°)
+  const camDist = useMemo(() => {
+    if (!projects.length) return 14;
+    const maxSpread = projects.reduce((m, p) => Math.max(m, Math.abs(p.x), Math.abs(p.z)), 0);
+    // fov 30° → half-angle 15° → need distance = spread / tan(15°) + padding
+    const dist = (maxSpread + 1.5) / Math.tan((15 * Math.PI) / 180);
+    return Math.max(6, Math.min(22, dist * 0.65));
+  }, [projects]);
+
   if (!projects.length) {
     return (
       <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -309,7 +318,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
     }}>
       <Canvas
         shadows
-        camera={{ position: [14, 8, 14], fov: 30, near: 0.1, far: 100 }}
+        camera={{ position: [camDist * 0.66, camDist * 0.38, camDist * 0.66], fov: 30, near: 0.1, far: 100 }}
         style={{ width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
