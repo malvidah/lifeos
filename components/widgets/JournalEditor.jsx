@@ -214,14 +214,35 @@ export function JournalEditor({date,userId,token}) {
 
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [lightboxIdx, setLightboxIdx] = useState(null);
+  // Persist photo view mode: null=strip, 0+=slideshow. Stored in localStorage.
+  const [lightboxIdx, setLightboxIdx] = useState(() => {
+    try { const v = localStorage.getItem('daylab:photoMode'); return v === 'slideshow' ? 0 : null; }
+    catch { return null; }
+  });
   const dragCounter = useRef(0);
 
   const images = useMemo(() => extractImages(value), [value]);
 
-  // Close slideshow when navigating to a date with no images
+  // Persist mode preference to localStorage
   useEffect(() => {
-    if (images.length === 0 && lightboxIdx != null) setLightboxIdx(null);
+    try { localStorage.setItem('daylab:photoMode', lightboxIdx != null ? 'slideshow' : 'strip'); } catch {}
+  }, [lightboxIdx != null]); // eslint-disable-line
+
+  // When navigating to a day with no images, hide photos entirely.
+  // When arriving at a day WITH images, restore the persisted mode.
+  const prevImageCount = useRef(images.length);
+  useEffect(() => {
+    if (images.length > 0 && prevImageCount.current === 0 && lightboxIdx == null) {
+      // Arriving at a day with images — restore slideshow mode if that was the preference
+      try {
+        if (localStorage.getItem('daylab:photoMode') === 'slideshow') setLightboxIdx(0);
+      } catch {}
+    }
+    // Clamp index if it's beyond available images
+    if (lightboxIdx != null && images.length > 0 && lightboxIdx >= images.length) {
+      setLightboxIdx(0);
+    }
+    prevImageCount.current = images.length;
   }, [images.length]); // eslint-disable-line
 
   // Format date for chip label: "Mar 16"
