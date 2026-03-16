@@ -488,7 +488,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
 
 // Mobile date picker — horizontal day strip with physics momentum
 // Month and year are static labels (snap discretely). Only the day ribbon moves.
-function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false, onEventClick, onAddClick, collapsed, onToggle, calView, onCalViewChange}) {
+function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=false, onEventClick, onAddClick, collapsed, onToggle, calView, onCalViewChange, summaries={}}) {
   const today = todayKey();
   const DAY_W = 175;
 
