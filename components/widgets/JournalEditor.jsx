@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useContext, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, useContext, useMemo, Fragment } from "react";
 import { mono, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
@@ -7,12 +7,142 @@ import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile } from "@/lib/images";
 import { DayLabEditor } from "../Editor.jsx";
 
+// Extract image URLs from journal HTML/text content
+function extractImages(content) {
+  if (!content) return [];
+  const urls = [];
+  // Match [img:url] format (text storage)
+  const txtRe = /\[img:(https?:\/\/[^\]]+)\]/g;
+  let m;
+  while ((m = txtRe.exec(content)) !== null) urls.push(m[1]);
+  // Match data-imageblock="url" format (HTML)
+  const htmlRe = /data-imageblock="([^"]+)"/g;
+  while ((m = htmlRe.exec(content)) !== null) urls.push(m[1]);
+  return [...new Set(urls)];
+}
+
+// ── Photo Grid ────────────────────────────────────────────────────────────────
+function PhotoGrid({ images }) {
+  const [viewIdx, setViewIdx] = useState(null);
+
+  if (!images.length) return null;
+
+  if (viewIdx != null) {
+    return <Lightbox images={images} index={viewIdx} onClose={() => setViewIdx(null)} />;
+  }
+
+  return (
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: images.length === 1 ? '1fr' : 'repeat(auto-fill, minmax(100px, 1fr))',
+      gap: 4, marginBottom: 8,
+    }}>
+      {images.map((url, i) => (
+        <button
+          key={url}
+          onClick={() => setViewIdx(i)}
+          style={{
+            background: 'var(--dl-well)', border: 'none', borderRadius: 8,
+            overflow: 'hidden', cursor: 'pointer', padding: 0,
+            aspectRatio: images.length === 1 ? 'auto' : '1',
+            transition: 'opacity 0.15s',
+          }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+        >
+          <img
+            src={url}
+            alt=""
+            loading="lazy"
+            style={{
+              width: '100%',
+              height: images.length === 1 ? 'auto' : '100%',
+              maxHeight: images.length === 1 ? 280 : undefined,
+              objectFit: images.length === 1 ? 'contain' : 'cover',
+              display: 'block', borderRadius: 8,
+            }}
+          />
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Lightbox ──────────────────────────────────────────────────────────────────
+function Lightbox({ images, index, onClose }) {
+  const [idx, setIdx] = useState(index);
+  const touchStart = useRef(null);
+  const prev = () => setIdx(i => (i - 1 + images.length) % images.length);
+  const next = () => setIdx(i => (i + 1) % images.length);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'ArrowLeft') prev();
+      else if (e.key === 'ArrowRight') next();
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+      <div
+        style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'pointer' }}
+        onTouchStart={e => { touchStart.current = e.touches[0].clientX; }}
+        onTouchEnd={e => {
+          if (touchStart.current == null) return;
+          const diff = e.changedTouches[0].clientX - touchStart.current;
+          if (Math.abs(diff) > 50) { diff > 0 ? prev() : next(); }
+          touchStart.current = null;
+        }}
+        onClick={next}
+      >
+        <img src={images[idx]} alt="" style={{ width: '100%', maxHeight: 420, objectFit: 'contain', display: 'block' }} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+        <span style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', letterSpacing: '0.06em' }}>
+          {idx + 1} / {images.length}
+        </span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {images.length > 1 && (
+            <>
+              <LbBtn onClick={e => { e.stopPropagation(); prev(); }}>‹</LbBtn>
+              <LbBtn onClick={e => { e.stopPropagation(); next(); }}>›</LbBtn>
+            </>
+          )}
+          <LbBtn onClick={e => { e.stopPropagation(); onClose(); }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </LbBtn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LbBtn({ onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      background: 'var(--dl-glass-active)', border: 'none', borderRadius: 100,
+      width: 26, height: 26, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'var(--dl-strong)', fontFamily: mono, fontSize: 13, transition: 'background 0.15s',
+    }}
+      onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-border2)'}
+      onMouseLeave={e => e.currentTarget.style.background = 'var(--dl-glass-active)'}
+    >{children}</button>
+  );
+}
+
 export function JournalEditor({date,userId,token}) {
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
-  // Hooks must be called unconditionally (before any early return)
   const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+
+  // Extract images from the current journal content for the grid
+  const images = useMemo(() => extractImages(value), [value]);
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
@@ -23,21 +153,25 @@ export function JournalEditor({date,userId,token}) {
   );
 
   return (
-    <DayLabEditor
-      value={value || ''}
-      onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
-      onUpdate={html => markDirty(html)}
-      onImageUpload={file => uploadImageFile(file, token)}
-      noteNames={ctxNotes}
-      projectNames={ctxProjects}
-      onProjectClick={name => navigateToProject(name)}
-      onNoteClick={name => navigateToNote(name)}
-      placeholder="What's on your mind? Use / for commands."
-      textColor={"var(--dl-strong)"}
-      mutedColor={"var(--dl-middle)"}
-      color={"var(--dl-accent)"}
-      style={{minHeight: 80, width: '100%'}}
-    />
+    <div>
+      <PhotoGrid images={images} />
+      <DayLabEditor
+        value={value || ''}
+        onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
+        onUpdate={html => markDirty(html)}
+        onImageUpload={file => uploadImageFile(file, token)}
+        noteNames={ctxNotes}
+        projectNames={ctxProjects}
+        onProjectClick={name => navigateToProject(name)}
+        onNoteClick={name => navigateToNote(name)}
+        placeholder="What's on your mind? Use / for commands."
+        textColor={"var(--dl-strong)"}
+        mutedColor={"var(--dl-middle)"}
+        color={"var(--dl-accent)"}
+        hideInlineImages
+        style={{minHeight: 80, width: '100%'}}
+      />
+    </div>
   );
 }
 

@@ -35,6 +35,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
+    .dl-hide-images .ProseMirror div[data-imageblock] { display: none; }
   `;
   document.head.appendChild(s);
 }
@@ -360,6 +361,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   textColor,
   mutedColor,
   editable     = true,
+  hideInlineImages = false,
   onUpdate,
 }, ref) {
   useEffect(injectEditorStyles, []);
@@ -693,8 +695,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
           if (!files.length) return false;
           e.preventDefault();
-          onImageUploadRef.current(files[0]).then(url => {
-            if (url) editorRef.current?.commands.insertContent({ type: 'imageBlock', attrs: { src: url } });
+          // Upload all dropped files, not just the first
+          Promise.all(files.map(f => onImageUploadRef.current(f))).then(urls => {
+            const blocks = urls.filter(Boolean).map(url => ({ type: 'imageBlock', attrs: { src: url } }));
+            if (blocks.length) editorRef.current?.commands.insertContent(blocks);
           });
           return true;
         },
@@ -810,7 +814,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
   return (
     <>
-      <div className={`dl-editor${taskList ? ' dl-tasklist' : ''}`} style={{
+      <div className={`dl-editor${taskList ? ' dl-tasklist' : ''}${hideInlineImages ? ' dl-hide-images' : ''}`} style={{
         fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
         color: textColor, caretColor: color,
         '--dl-muted': mutedColor,
