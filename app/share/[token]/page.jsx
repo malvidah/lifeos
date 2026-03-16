@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useParams } from "next/navigation";
 import "@/components/theme/theme.css";
 
@@ -57,6 +57,18 @@ function fmtDate(d) {
   const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   const [y, m, day] = d.split('-').map(Number);
   return `${months[m-1]} ${day}, ${y}`;
+}
+
+function noteTitle(html) {
+  if (!html) return 'Untitled';
+  const m = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
+  if (m) {
+    const t = m[1].replace(/<[^>]+>/g, '').trim();
+    return t || 'Untitled';
+  }
+  // Fallback: first line of text
+  const first = html.replace(/<[^>]+>/g, '').trim().split('\n')[0]?.slice(0, 40);
+  return first || 'Untitled';
 }
 
 function textOnly(html) {
@@ -173,6 +185,88 @@ function NotePhotos({ images, defaultMode = 'slideshow' }) {
   return <PubPhotoStrip images={images} onSelect={i => { setIdx(i); setMode('slideshow'); }}/>;
 }
 
+// ── Notes Section — sidebar + content (like edit mode but read-only) ─────────
+function NotesSection({ notes, accent, photoMode }) {
+  const [activeIdx, setActiveIdx] = useState(0);
+  const mono = "'SF Mono','Fira Code',ui-monospace,monospace";
+
+  if (!notes.length) return null;
+  const active = notes[activeIdx] || notes[0];
+  const images = extractImages(active?.content);
+
+  // Single note — no sidebar needed
+  if (notes.length === 1) {
+    return (
+      <section style={s.noteSection}>
+        {images.length > 0 && <NotePhotos images={images} defaultMode={photoMode}/>}
+        <div className="note-content"
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(active.content || '') }}
+        />
+        {active.updated_at && (
+          <div style={s.datestamp}>{fmtDate(active.updated_at.split('T')[0])}</div>
+        )}
+      </section>
+    );
+  }
+
+  // Multiple notes — sidebar + content
+  return (
+    <section style={{ ...s.noteSection, display: 'flex', gap: 0, minHeight: 200 }}>
+      {/* Sidebar */}
+      <div style={{
+        width: 180, flexShrink: 0,
+        display: 'flex', flexDirection: 'column', gap: 2,
+        paddingRight: 12, borderRight: '1px solid var(--dl-border)',
+        overflowY: 'auto', maxHeight: 500,
+      }}>
+        {notes.map((n, i) => {
+          const title = noteTitle(n.content);
+          const isActive = i === activeIdx;
+          return (
+            <button
+              key={i}
+              onClick={() => setActiveIdx(i)}
+              style={{
+                background: isActive ? (accent + '18') : 'transparent',
+                border: 'none', borderRadius: 6,
+                padding: '8px 10px', cursor: 'pointer',
+                textAlign: 'left', width: '100%',
+                transition: 'background 0.12s',
+              }}
+              onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--dl-border)'; }}
+              onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}
+            >
+              <div style={{
+                fontFamily: mono,
+                fontSize: 11, fontWeight: isActive ? 600 : 400,
+                letterSpacing: '0.04em',
+                color: isActive ? accent : 'var(--dl-highlight)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{title}</div>
+              {n.updated_at && (
+                <div style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', marginTop: 2, letterSpacing: '0.02em' }}>
+                  {fmtDate(n.updated_at.split('T')[0])}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0, paddingLeft: 16 }}>
+        {images.length > 0 && <NotePhotos images={images} defaultMode={photoMode}/>}
+        <div className="note-content"
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(active.content || '') }}
+        />
+        {active.updated_at && (
+          <div style={s.datestamp}>{fmtDate(active.updated_at.split('T')[0])}</div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 // ── Main Page ───────────────────────────────────────────────────────────────
 
 export default function SharedProjectPage() {
@@ -243,20 +337,7 @@ export default function SharedProjectPage() {
           <div style={{...s.projectLabel, color: accent}}>{project.name}</div>
         </header>
 
-        {hasNotes && notes.map((n, i) => {
-          const images = extractImages(n.content);
-          return (
-            <section key={i} style={s.noteSection}>
-              {images.length > 0 && <NotePhotos images={images} defaultMode={photoMode}/>}
-              <div className="note-content"
-                dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.content || '') }}
-              />
-              {n.updated_at && (
-                <div style={s.datestamp}>{fmtDate(n.updated_at.split('T')[0])}</div>
-              )}
-            </section>
-          );
-        })}
+        {hasNotes && <NotesSection notes={notes} accent={accent} photoMode={photoMode} />}
 
         {hasJournal && (
           <section style={s.section}>
