@@ -172,6 +172,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
     }}>
       <div style={{ position: 'relative' }}>
         <DayLabEditor
+          key={date}
           taskList
           value={htmlValue}
           onUpdate={html => setValue(html)}

@@ -291,6 +291,7 @@ export function JournalEditor({date,userId,token}) {
         <DropZone uploading={uploading} />
       ) : (
         <DayLabEditor
+          key={date}
           value={value || ''}
           onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
           onUpdate={html => markDirty(html)}
