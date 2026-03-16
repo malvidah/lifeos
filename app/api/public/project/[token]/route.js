@@ -23,25 +23,32 @@ export async function GET(_req, { params }) {
   const { user_id, name, color } = project;
   const tagFilter = [name];
 
-  // Fetch journal entries and tasks that belong to this project
-  const [journalR, tasksR] = await Promise.all([
+  // Fetch journal entries, tasks, and notes that belong to this project
+  const [journalR, tasksR, notesR] = await Promise.all([
     sb.from('journal_blocks')
-      .select('date, type, content, images')
+      .select('date, content')
       .eq('user_id', user_id)
       .overlaps('project_tags', tagFilter)
       .order('date', { ascending: false })
       .limit(200),
     sb.from('tasks')
-      .select('date, title, status, priority')
+      .select('date, text, done')
       .eq('user_id', user_id)
       .overlaps('project_tags', tagFilter)
       .order('date', { ascending: false })
       .limit(200),
+    sb.from('notes')
+      .select('title, content, updated_at')
+      .eq('user_id', user_id)
+      .overlaps('project_tags', tagFilter)
+      .order('updated_at', { ascending: false })
+      .limit(50),
   ]);
 
   return Response.json({
     project: { name, color },
     journalEntries: journalR.data ?? [],
     taskEntries: tasksR.data ?? [],
+    notes: notesR.data ?? [],
   });
 }
