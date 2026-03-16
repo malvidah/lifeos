@@ -84,7 +84,14 @@ const NoteLinkNode = Node.create({
 // ImageBlock: stored as [img:url], rendered as block image atom node.
 const ImageBlock = Node.create({
   name: 'imageBlock', group: 'block', atom: true, selectable: true, draggable: false,
-  addAttributes() { return { src: { default: null } }; },
+  addAttributes() {
+    return {
+      src: {
+        default: null,
+        parseHTML: el => el.getAttribute('data-imageblock'),
+      },
+    };
+  },
   parseHTML() { return [{ tag: 'div[data-imageblock]' }]; },
   renderHTML({ node }) {
     return ['div', { 'data-imageblock': node.attrs.src, style: 'margin:4px 0;line-height:0' },
