@@ -68,9 +68,16 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
 
   const patch = {};
   if (content !== undefined) {
-    patch.content      = content;
-    patch.title        = extractTitle(content);
-    patch.project_tags = extractProjectTags(content);
+    patch.content = content;
+    patch.title   = extractTitle(content);
+
+    // Merge new content tags with existing tags so the note doesn't lose
+    // its project association when the user edits without a {project} chip.
+    const contentTags = extractProjectTags(content);
+    const { data: existing } = await supabase
+      .from('notes').select('project_tags').eq('id', id).eq('user_id', user.id).maybeSingle();
+    const existingTags = existing?.project_tags ?? [];
+    patch.project_tags = [...new Set([...existingTags, ...contentTags])];
   }
 
   const { data, error } = await supabase
