@@ -50,16 +50,16 @@ function textOnly(html) {
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
 }
 
-// ── Photo Strip + Slideshow ─────────────────────────────────────────────────
+// ── Photo Strip + Slideshow (matches app style) ─────────────────────────────
 
-function PhotoStrip({ images, onSelect }) {
+function PubPhotoStrip({ images, onSelect }) {
   if (!images.length) return null;
   return (
-    <div style={{display:'flex',gap:6,overflowX:'auto',padding:'8px 0 12px',scrollbarWidth:'none'}}>
+    <div style={{display:'flex',gap:4,overflowX:'auto',marginBottom:12,borderRadius:10,scrollbarWidth:'none',WebkitOverflowScrolling:'touch',userSelect:'none'}}>
       {images.map((src, i) => (
         <div key={i} onClick={() => onSelect(i)} style={{
-          width:80, height:80, borderRadius:8, overflow:'hidden', flexShrink:0, cursor:'pointer',
-          border:'1px solid var(--dl-border)',
+          width:140, height:140, borderRadius:10, overflow:'hidden', flexShrink:0, cursor:'pointer',
+          background:'var(--dl-well)',
         }}>
           <img src={src} alt="" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}
             onError={e => { e.target.style.display='none'; }}/>
@@ -69,60 +69,89 @@ function PhotoStrip({ images, onSelect }) {
   );
 }
 
-function Slideshow({ images, index, onClose, onPrev, onNext }) {
+function PubSlideshow({ images, index, onClose }) {
+  const [idx, setIdx] = useState(index);
+  const prev = () => setIdx(i => (i - 1 + images.length) % images.length);
+  const next = () => setIdx(i => (i + 1) % images.length);
+  const mono = "'SF Mono','Fira Code',ui-monospace,monospace";
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'ArrowLeft') prev();
+      else if (e.key === 'ArrowRight') next();
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
   return (
-    <div style={{position:'relative',background:'var(--dl-well)',borderRadius:12,overflow:'hidden',marginBottom:12}}>
-      <div style={{aspectRatio:'4/3',display:'flex',alignItems:'center',justifyContent:'center'}}>
-        <img src={images[index]} alt="" style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain',display:'block'}}
-          onError={e => { e.target.alt='Image not available'; }}/>
-      </div>
-      {/* Navigation */}
+    <div style={{marginBottom:12,position:'relative',borderRadius:10,overflow:'hidden',background:'var(--dl-well)'}}>
+      <img src={images[idx]} alt="" style={{width:'100%',aspectRatio:'4/3',objectFit:'contain',display:'block'}}
+        onError={e => { e.target.alt='Image not available'; }}/>
+
+      {/* Left chevron */}
       {images.length > 1 && (
-        <>
-          <button onClick={onPrev} style={navBtn('left')}>&#8249;</button>
-          <button onClick={onNext} style={navBtn('right')}>&#8250;</button>
-        </>
+        <div onClick={prev} style={{
+          position:'absolute',left:0,top:0,bottom:0,width:48,
+          display:'flex',alignItems:'center',justifyContent:'center',
+          cursor:'pointer',color:'rgba(255,255,255,0.5)',
+        }}
+          onMouseEnter={e => e.currentTarget.style.color='#fff'}
+          onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.5)'}
+        ><span style={{fontSize:22,fontFamily:mono,textShadow:'0 1px 6px rgba(0,0,0,0.5)'}}>‹</span></div>
       )}
-      <button onClick={onClose} style={{
-        position:'absolute',top:8,right:8,background:'rgba(0,0,0,0.5)',color:'#fff',
-        border:'none',borderRadius:'50%',width:28,height:28,cursor:'pointer',fontSize:16,
-        display:'flex',alignItems:'center',justifyContent:'center',
-      }}>&times;</button>
+      {/* Right chevron */}
       {images.length > 1 && (
-        <div style={{textAlign:'center',padding:'6px 0',fontSize:12,color:'var(--dl-middle)',
-          fontFamily:"'SF Mono','Fira Code',ui-monospace,monospace"}}>
-          {index + 1} / {images.length}
+        <div onClick={next} style={{
+          position:'absolute',right:0,top:0,bottom:0,width:48,
+          display:'flex',alignItems:'center',justifyContent:'center',
+          cursor:'pointer',color:'rgba(255,255,255,0.5)',
+        }}
+          onMouseEnter={e => e.currentTarget.style.color='#fff'}
+          onMouseLeave={e => e.currentTarget.style.color='rgba(255,255,255,0.5)'}
+        ><span style={{fontSize:22,fontFamily:mono,textShadow:'0 1px 6px rgba(0,0,0,0.5)'}}>›</span></div>
+      )}
+      {/* Close X */}
+      <button onClick={onClose} style={{
+        position:'absolute',top:8,right:8,zIndex:2,
+        background:'rgba(0,0,0,0.4)',border:'none',borderRadius:100,
+        width:28,height:28,cursor:'pointer',
+        display:'flex',alignItems:'center',justifyContent:'center',
+        color:'rgba(255,255,255,0.6)',
+      }}
+        onMouseEnter={e=>{e.currentTarget.style.color='#fff';e.currentTarget.style.background='rgba(0,0,0,0.6)';}}
+        onMouseLeave={e=>{e.currentTarget.style.color='rgba(255,255,255,0.6)';e.currentTarget.style.background='rgba(0,0,0,0.4)';}}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      {/* Dots */}
+      {images.length > 1 && (
+        <div style={{position:'absolute',bottom:8,left:'50%',transform:'translateX(-50%)',display:'flex',gap:6}}>
+          {images.map((_, i) => (
+            <div key={i} onClick={() => setIdx(i)} style={{
+              width:6,height:6,borderRadius:'50%',cursor:'pointer',
+              background:i===idx?'#fff':'rgba(255,255,255,0.35)',
+            }}/>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-function navBtn(side) {
-  return {
-    position:'absolute', top:'50%', [side]:8, transform:'translateY(-50%)',
-    background:'rgba(0,0,0,0.4)', color:'#fff', border:'none', borderRadius:'50%',
-    width:32, height:32, cursor:'pointer', fontSize:20, display:'flex',
-    alignItems:'center', justifyContent:'center',
-  };
-}
-
 // ── Photo section for a note ────────────────────────────────────────────────
-function NotePhotos({ images, defaultMode = 'strip' }) {
+function NotePhotos({ images, defaultMode = 'slideshow' }) {
   const [mode, setMode] = useState(defaultMode);
   const [idx, setIdx] = useState(0);
   if (!images.length) return null;
 
   if (mode === 'slideshow') {
-    return (
-      <Slideshow images={images} index={idx}
-        onClose={() => setMode('strip')}
-        onPrev={() => setIdx((idx - 1 + images.length) % images.length)}
-        onNext={() => setIdx((idx + 1) % images.length)}
-      />
-    );
+    return <PubSlideshow images={images} index={idx} onClose={() => setMode('strip')} />;
   }
-  return <PhotoStrip images={images} onSelect={i => { setIdx(i); setMode('slideshow'); }}/>;
+  return <PubPhotoStrip images={images} onSelect={i => { setIdx(i); setMode('slideshow'); }}/>;
 }
 
 // ── Main Page ───────────────────────────────────────────────────────────────
