@@ -63,7 +63,7 @@ function PhotoStrip({ images, onViewImage }) {
       onMouseLeave={onMouseUp}
       style={{
         display: 'flex', gap: 4, overflowX: 'auto', overflowY: 'hidden',
-        marginBottom: 6, borderRadius: 10,
+        marginBottom: 12, borderRadius: 10,
         scrollbarWidth: 'none', msOverflowStyle: 'none',
         WebkitOverflowScrolling: 'touch',
         cursor: images.length > 1 ? 'grab' : 'pointer',
@@ -121,7 +121,7 @@ function Slideshow({ images, index, onClose }) {
   };
 
   return (
-    <div style={{ marginBottom: 6, position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'grab', userSelect: 'none' }}
+    <div style={{ marginBottom: 12, position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'grab', userSelect: 'none' }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
