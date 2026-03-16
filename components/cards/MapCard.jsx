@@ -365,34 +365,28 @@ function CelMoon({ position, visible }) {
   );
 }
 
-// ── Stars (night only) ───────────────────────────────────────────────────────
+// ── Stars (night only) — single Points geometry instead of 60 meshes ─────────
 function Stars({ visible }) {
-  const positions = useMemo(() => {
-    const pts = [];
+  const geo = useMemo(() => {
+    const positions = new Float32Array(60 * 3);
     for (let i = 0; i < 60; i++) {
       const theta = Math.random() * Math.PI * 2;
-      const phi = Math.random() * Math.PI * 0.4 + 0.2; // upper hemisphere
+      const phi = Math.random() * Math.PI * 0.4 + 0.2;
       const r = 18 + Math.random() * 4;
-      pts.push([
-        Math.sin(phi) * Math.cos(theta) * r,
-        Math.cos(phi) * r,
-        Math.sin(phi) * Math.sin(theta) * r,
-        0.03 + Math.random() * 0.05, // size
-      ]);
+      positions[i * 3]     = Math.sin(phi) * Math.cos(theta) * r;
+      positions[i * 3 + 1] = Math.cos(phi) * r;
+      positions[i * 3 + 2] = Math.sin(phi) * Math.sin(theta) * r;
     }
-    return pts;
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    return g;
   }, []);
 
   if (!visible) return null;
   return (
-    <group>
-      {positions.map((s, i) => (
-        <mesh key={i} position={[s[0], s[1], s[2]]}>
-          <sphereGeometry args={[s[3], 4, 3]} />
-          <meshBasicMaterial color="#E8E0F0" />
-        </mesh>
-      ))}
-    </group>
+    <points geometry={geo}>
+      <pointsMaterial color="#E8E0F0" size={0.15} sizeAttenuation />
+    </points>
   );
 }
 
@@ -484,7 +478,8 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
       background: `linear-gradient(180deg, ${sky.skyTop} 0%, ${sky.skyBot} 100%)`,
     }}>
       <Canvas
-        shadows
+        shadows={{ type: THREE.PCFShadowMap }}
+        dpr={[1, 1.5]}
         camera={{ position: [camDist * 0.66, camDist * 0.38, camDist * 0.66], fov: 30, near: 0.1, far: 100 }}
         style={{ width: '100%', height: '100%' }}
       >
