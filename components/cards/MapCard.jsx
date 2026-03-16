@@ -420,85 +420,72 @@ function Terrain({ projects, radius, vitality }) {
   );
 }
 
-// ── Water — volumetric body with surface waves + waterfalls ───────────────────
+// ── Water — flat surface + waterfall strips off the edge ──────────────────────
 function Water({ radius, vitality = 50 }) {
-  const surfaceRef = useRef();
   const vt = Math.max(0, Math.min(1, vitality / 100));
-  const waterY = -0.15 + vt * 0.23;
-  const waterDepth = 0.4 + vt * 0.3; // deeper when healthy
+  const waterY = -0.05 + vt * 0.15; // slightly below terrain surface
+  const R = radius * 0.85;
 
-  const surfaceColor = useMemo(() => new THREE.Color().setRGB(
-    0.12 + (1 - vt) * 0.12, 0.32 + vt * 0.12, 0.42 + vt * 0.18
-  ), [vt]);
-  const sideColor = useMemo(() => new THREE.Color().setRGB(
-    0.08 + (1 - vt) * 0.10, 0.22 + vt * 0.10, 0.35 + vt * 0.15
+  const waterColor = useMemo(() => new THREE.Color().setRGB(
+    0.15 + (1 - vt) * 0.10, 0.35 + vt * 0.10, 0.50 + vt * 0.15
   ), [vt]);
 
-  // Animated wave displacement on surface
-  useFrame(({ clock }) => {
-    const mesh = surfaceRef.current;
-    if (!mesh) return;
-    const pos = mesh.geometry.attributes.position;
-    const t = clock.getElapsedTime() * 0.8;
-    for (let i = 0; i < pos.count; i++) {
-      const x = pos.getX(i), z = pos.getZ(i);
-      const wave = Math.sin(x * 2.5 + t) * 0.015
-                 + Math.sin(z * 3 + t * 1.3) * 0.01
-                 + Math.sin((x + z) * 4 + t * 0.7) * 0.008;
-      pos.setY(i, wave);
-    }
-    pos.needsUpdate = true;
-  });
-
-  // Build waterfall ribbon positions around the island edge
-  const waterfalls = useMemo(() => {
-    const falls = [];
+  // Waterfall geometry: build a custom mesh with strips hanging off the edge
+  const fallGeo = useMemo(() => {
     const noise = createNoise2D();
-    const count = 4 + Math.floor(vt * 4); // more waterfalls when healthier
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2 + noise(i * 3, 0) * 0.5;
-      const r = radius * 0.82;
-      const x = Math.cos(angle) * r;
-      const z = Math.sin(angle) * r;
-      const width = 0.08 + noise(i * 5, 1) * 0.06;
-      falls.push({ x, z, angle, width });
+    const fallCount = 3 + Math.floor(vt * 5); // 3-8 waterfalls
+    const verts = [];
+    const indices = [];
+    const uvs = [];
+    let vi = 0;
+
+    for (let f = 0; f < fallCount; f++) {
+      const angle = (f / fallCount) * Math.PI * 2 + noise(f * 7, 0) * 0.4;
+      const width = 0.12 + noise(f * 3, 1) * 0.08; // 0.04 to 0.20
+      const fallLen = radius * 0.5 + noise(f * 5, 2) * radius * 0.2;
+
+      // Two edges of the waterfall strip at the island rim
+      const halfW = width / 2;
+      const perpX = -Math.sin(angle), perpZ = Math.cos(angle);
+      const edgeX = Math.cos(angle) * R, edgeZ = Math.sin(angle) * R;
+
+      // Top-left, top-right (at water surface level)
+      verts.push(edgeX + perpX * halfW, waterY, edgeZ + perpZ * halfW);
+      verts.push(edgeX - perpX * halfW, waterY, edgeZ - perpZ * halfW);
+      uvs.push(0, 0, 1, 0);
+
+      // Bottom-left, bottom-right (hanging down)
+      verts.push(edgeX + perpX * halfW * 0.3, waterY - fallLen, edgeZ + perpZ * halfW * 0.3);
+      verts.push(edgeX - perpX * halfW * 0.3, waterY - fallLen, edgeZ - perpZ * halfW * 0.3);
+      uvs.push(0, 1, 1, 1);
+
+      // Two triangles for this strip
+      indices.push(vi, vi + 2, vi + 1, vi + 1, vi + 2, vi + 3);
+      vi += 4;
     }
-    return falls;
-  }, [radius, vt]);
 
-  const R = radius * 0.88;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    return geo;
+  }, [radius, vt, waterY]);
+
   return (
-    <group position={[0, waterY, 0]}>
-      {/* Surface — animated waves */}
-      <mesh ref={surfaceRef} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <circleGeometry args={[R, 48, undefined, undefined]} />
-        <meshToonMaterial color={surfaceColor} gradientMap={toonGrad}
-          transparent opacity={0.6} />
+    <group>
+      {/* Flat water surface */}
+      <mesh position={[0, waterY, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[R, 48]} />
+        <meshToonMaterial color={waterColor} gradientMap={toonGrad}
+          transparent opacity={0.55} />
       </mesh>
 
-      {/* Volumetric body — cylinder under the surface */}
-      <mesh position={[0, -waterDepth / 2, 0]}>
-        <cylinderGeometry args={[R, R * 0.95, waterDepth, 32, 1, true]} />
-        <meshToonMaterial color={sideColor} gradientMap={toonGrad}
-          transparent opacity={0.45} side={THREE.DoubleSide} />
+      {/* Waterfall strips — taper from wide at rim to narrow below */}
+      <mesh geometry={fallGeo}>
+        <meshBasicMaterial color={waterColor}
+          transparent opacity={0.4} side={THREE.DoubleSide} />
       </mesh>
-
-      {/* Bottom cap */}
-      <mesh position={[0, -waterDepth, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[R * 0.95, 32]} />
-        <meshToonMaterial color={sideColor} gradientMap={toonGrad}
-          transparent opacity={0.35} />
-      </mesh>
-
-      {/* Waterfalls — thin ribbons cascading off the edge */}
-      {waterfalls.map((f, i) => (
-        <mesh key={i} position={[f.x, -waterDepth * 0.5, f.z]}
-          rotation={[0, -f.angle + Math.PI / 2, 0]}>
-          <planeGeometry args={[f.width, waterDepth * 1.5, 1, 6]} />
-          <meshBasicMaterial color={surfaceColor}
-            transparent opacity={0.35} side={THREE.DoubleSide} />
-        </mesh>
-      ))}
     </group>
   );
 }
