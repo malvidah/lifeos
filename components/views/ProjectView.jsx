@@ -13,7 +13,7 @@ import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primit
 import { DayLabEditor } from "../Editor.jsx";
 import { useTheme } from "@/lib/theme";
 import { TaskFilterBtns, clientParseTasks, tasksToHtml, injectTaskListStyles } from "../widgets/Tasks.jsx";
-import { AddJournalLine, extractImages, PhotoStrip, Slideshow, DropZone } from "../widgets/JournalEditor.jsx";
+import { AddJournalLine, extractImages, stripImageChips, PhotoStrip, Slideshow, DropZone } from "../widgets/JournalEditor.jsx";
 import { uploadImageFile, deleteImageFile } from "@/lib/images";
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";
 
@@ -401,7 +401,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     if (!activeNote) return;
     let content = activeNote.content || '';
     // Remove all image references
-    content = content.replace(/<span\s+data-image-chip="[^"]*"[^>]*>[^<]*<\/span>\s*/g, '');
+    content = stripImageChips(content);
     content = content.replace(/<div\s+data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '');
     content = content.replace(/\[img:https?:\/\/[^\]]+\]\n?/g, '');
     content = content.replace(/<p>\s*<\/p>/g, '');

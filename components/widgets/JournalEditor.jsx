@@ -8,6 +8,37 @@ import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/image
 import { api } from "@/lib/api";
 import { DayLabEditor } from "../Editor.jsx";
 
+// Strip image chip spans (which may contain nested child spans) from HTML.
+// Uses balanced-tag counting since the chip's renderHTML creates nested spans.
+export function stripImageChips(html) {
+  if (!html) return '';
+  let result = '', i = 0;
+  while (i < html.length) {
+    if (html.slice(i, i + 5) === '<span') {
+      const tagEnd = html.indexOf('>', i);
+      if (tagEnd === -1) break;
+      const tag = html.slice(i, tagEnd + 1);
+      if (tag.includes('data-image-chip=')) {
+        // Found a chip — skip it by counting nested span open/close
+        let depth = 1, j = tagEnd + 1;
+        while (j < html.length && depth > 0) {
+          if (html.slice(j, j + 5) === '<span') {
+            depth++;
+            const e = html.indexOf('>', j);
+            j = e >= 0 ? e + 1 : j + 1;
+          } else if (html.slice(j, j + 7) === '</span>') {
+            depth--; j += 7;
+          } else { j++; }
+        }
+        while (j < html.length && html[j] === ' ') j++;
+        i = j; continue;
+      }
+    }
+    result += html[i]; i++;
+  }
+  return result;
+}
+
 // Extract image URLs from journal/note content
 export function extractImages(content) {
   if (!content) return [];
@@ -321,8 +352,8 @@ export function JournalEditor({date,userId,token}) {
     setValue(prev => {
       if (!prev) return prev;
       let content = prev;
-      // Remove all image references (chips, imageblocks, [img:] tags)
-      content = content.replace(/<span\s+data-image-chip="[^"]*"[^>]*>[^<]*<\/span>\s*/g, '');
+      // Remove all image references (chips with nested spans, imageblocks, [img:] tags)
+      content = stripImageChips(content);
       content = content.replace(/<div\s+data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '');
       content = content.replace(/\[img:https?:\/\/[^\]]+\]\n?/g, '');
       // Clean up empty paragraphs left behind
