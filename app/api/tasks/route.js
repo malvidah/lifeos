@@ -76,11 +76,13 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .order('position', { ascending: true });
   if (e3) throw e3;
 
-  // Inject data-completed-date into each task's <li> for CSS filtering
+  // Inject data attributes into each task's <li> for client-side tracking
   const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? [])];
   for (const t of allTasks) {
-    if (t.completed_at && t.html) {
-      t.html = t.html.replace(/^<li\b/, `<li data-completed-date="${t.completed_at}"`);
+    if (t.html) {
+      let attrs = ` data-task-id="${t.id}" data-origin-date="${t.date}"`;
+      if (t.completed_at) attrs += ` data-completed-date="${t.completed_at}"`;
+      t.html = t.html.replace(/^<li\b/, `<li${attrs}`);
     }
   }
 
@@ -118,28 +120,72 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return arr?.length ? arr.shift() : null;
   }
 
-  // Atomic replace via RPC — DELETE+INSERT in one Postgres transaction.
-  // Prevents data loss if the server crashes between the two operations.
-  const rows = parsed.map(t => {
-    const prev = matchExisting(t.text);
-    return {
-      position:     t.position,
-      html:         t.html,
-      text:         t.text,
-      done:         t.done,
-      due_date:     t.due_date ?? prev?.due_date ?? null,
-      completed_at: t.done ? (prev?.completed_at ?? today) : null,
-      project_tags: t.project_tags ?? [],
-      note_tags:    t.note_tags ?? [],
-    };
-  });
+  // Separate tasks into own-date tasks vs due-date tasks from other dates
+  const ownRows = [];
+  const foreignTasks = []; // tasks with origin_date !== date (due-date tasks from other days)
+  for (const t of parsed) {
+    if (t.origin_date && t.origin_date !== date) {
+      foreignTasks.push(t);
+    } else {
+      ownRows.push(t);
+    }
+  }
 
-  const { error: rpcErr } = await supabase.rpc('batch_replace_tasks', {
-    p_user_id: user.id,
-    p_date:    date,
-    p_tasks:   rows,
-  });
-  if (rpcErr) throw rpcErr;
+  // Full-replace own-date tasks
+  const { error: delErr } = await supabase
+    .from('tasks').delete()
+    .eq('user_id', user.id).eq('date', date);
+  if (delErr) throw delErr;
+
+  if (ownRows.length > 0) {
+    const rows = ownRows.map(t => {
+      const prev = matchExisting(t.text);
+      return {
+        user_id:      user.id,
+        date,
+        position:     t.position,
+        html:         t.html,
+        text:         t.text,
+        done:         t.done,
+        due_date:     t.due_date ?? prev?.due_date ?? null,
+        completed_at: t.done ? (prev?.completed_at ?? today) : null,
+        project_tags: t.project_tags,
+        note_tags:    t.note_tags,
+      };
+    });
+    const { error: insErr } = await supabase.from('tasks').insert(rows);
+    if (insErr) throw insErr;
+  }
+
+  // Update foreign (due-date) tasks in place — toggle done, update text
+  for (const t of foreignTasks) {
+    if (!t.task_id) continue;
+    const patch = { done: t.done, html: t.html, text: t.text };
+    if (t.done) patch.completed_at = today;
+    else patch.completed_at = null;
+    await supabase.from('tasks').update(patch)
+      .eq('id', t.task_id).eq('user_id', user.id);
+  }
+
+  // Delete foreign tasks that were in the editor but got removed by the user
+  // (loaded as dueTasks but absent from the saved HTML)
+  const { data: loadedDue } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('user_id', user.id)
+    .not('due_date', 'is', null)
+    .lte('date', date)
+    .eq('done', false)
+    .neq('date', date);
+  const savedForeignIds = new Set(foreignTasks.map(t => t.task_id).filter(Boolean));
+  const removedIds = (loadedDue ?? [])
+    .map(t => t.id)
+    .filter(id => !savedForeignIds.has(id));
+  if (removedIds.length > 0) {
+    await supabase.from('tasks').delete()
+      .eq('user_id', user.id)
+      .in('id', removedIds);
+  }
 
   return Response.json({ ok: true, tasks: parsed.length });
 });
