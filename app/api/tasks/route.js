@@ -51,12 +51,13 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .order('position', { ascending: true });
   if (e1) throw e1;
 
-  // 2. Open tasks from other dates that are due on or before today (persist until done)
+  // 2. Open tasks with a due date, created on or before today (show every day until done)
   const { data: dueTasks, error: e2 } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
-    .lte('due_date', date)
+    .not('due_date', 'is', null)
+    .lte('date', date)
     .eq('done', false)
     .neq('date', date)  // exclude tasks already captured above
     .order('date', { ascending: true })
