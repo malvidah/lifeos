@@ -136,7 +136,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   // WITH sparklines in one fast DB read. For today it computes fresh.
   // One call, one setScores — no flicker, no lost sparklines.
   const [scores, setScores] = useState(null);
-  const scoreFetchedForDate = useRef(null);
+  const scoredKeyRef = useRef(null); // tracks date+fingerprint to avoid redundant fetches
 
   const scoreFingerprint = loaded
     ? [h.sleepHrs,h.sleepEff,h.hrv,h.rhr,h.steps,h.activeMinutes,h.stressMins,h.recoveryMins].join(':')
@@ -145,11 +145,10 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   useEffect(()=>{
     if(!token||!loaded||scoreFingerprint===null) return;
     if(date > todayKey()) return;
-    // For past dates: fetch once per date (cached on server, includes sparklines).
-    // For today: refetch when fingerprint changes (live data updates).
-    const isToday = date === todayKey();
-    if (scoreFetchedForDate.current === date && !isToday) return;
-    scoreFetchedForDate.current = date;
+    // Only refetch if date OR data changed
+    const key = `${date}:${scoreFingerprint}`;
+    if (scoredKeyRef.current === key) return;
+    scoredKeyRef.current = key;
     let cancelled = false;
     const tzOffset = new Date().getTimezoneOffset() * -1;
     const p = new URLSearchParams({ date, tzOffset });
