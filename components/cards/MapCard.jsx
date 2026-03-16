@@ -515,6 +515,10 @@ function Scene({ projects, radius, onSelect, hovered, setHovered, hour }) {
         minPolarAngle={Math.PI / 8}
         target={[0, peakY, 0]}
         autoRotate autoRotateSpeed={0.3}
+        onChange={e => {
+          const dist = e?.target?.object?.position?.length();
+          if (dist) localStorage.setItem('daylab:map-zoom', dist.toFixed(1));
+        }}
       />
       <EdgeDetection />
     </>
@@ -531,7 +535,12 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
   const radius = useMemo(() => islandRadius(projects.length), [projects.length]);
 
-  const camDist = 25;
+  // Restore last zoom level from localStorage, default to 25
+  const camDist = useMemo(() => {
+    if (typeof window === 'undefined') return 25;
+    const saved = localStorage.getItem('daylab:map-zoom');
+    return saved ? Math.max(6, Math.min(30, parseFloat(saved))) : 25;
+  }, []);
 
   if (!projects.length) {
     return (
