@@ -6,65 +6,75 @@ import {
   fetchWeather,
 } from "@/lib/weather";
 
-// ─── WeatherBackground ──────────────────────────────────────────────────────
-// Two stacked divs cross-fade via opacity (CSS can't transition gradients).
-// Current gradient is always fully visible; previous fades out behind it.
+// Compute a CSS gradient string from weather condition + current time
+function makeBg(condition, lat, lng) {
+  const phase = getDayPhase(new Date(), lat, lng);
+  const [top, bottom] = getWeatherGradient(condition || 'clear', phase);
+  return `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`;
+}
 
 export default function WeatherBackground({ date }) {
   const locRef = useRef(getCachedLocation() || DEFAULT_LOCATION);
-  const [bg, setBg] = useState(null);       // current gradient string
-  const [prevBg, setPrevBg] = useState(null); // previous (fading out)
-  const conditionRef = useRef('clear');
+  const [bg, setBg] = useState(() => makeBg('clear', locRef.current.lat, locRef.current.lng));
+  const [fadingBg, setFadingBg] = useState(null);
+  const condRef = useRef('clear');
+  const fadeTimer = useRef(null);
 
-  // Fetch user location once
+  // Fetch location once
   useEffect(() => {
-    getUserLocation().then(loc => { if (loc) locRef.current = loc; });
+    getUserLocation().then(loc => {
+      if (loc) {
+        locRef.current = loc;
+        setBg(makeBg(condRef.current, loc.lat, loc.lng));
+      }
+    });
   }, []);
 
-  // Compute gradient from current time + weather condition
-  function computeBg(cond) {
-    const loc = locRef.current;
-    const phase = getDayPhase(new Date(), loc.lat, loc.lng);
-    const [top, bottom] = getWeatherGradient(cond || 'clear', phase);
-    return `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`;
-  }
-
-  // When date changes, fetch weather and update gradient
+  // When date changes → fetch weather → update gradient with cross-fade
   useEffect(() => {
+    let cancelled = false;
     const loc = locRef.current;
-    fetchWeather(date, loc.lat, loc.lng).then(w => {
-      conditionRef.current = w?.condition || 'clear';
-      const next = computeBg(conditionRef.current);
-      setBg(prev => {
-        if (prev) setPrevBg(prev); // stash old gradient for cross-fade
-        return next;
+
+    fetchWeather(date, loc.lat, loc.lng)
+      .then(w => {
+        if (cancelled) return;
+        const cond = w?.condition || 'clear';
+        condRef.current = cond;
+        const next = makeBg(cond, loc.lat, loc.lng);
+
+        // Cross-fade: stash current bg as fading layer, set new bg
+        setBg(prev => {
+          setFadingBg(prev);
+          return next;
+        });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // No weather data — use clear with current time
+        const next = makeBg('clear', loc.lat, loc.lng);
+        setBg(prev => { setFadingBg(prev); return next; });
       });
-    });
-  }, [date]); // eslint-disable-line
 
-  // Live tick — update gradient every 60s for time-of-day shifts
+    return () => { cancelled = true; };
+  }, [date]);
+
+  // Live tick — update for time-of-day shifts every 60s
   useEffect(() => {
-    // Initial render
-    setBg(computeBg(conditionRef.current));
-
     const id = setInterval(() => {
-      const next = computeBg(conditionRef.current);
-      setBg(prev => {
-        if (prev && prev !== next) setPrevBg(prev);
-        return next;
-      });
+      const loc = locRef.current;
+      const next = makeBg(condRef.current, loc.lat, loc.lng);
+      setBg(next); // no cross-fade for subtle time shifts
     }, 60000);
     return () => clearInterval(id);
-  }, []); // eslint-disable-line
+  }, []);
 
-  // Clear prevBg after transition completes (2s)
+  // Clear fading layer after animation completes
   useEffect(() => {
-    if (!prevBg) return;
-    const id = setTimeout(() => setPrevBg(null), 2500);
-    return () => clearTimeout(id);
-  }, [prevBg]);
-
-  if (!bg) return null;
+    if (!fadingBg) return;
+    clearTimeout(fadeTimer.current);
+    fadeTimer.current = setTimeout(() => setFadingBg(null), 2200);
+    return () => clearTimeout(fadeTimer.current);
+  }, [fadingBg]);
 
   const layer = {
     position: 'absolute',
@@ -74,11 +84,15 @@ export default function WeatherBackground({ date }) {
 
   return (
     <div aria-hidden="true" style={{position:'absolute',inset:0,zIndex:0,pointerEvents:'none',overflow:'hidden'}}>
-      {/* New gradient — sits behind, always fully visible */}
+      {/* New gradient — always at bottom, fully visible */}
       <div style={{...layer, background: bg}}/>
-      {/* Previous gradient — sits on top, fades out to reveal new one */}
-      {prevBg && (
-        <div key={prevBg} style={{...layer, background: prevBg, animation: 'weatherFadeOut 2s ease forwards'}}/>
+      {/* Old gradient — fades out on top to reveal new one */}
+      {fadingBg && (
+        <div key={fadingBg} style={{
+          ...layer,
+          background: fadingBg,
+          animation: 'weatherFadeOut 2s ease forwards',
+        }}/>
       )}
       <style>{`@keyframes weatherFadeOut { from { opacity: 1; } to { opacity: 0; } }`}</style>
     </div>
