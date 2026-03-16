@@ -1,6 +1,7 @@
 import { withAuth } from '../_lib/auth.js';
 import { parseTaskBlocks, tasksToHtml } from '@/lib/parseBlocks.js';
 import { isValidDate } from '@/lib/validate.js';
+import { parseRecurrence } from '@/lib/recurrence.js';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -42,12 +43,13 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   // ── Day view ──────────────────────────────────────────────────────────────
   if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) or project required' }, { status: 400 });
 
-  // 1. Tasks written on this date
+  // 1. Tasks written on this date (exclude templates — they're managed by /api/habits)
   const { data: ownTasks, error: e1 } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
     .eq('date', date)
+    .is('is_template', false)
     .order('position', { ascending: true });
   if (e1) throw e1;
 
@@ -131,14 +133,45 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  // Full-replace own-date tasks
+  // Full-replace own-date tasks (skip templates and recurring instances)
   const { error: delErr } = await supabase
     .from('tasks').delete()
-    .eq('user_id', user.id).eq('date', date);
+    .eq('user_id', user.id).eq('date', date)
+    .is('is_template', false)
+    .is('recurrence_parent_id', null);
   if (delErr) throw delErr;
 
-  if (ownRows.length > 0) {
-    const rows = ownRows.map(t => {
+  // Detect /d recurrence syntax in tasks and create habit templates
+  const templatesToCreate = [];
+  const filteredOwnRows = [];
+  for (const t of ownRows) {
+    const { cleanText, recurrence } = parseRecurrence(t.text, date);
+    if (recurrence && cleanText) {
+      // This task has /d syntax — create a template instead of a regular task
+      templatesToCreate.push({
+        user_id: user.id,
+        date,
+        text: cleanText,
+        html: t.html.replace(/\/d\s+[^<]*/gi, cleanText), // strip /d from HTML too
+        done: false,
+        is_template: true,
+        recurrence,
+        project_tags: t.project_tags ?? [],
+        note_tags: t.note_tags ?? [],
+        position: 0,
+      });
+    } else {
+      filteredOwnRows.push(t);
+    }
+  }
+
+  // Create any habit templates
+  if (templatesToCreate.length > 0) {
+    await supabase.from('tasks').insert(templatesToCreate);
+  }
+
+  if (filteredOwnRows.length > 0) {
+    const rows = filteredOwnRows.map(t => {
       const prev = matchExisting(t.text);
       return {
         user_id:      user.id,
