@@ -169,20 +169,25 @@ function buildUndersideGeo(radius, noise2D, edgeR) {
       const angle = (seg / SEGS) * Math.PI * 2;
 
       // Base radius from edge shape, scaled by taper
-      const r = edgeR(angle) * taper;
+      // First 2 rings extend slightly wider/higher to overlap with top surface
+      const overlap = ring < 2 ? 1.05 : 1.0;
+      const r = edgeR(angle) * taper * overlap;
 
       // Rock displacement proportional to current radius (shrinks with taper)
       const rock = noise2D(angle * 5 + t * 8, t * 6) * 0.08
                  + noise2D(angle * 11 + t * 13, t * 11) * 0.04;
       const finalR = r * (1 + rock);
 
-      // Vertical noise for jagged cliffs
-      const yN = noise2D(angle * 5 + 20, t * 4 + 20) * 0.25
+      // Vertical noise for jagged cliffs (skip first ring to keep it flush)
+      const yN = ring < 2 ? 0
+               : noise2D(angle * 5 + 20, t * 4 + 20) * 0.25
                + noise2D(angle * 11 + 40, t * 8) * 0.12;
 
       const x = Math.cos(angle) * finalR;
       const z = Math.sin(angle) * finalR;
-      verts.push(x, y + yN * t * 0.5, z);
+      // First ring pushed slightly above y=0 to overlap terrain edge
+      const yOffset = ring === 0 ? 0.15 : ring === 1 ? 0.05 : 0;
+      verts.push(x, y + yOffset + yN * t * 0.5, z);
 
       // Color: warm brown at top → dark charcoal at bottom
       const warmth = 1 - t;
