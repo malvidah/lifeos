@@ -109,7 +109,7 @@ function navBtn(side) {
 
 // ── Photo section for a note ────────────────────────────────────────────────
 function NotePhotos({ images }) {
-  const [mode, setMode] = useState('strip'); // 'strip' | 'slideshow'
+  const [mode, setMode] = useState('slideshow'); // default to carousel on public pages
   const [idx, setIdx] = useState(0);
   if (!images.length) return null;
 
