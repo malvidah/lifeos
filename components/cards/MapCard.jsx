@@ -28,7 +28,6 @@ const edgeFragmentFull = /* glsl */`
 uniform sampler2D normalTexture;
 uniform vec2 resolution;
 uniform float edgeStrength;
-uniform float depthThreshold;
 uniform float normalThreshold;
 
 vec3 getNormal(vec2 uv) {
@@ -49,24 +48,11 @@ float sobelNormal(vec2 uv, vec2 texel) {
   return length(gx) + length(gy);
 }
 
-void mainImage(const in vec4 inputColor, const in vec2 uv, const in float depth, out vec4 outputColor) {
+void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor) {
   vec2 texel = 1.0 / resolution;
-
-  // Depth-based edge detection using the scene depth
-  float dC = depth;
-  float dL = texture2D(inputBuffer, uv + vec2(-texel.x, 0.0)).a;
-  float dR = texture2D(inputBuffer, uv + vec2(texel.x, 0.0)).a;
-  float dT = texture2D(inputBuffer, uv + vec2(0.0, texel.y)).a;
-  float dB = texture2D(inputBuffer, uv + vec2(0.0, -texel.y)).a;
-  float depthEdge = abs(dL - dC) + abs(dR - dC) + abs(dT - dC) + abs(dB - dC);
-
-  // Normal-based edge detection
   float nEdge = sobelNormal(uv, texel);
-
-  float edge = smoothstep(0.001, 0.004, depthEdge) * 0.6
-             + smoothstep(normalThreshold, normalThreshold * 2.5, nEdge);
+  float edge = smoothstep(normalThreshold, normalThreshold * 2.5, nEdge);
   edge = clamp(edge, 0.0, 1.0) * edgeStrength;
-
   vec3 lineColor = vec3(0.08, 0.06, 0.04);
   outputColor = vec4(mix(inputColor.rgb, lineColor, edge), inputColor.a);
 }
