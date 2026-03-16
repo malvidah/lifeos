@@ -255,8 +255,8 @@ function Environment({ hour }) {
 
 // ── Scene ────────────────────────────────────────────────────────────────────
 function Scene({ projects, onSelect, hovered, setHovered, hour }) {
-  const avgHeight = projects.length
-    ? projects.reduce((s, p) => s + p.height, 0) / projects.length
+  const peakY = projects.length
+    ? projects.reduce((max, p) => Math.max(max, p.height), 0) * 0.85
     : 0.5;
   return (
     <>
@@ -269,7 +269,7 @@ function Scene({ projects, onSelect, hovered, setHovered, hour }) {
         minDistance={6} maxDistance={22}
         maxPolarAngle={Math.PI / 2.3}
         minPolarAngle={Math.PI / 8}
-        target={[0, avgHeight * 0.5, 0]}
+        target={[0, peakY, 0]}
         autoRotate autoRotateSpeed={0.3}
       />
     </>
