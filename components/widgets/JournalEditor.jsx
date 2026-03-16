@@ -88,7 +88,7 @@ function Slideshow({ images, index, onClose }) {
         touchStart.current = null;
       }}
     >
-      <img src={images[idx]} alt="" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'contain', display: 'block' }} />
+      <img src={images[idx]} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'contain', display: 'block' }} />
 
       {/* Left chevron */}
       {images.length > 1 && (
