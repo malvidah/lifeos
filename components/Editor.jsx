@@ -40,7 +40,7 @@ function injectEditorStyles() {
     .dl-hide-images .ProseMirror div[data-imageblock] { display: none; }
     .dl-editor .ProseMirror { counter-reset: imgchip; }
     .dl-img-chip-num::before { content: counter(imgchip); }
-    .dl-editor .ProseMirror table { border-collapse: collapse; width: 100%; margin: 8px 0; table-layout: fixed; }
+    .dl-editor .ProseMirror table { border-collapse: collapse; width: 100% !important; margin: 8px 0; table-layout: fixed; min-width: 100% !important; }
     .dl-editor .ProseMirror .tableWrapper { overflow-x: auto; margin: 8px 0; }
     .dl-editor .ProseMirror .column-resize-handle { position: absolute; right: -1px; top: 0; bottom: 0; width: 3px; background: var(--dl-accent); opacity: 0; pointer-events: none; cursor: col-resize; }
     .dl-editor .ProseMirror .resize-cursor { cursor: col-resize; }
