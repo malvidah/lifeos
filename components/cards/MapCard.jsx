@@ -533,7 +533,8 @@ function Water({ radius, vitality = 50 }) {
 function DepthLabel({ p, onSelect, isHov, setHovered }) {
   const htmlRef = useRef();
   const frameCount = useRef(0);
-  const pos = useMemo(() => new THREE.Vector3(p.x, p.height + 0.5, p.z), [p.x, p.height, p.z]);
+  const labelY = p.height + 0.4;
+  const pos = useMemo(() => new THREE.Vector3(p.x, labelY, p.z), [p.x, labelY, p.z]);
 
   useFrame(({ camera }) => {
     // Throttle DOM writes to every 3rd frame
@@ -545,7 +546,7 @@ function DepthLabel({ p, onSelect, isHov, setHovered }) {
   });
 
   return (
-    <Html position={[p.x, p.height + 0.5, p.z]} center
+    <Html position={[p.x, labelY, p.z]} center
       zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
       <div ref={htmlRef} onClick={() => onSelect(p.tag)}
         onMouseEnter={() => setHovered(p.tag)}
@@ -566,7 +567,6 @@ function DepthLabel({ p, onSelect, isHov, setHovered }) {
           transition: 'all 0.15s',
           userSelect: 'none',
         }}>
-        {p.isActive && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: isHov ? '#fff' : p.color, marginRight: 6, verticalAlign: 'middle' }} />}
         {p.label.toUpperCase()}
       </div>
     </Html>
@@ -698,13 +698,9 @@ function VolcanicGlow({ projects }) {
   return (
     <>
       {projects.filter(p => p.isHot).map(p => (
-        <group key={`v-${p.tag}`} position={[p.x, p.height + 0.1, p.z]}>
-          {/* Emissive glow at peak */}
-          <mesh>
-            <sphereGeometry args={[0.2, 8, 6]} />
-            <meshBasicMaterial color="#FF4400" transparent opacity={0.4} depthWrite={false} />
-          </mesh>
-          <pointLight color="#FF6622" intensity={1.5} distance={3} decay={2} />
+        <group key={`v-${p.tag}`} position={[p.x, p.height * 0.85, p.z]}>
+          {/* Subtle glow — just a point light, no visible sphere */}
+          <pointLight color="#FF6622" intensity={2} distance={2.5} decay={2} />
         </group>
       ))}
     </>
