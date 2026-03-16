@@ -376,9 +376,7 @@ function DashboardInner() {
     <div style={{background:activeProject && activeProject !== '__graph__'?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
       {/* Weather/mountain background — full viewport, behind everything */}
       {!activeProject && <WeatherBackground date={selected} theme={theme}/>}
-      {activeProject === '__graph__' && graphData && (
-        <MountainBackground allTags={graphData.allTags} connections={graphData.connections} recency={graphData.recency} theme={theme} />
-      )}
+      {/* MapCard now renders its own full-viewport 3D background */}
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
@@ -541,19 +539,17 @@ function DashboardInner() {
                     />
                     {isGraph ? (
                       <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                        {graphData ? (
+                        {/* MapCard renders as fixed full-viewport background */}
+                        {graphData && (
                           <MapCard
                             allTags={graphData.allTags}
                             connections={graphData.connections}
                             recency={graphData.recency}
                             onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                           />
-                        ) : (
-                          <Card style={{height:'auto'}}>
-                            <div style={{padding:40,display:'flex',alignItems:'center',justifyContent:'center',
-                              fontFamily:mono,fontSize:F.sm,color:"var(--dl-middle)"}}>Loading graph…</div>
-                          </Card>
                         )}
+                        {/* Spacer so content starts below the visible terrain */}
+                        <div style={{height: 350}} />
                         <ErrorBoundary label="Project">
                         <ProjectView
                           project="__everything__"

@@ -225,9 +225,10 @@ function Environment({ hour }) {
         shadow-mapSize-height={1024}
       />
       <directionalLight position={[-4, 2, -3]} intensity={0.15} color="#8090B0" />
-      <Cloud position={[-3, 4, -2]} speed={0.1} opacity={isNight ? 0.1 : 0.3} width={4} depth={1} segments={8} />
-      <Cloud position={[2, 4.5, 1]} speed={0.15} opacity={isNight ? 0.08 : 0.25} width={3} depth={0.8} segments={6} />
-      {!isNight && <Cloud position={[0, 5, -3]} speed={0.08} opacity={0.15} width={5} depth={1.2} segments={10} />}
+      <Cloud position={[-4, 4.5, -2]} speed={0.1} opacity={isNight ? 0.05 : 0.6} width={5} depth={1.5} segments={12} color="white" />
+      <Cloud position={[3, 5, 2]} speed={0.15} opacity={isNight ? 0.04 : 0.5} width={4} depth={1} segments={10} color="white" />
+      {!isNight && <Cloud position={[0, 5.5, -4]} speed={0.08} opacity={0.4} width={6} depth={1.5} segments={14} color="white" />}
+      {!isNight && <Cloud position={[-2, 6, 4]} speed={0.12} opacity={0.3} width={4} depth={1} segments={8} color="white" />}
     </>
   );
 }
@@ -280,12 +281,12 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
 
   return (
     <div style={{
-      height: 420, borderRadius: 12, overflow: 'hidden',
+      position: 'fixed', inset: 0, zIndex: 0,
       background: `linear-gradient(180deg, ${skyTop} 0%, ${skyBot} 100%)`,
     }}>
       <Canvas
         shadows
-        camera={{ position: [9, 7, 9], fov: 32, near: 0.1, far: 100 }}
+        camera={{ position: [10, 7, 10], fov: 30, near: 0.1, far: 100 }}
         style={{ width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
