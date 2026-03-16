@@ -33,6 +33,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       .from('tasks')
       .select('id, date, due_date, text, html, done, completed_at, project_tags, position')
       .eq('user_id', user.id)
+      .is('is_template', false)
       .contains('project_tags', [project.toLowerCase()])
       .order('date', { ascending: false })
       .order('position', { ascending: true });
@@ -58,10 +59,12 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
+    .is('is_template', false)
+    .is('recurrence_parent_id', null)
     .not('due_date', 'is', null)
     .lte('date', date)
     .eq('done', false)
-    .neq('date', date)  // exclude tasks already captured above
+    .neq('date', date)
     .order('date', { ascending: true })
     .order('position', { ascending: true });
   if (e2) throw e2;
@@ -71,6 +74,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
+    .is('is_template', false)
     .eq('completed_at', date)
     .eq('done', true)
     .neq('date', date)
@@ -176,9 +180,18 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  // Create any habit templates
+  // Create any habit templates (dedup: skip if template with same text already exists)
   if (templatesToCreate.length > 0) {
-    await supabase.from('tasks').insert(templatesToCreate);
+    const { data: existingTemplates } = await supabase
+      .from('tasks')
+      .select('text')
+      .eq('user_id', user.id)
+      .eq('is_template', true);
+    const existingTexts = new Set((existingTemplates ?? []).map(t => t.text?.trim().toLowerCase()));
+    const newTemplates = templatesToCreate.filter(t => !existingTexts.has(t.text?.trim().toLowerCase()));
+    if (newTemplates.length > 0) {
+      await supabase.from('tasks').insert(newTemplates);
+    }
   }
 
   if (filteredOwnRows.length > 0) {
