@@ -56,7 +56,8 @@ export function clientParseTasks(data) {
       const doneMatch = attrs.match(/data-checked="(true|false)"/);
       const inner = m[2]
         .replace(/<span\b[^>]*\bdata-project-tag="([^"]*)"[^>]*>[^<]*<\/span>/g, '{$1}')
-        .replace(/<span\b[^>]*\bdata-note-link="([^"]*)"[^>]*>[^<]*<\/span>/g, '[$1]');
+        .replace(/<span\b[^>]*\bdata-note-link="([^"]*)"[^>]*>[^<]*<\/span>/g, '[$1]')
+        .replace(/<span\b[^>]*\bdata-date-tag="([^"]*)"[^>]*>[^<]*<\/span>/g, '@$1');
       const text = inner.replace(/<[^>]+>/g, '').trim();
       if (text) tasks.push({ id: `html_${idx++}`, text, done: doneMatch?.[1] === 'true' });
     }
@@ -71,16 +72,22 @@ export function clientParseTasks(data) {
 export function tasksToHtml(tasks) {
   const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   function inlineToHtml(text) {
-    const re = /\{([^}]+)\}|\[([^\]]+)\]/g;
+    const re = /\{([^}]+)\}|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})/g;
     let last = 0, out = '', m;
     while ((m = re.exec(text)) !== null) {
       if (m.index > last) out += esc(text.slice(last, m.index));
       if (m[1] != null) {
         const n = m[1];
         out += `<span data-project-tag="${esc(n)}">${esc(n.toUpperCase())}</span>`;
-      } else {
+      } else if (m[2] != null) {
         const n = m[2];
         out += `<span data-note-link="${esc(n)}">${esc(n)}</span>`;
+      } else {
+        const d = m[3];
+        const dt = new Date(d + 'T12:00:00');
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const label = months[dt.getMonth()] + ' ' + dt.getDate();
+        out += `<span data-date-tag="${esc(d)}">${esc(label)}</span>`;
       }
       last = m.index + m[0].length;
     }
@@ -118,7 +125,7 @@ export function TaskCheckbox({ done, onToggle }) {
 
 // Called on every theme change — always updates the existing style element so the
 // checkmark SVG (data URI) can't use CSS vars and must be baked in with the accent hex.
-export function injectTaskListStyles(accentHex) {
+export function injectTaskListStyles(accentHex, date) {
   if (typeof document === 'undefined') return;
   let s = document.getElementById('dl-tasklist-styles');
   if (!s) { s = document.createElement('style'); s.id = 'dl-tasklist-styles'; document.head.appendChild(s); }
@@ -142,6 +149,7 @@ export function injectTaskListStyles(accentHex) {
     .dl-editor ul[data-type="taskList"] > li[data-checked="true"] > div { color:var(--dl-strong); text-decoration:line-through; }
     [data-filter="open"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"] { display:none; }
     [data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="false"] { display:none; }
+    ${date ? `[data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"][data-completed-date]:not([data-completed-date="${date}"]) { display:none; }` : ''}
   `;
 }
 
@@ -153,7 +161,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   const {notes: ctxNotes} = useContext(NoteContext);
 
   const accentHex = theme === 'light' ? '#B87018' : '#D08828';
-  useEffect(() => injectTaskListStyles(accentHex), [accentHex]);
+  useEffect(() => injectTaskListStyles(accentHex, date), [accentHex, date]);
 
   const htmlValue = useMemo(() => migrateTasksToHtml(value) || '', [value]);
   const isEmpty = useMemo(() => clientParseTasks(htmlValue).length === 0, [htmlValue]);

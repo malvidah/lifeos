@@ -51,19 +51,38 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .order('position', { ascending: true });
   if (e1) throw e1;
 
-  // 2. Open tasks from other dates that are due today
+  // 2. Open tasks from other dates that are due on or before today (persist until done)
   const { data: dueTasks, error: e2 } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
-    .eq('due_date', date)
+    .lte('due_date', date)
     .eq('done', false)
     .neq('date', date)  // exclude tasks already captured above
     .order('date', { ascending: true })
     .order('position', { ascending: true });
   if (e2) throw e2;
 
-  const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? [])];
+  // 3. Tasks completed on this date (from other dates) — for "done" filter
+  const { data: completedTasks, error: e3 } = await supabase
+    .from('tasks')
+    .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
+    .eq('user_id', user.id)
+    .eq('completed_at', date)
+    .eq('done', true)
+    .neq('date', date)
+    .order('date', { ascending: true })
+    .order('position', { ascending: true });
+  if (e3) throw e3;
+
+  // Inject data-completed-date into each task's <li> for CSS filtering
+  const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? [])];
+  for (const t of allTasks) {
+    if (t.completed_at && t.html) {
+      t.html = t.html.replace(/^<li\b/, `<li data-completed-date="${t.completed_at}"`);
+    }
+  }
+
   return Response.json({ data: tasksToHtml(allTasks), dueTasks: dueTasks ?? [] });
 });
 

@@ -17,6 +17,7 @@ import {
 import { createPortal } from 'react-dom';
 import { Suggestion } from '@tiptap/suggestion';
 import { serif, mono, F, projectColor, CHIP_TOKENS } from '@/lib/tokens';
+import { generateDateSuggestions, dateChipColor, MONTHS_SHORT } from '@/lib/dates';
 
 const ACCENT = '#D08828'; // must match --dl-accent; used for CSS alpha concatenation only
 const WARM   = 'var(--dl-accent)';
@@ -112,6 +113,28 @@ const NoteLinkNode = Node.create({
         .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
         .join(';'),
     }, name];
+  },
+});
+
+// DateTag: stored as @YYYY-MM-DD, rendered as urgency-colored chip.
+const DateTagNode = Node.create({
+  name: 'dateTag', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() { return { date: { default: '' } }; },
+  parseHTML() {
+    return [{ tag: 'span[data-date-tag]', getAttrs: el => ({ date: el.getAttribute('data-date-tag') || '' }) }];
+  },
+  renderHTML({ node }) {
+    const date = node.attrs.date || '';
+    const col  = dateChipColor(date);
+    const d    = new Date(date + 'T12:00:00');
+    const label = MONTHS_SHORT[d.getMonth()] + ' ' + d.getDate();
+    return ['span', {
+      'data-date-tag': date,
+      style: Object.entries({ ...CHIP_TOKENS.date(col), userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
+    }, label];
   },
 });
 
@@ -374,7 +397,7 @@ function makeSlashSuggestionMatch() {
       if (!/\s/.test(prev) && i !== 0) continue; // require space-before or line start
       const after = nodeText.slice(i + 1);
       // Match bare / (show command menu), /p..., or /n...
-      if (after.length > 0 && !/^[pn]/i.test(after)) continue;
+      if (after.length > 0 && !/^[pn@d]/i.test(after)) continue;
       return {
         range: { from: nodeStart + i, to: $position.pos },
         query: after,           // "" (bare /), "p", "p big think", "n", "n my note"
@@ -444,18 +467,22 @@ function SuggestionDropdown({ state, onSelect }) {
     }}>
       {state.items.map((item, i) => {
         const isCmd              = item.startsWith('__cmd__:');
+        const isDate             = item.startsWith('__date__:');
         const isExistingProject  = item.startsWith('__project__:');
         const isNewProject       = item.startsWith('__create_project__:');
         const isProject          = isExistingProject || isNewProject;
         const isCreate           = item.startsWith('__create__:') || isNewProject;
         const rawLabel           = isCmd ? item.slice(8)
+                                 : isDate ? item.slice(20) // after __date__:YYYY-MM-DD:
                                  : isNewProject ? item.slice(19)
                                  : isExistingProject ? item.slice(12)
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9); // __note__: = 9
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : '/m  Media')
+        const dateStr            = isDate ? item.slice(9, 19) : null;
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : '/m  Media')
+                                 : isDate ? rawLabel
                                  : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
-        const col                = isProject ? projectColor(rawLabel) : null;
+        const col                = isProject ? projectColor(rawLabel) : isDate ? dateChipColor(dateStr) : null;
         const selected  = i === state.selectedIndex;
         return (
           <button
@@ -682,6 +709,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       URLExtension,
       ProjectTagNode,
       NoteLinkNode,
+      DateTagNode,
       ...(singleLine ? [] : [ImageBlock, ImageChip]),
       ...(noteTitle ? [Table.configure({ resizable: true }), TableRow, TableCell, TableHeader] : []),
       ...(taskList ? [TaskList, TaskItem.configure({ nested: false })] : []),
@@ -701,7 +729,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         renderRef,
         itemsFn: (query) => {
           // Bare / — show command menu
-          if (!query) return ['__cmd__:p', '__cmd__:n', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
+          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:@', '__cmd__:d', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
@@ -746,6 +774,12 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             // Never return empty — keeps the suggestion plugin alive while typing
             return matches.length ? matches : ['__create__:' + (qTrim || 'note')];
           }
+          if (cmd === '@' || cmd === 'd') {
+            const suggestions = generateDateSuggestions(search);
+            return suggestions
+              .filter(s => s.date)
+              .map(s => `__date__:${s.date}:${s.label}`);
+          }
           return [];
         },
         commandFn: ({ editor, range, name }) => {
@@ -755,6 +789,16 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
           justInsertedRef.current = true;
           setTimeout(() => { justInsertedRef.current = false; }, 150);
+
+          if (name.startsWith('__date__:')) {
+            // __date__:YYYY-MM-DD:Label
+            const dateStr = name.slice(9, 19); // YYYY-MM-DD
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'dateTag', attrs: { date: dateStr } },
+              { type: 'text', text: ' ' },
+            ]).run();
+            return;
+          }
 
           if (name.startsWith('__project__:') || name.startsWith('__create_project__:')) {
             // Existing project: "__project__:name"  |  New project: "__create_project__:name"
