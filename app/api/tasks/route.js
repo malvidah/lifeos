@@ -1,7 +1,7 @@
 import { withAuth } from '../_lib/auth.js';
 import { parseTaskBlocks, tasksToHtml } from '@/lib/parseBlocks.js';
 import { isValidDate } from '@/lib/validate.js';
-import { parseRecurrence } from '@/lib/recurrence.js';
+import { parseRecurrence, keyToRecurrence } from '@/lib/recurrence.js';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -141,18 +141,29 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .is('recurrence_parent_id', null);
   if (delErr) throw delErr;
 
-  // Detect /d recurrence syntax in tasks and create habit templates
+  // Detect recurrence in tasks — either /d text syntax OR data-recurrence chip
   const templatesToCreate = [];
   const filteredOwnRows = [];
   for (const t of ownRows) {
-    const { cleanText, recurrence } = parseRecurrence(t.text, date);
-    if (recurrence && cleanText) {
-      // This task has /d syntax — create a template instead of a regular task
+    // Check for recurrence chip in HTML: <span data-recurrence="key" ...>
+    const chipMatch = t.html?.match(/data-recurrence="([^"]+)"/);
+    // Check for /d text syntax
+    const { cleanText, recurrence: textRecurrence } = parseRecurrence(t.text, date);
+    const recurrence = chipMatch ? keyToRecurrence(chipMatch[1], date) : textRecurrence;
+    const taskText = chipMatch
+      ? t.text.replace(/\{d:[^}]*\}/g, '').trim() // strip serialized chip text
+      : (recurrence ? cleanText : null);
+
+    if (recurrence && taskText) {
+      // Strip the recurrence chip HTML from the template
+      const cleanHtml = t.html
+        .replace(/<span[^>]*data-recurrence[^>]*>[\s\S]*?<\/span>/g, '')
+        .replace(/\/d\s+[^<]*/gi, taskText);
       templatesToCreate.push({
         user_id: user.id,
         date,
-        text: cleanText,
-        html: t.html.replace(/\/d\s+[^<]*/gi, cleanText), // strip /d from HTML too
+        text: taskText,
+        html: cleanHtml,
         done: false,
         is_template: true,
         recurrence,

@@ -21,6 +21,7 @@ import { createPortal } from 'react-dom';
 import { Suggestion } from '@tiptap/suggestion';
 import { serif, mono, F, projectColor, CHIP_TOKENS } from '@/lib/tokens';
 import { generateDateSuggestions, dateChipColor, MONTHS_SHORT } from '@/lib/dates';
+import { getRecurrenceSuggestions } from '@/lib/recurrence';
 
 const ACCENT = '#D08828'; // must match --dl-accent; used for CSS alpha concatenation only
 const WARM   = 'var(--dl-accent)';
@@ -200,6 +201,43 @@ const ImageChip = Node.create({
   },
 });
 
+// RecurrenceTag: stored as {d:key:label}, rendered as green schedule chip.
+const RecurrenceTagNode = Node.create({
+  name: 'recurrenceTag', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() {
+    return {
+      key: { default: '' },
+      label: { default: '' },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-recurrence]', getAttrs: el => ({
+      key: el.getAttribute('data-recurrence') || '',
+      label: el.getAttribute('data-recurrence-label') || el.textContent || '',
+    }) }];
+  },
+  renderHTML({ node }) {
+    const label = node.attrs.label || node.attrs.key || '';
+    const col = 'var(--dl-green, #4A9A68)';
+    return ['span', {
+      'data-recurrence': node.attrs.key,
+      'data-recurrence-label': label,
+      style: [
+        'display:inline-flex', 'align-items:center', 'gap:3px', 'vertical-align:middle',
+        `color:${col}`, `background:${col}22`, 'border-radius:4px',
+        'padding:1px 7px', `font-family:'SF Mono','Fira Code',ui-monospace,monospace`,
+        'font-size:11px', 'letter-spacing:0.08em', 'line-height:1.65',
+        'text-transform:uppercase', 'white-space:nowrap', 'user-select:none',
+      ].join(';'),
+    },
+      // Flag icon + label
+      ['span', { style: 'pointer-events:none;font-size:10px' }, '\u{1F3F4}'],
+      ['span', { style: 'pointer-events:none' }, ` ${label}`],
+    ];
+  },
+});
+
 // ImageBlock: stored as [img:url], rendered as block image atom node.
 const ImageBlock = Node.create({
   name: 'imageBlock', group: 'block', atom: true, selectable: true, draggable: false,
@@ -328,6 +366,7 @@ export function docToText(docJson) {
       if (c.type === 'hardBreak')   return '\n';
       if (c.type === 'projectTag')  return `{${c.attrs?.name ?? ''}}`;
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
+      if (c.type === 'recurrenceTag') return `{d:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       return '';
     }).join('');
   }
@@ -472,21 +511,24 @@ function SuggestionDropdown({ state, onSelect }) {
       {state.items.map((item, i) => {
         const isCmd              = item.startsWith('__cmd__:');
         const isDate             = item.startsWith('__date__:');
+        const isRecurrence       = item.startsWith('__recurrence__:');
         const isExistingProject  = item.startsWith('__project__:');
         const isNewProject       = item.startsWith('__create_project__:');
         const isProject          = isExistingProject || isNewProject;
         const isCreate           = item.startsWith('__create__:') || isNewProject;
         const rawLabel           = isCmd ? item.slice(8)
                                  : isDate ? item.slice(20) // after __date__:YYYY-MM-DD:
+                                 : isRecurrence ? item.split(':').slice(2).join(':')
                                  : isNewProject ? item.slice(19)
                                  : isExistingProject ? item.slice(12)
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9); // __note__: = 9
         const dateStr            = isDate ? item.slice(9, 19) : null;
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : '/m  Media')
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date / Habit' : '/m  Media')
+                                 : isRecurrence ? `🏴 ${rawLabel}`
                                  : isDate ? rawLabel
                                  : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
-        const col                = isProject ? projectColor(rawLabel) : isDate ? dateChipColor(dateStr) : null;
+        const col                = isProject ? projectColor(rawLabel) : isDate ? dateChipColor(dateStr) : isRecurrence ? 'var(--dl-green)' : null;
         const selected  = i === state.selectedIndex;
         return (
           <button
@@ -713,6 +755,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       URLExtension,
       ProjectTagNode,
       NoteLinkNode,
+      RecurrenceTagNode,
       DateTagNode,
       ...(singleLine ? [] : [ImageBlock, ImageChip]),
       ...(noteTitle ? [Table.configure({ resizable: true }), TableRow, TableCell, TableHeader] : []),
@@ -780,10 +823,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             return matches.length ? matches : ['__create__:' + (qTrim || 'note')];
           }
           if (cmd === '@' || cmd === 'd') {
-            const suggestions = generateDateSuggestions(search);
-            return suggestions
+            // Check if query looks like a recurrence schedule
+            const recItems = getRecurrenceSuggestions(search);
+            const dateItems = generateDateSuggestions(search)
               .filter(s => s.date)
               .map(s => `__date__:${s.date}:${s.label}`);
+            // Show recurrence options first, then date options
+            return [...recItems, ...dateItems];
           }
           return [];
         },
@@ -794,6 +840,18 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
           justInsertedRef.current = true;
           setTimeout(() => { justInsertedRef.current = false; }, 150);
+
+          if (name.startsWith('__recurrence__:')) {
+            // __recurrence__:key:Label
+            const parts = name.split(':');
+            const key = parts[1];
+            const label = parts.slice(2).join(':');
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'recurrenceTag', attrs: { key, label } },
+              { type: 'text', text: ' ' },
+            ]).run();
+            return;
+          }
 
           if (name.startsWith('__date__:')) {
             // __date__:YYYY-MM-DD:Label
