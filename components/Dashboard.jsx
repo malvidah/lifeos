@@ -548,10 +548,8 @@ function DashboardInner() {
                             onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                           />
                         )}
-                        {/* Spacer so terrain is visible above cards */}
-                        <div style={{height: 350}} />
-                        {/* Opaque content area below terrain */}
-                        <div style={{background:'var(--dl-bg)', borderRadius:'16px 16px 0 0', padding:'10px 0', position:'relative', zIndex:2}}>
+                        {/* Spacer so terrain is visible above cards — smaller since NavBar is above */}
+                        <div style={{height: 300}} />
                         <ErrorBoundary label="Project">
                         <ProjectView
                           project="__everything__"
@@ -561,7 +559,6 @@ function DashboardInner() {
                           taskFilter={taskFilter} setTaskFilter={setTaskFilter}
                         />
                         </ErrorBoundary>
-                        </div>{/* close opaque content area */}
                       </div>
                     ) : (
                       <ErrorBoundary label="Project">
