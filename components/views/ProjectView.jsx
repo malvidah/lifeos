@@ -661,7 +661,10 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             onMouseEnter={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-middle)"}
             onMouseLeave={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-border)"}
           >
-            <div style={{ position: 'absolute', top: 0, bottom: 0, left: '50%', width: 1, background: 'var(--dl-border)' }}/>
+            {/* Line above chevron */}
+            <div style={{ position: 'absolute', top: 0, bottom: '50%', marginBottom: 10, left: '50%', width: 1, background: 'var(--dl-border)' }}/>
+            {/* Line below chevron */}
+            <div style={{ position: 'absolute', top: '50%', marginTop: 10, bottom: 0, left: '50%', width: 1, background: 'var(--dl-border)' }}/>
             <div className="notes-chevron" style={{ position: 'relative', zIndex: 1, color: 'var(--dl-border)', transition: 'color 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <svg width="7" height="10" viewBox="0 0 7 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 {notesListCollapsed
