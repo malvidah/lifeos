@@ -544,9 +544,8 @@ function DashboardInner() {
                           <MapCard
                             allTags={graphData.allTags}
                             connections={graphData.connections}
+                            recency={graphData.recency}
                             onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
-                            token={token} userId={userId}
-                            taskFilter={taskFilter} setTaskFilter={setTaskFilter}
                           />
                         ) : (
                           <Card style={{height:'auto'}}>

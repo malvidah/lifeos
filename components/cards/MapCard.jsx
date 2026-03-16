@@ -1,300 +1,212 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
-import { mono, F, projectColor } from "@/lib/tokens";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { mono, serif, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
-import { Card, ChevronBtn } from "../ui/primitives.jsx";
+import { Card } from "../ui/primitives.jsx";
 
-const CHAR_W = 7.4, PILL_PAD = 28, PILL_H = 26, PILL_RX = 13;
+// ── Mountain Range ───────────────────────────────────────────────────────────
+// Each project = a mountain peak. Height = data volume, proximity = connections.
 
-export function MapCard({ allTags, connections, onSelectProject }) {
-  const graphRef = useRef(null);
-  const [ready, setReady]               = useState(false);
-  const [tx, setTx]                     = useState(0);
-  const [ty, setTy]                     = useState(0);
-  const [scale, setScale]               = useState(1);
-  const [hovered, setHovered]           = useState(null);
-  const [graphCollapsed, setGraphCollapsed] = useState(false);
-  const containerRef = useRef(null);
-  const dragStart    = useRef(null);
-  const touchStart   = useRef(null);
+const PILL_H = 24, PILL_RX = 12, CHAR_W = 7;
 
-  useEffect(() => {
-    setReady(false);
-    const tagList = allTags || [];
-    if (!tagList.length) return;
+function buildMountains(tags, connections, recency) {
+  if (!tags.length) return [];
 
-    const idxOf = {};
-    tagList.forEach((t, i) => { idxOf[t.toLowerCase()] = i; });
+  // Count connections per tag and total weight
+  const connCount = {};
+  const connWeight = {};
+  tags.forEach(t => { connCount[t] = 0; connWeight[t] = 0; });
+  (connections || []).forEach(({ source, target, weight }) => {
+    if (connCount[source] != null) { connCount[source] += weight; connWeight[source] += weight; }
+    if (connCount[target] != null) { connCount[target] += weight; connWeight[target] += weight; }
+  });
 
-    // Build edges + weighted degree
-    const wdeg = new Array(tagList.length).fill(0);
-    const edges = [];
-    for (const c of (connections || [])) {
-      const si = idxOf[c.source?.toLowerCase()];
-      const ti = idxOf[c.target?.toLowerCase()];
-      if (si == null || ti == null) continue;
-      const w = Math.min(c.weight || 1, 10);
-      edges.push({ si, ti, w });
-      wdeg[si] += w;
-      wdeg[ti] += w;
-    }
-    const maxDeg = Math.max(1, ...wdeg);
+  // Sort by total connection weight (most connected = center)
+  const sorted = [...tags].sort((a, b) => (connWeight[b] || 0) - (connWeight[a] || 0));
 
-    const n = tagList.length;
-    const nodes = tagList.map((name, i) => {
-      const label = tagDisplayName(name).toUpperCase();
-      const pw    = label.length * CHAR_W + PILL_PAD;
-      const angle = (i / n) * Math.PI * 2;
-      const radius = 220 + (wdeg[i] / maxDeg) * 120;
-      return {
-        id: name, label, color: projectColor(name),
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-        vx: 0, vy: 0,
-        pw, // half-width used for repulsion
-      };
+  // Place mountains using a connection-based layout:
+  // Most connected tag goes to center, then place connected tags nearby
+  const placed = new Map();
+  const W = 1200;
+  const centerX = W / 2;
+
+  // Place first (most connected) at center
+  sorted.forEach((tag, i) => {
+    // Spread evenly but cluster connected ones
+    const baseX = centerX + (i % 2 === 0 ? 1 : -1) * Math.ceil(i / 2) * (W / (tags.length + 1));
+    placed.set(tag, { x: Math.max(60, Math.min(W - 60, baseX)) });
+  });
+
+  // Refine positions: pull connected tags closer together
+  for (let iter = 0; iter < 5; iter++) {
+    (connections || []).forEach(({ source, target, weight }) => {
+      const a = placed.get(source);
+      const b = placed.get(target);
+      if (!a || !b) return;
+      const dx = b.x - a.x;
+      const pull = dx * 0.05 * Math.min(weight, 5);
+      a.x += pull;
+      b.x -= pull;
     });
-
-    // Force-directed layout — pill-aware repulsion so labels never overlap
-    const K = Math.sqrt((900 * 700) / Math.max(n, 1)) * 1.05;
-    for (let iter = 0; iter < 320; iter++) {
-      const alpha = Math.pow(1 - iter / 320, 1.8);
-
-      // Repulsion
-      for (let a = 0; a < n; a++) {
-        for (let b = a + 1; b < n; b++) {
-          const na = nodes[a], nb = nodes[b];
-          let dx = nb.x - na.x || 0.1, dy = nb.y - na.y || 0.1;
-          const d = Math.sqrt(dx * dx + dy * dy) || 1;
-          const minD = (na.pw + nb.pw) / 2 + 36;
-          const rep  = (K * K / d) * alpha * 0.5;
-          const ovlp = d < minD ? (minD - d) * 2.5 * alpha : 0;
-          const f = rep + ovlp;
-          na.vx -= (dx / d) * f; na.vy -= (dy / d) * f;
-          nb.vx += (dx / d) * f; nb.vy += (dy / d) * f;
-        }
-      }
-
-      // Attraction along edges
-      for (const e of edges) {
-        const na = nodes[e.si], nb = nodes[e.ti];
-        const dx = nb.x - na.x, dy = nb.y - na.y;
-        const d  = Math.sqrt(dx * dx + dy * dy) || 1;
-        const rest = K * Math.max(0.35, 1.15 - e.w * 0.05);
-        const f = (d - rest) * 0.18 * alpha;
-        na.vx += (dx / d) * f; na.vy += (dy / d) * f;
-        nb.vx -= (dx / d) * f; nb.vy -= (dy / d) * f;
-      }
-
-      // Centre gravity + integrate
-      for (const node of nodes) {
-        node.vx -= node.x * 0.011 * alpha;
-        node.vy -= node.y * 0.011 * alpha;
-        node.x  += node.vx * 0.42;
-        node.y  += node.vy * 0.42;
-        node.vx *= 0.68;
-        node.vy *= 0.68;
+    // Push apart if too close
+    const arr = [...placed.entries()].sort((a, b) => a[1].x - b[1].x);
+    for (let i = 1; i < arr.length; i++) {
+      const gap = arr[i][1].x - arr[i - 1][1].x;
+      const minGap = 80;
+      if (gap < minGap) {
+        const push = (minGap - gap) / 2;
+        arr[i][1].x += push;
+        arr[i - 1][1].x -= push;
       }
     }
-
-    // Normalise to canvas space
-    const xs = nodes.map(nd => nd.x), ys = nodes.map(nd => nd.y);
-    const mnX = Math.min(...xs), mxX = Math.max(...xs);
-    const mnY = Math.min(...ys), mxY = Math.max(...ys);
-    const spanX = mxX - mnX || 1, spanY = mxY - mnY || 1;
-    nodes.forEach(nd => {
-      nd.x = ((nd.x - mnX) / spanX - 0.5) * 740;
-      nd.y = ((nd.y - mnY) / spanY - 0.5) * 520;
-    });
-
-    graphRef.current = { nodes, edges };
-    setReady(true);
-
-    function doFit() {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      if (!rect.width || !rect.height) { requestAnimationFrame(doFit); return; }
-      const pad = 56;
-      const minX = Math.min(...nodes.map(nd => nd.x - nd.pw / 2)) - pad;
-      const maxX = Math.max(...nodes.map(nd => nd.x + nd.pw / 2)) + pad;
-      const minY = Math.min(...nodes.map(nd => nd.y - PILL_H / 2)) - pad;
-      const maxY = Math.max(...nodes.map(nd => nd.y + PILL_H / 2)) + pad;
-      const newScale = Math.min(rect.width / (maxX - minX), rect.height / (maxY - minY)) * 0.94;
-      setScale(newScale);
-      setTx(rect.width  / 2 - ((minX + maxX) / 2) * newScale);
-      setTy(rect.height / 2 - ((minY + maxY) / 2) * newScale);
-    }
-    requestAnimationFrame(doFit);
-  }, [allTags, connections]); // eslint-disable-line
-
-  // ── Interaction handlers ────────────────────────────────────────────────────
-  const handleWheelRef = useRef();
-  handleWheelRef.current = (e) => {
-    e.preventDefault();
-    if (!containerRef.current) return;
-    const rect   = containerRef.current.getBoundingClientRect();
-    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
-    const factor = e.deltaY < 0 ? 1.12 : 0.89;
-    setScale(p => Math.max(0.12, Math.min(4, p * factor)));
-    setTx(p => mx - (mx - p) * factor);
-    setTy(p => my - (my - p) * factor);
-  };
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const handler = (e) => handleWheelRef.current(e);
-    el.addEventListener('wheel', handler, { passive: false });
-    return () => el.removeEventListener('wheel', handler);
-  }, []);
-  function handleMouseDown(e) {
-    if (e.target.closest('[data-node]')) return;
-    dragStart.current = { cx: e.clientX, cy: e.clientY, ox: tx, oy: ty };
   }
-  function handleMouseMove(e) {
-    if (!dragStart.current) return;
-    setTx(dragStart.current.ox + e.clientX - dragStart.current.cx);
-    setTy(dragStart.current.oy + e.clientY - dragStart.current.cy);
-  }
-  function handleMouseUp() { dragStart.current = null; }
-  function handleTouchStart(e) {
-    if (e.touches.length === 1)
-      touchStart.current = { cx: e.touches[0].clientX, cy: e.touches[0].clientY, ox: tx, oy: ty };
-  }
-  function handleTouchMove(e) {
-    if (!touchStart.current || e.touches.length !== 1) return;
-    e.preventDefault();
-    setTx(touchStart.current.ox + e.touches[0].clientX - touchStart.current.cx);
-    setTy(touchStart.current.oy + e.touches[0].clientY - touchStart.current.cy);
-  }
-  function handleTouchEnd() { touchStart.current = null; }
 
-  const { nodes, edges } = graphRef.current || { nodes: [], edges: [] };
+  // Build mountain data
+  const maxConn = Math.max(1, ...Object.values(connWeight));
+  const BASE_Y = 280;
+  const MIN_H = 50;
+  const MAX_H = 200;
+
+  return tags.map(tag => {
+    const { x } = placed.get(tag) || { x: centerX };
+    const score = (connWeight[tag] || 0) / maxConn;
+    const height = MIN_H + score * (MAX_H - MIN_H);
+    const width = 80 + score * 120; // wider base for more connected projects
+    const peakY = BASE_Y - height;
+    const color = projectColor(tag);
+    const label = tagDisplayName(tag);
+    const recent = recency?.[tag];
+    const isActive = recent && (Date.now() - new Date(recent).getTime()) < 7 * 86400000; // active within 7 days
+
+    return { tag, x, peakY, height, width, color, label, isActive, baseY: BASE_Y };
+  });
+}
+
+function mountainPath(x, peakY, width, baseY) {
+  // Natural mountain shape with slight asymmetry
+  const left = x - width / 2;
+  const right = x + width / 2;
+  const peakOffset = (Math.random() - 0.5) * width * 0.05; // subtle asymmetry
+  // Ridge shoulders
+  const lShoulder = x - width * 0.15;
+  const rShoulder = x + width * 0.18;
+  const shoulderY = peakY + (baseY - peakY) * 0.25;
+
+  return `M ${left} ${baseY} `
+    + `Q ${left + width * 0.15} ${baseY - (baseY - peakY) * 0.3}, ${lShoulder} ${shoulderY} `
+    + `Q ${x - width * 0.05} ${peakY - 5}, ${x + peakOffset} ${peakY} `
+    + `Q ${x + width * 0.08} ${peakY - 3}, ${rShoulder} ${shoulderY} `
+    + `Q ${right - width * 0.12} ${baseY - (baseY - peakY) * 0.25}, ${right} ${baseY} Z`;
+}
+
+export function MapCard({ allTags, connections, onSelectProject, recency }) {
+  const [hovered, setHovered] = useState(null);
+  const svgRef = useRef(null);
+
+  const mountains = useMemo(
+    () => buildMountains(allTags || [], connections, recency),
+    [allTags, connections, recency]
+  );
+
+  if (!mountains.length) {
+    return (
+      <Card style={{ height: 'auto' }}>
+        <div style={{ padding: 40, display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)" }}>
+          No projects yet
+        </div>
+      </Card>
+    );
+  }
+
+  const W = 1200, H = 320;
+
+  // Background mountain silhouettes (decorative, no interaction)
+  const bgRidges = [
+    `M 0 ${H * 0.7} Q ${W * 0.15} ${H * 0.35} ${W * 0.3} ${H * 0.55} Q ${W * 0.5} ${H * 0.3} ${W * 0.7} ${H * 0.5} Q ${W * 0.85} ${H * 0.35} ${W} ${H * 0.6} L ${W} ${H} L 0 ${H} Z`,
+    `M 0 ${H * 0.8} Q ${W * 0.2} ${H * 0.5} ${W * 0.4} ${H * 0.65} Q ${W * 0.6} ${H * 0.45} ${W * 0.8} ${H * 0.6} Q ${W * 0.9} ${H * 0.5} ${W} ${H * 0.7} L ${W} ${H} L 0 ${H} Z`,
+  ];
 
   return (
-    <Card style={{ height: 'auto' }}>
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div style={{ display:'flex', alignItems:'center', gap:8, padding:'11px 14px',
-        borderBottom: graphCollapsed ? 'none' : "1px solid var(--dl-border)",
-        flexShrink:0, cursor:'pointer' }}
-        onClick={() => setGraphCollapsed(c => !c)}>
-        <ChevronBtn collapsed={graphCollapsed} onToggle={e => { e.stopPropagation(); setGraphCollapsed(c => !c); }}/>
-        <span style={{ fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
-          textTransform:'uppercase', color:"var(--dl-highlight)", flex:1 }}>Map</span>
-        {!graphCollapsed && (
-          <span style={{ fontFamily:mono, fontSize:9, color:"var(--dl-middle)" }}>
-            {(allTags||[]).length} projects · scroll to zoom
-          </span>
-        )}
-      </div>
+    <div style={{ borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', position: 'relative' }}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${W} ${H}`}
+        style={{ width: '100%', height: 'auto', display: 'block' }}
+        preserveAspectRatio="xMidYMid meet"
+      >
+        {/* Background ridges */}
+        <path d={bgRidges[0]} fill="var(--dl-border)" opacity="0.15" />
+        <path d={bgRidges[1]} fill="var(--dl-border)" opacity="0.1" />
 
-      {/* ── Canvas ─────────────────────────────────────────────────────────── */}
-      {!graphCollapsed && (
-        <div ref={containerRef}
-          style={{ height:400, position:'relative', overflow:'hidden',
-            cursor: dragStart.current ? 'grabbing' : 'grab' }}
-          onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-          onTouchStart={handleTouchStart} onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}>
+        {/* Project mountains — back to front (tallest first for layering) */}
+        {[...mountains].sort((a, b) => a.height - b.height).map(m => {
+          const path = mountainPath(m.x, m.peakY, m.width, m.baseY);
+          const isHov = hovered === m.tag;
+          return (
+            <g key={m.tag}
+              onMouseEnter={() => setHovered(m.tag)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={() => onSelectProject(m.tag)}
+              style={{ cursor: 'pointer' }}
+            >
+              {/* Mountain body */}
+              <path d={path} fill={m.color} opacity={isHov ? 0.35 : 0.18} />
+              <path d={path} fill="none" stroke={m.color} strokeWidth={isHov ? 1.5 : 0.5} opacity={isHov ? 0.6 : 0.25} />
 
-          {!ready && (
-            <div style={{ position:'absolute', inset:0, display:'flex',
-              alignItems:'center', justifyContent:'center',
-              fontFamily:mono, fontSize:F.sm, color:"var(--dl-middle)" }}>
-              Laying out graph…
-            </div>
-          )}
+              {/* Snow cap on tall peaks */}
+              {m.height > 120 && (
+                <circle cx={m.x} cy={m.peakY + 3} r={4} fill="#fff" opacity={0.3} />
+              )}
 
-          {ready && (
-            <svg width="100%" height="100%" style={{ display:'block', position:'absolute', inset:0 }}>
-              {/* Dot-grid background */}
-              <defs>
-                <pattern id="mapgrid" x={tx % (24 * scale)} y={ty % (24 * scale)}
-                  width={24 * scale} height={24 * scale} patternUnits="userSpaceOnUse">
-                  <circle cx={12 * scale} cy={12 * scale}
-                    r={Math.max(0.5, scale * 0.65)} fill="var(--dl-border2)" opacity="0.6"/>
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#mapgrid)"/>
+              {/* Active glow */}
+              {m.isActive && (
+                <circle cx={m.x} cy={m.peakY} r={8} fill={m.color} opacity={0.15} />
+              )}
+            </g>
+          );
+        })}
 
-              <g transform={`translate(${tx},${ty}) scale(${scale})`}>
-                {/* Gradient defs live inside the transform so userSpaceOnUse coords match */}
-                <defs>
-                  {edges.map((e, i) => {
-                    const na = nodes[e.si], nb = nodes[e.ti];
-                    if (!na || !nb) return null;
-                    return (
-                      <linearGradient key={i} id={`eg${i}`} gradientUnits="userSpaceOnUse"
-                        x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}>
-                        <stop offset="0%"   stopColor={na.color} stopOpacity={0.55}/>
-                        <stop offset="100%" stopColor={nb.color} stopOpacity={0.55}/>
-                      </linearGradient>
-                    );
-                  })}
-                </defs>
+        {/* Labels at peaks — rendered on top */}
+        {mountains.map(m => {
+          const isHov = hovered === m.tag;
+          const pillW = m.label.length * CHAR_W + 24;
+          return (
+            <g key={`label-${m.tag}`}
+              onMouseEnter={() => setHovered(m.tag)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={() => onSelectProject(m.tag)}
+              style={{ cursor: 'pointer' }}
+            >
+              <rect
+                x={m.x - pillW / 2} y={m.peakY - PILL_H - 6}
+                width={pillW} height={PILL_H} rx={PILL_RX}
+                fill={isHov ? m.color : 'var(--dl-card)'}
+                fillOpacity={isHov ? 0.9 : 0.85}
+                stroke={m.color}
+                strokeWidth={isHov ? 1.5 : 0.5}
+                strokeOpacity={isHov ? 0.8 : 0.3}
+              />
+              <text
+                x={m.x} y={m.peakY - PILL_H / 2 - 4}
+                textAnchor="middle" dominantBaseline="central"
+                fill={isHov ? '#fff' : m.color}
+                style={{
+                  fontFamily: mono, fontSize: 10,
+                  letterSpacing: '0.08em', textTransform: 'uppercase',
+                  fontWeight: isHov ? 600 : 400,
+                  pointerEvents: 'none',
+                }}
+              >
+                {m.label.toUpperCase()}
+              </text>
+            </g>
+          );
+        })}
 
-                {/* Edges */}
-                {edges.map((e, i) => {
-                  const na = nodes[e.si], nb = nodes[e.ti];
-                  if (!na || !nb) return null;
-                  const isHovEdge = hovered === e.si || hovered === e.ti;
-                  const baseOp    = Math.min(0.55, 0.08 + e.w * 0.04);
-                  return (
-                    <line key={i} x1={na.x} y1={na.y} x2={nb.x} y2={nb.y}
-                      stroke={`url(#eg${i})`}
-                      strokeWidth={isHovEdge ? Math.max(1, e.w * 0.55) : Math.max(0.5, e.w * 0.3)}
-                      strokeOpacity={isHovEdge ? Math.min(0.85, baseOp * 2.5) : baseOp}
-                      strokeLinecap="round"/>
-                  );
-                })}
-
-                {/* Pill nodes */}
-                {nodes.map((node, i) => {
-                  const isHov = hovered === i;
-                  const col   = node.color;
-                  const pw    = node.pw;
-                  return (
-                    <g key={node.id} data-node="1"
-                      transform={`translate(${node.x},${node.y})`}
-                      style={{ cursor:'pointer' }}
-                      onClick={() => onSelectProject(node.id)}
-                      onMouseEnter={() => setHovered(i)}
-                      onMouseLeave={() => setHovered(null)}>
-                      {/* Pill body */}
-                      <rect x={-pw / 2} y={-PILL_H / 2} width={pw} height={PILL_H} rx={PILL_RX}
-                        fill={isHov ? col + '38' : col + '16'}
-                        stroke={isHov ? col : col + '60'}
-                        strokeWidth={isHov ? 1.5 : 1}/>
-                      {/* Label */}
-                      <text x={0} y={4} textAnchor="middle"
-                        style={{ fontFamily:mono, fontSize:10, letterSpacing:'0.055em',
-                          fill: isHov ? col : col + 'bb',
-                          pointerEvents:'none', userSelect:'none' }}>
-                        {node.label}
-                      </text>
-                    </g>
-                  );
-                })}
-              </g>
-            </svg>
-          )}
-
-          {/* Zoom buttons */}
-          <div style={{ position:'absolute', bottom:12, right:12,
-            display:'flex', flexDirection:'column', gap:4 }}>
-            {[{label:'+',f:1.25},{label:'−',f:0.8}].map(({label,f}) => (
-              <button key={label}
-                onClick={() => setScale(p => Math.max(0.12, Math.min(4, p * f)))}
-                style={{ width:30, height:30, background:"var(--dl-surface)",
-                  border:"1px solid var(--dl-border2)", borderRadius:6,
-                  color:"var(--dl-highlight)", fontFamily:mono, fontSize:16,
-                  cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-    </Card>
+        {/* Ground line */}
+        <line x1="0" y1={280} x2={W} y2={280} stroke="var(--dl-border)" strokeWidth="0.5" opacity="0.3" />
+      </svg>
+    </div>
   );
 }
