@@ -384,11 +384,8 @@ function DashboardInner() {
       {/* No top vignette needed — glassmorphic header handles the transition */}
 
 
-      {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
+      {/* ── Main scroll area — full width for mouse wheel, max-width for content ─── */}
         <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
-        <div style={{
-          flex:1, minHeight:0, maxWidth:1200, width:"100%", margin:"0 auto", alignSelf:"stretch",
-          display:"flex", flexDirection:"column", overflow:"hidden"}}>
 
           <HomeSettingsPanel open={homeSettingsOpen} onClose={() => setHomeSettingsOpen(false)} />
 
@@ -396,8 +393,10 @@ function DashboardInner() {
           {!activeProject && (
             <div style={{
               flex:1, minHeight:0, overflowY:"auto",
+              paddingBottom:mobile?200:0}}>
+            <div style={{
+              maxWidth:1200, width:"100%", margin:"0 auto",
               padding:10, paddingTop:0,
-              paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:8}}>
               {/* Spacer for fixed header — clears header + breathing room */}
               <div style={{height:70,flexShrink:0}}/>
@@ -512,7 +511,8 @@ function DashboardInner() {
               )}
             </>
           )}
-            </div>
+          </div>
+          </div>
           )}
 
           {/* ── Project view ── */}
@@ -522,11 +522,12 @@ function DashboardInner() {
               const pcol = isGraph ? "var(--dl-accent)" : projectColor(activeProject);
               return (
                 <>
-                  {/* Scrollable content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto',padding:10,paddingTop:0,boxSizing:'border-box',
+                  {/* Scrollable content — full width scroll, max-width content */}
+                  <div style={{flex:1,minHeight:0,overflow:'auto'}}>
+                  <div style={{maxWidth:1200,width:"100%",margin:"0 auto",padding:10,paddingTop:0,boxSizing:'border-box',
                     display:'flex',flexDirection:'column',gap:8}}>
-                    {/* 25px breathing room + NavBar in scroll flow — same component as home view */}
-                    <div style={{height:25,flexShrink:0}}/>
+                    {/* Spacer for fixed header — same as day view */}
+                    <div style={{height:70,flexShrink:0}}/>
                     <NavBar
                       activeProject={activeProject}
                       date={selected}
@@ -578,13 +579,13 @@ function DashboardInner() {
                       />
                       </ErrorBoundary>
                     )}
-                  </div>
+                  </div>{/* close max-width inner */}
+                  </div>{/* close scroll outer */}
                 </>
               );
             })()
           )}
 
-        </div>
         </div>
 
       {/* Bottom vignette — fades content up into the AI bar */}
