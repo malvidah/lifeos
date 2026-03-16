@@ -166,48 +166,53 @@ function buildIslandGeo(projects, radius) {
   top.computeVertexNormals();
 
   // ── Cliff + underside as a revolution solid ──────────────────────────────
-  // Build rings from the edge downward, tapering inward to a point.
-  // Each ring is at a different Y level with noise-displaced radius.
-  const RING_SEGS = 64;   // vertices per ring
-  const RINGS = 16;       // vertical rings from cliff top to bottom tip
+  // Rings taper from full edge radius down to a narrow point (iceberg).
+  // Rock noise is proportional to current ring radius so it can't inflate
+  // the bottom beyond the taper curve.
+  const RING_SEGS = 64;
+  const RINGS = 24;       // more rings for smoother taper
 
   const cliffVerts = [];
   const cliffCols = [];
   const cliffIdx = [];
 
   for (let ring = 0; ring <= RINGS; ring++) {
-    const t = ring / RINGS; // 0 = cliff top (edge), 1 = bottom tip
+    const t = ring / RINGS; // 0 = cliff top, 1 = bottom tip
     const y = -t * DEPTH;
 
-    // Taper: radius shrinks as we go down. Inverted-mountain profile.
-    // Use a curve that starts wide (edge radius) and narrows to a point.
-    // Slight overhang near top, then taper accelerates.
-    const taper = t < 0.15
-      ? 1.0 + t * 0.3  // slight overhang near top (cliff bulges out)
-      : (1 - ((t - 0.15) / 0.85)) ** 1.6; // accelerating taper to point
+    // Taper curve: starts at full radius, narrows to ~5% at bottom
+    // Slight cliff overhang at very top, then smooth taper
+    let taper;
+    if (t < 0.08) {
+      taper = 1.0 + t * 1.5; // slight overhang bulge
+    } else {
+      const s = (t - 0.08) / 0.92; // remap 0.08–1 → 0–1
+      taper = (1 - s * s) * 0.95 + 0.05; // quadratic taper, min 5%
+    }
 
     for (let seg = 0; seg <= RING_SEGS; seg++) {
       const angle = (seg / RING_SEGS) * Math.PI * 2;
       const baseR = getEdgeRadius(angle);
 
-      // Add rocky noise that increases with depth
-      const rockNoise = noise2D(Math.cos(angle) * 4 + t * 3, Math.sin(angle) * 4 + t * 5) * 0.12
-                      + noise2D(Math.cos(angle) * 8 + t * 7, Math.sin(angle) * 8 + t * 3) * 0.06;
-      const r = baseR * taper + rockNoise * radius * (0.3 + t * 0.4);
+      // Rock noise is scaled by taper so it shrinks with the ring
+      const rockNoise = noise2D(Math.cos(angle) * 4 + t * 5, Math.sin(angle) * 4 + t * 7) * 0.08
+                      + noise2D(Math.cos(angle) * 9 + t * 11, Math.sin(angle) * 9 + t * 5) * 0.04;
+      const r = baseR * taper * (1 + rockNoise);
 
-      // Vertical noise — makes cliff faces uneven
-      const yNoise = noise2D(Math.cos(angle) * 3 + 20, Math.sin(angle) * 3 + 20) * 0.3 * t;
+      // Vertical noise — jagged cliff faces
+      const yNoise = noise2D(Math.cos(angle) * 5 + 20, Math.sin(angle) * 5 + ring * 0.7) * 0.25
+                   + noise2D(Math.cos(angle) * 11 + 40, Math.sin(angle) * 11 + ring * 1.3) * 0.12;
 
       const x = Math.cos(angle) * r;
       const z = Math.sin(angle) * r;
-      cliffVerts.push(x, y + yNoise, z);
+      cliffVerts.push(x, y + yNoise * (0.2 + t * 0.8), z);
 
-      // Colors: brownish at top (matching terrain edge) → dark grey/charcoal at bottom
+      // Colors: warm brown at top → dark charcoal at bottom
       const warmth = (1 - t);
       const n = noise2D(x * 2 + 30, z * 2 + 30) * 0.05;
-      const cr = 0.12 + warmth * 0.25 + n;
-      const cg = 0.10 + warmth * 0.15 + n * 0.5;
-      const cb = 0.08 + warmth * 0.08 + n * 0.3;
+      const cr = 0.10 + warmth * 0.28 + n;
+      const cg = 0.08 + warmth * 0.16 + n * 0.4;
+      const cb = 0.07 + warmth * 0.08 + n * 0.2;
       cliffCols.push(cr, cg, cb);
     }
   }
@@ -312,15 +317,6 @@ function Terrain({ projects, radius }) {
   );
 }
 
-// ── Water — circular, matching island shape ──────────────────────────────────
-function Water({ radius }) {
-  return (
-    <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <circleGeometry args={[radius * 0.85, 64]} />
-      <meshStandardMaterial color="#2A5068" roughness={0.3} metalness={0.15} flatShading />
-    </mesh>
-  );
-}
 
 // ── Single label with depth-aware z-index ────────────────────────────────────
 function DepthLabel({ p, onSelect, isHov, setHovered }) {
@@ -404,7 +400,6 @@ function Scene({ projects, radius, onSelect, hovered, setHovered, hour }) {
     <>
       <Environment hour={hour} />
       <Terrain projects={projects} radius={radius} />
-      <Water radius={radius} />
       <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} />
       <OrbitControls
         enablePan enableZoom enableRotate
