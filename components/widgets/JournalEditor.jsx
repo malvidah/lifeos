@@ -26,21 +26,54 @@ function extractImages(content) {
 
 // ── Photo Strip ───────────────────────────────────────────────────────────────
 // Horizontal scroll row of filled rounded squares. Click to open slideshow.
+// Supports mouse drag-to-scroll on desktop + native touch scroll on mobile.
 function PhotoStrip({ images, onViewImage }) {
+  const scrollRef = useRef(null);
+  const dragState = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
+
   if (!images.length) return null;
-  // Height: ~half the card width. Using a fixed-ish height that feels compact.
   const SIZE = 140;
+
+  const onMouseDown = (e) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    dragState.current = { down: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, moved: false };
+    el.style.cursor = 'grabbing';
+  };
+  const onMouseMove = (e) => {
+    if (!dragState.current.down) return;
+    e.preventDefault();
+    const el = scrollRef.current;
+    const x = e.pageX - el.offsetLeft;
+    const walk = x - dragState.current.startX;
+    if (Math.abs(walk) > 4) dragState.current.moved = true;
+    el.scrollLeft = dragState.current.scrollLeft - walk;
+  };
+  const onMouseUp = () => {
+    dragState.current.down = false;
+    if (scrollRef.current) scrollRef.current.style.cursor = 'grab';
+  };
+
   return (
-    <div style={{
-      display: 'flex', gap: 4, overflowX: 'auto', overflowY: 'hidden',
-      marginBottom: 6, borderRadius: 10,
-      scrollbarWidth: 'none', msOverflowStyle: 'none',
-      WebkitOverflowScrolling: 'touch',
-    }}>
+    <div
+      ref={scrollRef}
+      onMouseDown={onMouseDown}
+      onMouseMove={onMouseMove}
+      onMouseUp={onMouseUp}
+      onMouseLeave={onMouseUp}
+      style={{
+        display: 'flex', gap: 4, overflowX: 'auto', overflowY: 'hidden',
+        marginBottom: 6, borderRadius: 10,
+        scrollbarWidth: 'none', msOverflowStyle: 'none',
+        WebkitOverflowScrolling: 'touch',
+        cursor: images.length > 1 ? 'grab' : 'pointer',
+        userSelect: 'none',
+      }}
+    >
       {images.map((url, i) => (
         <div
           key={url}
-          onClick={() => onViewImage(i)}
+          onClick={() => { if (!dragState.current.moved) onViewImage(i); }}
           style={{
             width: images.length === 1 ? '100%' : SIZE,
             height: SIZE, flexShrink: 0,
@@ -48,10 +81,10 @@ function PhotoStrip({ images, onViewImage }) {
             cursor: 'pointer', background: 'var(--dl-well)',
             transition: 'opacity 0.15s',
           }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '0.88'}
+          onMouseEnter={e => { if (!dragState.current.down) e.currentTarget.style.opacity = '0.88'; }}
           onMouseLeave={e => e.currentTarget.style.opacity = '1'}
         >
-          <img src={url} alt="" loading="lazy" style={{
+          <img src={url} alt="" loading="lazy" draggable="false" style={{
             width: '100%', height: '100%', objectFit: 'cover', display: 'block',
           }} />
         </div>
@@ -64,7 +97,8 @@ function PhotoStrip({ images, onViewImage }) {
 // Wide rectangle with chevrons, dots, and X to close.
 function Slideshow({ images, index, onClose }) {
   const [idx, setIdx] = useState(index);
-  const touchStart = useRef(null);
+  const pointerStart = useRef(null);
+
   const prev = () => setIdx(i => (i - 1 + images.length) % images.length);
   const next = () => setIdx(i => (i + 1) % images.length);
 
@@ -78,15 +112,19 @@ function Slideshow({ images, index, onClose }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
+  // Unified pointer (mouse + touch) swipe
+  const onPointerDown = (e) => { pointerStart.current = e.clientX; };
+  const onPointerUp = (e) => {
+    if (pointerStart.current == null) return;
+    const diff = e.clientX - pointerStart.current;
+    if (Math.abs(diff) > 40) { diff > 0 ? prev() : next(); }
+    pointerStart.current = null;
+  };
+
   return (
-    <div style={{ marginBottom: 6, position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)' }}
-      onTouchStart={e => { touchStart.current = e.touches[0].clientX; }}
-      onTouchEnd={e => {
-        if (touchStart.current == null) return;
-        const diff = e.changedTouches[0].clientX - touchStart.current;
-        if (Math.abs(diff) > 50) { diff > 0 ? prev() : next(); }
-        touchStart.current = null;
-      }}
+    <div style={{ marginBottom: 6, position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'grab', userSelect: 'none' }}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
     >
       <img src={images[idx]} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'contain', display: 'block' }} />
 
