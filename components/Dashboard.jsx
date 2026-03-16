@@ -65,9 +65,13 @@ function DashboardInner() {
       clearCacheForUser(session?.user?.id ?? null);
       setSession(session);setAuthReady(true);
     });
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,s)=>{
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_event,s)=>{
       clearCacheForUser(s?.user?.id ?? null);
       setSession(s);setAuthReady(true);
+      // Save Google tokens on fresh login (provider_token only present after OAuth callback)
+      if(s?.provider_token && s?.access_token){
+        api.post("/api/google-token",{googleToken:s.provider_token,refreshToken:s.provider_refresh_token||null},s.access_token).catch(()=>{});
+      }
     });
     return ()=>subscription.unsubscribe();
   },[]);
