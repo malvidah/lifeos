@@ -78,150 +78,143 @@ function islandRadius(projectCount) {
   return 3.5 + Math.sqrt(Math.max(1, projectCount)) * 1.8;
 }
 
-// ── Build the entire island as ONE CylinderGeometry that we deform ───────────
-// This avoids all the topology/seam issues of separate top + cliff + skirt.
-// A cylinder with radialSegments around, heightSegments vertically.
-// Top cap = terrain surface. Side rings = cliff that tapers. Bottom cap = tip.
+// ── Top surface (PlaneGeometry for full terrain detail) ──────────────────────
+const TOP_SEG = 80;
 
-function buildIslandGeo(projects, radius) {
-  const noise2D = createNoise2D();
-  const DEPTH = radius * 0.9;
-  const RADIAL = 64;     // segments around the perimeter
-  const HEIGHT = 20;     // vertical segments for the cliff sides
-
-  // ── Irregular edge radius ─────────────────────────────────────────────
-  function edgeR(angle) {
-    return radius * (0.82
-      + noise2D(Math.cos(angle) * 2.2, Math.sin(angle) * 2.2) * 0.18
-      + noise2D(Math.cos(angle * 2.7) * 1.8, Math.sin(angle * 2.7) * 1.8) * 0.1
-      + noise2D(Math.cos(angle * 5) * 1.2, Math.sin(angle * 5) * 1.2) * 0.05
-    );
-  }
-
-  // ── Use CylinderGeometry as base, then deform every vertex ────────────
-  // open-ended so we control top/bottom separately
-  const geo = new THREE.CylinderGeometry(
-    radius,      // radiusTop (will be deformed)
-    radius * 0.05, // radiusBottom — narrow tip
-    DEPTH,       // height
-    RADIAL,      // radialSegments
-    HEIGHT,      // heightSegments
-    false        // openEnded = false (includes caps)
-  );
-
-  const pos = geo.attributes.position;
-  const normals = geo.attributes.normal;
-  const colors = new Float32Array(pos.count * 3);
-
-  // Cylinder is centered at origin, extends from -DEPTH/2 to +DEPTH/2.
-  // We want: top at y=0, bottom at y=-DEPTH.
-  // So shift everything down by DEPTH/2.
+function buildTopGeo(projects, radius, noise2D, edgeR) {
+  const size = radius * 2.2;
+  const top = new THREE.PlaneGeometry(size, size, TOP_SEG, TOP_SEG);
+  top.rotateX(-Math.PI / 2);
+  const pos = top.attributes.position;
 
   for (let i = 0; i < pos.count; i++) {
-    let x = pos.getX(i);
-    let y = pos.getY(i);
-    let z = pos.getZ(i);
+    const x = pos.getX(i), z = pos.getZ(i);
+    const dist = Math.sqrt(x * x + z * z);
+    const angle = Math.atan2(z, x);
+    const eR = edgeR(angle);
 
-    // Shift so top is at y=0, bottom at y=-DEPTH
-    y -= DEPTH / 2;
+    if (dist > eR) { pos.setY(i, -20); continue; }
+
+    const t = dist / eR;
+    const mask = t > 0.75 ? 1 - ((t - 0.75) / 0.25) ** 2 : 1;
+
+    let h = noise2D(x * 0.3, z * 0.3) * 0.4
+          + noise2D(x * 0.7, z * 0.7) * 0.2
+          + noise2D(x * 1.5, z * 1.5) * 0.08;
+
+    for (const p of projects) {
+      const dx = x - p.x, dz = z - p.z;
+      const d = Math.sqrt(dx * dx + dz * dz);
+      const r = 0.6 + p.score * 0.3;
+      if (d < r * 2.0) {
+        const f = Math.max(0, 1 - d / (r * 2.0));
+        h += p.height * f * f * f;
+      }
+    }
+
+    pos.setY(i, h * mask + (1 - mask) * -0.05);
+  }
+
+  // Vertex colors
+  const colors = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const h = pos.getY(i);
+    if (h < -10) { colors[i*3]=0; colors[i*3+1]=0; colors[i*3+2]=0; continue; }
+    const x = pos.getX(i), z = pos.getZ(i);
+    const ht = Math.max(0, Math.min(1, (h + 0.3) / 2.8));
+    const n = noise2D(x * 2.5, z * 2.5) * 0.04;
+    if (ht < 0.1) { colors[i*3]=0.18+n; colors[i*3+1]=0.25+n; colors[i*3+2]=0.22+n; }
+    else if (ht < 0.25) { colors[i*3]=0.28+n; colors[i*3+1]=0.38+n; colors[i*3+2]=0.25+n; }
+    else if (ht < 0.4) { colors[i*3]=0.48+n; colors[i*3+1]=0.42+n; colors[i*3+2]=0.25+n; }
+    else if (ht < 0.6) { colors[i*3]=0.65+n; colors[i*3+1]=0.45+n; colors[i*3+2]=0.28+n; }
+    else if (ht < 0.8) { colors[i*3]=0.48+n; colors[i*3+1]=0.45+n; colors[i*3+2]=0.48+n; }
+    else { colors[i*3]=0.85+n; colors[i*3+1]=0.78+n; colors[i*3+2]=0.7+n; }
+  }
+  top.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  top.computeVertexNormals();
+  return top;
+}
+
+// ── Underside (open CylinderGeometry, deformed for taper) ────────────────────
+function buildUndersideGeo(radius, noise2D, edgeR) {
+  const DEPTH = radius * 0.9;
+  const RADIAL = 64;
+  const HEIGHT = 20;
+
+  // Open-ended cylinder, no caps — just the tapering sides
+  const geo = new THREE.CylinderGeometry(
+    radius, radius * 0.04, DEPTH, RADIAL, HEIGHT, true
+  );
+  const pos = geo.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+
+  for (let i = 0; i < pos.count; i++) {
+    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    y -= DEPTH / 2; // shift so top ring is at y=0
 
     const angle = Math.atan2(z, x);
     const currentR = Math.sqrt(x * x + z * z);
-
-    // t: 0 = top surface, 1 = bottom tip
     const t = Math.max(0, Math.min(1, -y / DEPTH));
 
-    // Target radius at this height: edge radius * taper
+    // Taper with power curve
     const taper = Math.max(0.03, (1 - t) ** 1.5);
     const targetR = edgeR(angle) * taper;
 
-    // Rocky displacement on cliff faces (not on top cap or bottom cap)
-    const isTopCap = (t < 0.01 && currentR < radius * 0.5);
-    const isBotCap = (t > 0.99 && currentR < radius * 0.1);
-    const isSide = !isTopCap && !isBotCap;
-
-    let rockDisp = 0;
-    if (isSide && t > 0.02) {
-      rockDisp = noise2D(angle * 5 + t * 8, t * 6) * 0.1
+    // Rock displacement scaled by taper
+    const rock = noise2D(angle * 5 + t * 8, t * 6) * 0.1
                + noise2D(angle * 11 + t * 13, t * 11) * 0.05;
-    }
 
-    // Scale radius to target
     if (currentR > 0.001) {
-      const scale = (targetR * (1 + rockDisp)) / currentR;
+      const scale = (targetR * (1 + rock)) / currentR;
       x *= scale;
       z *= scale;
     }
 
-    // Top surface: add terrain features (mountains, noise)
-    if (t < 0.05) {
-      const mask = 1 - t / 0.05; // blend from full terrain at t=0 to nothing at t=0.05
-      let terrain = noise2D(x * 0.3, z * 0.3) * 0.4
-                  + noise2D(x * 0.7, z * 0.7) * 0.2
-                  + noise2D(x * 1.5, z * 1.5) * 0.08;
+    // Vertical noise for jagged cliff
+    const yN = noise2D(angle * 5 + 20, t * 4 + 20) * 0.3
+             + noise2D(angle * 11 + 40, t * 8) * 0.15;
+    y += yN * t * 0.5;
 
-      // Island shape falloff at edges
-      const dist = Math.sqrt(x * x + z * z);
-      const eR = edgeR(angle);
-      const edgeFade = dist < eR * 0.7 ? 1 : Math.max(0, 1 - ((dist - eR * 0.7) / (eR * 0.3)));
+    pos.setX(i, x); pos.setY(i, y); pos.setZ(i, z);
 
-      for (const p of projects) {
-        const dx = x - p.x, dz = z - p.z;
-        const d = Math.sqrt(dx * dx + dz * dz);
-        const r = 0.6 + p.score * 0.3;
-        if (d < r * 2.0) {
-          const f = Math.max(0, 1 - d / (r * 2.0));
-          terrain += p.height * f * f * f;
-        }
-      }
-
-      y += terrain * edgeFade * mask;
-    }
-
-    // Vertical noise on cliff faces
-    if (isSide && t > 0.05) {
-      const yNoise = noise2D(angle * 5 + 20, t * 4 + 20) * 0.3
-                   + noise2D(angle * 11 + 40, t * 8) * 0.15;
-      y += yNoise * t * 0.5;
-    }
-
-    pos.setX(i, x);
-    pos.setY(i, y);
-    pos.setZ(i, z);
-
-    // ── Vertex colors ───────────────────────────────────────────────────
-    const n = noise2D(x * 2.5 + 10, z * 2.5 + 10) * 0.04;
-    if (t < 0.05) {
-      // Top surface — terrain colors
-      const h = y;
-      const ht = Math.max(0, Math.min(1, (h + 0.3) / 2.8));
-      if (ht < 0.1) { colors[i*3]=0.18+n; colors[i*3+1]=0.25+n; colors[i*3+2]=0.22+n; }
-      else if (ht < 0.25) { colors[i*3]=0.28+n; colors[i*3+1]=0.38+n; colors[i*3+2]=0.25+n; }
-      else if (ht < 0.4) { colors[i*3]=0.48+n; colors[i*3+1]=0.42+n; colors[i*3+2]=0.25+n; }
-      else if (ht < 0.6) { colors[i*3]=0.65+n; colors[i*3+1]=0.45+n; colors[i*3+2]=0.28+n; }
-      else if (ht < 0.8) { colors[i*3]=0.48+n; colors[i*3+1]=0.45+n; colors[i*3+2]=0.48+n; }
-      else { colors[i*3]=0.85+n; colors[i*3+1]=0.78+n; colors[i*3+2]=0.7+n; }
-    } else {
-      // Cliff / underside — warm brown fading to dark charcoal
-      const warmth = 1 - t;
-      colors[i*3]   = 0.10 + warmth * 0.30 + n;
-      colors[i*3+1] = 0.08 + warmth * 0.18 + n * 0.4;
-      colors[i*3+2] = 0.07 + warmth * 0.10 + n * 0.2;
-    }
+    // Colors: warm brown → dark charcoal
+    const warmth = 1 - t;
+    const n = noise2D(x * 2 + 30, z * 2 + 30) * 0.04;
+    colors[i*3]   = 0.10 + warmth * 0.30 + n;
+    colors[i*3+1] = 0.08 + warmth * 0.18 + n * 0.4;
+    colors[i*3+2] = 0.07 + warmth * 0.10 + n * 0.2;
   }
 
   geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   geo.computeVertexNormals();
-
   return geo;
 }
 
 function Terrain({ projects, radius }) {
-  const geo = useMemo(() => buildIslandGeo(projects, radius), [projects, radius]);
+  const { topGeo, undersideGeo } = useMemo(() => {
+    const noise2D = createNoise2D();
+    function edgeR(angle) {
+      return radius * (0.82
+        + noise2D(Math.cos(angle) * 2.2, Math.sin(angle) * 2.2) * 0.18
+        + noise2D(Math.cos(angle * 2.7) * 1.8, Math.sin(angle * 2.7) * 1.8) * 0.1
+        + noise2D(Math.cos(angle * 5) * 1.2, Math.sin(angle * 5) * 1.2) * 0.05
+      );
+    }
+    return {
+      topGeo: buildTopGeo(projects, radius, noise2D, edgeR),
+      undersideGeo: buildUndersideGeo(radius, noise2D, edgeR),
+    };
+  }, [projects, radius]);
+
   return (
-    <mesh geometry={geo} receiveShadow castShadow>
-      <meshToonMaterial vertexColors gradientMap={toonGrad} side={THREE.DoubleSide} />
-    </mesh>
+    <group>
+      <mesh geometry={topGeo} receiveShadow castShadow>
+        <meshToonMaterial vertexColors gradientMap={toonGrad} />
+      </mesh>
+      <mesh geometry={undersideGeo} receiveShadow castShadow>
+        <meshToonMaterial vertexColors gradientMap={toonGrad} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
   );
 }
 
