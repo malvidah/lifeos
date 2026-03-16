@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo, useRef, Suspense } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import { createNoise2D } from "simplex-noise";
 import * as THREE from "three";
@@ -322,35 +322,52 @@ function Water({ radius }) {
   );
 }
 
+// ── Single label with depth-aware z-index ────────────────────────────────────
+function DepthLabel({ p, onSelect, isHov, setHovered }) {
+  const ref = useRef();
+  const pos = useMemo(() => new THREE.Vector3(p.x, p.height + 0.5, p.z), [p.x, p.height, p.z]);
+
+  // Update z-index every frame based on camera distance — closer = higher
+  useFrame(({ camera }) => {
+    if (!ref.current) return;
+    const dist = camera.position.distanceTo(pos);
+    // Map distance to z-index: closer (dist ~6) → z 100, far (dist ~25) → z 1
+    const z = isHov ? 9999 : Math.max(1, Math.round(200 - dist * 8));
+    ref.current.style.zIndex = z;
+  });
+
+  return (
+    <Html position={[p.x, p.height + 0.5, p.z]} center
+      occlude={!isHov} zIndexRange={[0, 0]}>
+      <div ref={ref} onClick={() => onSelect(p.tag)}
+        onMouseEnter={() => setHovered(p.tag)}
+        onMouseLeave={() => setHovered(null)}
+        style={{
+          pointerEvents: 'auto',
+          background: isHov ? p.color : 'var(--dl-card, #1a1a1a)',
+          border: `1px solid ${p.color}${isHov ? '' : '55'}`,
+          borderRadius: 100, padding: '4px 14px',
+          fontFamily: mono, fontSize: 12, letterSpacing: '0.06em',
+          textTransform: 'uppercase', whiteSpace: 'nowrap',
+          color: isHov ? '#fff' : p.color,
+          cursor: 'pointer', fontWeight: isHov ? 600 : 400,
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+          transition: 'background 0.15s, color 0.15s, border-color 0.15s',
+          userSelect: 'none',
+        }}>
+        {p.isActive && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: isHov ? '#fff' : p.color, marginRight: 6, verticalAlign: 'middle' }} />}
+        {p.label.toUpperCase()}
+      </div>
+    </Html>
+  );
+}
+
 // ── Labels ───────────────────────────────────────────────────────────────────
 function Labels({ projects, onSelect, hovered, setHovered }) {
-  return projects.map(p => {
-    const isHov = hovered === p.tag;
-    return (
-      <Html key={p.tag} position={[p.x, p.height + 0.5, p.z]} center
-        occlude={!isHov}
-        style={{ pointerEvents: 'auto', zIndex: isHov ? 9999 : 1 }}
-        zIndexRange={isHov ? [9999, 9999] : [3, 0]}>
-        <div onClick={() => onSelect(p.tag)}
-          onMouseEnter={() => setHovered(p.tag)}
-          onMouseLeave={() => setHovered(null)}
-          style={{
-            background: isHov ? p.color : 'var(--dl-card, #1a1a1a)',
-            border: `1px solid ${p.color}${isHov ? '' : '55'}`,
-            borderRadius: 100, padding: '4px 14px',
-            fontFamily: mono, fontSize: 12, letterSpacing: '0.06em',
-            textTransform: 'uppercase', whiteSpace: 'nowrap',
-            color: isHov ? '#fff' : p.color,
-            cursor: 'pointer', fontWeight: isHov ? 600 : 400,
-            boxShadow: `0 2px 8px rgba(0,0,0,0.2)`,
-            transition: 'all 0.15s', userSelect: 'none',
-          }}>
-          {p.isActive && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: isHov ? '#fff' : p.color, marginRight: 6, verticalAlign: 'middle' }} />}
-          {p.label.toUpperCase()}
-        </div>
-      </Html>
-    );
-  });
+  return projects.map(p => (
+    <DepthLabel key={p.tag} p={p} onSelect={onSelect}
+      isHov={hovered === p.tag} setHovered={setHovered} />
+  ));
 }
 
 // ── Environment ──────────────────────────────────────────────────────────────
