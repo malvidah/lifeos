@@ -536,7 +536,7 @@ function Water({ radius, vitality = 50 }) {
 function DepthLabel({ p, onSelect, isHov, setHovered }) {
   const htmlRef = useRef();
   const frameCount = useRef(0);
-  const labelY = p.height + 0.7;
+  const labelY = p.height + 0.35;
   const pos = useMemo(() => new THREE.Vector3(p.x, labelY, p.z), [p.x, labelY, p.z]);
 
   useFrame(({ camera }) => {
