@@ -430,10 +430,10 @@ function DepthLabel({ p, onSelect, isHov, setHovered }) {
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: isHov ? p.color + 'CC' : p.color + '18',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: `1px solid ${p.color}${isHov ? '88' : '33'}`,
+          background: isHov ? p.color + 'CC' : `rgba(255,255,255,0.45)`,
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          border: `1px solid ${isHov ? p.color + '88' : 'rgba(255,255,255,0.5)'}`,
           borderRadius: 999, padding: '3px 12px',
           fontFamily: mono, fontSize: 11, letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
