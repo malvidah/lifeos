@@ -60,7 +60,13 @@ function DashboardInner() {
   useEffect(()=>{
     const supabase=createClient();
     const code=new URLSearchParams(window.location.search).get("code");
-    if(code){supabase.auth.exchangeCodeForSession(code).then(()=>window.history.replaceState({},document.title,window.location.pathname));}
+    if(code){supabase.auth.exchangeCodeForSession(code).then(({data:{session:s}})=>{
+      window.history.replaceState({},document.title,window.location.pathname);
+      // Save Google tokens immediately — provider_token is ONLY available here
+      if(s?.provider_token && s?.access_token){
+        api.post("/api/google-token",{googleToken:s.provider_token,refreshToken:s.provider_refresh_token||null},s.access_token).catch(()=>{});
+      }
+    });}
     supabase.auth.getSession().then(({data:{session}})=>{
       clearCacheForUser(session?.user?.id ?? null);
       setSession(session);setAuthReady(true);
