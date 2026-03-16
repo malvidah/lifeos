@@ -15,7 +15,6 @@ function fmtDate(d) {
   return `${months[m - 1]} ${day}`;
 }
 
-<<<<<<< HEAD
 // Sanitize HTML for display: strip image chips (shown in PhotoStrip), replace
 // project/note chips with styled spans, remove inline styles and data attrs.
 function sanitizeHtml(html) {
