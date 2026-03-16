@@ -19,18 +19,37 @@ function extractImages(html) {
   return [...new Set(urls)];
 }
 
-// Sanitize HTML: keep structure but strip image chips (rendered separately),
-// interactive chips, and inline styles
+// Hash a project name to a deterministic color (same as the app's projectColor)
+const PROJECT_PALETTE = ['#C17B4A','#7A9E6E','#6B8EB8','#A07AB0','#B08050','#5E9E8A','#B06878','#8A8A50'];
+function projectColor(name) {
+  let h = 0;
+  for (let i = 0; i < (name||'').length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return PROJECT_PALETTE[h % PROJECT_PALETTE.length];
+}
+
+// Sanitize HTML: keep structure, render chips as styled inline elements,
+// strip image chips (rendered separately in PhotoStrip/Slideshow)
 function sanitizeHtml(html) {
   if (!html) return '';
-  return html
-    .replace(/<span[^>]*data-image-chip="[^"]*"[^>]*>[\s\S]*?<\/span>/g, '') // remove image chips
-    .replace(/<div[^>]*data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '') // remove image blocks
-    .replace(/<span[^>]*data-project-tag="([^"]*)"[^>]*>[^<]*<\/span>/g, '<em>$1</em>')
-    .replace(/<span[^>]*data-note-link="([^"]*)"[^>]*>[^<]*<\/span>/g, '<em>$1</em>')
-    .replace(/ style="[^"]*"/g, '')
-    .replace(/ data-[a-z-]+="[^"]*"/g, '')
-    .replace(/&nbsp;/g, ' ');
+  let s = html;
+  // 1. Remove image chips/blocks (rendered separately)
+  s = s.replace(/<span[^>]*data-image-chip="[^"]*"[^>]*>[\s\S]*?<\/span>/g, '');
+  s = s.replace(/<div[^>]*data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '');
+  // 2. Strip inline styles and data attrs FIRST (before adding chip styles)
+  // Preserve data-project-tag and data-note-link for step 3
+  s = s.replace(/ style="[^"]*"/g, '');
+  s = s.replace(/ data-(?!project-tag|note-link)[a-z-]+="[^"]*"/g, '');
+  // 3. Replace project chips → styled pill with inline color
+  s = s.replace(/<span[^>]*data-project-tag="([^"]*)"[^>]*>[^<]*<\/span>/g, (_, name) => {
+    const col = projectColor(name);
+    return `<span class="chip-project" style="color:${col};background:${col}22">${name.toUpperCase()}</span>`;
+  });
+  // 4. Replace note chips → styled square chip
+  s = s.replace(/<span[^>]*data-note-link="([^"]*)"[^>]*>[^<]*<\/span>/g, (_, name) => {
+    return `<span class="chip-note">${name}</span>`;
+  });
+  s = s.replace(/&nbsp;/g, ' ');
+  return s;
 }
 
 function fmtDate(d) {
@@ -215,6 +234,8 @@ export default function SharedProjectPage() {
         .note-content table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 15px; }
         .note-content th, .note-content td { padding: 6px 12px; text-align: left; vertical-align: top; border: 1px solid var(--dl-border); color: var(--dl-strong); line-height: 1.6; }
         .note-content th { font-weight: 600; background: var(--dl-surface); }
+        .chip-project { display:inline-block; vertical-align:middle; border-radius:999px; padding:1px 7px; font-family:'SF Mono','Fira Code',ui-monospace,monospace; font-size:11px; letter-spacing:0.08em; line-height:1.65; text-transform:uppercase; white-space:nowrap; }
+        .chip-note { display:inline-block; vertical-align:middle; color:var(--dl-strong); background:var(--dl-border); border-radius:4px; padding:1px 7px; font-family:'SF Mono','Fira Code',ui-monospace,monospace; font-size:11px; letter-spacing:0.08em; line-height:1.65; text-transform:uppercase; white-space:nowrap; }
         @media print { .share-page { padding: 0; } .share-footer { display: none; } }
       `}</style>
       <div className="share-page" style={s.page}>
