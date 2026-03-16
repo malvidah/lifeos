@@ -17,7 +17,7 @@ import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
 import HealthCard from "./cards/HealthCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
-import { MapCard } from "./cards/MapCard.jsx";
+import { MapCard, MountainBackground } from "./cards/MapCard.jsx";
 import { JournalEditor, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
@@ -373,11 +373,12 @@ function DashboardInner() {
         }, 150);
       },
     }}>
-    <div style={{background:activeProject?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
-      {/* Weather gradient — full viewport, behind everything. Visible through
-          glassmorphic elements (nav bar, chat float) that use backdrop-filter.
-          Cards have opaque backgrounds and sit on top. */}
+    <div style={{background:activeProject && activeProject !== '__graph__'?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
+      {/* Weather/mountain background — full viewport, behind everything */}
       {!activeProject && <WeatherBackground date={selected} theme={theme}/>}
+      {activeProject === '__graph__' && graphData && (
+        <MountainBackground allTags={graphData.allTags} connections={graphData.connections} recency={graphData.recency} theme={theme} />
+      )}
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
