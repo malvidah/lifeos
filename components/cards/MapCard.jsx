@@ -534,24 +534,13 @@ function Water({ radius, vitality = 50 }) {
 
 // ── Labels ───────────────────────────────────────────────────────────────────
 function DepthLabel({ p, onSelect, isHov, setHovered }) {
-  const htmlRef = useRef();
-  const frameCount = useRef(0);
   const labelY = p.height + 0.35;
-  const pos = useMemo(() => new THREE.Vector3(p.x, labelY, p.z), [p.x, labelY, p.z]);
-
-  useFrame(({ camera }) => {
-    // Throttle DOM writes to every 3rd frame
-    if (++frameCount.current % 3 !== 0) return;
-    const wrapper = htmlRef.current?.parentElement;
-    if (!wrapper) return;
-    const dist = camera.position.distanceTo(pos);
-    wrapper.style.zIndex = isHov ? 9999 : Math.max(1, Math.round(1000 - dist * 40));
-  });
 
   return (
     <Html position={[p.x, labelY, p.z]} center
-      zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
-      <div ref={htmlRef} onClick={() => onSelect(p.tag)}
+      zIndexRange={isHov ? [9999, 9999] : [16, 0]}
+      style={{ pointerEvents: 'auto' }}>
+      <div onClick={() => onSelect(p.tag)}
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
