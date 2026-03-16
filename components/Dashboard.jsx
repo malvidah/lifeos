@@ -121,13 +121,16 @@ function DashboardInner() {
     Promise.all([
       api.get('/api/all-tags', token),
       api.get('/api/tag-connections', token),
-    ]).then(([tagsRes, connsRes]) => {
+      api.get('/api/project-stats', token),
+    ]).then(([tagsRes, connsRes, statsRes]) => {
       setGraphData({
         allTags: Array.isArray(tagsRes?.tags) ? tagsRes.tags : [],
         connections: Array.isArray(connsRes?.connections) ? connsRes.connections : [],
         recency: connsRes?.recency || {},
+        entryCounts: statsRes?.counts || {},
+        completedTasks: statsRes?.completed || {},
       });
-    }).catch(() => { setGraphData({ allTags: [], connections: [], recency: {} }); });
+    }).catch(() => { setGraphData({ allTags: [], connections: [], recency: {}, entryCounts: {}, completedTasks: {} }); });
   }, [activeProject, token]); // eslint-disable-line
   const { results: srResults, loading: srLoading } = useSearch(searchQuery, token, userId);
 
@@ -543,6 +546,9 @@ function DashboardInner() {
                             allTags={graphData.allTags}
                             connections={graphData.connections}
                             recency={graphData.recency}
+                            entryCounts={graphData.entryCounts}
+                            completedTasks={graphData.completedTasks}
+                            healthDots={healthDots}
                             onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                           />
                         )}

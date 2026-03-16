@@ -94,7 +94,7 @@ function EdgeDetection() {
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
-function layoutProjects(tags, connections, recency) {
+function layoutProjects(tags, connections, recency, entryCounts, completedTasks) {
   if (!tags.length) return [];
   const connWeight = {};
   tags.forEach(t => { connWeight[t] = 0; });
@@ -135,16 +135,20 @@ function layoutProjects(tags, connections, recency) {
     }
   }
   const maxConn = Math.max(1, ...Object.values(connWeight));
+  // Use entry counts for height — projects with more real entries get taller mountains
+  const maxEntries = Math.max(1, ...Object.values(entryCounts || {}));
   return tags.map(tag => {
     const pos = placed.get(tag) || { x: 0, z: 0 };
     const score = (connWeight[tag] || 0) / maxConn;
+    const entryScore = (entryCounts?.[tag] || 0) / maxEntries;
     return {
       tag, x: pos.x, z: pos.z,
-      height: 0.8 + score * 1.2,
+      height: 0.6 + entryScore * 1.8, // real effort drives height
       color: projectColor(tag),
       label: tagDisplayName(tag),
       isActive: recency?.[tag] && (Date.now() - new Date(recency[tag]).getTime()) < 7 * 86400000,
       score,
+      completedTasks: completedTasks?.[tag] || 0,
     };
   });
 }
@@ -173,7 +177,7 @@ function skyColors(hour) {
 //   center ──ring1──ring2──...──edgeRing──cliff1──cliff2──...──tipRing
 //   (top surface, terrain detail)         (underside, tapering down)
 
-function buildIslandGeo(projects, radius, noise2D, edgeR) {
+function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
   const ANG = 64;           // angular segments
   const TOP_RINGS = 28;     // concentric rings for top surface (center→edge)
   const UNDER_RINGS = 20;   // rings for underside (edge→bottom tip)
@@ -207,16 +211,28 @@ function buildIslandGeo(projects, radius, noise2D, edgeR) {
     return h * mask + (1 - mask) * -0.05;
   }
 
-  // Helper: terrain color
+  // Helper: terrain color — blends between lush (high vitality) and autumn (low)
+  // Snow caps on the tallest peaks
+  const v = Math.max(0, Math.min(100, vitality)) / 100; // 0-1
+  const maxHeight = projects.length ? Math.max(...projects.map(p => p.height)) : 1;
+  const snowThreshold = maxHeight * 0.75; // only tallest peaks get snow
+
+  // Two palettes: lush green vs warm autumn
+  const lush   = [[0.18,0.28,0.22],[0.22,0.42,0.20],[0.35,0.50,0.22],[0.48,0.45,0.25],[0.48,0.45,0.48],[0.85,0.78,0.70]];
+  const autumn  = [[0.25,0.18,0.15],[0.45,0.28,0.18],[0.60,0.35,0.20],[0.70,0.40,0.22],[0.55,0.40,0.38],[0.80,0.70,0.60]];
+
   function terrainColor(x, z, h) {
     const ht = Math.max(0, Math.min(1, (h + 0.3) / 2.8));
     const n = noise2D(x * 2.5, z * 2.5) * 0.04;
-    if (ht < 0.1) return [0.18+n, 0.25+n, 0.22+n];
-    if (ht < 0.25) return [0.28+n, 0.38+n, 0.25+n];
-    if (ht < 0.4) return [0.48+n, 0.42+n, 0.25+n];
-    if (ht < 0.6) return [0.65+n, 0.45+n, 0.28+n];
-    if (ht < 0.8) return [0.48+n, 0.45+n, 0.48+n];
-    return [0.85+n, 0.78+n, 0.7+n];
+    const band = ht < 0.1 ? 0 : ht < 0.25 ? 1 : ht < 0.4 ? 2 : ht < 0.6 ? 3 : ht < 0.8 ? 4 : 5;
+    const base = lush[band].map((l, i) => l * v + autumn[band][i] * (1 - v) + n);
+
+    // Snow cap: blend to white above threshold
+    if (h > snowThreshold && maxHeight > 1.2) {
+      const snowBlend = Math.min(1, (h - snowThreshold) / 0.4);
+      return base.map(c => c + (0.92 - c) * snowBlend + noise2D(x * 4, z * 4) * 0.02);
+    }
+    return base;
   }
 
   // ── Vertex 0: center point ─────────────────────────────────────────────
@@ -326,7 +342,7 @@ function buildIslandGeo(projects, radius, noise2D, edgeR) {
   return geo;
 }
 
-function Terrain({ projects, radius }) {
+function Terrain({ projects, radius, vitality }) {
   const geo = useMemo(() => {
     const noise2D = createNoise2D();
     function edgeR(angle) {
@@ -335,8 +351,8 @@ function Terrain({ projects, radius }) {
         + noise2D(Math.cos(angle * 2) * 1.2, Math.sin(angle * 2) * 1.2) * 0.04
       );
     }
-    return buildIslandGeo(projects, radius, noise2D, edgeR);
-  }, [projects, radius]);
+    return buildIslandGeo(projects, radius, noise2D, edgeR, vitality);
+  }, [projects, radius, vitality]);
 
   return (
     <mesh geometry={geo} receiveShadow castShadow>
@@ -500,13 +516,13 @@ function Environment({ hour }) {
 }
 
 // ── Scene ────────────────────────────────────────────────────────────────────
-function Scene({ projects, radius, onSelect, hovered, setHovered, hour }) {
+function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour }) {
   const peakY = projects.length
     ? projects.reduce((max, p) => Math.max(max, p.height), 0) * 0.85 : 0.5;
   return (
     <>
       <Environment hour={hour} />
-      <Terrain projects={projects} radius={radius} />
+      <Terrain projects={projects} radius={radius} vitality={vitality} />
       <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} />
       <OrbitControls
         enablePan enableZoom enableRotate
@@ -526,12 +542,25 @@ function Scene({ projects, radius, onSelect, hovered, setHovered, hour }) {
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────
-export function MapCard({ allTags, connections, recency, onSelectProject }) {
+export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, healthDots, onSelectProject }) {
   const [hovered, setHovered] = useState(null);
   const projects = useMemo(
-    () => layoutProjects(allTags || [], connections, recency),
-    [allTags, connections, recency]
+    () => layoutProjects(allTags || [], connections, recency, entryCounts, completedTasks),
+    [allTags, connections, recency, entryCounts, completedTasks]
   );
+
+  // Vitality: average of all 4 health scores over last 30 days (0-100)
+  const vitality = useMemo(() => {
+    if (!healthDots || !Object.keys(healthDots).length) return 50;
+    const now = new Date();
+    const cutoff = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const thirtyAgo = new Date(now); thirtyAgo.setDate(thirtyAgo.getDate() - 30);
+    const cutoffStart = `${thirtyAgo.getFullYear()}-${String(thirtyAgo.getMonth()+1).padStart(2,'0')}-${String(thirtyAgo.getDate()).padStart(2,'0')}`;
+    const scores = Object.entries(healthDots)
+      .filter(([d]) => d >= cutoffStart && d <= cutoff)
+      .map(([, v]) => ((v.sleep||0) + (v.readiness||0) + (v.activity||0) + (v.recovery||0)) / 4);
+    return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 50;
+  }, [healthDots]);
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
   const radius = useMemo(() => islandRadius(projects.length), [projects.length]);
 
@@ -565,7 +594,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
         style={{ width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
-          <Scene projects={projects} radius={radius} onSelect={onSelectProject}
+          <Scene projects={projects} radius={radius} vitality={vitality} onSelect={onSelectProject}
             hovered={hovered} setHovered={setHovered} hour={hour} />
         </Suspense>
         <fog attach="fog" args={[sky.fog, 18, 40]} />
