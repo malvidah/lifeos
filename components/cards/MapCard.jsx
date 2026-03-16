@@ -18,19 +18,37 @@ function layoutProjects(tags, connections, recency) {
   });
   const sorted = [...tags].sort((a, b) => (connWeight[b] || 0) - (connWeight[a] || 0));
   const placed = new Map();
+  // Spread projects more evenly with wider spacing
+  const baseRadius = sorted.length <= 3 ? 2.0 : 1.8;
   sorted.forEach((tag, i) => {
     const angle = (i / sorted.length) * Math.PI * 2 + Math.PI / 4;
-    const radius = i === 0 ? 0 : 1.2 + (i / sorted.length) * 2.5;
+    const radius = i === 0 ? 0 : baseRadius + (i / sorted.length) * 3.0;
     placed.set(tag, { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius });
   });
-  for (let iter = 0; iter < 8; iter++) {
+  // Lighter connection pull so clusters don't collapse
+  for (let iter = 0; iter < 5; iter++) {
     (connections || []).forEach(({ source, target, weight }) => {
       const a = placed.get(source), b = placed.get(target);
       if (!a || !b) return;
-      const pull = 0.03 * Math.min(weight, 5);
+      const pull = 0.015 * Math.min(weight, 5);
       a.x += (b.x - a.x) * pull; a.z += (b.z - a.z) * pull;
       b.x -= (b.x - a.x) * pull; b.z -= (b.z - a.z) * pull;
     });
+    // Repel projects that are too close together
+    const entries = [...placed.entries()];
+    for (let j = 0; j < entries.length; j++) {
+      for (let k = j + 1; k < entries.length; k++) {
+        const a = entries[j][1], b = entries[k][1];
+        const dx = a.x - b.x, dz = a.z - b.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        const minDist = 2.0;
+        if (dist < minDist && dist > 0.01) {
+          const push = (minDist - dist) * 0.3 / dist;
+          a.x += dx * push; a.z += dz * push;
+          b.x -= dx * push; b.z -= dz * push;
+        }
+      }
+    }
   }
   const maxConn = Math.max(1, ...Object.values(connWeight));
   return tags.map(tag => {
@@ -38,7 +56,7 @@ function layoutProjects(tags, connections, recency) {
     const score = (connWeight[tag] || 0) / maxConn;
     return {
       tag, x: pos.x, z: pos.z,
-      height: 0.6 + score * 2.0,
+      height: 0.8 + score * 1.2,
       color: projectColor(tag),
       label: tagDisplayName(tag),
       isActive: recency?.[tag] && (Date.now() - new Date(recency[tag]).getTime()) < 7 * 86400000,
@@ -65,10 +83,10 @@ function buildTerrainGeo(projects) {
     for (const p of projects) {
       const dx = x - p.x, dz = z - p.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      const r = 0.7 + p.score * 0.5;
-      if (dist < r * 2.5) {
-        const f = Math.max(0, 1 - dist / (r * 2.5));
-        h += p.height * f * f;
+      const r = 0.6 + p.score * 0.3;
+      if (dist < r * 2.0) {
+        const f = Math.max(0, 1 - dist / (r * 2.0));
+        h += p.height * f * f * f;
       }
     }
     // Gentle edge fade — pull edges down slightly
