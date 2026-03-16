@@ -141,9 +141,9 @@ function buildUndersideGeo(radius, noise2D, edgeR) {
   const RADIAL = 64;
   const HEIGHT = 20;
 
-  // Open-ended cylinder, no caps — just the tapering sides
+  // Uniform cylinder — all tapering done in vertex deformation below
   const geo = new THREE.CylinderGeometry(
-    radius, radius * 0.04, DEPTH, RADIAL, HEIGHT, true
+    1, 1, DEPTH, RADIAL, HEIGHT, true
   );
   const pos = geo.attributes.position;
   const colors = new Float32Array(pos.count * 3);
