@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
 import { Extension, Node } from '@tiptap/core';
+import { Table, TableRow, TableCell, TableHeader } from '@tiptap/extension-table';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { DecorationSet, Decoration } from '@tiptap/pm/view';
@@ -38,6 +39,28 @@ function injectEditorStyles() {
     .dl-hide-images .ProseMirror div[data-imageblock] { display: none; }
     .dl-editor .ProseMirror { counter-reset: imgchip; }
     .dl-img-chip-num::before { content: counter(imgchip); }
+    .dl-editor .ProseMirror table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+    .dl-editor .ProseMirror th,
+    .dl-editor .ProseMirror td {
+      border-bottom: 1px solid var(--dl-border);
+      padding: 6px 10px;
+      text-align: left;
+      vertical-align: top;
+      font-size: inherit;
+      line-height: 1.5;
+    }
+    .dl-editor .ProseMirror th {
+      font-family: ${mono};
+      font-size: 0.85em;
+      letter-spacing: 0.04em;
+      color: var(--dl-highlight);
+      font-weight: 400;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--dl-border2);
+    }
+    .dl-editor .ProseMirror td { color: var(--dl-strong); }
+    .dl-editor .ProseMirror tr:last-child td { border-bottom: none; }
+    .dl-editor .ProseMirror .selectedCell { background: var(--dl-accent-10); }
   `;
   document.head.appendChild(s);
 }
@@ -581,6 +604,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ProjectTagNode,
       NoteLinkNode,
       ...(singleLine ? [] : [ImageBlock, ImageChip]),
+      ...(noteTitle ? [Table.configure({ resizable: false }), TableRow, TableCell, TableHeader] : []),
       ...(taskList ? [TaskList, TaskItem.configure({ nested: false })] : []),
 
       Placeholder.configure({
