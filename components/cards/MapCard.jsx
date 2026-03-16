@@ -64,36 +64,56 @@ function layoutProjects(tags, connections, recency) {
 
 // ── Island radius based on project count ─────────────────────────────────────
 function islandRadius(projectCount) {
-  // 1 project → 4, grows with sqrt so it doesn't explode
   return 3.5 + Math.sqrt(Math.max(1, projectCount)) * 1.8;
 }
 
-// ── Floating island terrain ──────────────────────────────────────────────────
-const SEG = 80;
-const DEPTH = 2.0;
+// ── Floating island with iceberg-shaped underside ────────────────────────────
+// Strategy: build a revolution solid. The edge profile goes from the terrain
+// surface → vertical/overhanging cliff → tapers inward to a rocky point below.
+// Uses radial slices (like an orange) with noise on every parameter.
+
+const TOP_SEG = 80;
 
 function buildIslandGeo(projects, radius) {
   const noise2D = createNoise2D();
-  const size = radius * 2.2; // grid covers beyond the island edge
-  const top = new THREE.PlaneGeometry(size, size, SEG, SEG);
-  top.rotateX(-Math.PI / 2);
-  const pos = top.attributes.position;
+  const size = radius * 2.2;
+  const DEPTH = radius * 0.6; // iceberg depth scales with island size
 
-  // Island shape mask — organic circle with noise on the boundary
+  // ── Irregular edge radius per angle ──────────────────────────────────────
+  // Pre-compute a wobbly edge radius for ~128 angular samples
+  const ANGLE_SAMPLES = 128;
+  const edgeRadii = [];
+  for (let i = 0; i < ANGLE_SAMPLES; i++) {
+    const a = (i / ANGLE_SAMPLES) * Math.PI * 2;
+    const wobble = noise2D(Math.cos(a) * 2.2, Math.sin(a) * 2.2) * 0.18
+                 + noise2D(Math.cos(a * 2.7) * 1.8, Math.sin(a * 2.7) * 1.8) * 0.1
+                 + noise2D(Math.cos(a * 5) * 1.2, Math.sin(a * 5) * 1.2) * 0.05;
+    edgeRadii.push(radius * (0.82 + wobble));
+  }
+
+  function getEdgeRadius(angle) {
+    const a = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    const idx = (a / (Math.PI * 2)) * ANGLE_SAMPLES;
+    const i0 = Math.floor(idx) % ANGLE_SAMPLES;
+    const i1 = (i0 + 1) % ANGLE_SAMPLES;
+    const t = idx - Math.floor(idx);
+    return edgeRadii[i0] * (1 - t) + edgeRadii[i1] * t;
+  }
+
   function islandMask(x, z) {
     const dist = Math.sqrt(x * x + z * z);
     const angle = Math.atan2(z, x);
-    // Wobbly edge using noise
-    const wobble = noise2D(Math.cos(angle) * 2, Math.sin(angle) * 2) * 0.15
-                 + noise2D(Math.cos(angle * 3) * 1.5, Math.sin(angle * 3) * 1.5) * 0.08;
-    const edgeRadius = radius * (0.85 + wobble);
-    if (dist > edgeRadius) return 0;
-    // Smooth falloff near edge
-    const t = dist / edgeRadius;
-    if (t > 0.7) return 1 - ((t - 0.7) / 0.3) * ((t - 0.7) / 0.3);
+    const edgeR = getEdgeRadius(angle);
+    if (dist > edgeR) return 0;
+    const t = dist / edgeR;
+    if (t > 0.75) return 1 - ((t - 0.75) / 0.25) * ((t - 0.75) / 0.25);
     return 1;
   }
 
+  // ── Top surface ──────────────────────────────────────────────────────────
+  const top = new THREE.PlaneGeometry(size, size, TOP_SEG, TOP_SEG);
+  top.rotateX(-Math.PI / 2);
+  const pos = top.attributes.position;
   const hMap = [];
 
   for (let i = 0; i < pos.count; i++) {
@@ -101,18 +121,15 @@ function buildIslandGeo(projects, radius) {
     const mask = islandMask(x, z);
 
     if (mask <= 0) {
-      // Outside island — drop below view
-      pos.setY(i, -10);
-      hMap.push(-10);
+      pos.setY(i, -20);
+      hMap.push(-20);
       continue;
     }
 
-    // Base terrain noise
     let h = noise2D(x * 0.3, z * 0.3) * 0.4
           + noise2D(x * 0.7, z * 0.7) * 0.2
           + noise2D(x * 1.5, z * 1.5) * 0.08;
 
-    // Project peaks
     for (const p of projects) {
       const dx = x - p.x, dz = z - p.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
@@ -123,19 +140,16 @@ function buildIslandGeo(projects, radius) {
       }
     }
 
-    // Apply island mask — terrain fades to sea level at edges
-    h = h * mask + (1 - mask) * -0.1;
-
+    h = h * mask + (1 - mask) * -0.05;
     pos.setY(i, h);
     hMap.push(h);
   }
 
-  // Cairn-style vertex colors — bold color bands, warm/cool contrast
-  // Distinct steps rather than smooth gradients (cell-shaded feel)
+  // Vertex colors — Cairn style
   const colors = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) {
     const h = pos.getY(i);
-    if (h < -5) { colors[i*3]=0; colors[i*3+1]=0; colors[i*3+2]=0; continue; }
+    if (h < -10) { colors[i*3]=0; colors[i*3+1]=0; colors[i*3+2]=0; continue; }
     const x = pos.getX(i), z = pos.getZ(i);
     const t = Math.max(0, Math.min(1, (h + 0.3) / 2.8));
     const n = noise2D(x * 2.5, z * 2.5) * 0.04;
@@ -151,169 +165,149 @@ function buildIslandGeo(projects, radius) {
   top.setAttribute('color', new THREE.BufferAttribute(colors, 3));
   top.computeVertexNormals();
 
-  // ── Underside — rocky floating island bottom ────────────────────────────
-  // Build a separate geometry for the underside by extruding edge vertices down
-  // into a tapered rocky shape
-  const underVerts = [], underIdx = [], underCols = [];
-  let vOff = 0;
-  const step = size / SEG;
-  const half = size / 2;
+  // ── Cliff + underside as a revolution solid ──────────────────────────────
+  // Build rings from the edge downward, tapering inward to a point.
+  // Each ring is at a different Y level with noise-displaced radius.
+  const RING_SEGS = 64;   // vertices per ring
+  const RINGS = 16;       // vertical rings from cliff top to bottom tip
 
-  // For each grid cell, if it has visible vertices, create underside triangles
-  for (let row = 0; row < SEG; row++) {
-    for (let col = 0; col < SEG; col++) {
-      const i00 = row * (SEG + 1) + col;
-      const i10 = row * (SEG + 1) + col + 1;
-      const i01 = (row + 1) * (SEG + 1) + col;
-      const i11 = (row + 1) * (SEG + 1) + col + 1;
+  const cliffVerts = [];
+  const cliffCols = [];
+  const cliffIdx = [];
 
-      // Skip cells where all vertices are outside the island
-      if (hMap[i00] < -5 && hMap[i10] < -5 && hMap[i01] < -5 && hMap[i11] < -5) continue;
+  for (let ring = 0; ring <= RINGS; ring++) {
+    const t = ring / RINGS; // 0 = cliff top (edge), 1 = bottom tip
+    const y = -t * DEPTH;
 
-      const corners = [i00, i10, i11, i01];
-      const anyVisible = corners.some(idx => hMap[idx] > -5);
-      if (!anyVisible) continue;
+    // Taper: radius shrinks as we go down. Inverted-mountain profile.
+    // Use a curve that starts wide (edge radius) and narrows to a point.
+    // Slight overhang near top, then taper accelerates.
+    const taper = t < 0.15
+      ? 1.0 + t * 0.3  // slight overhang near top (cliff bulges out)
+      : (1 - ((t - 0.15) / 0.85)) ** 1.6; // accelerating taper to point
 
-      // Top positions
-      for (const idx of corners) {
-        const x = pos.getX(idx), y = pos.getY(idx), z = pos.getZ(idx);
-        if (y < -5) continue; // skip invisible
+    for (let seg = 0; seg <= RING_SEGS; seg++) {
+      const angle = (seg / RING_SEGS) * Math.PI * 2;
+      const baseR = getEdgeRadius(angle);
 
-        const dist = Math.sqrt(x * x + z * z);
-        // Underside tapers toward center — deeper in middle, shallower at edges
-        const taper = Math.max(0.3, 1 - dist / (radius * 1.2));
-        const bottomY = y - DEPTH * taper;
-        // Add noise to underside for rocky look
-        const rockNoise = noise2D(x * 1.2 + 50, z * 1.2 + 50) * 0.4
-                        + noise2D(x * 2.5 + 50, z * 2.5 + 50) * 0.2;
-        const finalBottomY = bottomY + rockNoise * taper;
+      // Add rocky noise that increases with depth
+      const rockNoise = noise2D(Math.cos(angle) * 4 + t * 3, Math.sin(angle) * 4 + t * 5) * 0.12
+                      + noise2D(Math.cos(angle) * 8 + t * 7, Math.sin(angle) * 8 + t * 3) * 0.06;
+      const r = baseR * taper + rockNoise * radius * (0.3 + t * 0.4);
 
-        underVerts.push(x, finalBottomY, z);
-        // Rocky brown colors with variation
-        const cv = 0.15 + noise2D(x * 3, z * 3) * 0.08;
-        underCols.push(0.25 + cv, 0.18 + cv * 0.5, 0.12 + cv * 0.3);
-      }
+      // Vertical noise — makes cliff faces uneven
+      const yNoise = noise2D(Math.cos(angle) * 3 + 20, Math.sin(angle) * 3 + 20) * 0.3 * t;
+
+      const x = Math.cos(angle) * r;
+      const z = Math.sin(angle) * r;
+      cliffVerts.push(x, y + yNoise, z);
+
+      // Colors: brownish at top (matching terrain edge) → dark grey/charcoal at bottom
+      const warmth = (1 - t);
+      const n = noise2D(x * 2 + 30, z * 2 + 30) * 0.05;
+      const cr = 0.12 + warmth * 0.25 + n;
+      const cg = 0.10 + warmth * 0.15 + n * 0.5;
+      const cb = 0.08 + warmth * 0.08 + n * 0.3;
+      cliffCols.push(cr, cg, cb);
     }
   }
 
-  // Simpler approach: create underside as a deformed copy of the top surface
-  const underGeo = new THREE.PlaneGeometry(size, size, SEG, SEG);
-  underGeo.rotateX(Math.PI / 2); // face downward
-  const uPos = underGeo.attributes.position;
-  const uColors = new Float32Array(uPos.count * 3);
-
-  for (let i = 0; i < uPos.count; i++) {
-    const x = uPos.getX(i), z = -uPos.getZ(i); // flip z due to rotation
-    const topH = hMap[i] ?? -10;
-
-    if (topH < -5) {
-      uPos.setY(i, -10);
-      uColors[i*3] = 0; uColors[i*3+1] = 0; uColors[i*3+2] = 0;
-      continue;
+  // Build triangle indices connecting adjacent rings
+  for (let ring = 0; ring < RINGS; ring++) {
+    for (let seg = 0; seg < RING_SEGS; seg++) {
+      const a = ring * (RING_SEGS + 1) + seg;
+      const b = a + 1;
+      const c = a + (RING_SEGS + 1);
+      const d = c + 1;
+      cliffIdx.push(a, c, b, b, c, d);
     }
-
-    const dist = Math.sqrt(x * x + z * z);
-    const taper = Math.max(0.2, 1 - dist / (radius * 1.1));
-    const rockNoise = noise2D(x * 1.5 + 50, z * 1.5 + 50) * 0.3
-                    + noise2D(x * 3 + 50, z * 3 + 50) * 0.15;
-    const bottomY = -(DEPTH * taper + Math.abs(rockNoise) * taper * 0.8);
-
-    uPos.setY(i, bottomY);
-    const cv = 0.12 + noise2D(x * 3, z * 3) * 0.06;
-    uColors[i*3] = 0.28 + cv; uColors[i*3+1] = 0.2 + cv * 0.5; uColors[i*3+2] = 0.14 + cv * 0.3;
   }
 
-  underGeo.setAttribute('color', new THREE.BufferAttribute(uColors, 3));
-  underGeo.computeVertexNormals();
+  const cliffGeo = new THREE.BufferGeometry();
+  cliffGeo.setAttribute('position', new THREE.Float32BufferAttribute(cliffVerts, 3));
+  cliffGeo.setAttribute('color', new THREE.Float32BufferAttribute(cliffCols, 3));
+  cliffGeo.setIndex(cliffIdx);
+  cliffGeo.computeVertexNormals();
 
-  // ── Edge skirt connecting top surface to underside ──────────────────────
-  // Walk the boundary of visible vertices and create side walls
-  const skirtVerts = [], skirtIdx = [], skirtCols = [];
+  // ── Connect top surface edge to cliff top ring ───────────────────────────
+  // Build a skirt that bridges the terrain boundary to the cliff's first ring
+  const skirtVerts = [], skirtCols = [], skirtIdx = [];
   let sOff = 0;
 
-  // Find boundary cells — cells where at least one vertex is visible and one is not
-  function isVisible(idx) { return hMap[idx] > -5; }
+  function isVisible(idx) { return hMap[idx] > -10; }
 
-  // Walk each edge of the grid
-  for (let row = 0; row <= SEG; row++) {
-    for (let col = 0; col <= SEG; col++) {
-      const idx = row * (SEG + 1) + col;
-      if (!isVisible(idx)) continue;
+  // For each cliff top vertex, find the nearest terrain boundary vertex
+  // Simpler: just walk boundary vertices and connect to cliff ring
+  for (let seg = 0; seg < RING_SEGS; seg++) {
+    const angle0 = (seg / RING_SEGS) * Math.PI * 2;
+    const angle1 = ((seg + 1) / RING_SEGS) * Math.PI * 2;
+    const eR0 = getEdgeRadius(angle0);
+    const eR1 = getEdgeRadius(angle1);
 
-      // Check if this is a boundary vertex (adjacent to invisible)
-      const neighbors = [];
-      if (col > 0) neighbors.push(row * (SEG + 1) + col - 1);
-      if (col < SEG) neighbors.push(row * (SEG + 1) + col + 1);
-      if (row > 0) neighbors.push((row - 1) * (SEG + 1) + col);
-      if (row < SEG) neighbors.push((row + 1) * (SEG + 1) + col);
+    // Top surface edge points (at terrain height)
+    const x0 = Math.cos(angle0) * eR0 * 0.95;
+    const z0 = Math.sin(angle0) * eR0 * 0.95;
+    const x1 = Math.cos(angle1) * eR1 * 0.95;
+    const z1 = Math.sin(angle1) * eR1 * 0.95;
 
-      const isBoundary = neighbors.some(n => !isVisible(n));
-      if (!isBoundary) continue;
-
-      // For boundary vertices, check right and down neighbors to form skirt quads
-      const right = col < SEG ? row * (SEG + 1) + col + 1 : -1;
-      const down = row < SEG ? (row + 1) * (SEG + 1) + col : -1;
-
-      for (const nIdx of [right, down]) {
-        if (nIdx < 0 || !isVisible(nIdx)) continue;
-        // Check if neighbor is also boundary
-        const nNeighbors = [];
-        const nCol = nIdx % (SEG + 1), nRow = Math.floor(nIdx / (SEG + 1));
-        if (nCol > 0) nNeighbors.push(nRow * (SEG + 1) + nCol - 1);
-        if (nCol < SEG) nNeighbors.push(nRow * (SEG + 1) + nCol + 1);
-        if (nRow > 0) nNeighbors.push((nRow - 1) * (SEG + 1) + nCol);
-        if (nRow < SEG) nNeighbors.push((nRow + 1) * (SEG + 1) + nCol);
-        if (!nNeighbors.some(n => !isVisible(n))) continue;
-
-        // Both are boundary — create a skirt quad
-        const x0 = pos.getX(idx), y0 = pos.getY(idx), z0 = pos.getZ(idx);
-        const x1 = pos.getX(nIdx), y1 = pos.getY(nIdx), z1 = pos.getZ(nIdx);
-
-        const dist0 = Math.sqrt(x0*x0 + z0*z0);
-        const dist1 = Math.sqrt(x1*x1 + z1*z1);
-        const t0 = Math.max(0.2, 1 - dist0 / (radius * 1.1));
-        const t1 = Math.max(0.2, 1 - dist1 / (radius * 1.1));
-        const by0 = -(DEPTH * t0);
-        const by1 = -(DEPTH * t1);
-
-        skirtVerts.push(x0, y0, z0, x1, y1, z1, x1, by1, z1, x0, by0, z0);
-        skirtIdx.push(sOff, sOff+1, sOff+2, sOff, sOff+2, sOff+3);
-        const c1 = [0.32, 0.24, 0.16], c2 = [0.22, 0.15, 0.1];
-        skirtCols.push(...c1, ...c1, ...c2, ...c2);
-        sOff += 4;
-      }
+    // Find terrain height at these points (approximate from nearest grid vertex)
+    function terrainH(x, z) {
+      const col = Math.round((x + size / 2) / (size / TOP_SEG));
+      const row = Math.round((z + size / 2) / (size / TOP_SEG));
+      const idx = Math.min(Math.max(row, 0), TOP_SEG) * (TOP_SEG + 1) + Math.min(Math.max(col, 0), TOP_SEG);
+      const h = hMap[idx];
+      return h > -10 ? h : 0;
     }
+
+    const y0t = terrainH(x0, z0);
+    const y1t = terrainH(x1, z1);
+
+    // Cliff ring points (from first ring of cliff geometry)
+    const cx0 = cliffVerts[seg * 3];
+    const cy0 = cliffVerts[seg * 3 + 1];
+    const cz0 = cliffVerts[seg * 3 + 2];
+    const cx1 = cliffVerts[(seg + 1) * 3];
+    const cy1 = cliffVerts[(seg + 1) * 3 + 1];
+    const cz1 = cliffVerts[(seg + 1) * 3 + 2];
+
+    skirtVerts.push(
+      x0, y0t, z0,
+      x1, y1t, z1,
+      cx1, cy1, cz1,
+      cx0, cy0, cz0,
+    );
+    const sc = [0.35, 0.25, 0.18];
+    skirtCols.push(...sc, ...sc, ...sc, ...sc);
+    skirtIdx.push(sOff, sOff+1, sOff+2, sOff, sOff+2, sOff+3);
+    sOff += 4;
   }
 
   const skirtGeo = new THREE.BufferGeometry();
-  if (skirtVerts.length) {
-    skirtGeo.setAttribute('position', new THREE.Float32BufferAttribute(skirtVerts, 3));
-    skirtGeo.setIndex(skirtIdx);
-    skirtGeo.setAttribute('color', new THREE.Float32BufferAttribute(skirtCols, 3));
-    skirtGeo.computeVertexNormals();
-  }
+  skirtGeo.setAttribute('position', new THREE.Float32BufferAttribute(skirtVerts, 3));
+  skirtGeo.setAttribute('color', new THREE.Float32BufferAttribute(skirtCols, 3));
+  skirtGeo.setIndex(skirtIdx);
+  skirtGeo.computeVertexNormals();
 
-  return { top, underGeo, skirtGeo, hasSkirt: skirtVerts.length > 0 };
+  return { top, cliffGeo, skirtGeo };
 }
 
 function Terrain({ projects, radius }) {
-  const { top, underGeo, skirtGeo, hasSkirt } = useMemo(
+  const { top, cliffGeo, skirtGeo } = useMemo(
     () => buildIslandGeo(projects, radius), [projects, radius]
   );
-  const mat = { flatShading: true, vertexColors: true, roughness: 0.85, metalness: 0.02, side: THREE.FrontSide };
+  const topMat = { flatShading: true, vertexColors: true, roughness: 0.85, metalness: 0.02 };
+  const cliffMat = { flatShading: true, vertexColors: true, roughness: 0.95, metalness: 0.01 };
   return (
     <group>
       <mesh geometry={top} receiveShadow castShadow>
-        <meshStandardMaterial {...mat} emissiveIntensity={0} />
+        <meshStandardMaterial {...topMat} />
       </mesh>
-      <mesh geometry={underGeo} receiveShadow>
-        <meshStandardMaterial flatShading vertexColors roughness={0.9} metalness={0.02} side={THREE.BackSide} />
+      <mesh geometry={cliffGeo} receiveShadow castShadow>
+        <meshStandardMaterial {...cliffMat} side={THREE.DoubleSide} />
       </mesh>
-      {hasSkirt && (
-        <mesh geometry={skirtGeo} receiveShadow>
-          <meshStandardMaterial flatShading vertexColors roughness={0.9} metalness={0.02} side={THREE.DoubleSide} />
-        </mesh>
-      )}
+      <mesh geometry={skirtGeo} receiveShadow>
+        <meshStandardMaterial {...cliffMat} side={THREE.DoubleSide} />
+      </mesh>
     </group>
   );
 }
@@ -322,19 +316,9 @@ function Terrain({ projects, radius }) {
 function Water({ radius }) {
   return (
     <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <circleGeometry args={[radius * 0.9, 64]} />
+      <circleGeometry args={[radius * 0.85, 64]} />
       <meshStandardMaterial color="#2A5068" roughness={0.3} metalness={0.15} flatShading />
     </mesh>
-  );
-}
-
-// ── Mountain icon SVG ────────────────────────────────────────────────────────
-function MountainIcon({ color, size = 10 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ verticalAlign: 'middle', marginRight: 5 }}>
-      <path d="M8 2L13.5 13H2.5L8 2Z" fill={color} opacity={0.6} />
-      <path d="M11 6L14.5 13H7.5L11 6Z" fill={color} opacity={0.35} />
-    </svg>
   );
 }
 
@@ -360,9 +344,8 @@ function Labels({ projects, onSelect, hovered, setHovered }) {
             cursor: 'pointer', fontWeight: isHov ? 600 : 400,
             boxShadow: `0 2px 8px rgba(0,0,0,0.2)`,
             transition: 'all 0.15s', userSelect: 'none',
-            display: 'flex', alignItems: 'center',
           }}>
-          <MountainIcon color={isHov ? '#fff' : p.color} />
+          {p.isActive && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: isHov ? '#fff' : p.color, marginRight: 6, verticalAlign: 'middle' }} />}
           {p.label.toUpperCase()}
         </div>
       </Html>
@@ -429,7 +412,6 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
   const radius = useMemo(() => islandRadius(projects.length), [projects.length]);
 
-  // Camera distance: fit the island with some padding
   const camDist = useMemo(() => {
     const maxSpread = projects.reduce((m, p) => Math.max(m, Math.abs(p.x), Math.abs(p.z)), radius * 0.5);
     const dist = (maxSpread + 2) / Math.tan((15 * Math.PI) / 180);

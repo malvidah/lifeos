@@ -181,10 +181,9 @@ export default function NavBar(props) {
         </NavIconBtn>
         <NavIconBtn onClick={onGoToProjects} active={!!activeProject} title="All projects">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2"  y="2"  width="9" height="9" rx="1.5"/>
-            <rect x="13" y="2"  width="9" height="9" rx="1.5"/>
-            <rect x="2"  y="13" width="9" height="9" rx="1.5"/>
-            <rect x="13" y="13" width="9" height="9" rx="1.5"/>
+            <path d="M8 20L1 20L6.5 10L10 16L14 8L23 20L16 20"/>
+            <path d="M8 20L10 16"/>
+            <path d="M16 20L14 8"/>
           </svg>
         </NavIconBtn>
       </div>
