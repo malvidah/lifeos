@@ -134,7 +134,7 @@ const DateTagNode = Node.create({
       style: Object.entries({ ...CHIP_TOKENS.date(col), userSelect: 'none' })
         .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
         .join(';'),
-    }, '\u{1F4C5} ' + label];
+    }, '\u{23F3} ' + label];
   },
 });
 
