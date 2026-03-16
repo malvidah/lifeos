@@ -1,30 +1,28 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, useContext, useMemo, Fragment } from "react";
-import { mono, F, R, projectColor } from "@/lib/tokens";
+import { mono, serif, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile } from "@/lib/images";
 import { DayLabEditor } from "../Editor.jsx";
 
-// Extract image URLs from journal HTML/text content
+// Extract image URLs from journal content (stored as [img:url])
 function extractImages(content) {
   if (!content) return [];
   const urls = [];
-  // Match [img:url] format (text storage)
-  const txtRe = /\[img:(https?:\/\/[^\]]+)\]/g;
+  const re = /\[img:(https?:\/\/[^\]]+)\]/g;
   let m;
-  while ((m = txtRe.exec(content)) !== null) urls.push(m[1]);
-  // Match data-imageblock="url" format (HTML)
+  while ((m = re.exec(content)) !== null) urls.push(m[1]);
+  // Also match HTML imageblock format
   const htmlRe = /data-imageblock="([^"]+)"/g;
   while ((m = htmlRe.exec(content)) !== null) urls.push(m[1]);
   return [...new Set(urls)];
 }
 
 // ── Photo Grid ────────────────────────────────────────────────────────────────
-function PhotoGrid({ images }) {
+function PhotoGrid({ images, onRemove }) {
   const [viewIdx, setViewIdx] = useState(null);
-
   if (!images.length) return null;
 
   if (viewIdx != null) {
@@ -43,25 +41,20 @@ function PhotoGrid({ images }) {
           onClick={() => setViewIdx(i)}
           style={{
             background: 'var(--dl-well)', border: 'none', borderRadius: 8,
-            overflow: 'hidden', cursor: 'pointer', padding: 0,
+            overflow: 'hidden', cursor: 'pointer', padding: 0, position: 'relative',
             aspectRatio: images.length === 1 ? 'auto' : '1',
             transition: 'opacity 0.15s',
           }}
           onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
           onMouseLeave={e => e.currentTarget.style.opacity = '1'}
         >
-          <img
-            src={url}
-            alt=""
-            loading="lazy"
-            style={{
-              width: '100%',
-              height: images.length === 1 ? 'auto' : '100%',
-              maxHeight: images.length === 1 ? 280 : undefined,
-              objectFit: images.length === 1 ? 'contain' : 'cover',
-              display: 'block', borderRadius: 8,
-            }}
-          />
+          <img src={url} alt="" loading="lazy" style={{
+            width: '100%',
+            height: images.length === 1 ? 'auto' : '100%',
+            maxHeight: images.length === 1 ? 280 : undefined,
+            objectFit: images.length === 1 ? 'contain' : 'cover',
+            display: 'block', borderRadius: 8,
+          }} />
         </button>
       ))}
     </div>
@@ -135,14 +128,101 @@ function LbBtn({ onClick, children }) {
   );
 }
 
+// ── Drop Zone Overlay ─────────────────────────────────────────────────────────
+function DropZone({ uploading }) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      gap: 12, padding: '32px 16px', minHeight: 120,
+      border: '2px dashed var(--dl-border2)', borderRadius: 12,
+      background: 'var(--dl-well)',
+      animation: uploading ? 'none' : undefined,
+    }}>
+      {uploading ? (
+        <>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--dl-accent)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+            style={{ animation: 'pulse 1.2s ease-in-out infinite' }}>
+            <circle cx="12" cy="12" r="10" strokeOpacity="0.3"/>
+            <path d="M12 6v6l4 2" />
+          </svg>
+          <span style={{ fontFamily: serif, fontSize: F.md, color: 'var(--dl-middle)' }}>
+            Uploading...
+          </span>
+          <style>{`@keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }`}</style>
+        </>
+      ) : (
+        <>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <span style={{ fontFamily: serif, fontSize: F.md, color: 'var(--dl-middle)' }}>
+            Drop photos here
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ── JournalEditor ─────────────────────────────────────────────────────────────
 export function JournalEditor({date,userId,token}) {
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
 
-  // Extract images from the current journal content for the grid
+  const [dragging, setDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const dragCounter = useRef(0);
+  const containerRef = useRef(null);
+
   const images = useMemo(() => extractImages(value), [value]);
+
+  // Helper: append an image to the journal value
+  const addImage = useCallback((url) => {
+    setValue(prev => {
+      const imgBlock = `[img:${url}]`;
+      // Don't add duplicate
+      if (prev && prev.includes(imgBlock)) return prev;
+      return (prev || '') + '\n' + imgBlock;
+    }, { undoLabel: 'Add photo' });
+  }, [setValue]);
+
+  // Handle file drop on the journal container
+  const handleDrop = useCallback(async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setDragging(false);
+
+    const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
+    if (!files.length || !token) return;
+
+    setUploading(true);
+    try {
+      const urls = await Promise.all(files.map(f => uploadImageFile(f, token)));
+      urls.filter(Boolean).forEach(url => addImage(url));
+    } finally {
+      setUploading(false);
+    }
+  }, [token, addImage]);
+
+  // Track drag enter/leave on the container (not individual children)
+  const handleDragEnter = useCallback((e) => {
+    e.preventDefault();
+    dragCounter.current++;
+    if (e.dataTransfer?.types?.includes('Files')) setDragging(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    dragCounter.current--;
+    if (dragCounter.current <= 0) { dragCounter.current = 0; setDragging(false); }
+  }, []);
+
+  const handleDragOver = useCallback((e) => { e.preventDefault(); }, []);
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
@@ -153,24 +233,34 @@ export function JournalEditor({date,userId,token}) {
   );
 
   return (
-    <div>
+    <div
+      ref={containerRef}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
       <PhotoGrid images={images} />
-      <DayLabEditor
-        value={value || ''}
-        onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
-        onUpdate={html => markDirty(html)}
-        onImageUpload={file => uploadImageFile(file, token)}
-        noteNames={ctxNotes}
-        projectNames={ctxProjects}
-        onProjectClick={name => navigateToProject(name)}
-        onNoteClick={name => navigateToNote(name)}
-        placeholder="What's on your mind? Use / for commands."
-        textColor={"var(--dl-strong)"}
-        mutedColor={"var(--dl-middle)"}
-        color={"var(--dl-accent)"}
-        hideInlineImages
-        style={{minHeight: 80, width: '100%'}}
-      />
+      {(dragging || uploading) ? (
+        <DropZone uploading={uploading} />
+      ) : (
+        <DayLabEditor
+          value={value || ''}
+          onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
+          onUpdate={html => markDirty(html)}
+          onImageUpload={file => uploadImageFile(file, token)}
+          noteNames={ctxNotes}
+          projectNames={ctxProjects}
+          onProjectClick={name => navigateToProject(name)}
+          onNoteClick={name => navigateToNote(name)}
+          placeholder="What's on your mind? Use / for commands."
+          textColor={"var(--dl-strong)"}
+          mutedColor={"var(--dl-middle)"}
+          color={"var(--dl-accent)"}
+          hideInlineImages
+          style={{minHeight: 80, width: '100%'}}
+        />
+      )}
     </div>
   );
 }
