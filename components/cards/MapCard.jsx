@@ -238,15 +238,28 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
   const maxHeight = projects.length ? Math.max(...projects.map(p => p.height)) : 1;
   const snowThreshold = maxHeight * 0.75; // only tallest peaks get snow
 
-  // Two palettes: lush green vs warm autumn
-  const lush   = [[0.18,0.28,0.22],[0.22,0.42,0.20],[0.35,0.50,0.22],[0.48,0.45,0.25],[0.48,0.45,0.48],[0.85,0.78,0.70]];
-  const autumn  = [[0.25,0.18,0.15],[0.45,0.28,0.18],[0.60,0.35,0.20],[0.70,0.40,0.22],[0.55,0.40,0.38],[0.80,0.70,0.60]];
+  // Two palettes: tropical lush vs drought/autumn
+  // Tropical: rich varied greens at low elevations, warm earth at mid, grey rock at high
+  const lush   = [[0.12,0.30,0.15],[0.18,0.42,0.18],[0.28,0.48,0.20],[0.45,0.40,0.25],[0.50,0.46,0.44],[0.82,0.76,0.68]];
+  const drought = [[0.30,0.22,0.14],[0.48,0.32,0.18],[0.58,0.38,0.22],[0.68,0.44,0.25],[0.55,0.42,0.38],[0.78,0.68,0.58]];
 
   function terrainColor(x, z, h) {
     const ht = Math.max(0, Math.min(1, (h + 0.3) / 2.8));
     const n = noise2D(x * 2.5, z * 2.5) * 0.04;
     const band = ht < 0.1 ? 0 : ht < 0.25 ? 1 : ht < 0.4 ? 2 : ht < 0.6 ? 3 : ht < 0.8 ? 4 : 5;
-    const base = lush[band].map((l, i) => l * v + autumn[band][i] * (1 - v) + n);
+    const base = lush[band].map((l, i) => l * v + drought[band][i] * (1 - v) + n);
+
+    // Active volcano glow: recent projects get warm ember tint at peaks
+    for (const p of projects) {
+      if (!p.isActive) continue;
+      const dx = x - p.x, dz = z - p.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < 0.5 && h > p.height * 0.6) {
+        const glow = (1 - dist / 0.5) * Math.min(1, (h - p.height * 0.6) / (p.height * 0.4));
+        const ember = [0.85, 0.35, 0.08]; // warm orange-red
+        return base.map((c, i) => c + (ember[i] - c) * glow * 0.6);
+      }
+    }
 
     // Snow cap: blend to white above threshold
     if (h > snowThreshold && maxHeight > 1.2) {
@@ -254,29 +267,28 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
       return base.map(c => c + (0.92 - c) * snowBlend + noise2D(x * 4, z * 4) * 0.02);
     }
 
-    // Foliage brushstrokes: green tints around mountain bases from completed tasks
-    // More completed tasks = wider, more intense green patches
+    // Tropical foliage: lush jungle patches around mountain bases
+    // Dappled canopy effect with varied greens, yellows, deep shadows
     let foliageBlend = 0;
     for (const p of projects) {
       if (!p.completedTasks) continue;
       const dx = x - p.x, dz = z - p.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      // Foliage radius grows with completed tasks (0.5 to 1.5 units)
-      const foliageR = 0.5 + Math.min(20, p.completedTasks) / 20 * 1.0;
+      const foliageR = 0.5 + Math.min(20, p.completedTasks) / 20 * 1.2;
       if (dist < foliageR) {
-        // Organic shape: use noise to break up the circle into natural patches
         const patchNoise = noise2D(x * 3 + p.x * 7, z * 3 + p.z * 7) * 0.5 + 0.5;
         const falloff = 1 - (dist / foliageR);
-        const intensity = falloff * falloff * patchNoise;
-        // Scale intensity with task count — more tasks = more vivid
-        foliageBlend = Math.max(foliageBlend, intensity * Math.min(1, p.completedTasks / 8));
+        foliageBlend = Math.max(foliageBlend, falloff * falloff * patchNoise * Math.min(1, p.completedTasks / 6));
       }
     }
     if (foliageBlend > 0.05 && ht < 0.5) {
-      // Blend toward rich green — varies with noise for texture
-      const greenVar = noise2D(x * 5, z * 5) * 0.08;
-      const green = [0.15 + greenVar, 0.38 + greenVar, 0.12 + greenVar];
-      return base.map((c, i) => c + (green[i] - c) * foliageBlend * 0.7);
+      // Tropical canopy: mix of deep green, yellow-green, and dark shadow
+      const canopyType = noise2D(x * 6, z * 6); // -1 to 1
+      const deep   = [0.08, 0.28, 0.10]; // deep jungle shadow
+      const bright  = [0.22, 0.48, 0.15]; // sunlit canopy
+      const golden  = [0.35, 0.45, 0.12]; // yellow-green highlight
+      const canopy = canopyType < -0.3 ? deep : canopyType > 0.3 ? golden : bright;
+      return base.map((c, i) => c + (canopy[i] - c) * foliageBlend * 0.75);
     }
 
     return base;
@@ -404,6 +416,30 @@ function Terrain({ projects, radius, vitality }) {
   return (
     <mesh geometry={geo} receiveShadow castShadow>
       <meshToonMaterial vertexColors gradientMap={toonGrad} side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
+// ── Water — level responds to health vitality ────────────────────────────────
+// High vitality = water at full level, lush. Low = receding, exposed rocks.
+function Water({ radius, vitality = 50 }) {
+  // Water level: -0.15 (low/drought) to 0.08 (full/thriving)
+  const waterY = -0.15 + (vitality / 100) * 0.23;
+  // Color: deeper blue when healthy, murky green-brown when low
+  const vt = Math.max(0, Math.min(1, vitality / 100));
+  const color = new THREE.Color().setRGB(
+    0.12 + (1 - vt) * 0.15,  // more red when drought
+    0.30 + vt * 0.15,         // greener when healthy
+    0.40 + vt * 0.20,         // bluer when healthy
+  );
+
+  return (
+    <mesh position={[0, waterY, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      <circleGeometry args={[radius * 0.88, 64]} />
+      <meshToonMaterial
+        color={color} gradientMap={toonGrad}
+        transparent opacity={0.65}
+      />
     </mesh>
   );
 }
@@ -574,6 +610,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour
     <>
       <Environment hour={hour} />
       <Terrain projects={projects} radius={radius} vitality={vitality} />
+      <Water radius={radius} vitality={vitality} />
       <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} />
       <OrbitControls
         enablePan enableZoom enableRotate
