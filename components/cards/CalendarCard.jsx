@@ -693,6 +693,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             const isCtr  = i === 0;
             const isTdy  = k === today;
             const dayEvents = (events[k] || []).slice().sort((a,b) => timeToMins(a.time) - timeToMins(b.time));
+            const daySummary = summaries[k];
             const dist = Math.abs(i);
             const opacity = isCtr ? 1 : Math.max(0.12, 1 - Math.pow(dist / 6, 2) * 0.88);
 
@@ -764,6 +765,15 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   ))}
 
                 </div>
+                {/* AI recap — only on selected day, below events */}
+                {isCtr && daySummary && (
+                  <div style={{
+                    fontFamily: mono, fontSize: '10px', color: "var(--dl-middle)",
+                    lineHeight: 1.4, padding: '4px 2px', flexShrink: 0,
+                    overflow: 'hidden', display: '-webkit-box',
+                    WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
+                  }}>{daySummary}</div>
+                )}
                 {/* + add button — fixed below scroll, only on selected day */}
                 {isCtr && onAddClick && (
                   <button
