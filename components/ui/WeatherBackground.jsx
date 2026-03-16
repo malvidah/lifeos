@@ -15,6 +15,7 @@ function makeBg(condition, lat, lng) {
 
 export default function WeatherBackground({ date }) {
   const locRef = useRef(getCachedLocation() || DEFAULT_LOCATION);
+  if (!locRef.current) locRef.current = DEFAULT_LOCATION;
   const [bg, setBg] = useState(() => makeBg('clear', locRef.current.lat, locRef.current.lng));
   const [fadingBg, setFadingBg] = useState(null);
   const condRef = useRef('clear');
@@ -33,7 +34,7 @@ export default function WeatherBackground({ date }) {
   // When date changes → fetch weather → update gradient with cross-fade
   useEffect(() => {
     let cancelled = false;
-    const loc = locRef.current;
+    const loc = locRef.current || DEFAULT_LOCATION;
 
     fetchWeather(date, loc.lat, loc.lng)
       .then(w => {
@@ -61,7 +62,7 @@ export default function WeatherBackground({ date }) {
   // Live tick — update for time-of-day shifts every 60s
   useEffect(() => {
     const id = setInterval(() => {
-      const loc = locRef.current;
+      const loc = locRef.current || DEFAULT_LOCATION;
       const next = makeBg(condRef.current, loc.lat, loc.lng);
       setBg(next); // no cross-fade for subtle time shifts
     }, 60000);
