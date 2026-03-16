@@ -58,7 +58,7 @@ function PhotoStrip({ images, onViewImage }) {
 }
 
 // ── Slideshow ─────────────────────────────────────────────────────────────────
-// Full-width image view with counter, swipe, keyboard nav.
+// Wide rectangle with chevrons, dots, and X to close.
 function Slideshow({ images, index, onClose }) {
   const [idx, setIdx] = useState(index);
   const touchStart = useRef(null);
@@ -76,41 +76,73 @@ function Slideshow({ images, index, onClose }) {
   }, [onClose]);
 
   return (
-    <div style={{ marginBottom: 6 }}>
-      <div
-        style={{ borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'pointer', position: 'relative' }}
-        onTouchStart={e => { touchStart.current = e.touches[0].clientX; }}
-        onTouchEnd={e => {
-          if (touchStart.current == null) return;
-          const diff = e.changedTouches[0].clientX - touchStart.current;
-          if (Math.abs(diff) > 50) { diff > 0 ? prev() : next(); }
-          touchStart.current = null;
-        }}
-        onClick={() => { if (images.length > 1) next(); }}
+    <div style={{ marginBottom: 6, position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)' }}
+      onTouchStart={e => { touchStart.current = e.touches[0].clientX; }}
+      onTouchEnd={e => {
+        if (touchStart.current == null) return;
+        const diff = e.changedTouches[0].clientX - touchStart.current;
+        if (Math.abs(diff) > 50) { diff > 0 ? prev() : next(); }
+        touchStart.current = null;
+      }}
+    >
+      <img src={images[idx]} alt="" style={{ width: '100%', aspectRatio: '16/10', objectFit: 'cover', display: 'block' }} />
+
+      {/* Close X — top right */}
+      <button onClick={onClose} style={{
+        position: 'absolute', top: 8, right: 8,
+        background: 'rgba(0,0,0,0.4)', border: 'none', borderRadius: 100,
+        width: 28, height: 28, cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'rgba(255,255,255,0.6)', transition: 'color 0.15s, background 0.15s',
+      }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.background = 'rgba(0,0,0,0.4)'; }}
       >
-        <img src={images[idx]} alt="" style={{ width: '100%', display: 'block' }} />
-        {/* Counter badge */}
-        <div style={{
-          position: 'absolute', top: 8, right: 8,
-          background: 'rgba(0,0,0,0.5)', borderRadius: 100,
-          padding: '3px 10px',
-          fontFamily: mono, fontSize: 11, color: '#fff', letterSpacing: '0.04em',
-        }}>
-          {idx + 1}/{images.length}
-        </div>
-      </div>
-      {/* Close — tapping below the image */}
-      <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 6 }}>
-        <button onClick={onClose} style={{
-          background: 'none', border: 'none', cursor: 'pointer',
-          fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)',
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-          transition: 'color 0.15s',
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      {/* Left chevron */}
+      {images.length > 1 && (
+        <div onClick={prev} style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: 48,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s',
         }}
-          onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
-        >close</button>
-      </div>
+          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
+        >
+          <span style={{ fontSize: 22, fontFamily: mono, textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>‹</span>
+        </div>
+      )}
+
+      {/* Right chevron */}
+      {images.length > 1 && (
+        <div onClick={next} style={{
+          position: 'absolute', right: 0, top: 0, bottom: 0, width: 48,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
+        >
+          <span style={{ fontSize: 22, fontFamily: mono, textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>›</span>
+        </div>
+      )}
+
+      {/* Dots */}
+      {images.length > 1 && (
+        <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 6 }}>
+          {images.map((_, i) => (
+            <div key={i} onClick={() => setIdx(i)} style={{
+              width: 6, height: 6, borderRadius: '50%', cursor: 'pointer',
+              background: i === idx ? '#fff' : 'rgba(255,255,255,0.35)',
+              transition: 'background 0.2s',
+            }} />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
