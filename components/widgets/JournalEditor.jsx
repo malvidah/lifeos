@@ -4,7 +4,7 @@ import { mono, serif, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
-import { estimateNutrition, uploadImageFile } from "@/lib/images";
+import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
 import { DayLabEditor } from "../Editor.jsx";
 
 // Extract image URLs from journal content
@@ -296,6 +296,7 @@ export function JournalEditor({date,userId,token}) {
           onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
           onUpdate={html => markDirty(html)}
           onImageUpload={file => uploadImageFile(file, token)}
+          onImageDelete={src => deleteImageFile(src, token)}
           noteNames={ctxNotes}
           projectNames={ctxProjects}
           onProjectClick={name => navigateToProject(name)}

@@ -86,6 +86,8 @@ const NoteLinkNode = Node.create({
 // ImageChip: inline atom node displayed as a small pill in text flow.
 // Source of truth for the photos section — deleting a chip removes the image.
 // Shows "📷 Mar 16 · 1" with auto-numbering via CSS counter.
+// onImageDeleteRef is set by DayLabEditor to call the orphan-cleanup API.
+let onImageDeleteRef = { current: null };
 const ImageChip = Node.create({
   name: 'imageChip', group: 'inline', inline: true,
   atom: true, selectable: true, draggable: false,
@@ -124,6 +126,19 @@ const ImageChip = Node.create({
       ],
       ['span', { class: 'dl-img-chip-num', style: 'pointer-events:none' }],
     ];
+  },
+  addKeyboardShortcuts() {
+    const del = () => {
+      const sel = this.editor.state.selection;
+      if (sel?.node?.type.name === 'imageChip') {
+        const src = sel.node.attrs.src;
+        this.editor.commands.deleteSelection();
+        if (src && onImageDeleteRef.current) onImageDeleteRef.current(src);
+        return true;
+      }
+      return false;
+    };
+    return { Backspace: del, Delete: del };
   },
 });
 
@@ -397,6 +412,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onBackspaceEmpty,
   onArrowUpAtStart,
   onImageUpload,
+  onImageDelete,     // (src) — called when an imageChip is deleted (orphan cleanup)
   noteNames,
   projectNames,
   onProjectClick,
@@ -429,6 +445,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onBackspaceEmptyRef  = useRef(onBackspaceEmpty);
   const onArrowUpAtStartRef  = useRef(onArrowUpAtStart);
   const onImageUploadRef    = useRef(onImageUpload);
+  const onImageDeleteRef    = useRef(onImageDelete);
   const noteNamesRef        = useRef(noteNames || []);
   const projectNamesRef     = useRef(projectNames || []);
   const onProjectClickRef   = useRef(onProjectClick);
@@ -448,6 +465,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onBackspaceEmptyRef.current  = onBackspaceEmpty; }, [onBackspaceEmpty]);
   useEffect(() => { onArrowUpAtStartRef.current  = onArrowUpAtStart; }, [onArrowUpAtStart]);
   useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
+  useEffect(() => { onImageDeleteRef.current     = onImageDelete; },    [onImageDelete]);
   useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
   useEffect(() => { onProjectClickRef.current    = onProjectClick; },   [onProjectClick]);
@@ -829,6 +847,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
   });
 
+  // Sync the module-level ref so ImageChip keyboard shortcuts can call onImageDelete
+  useEffect(() => { onImageDeleteRef.current = onImageDelete; }, [onImageDelete]);
   useEffect(() => { editorRef.current = editor; }, [editor]);
 
   // Mark editor as initialized after mount settles — unblocks onUpdate and onSelectionUpdate
