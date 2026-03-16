@@ -8,6 +8,7 @@ import { createNoise2D } from "simplex-noise";
 import * as THREE from "three";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
+import { fetchWeather, getCachedLocation, DEFAULT_LOCATION } from "@/lib/weather";
 
 // 3-step toon gradient (hard shadow/mid/lit bands for cel-shaded look)
 function makeToonGradient() {
@@ -157,16 +158,36 @@ function islandRadius(projectCount) {
   return 3.5 + Math.sqrt(Math.max(1, projectCount)) * 1.8;
 }
 
-// Shared sky/fog colors based on time of day
-function skyColors(hour) {
+// Shared sky/fog colors based on time of day + weather condition
+function skyColors(hour, weather = 'clear') {
   const isNight = hour < 6 || hour > 20;
   const isDusk = (hour >= 17 && hour <= 20) || (hour >= 5 && hour < 7);
-  return {
-    isNight, isDusk,
-    skyTop: isNight ? '#0A0A1A' : isDusk ? '#2A1520' : '#8AAAC8',
-    skyBot: isNight ? '#1A1A30' : isDusk ? '#C07040' : '#C4B8A4',
-    fog:    isNight ? '#0A0A1A' : isDusk ? '#C07040' : '#C4B8A4',
-  };
+
+  // Base colors by time of day
+  let skyTop = isNight ? '#0A0A1A' : isDusk ? '#2A1520' : '#8AAAC8';
+  let skyBot = isNight ? '#1A1A30' : isDusk ? '#C07040' : '#C4B8A4';
+  let fog    = isNight ? '#0A0A1A' : isDusk ? '#C07040' : '#C4B8A4';
+  let fogNear = 18, fogFar = 40;
+
+  // Weather modifiers — shift colors and fog density
+  if (weather === 'overcast' || weather === 'cloudy') {
+    if (!isNight) { skyTop = '#6A7888'; skyBot = '#9A9490'; fog = '#9A9490'; }
+    fogNear = 14; fogFar = 32;
+  } else if (weather === 'rain' || weather === 'drizzle') {
+    if (!isNight) { skyTop = '#506068'; skyBot = '#808888'; fog = '#707878'; }
+    fogNear = 10; fogFar = 25;
+  } else if (weather === 'snow') {
+    if (!isNight) { skyTop = '#8898A8'; skyBot = '#B0B8C0'; fog = '#A8B0B8'; }
+    fogNear = 8; fogFar = 22;
+  } else if (weather === 'fog') {
+    if (!isNight) { skyTop = '#888888'; skyBot = '#A0A098'; fog = '#A0A098'; }
+    fogNear = 5; fogFar = 18;
+  } else if (weather === 'thunderstorm') {
+    if (!isNight) { skyTop = '#3A4050'; skyBot = '#585860'; fog = '#505058'; }
+    fogNear = 10; fogFar = 24;
+  }
+
+  return { isNight, isDusk, skyTop, skyBot, fog, fogNear, fogFar };
 }
 
 // ── Unified island mesh — single polar-grid geometry, no seams ───────────────
@@ -361,6 +382,76 @@ function Terrain({ projects, radius, vitality }) {
   );
 }
 
+// ── Trees — procedural low-poly, instanced per project ───────────────────────
+// Three tree variants (different height/width ratios). Count scales with
+// completed tasks tagged to each project. Uses InstancedMesh for performance.
+function Trees({ projects, radius }) {
+  const { foliageGeo, trunkGeo } = useMemo(() => ({
+    foliageGeo: new THREE.ConeGeometry(0.18, 0.4, 5),  // low-poly cone
+    trunkGeo:   new THREE.CylinderGeometry(0.03, 0.04, 0.15, 4),
+  }), []);
+
+  const { foliageData, trunkData } = useMemo(() => {
+    const noise = createNoise2D();
+    const foliage = [];
+    const trunks = [];
+    const dummy = new THREE.Object3D();
+
+    for (const p of projects) {
+      const count = Math.min(15, Math.floor((p.completedTasks || 0) / 2));
+      if (count === 0) continue;
+
+      for (let i = 0; i < count; i++) {
+        // Place trees in a ring around the mountain base
+        const angle = (i / count) * Math.PI * 2 + noise(p.x + i * 0.5, p.z) * 0.8;
+        const dist = 0.7 + noise(i * 0.3, p.x) * 0.3 + 0.4;
+        const tx = p.x + Math.cos(angle) * dist;
+        const tz = p.z + Math.sin(angle) * dist;
+        // Skip if outside island
+        if (Math.sqrt(tx * tx + tz * tz) > radius * 0.85) continue;
+
+        const scale = 0.7 + noise(tx, tz) * 0.6; // size variation
+        const ty = noise(tx * 0.3, tz * 0.3) * 0.3 + 0.05; // approximate terrain height at base
+
+        // Foliage (cone) — sits on top of trunk
+        dummy.position.set(tx, ty + 0.2 * scale, tz);
+        dummy.scale.set(scale, scale, scale);
+        dummy.rotation.y = noise(tx * 2, tz * 2) * Math.PI;
+        dummy.updateMatrix();
+        foliage.push(dummy.matrix.clone());
+
+        // Trunk (cylinder) — below foliage
+        dummy.position.set(tx, ty + 0.02 * scale, tz);
+        dummy.scale.set(scale, scale * 0.8, scale);
+        dummy.updateMatrix();
+        trunks.push(dummy.matrix.clone());
+      }
+    }
+    return { foliageData: foliage, trunkData: trunks };
+  }, [projects, radius]);
+
+  if (foliageData.length === 0) return null;
+
+  return (
+    <group>
+      <instancedMesh args={[foliageGeo, undefined, foliageData.length]} castShadow ref={ref => {
+        if (!ref) return;
+        foliageData.forEach((m, i) => ref.setMatrixAt(i, m));
+        ref.instanceMatrix.needsUpdate = true;
+      }}>
+        <meshToonMaterial color="#3A6830" gradientMap={toonGrad} />
+      </instancedMesh>
+      <instancedMesh args={[trunkGeo, undefined, trunkData.length]} ref={ref => {
+        if (!ref) return;
+        trunkData.forEach((m, i) => ref.setMatrixAt(i, m));
+        ref.instanceMatrix.needsUpdate = true;
+      }}>
+        <meshToonMaterial color="#5A4030" gradientMap={toonGrad} />
+      </instancedMesh>
+    </group>
+  );
+}
+
 // ── Labels ───────────────────────────────────────────────────────────────────
 function DepthLabel({ p, onSelect, isHov, setHovered }) {
   const htmlRef = useRef();
@@ -527,6 +618,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour
     <>
       <Environment hour={hour} />
       <Terrain projects={projects} radius={radius} vitality={vitality} />
+      <Trees projects={projects} radius={radius} />
       <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} />
       <OrbitControls
         enablePan enableZoom enableRotate
@@ -565,6 +657,18 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
       .map(([, v]) => ((v.sleep||0) + (v.readiness||0) + (v.activity||0) + (v.recovery||0)) / 4);
     return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 50;
   }, [healthDots]);
+
+  // Weather condition for island atmosphere
+  const [weather, setWeather] = useState('clear');
+  useEffect(() => {
+    const loc = getCachedLocation() || DEFAULT_LOCATION;
+    const today = new Date();
+    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    fetchWeather(dateStr, loc.lat, loc.lng).then(w => {
+      if (w?.condition) setWeather(w.condition);
+    });
+  }, []);
+
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
   const radius = useMemo(() => islandRadius(projects.length), [projects.length]);
 
@@ -584,7 +688,7 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
     );
   }
 
-  const sky = skyColors(hour);
+  const sky = skyColors(hour, weather);
 
   return (
     <div style={{
@@ -601,7 +705,7 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
           <Scene projects={projects} radius={radius} vitality={vitality} onSelect={onSelectProject}
             hovered={hovered} setHovered={setHovered} hour={hour} />
         </Suspense>
-        <fog attach="fog" args={[sky.fog, 18, 40]} />
+        <fog attach="fog" args={[sky.fog, sky.fogNear, sky.fogFar]} />
       </Canvas>
     </div>
   );
