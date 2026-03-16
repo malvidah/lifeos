@@ -35,6 +35,35 @@ export async function saveGoogleToken(supabase, userId, accessToken, refreshToke
 }
 
 /**
+ * Fetch stored Google tokens, call fn(accessToken), auto-refresh on 401.
+ * Shared by calendar, photos, and other Google API routes.
+ */
+export async function withGoogleToken(supabase, userId, fn) {
+  const { data: stored } = await supabase.from('user_settings').select('data')
+    .eq('user_id', userId).maybeSingle();
+
+  let accessToken = stored?.data?.googleToken;
+  const refreshToken = stored?.data?.googleRefreshToken;
+
+  if (!accessToken && !refreshToken) {
+    return { ok: false, status: 401, error: 'No Google connection' };
+  }
+
+  let result = accessToken ? await fn(accessToken) : { ok: false, status: 401 };
+
+  if (!result.ok && refreshToken) {
+    const newToken = await refreshGoogleToken(refreshToken);
+    if (newToken) {
+      await saveGoogleToken(supabase, userId, newToken, refreshToken);
+      accessToken = newToken;
+      result = await fn(newToken);
+    }
+  }
+
+  return { ...result, accessToken };
+}
+
+/**
  * Build a Google Calendar event body from common params.
  * @param {string} date       – YYYY-MM-DD
  * @param {object} opts

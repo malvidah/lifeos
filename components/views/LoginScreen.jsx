@@ -26,7 +26,7 @@ export default function LoginScreen() {
           const isNative = !!(window.daylabNative);
           const redirectTo = isNative ? `daylab://auth/callback` : `${window.location.origin}/auth/callback`;
           await supabase.auth.signInWithOAuth({provider:"google",options:{
-            scopes:"https://www.googleapis.com/auth/calendar",
+            scopes:"https://www.googleapis.com/auth/calendar https://www.googleapis.com/auth/photoslibrary.readonly",
             redirectTo,
             queryParams:{access_type:"offline",prompt:"consent"},
           }});

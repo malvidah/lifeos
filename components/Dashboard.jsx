@@ -26,6 +26,7 @@ import LoginScreen from "./views/LoginScreen.jsx";
 import ProjectView from "./views/ProjectView.jsx";
 import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
+import PhotosCard from "./cards/PhotosCard.jsx";
 
 function DashboardInner() {
   const { theme, preference, setTheme } = useTheme();
@@ -412,6 +413,9 @@ function DashboardInner() {
                         collapsed={healthCollapsed} onToggle={toggleHealth}/>
                       </ErrorBoundary>
                     </div>
+                    <ErrorBoundary label="Photos">
+                      <PhotosCard date={selected} token={token}/>
+                    </ErrorBoundary>
                   </>
                 )}
               {/* Search results or widgets */}
