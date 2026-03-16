@@ -5,6 +5,7 @@ import { useDbSave } from "@/lib/db";
 import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
+import { api } from "@/lib/api";
 import { DayLabEditor } from "../Editor.jsx";
 
 // Extract image URLs from journal/note content
@@ -285,9 +286,11 @@ export function JournalEditor({date,userId,token}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
-  // Persist mode preference to localStorage
+  // Persist mode preference to localStorage + user_settings (for public share pages)
   useEffect(() => {
-    try { localStorage.setItem('daylab:photoMode', lightboxIdx != null ? 'slideshow' : 'strip'); } catch {}
+    const mode = lightboxIdx != null ? 'slideshow' : 'strip';
+    try { localStorage.setItem('daylab:photoMode', mode); } catch {}
+    if (token) api.patch('/api/settings', { photoMode: mode }, token).catch(() => {});
   }, [lightboxIdx != null]); // eslint-disable-line
 
   // When navigating to a day with no images, hide photos entirely.

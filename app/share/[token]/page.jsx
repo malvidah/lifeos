@@ -108,8 +108,8 @@ function navBtn(side) {
 }
 
 // ── Photo section for a note ────────────────────────────────────────────────
-function NotePhotos({ images }) {
-  const [mode, setMode] = useState('slideshow'); // default to carousel on public pages
+function NotePhotos({ images, defaultMode = 'strip' }) {
+  const [mode, setMode] = useState(defaultMode);
   const [idx, setIdx] = useState(0);
   if (!images.length) return null;
 
@@ -163,7 +163,7 @@ export default function SharedProjectPage() {
     return <div style={s.center}><p style={{color:'var(--dl-middle)',fontSize:13,letterSpacing:'0.1em'}}>LOADING</p></div>;
   }
 
-  const { project, journalEntries, taskEntries, notes } = data;
+  const { project, journalEntries, taskEntries, notes, photoMode } = data;
   const accent = project.color || 'var(--dl-accent)';
 
   const journalByDate = {};
@@ -197,7 +197,7 @@ export default function SharedProjectPage() {
           const images = extractImages(n.content);
           return (
             <section key={i} style={s.noteSection}>
-              {images.length > 0 && <NotePhotos images={images}/>}
+              {images.length > 0 && <NotePhotos images={images} defaultMode={photoMode}/>}
               <div className="note-content"
                 dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.content || '') }}
               />
@@ -216,7 +216,7 @@ export default function SharedProjectPage() {
               return (
                 <div key={date} style={s.journalDay}>
                   <div style={s.datestamp}>{fmtDate(date)}</div>
-                  {dayImages.length > 0 && <NotePhotos images={dayImages}/>}
+                  {dayImages.length > 0 && <NotePhotos images={dayImages} defaultMode={photoMode}/>}
                   {entries.map((e, i) => (
                     <div key={i} className="note-content"
                       dangerouslySetInnerHTML={{ __html: sanitizeHtml(e.content || '') }}

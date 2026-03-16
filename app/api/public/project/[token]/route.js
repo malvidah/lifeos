@@ -23,6 +23,11 @@ export async function GET(_req, { params }) {
   const { user_id, name, color } = project;
   const tagFilter = [name];
 
+  // Fetch user's photo mode preference
+  const { data: settingsRow } = await sb
+    .from('user_settings').select('data').eq('user_id', user_id).maybeSingle();
+  const photoMode = settingsRow?.data?.photoMode || 'strip';
+
   // Fetch journal entries, tasks, and notes that belong to this project
   const [journalR, tasksR, notesR] = await Promise.all([
     sb.from('journal_blocks')
@@ -47,6 +52,7 @@ export async function GET(_req, { params }) {
 
   return Response.json({
     project: { name, color },
+    photoMode,
     journalEntries: journalR.data ?? [],
     taskEntries: tasksR.data ?? [],
     notes: notesR.data ?? [],
