@@ -35,7 +35,12 @@ export const viewport = {
 // This script runs synchronously before any paint — zero flash possible.
 const THEME_SCRIPT = `(function(){
   try {
-    var t = localStorage.getItem("theme") || "dark";
+    var pref = localStorage.getItem("theme") || "auto";
+    var t = pref;
+    if (pref === "auto") {
+      var h = new Date().getHours();
+      t = (h >= 6 && h < 19) ? "light" : "dark";
+    }
     var bg = t === "light" ? "#D4CCB8" : "#111110";
     var el = document.documentElement;
     el.style.setProperty("background", bg, "important");
@@ -59,9 +64,9 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-title" content="Day Lab" />
         <style dangerouslySetInnerHTML={{ __html: `
           html, body { margin: 0; padding: 0; }
-          html[data-theme="light"], html[data-theme="light"] body { background: #D4CCB8 !important; }
-          html[data-theme="dark"], html[data-theme="dark"] body { background: #111110 !important; }
-          html:not([data-theme]) body { background: #111110 !important; }
+          html[data-theme="light"], html[data-theme="light"] body { background-color: #D4CCB8 !important; }
+          html[data-theme="dark"], html[data-theme="dark"] body { background-color: #111110 !important; }
+          html:not([data-theme]) body { background-color: #111110 !important; }
         `}} />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>

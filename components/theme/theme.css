@@ -67,6 +67,12 @@
   --dl-border-15:color-mix(in srgb,var(--dl-border) 15%,transparent);
   --dl-surface-93:color-mix(in srgb,var(--dl-surface) 93%,transparent);
 }
+/* Smooth theme transitions for auto mode (sun-based switching) */
+html,body{transition:background-color 1.5s ease}
+*{transition:color 1s ease,background-color 1s ease,border-color 1s ease,box-shadow 1s ease}
+/* Exclude elements that need instant transitions */
+input,textarea,[contenteditable],.ProseMirror,.ProseMirror *{transition:none !important}
+@keyframes none-override{}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 ::-webkit-scrollbar{display:none}*{scrollbar-width:none}
 button{border-radius:0}a{text-decoration:none}

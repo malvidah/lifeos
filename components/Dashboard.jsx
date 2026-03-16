@@ -28,7 +28,7 @@ import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 
 function DashboardInner() {
-  const { theme, setTheme } = useTheme();
+  const { theme, preference, setTheme } = useTheme();
 
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);
@@ -360,7 +360,7 @@ function DashboardInner() {
           Cards have opaque backgrounds and sit on top. */}
       {!activeProject && <WeatherBackground date={selected} theme={theme}/>}
 
-      <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+      <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* Top vignette removed — transparent header shows background */}
 

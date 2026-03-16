@@ -4,7 +4,7 @@ import { mono, F, blurweb } from "@/lib/tokens";
 import { toKey, todayKey, DAYS_SHORT, MONTHS_SHORT } from "@/lib/dates";
 import UserMenu from "./UserMenu.jsx";
 
-export default function Header({session,token,userId,syncStatus,theme,onThemeChange,selected,onGoToToday,onGoHome,stravaConnected,onStravaChange}) {
+export default function Header({session,token,userId,syncStatus,theme,themePreference,onThemeChange,selected,onGoToToday,onGoHome,stravaConnected,onStravaChange}) {
   // Format selected date as "Mon, Mar 1" — the actual context anchor
   const [dateLabel, setDateLabel] = useState("");
   const [isToday, setIsToday] = useState(false);
@@ -63,7 +63,7 @@ export default function Header({session,token,userId,syncStatus,theme,onThemeCha
         WebkitAppRegion: "drag",
       }}>
         <div style={{WebkitAppRegion:"no-drag", position:"relative", zIndex:101}}>
-          <UserMenu session={session} token={token} userId={userId} theme={theme} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
+          <UserMenu session={session} token={token} userId={userId} theme={theme} themePreference={themePreference} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
         </div>
       </div>
     </div>

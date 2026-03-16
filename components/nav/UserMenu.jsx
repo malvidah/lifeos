@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase";
 import { ouraKey } from "@/lib/ouraCache";
 import { IntegrationToggle, IntegrationRow, InfoTip, Card, DayLabLoader } from "../ui/primitives.jsx";
 
-export default function UserMenu({session,token,userId,theme,onThemeChange,stravaConnected,onStravaChange}) {
+export default function UserMenu({session,token,userId,theme,themePreference,onThemeChange,stravaConnected,onStravaChange}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
   const [ouraConnected,setOuraConnected]=useState(false);
@@ -381,16 +381,20 @@ export default function UserMenu({session,token,userId,theme,onThemeChange,strav
           {/* Theme */}
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:"var(--dl-highlight)"}}>
-              {theme==="dark"?"Dark":"Light"} Mode
+              Theme
             </span>
-            <button onClick={()=>onThemeChange(t=>t==="dark"?"light":"dark")}
-              style={{
-                background:theme==="dark"?"rgba(196,168,130,0.15)":"rgba(155,107,58,0.12)",
-                border:`1px solid var(--dl-border2)`,borderRadius:20,cursor:"pointer",
-                padding:3,display:"flex",alignItems:"center",width:40,height:22,
-                justifyContent:theme==="dark"?"flex-end":"flex-start"}}>
-              <div style={{width:14,height:14,borderRadius:"50%",background:"var(--dl-accent)",transition:"all 0.2s"}}/>
-            </button>
+            <div style={{display:"flex",gap:2,background:"var(--dl-well)",borderRadius:6,padding:2}}>
+              {[{key:"auto",label:"Auto"},{key:"light",label:"Light"},{key:"dark",label:"Dark"}].map(opt=>(
+                <button key={opt.key} onClick={()=>onThemeChange(opt.key)}
+                  style={{
+                    fontFamily:mono,fontSize:10,letterSpacing:'0.04em',textTransform:'uppercase',
+                    padding:'4px 8px',borderRadius:4,cursor:'pointer',border:'none',
+                    background:(themePreference||'auto')===opt.key?"var(--dl-accent)":"transparent",
+                    color:(themePreference||'auto')===opt.key?"var(--dl-bg)":"var(--dl-highlight)",
+                    transition:'background 0.2s,color 0.2s',
+                  }}>{opt.label}</button>
+              ))}
+            </div>
           </div>
 
           {divider}
