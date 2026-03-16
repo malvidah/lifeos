@@ -26,8 +26,10 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
       flexShrink: 0,
       position: "sticky", top: 0, zIndex: 100,
       background: "var(--dl-glass)",
-      backdropFilter: "blur(24px) saturate(1.3)",
-      WebkitBackdropFilter: "blur(24px) saturate(1.3)",
+      backdropFilter: "blur(20px) saturate(1.4)",
+      WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+      boxShadow: "var(--dl-glass-shadow)",
+      borderBottom: "1px solid var(--dl-glass-border)",
       WebkitAppRegion: "drag", userSelect: "none",
     }}>
       {/* Pull-down overscroll patch — matches glass style */}
