@@ -197,28 +197,33 @@ function Water() {
 
 // ── Labels ───────────────────────────────────────────────────────────────────
 function Labels({ projects, onSelect, hovered, setHovered }) {
-  return projects.map(p => (
-    <Html key={p.tag} position={[p.x, p.height + 0.5, p.z]} center
-      occlude style={{ pointerEvents: 'auto' }} zIndexRange={[3, 0]}>
-      <div onClick={() => onSelect(p.tag)}
-        onMouseEnter={() => setHovered(p.tag)}
-        onMouseLeave={() => setHovered(null)}
-        style={{
-          background: hovered === p.tag ? p.color : 'var(--dl-card, #1a1a1a)',
-          border: `1px solid ${p.color}${hovered === p.tag ? '' : '55'}`,
-          borderRadius: 100, padding: '4px 14px',
-          fontFamily: mono, fontSize: 12, letterSpacing: '0.06em',
-          textTransform: 'uppercase', whiteSpace: 'nowrap',
-          color: hovered === p.tag ? '#fff' : p.color,
-          cursor: 'pointer', fontWeight: hovered === p.tag ? 600 : 400,
-          boxShadow: `0 2px 8px rgba(0,0,0,0.2)`,
-          transition: 'all 0.15s', userSelect: 'none',
-        }}>
-        {p.isActive && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: p.color, marginRight: 6, verticalAlign: 'middle' }} />}
-        {p.label.toUpperCase()}
-      </div>
-    </Html>
-  ));
+  return projects.map(p => {
+    const isHov = hovered === p.tag;
+    return (
+      <Html key={p.tag} position={[p.x, p.height + 0.5, p.z]} center
+        occlude={!isHov}
+        style={{ pointerEvents: 'auto', zIndex: isHov ? 9999 : 1 }}
+        zIndexRange={isHov ? [9999, 9999] : [3, 0]}>
+        <div onClick={() => onSelect(p.tag)}
+          onMouseEnter={() => setHovered(p.tag)}
+          onMouseLeave={() => setHovered(null)}
+          style={{
+            background: isHov ? p.color : 'var(--dl-card, #1a1a1a)',
+            border: `1px solid ${p.color}${isHov ? '' : '55'}`,
+            borderRadius: 100, padding: '4px 14px',
+            fontFamily: mono, fontSize: 12, letterSpacing: '0.06em',
+            textTransform: 'uppercase', whiteSpace: 'nowrap',
+            color: isHov ? '#fff' : p.color,
+            cursor: 'pointer', fontWeight: isHov ? 600 : 400,
+            boxShadow: `0 2px 8px rgba(0,0,0,0.2)`,
+            transition: 'all 0.15s', userSelect: 'none',
+          }}>
+          {p.isActive && <span style={{ display: 'inline-block', width: 5, height: 5, borderRadius: '50%', background: isHov ? '#fff' : p.color, marginRight: 6, verticalAlign: 'middle' }} />}
+          {p.label.toUpperCase()}
+        </div>
+      </Html>
+    );
+  });
 }
 
 // ── Environment ──────────────────────────────────────────────────────────────
@@ -301,7 +306,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
     }}>
       <Canvas
         shadows
-        camera={{ position: [10, 10, 10], fov: 30, near: 0.1, far: 100 }}
+        camera={{ position: [13, 13, 13], fov: 30, near: 0.1, far: 100 }}
         style={{ width: '100%', height: '100%' }}
       >
         <Suspense fallback={null}>
