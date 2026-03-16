@@ -39,7 +39,12 @@ function injectEditorStyles() {
     .dl-hide-images .ProseMirror div[data-imageblock] { display: none; }
     .dl-editor .ProseMirror { counter-reset: imgchip; }
     .dl-img-chip-num::before { content: counter(imgchip); }
-    .dl-editor .ProseMirror table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+    .dl-editor .ProseMirror table { border-collapse: collapse; width: 100%; margin: 8px 0; table-layout: fixed; }
+    .dl-editor .ProseMirror .tableWrapper { overflow-x: auto; margin: 8px 0; }
+    .dl-editor .ProseMirror .column-resize-handle { position: absolute; right: -1px; top: 0; bottom: 0; width: 3px; background: var(--dl-accent); opacity: 0; pointer-events: none; cursor: col-resize; }
+    .dl-editor .ProseMirror .resize-cursor { cursor: col-resize; }
+    .dl-editor .ProseMirror td:hover .column-resize-handle,
+    .dl-editor .ProseMirror th:hover .column-resize-handle { opacity: 0.5; pointer-events: auto; }
     .dl-editor .ProseMirror th,
     .dl-editor .ProseMirror td {
       border-bottom: 1px solid var(--dl-border);
@@ -604,7 +609,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ProjectTagNode,
       NoteLinkNode,
       ...(singleLine ? [] : [ImageBlock, ImageChip]),
-      ...(noteTitle ? [Table.configure({ resizable: false }), TableRow, TableCell, TableHeader] : []),
+      ...(noteTitle ? [Table.configure({ resizable: true }), TableRow, TableCell, TableHeader] : []),
       ...(taskList ? [TaskList, TaskItem.configure({ nested: false })] : []),
 
       Placeholder.configure({
