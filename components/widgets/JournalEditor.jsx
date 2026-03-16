@@ -7,54 +7,125 @@ import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile } from "@/lib/images";
 import { DayLabEditor } from "../Editor.jsx";
 
-// Extract image URLs from journal content (stored as [img:url])
+// Extract image URLs from journal content
 function extractImages(content) {
   if (!content) return [];
   const urls = [];
-  const re = /\[img:(https?:\/\/[^\]]+)\]/g;
+  // [img:url] text format
+  const txtRe = /\[img:(https?:\/\/[^\]]+)\]/g;
   let m;
-  while ((m = re.exec(content)) !== null) urls.push(m[1]);
-  // Also match HTML imageblock format
+  while ((m = txtRe.exec(content)) !== null) urls.push(m[1]);
+  // HTML imageblock format
   const htmlRe = /data-imageblock="([^"]+)"/g;
   while ((m = htmlRe.exec(content)) !== null) urls.push(m[1]);
   return [...new Set(urls)];
 }
 
-// ── Photo Grid ────────────────────────────────────────────────────────────────
-function PhotoGrid({ images, onRemove }) {
-  const [viewIdx, setViewIdx] = useState(null);
+// ── Photo Carousel ────────────────────────────────────────────────────────────
+// Rounded square at top of journal. Layout adapts to image count.
+function PhotoCarousel({ images, onViewImage }) {
+  const [idx, setIdx] = useState(0);
+  const touchStart = useRef(null);
+
+  useEffect(() => { setIdx(0); }, [images.length]);
+
   if (!images.length) return null;
 
-  if (viewIdx != null) {
-    return <Lightbox images={images} index={viewIdx} onClose={() => setViewIdx(null)} />;
+  const prev = () => setIdx(i => (i - 1 + images.length) % images.length);
+  const next = () => setIdx(i => (i + 1) % images.length);
+
+  // 1 image: full square
+  if (images.length === 1) {
+    return (
+      <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 6, position: 'relative', cursor: 'pointer' }}
+        onClick={() => onViewImage(0)}>
+        <div style={{ aspectRatio: '1', background: 'var(--dl-well)' }}>
+          <img src={images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        </div>
+      </div>
+    );
   }
 
-  const cols = images.length === 1 ? '1fr'
-    : images.length === 2 ? '1fr 1fr'
-    : 'repeat(auto-fill, minmax(100px, 1fr))';
+  // 2-3 images: carousel with chevrons
+  if (images.length <= 3) {
+    return (
+      <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 6, position: 'relative' }}>
+        <div style={{ aspectRatio: '1', background: 'var(--dl-well)', cursor: 'pointer' }}
+          onClick={() => onViewImage(idx)}
+          onTouchStart={e => { touchStart.current = e.touches[0].clientX; }}
+          onTouchEnd={e => {
+            if (touchStart.current == null) return;
+            const diff = e.changedTouches[0].clientX - touchStart.current;
+            if (diff > 50) prev(); else if (diff < -50) next();
+            touchStart.current = null;
+          }}>
+          <img src={images[idx]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', transition: 'opacity 0.2s' }} />
+        </div>
+        {/* Left vignette + chevron */}
+        <div onClick={e => { e.stopPropagation(); prev(); }} style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: '15%',
+          background: 'linear-gradient(to right, rgba(0,0,0,0.3), transparent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 8,
+          cursor: 'pointer', opacity: 0.5, transition: 'opacity 0.2s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}>
+          <span style={{ color: '#fff', fontSize: 20, fontFamily: mono, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>‹</span>
+        </div>
+        {/* Right vignette + chevron */}
+        <div onClick={e => { e.stopPropagation(); next(); }} style={{
+          position: 'absolute', right: 0, top: 0, bottom: 0, width: '15%',
+          background: 'linear-gradient(to left, rgba(0,0,0,0.3), transparent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 8,
+          cursor: 'pointer', opacity: 0.5, transition: 'opacity 0.2s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+          onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}>
+          <span style={{ color: '#fff', fontSize: 20, fontFamily: mono, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>›</span>
+        </div>
+        {/* Dots indicator */}
+        <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 5 }}>
+          {images.map((_, i) => (
+            <div key={i} onClick={e => { e.stopPropagation(); setIdx(i); }} style={{
+              width: 6, height: 6, borderRadius: '50%', cursor: 'pointer',
+              background: i === idx ? '#fff' : 'rgba(255,255,255,0.4)',
+              transition: 'background 0.2s',
+            }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
+  // 4+ images: hero left + 3 stacked right (Instagram style)
   return (
-    <div style={{
-      display: 'grid', gridTemplateColumns: cols,
-      gap: 3, marginBottom: 6, borderRadius: 10, overflow: 'hidden',
-    }}>
-      {images.map((url, i) => (
-        <button
-          key={url}
-          onClick={() => setViewIdx(i)}
-          style={{
-            background: 'var(--dl-well)', border: 'none', padding: 0, cursor: 'pointer',
-            aspectRatio: images.length === 1 ? '16/10' : '1',
-            overflow: 'hidden', transition: 'opacity 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
-          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-        >
-          <img src={url} alt="" loading="lazy" style={{
-            width: '100%', height: '100%',
-            objectFit: 'cover', display: 'block',
-          }} />
-        </button>
+    <div style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 6, display: 'grid', gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr 1fr', aspectRatio: '1', gap: 2 }}>
+      {/* Hero: spans all 3 rows on the left */}
+      <div style={{ gridRow: '1 / 4', cursor: 'pointer', background: 'var(--dl-well)' }}
+        onClick={() => onViewImage(0)}>
+        <img src={images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      </div>
+      {/* Right column: 3 stacked */}
+      {[1, 2, 3].map(i => (
+        <div key={i} style={{ cursor: 'pointer', background: 'var(--dl-well)', position: 'relative', overflow: 'hidden' }}
+          onClick={() => onViewImage(i < images.length ? i : 0)}>
+          {i < images.length ? (
+            <img src={images[i]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+          ) : (
+            <div style={{ width: '100%', height: '100%', background: 'var(--dl-well)' }} />
+          )}
+          {/* "+N more" overlay on last tile */}
+          {i === 3 && images.length > 4 && (
+            <div style={{
+              position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <span style={{ color: '#fff', fontFamily: mono, fontSize: F.md, letterSpacing: '0.04em' }}>
+                +{images.length - 4}
+              </span>
+            </div>
+          )}
+        </div>
       ))}
     </div>
   );
@@ -78,9 +149,9 @@ function Lightbox({ images, index, onClose }) {
   }, [onClose]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 6 }}>
       <div
-        style={{ position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'pointer' }}
+        style={{ borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'pointer', position: 'relative' }}
         onTouchStart={e => { touchStart.current = e.touches[0].clientX; }}
         onTouchEnd={e => {
           if (touchStart.current == null) return;
@@ -90,7 +161,7 @@ function Lightbox({ images, index, onClose }) {
         }}
         onClick={next}
       >
-        <img src={images[idx]} alt="" style={{ width: '100%', maxHeight: 480, objectFit: 'contain', display: 'block', background: 'var(--dl-well)' }} />
+        <img src={images[idx]} alt="" style={{ width: '100%', maxHeight: 520, objectFit: 'contain', display: 'block' }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
         <span style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', letterSpacing: '0.06em' }}>
@@ -127,13 +198,12 @@ function LbBtn({ onClick, children }) {
   );
 }
 
-// ── Drop Zone Overlay ─────────────────────────────────────────────────────────
+// ── Drop Zone ─────────────────────────────────────────────────────────────────
 function DropZone({ uploading }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      minHeight: 80, padding: '24px 0',
-      opacity: 0.5,
+      minHeight: 80, padding: '24px 0', opacity: 0.5,
     }}>
       <span style={{
         fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
@@ -155,30 +225,27 @@ export function JournalEditor({date,userId,token}) {
 
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [lightboxIdx, setLightboxIdx] = useState(null);
   const dragCounter = useRef(0);
-  const containerRef = useRef(null);
 
   const images = useMemo(() => extractImages(value), [value]);
 
-  // Helper: append an image to the journal value as HTML imageblock
+  // Append image to journal content (as imageblock HTML for persistence)
   const addImage = useCallback((url) => {
     setValue(prev => {
-      if (prev && prev.includes(url)) return prev; // no duplicate
+      if (prev && prev.includes(url)) return prev;
       const imgHtml = `<div data-imageblock="${url}" style="margin:4px 0;line-height:0"><img src="${url}" style="max-width:100%;border-radius:8px;display:block" /></div>`;
       return (prev || '') + imgHtml;
     }, { undoLabel: 'Add photo' });
   }, [setValue]);
 
-  // Handle file drop on the journal container
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();
     e.stopPropagation();
     dragCounter.current = 0;
     setDragging(false);
-
     const files = Array.from(e.dataTransfer?.files || []).filter(f => f.type.startsWith('image/'));
     if (!files.length || !token) return;
-
     setUploading(true);
     try {
       const urls = await Promise.all(files.map(f => uploadImageFile(f, token)));
@@ -188,19 +255,16 @@ export function JournalEditor({date,userId,token}) {
     }
   }, [token, addImage]);
 
-  // Track drag enter/leave on the container (not individual children)
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
     dragCounter.current++;
     if (e.dataTransfer?.types?.includes('Files')) setDragging(true);
   }, []);
-
   const handleDragLeave = useCallback((e) => {
     e.preventDefault();
     dragCounter.current--;
     if (dragCounter.current <= 0) { dragCounter.current = 0; setDragging(false); }
   }, []);
-
   const handleDragOver = useCallback((e) => { e.preventDefault(); }, []);
 
   if (!loaded) return (
@@ -213,13 +277,16 @@ export function JournalEditor({date,userId,token}) {
 
   return (
     <div
-      ref={containerRef}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <PhotoGrid images={images} />
+      {lightboxIdx != null ? (
+        <Lightbox images={images} index={lightboxIdx} onClose={() => setLightboxIdx(null)} />
+      ) : (
+        <PhotoCarousel images={images} onViewImage={i => setLightboxIdx(i)} />
+      )}
       {(dragging || uploading) ? (
         <DropZone uploading={uploading} />
       ) : (
@@ -232,7 +299,7 @@ export function JournalEditor({date,userId,token}) {
           projectNames={ctxProjects}
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
-          placeholder="What's on your mind? Use / for commands."
+          placeholder="What's on your mind?"
           textColor={"var(--dl-strong)"}
           mutedColor={"var(--dl-middle)"}
           color={"var(--dl-accent)"}
