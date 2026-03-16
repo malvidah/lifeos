@@ -763,6 +763,16 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
       handleDOMEvents: {
         paste(view, e) {
+          // Check for pasted image URL (text that ends with image extension)
+          const pastedText = e.clipboardData?.getData('text/plain')?.trim();
+          if (pastedText && /^https?:\/\/.+\.(jpe?g|png|gif|webp|svg|bmp|avif)(\?[^\s]*)?$/i.test(pastedText)) {
+            e.preventDefault();
+            editorRef.current?.commands.insertContent([
+              { type: 'imageChip', attrs: { src: pastedText } },
+              { type: 'text', text: ' ' },
+            ]);
+            return true;
+          }
           if (!onImageUploadRef.current) return false;
           const img = Array.from(e.clipboardData?.items || []).find(i => i.type.startsWith('image/'));
           if (!img) return false;
