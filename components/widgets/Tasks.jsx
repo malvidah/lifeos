@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useContext, useMemo } from "react";
 import { api } from "@/lib/api";
+import { recurrenceLabel } from "@/lib/recurrence";
 import { useTheme } from "@/lib/theme";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
@@ -213,23 +214,6 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
   );
 }
 
-// ── Habit schedule label ──────────────────────────────────────────────────────
-const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-function scheduleLabel(rec) {
-  if (!rec) return '';
-  if (rec.rule === 'daily') return 'Daily';
-  if (rec.rule === 'weekly') {
-    const days = (rec.days || []).map(d => DAY_NAMES[d]);
-    if (days.length === 5 && !rec.days.includes(0) && !rec.days.includes(6)) return 'Weekdays';
-    if (days.length === 2 && rec.days.includes(0) && rec.days.includes(6)) return 'Weekends';
-    if (days.length === 1) return `Every ${DAY_NAMES[rec.days[0]]}`;
-    return days.join(' · ');
-  }
-  if (rec.rule === 'biweekly') return `Biweekly ${DAY_NAMES[rec.days?.[0]] || ''}`;
-  if (rec.rule === 'monthly') return `Monthly ${rec.dayOfMonth}`;
-  return '';
-}
-
 // ── Habit Instances — recurring tasks with flag chip ──────────────────────────
 function HabitInstances({ date, token }) {
   const [instances, setInstances] = useState([]);
@@ -291,7 +275,7 @@ function HabitInstances({ date, token }) {
               <svg width="8" height="8" viewBox="0 0 16 16" fill={flagColor} stroke="none" style={{flexShrink:0}}>
                 <path d="M3 1v14M3 1h9l-2.5 3.5L12 8H3"/>
               </svg>
-              {scheduleLabel(inst.recurrence)}
+              {recurrenceLabel(inst.recurrence)}
             </span>
           )}
         </div>
