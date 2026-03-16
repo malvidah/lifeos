@@ -308,15 +308,15 @@ function CelSun({ position, visible }) {
   if (!visible) return null;
   return (
     <group position={position}>
-      {/* Glow ring */}
+      {/* Outer glow */}
       <mesh>
-        <ringGeometry args={[0.55, 0.75, 32]} />
-        <meshBasicMaterial color="#FFE080" transparent opacity={0.25} side={THREE.DoubleSide} />
+        <ringGeometry args={[1.0, 1.4, 32]} />
+        <meshBasicMaterial color="#FFE080" transparent opacity={0.2} side={THREE.DoubleSide} />
       </mesh>
       {/* Core */}
       <mesh>
-        <sphereGeometry args={[0.5, 8, 6]} />
-        <meshToonMaterial color="#FFD060" gradientMap={toonGrad} emissive="#FFA030" emissiveIntensity={0.4} />
+        <sphereGeometry args={[0.8, 8, 6]} />
+        <meshToonMaterial color="#FFD060" gradientMap={toonGrad} emissive="#FFA030" emissiveIntensity={0.6} />
       </mesh>
     </group>
   );
@@ -386,8 +386,9 @@ function Environment({ hour }) {
   const h = hour ?? 14;
   const { isNight, isDusk } = skyColors(h);
   const sunAngle = ((h - 6) / 12) * Math.PI;
-  const sunX = Math.cos(sunAngle) * 14;
-  const sunY = Math.sin(sunAngle) * 14;
+  const sunX = Math.cos(sunAngle) * 12;
+  const sunY = Math.max(2, Math.sin(sunAngle) * 8);
+  const sunZ = -10;
   const moonAngle = sunAngle + Math.PI;
   const moonX = Math.cos(moonAngle) * 14;
   const moonY = Math.max(2, Math.sin(moonAngle) * 14);
@@ -395,7 +396,7 @@ function Environment({ hour }) {
     <>
       <ambientLight intensity={isNight ? 0.08 : 0.25} color={isNight ? '#3344AA' : '#B8A890'} />
       <directionalLight
-        position={[sunX, sunY, 4]}
+        position={[sunX, sunY, sunZ]}
         intensity={isNight ? 0.08 : isDusk ? 1.0 : 1.4}
         color={isDusk ? '#FF8040' : isNight ? '#5566AA' : '#FFD8A8'}
         castShadow
@@ -407,7 +408,7 @@ function Environment({ hour }) {
       <directionalLight position={[0, 2, -8]} intensity={0.12} color="#A0B0D0" />
 
       {/* Celestial bodies */}
-      <CelSun position={[sunX, sunY, 4]} visible={!isNight} />
+      <CelSun position={[sunX, sunY, sunZ]} visible={!isNight} />
       <CelMoon position={[moonX, moonY, -4]} visible={isNight || isDusk} />
       <Stars visible={isNight} />
     </>
