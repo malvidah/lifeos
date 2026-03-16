@@ -399,8 +399,8 @@ function DashboardInner() {
               padding:10, paddingTop:0,
               paddingBottom:mobile?200:0,
               display:"flex", flexDirection:"column", gap:8}}>
-              {/* Spacer for fixed header height */}
-              <div style={{height:50,flexShrink:0}}/>
+              {/* Spacer for fixed header — clears header + breathing room */}
+              <div style={{height:70,flexShrink:0}}/>
               {/* NavBar — in scroll flow, same component on every page */}
               <NavBar
                 activeProject={activeProject}
