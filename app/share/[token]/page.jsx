@@ -87,6 +87,10 @@ export default function SharedProjectPage() {
         .note-content em { font-style: normal; color: ${accent}; font-weight: 500; }
         .note-content ul, .note-content ol { padding-left: 20px; margin: 4px 0 8px; }
         .note-content li { font-size: 15px; line-height: 1.75; color: var(--dl-strong); }
+        .note-content table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 15px; }
+        .note-content th, .note-content td { padding: 6px 12px; text-align: left; vertical-align: top; border: 1px solid var(--dl-border); color: var(--dl-strong); line-height: 1.6; }
+        .note-content th { font-weight: 600; background: var(--dl-surface); }
+        .note-content tr:first-child th, .note-content tr:first-child td { border-top: 1px solid var(--dl-border); }
         @media print { .share-page { padding: 0; } .share-footer { display: none; } }
       `}</style>
       <div className="share-page" style={s.page}>
