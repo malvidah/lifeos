@@ -29,7 +29,7 @@ function injectEditorStyles() {
   s.textContent = `
     .dl-editor .ProseMirror { outline: none; white-space: pre-wrap; word-break: break-word; min-height: 1.7em; }
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
-    .dl-editor .ProseMirror > p:first-of-type.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
+    .dl-editor .ProseMirror > p:only-child.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-weight: 400; }
     .dl-tasklist .ProseMirror p.is-empty::before { content: none !important; }
     .dl-tasklist .ProseMirror > p:last-child { display: none; }
