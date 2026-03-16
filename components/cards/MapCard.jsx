@@ -96,17 +96,35 @@ function buildTerrainGeo(projects) {
     hMap.push(h);
   }
 
-  // Vertex colors
+  // Cairn-style vertex colors — bold color bands, warm/cool contrast
+  // Distinct steps rather than smooth gradients (cell-shaded feel)
   const colors = new Float32Array(pos.count * 3);
   for (let i = 0; i < pos.count; i++) {
     const h = pos.getY(i);
-    const t = Math.max(0, Math.min(1, (h + 0.3) / 2.5));
+    const x = pos.getX(i), z = pos.getZ(i);
+    const t = Math.max(0, Math.min(1, (h + 0.3) / 2.8));
+    // Add subtle noise variation to break up bands
+    const n = noise2D(x * 2.5, z * 2.5) * 0.04;
     let r, g, b;
-    if (t < 0.15) { r = 0.25; g = 0.35; b = 0.22; } // deep green valley
-    else if (t < 0.3) { r = 0.32 + t; g = 0.38 + t * 0.5; b = 0.22; } // green slopes
-    else if (t < 0.55) { r = 0.48 + t * 0.3; g = 0.4 + t * 0.2; b = 0.25 + t * 0.1; } // brown
-    else if (t < 0.8) { r = 0.55 + t * 0.15; g = 0.5 + t * 0.1; b = 0.4 + t * 0.08; } // rocky
-    else { r = 0.75 + t * 0.2; g = 0.73 + t * 0.2; b = 0.7 + t * 0.2; } // snow
+    if (t < 0.1) {
+      // Deep valley: cool blue-green (shadow)
+      r = 0.18 + n; g = 0.25 + n; b = 0.22 + n;
+    } else if (t < 0.25) {
+      // Low ground: muted green
+      r = 0.28 + n; g = 0.38 + n; b = 0.25 + n;
+    } else if (t < 0.4) {
+      // Mid slopes: warm olive-brown
+      r = 0.48 + n; g = 0.42 + n; b = 0.25 + n;
+    } else if (t < 0.6) {
+      // Upper slopes: warm amber/orange (Cairn rock catching light)
+      r = 0.65 + n; g = 0.45 + n; b = 0.28 + n;
+    } else if (t < 0.8) {
+      // High rock: cool blue-grey (shadow side feel)
+      r = 0.48 + n; g = 0.45 + n; b = 0.48 + n;
+    } else {
+      // Peak: bright warm white with slight amber
+      r = 0.85 + n; g = 0.78 + n; b = 0.7 + n;
+    }
     colors[i * 3] = r; colors[i * 3 + 1] = g; colors[i * 3 + 2] = b;
   }
   top.setAttribute('color', new THREE.BufferAttribute(colors, 3));
@@ -146,8 +164,9 @@ function buildTerrainGeo(projects) {
       // Two triangles: top-left, top-right, bottom-right, bottom-left
       sideVerts.push(x0, h0, z0, x1, h1, z1, x1, -DEPTH, z1, x0, -DEPTH, z0);
       sideIdx.push(vOff, vOff + 1, vOff + 2, vOff, vOff + 2, vOff + 3);
-      // Earth layer colors (darker at bottom)
-      const c1 = [0.38, 0.28, 0.2], c2 = [0.25, 0.18, 0.12];
+      // Cairn-style earth layers: warm amber top → cool dark bottom
+      const c1 = [0.45, 0.32, 0.22]; // warm brown at surface
+      const c2 = [0.18, 0.14, 0.12]; // deep cool dark at base
       sideCols.push(...c1, ...c1, ...c2, ...c2);
       vOff += 4;
     }
@@ -173,24 +192,29 @@ function Terrain({ projects }) {
   return (
     <group>
       <mesh geometry={top} receiveShadow castShadow>
-        <meshStandardMaterial {...mat} />
+        <meshStandardMaterial {...mat} emissiveIntensity={0} />
       </mesh>
       <mesh geometry={sideGeo} receiveShadow>
-        <meshStandardMaterial {...mat} />
+        <meshStandardMaterial flatShading vertexColors roughness={0.95} metalness={0} />
       </mesh>
       <mesh geometry={botGeo}>
-        <meshStandardMaterial color="#1E1510" roughness={1} />
+        <meshStandardMaterial color="#12100E" roughness={1} flatShading />
       </mesh>
     </group>
   );
 }
 
-// ── Water plane (lake in low areas) ──────────────────────────────────────────
+// ── Water — opaque blue plane flush with terrain, no gaps ────────────────────
 function Water() {
   return (
-    <mesh position={[0, 0.05, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+    <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
       <planeGeometry args={[SIZE, SIZE]} />
-      <meshStandardMaterial color="#4A7890" transparent opacity={0.35} roughness={0.2} metalness={0.1} />
+      <meshStandardMaterial
+        color="#2A5068"
+        roughness={0.3}
+        metalness={0.15}
+        flatShading
+      />
     </mesh>
   );
 }
