@@ -165,6 +165,7 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks)
       height: h,
       color: projectColor(tag),
       label: tagDisplayName(tag),
+      score: Math.max(entryScore, connScore, 0.3),
       isActive: daysSinceActive < 7,
       isHot: daysSinceActive < 1,     // active today → volcanic
       recencyScore: rScore,
