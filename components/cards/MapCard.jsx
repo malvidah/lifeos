@@ -103,12 +103,27 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks)
     if (connWeight[source] != null) connWeight[source] += weight;
     if (connWeight[target] != null) connWeight[target] += weight;
   });
-  const sorted = [...tags].sort((a, b) => (connWeight[b] || 0) - (connWeight[a] || 0));
+
+  // Sort by recency — most recently active projects go toward center
+  const now = Date.now();
+  const recencyScore = (tag) => {
+    if (!recency?.[tag]) return 0;
+    const age = now - new Date(recency[tag]).getTime();
+    const days = age / 86400000;
+    if (days < 1) return 1.0;   // today
+    if (days < 7) return 0.7;   // this week
+    if (days < 30) return 0.4;  // this month
+    return 0.1;
+  };
+  const sorted = [...tags].sort((a, b) => recencyScore(b) - recencyScore(a));
+
   const placed = new Map();
   const baseRadius = sorted.length <= 3 ? 2.0 : 1.8;
   sorted.forEach((tag, i) => {
     const angle = (i / sorted.length) * Math.PI * 2 + Math.PI / 4;
-    const radius = i === 0 ? 0 : baseRadius + (i / sorted.length) * 3.0;
+    // More recent → smaller radius (closer to center)
+    const rScore = recencyScore(tag);
+    const radius = i === 0 ? 0 : (baseRadius + (1 - rScore) * 2.5) + (i / sorted.length) * 1.5;
     placed.set(tag, { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius });
   });
   for (let iter = 0; iter < 5; iter++) {
@@ -135,20 +150,20 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks)
       }
     }
   }
-  const maxConn = Math.max(1, ...Object.values(connWeight));
-  // Use entry counts for height — projects with more real entries get taller mountains
   const maxEntries = Math.max(1, ...Object.values(entryCounts || {}));
   return tags.map(tag => {
     const pos = placed.get(tag) || { x: 0, z: 0 };
-    const score = (connWeight[tag] || 0) / maxConn;
     const entryScore = (entryCounts?.[tag] || 0) / maxEntries;
+    const rScore = recencyScore(tag);
+    const daysSinceActive = recency?.[tag] ? (now - new Date(recency[tag]).getTime()) / 86400000 : 999;
     return {
       tag, x: pos.x, z: pos.z,
-      height: 0.6 + entryScore * 1.8, // real effort drives height
+      height: 0.6 + entryScore * 1.8,
       color: projectColor(tag),
       label: tagDisplayName(tag),
-      isActive: recency?.[tag] && (Date.now() - new Date(recency[tag]).getTime()) < 7 * 86400000,
-      score,
+      isActive: daysSinceActive < 7,
+      isHot: daysSinceActive < 1,     // active today → volcanic
+      recencyScore: rScore,
       completedTasks: completedTasks?.[tag] || 0,
     };
   });
@@ -553,6 +568,191 @@ function DepthLabel({ p, onSelect, isHov, setHovered }) {
   );
 }
 
+// ── Low-poly tree ────────────────────────────────────────────────────────────
+function Tree({ position, scale = 1 }) {
+  return (
+    <group position={position} scale={[scale, scale, scale]}>
+      {/* Trunk */}
+      <mesh position={[0, 0.15, 0]}>
+        <cylinderGeometry args={[0.03, 0.05, 0.3, 5]} />
+        <meshToonMaterial color="#6B4226" gradientMap={toonGrad} />
+      </mesh>
+      {/* Canopy — stacked cones */}
+      <mesh position={[0, 0.45, 0]}>
+        <coneGeometry args={[0.18, 0.3, 5]} />
+        <meshToonMaterial color="#2D5A1E" gradientMap={toonGrad} />
+      </mesh>
+      <mesh position={[0, 0.6, 0]}>
+        <coneGeometry args={[0.14, 0.25, 5]} />
+        <meshToonMaterial color="#3A6E28" gradientMap={toonGrad} />
+      </mesh>
+    </group>
+  );
+}
+
+// ── Rock ─────────────────────────────────────────────────────────────────────
+function Rock({ position, scale = 1 }) {
+  return (
+    <mesh position={position} scale={[scale, scale * 0.6, scale]}>
+      <dodecahedronGeometry args={[0.1, 0]} />
+      <meshToonMaterial color="#6A6A5A" gradientMap={toonGrad} />
+    </mesh>
+  );
+}
+
+// ── Foliage around mountain bases (trees + rocks from completed tasks) ───────
+function Foliage({ projects }) {
+  const items = useMemo(() => {
+    const result = [];
+    for (const p of projects) {
+      if (!p.completedTasks) continue;
+      const count = Math.min(p.completedTasks, 30); // cap at 30 objects
+      const treeCount = Math.floor(count * 0.6);
+      const rockCount = count - treeCount;
+      for (let i = 0; i < treeCount; i++) {
+        const angle = (i / treeCount) * Math.PI * 2 + p.x * 3;
+        const dist = 0.5 + (i % 3) * 0.3 + Math.sin(i * 7) * 0.2;
+        result.push({
+          type: 'tree', key: `t-${p.tag}-${i}`,
+          pos: [p.x + Math.cos(angle) * dist, 0, p.z + Math.sin(angle) * dist],
+          scale: 0.5 + Math.random() * 0.4,
+        });
+      }
+      for (let i = 0; i < rockCount; i++) {
+        const angle = (i / rockCount) * Math.PI * 2 + p.z * 5;
+        const dist = 0.3 + (i % 4) * 0.25;
+        result.push({
+          type: 'rock', key: `r-${p.tag}-${i}`,
+          pos: [p.x + Math.cos(angle) * dist, 0, p.z + Math.sin(angle) * dist],
+          scale: 0.6 + Math.random() * 0.5,
+        });
+      }
+    }
+    return result;
+  }, [projects]);
+
+  return (
+    <>
+      {items.map(item => item.type === 'tree'
+        ? <Tree key={item.key} position={item.pos} scale={item.scale} />
+        : <Rock key={item.key} position={item.pos} scale={item.scale} />
+      )}
+    </>
+  );
+}
+
+// ── Achievement flags on mountainside ────────────────────────────────────────
+const FLAG_MILESTONES = [
+  { count: 10, color: '#4A9E6E', height: 0.3 },  // green
+  { count: 30, color: '#6B8EB8', height: 0.6 },  // blue
+  { count: 100, color: '#C17B4A', height: 0.85 }, // gold
+];
+
+function Flags({ projects }) {
+  const flags = useMemo(() => {
+    const result = [];
+    for (const p of projects) {
+      for (const m of FLAG_MILESTONES) {
+        if (p.completedTasks >= m.count) {
+          const angle = m.count * 1.3 + p.x; // deterministic angle per milestone
+          const dist = 0.3;
+          const y = p.height * m.height;
+          result.push({
+            key: `f-${p.tag}-${m.count}`,
+            pos: [p.x + Math.cos(angle) * dist, y, p.z + Math.sin(angle) * dist],
+            color: m.color,
+          });
+        }
+      }
+    }
+    return result;
+  }, [projects]);
+
+  return (
+    <>
+      {flags.map(f => (
+        <group key={f.key} position={f.pos}>
+          {/* Pole */}
+          <mesh position={[0, 0.15, 0]}>
+            <cylinderGeometry args={[0.01, 0.01, 0.3, 4]} />
+            <meshToonMaterial color="#888" gradientMap={toonGrad} />
+          </mesh>
+          {/* Flag */}
+          <mesh position={[0.06, 0.25, 0]}>
+            <planeGeometry args={[0.12, 0.07]} />
+            <meshToonMaterial color={f.color} gradientMap={toonGrad} side={THREE.DoubleSide} />
+          </mesh>
+        </group>
+      ))}
+    </>
+  );
+}
+
+// ── Volcanic glow for very active projects ───────────────────────────────────
+function VolcanicGlow({ projects }) {
+  return (
+    <>
+      {projects.filter(p => p.isHot).map(p => (
+        <group key={`v-${p.tag}`} position={[p.x, p.height + 0.1, p.z]}>
+          {/* Emissive glow at peak */}
+          <mesh>
+            <sphereGeometry args={[0.2, 8, 6]} />
+            <meshBasicMaterial color="#FF4400" transparent opacity={0.4} depthWrite={false} />
+          </mesh>
+          <pointLight color="#FF6622" intensity={1.5} distance={3} decay={2} />
+        </group>
+      ))}
+    </>
+  );
+}
+
+// ── Birds circling peaks (for active projects with streaks) ──────────────────
+function Birds({ projects }) {
+  const birdData = useMemo(() => {
+    // Birds appear on projects active this week with at least 5 completed tasks
+    return projects
+      .filter(p => p.isActive && p.completedTasks >= 5)
+      .flatMap((p, pi) => {
+        const count = Math.min(3, Math.floor(p.completedTasks / 10) + 1);
+        return Array.from({ length: count }, (_, i) => ({
+          key: `b-${p.tag}-${i}`,
+          center: [p.x, p.height + 0.6 + i * 0.15, p.z],
+          radius: 0.4 + i * 0.15,
+          speed: 0.8 + i * 0.3,
+          offset: (pi * 2.1 + i * 2.0),
+        }));
+      });
+  }, [projects]);
+
+  return birdData.map(b => <Bird key={b.key} {...b} />);
+}
+
+function Bird({ center, radius, speed, offset }) {
+  const ref = useRef();
+  useFrame(({ clock }) => {
+    if (!ref.current) return;
+    const t = clock.elapsedTime * speed + offset;
+    ref.current.position.x = center[0] + Math.cos(t) * radius;
+    ref.current.position.y = center[1] + Math.sin(t * 0.7) * 0.1;
+    ref.current.position.z = center[2] + Math.sin(t) * radius;
+    ref.current.rotation.y = -t + Math.PI / 2;
+  });
+
+  return (
+    <group ref={ref}>
+      {/* Simple V-shape bird */}
+      <mesh rotation={[0, 0, 0.3]}>
+        <planeGeometry args={[0.08, 0.02]} />
+        <meshBasicMaterial color="#222" side={THREE.DoubleSide} />
+      </mesh>
+      <mesh rotation={[0, 0, -0.3]}>
+        <planeGeometry args={[0.08, 0.02]} />
+        <meshBasicMaterial color="#222" side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
 function Labels({ projects, onSelect, hovered, setHovered }) {
   return projects.map(p => (
     <DepthLabel key={p.tag} p={p} onSelect={onSelect}
@@ -680,6 +880,10 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour
       <Environment hour={hour} />
       <Terrain projects={projects} radius={radius} vitality={vitality} />
       <Water radius={radius} vitality={vitality} />
+      <Foliage projects={projects} />
+      <Flags projects={projects} />
+      <VolcanicGlow projects={projects} />
+      <Birds projects={projects} />
       <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} />
       <OrbitControls
         enablePan enableZoom enableRotate
