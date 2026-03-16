@@ -522,7 +522,7 @@ function DashboardInner() {
               return (
                 <>
                   {/* Scrollable content — full width scroll, max-width content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto'}}>
+                  <div style={{flex:1,minHeight:0,overflow:'auto',position:'relative',zIndex:1}}>
                   <div style={{maxWidth:1200,width:"100%",margin:"0 auto",padding:10,paddingTop:0,boxSizing:'border-box',
                     display:'flex',flexDirection:'column',gap:8}}>
                     {/* Spacer for fixed header — same as day view */}
@@ -548,8 +548,10 @@ function DashboardInner() {
                             onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                           />
                         )}
-                        {/* Spacer so content starts below the visible terrain */}
+                        {/* Spacer so terrain is visible above cards */}
                         <div style={{height: 350}} />
+                        {/* Opaque content area below terrain */}
+                        <div style={{background:'var(--dl-bg)', borderRadius:'16px 16px 0 0', padding:'10px 0', position:'relative', zIndex:2}}>
                         <ErrorBoundary label="Project">
                         <ProjectView
                           project="__everything__"
@@ -559,6 +561,7 @@ function DashboardInner() {
                           taskFilter={taskFilter} setTaskFilter={setTaskFilter}
                         />
                         </ErrorBoundary>
+                        </div>{/* close opaque content area */}
                       </div>
                     ) : (
                       <ErrorBoundary label="Project">

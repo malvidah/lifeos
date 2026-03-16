@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useRef, Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Html, Cloud, Sky } from "@react-three/drei";
+import { OrbitControls, Html } from "@react-three/drei";
 import { createNoise2D } from "simplex-noise";
 import * as THREE from "three";
 import { mono, F, projectColor } from "@/lib/tokens";
@@ -225,10 +225,7 @@ function Environment({ hour }) {
         shadow-mapSize-height={1024}
       />
       <directionalLight position={[-4, 2, -3]} intensity={0.15} color="#8090B0" />
-      <Cloud position={[-4, 4.5, -2]} speed={0.1} opacity={isNight ? 0.05 : 0.6} width={5} depth={1.5} segments={12} color="white" />
-      <Cloud position={[3, 5, 2]} speed={0.15} opacity={isNight ? 0.04 : 0.5} width={4} depth={1} segments={10} color="white" />
-      {!isNight && <Cloud position={[0, 5.5, -4]} speed={0.08} opacity={0.4} width={6} depth={1.5} segments={14} color="white" />}
-      {!isNight && <Cloud position={[-2, 6, 4]} speed={0.12} opacity={0.3} width={4} depth={1} segments={8} color="white" />}
+      {/* Clouds removed — revisit later */}
     </>
   );
 }
