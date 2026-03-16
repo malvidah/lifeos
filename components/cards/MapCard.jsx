@@ -238,16 +238,34 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
   const maxHeight = projects.length ? Math.max(...projects.map(p => p.height)) : 1;
   const snowThreshold = maxHeight * 0.75; // only tallest peaks get snow
 
-  // Two palettes: tropical lush vs drought/autumn
-  // Tropical: rich varied greens at low elevations, warm earth at mid, grey rock at high
-  const lush   = [[0.12,0.30,0.15],[0.18,0.42,0.18],[0.28,0.48,0.20],[0.45,0.40,0.25],[0.50,0.46,0.44],[0.82,0.76,0.68]];
-  const drought = [[0.30,0.22,0.14],[0.48,0.32,0.18],[0.58,0.38,0.22],[0.68,0.44,0.25],[0.55,0.42,0.38],[0.78,0.68,0.58]];
+  // Two palettes: saturated tropical vs warm drought
+  // More contrast: deep shadows at low, vivid greens at mid-low, warm earth at mid, cool rock at high
+  const lush = [
+    [0.06, 0.18, 0.08], // 0: deep valley shadow — very dark green
+    [0.10, 0.35, 0.12], // 1: low — rich forest green
+    [0.20, 0.50, 0.15], // 2: mid-low — bright jungle green
+    [0.50, 0.42, 0.22], // 3: mid — warm earth/exposed soil
+    [0.55, 0.50, 0.48], // 4: high — cool grey rock
+    [0.88, 0.82, 0.74], // 5: peak — light stone
+  ];
+  const drought = [
+    [0.20, 0.12, 0.08], // 0: deep — burnt umber
+    [0.40, 0.25, 0.12], // 1: low — dry earth
+    [0.55, 0.35, 0.18], // 2: mid-low — warm sand
+    [0.65, 0.42, 0.22], // 3: mid — terracotta
+    [0.52, 0.42, 0.38], // 4: high — muted rock
+    [0.75, 0.65, 0.55], // 5: peak — dry stone
+  ];
 
   function terrainColor(x, z, h) {
     const ht = Math.max(0, Math.min(1, (h + 0.3) / 2.8));
-    const n = noise2D(x * 2.5, z * 2.5) * 0.04;
+    // Larger noise variation for more texture
+    const n = noise2D(x * 2.5, z * 2.5) * 0.06;
+    // Fake ambient occlusion: darken low areas and concavities
+    const ao = Math.max(0, Math.min(1, (h + 0.1) / 0.6)); // 0 at valleys, 1 at hills
+    const aoFactor = 0.7 + ao * 0.3; // darken valleys by up to 30%
     const band = ht < 0.1 ? 0 : ht < 0.25 ? 1 : ht < 0.4 ? 2 : ht < 0.6 ? 3 : ht < 0.8 ? 4 : 5;
-    const base = lush[band].map((l, i) => l * v + drought[band][i] * (1 - v) + n);
+    const base = lush[band].map((l, i) => (l * v + drought[band][i] * (1 - v) + n) * aoFactor);
 
     // Active volcano glow: recent projects get warm ember tint at peaks
     for (const p of projects) {
@@ -423,11 +441,12 @@ function Terrain({ projects, radius, vitality }) {
 // ── Water — flat surface + waterfall strips off the edge ──────────────────────
 function Water({ radius, vitality = 50 }) {
   const vt = Math.max(0, Math.min(1, vitality / 100));
-  const waterY = -0.05 + vt * 0.15; // slightly below terrain surface
-  const R = radius * 0.85;
+  const waterY = 0.0 + vt * 0.12; // visible above low terrain
+  const R = radius * 0.88;
 
+  // Richer, more saturated water color
   const waterColor = useMemo(() => new THREE.Color().setRGB(
-    0.15 + (1 - vt) * 0.10, 0.35 + vt * 0.10, 0.50 + vt * 0.15
+    0.08 + (1 - vt) * 0.12, 0.28 + vt * 0.15, 0.48 + vt * 0.22
   ), [vt]);
 
   // Waterfall geometry: build a custom mesh with strips hanging off the edge
@@ -474,11 +493,11 @@ function Water({ radius, vitality = 50 }) {
 
   return (
     <group>
-      {/* Flat water surface */}
+      {/* Water surface — more opaque, visible */}
       <mesh position={[0, waterY, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[R, 48]} />
         <meshToonMaterial color={waterColor} gradientMap={toonGrad}
-          transparent opacity={0.55} />
+          transparent opacity={0.75} />
       </mesh>
 
       {/* Waterfall strips — taper from wide at rim to narrow below */}
@@ -627,18 +646,22 @@ function Environment({ hour }) {
   const moonY = Math.max(2, Math.sin(moonAngle) * 14);
   return (
     <>
-      <ambientLight intensity={isNight ? 0.08 : 0.25} color={isNight ? '#3344AA' : '#B8A890'} />
+      {/* Ambient — lower for more contrast between lit and shadow */}
+      <ambientLight intensity={isNight ? 0.06 : 0.15} color={isNight ? '#3344AA' : '#C8B8A0'} />
+      {/* Main sun — stronger for pronounced toon bands */}
       <directionalLight
         position={[sunX, sunY, sunZ]}
-        intensity={isNight ? 0.08 : isDusk ? 1.0 : 1.4}
-        color={isDusk ? '#FF8040' : isNight ? '#5566AA' : '#FFD8A8'}
+        intensity={isNight ? 0.08 : isDusk ? 1.2 : 1.8}
+        color={isDusk ? '#FF8040' : isNight ? '#5566AA' : '#FFE0B0'}
         castShadow
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
         shadow-bias={-0.001}
       />
-      <directionalLight position={[-5, 3, -4]} intensity={isNight ? 0.05 : 0.2} color="#6080B0" />
-      <directionalLight position={[0, 2, -8]} intensity={0.12} color="#A0B0D0" />
+      {/* Fill — cool blue from opposite side */}
+      <directionalLight position={[-5, 3, -4]} intensity={isNight ? 0.04 : 0.15} color="#5070A0" />
+      {/* Rim/back light — creates glowing edge silhouette on peaks */}
+      <directionalLight position={[-sunX, sunY * 0.5, -sunZ]} intensity={isNight ? 0.03 : 0.4} color="#FFE8C8" />
 
       {/* Celestial bodies */}
       <CelSun position={[sunX, sunY, sunZ]} visible={!isNight} />
