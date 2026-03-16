@@ -704,7 +704,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   padding:"4px 3px",
                   cursor: isCtr ? "default" : "pointer",
                   opacity,
-                  transition: "opacity 0.15s",
+                  transition: "none",
                   borderLeft: isCtr ? `1px solid var(--dl-accent-13)` : "1px solid transparent",
                   borderRight: isCtr ? `1px solid var(--dl-accent-13)` : "1px solid transparent",
                   background: isCtr ? "var(--dl-accent-03)" : "transparent",
