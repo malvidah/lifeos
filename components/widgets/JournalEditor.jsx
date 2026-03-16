@@ -75,8 +75,7 @@ function PhotoStrip({ images, onViewImage }) {
           key={url}
           onClick={() => { if (!dragState.current.moved) onViewImage(i); }}
           style={{
-            width: images.length === 1 ? '100%' : SIZE,
-            height: SIZE, flexShrink: 0,
+            width: SIZE, height: SIZE, flexShrink: 0,
             borderRadius: 10, overflow: 'hidden',
             cursor: 'pointer', background: 'var(--dl-well)',
             transition: 'opacity 0.15s',
@@ -220,18 +219,25 @@ export function JournalEditor({date,userId,token}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
+  // Format date for chip label: "Mar 16"
+  const chipDate = useMemo(() => {
+    if (!date) return '';
+    const [y, m, d] = date.split('-').map(Number);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[m - 1]} ${d}`;
+  }, [date]);
+
   // Append image chip to journal content
   const addImage = useCallback((url) => {
     setValue(prev => {
       if (prev && prev.includes(url)) return prev;
-      const chipHtml = `<span data-image-chip="${url}">\u{1F4F7}</span> `;
-      // Append chip inside the last <p>, or create a new one
+      const chipHtml = `<span data-image-chip="${url}" data-chip-label="${chipDate}">\u{1F4F7}</span> `;
       if (prev && prev.includes('</p>')) {
         return prev.replace(/<\/p>\s*$/, chipHtml + '</p>');
       }
       return (prev || '') + `<p>${chipHtml}</p>`;
     }, { undoLabel: 'Add photo' });
-  }, [setValue]);
+  }, [setValue, chipDate]);
 
   const handleDrop = useCallback(async (e) => {
     e.preventDefault();

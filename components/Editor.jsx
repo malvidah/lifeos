@@ -36,6 +36,8 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
     .dl-hide-images .ProseMirror div[data-imageblock] { display: none; }
+    .dl-editor .ProseMirror { counter-reset: imgchip; }
+    .dl-img-chip-num::before { content: counter(imgchip); }
   `;
   document.head.appendChild(s);
 }
@@ -83,6 +85,7 @@ const NoteLinkNode = Node.create({
 
 // ImageChip: inline atom node displayed as a small pill in text flow.
 // Source of truth for the photos section — deleting a chip removes the image.
+// Shows "📷 Mar 16 · 1" with auto-numbering via CSS counter.
 const ImageChip = Node.create({
   name: 'imageChip', group: 'inline', inline: true,
   atom: true, selectable: true, draggable: false,
@@ -92,12 +95,18 @@ const ImageChip = Node.create({
         default: null,
         parseHTML: el => el.getAttribute('data-image-chip'),
       },
+      label: {
+        default: '',
+        parseHTML: el => el.getAttribute('data-chip-label') || '',
+      },
     };
   },
   parseHTML() { return [{ tag: 'span[data-image-chip]' }]; },
   renderHTML({ node }) {
     return ['span', {
       'data-image-chip': node.attrs.src,
+      'data-chip-label': node.attrs.label,
+      class: 'dl-img-chip',
       style: [
         'display:inline-flex', 'align-items:center', 'gap:3px',
         'vertical-align:middle',
@@ -106,8 +115,15 @@ const ImageChip = Node.create({
         'font-size:11px', 'letter-spacing:0.04em', 'line-height:1.65',
         'color:var(--dl-highlight)', 'white-space:nowrap', 'cursor:default',
         'user-select:none', 'flex-shrink:0',
+        'counter-increment:imgchip',
       ].join(';'),
-    }, '\u{1F4F7}'];  // 📷
+    },
+      ['span', { style: 'pointer-events:none' }, '\u{1F4F7}'],
+      ['span', { class: 'dl-img-chip-label', style: 'pointer-events:none' },
+        node.attrs.label ? ` ${node.attrs.label} \u00B7 ` : ' \u00B7 ',
+      ],
+      ['span', { class: 'dl-img-chip-num', style: 'pointer-events:none' }],
+    ];
   },
 });
 
