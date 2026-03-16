@@ -1,12 +1,31 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import "@/components/theme/theme.css";
 
-// Sanitize HTML: keep structure but strip interactive chips and inline styles
+// Extract image URLs from HTML content (imageChip spans and imageBlock divs)
+function extractImages(html) {
+  if (!html) return [];
+  const urls = [];
+  // Inline image chips: <span data-image-chip="URL">
+  const chipRe = /data-image-chip="([^"]+)"/g;
+  let m;
+  while ((m = chipRe.exec(html)) !== null) urls.push(m[1]);
+  // Block images: <div data-imageblock="URL"> or [img:URL]
+  const blockRe = /data-imageblock="([^"]+)"/g;
+  while ((m = blockRe.exec(html)) !== null) urls.push(m[1]);
+  const txtRe = /\[img:(https?:\/\/[^\]]+)\]/g;
+  while ((m = txtRe.exec(html)) !== null) urls.push(m[1]);
+  return [...new Set(urls)];
+}
+
+// Sanitize HTML: keep structure but strip image chips (rendered separately),
+// interactive chips, and inline styles
 function sanitizeHtml(html) {
   if (!html) return '';
   return html
+    .replace(/<span[^>]*data-image-chip="[^"]*"[^>]*>[\s\S]*?<\/span>/g, '') // remove image chips
+    .replace(/<div[^>]*data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '') // remove image blocks
     .replace(/<span[^>]*data-project-tag="([^"]*)"[^>]*>[^<]*<\/span>/g, '<em>$1</em>')
     .replace(/<span[^>]*data-note-link="([^"]*)"[^>]*>[^<]*<\/span>/g, '<em>$1</em>')
     .replace(/ style="[^"]*"/g, '')
@@ -26,16 +45,93 @@ function textOnly(html) {
   return html
     .replace(/<span[^>]*data-project-tag="[^"]*"[^>]*>[^<]*<\/span>/g, '')
     .replace(/<span[^>]*data-note-link="[^"]*"[^>]*>[^<]*<\/span>/g, '')
+    .replace(/<span[^>]*data-image-chip="[^"]*"[^>]*>[\s\S]*?<\/span>/g, '')
     .replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim();
 }
+
+// ── Photo Strip + Slideshow ─────────────────────────────────────────────────
+
+function PhotoStrip({ images, onSelect }) {
+  if (!images.length) return null;
+  return (
+    <div style={{display:'flex',gap:6,overflowX:'auto',padding:'8px 0 12px',scrollbarWidth:'none'}}>
+      {images.map((src, i) => (
+        <div key={i} onClick={() => onSelect(i)} style={{
+          width:80, height:80, borderRadius:8, overflow:'hidden', flexShrink:0, cursor:'pointer',
+          border:'1px solid var(--dl-border)',
+        }}>
+          <img src={src} alt="" style={{width:'100%',height:'100%',objectFit:'cover',display:'block'}}
+            onError={e => { e.target.style.display='none'; }}/>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Slideshow({ images, index, onClose, onPrev, onNext }) {
+  return (
+    <div style={{position:'relative',background:'var(--dl-well)',borderRadius:12,overflow:'hidden',marginBottom:12}}>
+      <div style={{aspectRatio:'4/3',display:'flex',alignItems:'center',justifyContent:'center'}}>
+        <img src={images[index]} alt="" style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain',display:'block'}}
+          onError={e => { e.target.alt='Image not available'; }}/>
+      </div>
+      {/* Navigation */}
+      {images.length > 1 && (
+        <>
+          <button onClick={onPrev} style={navBtn('left')}>&#8249;</button>
+          <button onClick={onNext} style={navBtn('right')}>&#8250;</button>
+        </>
+      )}
+      <button onClick={onClose} style={{
+        position:'absolute',top:8,right:8,background:'rgba(0,0,0,0.5)',color:'#fff',
+        border:'none',borderRadius:'50%',width:28,height:28,cursor:'pointer',fontSize:16,
+        display:'flex',alignItems:'center',justifyContent:'center',
+      }}>&times;</button>
+      {images.length > 1 && (
+        <div style={{textAlign:'center',padding:'6px 0',fontSize:12,color:'var(--dl-middle)',
+          fontFamily:"'SF Mono','Fira Code',ui-monospace,monospace"}}>
+          {index + 1} / {images.length}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function navBtn(side) {
+  return {
+    position:'absolute', top:'50%', [side]:8, transform:'translateY(-50%)',
+    background:'rgba(0,0,0,0.4)', color:'#fff', border:'none', borderRadius:'50%',
+    width:32, height:32, cursor:'pointer', fontSize:20, display:'flex',
+    alignItems:'center', justifyContent:'center',
+  };
+}
+
+// ── Photo section for a note ────────────────────────────────────────────────
+function NotePhotos({ images }) {
+  const [mode, setMode] = useState('strip'); // 'strip' | 'slideshow'
+  const [idx, setIdx] = useState(0);
+  if (!images.length) return null;
+
+  if (mode === 'slideshow') {
+    return (
+      <Slideshow images={images} index={idx}
+        onClose={() => setMode('strip')}
+        onPrev={() => setIdx((idx - 1 + images.length) % images.length)}
+        onNext={() => setIdx((idx + 1) % images.length)}
+      />
+    );
+  }
+  return <PhotoStrip images={images} onSelect={i => { setIdx(i); setMode('slideshow'); }}/>;
+}
+
+// ── Main Page ───────────────────────────────────────────────────────────────
 
 export default function SharedProjectPage() {
   const { token } = useParams();
   const [data, setData] = useState(null);
   const [error, setError] = useState(false);
 
-  // Detect system dark mode preference
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = (dark) => document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
@@ -82,7 +178,7 @@ export default function SharedProjectPage() {
         .share-page { font-family: Georgia, 'Times New Roman', serif; }
         .share-page h1, .share-page h2, .share-page h3 { margin: 0; }
         .share-page p { margin: 0 0 0.5em; }
-        .note-content h1 { font-size: 18px; font-weight: 600; margin: 0 0 12px; color: var(--dl-strong); font-family: 'SF Mono','Fira Code',ui-monospace,monospace; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 400; }
+        .note-content h1 { font-size: 13px; font-weight: 400; margin: 0 0 12px; color: var(--dl-strong); font-family: 'SF Mono','Fira Code',ui-monospace,monospace; text-transform: uppercase; letter-spacing: 0.08em; }
         .note-content p { font-size: 15px; line-height: 1.75; color: var(--dl-strong); margin: 0 0 8px; }
         .note-content em { font-style: normal; color: ${accent}; font-weight: 500; }
         .note-content ul, .note-content ol { padding-left: 20px; margin: 4px 0 8px; }
@@ -90,7 +186,6 @@ export default function SharedProjectPage() {
         .note-content table { width: 100%; border-collapse: collapse; margin: 8px 0 12px; font-size: 15px; }
         .note-content th, .note-content td { padding: 6px 12px; text-align: left; vertical-align: top; border: 1px solid var(--dl-border); color: var(--dl-strong); line-height: 1.6; }
         .note-content th { font-weight: 600; background: var(--dl-surface); }
-        .note-content tr:first-child th, .note-content tr:first-child td { border-top: 1px solid var(--dl-border); }
         @media print { .share-page { padding: 0; } .share-footer { display: none; } }
       `}</style>
       <div className="share-page" style={s.page}>
@@ -98,30 +193,38 @@ export default function SharedProjectPage() {
           <div style={{...s.projectLabel, color: accent}}>{project.name}</div>
         </header>
 
-        {hasNotes && notes.map((n, i) => (
-          <section key={i} style={s.noteSection}>
-            <div className="note-content"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.content || '') }}
-            />
-            {n.updated_at && (
-              <div style={s.datestamp}>{fmtDate(n.updated_at.split('T')[0])}</div>
-            )}
-          </section>
-        ))}
+        {hasNotes && notes.map((n, i) => {
+          const images = extractImages(n.content);
+          return (
+            <section key={i} style={s.noteSection}>
+              {images.length > 0 && <NotePhotos images={images}/>}
+              <div className="note-content"
+                dangerouslySetInnerHTML={{ __html: sanitizeHtml(n.content || '') }}
+              />
+              {n.updated_at && (
+                <div style={s.datestamp}>{fmtDate(n.updated_at.split('T')[0])}</div>
+              )}
+            </section>
+          );
+        })}
 
         {hasJournal && (
           <section style={s.section}>
             <div style={s.sectionLabel}>Journal</div>
-            {Object.entries(journalByDate).map(([date, entries]) => (
-              <div key={date} style={s.journalDay}>
-                <div style={s.datestamp}>{fmtDate(date)}</div>
-                {entries.map((e, i) => (
-                  <div key={i} className="note-content"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(e.content || '') }}
-                  />
-                ))}
-              </div>
-            ))}
+            {Object.entries(journalByDate).map(([date, entries]) => {
+              const dayImages = entries.flatMap(e => extractImages(e.content));
+              return (
+                <div key={date} style={s.journalDay}>
+                  <div style={s.datestamp}>{fmtDate(date)}</div>
+                  {dayImages.length > 0 && <NotePhotos images={dayImages}/>}
+                  {entries.map((e, i) => (
+                    <div key={i} className="note-content"
+                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(e.content || '') }}
+                    />
+                  ))}
+                </div>
+              );
+            })}
           </section>
         )}
 
