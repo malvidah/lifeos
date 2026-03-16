@@ -18,7 +18,7 @@ export default function PhotosCard({ date, token }) {
     setLoaded(false);
     api.get(`/api/photos?date=${date}`, token)
       .then(d => {
-        if (d?.error) console.warn('[PhotosCard] API error:', d.error);
+        if (d?.error) console.warn('[PhotosCard]', JSON.stringify(d));
         setPhotos(d?.photos || []);
         setLoaded(true);
       })
