@@ -420,27 +420,86 @@ function Terrain({ projects, radius, vitality }) {
   );
 }
 
-// ── Water — level responds to health vitality ────────────────────────────────
-// High vitality = water at full level, lush. Low = receding, exposed rocks.
+// ── Water — volumetric body with surface waves + waterfalls ───────────────────
 function Water({ radius, vitality = 50 }) {
-  // Water level: -0.15 (low/drought) to 0.08 (full/thriving)
-  const waterY = -0.15 + (vitality / 100) * 0.23;
-  // Color: deeper blue when healthy, murky green-brown when low
+  const surfaceRef = useRef();
   const vt = Math.max(0, Math.min(1, vitality / 100));
-  const color = new THREE.Color().setRGB(
-    0.12 + (1 - vt) * 0.15,  // more red when drought
-    0.30 + vt * 0.15,         // greener when healthy
-    0.40 + vt * 0.20,         // bluer when healthy
-  );
+  const waterY = -0.15 + vt * 0.23;
+  const waterDepth = 0.4 + vt * 0.3; // deeper when healthy
 
+  const surfaceColor = useMemo(() => new THREE.Color().setRGB(
+    0.12 + (1 - vt) * 0.12, 0.32 + vt * 0.12, 0.42 + vt * 0.18
+  ), [vt]);
+  const sideColor = useMemo(() => new THREE.Color().setRGB(
+    0.08 + (1 - vt) * 0.10, 0.22 + vt * 0.10, 0.35 + vt * 0.15
+  ), [vt]);
+
+  // Animated wave displacement on surface
+  useFrame(({ clock }) => {
+    const mesh = surfaceRef.current;
+    if (!mesh) return;
+    const pos = mesh.geometry.attributes.position;
+    const t = clock.getElapsedTime() * 0.8;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      const wave = Math.sin(x * 2.5 + t) * 0.015
+                 + Math.sin(z * 3 + t * 1.3) * 0.01
+                 + Math.sin((x + z) * 4 + t * 0.7) * 0.008;
+      pos.setY(i, wave);
+    }
+    pos.needsUpdate = true;
+  });
+
+  // Build waterfall ribbon positions around the island edge
+  const waterfalls = useMemo(() => {
+    const falls = [];
+    const noise = createNoise2D();
+    const count = 4 + Math.floor(vt * 4); // more waterfalls when healthier
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + noise(i * 3, 0) * 0.5;
+      const r = radius * 0.82;
+      const x = Math.cos(angle) * r;
+      const z = Math.sin(angle) * r;
+      const width = 0.08 + noise(i * 5, 1) * 0.06;
+      falls.push({ x, z, angle, width });
+    }
+    return falls;
+  }, [radius, vt]);
+
+  const R = radius * 0.88;
   return (
-    <mesh position={[0, waterY, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <circleGeometry args={[radius * 0.88, 64]} />
-      <meshToonMaterial
-        color={color} gradientMap={toonGrad}
-        transparent opacity={0.65}
-      />
-    </mesh>
+    <group position={[0, waterY, 0]}>
+      {/* Surface — animated waves */}
+      <mesh ref={surfaceRef} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[R, 48, undefined, undefined]} />
+        <meshToonMaterial color={surfaceColor} gradientMap={toonGrad}
+          transparent opacity={0.6} />
+      </mesh>
+
+      {/* Volumetric body — cylinder under the surface */}
+      <mesh position={[0, -waterDepth / 2, 0]}>
+        <cylinderGeometry args={[R, R * 0.95, waterDepth, 32, 1, true]} />
+        <meshToonMaterial color={sideColor} gradientMap={toonGrad}
+          transparent opacity={0.45} side={THREE.DoubleSide} />
+      </mesh>
+
+      {/* Bottom cap */}
+      <mesh position={[0, -waterDepth, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[R * 0.95, 32]} />
+        <meshToonMaterial color={sideColor} gradientMap={toonGrad}
+          transparent opacity={0.35} />
+      </mesh>
+
+      {/* Waterfalls — thin ribbons cascading off the edge */}
+      {waterfalls.map((f, i) => (
+        <mesh key={i} position={[f.x, -waterDepth * 0.5, f.z]}
+          rotation={[0, -f.angle + Math.PI / 2, 0]}>
+          <planeGeometry args={[f.width, waterDepth * 1.5, 1, 6]} />
+          <meshBasicMaterial color={surfaceColor}
+            transparent opacity={0.35} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+    </group>
   );
 }
 
