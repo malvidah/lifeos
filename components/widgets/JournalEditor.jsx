@@ -287,6 +287,7 @@ export function JournalEditor({date,userId,token}) {
     try { return localStorage.getItem('daylab:photoMode') === 'slideshow' ? 0 : null; }
     catch { return null; }
   });
+  const [editorRev, setEditorRev] = useState(0); // bump to force editor remount after reorder
   const dragCounter = useRef(0);
 
   const images = useMemo(() => extractImages(value), [value]);
@@ -339,6 +340,7 @@ export function JournalEditor({date,userId,token}) {
       }
       return content;
     }, { undoLabel: 'Reorder photos' });
+    setEditorRev(r => r + 1); // force editor to remount with new chip order
   }, [setValue, chipDate]);
 
   // Append image chip to journal content
@@ -405,7 +407,7 @@ export function JournalEditor({date,userId,token}) {
         <DropZone uploading={uploading} />
       ) : (
         <DayLabEditor
-          key={date}
+          key={`${date}:${editorRev}`}
           value={value || ''}
           onBlur={html => setValue(html, {undoLabel: 'Edit notes'})}
           onUpdate={html => markDirty(html)}

@@ -214,6 +214,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const [noteLightbox, setNoteLightbox] = useState(null); // null=strip, number=slideshow index
   const [noteDragging, setNoteDragging] = useState(false);
   const [noteUploading, setNoteUploading] = useState(false);
+  const [noteEditorRev, setNoteEditorRev] = useState(0); // bump to force editor remount after reorder
   const noteDragCounter = useRef(0);
 
   // Load notes for this project
@@ -414,6 +415,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       }
     }
     updateNoteContent(activeNote.id, content);
+    setNoteEditorRev(r => r + 1); // force editor remount with new chip order
   }, [activeNote, updateNoteContent]);
 
   const handleNoteDrop = useCallback(async (e) => {
@@ -712,7 +714,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               <DropZone uploading={noteUploading} />
             ) : activeNote ? (
               <DayLabEditor
-                key={activeNote.id}
+                key={`${activeNote.id}:${noteEditorRev}`}
                 value={activeNote.content || ''}
                 noteTitle
                 autoFocus
