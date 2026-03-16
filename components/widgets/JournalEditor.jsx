@@ -27,126 +27,91 @@ export function extractImages(content) {
 
 // ── Photo Strip ───────────────────────────────────────────────────────────────
 // Horizontal scroll row of filled rounded squares. Click to open slideshow.
-// Drag-to-reorder: long press or drag an item to reorder with live animation.
+// Drag an image to reorder; click (without dragging) opens slideshow.
 const SIZE = 140;
-const GAP = 4;
 
 export function PhotoStrip({ images, onViewImage, onReorder }) {
-  const containerRef = useRef(null);
-  const [dragIdx, setDragIdx] = useState(null);     // index being dragged
-  const [overIdx, setOverIdx] = useState(null);      // index being hovered over
-  const dragStartX = useRef(0);
-  const dragOffsetX = useRef(0);
-  const [dragX, setDragX] = useState(0);
-  const didMove = useRef(false);
-  const longPressTimer = useRef(null);
-  const [reordering, setReordering] = useState(false); // true when in reorder mode
+  const [dragIdx, setDragIdx] = useState(null);
+  const [overIdx, setOverIdx] = useState(null);
+  const didDrag = useRef(false);
 
   if (!images.length) return null;
 
-  // Compute display order based on drag state
-  const displayOrder = [...images];
-  if (dragIdx != null && overIdx != null && dragIdx !== overIdx && reordering) {
-    const item = displayOrder.splice(dragIdx, 1)[0];
-    displayOrder.splice(overIdx, 0, item);
-  }
+  const canReorder = !!onReorder && images.length > 1;
 
-  const handlePointerDown = (e, i) => {
-    if (images.length < 2) return;
-    dragStartX.current = e.clientX;
-    didMove.current = false;
-    const rect = e.currentTarget.getBoundingClientRect();
-    dragOffsetX.current = e.clientX - rect.left;
-
-    // Long press to start reorder (300ms)
-    longPressTimer.current = setTimeout(() => {
-      setReordering(true);
-      setDragIdx(i);
-      setOverIdx(i);
-      setDragX(e.clientX - dragOffsetX.current);
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }, 300);
+  const onDragStart = (e, i) => {
+    setDragIdx(i);
+    didDrag.current = false;
+    e.dataTransfer.effectAllowed = 'move';
+    // Transparent drag image — the inline style changes provide the visual feedback
+    const canvas = document.createElement('canvas');
+    canvas.width = 1; canvas.height = 1;
+    e.dataTransfer.setDragImage(canvas, 0, 0);
   };
 
-  const handlePointerMove = (e) => {
-    // Cancel long press if moved before timer
-    if (!reordering && Math.abs(e.clientX - dragStartX.current) > 5) {
-      clearTimeout(longPressTimer.current);
-    }
-    if (!reordering || dragIdx == null) return;
-    didMove.current = true;
-    const containerRect = containerRef.current?.getBoundingClientRect();
-    if (!containerRect) return;
-
-    setDragX(e.clientX - dragOffsetX.current);
-
-    // Calculate which index we're over
-    const relX = e.clientX - containerRect.left + (containerRef.current?.scrollLeft || 0);
-    const newOver = Math.max(0, Math.min(images.length - 1, Math.floor(relX / (SIZE + GAP))));
-    setOverIdx(newOver);
+  const onDragOver = (e, i) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (i !== overIdx) setOverIdx(i);
+    didDrag.current = true;
   };
 
-  const handlePointerUp = (e) => {
-    clearTimeout(longPressTimer.current);
-    if (reordering && dragIdx != null && overIdx != null && dragIdx !== overIdx && onReorder) {
-      const newOrder = [...images];
-      const item = newOrder.splice(dragIdx, 1)[0];
-      newOrder.splice(overIdx, 0, item);
-      onReorder(newOrder);
+  const onDrop = (e, i) => {
+    e.preventDefault();
+    if (dragIdx != null && dragIdx !== i && onReorder) {
+      const arr = [...images];
+      const [moved] = arr.splice(dragIdx, 1);
+      arr.splice(i, 0, moved);
+      onReorder(arr);
     }
-    const wasDragging = reordering;
     setDragIdx(null);
     setOverIdx(null);
-    setReordering(false);
+  };
 
-    if (!wasDragging && !didMove.current) {
-      // It was a click, not a drag
-      const containerRect = containerRef.current?.getBoundingClientRect();
-      if (containerRect) {
-        const relX = e.clientX - containerRect.left + (containerRef.current?.scrollLeft || 0);
-        const clickedIdx = Math.floor(relX / (SIZE + GAP));
-        if (clickedIdx >= 0 && clickedIdx < images.length) onViewImage(clickedIdx);
-      }
-    }
+  const onDragEnd = () => {
+    setDragIdx(null);
+    setOverIdx(null);
+    // Prevent the click handler from also firing after a drag
+    setTimeout(() => { didDrag.current = false; }, 100);
   };
 
   return (
-    <div
-      ref={containerRef}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
-      style={{
-        display: 'flex', gap: GAP, overflowX: 'auto', overflowY: 'hidden',
-        marginBottom: 12, borderRadius: 10,
-        scrollbarWidth: 'none', msOverflowStyle: 'none',
-        WebkitOverflowScrolling: 'touch',
-        cursor: images.length > 1 ? 'grab' : 'pointer',
-        userSelect: 'none', position: 'relative',
-        touchAction: reordering ? 'none' : 'pan-x',
-      }}
-    >
-      {displayOrder.map((url, i) => {
-        const origIdx = images.indexOf(url);
-        const isDragged = reordering && origIdx === dragIdx;
+    <div style={{
+      display: 'flex', gap: 4, overflowX: 'auto', overflowY: 'hidden',
+      marginBottom: 12, borderRadius: 10,
+      scrollbarWidth: 'none', msOverflowStyle: 'none',
+      WebkitOverflowScrolling: 'touch',
+      userSelect: 'none',
+    }}>
+      {images.map((url, i) => {
+        const isDragged = dragIdx === i;
+        const isOver = overIdx === i && dragIdx != null && dragIdx !== i;
         return (
           <div
             key={url}
-            onPointerDown={e => handlePointerDown(e, origIdx)}
+            draggable={canReorder}
+            onDragStart={canReorder ? e => onDragStart(e, i) : undefined}
+            onDragOver={canReorder ? e => onDragOver(e, i) : undefined}
+            onDrop={canReorder ? e => onDrop(e, i) : undefined}
+            onDragEnd={canReorder ? onDragEnd : undefined}
+            onClick={() => { if (!didDrag.current) onViewImage(i); }}
             style={{
               width: SIZE, height: SIZE, flexShrink: 0,
-              borderRadius: 10, overflow: 'hidden',
-              background: 'var(--dl-well)',
-              opacity: isDragged ? 0.6 : 1,
-              transform: isDragged ? 'scale(1.05)' : 'scale(1)',
-              transition: reordering ? 'transform 0.15s, opacity 0.15s' : 'none',
-              zIndex: isDragged ? 10 : 1,
-              cursor: reordering ? 'grabbing' : 'pointer',
+              borderRadius: 10, overflow: 'visible',
+              cursor: 'pointer', background: 'var(--dl-well)',
+              opacity: isDragged ? 0.35 : 1,
+              outline: isOver ? '2px solid var(--dl-accent)' : '2px solid transparent',
+              outlineOffset: -2,
+              transform: isOver ? 'scale(1.06)' : 'scale(1)',
+              transition: 'opacity 0.15s, transform 0.15s, outline-color 0.15s',
+              borderRadius: 10,
             }}
+            onMouseEnter={e => { if (dragIdx == null) e.currentTarget.style.opacity = '0.85'; }}
+            onMouseLeave={e => { if (dragIdx == null) e.currentTarget.style.opacity = '1'; }}
           >
             <img src={url} alt="" loading="lazy" draggable="false" style={{
               width: '100%', height: '100%', objectFit: 'cover', display: 'block',
-              pointerEvents: 'none',
+              borderRadius: 10, pointerEvents: 'none',
             }} />
           </div>
         );
