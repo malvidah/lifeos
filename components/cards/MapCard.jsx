@@ -319,27 +319,29 @@ function Terrain({ projects, radius }) {
 
 
 // ── Single label with depth-aware z-index ────────────────────────────────────
+// Drei's Html wraps content in a div whose z-index we control via zIndexRange.
+// We use useFrame to compute camera distance and update the wrapper's z-index
+// directly, so closer labels always stack above farther ones.
 function DepthLabel({ p, onSelect, isHov, setHovered }) {
-  const ref = useRef();
+  const htmlRef = useRef();
   const pos = useMemo(() => new THREE.Vector3(p.x, p.height + 0.5, p.z), [p.x, p.height, p.z]);
 
-  // Update z-index every frame based on camera distance — closer = higher
   useFrame(({ camera }) => {
-    if (!ref.current) return;
+    // Html component creates a wrapper div — find it and set z-index
+    const wrapper = htmlRef.current?.parentElement;
+    if (!wrapper) return;
     const dist = camera.position.distanceTo(pos);
-    // Map distance to z-index: closer (dist ~6) → z 100, far (dist ~25) → z 1
-    const z = isHov ? 9999 : Math.max(1, Math.round(200 - dist * 8));
-    ref.current.style.zIndex = z;
+    const z = isHov ? 9999 : Math.max(1, Math.round(1000 - dist * 40));
+    wrapper.style.zIndex = z;
   });
 
   return (
     <Html position={[p.x, p.height + 0.5, p.z]} center
-      occlude={!isHov} zIndexRange={[0, 0]}>
-      <div ref={ref} onClick={() => onSelect(p.tag)}
+      zIndexRange={[0, 0]} style={{ pointerEvents: 'auto' }}>
+      <div ref={htmlRef} onClick={() => onSelect(p.tag)}
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          pointerEvents: 'auto',
           background: isHov ? p.color : 'var(--dl-card, #1a1a1a)',
           border: `1px solid ${p.color}${isHov ? '' : '55'}`,
           borderRadius: 100, padding: '4px 14px',
