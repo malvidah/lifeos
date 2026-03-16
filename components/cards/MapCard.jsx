@@ -158,12 +158,11 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks)
     const connScore = (connWeight[tag] || 0) / maxConn;
     const rScore = recencyScore(tag);
     const daysSinceActive = recency?.[tag] ? (now - new Date(recency[tag]).getTime()) / 86400000 : 999;
-    // Height: entries + connections + deterministic variation per project
-    // Hash the tag name for consistent per-project variation
+    // Height: entries + connections + large deterministic variation per project
     let hash = 0;
     for (let c = 0; c < tag.length; c++) hash = (hash * 31 + tag.charCodeAt(c)) >>> 0;
-    const variation = 0.3 + (hash % 100) / 100 * 0.7; // 0.3–1.0
-    const h = Math.max(entryScore, connScore, 0.2) * 1.6 + 0.7 + variation * 0.8;
+    const variation = (hash % 100) / 100; // 0–1
+    const h = Math.max(entryScore, connScore, 0.15) * 2.0 + 0.8 + variation * 1.5;
     return {
       tag, x: pos.x, z: pos.z,
       height: h,
@@ -537,7 +536,7 @@ function Water({ radius, vitality = 50 }) {
 function DepthLabel({ p, onSelect, isHov, setHovered }) {
   const htmlRef = useRef();
   const frameCount = useRef(0);
-  const labelY = p.height + 0.4;
+  const labelY = p.height + 0.7;
   const pos = useMemo(() => new THREE.Vector3(p.x, labelY, p.z), [p.x, labelY, p.z]);
 
   useFrame(({ camera }) => {
