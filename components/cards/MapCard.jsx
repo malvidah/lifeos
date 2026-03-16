@@ -77,7 +77,7 @@ const TOP_SEG = 80;
 function buildIslandGeo(projects, radius) {
   const noise2D = createNoise2D();
   const size = radius * 2.2;
-  const DEPTH = radius * 0.6; // iceberg depth scales with island size
+  const DEPTH = radius * 1.2; // iceberg depth — tall enough to show taper
 
   // ── Irregular edge radius per angle ──────────────────────────────────────
   // Pre-compute a wobbly edge radius for ~128 angular samples
@@ -180,15 +180,9 @@ function buildIslandGeo(projects, radius) {
     const t = ring / RINGS; // 0 = cliff top, 1 = bottom tip
     const y = -t * DEPTH;
 
-    // Taper curve: starts at full radius, narrows to ~5% at bottom
-    // Slight cliff overhang at very top, then smooth taper
-    let taper;
-    if (t < 0.08) {
-      taper = 1.0 + t * 1.5; // slight overhang bulge
-    } else {
-      const s = (t - 0.08) / 0.92; // remap 0.08–1 → 0–1
-      taper = (1 - s * s) * 0.95 + 0.05; // quadratic taper, min 5%
-    }
+    // Taper: inverted mountain profile. Full width at top, narrows to a point.
+    // Uses power curve for natural rocky taper shape.
+    const taper = Math.max(0.02, (1 - t) ** 1.3);
 
     for (let seg = 0; seg <= RING_SEGS; seg++) {
       const angle = (seg / RING_SEGS) * Math.PI * 2;
