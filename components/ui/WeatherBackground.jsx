@@ -6,17 +6,25 @@ import {
   fetchWeather,
 } from "@/lib/weather";
 
-// Compute a CSS gradient string from weather condition + current time
-function makeBg(condition, lat, lng) {
-  const phase = getDayPhase(new Date(), lat, lng);
+// Compute a CSS gradient string from weather condition + time of day.
+// For today: uses real current time. For other dates: uses solar noon (brightest).
+function makeBg(condition, lat, lng, date) {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  const timeRef = (date && date !== todayStr)
+    ? new Date(date + 'T12:00:00') // noon for past/future dates
+    : today;
+  const phase = getDayPhase(timeRef, lat, lng);
   const [top, bottom] = getWeatherGradient(condition || 'clear', phase);
   return `linear-gradient(180deg, ${top} 0%, ${bottom} 100%)`;
 }
 
 export default function WeatherBackground({ date }) {
+  const dateRef = useRef(date);
+  dateRef.current = date;
   const locRef = useRef(getCachedLocation() || DEFAULT_LOCATION);
   if (!locRef.current) locRef.current = DEFAULT_LOCATION;
-  const [bg, setBg] = useState(() => makeBg('clear', locRef.current.lat, locRef.current.lng));
+  const [bg, setBg] = useState(() => makeBg('clear', locRef.current.lat, locRef.current.lng, date));
   const [fadingBg, setFadingBg] = useState(null);
   const condRef = useRef('clear');
   const fadeTimer = useRef(null);
@@ -26,7 +34,7 @@ export default function WeatherBackground({ date }) {
     getUserLocation().then(loc => {
       if (loc) {
         locRef.current = loc;
-        setBg(makeBg(condRef.current, loc.lat, loc.lng));
+        setBg(makeBg(condRef.current, loc.lat, loc.lng, date));
       }
     });
   }, []);
@@ -41,7 +49,7 @@ export default function WeatherBackground({ date }) {
         if (cancelled) return;
         const cond = w?.condition || 'clear';
         condRef.current = cond;
-        const next = makeBg(cond, loc.lat, loc.lng);
+        const next = makeBg(cond, loc.lat, loc.lng, date);
 
         // Cross-fade: stash current bg as fading layer, set new bg
         setBg(prev => {
@@ -52,7 +60,7 @@ export default function WeatherBackground({ date }) {
       .catch(() => {
         if (cancelled) return;
         // No weather data — use clear with current time
-        const next = makeBg('clear', loc.lat, loc.lng);
+        const next = makeBg('clear', loc.lat, loc.lng, date);
         setBg(prev => { setFadingBg(prev); return next; });
       });
 
@@ -63,7 +71,7 @@ export default function WeatherBackground({ date }) {
   useEffect(() => {
     const id = setInterval(() => {
       const loc = locRef.current || DEFAULT_LOCATION;
-      const next = makeBg(condRef.current, loc.lat, loc.lng);
+      const next = makeBg(condRef.current, loc.lat, loc.lng, dateRef.current);
       setBg(next); // no cross-fade for subtle time shifts
     }, 60000);
     return () => clearInterval(id);
