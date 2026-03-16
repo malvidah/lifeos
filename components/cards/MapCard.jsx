@@ -383,18 +383,18 @@ function DepthLabel({ p, onSelect, isHov, setHovered }) {
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: isHov ? p.color + 'DD' : 'rgba(255,255,255,0.12)',
+          background: isHov ? p.color + 'CC' : p.color + '18',
           backdropFilter: 'blur(12px)',
           WebkitBackdropFilter: 'blur(12px)',
-          border: `1px solid ${isHov ? p.color : 'rgba(255,255,255,0.2)'}`,
+          border: `1px solid ${p.color}${isHov ? '88' : '33'}`,
           borderRadius: 999, padding: '3px 12px',
           fontFamily: mono, fontSize: 11, letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
           color: isHov ? '#fff' : p.color,
           cursor: 'pointer',
           boxShadow: isHov
-            ? `0 4px 16px ${p.color}44`
-            : '0 2px 8px rgba(0,0,0,0.15), inset 0 1px 0 rgba(255,255,255,0.15)',
+            ? `0 4px 16px ${p.color}55, inset 0 1px 0 rgba(255,255,255,0.2)`
+            : `0 2px 8px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.1)`,
           transition: 'all 0.15s',
           userSelect: 'none',
         }}>
