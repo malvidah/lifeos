@@ -271,13 +271,98 @@ function Labels({ projects, onSelect, hovered, setHovered }) {
 }
 
 // ── Environment ──────────────────────────────────────────────────────────────
+// ── Cel-shaded Sun ───────────────────────────────────────────────────────────
+function CelSun({ position, visible }) {
+  if (!visible) return null;
+  return (
+    <group position={position}>
+      {/* Glow ring */}
+      <mesh>
+        <ringGeometry args={[0.55, 0.75, 32]} />
+        <meshBasicMaterial color="#FFE080" transparent opacity={0.25} side={THREE.DoubleSide} />
+      </mesh>
+      {/* Core */}
+      <mesh>
+        <sphereGeometry args={[0.5, 8, 6]} />
+        <meshToonMaterial color="#FFD060" gradientMap={toonGrad} emissive="#FFA030" emissiveIntensity={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+// ── Cel-shaded Moon ──────────────────────────────────────────────────────────
+function CelMoon({ position, visible }) {
+  if (!visible) return null;
+  return (
+    <group position={position}>
+      {/* Subtle glow */}
+      <mesh>
+        <ringGeometry args={[0.4, 0.55, 32]} />
+        <meshBasicMaterial color="#B0C0E0" transparent opacity={0.15} side={THREE.DoubleSide} />
+      </mesh>
+      {/* Moon body */}
+      <mesh>
+        <sphereGeometry args={[0.35, 8, 6]} />
+        <meshToonMaterial color="#C8D0E0" gradientMap={toonGrad} emissive="#8090B0" emissiveIntensity={0.2} />
+      </mesh>
+      {/* Dark crater spots */}
+      <mesh position={[0.08, 0.1, 0.3]}>
+        <sphereGeometry args={[0.08, 6, 4]} />
+        <meshToonMaterial color="#9098B0" gradientMap={toonGrad} />
+      </mesh>
+      <mesh position={[-0.12, -0.05, 0.28]}>
+        <sphereGeometry args={[0.06, 6, 4]} />
+        <meshToonMaterial color="#8890A8" gradientMap={toonGrad} />
+      </mesh>
+    </group>
+  );
+}
+
+// ── Stars (night only) ───────────────────────────────────────────────────────
+function Stars({ visible }) {
+  const positions = useMemo(() => {
+    const pts = [];
+    for (let i = 0; i < 60; i++) {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.random() * Math.PI * 0.4 + 0.2; // upper hemisphere
+      const r = 18 + Math.random() * 4;
+      pts.push([
+        Math.sin(phi) * Math.cos(theta) * r,
+        Math.cos(phi) * r,
+        Math.sin(phi) * Math.sin(theta) * r,
+        0.03 + Math.random() * 0.05, // size
+      ]);
+    }
+    return pts;
+  }, []);
+
+  if (!visible) return null;
+  return (
+    <group>
+      {positions.map((s, i) => (
+        <mesh key={i} position={[s[0], s[1], s[2]]}>
+          <sphereGeometry args={[s[3], 4, 3]} />
+          <meshBasicMaterial color="#E8E0F0" />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+// ── Environment ──────────────────────────────────────────────────────────────
 function Environment({ hour }) {
   const h = hour ?? 14;
-  const sunAngle = ((h - 6) / 12) * Math.PI;
-  const sunX = Math.cos(sunAngle) * 10;
-  const sunY = Math.sin(sunAngle) * 10;
+  const sunAngle = ((h - 6) / 12) * Math.PI; // 6am=horizon, noon=top, 6pm=horizon
+  const sunX = Math.cos(sunAngle) * 14;
+  const sunY = Math.sin(sunAngle) * 14;
   const isNight = h < 6 || h > 20;
   const isDusk = (h >= 17 && h <= 20) || (h >= 5 && h < 7);
+
+  // Moon is opposite the sun
+  const moonAngle = sunAngle + Math.PI;
+  const moonX = Math.cos(moonAngle) * 14;
+  const moonY = Math.max(2, Math.sin(moonAngle) * 14);
+
   return (
     <>
       <ambientLight intensity={isNight ? 0.08 : 0.25} color={isNight ? '#3344AA' : '#B8A890'} />
@@ -292,6 +377,11 @@ function Environment({ hour }) {
       />
       <directionalLight position={[-5, 3, -4]} intensity={isNight ? 0.05 : 0.2} color="#6080B0" />
       <directionalLight position={[0, 2, -8]} intensity={0.12} color="#A0B0D0" />
+
+      {/* Celestial bodies */}
+      <CelSun position={[sunX, sunY, 4]} visible={!isNight} />
+      <CelMoon position={[moonX, moonY, -4]} visible={isNight || isDusk} />
+      <Stars visible={isNight} />
     </>
   );
 }
