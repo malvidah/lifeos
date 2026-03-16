@@ -48,6 +48,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror th,
     .dl-editor .ProseMirror td {
       border-bottom: 1px solid var(--dl-border);
+      border-right: 1px solid var(--dl-border);
       padding: 6px 10px;
       text-align: left;
       vertical-align: top;
@@ -65,6 +66,8 @@ function injectEditorStyles() {
     }
     .dl-editor .ProseMirror td { color: var(--dl-strong); }
     .dl-editor .ProseMirror tr:last-child td { border-bottom: none; }
+    .dl-editor .ProseMirror td:last-child,
+    .dl-editor .ProseMirror th:last-child { border-right: none; }
     .dl-editor .ProseMirror .selectedCell { background: var(--dl-accent-10); }
   `;
   document.head.appendChild(s);
