@@ -522,7 +522,7 @@ function DashboardInner() {
               return (
                 <>
                   {/* Scrollable content — full width scroll, max-width content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto',position:'relative',zIndex:1}}>
+                  <div style={{flex:1,minHeight:0,overflow:'auto',position:'relative',zIndex:10}}>
                   <div style={{maxWidth:1200,width:"100%",margin:"0 auto",padding:10,paddingTop:0,boxSizing:'border-box',
                     display:'flex',flexDirection:'column',gap:8}}>
                     {/* Spacer for fixed header — same as day view */}
@@ -548,8 +548,8 @@ function DashboardInner() {
                             onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                           />
                         )}
-                        {/* Spacer so terrain is visible above cards — smaller since NavBar is above */}
-                        <div style={{height: 300}} />
+                        {/* Spacer — transparent, pointer events pass through to 3D terrain */}
+                        <div style={{height: 300, pointerEvents: 'none'}} />
                         <ErrorBoundary label="Project">
                         <ProjectView
                           project="__everything__"

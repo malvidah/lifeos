@@ -199,7 +199,7 @@ function Water() {
 function Labels({ projects, onSelect, hovered, setHovered }) {
   return projects.map(p => (
     <Html key={p.tag} position={[p.x, p.height + 0.5, p.z]} center
-      style={{ pointerEvents: 'auto' }} zIndexRange={[10, 0]}>
+      style={{ pointerEvents: 'auto' }} zIndexRange={[3, 0]}>
       <div onClick={() => onSelect(p.tag)}
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
@@ -296,7 +296,7 @@ export function MapCard({ allTags, connections, recency, onSelectProject }) {
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 0,
+      position: 'fixed', inset: 0, zIndex: 2,
       background: `linear-gradient(180deg, ${skyTop} 0%, ${skyBot} 100%)`,
     }}>
       <Canvas
