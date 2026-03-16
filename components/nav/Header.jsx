@@ -25,11 +25,13 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
       paddingBottom: 10,
       flexShrink: 0,
       position: "sticky", top: 0, zIndex: 100,
-      background: "transparent",
+      background: "var(--dl-glass)",
+      backdropFilter: "blur(24px) saturate(1.3)",
+      WebkitBackdropFilter: "blur(24px) saturate(1.3)",
       WebkitAppRegion: "drag", userSelect: "none",
     }}>
-      {/* Pull-down overscroll patch */}
-      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:"transparent",zIndex:99}}/>
+      {/* Pull-down overscroll patch — matches glass style */}
+      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:"var(--dl-bg)",zIndex:99}}/>
       {/* DAY LAB wordmark — full-width centered, click = go home */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",

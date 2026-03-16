@@ -381,15 +381,7 @@ function DashboardInner() {
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
-      {/* Top vignette — frosted blur fade that works over any background */}
-      <div style={{
-        position:"fixed", top:"calc(env(safe-area-inset-top, 0px) + 38px)", left:0, right:0,
-        height:60, pointerEvents:"none", zIndex:48,
-        backdropFilter:"blur(8px)",
-        WebkitBackdropFilter:"blur(8px)",
-        maskImage:"linear-gradient(to bottom, black 0%, transparent 100%)",
-        WebkitMaskImage:"linear-gradient(to bottom, black 0%, transparent 100%)",
-      }}/>
+      {/* No top vignette needed — glassmorphic header handles the transition */}
 
 
       {/* ── SINGLE layout path — stacks on narrow, 2-col on wide ─── */}
