@@ -39,10 +39,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   // Refresh if expired (5min buffer)
   if (tokens.expires_at && Date.now() / 1000 > tokens.expires_at - 300) {
-    const fresh = await refreshStravaToken(clientId, clientSecret, tokens.refresh_token);
-    if (fresh.access_token) {
-      tokens = { ...tokens, access_token: fresh.access_token, refresh_token: fresh.refresh_token || tokens.refresh_token, expires_at: fresh.expires_at };
-      await saveStravaTokens(supabase, user.id, tokens);
+    try {
+      const fresh = await refreshStravaToken(clientId, clientSecret, tokens.refresh_token);
+      if (fresh.access_token) {
+        tokens = { ...tokens, access_token: fresh.access_token, refresh_token: fresh.refresh_token || tokens.refresh_token, expires_at: fresh.expires_at };
+        await saveStravaTokens(supabase, user.id, tokens);
+      }
+    } catch (e) {
+      console.error('[strava] token refresh failed:', e.message);
+      return Response.json({ activities: [] });
     }
   }
 
@@ -52,8 +57,9 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     `https://www.strava.com/api/v3/athlete/activities?after=${noon - 14*3600}&before=${noon + 14*3600}&per_page=20`,
     { headers: { Authorization: `Bearer ${tokens.access_token}` } }
   );
-  const activities = await r.json();
-  if (!Array.isArray(activities)) return Response.json({ error: activities.message || 'strava_error' }, { status: 500 });
+  if (!r.ok) return Response.json({ activities: [], error: `strava ${r.status}` });
+  const activities = await r.json().catch(() => []);
+  if (!Array.isArray(activities)) return Response.json({ activities: [] });
 
   const result = activities.map(a => ({
     id: a.id, name: a.name, type: a.type, sport: a.sport_type,
