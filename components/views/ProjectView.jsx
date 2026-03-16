@@ -78,7 +78,7 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
     return tasksToHtml(tasks.map(t => ({ id: t.id, text: t.text, done: !!t.done })));
   }, []); // eslint-disable-line
 
-  const isEmpty = useMemo(() => clientParseTasks(initialHtml).length === 0, [initialHtml]);
+  const [isEmpty, setIsEmpty] = useState(() => clientParseTasks(initialHtml).length === 0);
 
   // Inject task list styles (same as daily view)
   const accentHex = theme === 'light' ? '#B87018' : '#D08828';
@@ -132,6 +132,7 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
 
   function handleUpdate(newHtml) {
     latestHtml.current = newHtml;
+    setIsEmpty(clientParseTasks(newHtml).length === 0);
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => mergeAndSave(newHtml), 800);
   }
