@@ -221,12 +221,15 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   const noteEditorRef = useRef(null);
   const noteDragCounter = useRef(0);
 
-  // Load notes for this project
+  // Load notes for this project (or all notes for __everything__)
   useEffect(() => {
-    if (!project || project.startsWith('__') || !token) return;
+    if (!project || project === '__graph__' || !token) return;
     let stale = false;
     setNotesLoaded(false);
-    api.get(`/api/notes?project=${encodeURIComponent(project)}`, token)
+    const url = project === '__everything__'
+      ? '/api/notes'
+      : `/api/notes?project=${encodeURIComponent(project)}`;
+    api.get(url, token)
       .then(res => {
         if (stale) return;
         const notes = res?.notes || [];
