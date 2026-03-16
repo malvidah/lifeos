@@ -17,8 +17,12 @@ export default function PhotosCard({ date, token }) {
     if (!token || !date) { setPhotos([]); setLoaded(true); return; }
     setLoaded(false);
     api.get(`/api/photos?date=${date}`, token)
-      .then(d => { setPhotos(d?.photos || []); setLoaded(true); })
-      .catch(() => { setPhotos([]); setLoaded(true); });
+      .then(d => {
+        if (d?.error) console.warn('[PhotosCard] API error:', d.error);
+        setPhotos(d?.photos || []);
+        setLoaded(true);
+      })
+      .catch(e => { console.warn('[PhotosCard] fetch failed:', e); setPhotos([]); setLoaded(true); });
   }, [date, token]);
 
   // Reset slideshow when date changes

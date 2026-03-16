@@ -32,7 +32,9 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     });
 
     if (!res.ok) {
-      return { ok: false, status: res.status };
+      const errBody = await res.text().catch(() => '');
+      console.error('[photos] Google API error:', res.status, errBody);
+      return { ok: false, status: res.status, error: errBody };
     }
 
     const body = await res.json();
@@ -40,8 +42,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   });
 
   if (!ok) {
-    if (status === 401) return Response.json({ photos: [], error: 'no_token' });
-    return Response.json({ photos: [] });
+    console.error('[photos] withGoogleToken failed:', { status, error });
+    return Response.json({ photos: [], error: error || `google_api_${status}` });
   }
 
   const items = data?.mediaItems || [];
