@@ -408,17 +408,16 @@ function makeSlashSuggestionMatch() {
   };
 }
 
-function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
+function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey, findMatch }) {
   return Extension.create({
     name: `suggestion_${suggKey}`,
     addProseMirrorPlugins() {
       const editor = this.editor;
-      return [Suggestion({
+      const opts = {
         editor,
         char,
         allowSpaces: true,
         allowedPrefixes: null,
-        findSuggestionMatch: makeSlashSuggestionMatch(),
         pluginKey: new PluginKey(`suggestion_${suggKey}`),
         items: ({ query }) => itemsFn(query),
         command: ({ editor, range, props }) => commandFn({ editor, range, name: props }),
@@ -428,7 +427,9 @@ function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey }) {
           onExit:    p => renderRef.current?.onExit?.(p,    suggKey),
           onKeyDown: p => renderRef.current?.onKeyDown?.(p, suggKey) ?? false,
         }),
-      })];
+      };
+      if (findMatch) opts.findSuggestionMatch = findMatch;
+      return [Suggestion(opts)];
     },
   });
 }
@@ -727,6 +728,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         char: '/',
         suggKey: 'slash',
         renderRef,
+        findMatch: makeSlashSuggestionMatch(),
         itemsFn: (query) => {
           // Bare / — show command menu
           if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:@', '__cmd__:d', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
@@ -824,6 +826,29 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name: noteName } }));
             }
           }
+        },
+      }),
+
+      // @ trigger for date tags — bare @query without /
+      createSuggestion({
+        char: '@',
+        suggKey: 'atDate',
+        renderRef,
+        itemsFn: (query) => {
+          const suggestions = generateDateSuggestions(query);
+          return suggestions
+            .filter(s => s.date)
+            .map(s => `__date__:${s.date}:${s.label}`);
+        },
+        commandFn: ({ editor, range, name }) => {
+          if (!name.startsWith('__date__:')) return;
+          justInsertedRef.current = true;
+          setTimeout(() => { justInsertedRef.current = false; }, 150);
+          const dateStr = name.slice(9, 19);
+          editor.chain().focus().deleteRange(range).insertContent([
+            { type: 'dateTag', attrs: { date: dateStr } },
+            { type: 'text', text: ' ' },
+          ]).run();
         },
       }),
     ],
