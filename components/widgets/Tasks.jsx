@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useContext, useMemo } from "react";
+import { useState, useEffect, useContext, useMemo } from "react";
+import { api } from "@/lib/api";
 import { useTheme } from "@/lib/theme";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
@@ -206,6 +207,55 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
           </div>
         )}
       </div>
+      {/* Recurring task instances (habits) for this date */}
+      <HabitInstances date={date} token={token} />
+    </div>
+  );
+}
+
+// ── Habit Instances — recurring tasks with flag icons ─────────────────────────
+function HabitInstances({ date, token }) {
+  const [instances, setInstances] = useState([]);
+
+  useEffect(() => {
+    if (!date || !token) return;
+    api.get(`/api/habits?date=${date}`, token).then(d => {
+      if (d?.instances) setInstances(d.instances);
+    });
+  }, [date, token]);
+
+  if (!instances.length) return null;
+
+  const toggleFlag = async (id, currentDone) => {
+    setInstances(prev => prev.map(i => i.id === id ? { ...i, done: !currentDone } : i));
+    await api.patch('/api/habits', { id, done: !currentDone }, token);
+  };
+
+  return (
+    <div style={{ borderTop: '1px solid var(--dl-border)', marginTop: 6, paddingTop: 6 }}>
+      {instances.map(inst => (
+        <div key={inst.id} style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '3px 0',
+        }}>
+          {/* Flag icon instead of checkbox */}
+          <button onClick={() => toggleFlag(inst.id, inst.done)} style={{
+            background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            fontSize: 16, lineHeight: 1, flexShrink: 0,
+            filter: inst.done ? 'none' : 'grayscale(1) opacity(0.4)',
+            transition: 'filter 0.15s',
+          }}>
+            {inst.done ? '\u{1F6A9}' : '\u{1F3F3}'}
+          </button>
+          <span style={{
+            fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
+            color: 'var(--dl-strong)',
+            opacity: inst.done ? 0.5 : 1,
+            textDecoration: inst.done ? 'line-through' : 'none',
+          }}>
+            {inst.text}
+          </span>
+        </div>
+      ))}
     </div>
   );
 }
