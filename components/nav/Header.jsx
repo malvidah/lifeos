@@ -24,7 +24,7 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
       paddingLeft: 18, paddingRight: 14,
       paddingBottom: 10,
       flexShrink: 0,
-      position: "sticky", top: 0, zIndex: 100,
+      position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
       background: "var(--dl-glass)",
       backdropFilter: "blur(20px) saturate(1.4)",
       WebkitBackdropFilter: "blur(20px) saturate(1.4)",
