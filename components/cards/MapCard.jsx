@@ -90,25 +90,31 @@ function skyColors(hour) {
   };
 }
 
-// ── Top surface (PlaneGeometry for full terrain detail) ──────────────────────
-const TOP_SEG = 80;
+// ── Unified island mesh — single polar-grid geometry, no seams ───────────────
+// Uses concentric rings for the top surface that seamlessly continue into
+// tapering underside rings. One mesh, shared vertices at the boundary.
+//
+// Structure (cross-section):
+//   center ──ring1──ring2──...──edgeRing──cliff1──cliff2──...──tipRing
+//   (top surface, terrain detail)         (underside, tapering down)
 
-function buildTopGeo(projects, radius, noise2D, edgeR) {
-  const size = radius * 2.2;
-  const top = new THREE.PlaneGeometry(size, size, TOP_SEG, TOP_SEG);
-  top.rotateX(-Math.PI / 2);
-  const pos = top.attributes.position;
+function buildIslandGeo(projects, radius, noise2D, edgeR) {
+  const ANG = 64;           // angular segments
+  const TOP_RINGS = 28;     // concentric rings for top surface (center→edge)
+  const UNDER_RINGS = 20;   // rings for underside (edge→bottom tip)
+  const DEPTH = radius * 0.9;
 
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), z = pos.getZ(i);
+  const verts = [];
+  const cols = [];
+  const indices = [];
+
+  // Helper: terrain height at (x, z)
+  function terrainAt(x, z) {
     const dist = Math.sqrt(x * x + z * z);
     const angle = Math.atan2(z, x);
     const eR = edgeR(angle);
-
-    if (dist > eR) { pos.setY(i, -20); continue; }
-
     const t = dist / eR;
-    const mask = t > 0.75 ? 1 - ((t - 0.75) / 0.25) ** 2 : 1;
+    const mask = t > 0.75 ? Math.max(0, 1 - ((t - 0.75) / 0.25) ** 2) : 1;
 
     let h = noise2D(x * 0.3, z * 0.3) * 0.4
           + noise2D(x * 0.7, z * 0.7) * 0.2
@@ -123,98 +129,116 @@ function buildTopGeo(projects, radius, noise2D, edgeR) {
         h += p.height * f * f * f;
       }
     }
-
-    pos.setY(i, h * mask + (1 - mask) * -0.05);
+    return h * mask + (1 - mask) * -0.05;
   }
 
-  // Vertex colors
-  const colors = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) {
-    const h = pos.getY(i);
-    if (h < -10) { colors[i*3]=0; colors[i*3+1]=0; colors[i*3+2]=0; continue; }
-    const x = pos.getX(i), z = pos.getZ(i);
+  // Helper: terrain color
+  function terrainColor(x, z, h) {
     const ht = Math.max(0, Math.min(1, (h + 0.3) / 2.8));
     const n = noise2D(x * 2.5, z * 2.5) * 0.04;
-    if (ht < 0.1) { colors[i*3]=0.18+n; colors[i*3+1]=0.25+n; colors[i*3+2]=0.22+n; }
-    else if (ht < 0.25) { colors[i*3]=0.28+n; colors[i*3+1]=0.38+n; colors[i*3+2]=0.25+n; }
-    else if (ht < 0.4) { colors[i*3]=0.48+n; colors[i*3+1]=0.42+n; colors[i*3+2]=0.25+n; }
-    else if (ht < 0.6) { colors[i*3]=0.65+n; colors[i*3+1]=0.45+n; colors[i*3+2]=0.28+n; }
-    else if (ht < 0.8) { colors[i*3]=0.48+n; colors[i*3+1]=0.45+n; colors[i*3+2]=0.48+n; }
-    else { colors[i*3]=0.85+n; colors[i*3+1]=0.78+n; colors[i*3+2]=0.7+n; }
+    if (ht < 0.1) return [0.18+n, 0.25+n, 0.22+n];
+    if (ht < 0.25) return [0.28+n, 0.38+n, 0.25+n];
+    if (ht < 0.4) return [0.48+n, 0.42+n, 0.25+n];
+    if (ht < 0.6) return [0.65+n, 0.45+n, 0.28+n];
+    if (ht < 0.8) return [0.48+n, 0.45+n, 0.48+n];
+    return [0.85+n, 0.78+n, 0.7+n];
   }
-  top.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
-  // Remove triangles that touch invisible vertices (y=-20) — these create
-  // the vertical wall artifacts at the island boundary.
-  const oldIdx = top.index.array;
-  const newIdx = [];
-  for (let i = 0; i < oldIdx.length; i += 3) {
-    const a = oldIdx[i], b = oldIdx[i+1], c = oldIdx[i+2];
-    if (pos.getY(a) < -10 || pos.getY(b) < -10 || pos.getY(c) < -10) continue;
-    newIdx.push(a, b, c);
+  // ── Vertex 0: center point ─────────────────────────────────────────────
+  const centerH = terrainAt(0, 0);
+  verts.push(0, centerH, 0);
+  const cc = terrainColor(0, 0, centerH);
+  cols.push(...cc);
+
+  // ── Top surface rings (1 to TOP_RINGS) ─────────────────────────────────
+  for (let ring = 1; ring <= TOP_RINGS; ring++) {
+    const ringFrac = ring / TOP_RINGS; // 0→1 from center to edge
+    for (let seg = 0; seg <= ANG; seg++) {
+      const angle = (seg / ANG) * Math.PI * 2;
+      const eR = edgeR(angle);
+      const r = eR * ringFrac;
+      const x = Math.cos(angle) * r;
+      const z = Math.sin(angle) * r;
+      const h = terrainAt(x, z);
+      verts.push(x, h, z);
+      const c = terrainColor(x, z, h);
+      cols.push(...c);
+    }
   }
-  top.setIndex(newIdx);
 
-  top.computeVertexNormals();
-  return top;
-}
-
-// ── Underside (hand-built rings — no CylinderGeometry) ───────────────────────
-// Build explicit vertex rings at each depth level with exact radii.
-function buildUndersideGeo(radius, noise2D, edgeR) {
-  const DEPTH = radius * 0.9;
-  const SEGS = 64;       // vertices per ring
-  const RINGS = 22;      // depth levels (0 = top edge, RINGS = bottom tip)
-
-  const verts = [];
-  const cols = [];
-  const indices = [];
-
-  for (let ring = 0; ring <= RINGS; ring++) {
-    const t = ring / RINGS; // 0 = cliff top, 1 = bottom tip
+  // ── Underside rings (TOP_RINGS+1 to TOP_RINGS+UNDER_RINGS) ────────────
+  for (let ring = 1; ring <= UNDER_RINGS; ring++) {
+    const t = ring / UNDER_RINGS; // 0→1 from edge down to tip
     const y = -t * DEPTH;
-
-    // Taper: full width → narrow point
     const taper = Math.max(0.03, (1 - t) ** 1.5);
 
-    for (let seg = 0; seg <= SEGS; seg++) {
-      const angle = (seg / SEGS) * Math.PI * 2;
+    for (let seg = 0; seg <= ANG; seg++) {
+      const angle = (seg / ANG) * Math.PI * 2;
+      const eR = edgeR(angle);
+      const r = eR * taper;
 
-      // Base radius from edge shape, scaled by taper
-      // First 3 rings extend wider to generously overlap with top surface
-      const overlap = ring === 0 ? 1.12 : ring === 1 ? 1.08 : ring === 2 ? 1.04 : 1.0;
-      const r = edgeR(angle) * taper * overlap;
-
-      // Rock displacement proportional to current radius (shrinks with taper)
+      // Rock displacement
       const rock = noise2D(angle * 5 + t * 8, t * 6) * 0.08
                  + noise2D(angle * 11 + t * 13, t * 11) * 0.04;
       const finalR = r * (1 + rock);
 
-      // Vertical noise for jagged cliffs (skip first ring to keep it flush)
-      const yN = ring < 2 ? 0
-               : noise2D(angle * 5 + 20, t * 4 + 20) * 0.25
+      // Vertical noise for jagged cliffs
+      const yN = noise2D(angle * 5 + 20, t * 4 + 20) * 0.25
                + noise2D(angle * 11 + 40, t * 8) * 0.12;
 
       const x = Math.cos(angle) * finalR;
       const z = Math.sin(angle) * finalR;
-      // First rings pushed above y=0 to overlap terrain surface
-      const yOffset = ring === 0 ? 0.25 : ring === 1 ? 0.15 : ring === 2 ? 0.05 : 0;
-      verts.push(x, y + yOffset + yN * t * 0.5, z);
+      verts.push(x, y + yN * t * 0.5, z);
 
-      // Color: warm brown at top → dark charcoal at bottom
+      // Cliff color: warm brown → dark charcoal
       const warmth = 1 - t;
       const n = noise2D(x * 2 + 30, z * 2 + 30) * 0.04;
       cols.push(0.10 + warmth * 0.30 + n, 0.08 + warmth * 0.18 + n * 0.4, 0.07 + warmth * 0.10 + n * 0.2);
     }
   }
 
-  // Connect rings with triangles
-  for (let ring = 0; ring < RINGS; ring++) {
-    for (let seg = 0; seg < SEGS; seg++) {
-      const a = ring * (SEGS + 1) + seg;
-      const b = a + 1;
-      const c = a + (SEGS + 1);
-      const d = c + 1;
+  // ── Triangles: center fan (vertex 0 → ring 1) ─────────────────────────
+  for (let seg = 0; seg < ANG; seg++) {
+    const a = 0;                    // center
+    const b = 1 + seg;              // ring 1 current
+    const c = 1 + seg + 1;          // ring 1 next
+    indices.push(a, b, c);
+  }
+
+  // ── Triangles: top surface ring-to-ring ────────────────────────────────
+  const stride = ANG + 1; // vertices per ring
+  for (let ring = 1; ring < TOP_RINGS; ring++) {
+    const ringStart = 1 + (ring - 1) * stride;
+    const nextStart = ringStart + stride;
+    for (let seg = 0; seg < ANG; seg++) {
+      const a = ringStart + seg;
+      const b = ringStart + seg + 1;
+      const c = nextStart + seg;
+      const d = nextStart + seg + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  // ── Triangles: edge ring → first underside ring (seamless transition) ──
+  const edgeStart = 1 + (TOP_RINGS - 1) * stride;
+  const firstUnderStart = 1 + TOP_RINGS * stride;
+  for (let seg = 0; seg < ANG; seg++) {
+    const a = edgeStart + seg;
+    const b = edgeStart + seg + 1;
+    const c = firstUnderStart + seg;
+    const d = firstUnderStart + seg + 1;
+    indices.push(a, c, b, b, c, d);
+  }
+
+  // ── Triangles: underside ring-to-ring ──────────────────────────────────
+  for (let ring = 1; ring < UNDER_RINGS; ring++) {
+    const ringStart = 1 + (TOP_RINGS + ring - 1) * stride;
+    const nextStart = ringStart + stride;
+    for (let seg = 0; seg < ANG; seg++) {
+      const a = ringStart + seg;
+      const b = ringStart + seg + 1;
+      const c = nextStart + seg;
+      const d = nextStart + seg + 1;
       indices.push(a, c, b, b, c, d);
     }
   }
@@ -228,30 +252,21 @@ function buildUndersideGeo(radius, noise2D, edgeR) {
 }
 
 function Terrain({ projects, radius }) {
-  const { topGeo, undersideGeo } = useMemo(() => {
+  const geo = useMemo(() => {
     const noise2D = createNoise2D();
     function edgeR(angle) {
-      // Gentle wobble — mostly round with subtle irregularity
       return radius * (0.90
         + noise2D(Math.cos(angle) * 1.5, Math.sin(angle) * 1.5) * 0.07
         + noise2D(Math.cos(angle * 2) * 1.2, Math.sin(angle * 2) * 1.2) * 0.04
       );
     }
-    return {
-      topGeo: buildTopGeo(projects, radius, noise2D, edgeR),
-      undersideGeo: buildUndersideGeo(radius, noise2D, edgeR),
-    };
+    return buildIslandGeo(projects, radius, noise2D, edgeR);
   }, [projects, radius]);
 
   return (
-    <group>
-      <mesh geometry={topGeo} receiveShadow castShadow>
-        <meshToonMaterial vertexColors gradientMap={toonGrad} />
-      </mesh>
-      <mesh geometry={undersideGeo} receiveShadow castShadow>
-        <meshToonMaterial vertexColors gradientMap={toonGrad} side={THREE.DoubleSide} />
-      </mesh>
-    </group>
+    <mesh geometry={geo} receiveShadow castShadow>
+      <meshToonMaterial vertexColors gradientMap={toonGrad} side={THREE.DoubleSide} />
+    </mesh>
   );
 }
 
