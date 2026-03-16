@@ -175,7 +175,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   const prevScoreDate = useRef(date);
   if (prevScoreDate.current !== date) {
     prevScoreDate.current = date;
-    scoreFetchedForDate.current = null;
+    scoredKeyRef.current = null;
   }
 
   // ── Apple Health connect prompt (iOS only) ────────────────────────────────
