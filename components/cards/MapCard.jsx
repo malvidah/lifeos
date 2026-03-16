@@ -135,57 +135,65 @@ function buildTopGeo(projects, radius, noise2D, edgeR) {
   return top;
 }
 
-// ── Underside (open CylinderGeometry, deformed for taper) ────────────────────
+// ── Underside (hand-built rings — no CylinderGeometry) ───────────────────────
+// Build explicit vertex rings at each depth level with exact radii.
 function buildUndersideGeo(radius, noise2D, edgeR) {
   const DEPTH = radius * 0.9;
-  const RADIAL = 64;
-  const HEIGHT = 20;
+  const SEGS = 64;       // vertices per ring
+  const RINGS = 22;      // depth levels (0 = top edge, RINGS = bottom tip)
 
-  // Uniform cylinder — all tapering done in vertex deformation below
-  const geo = new THREE.CylinderGeometry(
-    1, 1, DEPTH, RADIAL, HEIGHT, true
-  );
-  const pos = geo.attributes.position;
-  const colors = new Float32Array(pos.count * 3);
+  const verts = [];
+  const cols = [];
+  const indices = [];
 
-  for (let i = 0; i < pos.count; i++) {
-    let x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
-    y -= DEPTH / 2; // shift so top ring is at y=0
+  for (let ring = 0; ring <= RINGS; ring++) {
+    const t = ring / RINGS; // 0 = cliff top, 1 = bottom tip
+    const y = -t * DEPTH;
 
-    const angle = Math.atan2(z, x);
-    const currentR = Math.sqrt(x * x + z * z);
-    const t = Math.max(0, Math.min(1, -y / DEPTH));
-
-    // Taper with power curve
+    // Taper: full width → narrow point
     const taper = Math.max(0.03, (1 - t) ** 1.5);
-    const targetR = edgeR(angle) * taper;
 
-    // Rock displacement scaled by taper
-    const rock = noise2D(angle * 5 + t * 8, t * 6) * 0.1
-               + noise2D(angle * 11 + t * 13, t * 11) * 0.05;
+    for (let seg = 0; seg <= SEGS; seg++) {
+      const angle = (seg / SEGS) * Math.PI * 2;
 
-    if (currentR > 0.001) {
-      const scale = (targetR * (1 + rock)) / currentR;
-      x *= scale;
-      z *= scale;
+      // Base radius from edge shape, scaled by taper
+      const r = edgeR(angle) * taper;
+
+      // Rock displacement proportional to current radius (shrinks with taper)
+      const rock = noise2D(angle * 5 + t * 8, t * 6) * 0.08
+                 + noise2D(angle * 11 + t * 13, t * 11) * 0.04;
+      const finalR = r * (1 + rock);
+
+      // Vertical noise for jagged cliffs
+      const yN = noise2D(angle * 5 + 20, t * 4 + 20) * 0.25
+               + noise2D(angle * 11 + 40, t * 8) * 0.12;
+
+      const x = Math.cos(angle) * finalR;
+      const z = Math.sin(angle) * finalR;
+      verts.push(x, y + yN * t * 0.5, z);
+
+      // Color: warm brown at top → dark charcoal at bottom
+      const warmth = 1 - t;
+      const n = noise2D(x * 2 + 30, z * 2 + 30) * 0.04;
+      cols.push(0.10 + warmth * 0.30 + n, 0.08 + warmth * 0.18 + n * 0.4, 0.07 + warmth * 0.10 + n * 0.2);
     }
-
-    // Vertical noise for jagged cliff
-    const yN = noise2D(angle * 5 + 20, t * 4 + 20) * 0.3
-             + noise2D(angle * 11 + 40, t * 8) * 0.15;
-    y += yN * t * 0.5;
-
-    pos.setX(i, x); pos.setY(i, y); pos.setZ(i, z);
-
-    // Colors: warm brown → dark charcoal
-    const warmth = 1 - t;
-    const n = noise2D(x * 2 + 30, z * 2 + 30) * 0.04;
-    colors[i*3]   = 0.10 + warmth * 0.30 + n;
-    colors[i*3+1] = 0.08 + warmth * 0.18 + n * 0.4;
-    colors[i*3+2] = 0.07 + warmth * 0.10 + n * 0.2;
   }
 
-  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  // Connect rings with triangles
+  for (let ring = 0; ring < RINGS; ring++) {
+    for (let seg = 0; seg < SEGS; seg++) {
+      const a = ring * (SEGS + 1) + seg;
+      const b = a + 1;
+      const c = a + (SEGS + 1);
+      const d = c + 1;
+      indices.push(a, c, b, b, c, d);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  geo.setIndex(indices);
   geo.computeVertexNormals();
   return geo;
 }
