@@ -150,15 +150,19 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks)
       }
     }
   }
+  const maxConn = Math.max(1, ...Object.values(connWeight));
   const maxEntries = Math.max(1, ...Object.values(entryCounts || {}));
   return tags.map(tag => {
     const pos = placed.get(tag) || { x: 0, z: 0 };
     const entryScore = (entryCounts?.[tag] || 0) / maxEntries;
+    const connScore = (connWeight[tag] || 0) / maxConn;
     const rScore = recencyScore(tag);
     const daysSinceActive = recency?.[tag] ? (now - new Date(recency[tag]).getTime()) / 86400000 : 999;
+    // Height: combine entries + connections + base. Every project gets a visible peak.
+    const h = Math.max(entryScore, connScore, 0.3) * 1.6 + 0.8;
     return {
       tag, x: pos.x, z: pos.z,
-      height: 0.6 + entryScore * 1.8,
+      height: h,
       color: projectColor(tag),
       label: tagDisplayName(tag),
       isActive: daysSinceActive < 7,
