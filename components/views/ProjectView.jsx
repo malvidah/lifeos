@@ -396,6 +396,26 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     updateNoteContent(activeNote.id, newContent);
   }, [activeNote, updateNoteContent]);
 
+  const reorderNoteImages = useCallback((newOrder) => {
+    if (!activeNote) return;
+    let content = activeNote.content || '';
+    // Remove all image references
+    content = content.replace(/<span\s+data-image-chip="[^"]*"[^>]*>[^<]*<\/span>\s*/g, '');
+    content = content.replace(/<div\s+data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '');
+    content = content.replace(/\[img:https?:\/\/[^\]]+\]\n?/g, '');
+    content = content.replace(/<p>\s*<\/p>/g, '');
+    // Re-add in new order
+    const chips = newOrder.map(url => `<span data-image-chip="${url}">\u{1F4F7}</span> `).join('');
+    if (chips) {
+      if (content.includes('</p>')) {
+        content = content.replace(/<\/p>\s*$/, chips + '</p>');
+      } else {
+        content = (content || '') + `<p>${chips}</p>`;
+      }
+    }
+    updateNoteContent(activeNote.id, content);
+  }, [activeNote, updateNoteContent]);
+
   const handleNoteDrop = useCallback(async (e) => {
     e.preventDefault(); e.stopPropagation();
     noteDragCounter.current = 0; setNoteDragging(false);
@@ -686,7 +706,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             {noteImages.length > 0 && (
               noteLightbox != null
                 ? <Slideshow images={noteImages} index={noteLightbox} onClose={() => setNoteLightbox(null)} />
-                : <PhotoStrip images={noteImages} onViewImage={i => setNoteLightbox(i)} />
+                : <PhotoStrip images={noteImages} onViewImage={i => setNoteLightbox(i)} onReorder={reorderNoteImages} />
             )}
             {(noteDragging || noteUploading) ? (
               <DropZone uploading={noteUploading} />

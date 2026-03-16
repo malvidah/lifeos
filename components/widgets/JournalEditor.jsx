@@ -26,68 +26,130 @@ export function extractImages(content) {
 
 // ── Photo Strip ───────────────────────────────────────────────────────────────
 // Horizontal scroll row of filled rounded squares. Click to open slideshow.
-// Supports mouse drag-to-scroll on desktop + native touch scroll on mobile.
-export function PhotoStrip({ images, onViewImage }) {
-  const scrollRef = useRef(null);
-  const dragState = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
+// Drag-to-reorder: long press or drag an item to reorder with live animation.
+const SIZE = 140;
+const GAP = 4;
+
+export function PhotoStrip({ images, onViewImage, onReorder }) {
+  const containerRef = useRef(null);
+  const [dragIdx, setDragIdx] = useState(null);     // index being dragged
+  const [overIdx, setOverIdx] = useState(null);      // index being hovered over
+  const dragStartX = useRef(0);
+  const dragOffsetX = useRef(0);
+  const [dragX, setDragX] = useState(0);
+  const didMove = useRef(false);
+  const longPressTimer = useRef(null);
+  const [reordering, setReordering] = useState(false); // true when in reorder mode
 
   if (!images.length) return null;
-  const SIZE = 140;
 
-  const onMouseDown = (e) => {
-    const el = scrollRef.current;
-    if (!el) return;
-    dragState.current = { down: true, startX: e.pageX - el.offsetLeft, scrollLeft: el.scrollLeft, moved: false };
-    el.style.cursor = 'grabbing';
+  // Compute display order based on drag state
+  const displayOrder = [...images];
+  if (dragIdx != null && overIdx != null && dragIdx !== overIdx && reordering) {
+    const item = displayOrder.splice(dragIdx, 1)[0];
+    displayOrder.splice(overIdx, 0, item);
+  }
+
+  const handlePointerDown = (e, i) => {
+    if (images.length < 2) return;
+    dragStartX.current = e.clientX;
+    didMove.current = false;
+    const rect = e.currentTarget.getBoundingClientRect();
+    dragOffsetX.current = e.clientX - rect.left;
+
+    // Long press to start reorder (300ms)
+    longPressTimer.current = setTimeout(() => {
+      setReordering(true);
+      setDragIdx(i);
+      setOverIdx(i);
+      setDragX(e.clientX - dragOffsetX.current);
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }, 300);
   };
-  const onMouseMove = (e) => {
-    if (!dragState.current.down) return;
-    e.preventDefault();
-    const el = scrollRef.current;
-    const x = e.pageX - el.offsetLeft;
-    const walk = x - dragState.current.startX;
-    if (Math.abs(walk) > 4) dragState.current.moved = true;
-    el.scrollLeft = dragState.current.scrollLeft - walk;
+
+  const handlePointerMove = (e) => {
+    // Cancel long press if moved before timer
+    if (!reordering && Math.abs(e.clientX - dragStartX.current) > 5) {
+      clearTimeout(longPressTimer.current);
+    }
+    if (!reordering || dragIdx == null) return;
+    didMove.current = true;
+    const containerRect = containerRef.current?.getBoundingClientRect();
+    if (!containerRect) return;
+
+    setDragX(e.clientX - dragOffsetX.current);
+
+    // Calculate which index we're over
+    const relX = e.clientX - containerRect.left + (containerRef.current?.scrollLeft || 0);
+    const newOver = Math.max(0, Math.min(images.length - 1, Math.floor(relX / (SIZE + GAP))));
+    setOverIdx(newOver);
   };
-  const onMouseUp = () => {
-    dragState.current.down = false;
-    if (scrollRef.current) scrollRef.current.style.cursor = 'grab';
+
+  const handlePointerUp = (e) => {
+    clearTimeout(longPressTimer.current);
+    if (reordering && dragIdx != null && overIdx != null && dragIdx !== overIdx && onReorder) {
+      const newOrder = [...images];
+      const item = newOrder.splice(dragIdx, 1)[0];
+      newOrder.splice(overIdx, 0, item);
+      onReorder(newOrder);
+    }
+    const wasDragging = reordering;
+    setDragIdx(null);
+    setOverIdx(null);
+    setReordering(false);
+
+    if (!wasDragging && !didMove.current) {
+      // It was a click, not a drag
+      const containerRect = containerRef.current?.getBoundingClientRect();
+      if (containerRect) {
+        const relX = e.clientX - containerRect.left + (containerRef.current?.scrollLeft || 0);
+        const clickedIdx = Math.floor(relX / (SIZE + GAP));
+        if (clickedIdx >= 0 && clickedIdx < images.length) onViewImage(clickedIdx);
+      }
+    }
   };
 
   return (
     <div
-      ref={scrollRef}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
+      ref={containerRef}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerLeave={handlePointerUp}
       style={{
-        display: 'flex', gap: 4, overflowX: 'auto', overflowY: 'hidden',
+        display: 'flex', gap: GAP, overflowX: 'auto', overflowY: 'hidden',
         marginBottom: 12, borderRadius: 10,
         scrollbarWidth: 'none', msOverflowStyle: 'none',
         WebkitOverflowScrolling: 'touch',
         cursor: images.length > 1 ? 'grab' : 'pointer',
-        userSelect: 'none',
+        userSelect: 'none', position: 'relative',
+        touchAction: reordering ? 'none' : 'pan-x',
       }}
     >
-      {images.map((url, i) => (
-        <div
-          key={url}
-          onClick={() => { if (!dragState.current.moved) onViewImage(i); }}
-          style={{
-            width: SIZE, height: SIZE, flexShrink: 0,
-            borderRadius: 10, overflow: 'hidden',
-            cursor: 'pointer', background: 'var(--dl-well)',
-            transition: 'opacity 0.15s',
-          }}
-          onMouseEnter={e => { if (!dragState.current.down) e.currentTarget.style.opacity = '0.88'; }}
-          onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-        >
-          <img src={url} alt="" loading="lazy" draggable="false" style={{
-            width: '100%', height: '100%', objectFit: 'cover', display: 'block',
-          }} />
-        </div>
-      ))}
+      {displayOrder.map((url, i) => {
+        const origIdx = images.indexOf(url);
+        const isDragged = reordering && origIdx === dragIdx;
+        return (
+          <div
+            key={url}
+            onPointerDown={e => handlePointerDown(e, origIdx)}
+            style={{
+              width: SIZE, height: SIZE, flexShrink: 0,
+              borderRadius: 10, overflow: 'hidden',
+              background: 'var(--dl-well)',
+              opacity: isDragged ? 0.6 : 1,
+              transform: isDragged ? 'scale(1.05)' : 'scale(1)',
+              transition: reordering ? 'transform 0.15s, opacity 0.15s' : 'none',
+              zIndex: isDragged ? 10 : 1,
+              cursor: reordering ? 'grabbing' : 'pointer',
+            }}
+          >
+            <img src={url} alt="" loading="lazy" draggable="false" style={{
+              width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+              pointerEvents: 'none',
+            }} />
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -253,6 +315,32 @@ export function JournalEditor({date,userId,token}) {
     return `${months[m - 1]} ${d}`;
   }, [date]);
 
+  // Reorder images in journal content to match new order
+  const reorderImages = useCallback((newOrder) => {
+    setValue(prev => {
+      if (!prev) return prev;
+      let content = prev;
+      // Remove all image references (chips, imageblocks, [img:] tags)
+      content = content.replace(/<span\s+data-image-chip="[^"]*"[^>]*>[^<]*<\/span>\s*/g, '');
+      content = content.replace(/<div\s+data-imageblock="[^"]*"[^>]*>[\s\S]*?<\/div>/g, '');
+      content = content.replace(/\[img:https?:\/\/[^\]]+\]\n?/g, '');
+      // Clean up empty paragraphs left behind
+      content = content.replace(/<p>\s*<\/p>/g, '');
+      // Re-add images in new order as chips
+      const chips = newOrder.map(url =>
+        `<span data-image-chip="${url}" data-chip-label="${chipDate}">\u{1F4F7}</span> `
+      ).join('');
+      if (chips) {
+        if (content.includes('</p>')) {
+          content = content.replace(/<\/p>\s*$/, chips + '</p>');
+        } else {
+          content = (content || '') + `<p>${chips}</p>`;
+        }
+      }
+      return content;
+    }, { undoLabel: 'Reorder photos' });
+  }, [setValue, chipDate]);
+
   // Append image chip to journal content
   const addImage = useCallback((url) => {
     setValue(prev => {
@@ -311,7 +399,7 @@ export function JournalEditor({date,userId,token}) {
       {lightboxIdx != null && images.length > 0 ? (
         <Slideshow images={images} index={lightboxIdx} onClose={() => setLightboxIdx(null)} />
       ) : images.length > 0 ? (
-        <PhotoStrip images={images} onViewImage={i => setLightboxIdx(i)} />
+        <PhotoStrip images={images} onViewImage={i => setLightboxIdx(i)} onReorder={reorderImages} />
       ) : null}
       {(dragging || uploading) ? (
         <DropZone uploading={uploading} />
