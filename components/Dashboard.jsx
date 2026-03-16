@@ -32,7 +32,10 @@ function DashboardInner() {
 
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);
-  const [selected,  setSelected]  = useState(todayKey);
+  const [selected,  setSelected]  = useState(() => {
+    try { const s = localStorage.getItem('daylab:selected'); if (s && /^\d{4}-\d{2}-\d{2}$/.test(s)) return s; } catch {}
+    return todayKey();
+  });
   const [calView,   setCalView]   = useState(() => localStorage.getItem('calView') || 'day');
   const [events,    setEvents]    = useState({});
   const [healthDots,setHealthDots]= useState(()=>{
@@ -44,11 +47,17 @@ function DashboardInner() {
   const [lastSync,  setLastSync]  = useState(null);
   const [googleToken,setGoogleToken] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
-  const [activeProject, setActiveProject] = useState(null); // null = daily view, string = project name
+  const [activeProject, setActiveProject] = useState(() => {
+    try { return localStorage.getItem('daylab:activeProject') || null; } catch { return null; }
+  });
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
 
+
+  // Persist selected date and active project for hard-refresh recovery
+  useEffect(() => { try { localStorage.setItem('daylab:selected', selected); } catch {} }, [selected]);
+  useEffect(() => { try { if (activeProject) localStorage.setItem('daylab:activeProject', activeProject); else localStorage.removeItem('daylab:activeProject'); } catch {} }, [activeProject]);
 
   // Theme is now handled by ThemeContext
 
