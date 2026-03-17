@@ -168,17 +168,32 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return arr?.length ? arr.shift() : null;
   }
 
-  // Separate tasks into own-date vs foreign (due-date) vs recurring (skip entirely)
+  // Separate tasks into own-date vs foreign (due-date) vs recurring (update original)
   const ownRows = [];
   const foreignTasks = [];
+  const recurringUpdates = []; // edits to recurring proxies → update the original row
   for (const t of parsed) {
-    // Recurring tasks from other dates — display only, never save as new rows
-    if (t.recurring) continue;
+    if (t.recurring && t.task_id) {
+      // Recurring proxy was edited — update the original row's text/html
+      recurringUpdates.push(t);
+      continue;
+    }
+    if (t.recurring) continue; // unchanged recurring proxy — skip
     if (t.origin_date && t.origin_date !== date) {
       foreignTasks.push(t);
     } else {
       ownRows.push(t);
     }
+  }
+
+  // Apply edits to recurring originals
+  for (const t of recurringUpdates) {
+    await supabase.from('tasks').update({
+      text: t.text,
+      html: t.html,
+      done: t.done,
+      project_tags: t.project_tags ?? [],
+    }).eq('id', t.task_id).eq('user_id', user.id);
   }
 
   // Full-replace own-date tasks — preserve recurring instances (managed by habits API)
