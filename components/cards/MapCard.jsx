@@ -598,7 +598,7 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
           fontFamily: mono, fontSize: isSelected ? 12 : 11, fontWeight: isSelected ? 600 : 400,
           letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
-          color: isHov ? '#fff' : p.color,
+          color: isHov && isDark ? '#fff' : p.color,
           cursor: 'pointer',
           opacity: dimmed ? 0.45 : 1,
           boxShadow: isSelected ? `0 0 16px ${p.color}55, 0 2px 8px rgba(0,0,0,0.2)`
