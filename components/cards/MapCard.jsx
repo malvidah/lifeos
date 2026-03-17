@@ -95,7 +95,7 @@ function EdgeDetection() {
 }
 
 // ── Layout ───────────────────────────────────────────────────────────────────
-function layoutProjects(tags, connections, recency, entryCounts, completedTasks) {
+function layoutProjects(tags, connections, recency, entryCounts, completedTasks, habits) {
   if (!tags.length) return [];
   const connWeight = {};
   tags.forEach(t => { connWeight[t] = 0; });
@@ -173,6 +173,7 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks)
       isHot: daysSinceActive < 1,     // active today → volcanic
       recencyScore: rScore,
       completedTasks: completedTasks?.[tag] || 0,
+      habits: habits?.[tag] || [], // [{text, flagCount, topScore, streak}]
     };
   });
 }
@@ -337,10 +338,19 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
       }
     }
 
-    // Snow cap: blend to white above threshold
+    // Snow cap: only on tall INACTIVE peaks (not active or hot — those have magma)
     if (h > snowThreshold && maxHeight > 1.2) {
-      const snowBlend = Math.min(1, (h - snowThreshold) / 0.4);
-      return base.map(c => c + (0.92 - c) * snowBlend + noise2D(x * 4, z * 4) * 0.02);
+      // Check if this point is near any active project — skip snow if so
+      let nearActive = false;
+      for (const p of projects) {
+        if (!p.isActive) continue;
+        const dx = x - p.x, dz = z - p.z;
+        if (Math.sqrt(dx * dx + dz * dz) < 1.5) { nearActive = true; break; }
+      }
+      if (!nearActive) {
+        const snowBlend = Math.min(1, (h - snowThreshold) / 0.4);
+        return base.map(c => c + (0.92 - c) * snowBlend + noise2D(x * 4, z * 4) * 0.02);
+      }
     }
 
     // Tropical foliage: lush jungle patches around mountain bases
@@ -622,6 +632,38 @@ function Tree({ position, scale = 1 }) {
   );
 }
 
+// ── Round tree (deciduous) ───────────────────────────────────────────────────
+function RoundTree({ position, scale = 1 }) {
+  return (
+    <group position={position} scale={[scale, scale, scale]}>
+      <mesh position={[0, 0.15, 0]}>
+        <cylinderGeometry args={[0.03, 0.04, 0.3, 5]} />
+        <meshToonMaterial color="#5A3A1A" gradientMap={toonGrad} />
+      </mesh>
+      <mesh position={[0, 0.45, 0]}>
+        <dodecahedronGeometry args={[0.18, 1]} />
+        <meshToonMaterial color="#3A7030" gradientMap={toonGrad} />
+      </mesh>
+    </group>
+  );
+}
+
+// ── Grass tuft ──────────────────────────────────────────────────────────────
+function Grass({ position, scale = 1 }) {
+  return (
+    <group position={position} scale={[scale, scale * 1.2, scale]}>
+      <mesh position={[0, 0.04, 0]}>
+        <coneGeometry args={[0.06, 0.12, 4]} />
+        <meshToonMaterial color="#4A7828" gradientMap={toonGrad} />
+      </mesh>
+      <mesh position={[0.04, 0.03, 0.02]} rotation={[0, 0.8, 0.15]}>
+        <coneGeometry args={[0.04, 0.09, 3]} />
+        <meshToonMaterial color="#3A6820" gradientMap={toonGrad} />
+      </mesh>
+    </group>
+  );
+}
+
 // ── Rock ─────────────────────────────────────────────────────────────────────
 function Rock({ position, scale = 1 }) {
   return (
@@ -636,27 +678,22 @@ function Rock({ position, scale = 1 }) {
 function Foliage({ projects }) {
   const items = useMemo(() => {
     const result = [];
+    const types = ['tree', 'roundTree', 'grass', 'rock'];
     for (const p of projects) {
       if (!p.completedTasks) continue;
-      const count = Math.min(p.completedTasks, 30); // cap at 30 objects
-      const treeCount = Math.floor(count * 0.6);
-      const rockCount = count - treeCount;
-      for (let i = 0; i < treeCount; i++) {
-        const angle = (i / treeCount) * Math.PI * 2 + p.x * 3;
-        const dist = 0.5 + (i % 3) * 0.3 + Math.sin(i * 7) * 0.2;
+      const count = Math.min(p.completedTasks, 40);
+      for (let i = 0; i < count; i++) {
+        // Deterministic pseudo-random from index + project position
+        const seed = Math.sin(i * 127.1 + p.x * 311.7 + p.z * 269.5) * 43758.5453;
+        const rnd = seed - Math.floor(seed); // 0–1
+        const type = types[Math.floor(rnd * types.length)];
+        const angle = (i / count) * Math.PI * 2 + p.x * 3 + rnd * 0.5;
+        const dist = 0.4 + (rnd * 0.6) + (i % 3) * 0.2;
+        const scale = 0.4 + rnd * 0.5;
         result.push({
-          type: 'tree', key: `t-${p.tag}-${i}`,
+          type, key: `fo-${p.tag}-${i}`,
           pos: [p.x + Math.cos(angle) * dist, 0, p.z + Math.sin(angle) * dist],
-          scale: 0.5 + Math.random() * 0.4,
-        });
-      }
-      for (let i = 0; i < rockCount; i++) {
-        const angle = (i / rockCount) * Math.PI * 2 + p.z * 5;
-        const dist = 0.3 + (i % 4) * 0.25;
-        result.push({
-          type: 'rock', key: `r-${p.tag}-${i}`,
-          pos: [p.x + Math.cos(angle) * dist, 0, p.z + Math.sin(angle) * dist],
-          scale: 0.6 + Math.random() * 0.5,
+          scale,
         });
       }
     }
@@ -665,37 +702,42 @@ function Foliage({ projects }) {
 
   return (
     <>
-      {items.map(item => item.type === 'tree'
-        ? <Tree key={item.key} position={item.pos} scale={item.scale} />
-        : <Rock key={item.key} position={item.pos} scale={item.scale} />
-      )}
+      {items.map(item => {
+        const P = { key: item.key, position: item.pos, scale: item.scale };
+        if (item.type === 'tree') return <Tree {...P} />;
+        if (item.type === 'roundTree') return <RoundTree {...P} />;
+        if (item.type === 'grass') return <Grass {...P} />;
+        return <Rock {...P} />;
+      })}
     </>
   );
 }
 
-// ── Achievement flags on mountainside ────────────────────────────────────────
-const FLAG_MILESTONES = [
-  { count: 10, color: '#4A9E6E', height: 0.3 },  // green
-  { count: 30, color: '#6B8EB8', height: 0.6 },  // blue
-  { count: 100, color: '#C17B4A', height: 0.85 }, // gold
-];
+// ── Habit flags on mountainside ───────────────────────────────────────────────
+// Each repeating task with 10+ repeats gets a flag.
+// Flag height = streak / topScore (100% = summit, lower = partway up).
+// Color cycles through a palette per habit.
+const FLAG_COLORS = ['#4A9E6E', '#6B8EB8', '#C17B4A', '#A07AB0', '#B06878'];
 
 function Flags({ projects }) {
   const flags = useMemo(() => {
     const result = [];
     for (const p of projects) {
-      for (const m of FLAG_MILESTONES) {
-        if (p.completedTasks >= m.count) {
-          const angle = m.count * 1.3 + p.x; // deterministic angle per milestone
-          const dist = 0.3;
-          const y = p.height * m.height;
-          result.push({
-            key: `f-${p.tag}-${m.count}`,
-            pos: [p.x + Math.cos(angle) * dist, y, p.z + Math.sin(angle) * dist],
-            color: m.color,
-          });
-        }
-      }
+      if (!p.habits?.length) continue;
+      p.habits.forEach((habit, i) => {
+        // Height: streak as % of topScore (flagCount is the all-time max)
+        const pct = habit.topScore > 0 ? Math.min(1, habit.streak / habit.topScore) : 0;
+        const heightFrac = 0.15 + pct * 0.85; // min 15% up the mountain, 100% = summit
+        const angle = i * 2.4 + p.x * 3; // spread flags around the mountain
+        const dist = 0.25 + (i % 3) * 0.1;
+        const y = p.height * heightFrac;
+        result.push({
+          key: `f-${p.tag}-${i}`,
+          pos: [p.x + Math.cos(angle) * dist, y, p.z + Math.sin(angle) * dist],
+          color: FLAG_COLORS[i % FLAG_COLORS.length],
+          atSummit: pct >= 0.99,
+        });
+      });
     }
     return result;
   }, [projects]);
@@ -931,11 +973,11 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────
-export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, healthDots, onSelectProject }) {
+export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, onSelectProject }) {
   const [hovered, setHovered] = useState(null);
   const projects = useMemo(
-    () => layoutProjects(allTags || [], connections, recency, entryCounts, completedTasks),
-    [allTags, connections, recency, entryCounts, completedTasks]
+    () => layoutProjects(allTags || [], connections, recency, entryCounts, completedTasks, habits),
+    [allTags, connections, recency, entryCounts, completedTasks, habits]
   );
 
   // Vitality: average of all 4 health scores over last 30 days (0-100)

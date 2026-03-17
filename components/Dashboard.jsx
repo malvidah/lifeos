@@ -129,6 +129,7 @@ function DashboardInner() {
         recency: connsRes?.recency || {},
         entryCounts: statsRes?.counts || {},
         completedTasks: statsRes?.completed || {},
+        habits: statsRes?.habits || {},
       });
     }).catch(() => { setGraphData({ allTags: [], connections: [], recency: {}, entryCounts: {}, completedTasks: {} }); });
   }, [activeProject, token]); // eslint-disable-line
@@ -549,6 +550,7 @@ function DashboardInner() {
                             recency={graphData.recency}
                             entryCounts={graphData.entryCounts}
                             completedTasks={graphData.completedTasks}
+                            habits={graphData.habits}
                             healthDots={healthDots}
                             onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                           />
