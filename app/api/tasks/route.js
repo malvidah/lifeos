@@ -145,24 +145,24 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .is('recurrence_parent_id', null);
   if (delErr) throw delErr;
 
-  // Detect recurrence in tasks — either /d text syntax OR data-recurrence chip
+  // Detect recurrence in tasks — either /h text syntax OR data-recurrence chip
   const templatesToCreate = [];
   const filteredOwnRows = [];
   for (const t of ownRows) {
     // Check for recurrence chip in HTML: <span data-recurrence="key" ...>
     const chipMatch = t.html?.match(/data-recurrence="([^"]+)"/);
-    // Check for /d text syntax
+    // Check for /h text syntax
     const { cleanText, recurrence: textRecurrence } = parseRecurrence(t.text, date);
     const recurrence = chipMatch ? keyToRecurrence(chipMatch[1], date) : textRecurrence;
     const taskText = chipMatch
-      ? t.text.replace(/\{d:[^}]*\}/g, '').trim() // strip serialized chip text
+      ? t.text.replace(/\{h:[^}]*\}/g, '').trim() // strip serialized chip text
       : (recurrence ? cleanText : null);
 
     if (recurrence && taskText) {
       // Strip the recurrence chip HTML from the template
       const cleanHtml = t.html
         .replace(/<span[^>]*data-recurrence[^>]*>[\s\S]*?<\/span>/g, '')
-        .replace(/\/d\s+[^<]*/gi, taskText);
+        .replace(/\/h\s+[^<]*/gi, taskText);
       templatesToCreate.push({
         user_id: user.id,
         date,

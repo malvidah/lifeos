@@ -201,7 +201,7 @@ const ImageChip = Node.create({
   },
 });
 
-// RecurrenceTag: stored as {d:key:label}, rendered as green schedule chip.
+// RecurrenceTag: stored as {h:key:label}, rendered as flag + schedule chip (same style as date chip).
 const RecurrenceTagNode = Node.create({
   name: 'recurrenceTag', group: 'inline', inline: true,
   atom: true, selectable: true, draggable: false,
@@ -223,18 +223,10 @@ const RecurrenceTagNode = Node.create({
     return ['span', {
       'data-recurrence': node.attrs.key,
       'data-recurrence-label': label,
-      style: [
-        'display:inline-flex', 'align-items:center', 'gap:3px', 'vertical-align:middle',
-        `color:${col}`, `background:${col}22`, 'border-radius:4px',
-        'padding:1px 7px', `font-family:'SF Mono','Fira Code',ui-monospace,monospace`,
-        'font-size:11px', 'letter-spacing:0.08em', 'line-height:1.65',
-        'text-transform:uppercase', 'white-space:nowrap', 'user-select:none',
-      ].join(';'),
-    },
-      // Flag icon + label
-      ['span', { style: 'pointer-events:none;font-size:10px' }, '\u{1F3F4}'],
-      ['span', { style: 'pointer-events:none' }, ` ${label}`],
-    ];
+      style: Object.entries({ ...CHIP_TOKENS.date(col), userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
+    }, '\u{1F6A9} ' + label];
   },
 });
 
@@ -366,7 +358,7 @@ export function docToText(docJson) {
       if (c.type === 'hardBreak')   return '\n';
       if (c.type === 'projectTag')  return `{${c.attrs?.name ?? ''}}`;
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
-      if (c.type === 'recurrenceTag') return `{d:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
+      if (c.type === 'recurrenceTag') return `{h:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       return '';
     }).join('');
   }
@@ -524,7 +516,7 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9); // __note__: = 9
         const dateStr            = isDate ? item.slice(9, 19) : null;
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date / Habit' : '/m  Media')
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'h' ? '/h  Habit' : '/m  Media')
                                  : isRecurrence ? `🏴 ${rawLabel}`
                                  : isDate ? rawLabel
                                  : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
@@ -777,7 +769,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         findMatch: makeSlashSuggestionMatch(),
         itemsFn: (query) => {
           // Bare / — show command menu
-          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:d', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
+          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:d', '__cmd__:h', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
@@ -823,13 +815,15 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             return matches.length ? matches : ['__create__:' + (qTrim || 'note')];
           }
           if (cmd === '@' || cmd === 'd') {
-            // Check if query looks like a recurrence schedule
-            const recItems = getRecurrenceSuggestions(search);
+            // Date suggestions only
             const dateItems = generateDateSuggestions(search)
               .filter(s => s.date)
               .map(s => `__date__:${s.date}:${s.label}`);
-            // Show recurrence options first, then date options
-            return [...recItems, ...dateItems];
+            return dateItems;
+          }
+          if (cmd === 'h') {
+            // Habit/recurrence suggestions only
+            return getRecurrenceSuggestions(search);
           }
           return [];
         },
