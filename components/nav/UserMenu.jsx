@@ -378,6 +378,47 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
 
           {divider}
 
+          {/* Google Tasks Import */}
+          <div style={row}>
+            <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-highlight)"}}>
+                Google Tasks
+              </span>
+              <button
+                onClick={async () => {
+                  setSyncing('gtasks');
+                  try {
+                    const res = await fetch('/api/google-tasks', { method: 'POST',
+                      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ import: true }) });
+                    const d = await res.json();
+                    if (d.imported != null) {
+                      alert(`Imported ${d.imported} tasks, skipped ${d.skipped} duplicates from ${d.lists} lists.`);
+                      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'] } }));
+                    } else {
+                      alert(d.error || 'Import failed — make sure Google is connected.');
+                    }
+                  } catch (e) { alert('Import failed'); }
+                  setSyncing(null);
+                }}
+                disabled={syncing === 'gtasks'}
+                style={{
+                  fontFamily:mono, fontSize:10, letterSpacing:'0.04em', textTransform:'uppercase',
+                  padding:'4px 10px', borderRadius:4, cursor:'pointer',
+                  border:'1px solid var(--dl-border2)', background:'none', color:'var(--dl-highlight)',
+                  opacity: syncing === 'gtasks' ? 0.5 : 1,
+                }}
+              >
+                {syncing === 'gtasks' ? 'Importing…' : 'Import'}
+              </button>
+            </div>
+            <div style={{fontFamily:mono,fontSize:10,color:"var(--dl-middle)",marginTop:4}}>
+              Imports tasks from all Google Tasks lists as tagged Day Lab tasks.
+            </div>
+          </div>
+
+          {divider}
+
           {/* Theme */}
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:"var(--dl-highlight)"}}>
