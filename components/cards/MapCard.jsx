@@ -249,7 +249,13 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
       const r = 0.6 + p.score * 0.3;
       if (d < r * 2.0) {
         const f = Math.max(0, 1 - d / (r * 2.0));
-        h += p.height * f * f * f;
+        if (p.isHot) {
+          // Volcano shape: flat crater top, steeper sides
+          const volcano = f < 0.7 ? f * f : 0.49 - (f - 0.7) * 0.5;
+          h += p.height * volcano;
+        } else {
+          h += p.height * f * f * f;
+        }
       }
     }
     return h * mask + (1 - mask) * -0.05;
