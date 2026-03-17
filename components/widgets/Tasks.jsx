@@ -229,7 +229,7 @@ export function TaskFilterBtns({ filter, setFilter }) {
     { key: 'all',  label: 'ALL', icon: null },
   ];
   return (
-    <div style={{ display:'flex', gap:2, background:'var(--dl-well)', borderRadius:100, padding:2 }}>
+    <div style={{ display:'flex', gap:2, background:'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius:100, padding:2 }}>
       {btns.map(b => {
         const active = filter === b.key;
         return (

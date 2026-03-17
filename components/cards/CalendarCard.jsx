@@ -644,7 +644,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
 
 
         {/* RIGHT: M/D toggle — hidden when collapsed */}
-        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:2,background:(!collapsed&&onCalViewChange)?'var(--dl-well)':'transparent',borderRadius:100,padding:(!collapsed&&onCalViewChange)?2:0,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
+        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:2,background:(!collapsed&&onCalViewChange)?'var(--dl-border-15, rgba(128,120,100,0.1))':'transparent',borderRadius:100,padding:(!collapsed&&onCalViewChange)?2:0,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
           {!collapsed && onCalViewChange && ['month','day'].map(v => {
             const active = calView === v;
             return (
@@ -1011,7 +1011,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               </div>
             ) : null}
             {/* M/D toggle — right, hidden when collapsed */}
-            <div style={{marginLeft:'auto',display:'flex',gap:2,background:collapsed?'transparent':'var(--dl-well)',borderRadius:100,padding:collapsed?0:2}} onClick={e=>e.stopPropagation()}>
+            <div style={{marginLeft:'auto',display:'flex',gap:2,background:collapsed?'transparent':'var(--dl-border-15, rgba(128,120,100,0.1))',borderRadius:100,padding:collapsed?0:2}} onClick={e=>e.stopPropagation()}>
               {!collapsed && ['month','day'].map(v => {
                 const active = calView === v;
                 return (

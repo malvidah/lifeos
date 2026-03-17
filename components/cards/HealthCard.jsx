@@ -587,7 +587,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                   {avgVal != null && (
                     <span style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-middle)"}}>avg {avgVal}</span>
                   )}
-                  <div style={{display:'flex',gap:2,background:'var(--dl-well)',borderRadius:100,padding:2}}>
+                  <div style={{display:'flex',gap:2,background:'var(--dl-border-15, rgba(128,120,100,0.1))',borderRadius:100,padding:2}}>
                   {["12m","30d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
                       style={{fontFamily:mono,fontSize:"10px",letterSpacing:"0.05em",
