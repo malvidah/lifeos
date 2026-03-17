@@ -166,14 +166,8 @@ export default function Tasks({date, token, userId, taskFilter="all", project}) 
   const htmlValue = useMemo(() => migrateTasksToHtml(value) || '', [value]);
   const isEmpty = useMemo(() => clientParseTasks(htmlValue).length === 0, [htmlValue]);
 
-  if (!loaded) return (
-    <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}>
-      <Shimmer width="75%" height={13}/><Shimmer width="55%" height={13}/><Shimmer width="65%" height={13}/>
-    </div>
-  );
-
   // When filtering by project, inject CSS to hide non-matching tasks.
-  // Each task <li> contains <span data-project-tag="name"> if tagged.
+  // All hooks must be called before any early return.
   const filterId = useRef(`tasks-${Math.random().toString(36).slice(2,8)}`).current;
   useEffect(() => {
     if (!project || project === '__everything__') return;
@@ -184,6 +178,12 @@ export default function Tasks({date, token, userId, taskFilter="all", project}) 
     document.head.appendChild(style);
     return () => style.remove();
   }, [project, filterId]);
+
+  if (!loaded) return (
+    <div style={{display:'flex',flexDirection:'column',gap:8,padding:'4px 0'}}>
+      <Shimmer width="75%" height={13}/><Shimmer width="55%" height={13}/><Shimmer width="65%" height={13}/>
+    </div>
+  );
 
   return (
     <div data-filter={taskFilter} data-tasks-id={filterId} style={{
