@@ -591,7 +591,7 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: isSelected ? (isDark ? '#1a1816' : '#fff') : isHov ? p.color : isDark ? '#1a1816' : '#E8E0CC',
+          background: isSelected ? (isDark ? '#1a1816' : '#F0E8D8') : isHov ? p.color : isDark ? '#1a1816' : '#E8E0CC',
           border: `${isSelected ? '2px' : '1px'} solid ${isSelected || isHov ? p.color : isDark ? '#2a2720' : '#C8C0A8'}`,
           borderRadius: 999, padding: isSelected ? '4px 14px' : '3px 12px',
           fontFamily: mono, fontSize: isSelected ? 12 : 11, fontWeight: isSelected ? 600 : 400,
@@ -602,7 +602,7 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
           opacity: dimmed ? 0.45 : 1,
           boxShadow: isSelected ? `0 0 16px ${p.color}55, 0 2px 8px rgba(0,0,0,0.2)`
                    : isDark ? '0 2px 6px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.08)',
-          transition: 'all 0.3s',
+          transition: 'all 0.1s ease-out',
           userSelect: 'none',
         }}>
         {p.label.toUpperCase()}
