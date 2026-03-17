@@ -963,7 +963,7 @@ function SelectionBeacon({ projects, selectedProject }) {
   );
 }
 
-function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, selectedProject, hour }) {
+function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, selectedProject, hour, isDark }) {
   const peakY = projects.length
     ? projects.reduce((max, p) => Math.max(max, p.height), 0) * 0.85 : 0.5;
   return (
@@ -976,7 +976,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, sele
       <VolcanicGlow projects={projects} />
       <Birds projects={projects} />
       <SelectionBeacon projects={projects} selectedProject={selectedProject} />
-      <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} isDark={appDark || skyColors(hour).isNight || skyColors(hour).isDusk} />
+      <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} isDark={isDark} />
       <OrbitControls
         enablePan enableZoom enableRotate
         minDistance={6} maxDistance={30}
@@ -1062,7 +1062,8 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
       >
         <Suspense fallback={null}>
           <Scene projects={projects} radius={radius} vitality={vitality} onSelect={onSelectProject}
-            hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} hour={hour} />
+            hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} hour={hour}
+            isDark={appDark || skyColors(hour).isNight || skyColors(hour).isDusk} />
         </Suspense>
         <fog attach="fog" args={[sky.fog, sky.fogNear, sky.fogFar]} />
       </Canvas>
