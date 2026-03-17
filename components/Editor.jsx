@@ -226,7 +226,7 @@ const RecurrenceTagNode = Node.create({
       style: Object.entries({ ...CHIP_TOKENS.date(col), userSelect: 'none' })
         .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
         .join(';'),
-    }, label];
+    }, '\u21BB ' + label];
   },
 });
 
