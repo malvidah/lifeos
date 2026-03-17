@@ -859,24 +859,24 @@ function CelMoon({ position, visible }) {
   if (!visible) return null;
   return (
     <group position={position}>
-      {/* Subtle glow */}
+      {/* Soft 3D glow sphere — cool, dim */}
       <mesh>
-        <ringGeometry args={[0.4, 0.55, 32]} />
-        <meshBasicMaterial color="#B0C0E0" transparent opacity={0.15} side={THREE.DoubleSide} />
+        <sphereGeometry args={[0.8, 16, 12]} />
+        <meshBasicMaterial color="#A0B0D0" transparent opacity={0.08} depthWrite={false} />
       </mesh>
       {/* Moon body */}
       <mesh>
-        <sphereGeometry args={[0.35, 8, 6]} />
-        <meshToonMaterial color="#C8D0E0" gradientMap={toonGrad} emissive="#8090B0" emissiveIntensity={0.2} />
+        <sphereGeometry args={[0.35, 16, 12]} />
+        <meshBasicMaterial color="#D0D8E8" />
       </mesh>
       {/* Dark crater spots */}
       <mesh position={[0.08, 0.1, 0.3]}>
-        <sphereGeometry args={[0.08, 6, 4]} />
-        <meshToonMaterial color="#9098B0" gradientMap={toonGrad} />
+        <sphereGeometry args={[0.07, 6, 4]} />
+        <meshBasicMaterial color="#A0A8C0" />
       </mesh>
-      <mesh position={[-0.12, -0.05, 0.28]}>
-        <sphereGeometry args={[0.06, 6, 4]} />
-        <meshToonMaterial color="#8890A8" gradientMap={toonGrad} />
+      <mesh position={[-0.1, -0.05, 0.28]}>
+        <sphereGeometry args={[0.05, 6, 4]} />
+        <meshBasicMaterial color="#9098B0" />
       </mesh>
     </group>
   );
