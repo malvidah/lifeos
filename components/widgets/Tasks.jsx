@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useContext, useMemo } from "react";
+import { useEffect, useContext, useMemo, useRef } from "react";
 import { useTheme } from "@/lib/theme";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
@@ -153,7 +153,7 @@ export function injectTaskListStyles(accentHex, date) {
   `;
 }
 
-export default function Tasks({date, token, userId, taskFilter="all"}) {
+export default function Tasks({date, token, userId, taskFilter="all", project}) {
   const { theme } = useTheme();
   const {value, setValue, loaded} = useDbSave(date, 'tasks', '', token, userId);
   const taskProjectNames = useContext(ProjectNamesContext);
@@ -172,8 +172,21 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
     </div>
   );
 
+  // When filtering by project, inject CSS to hide non-matching tasks.
+  // Each task <li> contains <span data-project-tag="name"> if tagged.
+  const filterId = useRef(`tasks-${Math.random().toString(36).slice(2,8)}`).current;
+  useEffect(() => {
+    if (!project || project === '__everything__') return;
+    const style = document.createElement('style');
+    style.textContent = `
+      [data-tasks-id="${filterId}"] .dl-editor ul[data-type="taskList"] > li:not(:has(span[data-project-tag="${CSS.escape(project)}"])) { display: none; }
+    `;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, [project, filterId]);
+
   return (
-    <div data-filter={taskFilter} style={{
+    <div data-filter={taskFilter} data-tasks-id={filterId} style={{
       '--task-border': "var(--dl-border2)",
       '--task-color':  "var(--dl-accent)",
       '--task-fill':   theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
@@ -194,7 +207,7 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
           onNoteClick={name => navigateToNote(name)}
           style={{padding:0}}
         />
-        {isEmpty && (
+        {isEmpty && !project && (
           <div style={{
             position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
             display: 'flex', alignItems: 'flex-start',

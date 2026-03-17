@@ -12,7 +12,7 @@ import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, Navig
 import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
 import { useTheme } from "@/lib/theme";
-import { TaskFilterBtns, clientParseTasks, tasksToHtml, injectTaskListStyles } from "../widgets/Tasks.jsx";
+import Tasks, { TaskFilterBtns, clientParseTasks, tasksToHtml, injectTaskListStyles } from "../widgets/Tasks.jsx";
 import { AddJournalLine, extractImages, stripImageChips, PhotoStrip, Slideshow, DropZone } from "../widgets/JournalEditor.jsx";
 import { uploadImageFile, deleteImageFile } from "@/lib/images";
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";
@@ -58,130 +58,9 @@ function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
   );
 }
 
-// ─── ProjectDateTaskEditor ────────────────────────────────────────────────────
-// Per-date TipTap task list editor for the project view. Works like the daily
-// view editor but only shows tasks tagged to this project, merging changes back
-// into the full day's task list on save.
-function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksChanged, taskFilter, pvSource }) {
-  const { theme } = useTheme();
-  const ctxProjects = useContext(ProjectNamesContext);
-  const ctxNotes    = useContext(NoteContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
-  const saveTimer = useRef(null);
-  const savingRef = useRef(false);
-  const latestHtml = useRef(null);
-  const chip = `{${project}}`;
-
-  // Build initial HTML from the project's tasks for this date
-  const initialHtml = useMemo(() => {
-    if (!tasks || tasks.length === 0) return '';
-    return tasksToHtml(tasks.map(t => ({ id: t.id, text: t.text, done: !!t.done })));
-  }, []); // eslint-disable-line
-
-  const [isEmpty, setIsEmpty] = useState(() => clientParseTasks(initialHtml).length === 0);
-
-  // Inject task list styles (same as daily view)
-  const accentHex = theme === 'light' ? '#B87018' : '#D08828';
-  useEffect(() => injectTaskListStyles(accentHex), [accentHex]);
-
-  useEffect(() => () => clearTimeout(saveTimer.current), []);
-
-  async function mergeAndSave(newHtml) {
-    if (savingRef.current) return; // prevent overlapping saves
-    savingRef.current = true;
-    try {
-      let editorTasks = clientParseTasks(newHtml);
-      // Auto-tag NEW tasks (no project tags at all) with this project.
-      // Skip tasks that already have any project tag — they belong to their own project.
-      // Skip for __everything__ view.
-      if (project !== '__everything__') {
-        editorTasks = editorTasks.map(t => {
-          const tags = t.project_tags || [];
-          // Only auto-tag if the task has NO project tags at all (newly typed)
-          if (tags.length === 0 && !t.text.toLowerCase().includes(chip)) {
-            return { ...t, text: `${t.text} ${chip}` };
-          }
-          return t;
-        });
-      }
-      // Load full day's tasks and replace the project-tagged ones
-      const raw = await dbLoad(date, 'tasks', token);
-      const allTasks = clientParseTasks(raw);
-      let merged;
-      if (project === '__everything__') {
-        merged = editorTasks;
-      } else {
-        // Build merged list: keep non-project tasks in place, swap project tasks
-        merged = [];
-        let projectTasksInserted = false;
-        for (const t of allTasks) {
-          if (t.text.toLowerCase().includes(chip)) {
-            if (!projectTasksInserted) {
-              merged.push(...editorTasks);
-              projectTasksInserted = true;
-            }
-            // Skip original project task (replaced by editorTasks)
-          } else {
-            merged.push(t);
-          }
-        }
-        if (!projectTasksInserted) merged.push(...editorTasks);
-      }
-      const mergedHtml = tasksToHtml(merged);
-      await dbSave(date, 'tasks', mergedHtml, token);
-      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['tasks'], date, _pvSource: pvSource } }));
-      if (onTasksChanged) onTasksChanged(date, editorTasks);
-    } finally {
-      savingRef.current = false;
-    }
-  }
-
-  function handleUpdate(newHtml) {
-    latestHtml.current = newHtml;
-    setIsEmpty(clientParseTasks(newHtml).length === 0);
-    // Skip auto-save in __everything__ view — edits there caused duplication
-    // because each date's editor merges ALL tasks, not just one project's.
-    if (project === '__everything__') return;
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => mergeAndSave(newHtml), 800);
-  }
-
-  return (
-    <div data-filter={taskFilter} style={{
-      '--task-border': "var(--dl-border2)",
-      '--task-color':  "var(--dl-accent)",
-      '--task-fill':   theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
-    }}>
-      <div style={{ position: 'relative' }}>
-        <DayLabEditor
-          taskList
-          value={initialHtml}
-          onUpdate={handleUpdate}
-          placeholder=""
-          projectNames={ctxProjects}
-          noteNames={ctxNotes.notes}
-          textColor={"var(--dl-strong)"}
-          mutedColor={"var(--dl-middle)"}
-          color={"var(--dl-accent)"}
-          onProjectClick={name => navigateToProject(name)}
-          onNoteClick={name => navigateToNote(name)}
-          style={{ padding: 0 }}
-        />
-        {isEmpty && (
-          <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-            display: 'flex', alignItems: 'flex-start',
-            paddingTop: 3, paddingLeft: 25,
-            color: 'var(--dl-middle)', pointerEvents: 'none',
-            fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
-          }}>
-            Add a task. Use / for commands.
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+// ProjectDateTaskEditor removed — project view now reuses the day-view Tasks
+// component with CSS-based project filtering. This eliminates the merge logic
+// that was the source of task duplication and cross-project tag pollution.
 
 // ─── ProjectView ──────────────────────────────────────────────────────────────
 export default function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter, settingsOpen, onCloseSettings, onRenamed }) {
@@ -588,17 +467,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     } : prev);
   }
 
-  // Called by ProjectDateTaskEditor when tasks are saved for a date
-  function handleTasksChanged(date, updatedTasks) {
-    registerNewTags(updatedTasks.map(t => t.text).join(' '));
-    setEntries(prev => prev ? {
-      ...prev,
-      taskEntries: [
-        ...prev.taskEntries.filter(t => t.date !== date),
-        ...updatedTasks.map(t => ({ date, id: t.id, text: t.text, done: !!t.done })),
-      ],
-    } : prev);
-  }
 
   async function addNewJournal(text) {
     if (!text.trim()) return;
@@ -820,16 +688,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                         onMouseLeave={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = isToday ? "var(--dl-accent)" : "var(--dl-highlight)"; }}
                       >{isToday ? 'Today' : fmtDate(date)}</div>
                     </div>
-                    <ProjectDateTaskEditor
+                    <Tasks
                       key={`${project}-${date}`}
                       date={date}
-                      project={project}
-                      tasks={all}
                       token={token}
                       userId={userId}
-                      onTasksChanged={handleTasksChanged}
                       taskFilter={pvTaskFilter}
-                      pvSource={pvId.current}
+                      project={project === '__everything__' ? undefined : project}
                     />
                     <div style={{ borderTop:"1px solid var(--dl-border)", marginTop:12, marginBottom:4 }}/>
                   </div>
