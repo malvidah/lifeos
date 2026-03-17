@@ -44,46 +44,32 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   // ── Day view ──────────────────────────────────────────────────────────────
   if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) or project required' }, { status: 400 });
 
-  // 1. Tasks written on this date (exclude templates — they're managed by /api/habits)
+  // ── Clean task loading with no overlapping queries ───────────────────────
+  // 1. OWN tasks: written on this date (any status — shown as-is)
   const { data: ownTasks, error: e1 } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
     .eq('date', date)
-
     .order('position', { ascending: true });
   if (e1) throw e1;
 
-  // 2. Open tasks with a due date, created on or before today (show every day until done)
-  const { data: dueTasks, error: e2 } = await supabase
+  // 2. PERSISTENT tasks: from other dates, have a due_date, not done, not recurring
+  //    These carry forward until completed.
+  const { data: persistentTasks, error: e2 } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
-
     .not('due_date', 'is', null)
-    .lte('date', date)
+    .lte('due_date', date)
     .eq('done', false)
-    .neq('date', date)
-    .order('date', { ascending: true })
-    .order('position', { ascending: true });
-  if (e2) throw e2;
-
-  // 3. Tasks completed on this date (from other dates) — for "done" filter.
-  //    Exclude recurring tasks — they have their own display logic.
-  const { data: completedTasks, error: e3 } = await supabase
-    .from('tasks')
-    .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
-    .eq('user_id', user.id)
-    .eq('completed_at', date)
-    .eq('done', true)
     .neq('date', date)
     .not('html', 'ilike', '%data-recurrence=%')
     .order('date', { ascending: true })
     .order('position', { ascending: true });
-  if (e3) throw e3;
+  if (e2) throw e2;
 
-  // 4. Recurring tasks — tasks with /r chips that match this day of week.
-  //    Returned separately (not in editor HTML) to prevent duplication on save.
+  // 3. RECURRING tasks: from other dates, schedule matches this day, shown as unchecked
   const { data: recurringCandidates } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
@@ -98,30 +84,37 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     return recurrence && matchesSchedule(date, recurrence);
   }).map(t => ({
     ...t,
+    // Always unchecked on non-origin dates
     done: false,
     completed_at: null,
     html: t.html?.replace(/data-checked="true"/, 'data-checked="false"') ?? t.html,
   }));
 
-  // Inject data attributes into each task's <li> for client-side tracking
-  const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? [])];
-  for (const t of allTasks) {
+  // Dedup: collect IDs from ownTasks to prevent recurring tasks from appearing twice
+  // (e.g., if a MWF task was created on this date, it already appears in ownTasks)
+  const ownIds = new Set((ownTasks ?? []).map(t => t.id));
+  const dedupedRecurring = recurringTasks.filter(t => !ownIds.has(t.id));
+  const dedupedPersistent = (persistentTasks ?? []).filter(t => !ownIds.has(t.id));
+
+  // Inject data attributes for client-side tracking
+  const regularTasks = [...(ownTasks ?? []), ...dedupedPersistent];
+  for (const t of regularTasks) {
     if (t.html) {
       let attrs = ` data-task-id="${t.id}" data-origin-date="${t.date}"`;
       if (t.completed_at) attrs += ` data-completed-date="${t.completed_at}"`;
       t.html = t.html.replace(/^<li\b/, `<li${attrs}`);
     }
   }
-  // Recurring tasks from other dates: included in editor for display,
-  // but marked with data-recurring so POST knows to skip them on save.
-  for (const t of recurringTasks) {
+  for (const t of dedupedRecurring) {
     if (t.html) {
       t.html = t.html.replace(/^<li\b/, `<li data-task-id="${t.id}" data-origin-date="${t.date}" data-recurring="true"`);
     }
   }
-  const allWithRecurring = [...allTasks, ...recurringTasks];
 
-  return Response.json({ data: tasksToHtml(allWithRecurring), dueTasks: dueTasks ?? [] });
+  return Response.json({
+    data: tasksToHtml([...regularTasks, ...dedupedRecurring]),
+    dueTasks: dedupedPersistent,
+  });
 });
 
 export const POST = withAuth(async (req, { supabase, user }) => {
