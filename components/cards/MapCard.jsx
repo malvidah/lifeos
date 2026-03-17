@@ -9,7 +9,7 @@ import * as THREE from "three";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
 import { useTheme } from "@/lib/theme";
-import { fetchWeather, getCachedLocation, DEFAULT_LOCATION } from "@/lib/weather";
+import { fetchWeather, getCachedLocation, DEFAULT_LOCATION, getDayPhase, getWeatherGradient, weatherCodeToCondition } from "@/lib/weather";
 
 // 3-step toon gradient (hard shadow/mid/lit bands for cel-shaded look)
 function makeToonGradient() {
@@ -184,35 +184,21 @@ function islandRadius(projectCount) {
 }
 
 // Shared sky/fog colors based on time of day + weather condition
-function skyColors(hour, weather = 'clear') {
-  const isNight = hour < 6 || hour > 20;
-  const isDusk = (hour >= 18.5 && hour <= 20.5) || (hour >= 5 && hour < 6.5);
-
-  // Base colors by time of day
-  let skyTop = isNight ? '#0A0A1A' : isDusk ? '#2A1520' : '#8AAAC8';
-  let skyBot = isNight ? '#1A1A30' : isDusk ? '#C07040' : '#C4B8A4';
-  let fog    = isNight ? '#0A0A1A' : isDusk ? '#C07040' : '#C4B8A4';
+// Uses the same weather/solar system as the daily view WeatherBackground
+function skyColors(weather = 'clear') {
+  const loc = getCachedLocation() || DEFAULT_LOCATION;
+  const phase = getDayPhase(new Date(), loc.lat, loc.lng);
+  const [top, bot] = getWeatherGradient(weather, phase);
+  const isNight = phase.light < 0.1;
+  const isDusk = phase.light >= 0.1 && phase.light < 0.35;
+  // Fog density from weather condition
   let fogNear = 18, fogFar = 40;
-
-  // Weather modifiers — shift colors and fog density
-  if (weather === 'overcast' || weather === 'cloudy') {
-    if (!isNight) { skyTop = '#6A7888'; skyBot = '#9A9490'; fog = '#9A9490'; }
-    fogNear = 14; fogFar = 32;
-  } else if (weather === 'rain' || weather === 'drizzle') {
-    if (!isNight) { skyTop = '#506068'; skyBot = '#808888'; fog = '#707878'; }
-    fogNear = 10; fogFar = 25;
-  } else if (weather === 'snow') {
-    if (!isNight) { skyTop = '#8898A8'; skyBot = '#B0B8C0'; fog = '#A8B0B8'; }
-    fogNear = 8; fogFar = 22;
-  } else if (weather === 'fog') {
-    if (!isNight) { skyTop = '#888888'; skyBot = '#A0A098'; fog = '#A0A098'; }
-    fogNear = 5; fogFar = 18;
-  } else if (weather === 'thunderstorm') {
-    if (!isNight) { skyTop = '#3A4050'; skyBot = '#585860'; fog = '#505058'; }
-    fogNear = 10; fogFar = 24;
-  }
-
-  return { isNight, isDusk, skyTop, skyBot, fog, fogNear, fogFar };
+  if (weather === 'rain' || weather === 'drizzle') { fogNear = 10; fogFar = 25; }
+  else if (weather === 'snow') { fogNear = 8; fogFar = 22; }
+  else if (weather === 'fog') { fogNear = 5; fogFar = 18; }
+  else if (weather === 'overcast' || weather === 'cloudy') { fogNear = 14; fogFar = 32; }
+  else if (weather === 'thunderstorm') { fogNear = 10; fogFar = 24; }
+  return { isNight, isDusk, skyTop: top, skyBot: bot, fog: bot, fogNear, fogFar, light: phase.light };
 }
 
 // ── Unified island mesh — single polar-grid geometry, no seams ───────────────
@@ -910,7 +896,7 @@ function Stars({ visible }) {
 // ── Environment ──────────────────────────────────────────────────────────────
 function Environment({ hour }) {
   const h = hour ?? 14;
-  const { isNight, isDusk } = skyColors(h);
+  const { isNight, isDusk } = skyColors();
   const sunAngle = ((h - 6) / 12) * Math.PI;
   const sunX = Math.cos(sunAngle) * 12;
   const sunY = Math.max(2, Math.sin(sunAngle) * 8);
@@ -1047,7 +1033,7 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
     );
   }
 
-  const sky = skyColors(hour, weather);
+  const sky = skyColors(weather);
 
   return (
     <div style={{
@@ -1063,7 +1049,7 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
         <Suspense fallback={null}>
           <Scene projects={projects} radius={radius} vitality={vitality} onSelect={onSelectProject}
             hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} hour={hour}
-            isDark={appDark || skyColors(hour).isNight || skyColors(hour).isDusk} />
+            isDark={appDark || sky.isNight || sky.isDusk} />
         </Suspense>
         <fog attach="fog" args={[sky.fog, sky.fogNear, sky.fogFar]} />
       </Canvas>
