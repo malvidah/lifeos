@@ -1,7 +1,7 @@
 import { withAuth } from '../_lib/auth.js';
 import { parseTaskBlocks, tasksToHtml } from '@/lib/parseBlocks.js';
 import { isValidDate } from '@/lib/validate.js';
-import { parseRecurrence, keyToRecurrence } from '@/lib/recurrence.js';
+// Recurrence chips (/d mwf) are stored inline as HTML — no server-side parsing needed.
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -33,7 +33,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       .from('tasks')
       .select('id, date, due_date, text, html, done, completed_at, project_tags, position')
       .eq('user_id', user.id)
-      .is('is_template', false)
+  
       .contains('project_tags', [project.toLowerCase()])
       .order('date', { ascending: false })
       .order('position', { ascending: true });
@@ -50,7 +50,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
     .eq('date', date)
-    .is('is_template', false)
+
     .order('position', { ascending: true });
   if (e1) throw e1;
 
@@ -59,8 +59,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
-    .is('is_template', false)
-    .is('recurrence_parent_id', null)
+
     .not('due_date', 'is', null)
     .lte('date', date)
     .eq('done', false)
@@ -74,7 +73,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
-    .is('is_template', false)
+
     .eq('completed_at', date)
     .eq('done', true)
     .neq('date', date)
@@ -137,65 +136,16 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  // Full-replace own-date tasks (skip templates and recurring instances)
+  // Full-replace own-date tasks
   const { error: delErr } = await supabase
     .from('tasks').delete()
-    .eq('user_id', user.id).eq('date', date)
-    .is('is_template', false)
-    .is('recurrence_parent_id', null);
+    .eq('user_id', user.id).eq('date', date);
   if (delErr) throw delErr;
 
-  // Detect recurrence in tasks — either /h text syntax OR data-recurrence chip
-  const templatesToCreate = [];
-  const filteredOwnRows = [];
-  for (const t of ownRows) {
-    // Check for recurrence chip in HTML: <span data-recurrence="key" ...>
-    const chipMatch = t.html?.match(/data-recurrence="([^"]+)"/);
-    // Check for /h text syntax
-    const { cleanText, recurrence: textRecurrence } = parseRecurrence(t.text, date);
-    const recurrence = chipMatch ? keyToRecurrence(chipMatch[1], date) : textRecurrence;
-    const taskText = chipMatch
-      ? t.text.replace(/\{h:[^}]*\}/g, '').trim() // strip serialized chip text
-      : (recurrence ? cleanText : null);
-
-    if (recurrence && taskText) {
-      // Strip the recurrence chip HTML from the template
-      const cleanHtml = t.html
-        .replace(/<span[^>]*data-recurrence[^>]*>[\s\S]*?<\/span>/g, '')
-        .replace(/\/h\s+[^<]*/gi, taskText);
-      templatesToCreate.push({
-        user_id: user.id,
-        date,
-        text: taskText,
-        html: cleanHtml,
-        done: false,
-        is_template: true,
-        recurrence,
-        project_tags: t.project_tags ?? [],
-        note_tags: t.note_tags ?? [],
-        position: 0,
-      });
-    } else {
-      filteredOwnRows.push(t);
-    }
-  }
-
-  // Create any habit templates (dedup: skip if template with same text already exists)
-  if (templatesToCreate.length > 0) {
-    const { data: existingTemplates } = await supabase
-      .from('tasks')
-      .select('text')
-      .eq('user_id', user.id)
-      .eq('is_template', true);
-    const existingTexts = new Set((existingTemplates ?? []).map(t => t.text?.trim().toLowerCase()));
-    const newTemplates = templatesToCreate.filter(t => !existingTexts.has(t.text?.trim().toLowerCase()));
-    if (newTemplates.length > 0) {
-      await supabase.from('tasks').insert(newTemplates);
-    }
-  }
-
-  if (filteredOwnRows.length > 0) {
-    const rows = filteredOwnRows.map(t => {
+  // Tasks with /d recurrence chips stay as regular tasks — the chip is just
+  // inline metadata like project tags and due dates. No template extraction.
+  if (ownRows.length > 0) {
+    const rows = ownRows.map(t => {
       const prev = matchExisting(t.text);
       return {
         user_id:      user.id,

@@ -1,7 +1,5 @@
 "use client";
-import { useState, useEffect, useContext, useMemo } from "react";
-import { api } from "@/lib/api";
-import { recurrenceLabel } from "@/lib/recurrence";
+import { useEffect, useContext, useMemo } from "react";
 import { useTheme } from "@/lib/theme";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
@@ -208,81 +206,10 @@ export default function Tasks({date, token, userId, taskFilter="all"}) {
           </div>
         )}
       </div>
-      {/* Recurring task instances (habits) for this date */}
-      <HabitInstances date={date} token={token} />
     </div>
   );
 }
 
-// ── Habit Instances — recurring tasks with flag chip ──────────────────────────
-function HabitInstances({ date, token }) {
-  const [instances, setInstances] = useState([]);
-
-  useEffect(() => {
-    if (!date || !token) return;
-    api.get(`/api/habits?date=${date}`, token).then(d => {
-      if (d?.instances) setInstances(d.instances);
-    });
-  }, [date, token]);
-
-  if (!instances.length) return null;
-
-  const toggleFlag = async (id, currentDone) => {
-    setInstances(prev => prev.map(i => i.id === id ? { ...i, done: !currentDone } : i));
-    await api.patch('/api/habits', { id, done: !currentDone }, token);
-  };
-
-  const flagColor = 'var(--dl-green)';
-
-  return (
-    <div style={{ borderTop: '1px solid var(--dl-border)', marginTop: 6, paddingTop: 6 }}>
-      {instances.map(inst => (
-        <div key={inst.id} style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0',
-        }}>
-          {/* Flag button */}
-          <button onClick={() => toggleFlag(inst.id, inst.done)} style={{
-            width: 16, height: 16, flexShrink: 0, borderRadius: 4, padding: 0,
-            cursor: 'pointer', border: `1.5px solid ${inst.done ? flagColor : 'var(--dl-border2)'}`,
-            background: inst.done ? flagColor : 'transparent',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            transition: 'all 0.15s',
-          }}>
-            {inst.done && (
-              <svg width="9" height="9" viewBox="0 0 16 16" fill="var(--dl-bg)" stroke="none">
-                <path d="M3 2v12M3 2h8l-2 3 2 3H3"/>
-              </svg>
-            )}
-          </button>
-          {/* Task text */}
-          <span style={{
-            fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
-            color: 'var(--dl-strong)',
-            opacity: inst.done ? 0.5 : 1,
-            textDecoration: inst.done ? 'line-through' : 'none',
-          }}>
-            {inst.text}
-          </span>
-          {/* Schedule chip */}
-          {inst.recurrence && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              fontFamily: mono, fontSize: 11, letterSpacing: '0.06em',
-              color: flagColor, background: flagColor + '18',
-              borderRadius: 4, padding: '1px 7px', lineHeight: '1.65',
-              textTransform: 'uppercase', whiteSpace: 'nowrap', flexShrink: 0,
-            }}>
-              <svg width="8" height="8" viewBox="0 0 16 16" fill={flagColor} stroke="none" style={{flexShrink:0}}>
-                <path d="M3 1v14M3 1h9l-2.5 3.5L12 8H3"/>
-              </svg>
-              {recurrenceLabel(inst.recurrence)}
-            </span>
-          )}
-        </div>
-      ))}
-    </div>
-  );
-}
 
 export function TaskFilterBtns({ filter, setFilter }) {
   const OpenIcon = () => (
