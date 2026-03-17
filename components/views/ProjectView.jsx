@@ -140,7 +140,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     return c.split('\n')[0].trim() || 'Untitled';
   };
 
-  // Sorted by most recent first for the left panel
+  // Notes sort mode — must be declared before sortedNotes which depends on it
+  const [notesSortRecent, toggleNotesSort] = useCollapse(`pv:${project}:notes-sort`, false);
+
   // Sort notes: manual order (persisted) or most recent (updated_at desc)
   const sortedNotes = useMemo(() => {
     if (notesSortRecent) {
@@ -167,8 +169,20 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   }, [project, projectsMeta, setProjectsMeta]);
 
   // Drag-to-reorder state
-  const dragNoteId = useRef(null);
-  const dragOverId = useRef(null);
+  const [dragNoteId, setDragNoteId] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+
+  // Compute visual tab order during drag
+  const displayNotes = useMemo(() => {
+    if (dragNoteId == null || dragOverIdx == null) return sortedNotes;
+    const ids = sortedNotes.map(n => n.id);
+    const fromIdx = ids.indexOf(dragNoteId);
+    if (fromIdx < 0 || fromIdx === dragOverIdx) return sortedNotes;
+    const reordered = [...sortedNotes];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(dragOverIdx, 0, moved);
+    return reordered;
+  }, [sortedNotes, dragNoteId, dragOverIdx]);
 
   const addNote = async (initialName = '', { silent = false, initialContent } = {}) => {
     const content = initialContent || initialName || '';
@@ -364,7 +378,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
 
   // Per-project collapse state (persisted)
   const [notesCollapsed,      toggleNotes]      = useCollapse(`pv:${project}:journal`,    false);
-  const [notesSortRecent,     toggleNotesSort]  = useCollapse(`pv:${project}:notes-sort`, false);
   const [tasksCollapsed,      toggleTasks]      = useCollapse(`pv:${project}:tasks`,      false);
   const [entriesCollapsed,    toggleEntries]    = useCollapse(`pv:${project}:entries`,    false);
   const [workoutsCollapsed,   toggleWorkouts]   = useCollapse(`pv:${project}:workouts`,   false);
@@ -581,29 +594,30 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                     whiteSpace: 'nowrap', flexShrink: 0,
                   }}>Untitled</button>
               )}
-              {sortedNotes.map(note => {
+              {displayNotes.map((note, idx) => {
                 const active = note.id === activeNoteId;
+                const isDragging = note.id === dragNoteId;
                 return (
                   <button
                     key={note.id}
                     draggable={!notesSortRecent}
                     onClick={() => selectNote(note.id)}
-                    onDragStart={e => { dragNoteId.current = note.id; e.dataTransfer.effectAllowed = 'move'; e.currentTarget.style.opacity = '0.4'; }}
-                    onDragEnd={e => { e.currentTarget.style.opacity = '1'; dragNoteId.current = null; dragOverId.current = null; }}
-                    onDragOver={e => { e.preventDefault(); dragOverId.current = note.id; }}
-                    onDrop={e => {
-                      e.preventDefault();
-                      const fromId = dragNoteId.current;
-                      const toId = note.id;
-                      if (!fromId || fromId === toId) return;
-                      const ids = sortedNotes.map(n => n.id);
-                      const fromIdx = ids.indexOf(fromId);
-                      const toIdx = ids.indexOf(toId);
-                      if (fromIdx < 0 || toIdx < 0) return;
-                      ids.splice(fromIdx, 1);
-                      ids.splice(toIdx, 0, fromId);
-                      saveNoteOrder(ids);
+                    onDragStart={e => { setDragNoteId(note.id); e.dataTransfer.effectAllowed = 'move'; }}
+                    onDragEnd={() => {
+                      // Commit the reorder on drop
+                      if (dragNoteId != null && dragOverIdx != null) {
+                        const ids = sortedNotes.map(n => n.id);
+                        const fromIdx = ids.indexOf(dragNoteId);
+                        if (fromIdx >= 0 && fromIdx !== dragOverIdx) {
+                          ids.splice(fromIdx, 1);
+                          ids.splice(dragOverIdx, 0, dragNoteId);
+                          saveNoteOrder(ids);
+                        }
+                      }
+                      setDragNoteId(null);
+                      setDragOverIdx(null);
                     }}
+                    onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
                     style={{
                       background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
                       border: 'none', borderRadius: 100,
@@ -611,8 +625,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                       fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
                       textTransform: 'uppercase', whiteSpace: 'nowrap',
                       color: active ? "var(--dl-strong)" : "var(--dl-middle)",
-                      transition: 'color 0.15s', maxWidth: 160,
-                      overflow: 'hidden', textOverflow: 'ellipsis',
+                      opacity: isDragging ? 0.4 : 1,
+                      transition: 'color 0.15s, transform 0.15s, opacity 0.15s',
+                      maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
                     }}
                     onMouseEnter={e => { if (!active) e.currentTarget.style.color = "var(--dl-strong)"; }}
                     onMouseLeave={e => { if (!active) e.currentTarget.style.color = "var(--dl-middle)"; }}
