@@ -104,8 +104,6 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   }));
 
   // Inject data attributes into each task's <li> for client-side tracking
-  // NOTE: recurring tasks are NOT included in allTasks/editor HTML — they're
-  // returned separately to prevent round-trip duplication on save.
   const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? [])];
   for (const t of allTasks) {
     if (t.html) {
@@ -114,8 +112,16 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       t.html = t.html.replace(/^<li\b/, `<li${attrs}`);
     }
   }
+  // Recurring tasks from other dates: included in editor for display,
+  // but marked with data-recurring so POST knows to skip them on save.
+  for (const t of recurringTasks) {
+    if (t.html) {
+      t.html = t.html.replace(/^<li\b/, `<li data-task-id="${t.id}" data-origin-date="${t.date}" data-recurring="true"`);
+    }
+  }
+  const allWithRecurring = [...allTasks, ...recurringTasks];
 
-  return Response.json({ data: tasksToHtml(allTasks), dueTasks: dueTasks ?? [], recurringTasks: recurringTasks ?? [] });
+  return Response.json({ data: tasksToHtml(allWithRecurring), dueTasks: dueTasks ?? [] });
 });
 
 export const POST = withAuth(async (req, { supabase, user }) => {
@@ -149,10 +155,12 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return arr?.length ? arr.shift() : null;
   }
 
-  // Separate tasks into own-date tasks vs due-date tasks from other dates
+  // Separate tasks into own-date vs foreign (due-date) vs recurring (skip entirely)
   const ownRows = [];
-  const foreignTasks = []; // tasks with origin_date !== date (due-date tasks from other days)
+  const foreignTasks = [];
   for (const t of parsed) {
+    // Recurring tasks from other dates — display only, never save as new rows
+    if (t.recurring) continue;
     if (t.origin_date && t.origin_date !== date) {
       foreignTasks.push(t);
     } else {
