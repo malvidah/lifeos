@@ -722,7 +722,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                 <div style={{textAlign:"center", marginBottom:6, paddingTop:2, flexShrink:0}}>
                   <div style={{
                     fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em",
-                    fontWeight: (isCtr && isTdy) ? "700" : "normal",
+                    fontWeight: "normal",
                     color: (isCtr && isTdy) ? "var(--dl-strong)"
                          : isTdy           ? "var(--dl-orange)"
                          : isCtr           ? "var(--dl-strong)"
