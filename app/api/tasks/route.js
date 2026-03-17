@@ -68,27 +68,27 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .order('position', { ascending: true });
   if (e2) throw e2;
 
-  // 3. Tasks completed on this date (from other dates) — for "done" filter
+  // 3. Tasks completed on this date (from other dates) — for "done" filter.
+  //    Exclude recurring tasks — they have their own display logic.
   const { data: completedTasks, error: e3 } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
-
     .eq('completed_at', date)
     .eq('done', true)
     .neq('date', date)
+    .not('html', 'ilike', '%data-recurrence=%')
     .order('date', { ascending: true })
     .order('position', { ascending: true });
   if (e3) throw e3;
 
   // 4. Recurring tasks — tasks with /r chips that match this day of week.
-  //    These are regular tasks (not templates) whose HTML contains data-recurrence.
-  //    They show on every matching day, not just their creation date.
+  //    Show as unchecked on non-origin dates (each day is independent).
   const { data: recurringCandidates } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
     .eq('user_id', user.id)
-    .neq('date', date) // exclude tasks already in ownTasks
+    .neq('date', date)
     .ilike('html', '%data-recurrence=%');
 
   const recurringTasks = (recurringCandidates ?? []).filter(t => {
@@ -96,7 +96,14 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     if (!match) return false;
     const recurrence = keyToRecurrence(match[1], t.date);
     return recurrence && matchesSchedule(date, recurrence);
-  });
+  }).map(t => ({
+    ...t,
+    // Override: show as unchecked on non-origin dates — checking off
+    // only applies to the day the task was created on.
+    done: false,
+    completed_at: null,
+    html: t.html?.replace(/data-checked="true"/, 'data-checked="false"') ?? t.html,
+  }));
 
   // Inject data attributes into each task's <li> for client-side tracking
   const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? []), ...(recurringTasks ?? [])];
