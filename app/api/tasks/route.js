@@ -83,7 +83,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (e3) throw e3;
 
   // 4. Recurring tasks — tasks with /r chips that match this day of week.
-  //    Show as unchecked on non-origin dates (each day is independent).
+  //    Returned separately (not in editor HTML) to prevent duplication on save.
   const { data: recurringCandidates } = await supabase
     .from('tasks')
     .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
@@ -98,15 +98,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     return recurrence && matchesSchedule(date, recurrence);
   }).map(t => ({
     ...t,
-    // Override: show as unchecked on non-origin dates — checking off
-    // only applies to the day the task was created on.
     done: false,
     completed_at: null,
     html: t.html?.replace(/data-checked="true"/, 'data-checked="false"') ?? t.html,
   }));
 
   // Inject data attributes into each task's <li> for client-side tracking
-  const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? []), ...(recurringTasks ?? [])];
+  // NOTE: recurring tasks are NOT included in allTasks/editor HTML — they're
+  // returned separately to prevent round-trip duplication on save.
+  const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? [])];
   for (const t of allTasks) {
     if (t.html) {
       let attrs = ` data-task-id="${t.id}" data-origin-date="${t.date}"`;
@@ -115,7 +115,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  return Response.json({ data: tasksToHtml(allTasks), dueTasks: dueTasks ?? [] });
+  return Response.json({ data: tasksToHtml(allTasks), dueTasks: dueTasks ?? [], recurringTasks: recurringTasks ?? [] });
 });
 
 export const POST = withAuth(async (req, { supabase, user }) => {
