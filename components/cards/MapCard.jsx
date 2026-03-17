@@ -184,7 +184,7 @@ function islandRadius(projectCount) {
 // Shared sky/fog colors based on time of day + weather condition
 function skyColors(hour, weather = 'clear') {
   const isNight = hour < 6 || hour > 20;
-  const isDusk = (hour >= 17 && hour <= 20) || (hour >= 5 && hour < 7);
+  const isDusk = (hour >= 18.5 && hour <= 20.5) || (hour >= 5 && hour < 6.5);
 
   // Base colors by time of day
   let skyTop = isNight ? '#0A0A1A' : isDusk ? '#2A1520' : '#8AAAC8';
@@ -533,7 +533,7 @@ function Water({ radius, vitality = 50 }) {
 }
 
 // ── Labels ───────────────────────────────────────────────────────────────────
-function DepthLabel({ p, onSelect, isHov, setHovered }) {
+function DepthLabel({ p, onSelect, isHov, setHovered, isDark }) {
   const labelY = p.height + 0.35;
 
   return (
@@ -544,10 +544,10 @@ function DepthLabel({ p, onSelect, isHov, setHovered }) {
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: isHov ? p.color + 'CC' : `rgba(255,255,255,0.45)`,
+          background: isHov ? p.color + 'CC' : isDark ? 'rgba(20,20,30,0.55)' : 'rgba(255,255,255,0.45)',
           backdropFilter: 'blur(14px)',
           WebkitBackdropFilter: 'blur(14px)',
-          border: `1px solid ${isHov ? p.color + '88' : 'rgba(255,255,255,0.5)'}`,
+          border: `1px solid ${isHov ? p.color + '88' : isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.5)'}`,
           borderRadius: 999, padding: '3px 12px',
           fontFamily: mono, fontSize: 11, letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
@@ -746,10 +746,10 @@ function Bird({ center, radius, speed, offset }) {
   );
 }
 
-function Labels({ projects, onSelect, hovered, setHovered }) {
+function Labels({ projects, onSelect, hovered, setHovered, isDark }) {
   return projects.map(p => (
     <DepthLabel key={p.tag} p={p} onSelect={onSelect}
-      isHov={hovered === p.tag} setHovered={setHovered} />
+      isHov={hovered === p.tag} setHovered={setHovered} isDark={isDark} />
   ));
 }
 
@@ -877,7 +877,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour
       <Flags projects={projects} />
       <VolcanicGlow projects={projects} />
       <Birds projects={projects} />
-      <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} />
+      <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} isDark={skyColors(hour).isNight || skyColors(hour).isDusk} />
       <OrbitControls
         enablePan enableZoom enableRotate
         minDistance={6} maxDistance={30}
