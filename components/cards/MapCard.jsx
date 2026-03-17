@@ -697,9 +697,18 @@ function VolcanicGlow({ projects }) {
   return (
     <>
       {projects.filter(p => p.isHot).map(p => (
-        <group key={`v-${p.tag}`} position={[p.x, p.height * 0.85, p.z]}>
-          {/* Subtle glow — just a point light, no visible sphere */}
-          <pointLight color="#FF6622" intensity={2} distance={2.5} decay={2} />
+        <group key={`v-${p.tag}`} position={[p.x, p.height * 0.78, p.z]}>
+          {/* Magma glow inside the crater */}
+          <mesh>
+            <sphereGeometry args={[0.15, 8, 6]} />
+            <meshBasicMaterial color="#FF4400" transparent opacity={0.9} depthWrite={false} />
+          </mesh>
+          {/* Outer lava glow */}
+          <mesh>
+            <sphereGeometry args={[0.3, 8, 6]} />
+            <meshBasicMaterial color="#FF6600" transparent opacity={0.35} depthWrite={false} />
+          </mesh>
+          <pointLight color="#FF4400" intensity={3} distance={2} decay={2} />
         </group>
       ))}
     </>
