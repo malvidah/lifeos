@@ -168,11 +168,29 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  // Full-replace own-date tasks
+  // Full-replace own-date tasks — preserve recurring instances (managed by habits API)
   const { error: delErr } = await supabase
     .from('tasks').delete()
-    .eq('user_id', user.id).eq('date', date);
+    .eq('user_id', user.id).eq('date', date)
+    .is('recurrence_parent_id', null);
   if (delErr) throw delErr;
+
+  // Recurring instances removed from the editor: mark done so habits API
+  // won't recreate them (it skips dates that already have an instance).
+  const { data: recurringInstances } = await supabase
+    .from('tasks')
+    .select('id, text, recurrence_parent_id, done')
+    .eq('user_id', user.id).eq('date', date)
+    .not('recurrence_parent_id', 'is', null);
+
+  if (recurringInstances?.length) {
+    const savedTexts = new Set(ownRows.map(r => r.text?.trim()));
+    const removed = recurringInstances.filter(ri => !ri.done && !savedTexts.has(ri.text?.trim()));
+    if (removed.length) {
+      await supabase.from('tasks').update({ done: true, completed_at: today })
+        .in('id', removed.map(r => r.id));
+    }
+  }
 
   // Tasks with /d recurrence chips stay as regular tasks — the chip is just
   // inline metadata like project tags and due dates. No template extraction.
