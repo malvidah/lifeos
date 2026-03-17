@@ -540,46 +540,34 @@ function DashboardInner() {
                       onBack={() => setActiveProject('__graph__')}
                       onOpenSettings={() => setSettingsOpen(true)}
                     />
-                    {isGraph ? (
-                      <div style={{display:'flex',flexDirection:'column',gap:10}}>
-                        {/* MapCard renders as fixed full-viewport background */}
-                        {graphData && (
-                          <MapCard
-                            allTags={graphData.allTags}
-                            connections={graphData.connections}
-                            recency={graphData.recency}
-                            entryCounts={graphData.entryCounts}
-                            completedTasks={graphData.completedTasks}
-                            habits={graphData.habits}
-                            healthDots={healthDots}
-                            onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
-                          />
-                        )}
-                        <ErrorBoundary label="Project">
-                        <ProjectView
-                          project="__everything__"
-                          token={token} userId={userId}
-                          onBack={() => {}}
-                          onSelectDate={d => { setActiveProject(null); setSelected(d); }}
-                          taskFilter={taskFilter} setTaskFilter={setTaskFilter}
-                        />
-                        </ErrorBoundary>
-                      </div>
-                    ) : (
-                      <ErrorBoundary label="Project">
-                      <ProjectView
-                        project={activeProject}
-                        token={token}
-                        userId={userId}
-                        onBack={() => setActiveProject(null)}
-                        onSelectDate={d => { setActiveProject(null); setSelected(d); }}
-                        taskFilter={taskFilter} setTaskFilter={setTaskFilter}
-                        settingsOpen={settingsOpen}
-                        onCloseSettings={() => setSettingsOpen(false)}
-                        onRenamed={slug => { setActiveProject(slug); setSettingsOpen(false); }}
+                    {/* MapCard as background for all project views */}
+                    {graphData && (
+                      <MapCard
+                        allTags={graphData.allTags}
+                        connections={graphData.connections}
+                        recency={graphData.recency}
+                        entryCounts={graphData.entryCounts}
+                        completedTasks={graphData.completedTasks}
+                        habits={graphData.habits}
+                        healthDots={healthDots}
+                        onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                       />
-                      </ErrorBoundary>
                     )}
+                    <ErrorBoundary label="Project">
+                    <ProjectView
+                      project={isGraph ? '__everything__' : activeProject}
+                      token={token}
+                      userId={userId}
+                      onBack={isGraph ? () => {} : () => setActiveProject('__graph__')}
+                      onSelectDate={d => { setActiveProject(null); setSelected(d); }}
+                      taskFilter={taskFilter} setTaskFilter={setTaskFilter}
+                      {...(!isGraph && {
+                        settingsOpen,
+                        onCloseSettings: () => setSettingsOpen(false),
+                        onRenamed: slug => { setActiveProject(slug); setSettingsOpen(false); },
+                      })}
+                    />
+                    </ErrorBoundary>
                   </div>{/* close max-width inner */}
                   </div>{/* close scroll outer */}
                 </>
