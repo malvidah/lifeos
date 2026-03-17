@@ -44,56 +44,75 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   // ── Day view ──────────────────────────────────────────────────────────────
   if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) or project required' }, { status: 400 });
 
-  // ── Clean task loading with no overlapping queries ───────────────────────
-  // 1. OWN tasks: written on this date (any status — shown as-is)
+  // ── Task loading rules ──────────────────────────────────────────────────
+  //
+  // For date D, a task appears if ANY of these are true:
+  //   A) It was created on D (ownTasks)
+  //   B) It has a due_date, is not done, and due_date >= D and date <= D
+  //      (persistent — shows every day from creation until due date or completion)
+  //   C) It has a /r recurrence chip, the schedule matches D,
+  //      and (no due_date OR due_date >= D)
+  //      (recurring — virtual appearance, always unchecked on non-origin dates)
+  //
+  // A task NEVER appears if:
+  //   - It's done AND it wasn't created on D (completed tasks only show on their own date)
+  //   - It's a virtual recurring appearance and the task is already in ownTasks
+  //
+  // Virtual recurring appearances: the DB row is the ORIGINAL (created once).
+  // The GET endpoint includes it in the response for matching dates. No copies,
+  // no proxy rows — so no infinite copy loop. The data-recurring="true" attribute
+  // tells POST to skip it when saving (it's display-only on non-origin dates).
+
+  const cols = 'id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date';
+
+  // A) OWN tasks: written on this date (any status)
   const { data: ownTasks, error: e1 } = await supabase
-    .from('tasks')
-    .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
-    .eq('user_id', user.id)
-    .eq('date', date)
+    .from('tasks').select(cols)
+    .eq('user_id', user.id).eq('date', date)
     .order('position', { ascending: true });
   if (e1) throw e1;
+  const ownIds = new Set((ownTasks ?? []).map(t => t.id));
 
-  // 2. PERSISTENT tasks: from other dates, have a due_date, not done, not recurring
-  //    These carry forward until completed.
+  // B) PERSISTENT tasks: have due_date, not done, created before today, not recurring
+  //    Show from creation date through due_date (or indefinitely if no due_date? No —
+  //    tasks with NO due_date and NO recurrence only show on their creation date).
   const { data: persistentTasks, error: e2 } = await supabase
-    .from('tasks')
-    .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
+    .from('tasks').select(cols)
     .eq('user_id', user.id)
     .not('due_date', 'is', null)
-    .lte('due_date', date)
+    .lte('date', date)       // created on or before this date
+    .gte('due_date', date)   // due date is today or in the future
     .eq('done', false)
-    .neq('date', date)
+    .neq('date', date)       // not already in ownTasks
     .not('html', 'ilike', '%data-recurrence=%')
-    .order('date', { ascending: true })
-    .order('position', { ascending: true });
+    .order('date', { ascending: true });
   if (e2) throw e2;
 
-  // 3. RECURRING tasks: from other dates, schedule matches this day, shown as unchecked
+  // C) RECURRING tasks: have /r chip, schedule matches this day
   const { data: recurringCandidates } = await supabase
-    .from('tasks')
-    .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
+    .from('tasks').select(cols)
     .eq('user_id', user.id)
     .neq('date', date)
     .ilike('html', '%data-recurrence=%');
 
   const recurringTasks = (recurringCandidates ?? []).filter(t => {
+    if (ownIds.has(t.id)) return false; // already in ownTasks
     const match = t.html?.match(/data-recurrence="([^"]+)"/);
     if (!match) return false;
     const recurrence = keyToRecurrence(match[1], t.date);
-    return recurrence && matchesSchedule(date, recurrence);
+    if (!recurrence || !matchesSchedule(date, recurrence)) return false;
+    // If task has a due_date, only show up to the due_date
+    if (t.due_date && t.due_date < date) return false;
+    return true;
   }).map(t => ({
     ...t,
-    // Always unchecked on non-origin dates
+    // Virtual appearance: always unchecked (each day is independent)
     done: false,
     completed_at: null,
     html: t.html?.replace(/data-checked="true"/, 'data-checked="false"') ?? t.html,
   }));
 
-  // Dedup: collect IDs from ownTasks to prevent recurring tasks from appearing twice
-  // (e.g., if a MWF task was created on this date, it already appears in ownTasks)
-  const ownIds = new Set((ownTasks ?? []).map(t => t.id));
-  const dedupedRecurring = recurringTasks.filter(t => !ownIds.has(t.id));
+  // Dedup persistent against ownTasks
   const dedupedPersistent = (persistentTasks ?? []).filter(t => !ownIds.has(t.id));
 
   // Inject data attributes for client-side tracking
@@ -105,14 +124,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       t.html = t.html.replace(/^<li\b/, `<li${attrs}`);
     }
   }
-  for (const t of dedupedRecurring) {
+  // Mark recurring as display-only so POST skips them
+  for (const t of recurringTasks) {
     if (t.html) {
       t.html = t.html.replace(/^<li\b/, `<li data-task-id="${t.id}" data-origin-date="${t.date}" data-recurring="true"`);
     }
   }
 
   return Response.json({
-    data: tasksToHtml([...regularTasks, ...dedupedRecurring]),
+    data: tasksToHtml([...regularTasks, ...recurringTasks]),
     dueTasks: dedupedPersistent,
   });
 });
