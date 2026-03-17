@@ -550,6 +550,7 @@ function DashboardInner() {
                         completedTasks={graphData.completedTasks}
                         habits={graphData.habits}
                         healthDots={healthDots}
+                        selectedProject={isGraph ? null : activeProject}
                         onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
                       />
                     )}

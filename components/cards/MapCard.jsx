@@ -578,26 +578,30 @@ function Water({ radius, vitality = 50 }) {
 }
 
 // ── Labels ───────────────────────────────────────────────────────────────────
-function DepthLabel({ p, onSelect, isHov, setHovered, isDark }) {
+function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSelection }) {
   const labelY = p.height + 0.35;
+  // When a project is selected: selected label is bright, others fade
+  const dimmed = hasSelection && !isSelected && !isHov;
 
   return (
     <Html position={[p.x, labelY, p.z]} center
-      zIndexRange={isHov ? [9999, 9999] : [16, 0]}
+      zIndexRange={isSelected ? [9998, 9998] : isHov ? [9999, 9999] : [16, 0]}
       style={{ pointerEvents: 'auto' }}>
       <div onClick={() => onSelect(p.tag)}
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: isHov ? p.color : isDark ? '#1a1816' : '#E8E0CC',
-          border: `1px solid ${isHov ? p.color : isDark ? '#2a2720' : '#C8C0A8'}`,
+          background: isSelected ? p.color + '22' : isHov ? p.color : isDark ? '#1a1816' : '#E8E0CC',
+          border: `1.5px solid ${isSelected ? p.color : isHov ? p.color : isDark ? '#2a2720' : '#C8C0A8'}`,
           borderRadius: 999, padding: '3px 12px',
-          fontFamily: mono, fontSize: 11, letterSpacing: '0.08em',
+          fontFamily: mono, fontSize: isSelected ? 12 : 11, letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
-          color: isHov ? '#fff' : p.color,
+          color: isSelected ? p.color : isHov ? '#fff' : p.color,
           cursor: 'pointer',
-          boxShadow: isDark ? '0 2px 6px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.08)',
-          transition: 'all 0.15s',
+          opacity: dimmed ? 0.4 : 1,
+          boxShadow: isSelected ? `0 0 12px ${p.color}44, 0 2px 8px rgba(0,0,0,0.15)`
+                   : isDark ? '0 2px 6px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.08)',
+          transition: 'all 0.3s',
           userSelect: 'none',
         }}>
         {p.label.toUpperCase()}
@@ -819,10 +823,12 @@ function Bird({ center, radius, speed, offset }) {
   );
 }
 
-function Labels({ projects, onSelect, hovered, setHovered, isDark }) {
+function Labels({ projects, onSelect, hovered, setHovered, selectedProject, isDark }) {
   return projects.map(p => (
     <DepthLabel key={p.tag} p={p} onSelect={onSelect}
-      isHov={hovered === p.tag} setHovered={setHovered} isDark={isDark} />
+      isHov={hovered === p.tag} setHovered={setHovered} isDark={isDark}
+      isSelected={selectedProject === p.tag}
+      hasSelection={!!selectedProject} />
   ));
 }
 
@@ -938,7 +944,27 @@ function Environment({ hour }) {
 }
 
 // ── Scene ────────────────────────────────────────────────────────────────────
-function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour }) {
+// ── Selection beacon — soft light pillar from selected mountain ───────────────
+function SelectionBeacon({ projects, selectedProject }) {
+  const selected = selectedProject ? projects.find(p => p.tag === selectedProject) : null;
+  if (!selected) return null;
+  return (
+    <group position={[selected.x, selected.height * 0.5, selected.z]}>
+      {/* Vertical light pillar */}
+      <mesh position={[0, selected.height * 0.5 + 1.5, 0]}>
+        <cylinderGeometry args={[0.02, 0.08, 3, 8]} />
+        <meshBasicMaterial color={selected.color} transparent opacity={0.3} depthWrite={false} />
+      </mesh>
+      {/* Base glow ring */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
+        <ringGeometry args={[0.3, 0.5, 24]} />
+        <meshBasicMaterial color={selected.color} transparent opacity={0.25} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, selectedProject, hour }) {
   const peakY = projects.length
     ? projects.reduce((max, p) => Math.max(max, p.height), 0) * 0.85 : 0.5;
   return (
@@ -950,7 +976,8 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour
       <Flags projects={projects} />
       <VolcanicGlow projects={projects} />
       <Birds projects={projects} />
-      <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} isDark={skyColors(hour).isNight || skyColors(hour).isDusk} />
+      <SelectionBeacon projects={projects} selectedProject={selectedProject} />
+      <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} isDark={skyColors(hour).isNight || skyColors(hour).isDusk} />
       <OrbitControls
         enablePan enableZoom enableRotate
         minDistance={6} maxDistance={30}
@@ -969,7 +996,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, hour
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────
-export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, onSelectProject }) {
+export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, selectedProject, onSelectProject }) {
   const [hovered, setHovered] = useState(null);
   const projects = useMemo(
     () => layoutProjects(allTags || [], connections, recency, entryCounts, completedTasks, habits),
@@ -1034,7 +1061,7 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
       >
         <Suspense fallback={null}>
           <Scene projects={projects} radius={radius} vitality={vitality} onSelect={onSelectProject}
-            hovered={hovered} setHovered={setHovered} hour={hour} />
+            hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} hour={hour} />
         </Suspense>
         <fog attach="fog" args={[sky.fog, sky.fogNear, sky.fogFar]} />
       </Canvas>
