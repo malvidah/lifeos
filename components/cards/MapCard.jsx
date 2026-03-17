@@ -296,15 +296,44 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
     const band = ht < 0.1 ? 0 : ht < 0.25 ? 1 : ht < 0.4 ? 2 : ht < 0.6 ? 3 : ht < 0.8 ? 4 : 5;
     const base = lush[band].map((l, i) => (l * v + drought[band][i] * (1 - v) + n) * aoFactor);
 
-    // Active volcano glow: recent projects get warm ember tint at peaks
+    // Volcanic magma: hot projects get bright lava at crater + flow streaks down sides
     for (const p of projects) {
-      if (!p.isActive) continue;
+      if (!p.isHot) continue;
+      const dx = x - p.x, dz = z - p.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const peakR = (0.6 + p.score * 0.3) * 1.5; // match volcano radius
+
+      // Crater glow — bright orange-red inside the caldera
+      if (dist < peakR * 0.4 && h > p.height * 0.5) {
+        const glow = (1 - dist / (peakR * 0.4)) * Math.min(1, (h - p.height * 0.5) / (p.height * 0.3));
+        const magma = [0.95, 0.25, 0.05];
+        return base.map((c, i) => c + (magma[i] - c) * glow * 0.85);
+      }
+
+      // Lava flow streaks down the sides — noise-driven channels
+      if (dist < peakR * 1.5 && h > p.height * 0.15) {
+        const angle = Math.atan2(dz, dx);
+        // Create 3-4 lava channels using noise
+        const channel = noise2D(Math.cos(angle) * 3 + p.x * 5, Math.sin(angle) * 3 + p.z * 5);
+        if (channel > 0.3) {
+          const heightFade = Math.min(1, (h - p.height * 0.15) / (p.height * 0.5));
+          const distFade = 1 - dist / (peakR * 1.5);
+          const intensity = (channel - 0.3) / 0.7 * heightFade * distFade;
+          const lava = [0.9, 0.2 + intensity * 0.2, 0.02];
+          return base.map((c, i) => c + (lava[i] - c) * intensity * 0.7);
+        }
+      }
+    }
+
+    // Warm ember tint for active (but not hot) projects near peaks
+    for (const p of projects) {
+      if (!p.isActive || p.isHot) continue;
       const dx = x - p.x, dz = z - p.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
       if (dist < 0.5 && h > p.height * 0.6) {
         const glow = (1 - dist / 0.5) * Math.min(1, (h - p.height * 0.6) / (p.height * 0.4));
-        const ember = [0.85, 0.35, 0.08]; // warm orange-red
-        return base.map((c, i) => c + (ember[i] - c) * glow * 0.6);
+        const ember = [0.85, 0.35, 0.08];
+        return base.map((c, i) => c + (ember[i] - c) * glow * 0.4);
       }
     }
 
@@ -696,18 +725,9 @@ function VolcanicGlow({ projects }) {
   return (
     <>
       {projects.filter(p => p.isHot).map(p => (
-        <group key={`v-${p.tag}`} position={[p.x, p.height * 0.78, p.z]}>
-          {/* Magma glow inside the crater */}
-          <mesh>
-            <sphereGeometry args={[0.15, 8, 6]} />
-            <meshBasicMaterial color="#FF4400" transparent opacity={0.9} depthWrite={false} />
-          </mesh>
-          {/* Outer lava glow */}
-          <mesh>
-            <sphereGeometry args={[0.3, 8, 6]} />
-            <meshBasicMaterial color="#FF6600" transparent opacity={0.35} depthWrite={false} />
-          </mesh>
-          <pointLight color="#FF4400" intensity={3} distance={2} decay={2} />
+        <group key={`v-${p.tag}`} position={[p.x, p.height * 0.75, p.z]}>
+          {/* Diffuse lava light from inside crater — no visible mesh */}
+          <pointLight color="#FF4400" intensity={4} distance={3} decay={2} />
         </group>
       ))}
     </>
