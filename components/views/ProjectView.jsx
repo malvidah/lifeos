@@ -644,65 +644,20 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
         </div>
       </Card>
 
-      {/* Tasks — all projects and specific projects */}
+      {/* Tasks — same as day view, filtered by project */}
       <Card
-        label={taskEntries.length ? `Tasks · ${openTasks.length} open` : 'Tasks'}
+        label="Tasks"
         color={"var(--dl-blue)"} autoHeight
         collapsed={tasksCollapsed} onToggle={toggleTasks}
         headerRight={<TaskFilterBtns filter={pvTaskFilter} setFilter={setPvTaskFilter}/>}
       >
-        {entries === null ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Shimmer width="70%" height={13}/><Shimmer width="55%" height={13}/>
-          </div>
-        ) : (() => {
-          const todayStr = todayKey();
-          const otherDates = tasksByDate.filter(([d]) => d !== todayStr).sort(([a],[b]) => b.localeCompare(a));
-          const todayEntry = tasksByDate.find(([d]) => d === todayStr);
-          // Always include Today section with editor (even when empty)
-          const allDates = todayEntry
-            ? [[todayStr, todayEntry[1]], ...otherDates]
-            : [[todayStr, { all:[], open:[], done:[] }], ...otherDates];
-
-          return (
-            <div>
-              {allDates.filter(([date, { open, done }]) =>
-                pvTaskFilter === 'open' ? (open.length > 0 || date === todayStr) :
-                pvTaskFilter === 'done' ? (done.length > 0 || date === todayStr) : true
-              ).map(([date, { all }], dateIdx) => {
-                const isToday = date === todayStr;
-                return (
-                  <div key={date}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8,
-                      marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 6 }}>
-                      <div
-                        onClick={() => !isToday && onSelectDate && (onBack(), onSelectDate(date))}
-                        style={{
-                          fontFamily: mono, fontSize: 10,
-                          color: isToday ? "var(--dl-accent)" : "var(--dl-highlight)",
-                          letterSpacing: '0.06em', textTransform: 'uppercase',
-                          cursor: (!isToday && onSelectDate) ? 'pointer' : 'default',
-                          display: 'inline-block', transition: 'color 0.15s',
-                        }}
-                        onMouseEnter={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = "var(--dl-strong)"; }}
-                        onMouseLeave={e => { if (!isToday && onSelectDate) e.currentTarget.style.color = isToday ? "var(--dl-accent)" : "var(--dl-highlight)"; }}
-                      >{isToday ? 'Today' : fmtDate(date)}</div>
-                    </div>
-                    <Tasks
-                      key={`${project}-${date}`}
-                      date={date}
-                      token={token}
-                      userId={userId}
-                      taskFilter={pvTaskFilter}
-                      project={project === '__everything__' ? undefined : project}
-                    />
-                    <div style={{ borderTop:"1px solid var(--dl-border)", marginTop:12, marginBottom:4 }}/>
-                  </div>
-                );
-              })}
-            </div>
-          );
-        })()}
+        <Tasks
+          date={todayKey()}
+          token={token}
+          userId={userId}
+          taskFilter={pvTaskFilter}
+          project={project === '__everything__' ? undefined : project}
+        />
       </Card>
 
       {/* Journal Entries */}
