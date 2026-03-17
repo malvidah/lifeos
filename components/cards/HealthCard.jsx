@@ -587,17 +587,20 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
                   {avgVal != null && (
                     <span style={{fontFamily:mono,fontSize:"10px",color:"var(--dl-middle)"}}>avg {avgVal}</span>
                   )}
+                  <div style={{display:'flex',gap:2,background:'var(--dl-well)',borderRadius:100,padding:2}}>
                   {["12m","30d"].map(r => (
                     <button key={r} onClick={e=>{e.stopPropagation();setTrendRange(r);}}
                       style={{fontFamily:mono,fontSize:"10px",letterSpacing:"0.05em",
-                        padding:"6px 10px",borderRadius:6,cursor:"pointer",border:"none",
-                        minHeight:32,
-                        background: trendRange===r ? m.color+"33" : "transparent",
+                        padding:"4px 10px",borderRadius:100,cursor:"pointer",border:"none",
+                        background: trendRange===r ? (m.color+"33") : "transparent",
                         color: trendRange===r ? m.color : "var(--dl-middle)",
-                        transition:"background 0.15s,color 0.15s"}}>
+                        transition:"all 0.15s"}}
+                      onMouseEnter={e=>{if(trendRange!==r){e.currentTarget.style.color=m.color;e.currentTarget.style.background=m.color+"1A";}}}
+                      onMouseLeave={e=>{if(trendRange!==r){e.currentTarget.style.color="var(--dl-middle)";e.currentTarget.style.background="transparent";}}}>
                       {r.toUpperCase()}
                     </button>
                   ))}
+                  </div>
                 </div>
               </div>
               <TrendLine metricKey={m.key} color={m.color}/>

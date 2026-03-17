@@ -229,24 +229,22 @@ export function TaskFilterBtns({ filter, setFilter }) {
     { key: 'all',  label: 'ALL', icon: null },
   ];
   return (
-    <div style={{ display:'flex', gap:4 }}>
+    <div style={{ display:'flex', gap:2, background:'var(--dl-well)', borderRadius:100, padding:2 }}>
       {btns.map(b => {
         const active = filter === b.key;
         return (
           <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }}
             style={{
               fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em',
-              padding: b.label ? '3px 8px' : '3px 6px',
-              borderRadius: 4, cursor: 'pointer',
-              minHeight: 22,
-              background: active ? "var(--dl-accent-13)" : 'none',
-              border: `1px solid ${active ? "var(--dl-accent)" : "var(--dl-border2)"}`,
-              color: active ? "var(--dl-accent)" : "var(--dl-highlight)",
+              padding: b.label ? '4px 10px' : '4px 7px',
+              borderRadius: 100, cursor: 'pointer', border: 'none',
+              background: active ? "var(--dl-glass-active, var(--dl-accent-13))" : 'transparent',
+              color: active ? "var(--dl-strong)" : "var(--dl-middle)",
               display: 'flex', alignItems: 'center', gap: 3,
               transition: 'all 0.15s',
             }}
-            onMouseEnter={e => { if (!active) { e.currentTarget.style.borderColor="var(--dl-accent-40)"; e.currentTarget.style.color="var(--dl-strong)"; }}}
-            onMouseLeave={e => { if (!active) { e.currentTarget.style.borderColor="var(--dl-border2)"; e.currentTarget.style.color="var(--dl-highlight)"; }}}
+            onMouseEnter={e => { if (!active) { e.currentTarget.style.color="var(--dl-strong)"; e.currentTarget.style.background="var(--dl-glass-active, var(--dl-accent-13))"; }}}
+            onMouseLeave={e => { if (!active) { e.currentTarget.style.color="var(--dl-middle)"; e.currentTarget.style.background="transparent"; }}}
           >
             {b.label || b.icon}
           </button>

@@ -644,19 +644,22 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
 
 
         {/* RIGHT: M/D toggle — hidden when collapsed */}
-        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:4,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
-          {!collapsed && onCalViewChange&&<>
-            <button onClick={()=>onCalViewChange('month')}
-              style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
-                padding:'3px 8px',borderRadius:4,cursor:'pointer',
-                minHeight:22,minWidth:22,
-                background:'none',border:"1px solid var(--dl-border2)",color:"var(--dl-highlight)"}}>M</button>
-            <button onClick={()=>onCalViewChange('day')}
-              style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
-                padding:'3px 8px',borderRadius:4,cursor:'pointer',
-                minHeight:22,minWidth:22,
-                background:"var(--dl-accent-13)",border:"1px solid var(--dl-accent)",color:"var(--dl-accent)"}}>D</button>
-          </>}
+        <div style={{marginLeft:'auto',flexShrink:0,display:'flex',gap:2,background:(!collapsed&&onCalViewChange)?'var(--dl-well)':'transparent',borderRadius:100,padding:(!collapsed&&onCalViewChange)?2:0,alignItems:'center'}} onClick={e=>e.stopPropagation()}>
+          {!collapsed && onCalViewChange && ['month','day'].map(v => {
+            const active = calView === v;
+            return (
+              <button key={v} onClick={()=>onCalViewChange(v)}
+                style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
+                  padding:'4px 10px',borderRadius:100,cursor:'pointer',border:'none',
+                  background:active?'var(--dl-glass-active, var(--dl-accent-13))':'transparent',
+                  color:active?'var(--dl-strong)':'var(--dl-middle)',
+                  transition:'all 0.15s',
+                }}
+                onMouseEnter={e=>{if(!active){e.currentTarget.style.color='var(--dl-strong)';e.currentTarget.style.background='var(--dl-glass-active, var(--dl-accent-13))';}}}
+                onMouseLeave={e=>{if(!active){e.currentTarget.style.color='var(--dl-middle)';e.currentTarget.style.background='transparent';}}}
+              >{v[0].toUpperCase()}</button>
+            );
+          })}
         </div>
       </div>
 
@@ -1008,19 +1011,22 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
               </div>
             ) : null}
             {/* M/D toggle — right, hidden when collapsed */}
-            <div style={{marginLeft:'auto',display:'flex',gap:4}} onClick={e=>e.stopPropagation()}>
-              {!collapsed && <>
-              <button onClick={()=>onCalViewChange('month')}
-                style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
-                  padding:'3px 8px',borderRadius:4,cursor:'pointer',
-                  minHeight:22,minWidth:22,
-                  background:"var(--dl-accent-13)",border:"1px solid var(--dl-accent)",color:"var(--dl-accent)"}}>M</button>
-              <button onClick={()=>onCalViewChange('day')}
-                style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
-                  padding:'3px 8px',borderRadius:4,cursor:'pointer',
-                  minHeight:22,minWidth:22,
-                  background:'none',border:"1px solid var(--dl-border2)",color:"var(--dl-highlight)"}}>D</button>
-              </>}
+            <div style={{marginLeft:'auto',display:'flex',gap:2,background:collapsed?'transparent':'var(--dl-well)',borderRadius:100,padding:collapsed?0:2}} onClick={e=>e.stopPropagation()}>
+              {!collapsed && ['month','day'].map(v => {
+                const active = calView === v;
+                return (
+                  <button key={v} onClick={()=>onCalViewChange(v)}
+                    style={{fontFamily:mono,fontSize:'10px',letterSpacing:'0.06em',
+                      padding:'4px 10px',borderRadius:100,cursor:'pointer',border:'none',
+                      background:active?'var(--dl-glass-active, var(--dl-accent-13))':'transparent',
+                      color:active?'var(--dl-strong)':'var(--dl-middle)',
+                      transition:'all 0.15s',
+                    }}
+                    onMouseEnter={e=>{if(!active){e.currentTarget.style.color='var(--dl-strong)';e.currentTarget.style.background='var(--dl-glass-active, var(--dl-accent-13))';}}}
+                    onMouseLeave={e=>{if(!active){e.currentTarget.style.color='var(--dl-middle)';e.currentTarget.style.background='transparent';}}}
+                  >{v[0].toUpperCase()}</button>
+                );
+              })}
             </div>
           </div>
           {!collapsed&&<MonthView
