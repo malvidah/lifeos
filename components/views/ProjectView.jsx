@@ -133,6 +133,9 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
   function handleUpdate(newHtml) {
     latestHtml.current = newHtml;
     setIsEmpty(clientParseTasks(newHtml).length === 0);
+    // Skip auto-save in __everything__ view — edits there caused duplication
+    // because each date's editor merges ALL tasks, not just one project's.
+    if (project === '__everything__') return;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => mergeAndSave(newHtml), 800);
   }
