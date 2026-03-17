@@ -723,10 +723,9 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                   <div style={{
                     fontFamily:mono, fontSize:F.sm, letterSpacing:"0.06em",
                     fontWeight: "normal",
-                    color: (isCtr && isTdy) ? "var(--dl-strong)"
-                         : isTdy           ? "var(--dl-orange)"
-                         : isCtr           ? "var(--dl-strong)"
-                                           : "var(--dl-middle)",
+                    color: isTdy ? "var(--dl-orange)"
+                         : isCtr ? "var(--dl-strong)"
+                                 : "var(--dl-middle)",
                     marginBottom:3,
                     textTransform:"uppercase",
                   }}>{DAY_NAMES[d.getDay()]} {d.getDate()}</div>
