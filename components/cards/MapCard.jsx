@@ -250,12 +250,9 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
       if (d < r * 2.0) {
         const f = Math.max(0, 1 - d / (r * 2.0));
         if (p.isHot) {
-          // Volcano: steep sides to full height, then caldera dip at center
-          // f=0 at edge, f=1 at center
-          const rise = f * f; // steep quadratic sides
-          // Caldera: small dip only in the very center (f > 0.85)
-          const caldera = f > 0.85 ? (f - 0.85) / 0.15 * 0.15 : 0;
-          h += p.height * (rise - caldera);
+          // Volcano: sides rise then dip into caldera at center, scaled 1.4x taller
+          const volcano = f < 0.7 ? f * f : 0.49 - (f - 0.7) * 0.5;
+          h += p.height * 1.4 * volcano;
         } else {
           h += p.height * f * f * f;
         }
