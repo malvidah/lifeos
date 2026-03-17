@@ -91,10 +91,16 @@ function ProjectDateTaskEditor({ date, project, tasks, token, userId, onTasksCha
     savingRef.current = true;
     try {
       let editorTasks = clientParseTasks(newHtml);
-      // Auto-tag tasks that don't reference this project (skip for __everything__)
+      // Auto-tag NEW tasks (no project tags at all) with this project.
+      // Skip tasks that already have any project tag — they belong to their own project.
+      // Skip for __everything__ view.
       if (project !== '__everything__') {
         editorTasks = editorTasks.map(t => {
-          if (!t.text.toLowerCase().includes(chip)) return { ...t, text: `${t.text} ${chip}` };
+          const tags = t.project_tags || [];
+          // Only auto-tag if the task has NO project tags at all (newly typed)
+          if (tags.length === 0 && !t.text.toLowerCase().includes(chip)) {
+            return { ...t, text: `${t.text} ${chip}` };
+          }
           return t;
         });
       }
