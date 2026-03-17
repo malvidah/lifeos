@@ -1,7 +1,7 @@
 import { withAuth } from '../_lib/auth.js';
 import { parseTaskBlocks, tasksToHtml } from '@/lib/parseBlocks.js';
 import { isValidDate } from '@/lib/validate.js';
-// Recurrence chips (/d mwf) are stored inline as HTML — no server-side parsing needed.
+import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -81,8 +81,25 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .order('position', { ascending: true });
   if (e3) throw e3;
 
+  // 4. Recurring tasks — tasks with /r chips that match this day of week.
+  //    These are regular tasks (not templates) whose HTML contains data-recurrence.
+  //    They show on every matching day, not just their creation date.
+  const { data: recurringCandidates } = await supabase
+    .from('tasks')
+    .select('id, position, html, text, done, due_date, completed_at, project_tags, note_tags, date')
+    .eq('user_id', user.id)
+    .neq('date', date) // exclude tasks already in ownTasks
+    .ilike('html', '%data-recurrence=%');
+
+  const recurringTasks = (recurringCandidates ?? []).filter(t => {
+    const match = t.html?.match(/data-recurrence="([^"]+)"/);
+    if (!match) return false;
+    const recurrence = keyToRecurrence(match[1], t.date);
+    return recurrence && matchesSchedule(date, recurrence);
+  });
+
   // Inject data attributes into each task's <li> for client-side tracking
-  const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? [])];
+  const allTasks = [...(ownTasks ?? []), ...(dueTasks ?? []), ...(completedTasks ?? []), ...(recurringTasks ?? [])];
   for (const t of allTasks) {
     if (t.html) {
       let attrs = ` data-task-id="${t.id}" data-origin-date="${t.date}"`;
