@@ -8,6 +8,7 @@ import { createNoise2D } from "simplex-noise";
 import * as THREE from "three";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
+import { useTheme } from "@/lib/theme";
 import { fetchWeather, getCachedLocation, DEFAULT_LOCATION } from "@/lib/weather";
 
 // 3-step toon gradient (hard shadow/mid/lit bands for cel-shaded look)
@@ -975,7 +976,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, sele
       <VolcanicGlow projects={projects} />
       <Birds projects={projects} />
       <SelectionBeacon projects={projects} selectedProject={selectedProject} />
-      <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} isDark={skyColors(hour).isNight || skyColors(hour).isDusk} />
+      <Labels projects={projects} onSelect={onSelect} hovered={hovered} setHovered={setHovered} selectedProject={selectedProject} isDark={appDark || skyColors(hour).isNight || skyColors(hour).isDusk} />
       <OrbitControls
         enablePan enableZoom enableRotate
         minDistance={6} maxDistance={30}
@@ -995,6 +996,8 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, sele
 
 // ── Exports ──────────────────────────────────────────────────────────────────
 export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, selectedProject, onSelectProject }) {
+  const { theme } = useTheme();
+  const appDark = theme === 'dark';
   const [hovered, setHovered] = useState(null);
   const projects = useMemo(
     () => layoutProjects(allTags || [], connections, recency, entryCounts, completedTasks, habits),
