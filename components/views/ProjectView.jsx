@@ -141,9 +141,31 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   };
 
   // Sorted by most recent first for the left panel
-  const sortedNotes = [...notesList].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+  // Sort notes by persisted per-project order, then by created_at for unordered notes
+  const sortedNotes = useMemo(() => {
+    const order = (projectsMeta || {})[project]?.noteOrder || [];
+    const orderMap = new Map(order.map((id, i) => [id, i]));
+    return [...notesList].sort((a, b) => {
+      const ai = orderMap.has(a.id) ? orderMap.get(a.id) : 9999;
+      const bi = orderMap.has(b.id) ? orderMap.get(b.id) : 9999;
+      if (ai !== bi) return ai - bi;
+      return new Date(a.created_at || 0) - new Date(b.created_at || 0);
+    });
+  }, [notesList, projectsMeta, project]);
   // All current note names (for {note} autocomplete)
   const allNoteNames = notesList.map(noteName).filter(Boolean);
+
+  // Save note tab order to project metadata
+  const saveNoteOrder = useCallback((orderedIds) => {
+    if (!project || project.startsWith('__')) return;
+    const updated = { ...(projectsMeta || {}) };
+    updated[project] = { ...(updated[project] || {}), noteOrder: orderedIds };
+    setProjectsMeta(updated, { skipHistory: true });
+  }, [project, projectsMeta, setProjectsMeta]);
+
+  // Drag-to-reorder state
+  const dragNoteId = useRef(null);
+  const dragOverId = useRef(null);
 
   const addNote = async (initialName = '', { silent = false, initialContent } = {}) => {
     const content = initialContent || initialName || '';
@@ -529,9 +551,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 220 }}>
-          {/* Tab row: horizontal scrolling note tabs */}
+          {/* Tab row: draggable note tabs */}
           <div style={{
-            display: 'flex', gap: 4, overflowX: 'auto', overflowY: 'hidden',
+            display: 'flex', gap: 2, overflowX: 'auto', overflowY: 'hidden',
             paddingBottom: 8, marginBottom: 8,
             borderBottom: '1px solid var(--dl-border)',
             scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
@@ -549,49 +571,71 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
             {sortedNotes.map(note => {
               const active = note.id === activeNoteId;
               return (
-                <div key={note.id} style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
-                  <button
-                    onClick={() => selectNote(note.id)}
-                    style={{
-                      background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
-                      border: 'none', borderRadius: 100,
-                      padding: '5px 12px', cursor: 'pointer',
-                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
-                      textTransform: 'uppercase', whiteSpace: 'nowrap',
-                      color: active ? "var(--dl-strong)" : "var(--dl-middle)",
-                      transition: 'all 0.15s', maxWidth: 160,
-                      overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}
-                    onMouseEnter={e => { if (!active) { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = "var(--dl-glass-active, var(--dl-accent-13))"; }}}
-                    onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.background = "transparent"; }}}
-                  >{noteName(note)}</button>
-                  {active && (
-                    <button
-                      onClick={e => { e.stopPropagation(); setDeleteConfirm({ id: note.id, name: noteName(note) }); }}
-                      title="Delete"
-                      style={{
-                        background: 'none', border: 'none', cursor: 'pointer',
-                        padding: '2px 4px', color: "var(--dl-middle)", fontSize: 12,
-                        lineHeight: 1, flexShrink: 0, opacity: 0.5,
-                        transition: 'opacity 0.12s', borderRadius: 4,
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                      onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
-                    >×</button>
-                  )}
-                </div>
+                <button
+                  key={note.id}
+                  draggable
+                  onClick={() => selectNote(note.id)}
+                  onDragStart={e => { dragNoteId.current = note.id; e.dataTransfer.effectAllowed = 'move'; e.currentTarget.style.opacity = '0.4'; }}
+                  onDragEnd={e => { e.currentTarget.style.opacity = '1'; dragNoteId.current = null; dragOverId.current = null; }}
+                  onDragOver={e => { e.preventDefault(); dragOverId.current = note.id; }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    const fromId = dragNoteId.current;
+                    const toId = note.id;
+                    if (!fromId || fromId === toId) return;
+                    const ids = sortedNotes.map(n => n.id);
+                    const fromIdx = ids.indexOf(fromId);
+                    const toIdx = ids.indexOf(toId);
+                    if (fromIdx < 0 || toIdx < 0) return;
+                    ids.splice(fromIdx, 1);
+                    ids.splice(toIdx, 0, fromId);
+                    saveNoteOrder(ids);
+                  }}
+                  style={{
+                    background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
+                    border: 'none', borderRadius: 100,
+                    padding: '5px 12px', cursor: 'grab', flexShrink: 0,
+                    fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', whiteSpace: 'nowrap',
+                    color: active ? "var(--dl-strong)" : "var(--dl-middle)",
+                    transition: 'color 0.15s', maxWidth: 160,
+                    overflow: 'hidden', textOverflow: 'ellipsis',
+                  }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.color = "var(--dl-strong)"; }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.color = "var(--dl-middle)"; }}
+                >{noteName(note)}</button>
               );
             })}
           </div>
 
-          {/* Editor + photos — full width */}
+          {/* Editor + photos — full width, with delete button */}
           <div
-            style={{ flex: 1, minWidth: 0 }}
+            style={{ flex: 1, minWidth: 0, position: 'relative' }}
             onDragEnter={handleNoteDragEnter}
             onDragLeave={handleNoteDragLeave}
             onDragOver={handleNoteDragOver}
             onDrop={handleNoteDrop}
           >
+            {/* Delete note button — top right of editor area */}
+            {activeNote && (
+              <button
+                onClick={() => setDeleteConfirm({ id: activeNote.id, name: noteName(activeNote) })}
+                title="Delete note"
+                style={{
+                  position: 'absolute', top: 4, right: 4, zIndex: 2,
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--dl-middle)', padding: 6, borderRadius: 6,
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                  <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                </svg>
+              </button>
+            )}
             {/* Photos for current note */}
             {noteImages.length > 0 && (
               noteLightbox != null
