@@ -201,7 +201,7 @@ const ImageChip = Node.create({
   },
 });
 
-// RecurrenceTag: stored as {h:key:label}, rendered as flag + schedule chip (same style as date chip).
+// RecurrenceTag: stored as {r:key:label}, rendered as M·W·F chip (date tag style).
 const RecurrenceTagNode = Node.create({
   name: 'recurrenceTag', group: 'inline', inline: true,
   atom: true, selectable: true, draggable: false,
@@ -226,7 +226,7 @@ const RecurrenceTagNode = Node.create({
       style: Object.entries({ ...CHIP_TOKENS.date(col), userSelect: 'none' })
         .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
         .join(';'),
-    }, '\u{1F6A9} ' + label];
+    }, label];
   },
 });
 
@@ -358,7 +358,7 @@ export function docToText(docJson) {
       if (c.type === 'hardBreak')   return '\n';
       if (c.type === 'projectTag')  return `{${c.attrs?.name ?? ''}}`;
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
-      if (c.type === 'recurrenceTag') return `{h:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
+      if (c.type === 'recurrenceTag') return `{r:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       return '';
     }).join('');
   }
@@ -431,7 +431,7 @@ function makeSlashSuggestionMatch() {
       if (!/\s/.test(prev) && i !== 0) continue; // require space-before or line start
       const after = nodeText.slice(i + 1);
       // Match bare / (show command menu), /p..., or /n...
-      if (after.length > 0 && !/^[pn@dh]/i.test(after)) continue;
+      if (after.length > 0 && !/^[pn@dr]/i.test(after)) continue;
       return {
         range: { from: nodeStart + i, to: $position.pos },
         query: after,           // "" (bare /), "p", "p big think", "n", "n my note"
@@ -516,8 +516,8 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9); // __note__: = 9
         const dateStr            = isDate ? item.slice(9, 19) : null;
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'h' ? '/h  Habit' : '/m  Media')
-                                 : isRecurrence ? `🏴 ${rawLabel}`
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'r' ? '/r  Repeat' : '/m  Media')
+                                 : isRecurrence ? `↻ ${rawLabel}`
                                  : isDate ? rawLabel
                                  : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
         const col                = isProject ? projectColor(rawLabel) : isDate ? dateChipColor(dateStr) : isRecurrence ? 'var(--dl-green)' : null;
@@ -769,7 +769,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         findMatch: makeSlashSuggestionMatch(),
         itemsFn: (query) => {
           // Bare / — show command menu
-          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:d', '__cmd__:h', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
+          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:d', '__cmd__:r', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
@@ -821,8 +821,8 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               .map(s => `__date__:${s.date}:${s.label}`);
             return dateItems;
           }
-          if (cmd === 'h') {
-            // Habit/recurrence suggestions only
+          if (cmd === 'r') {
+            // Repeat/recurrence suggestions
             return getRecurrenceSuggestions(search);
           }
           return [];
