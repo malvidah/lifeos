@@ -591,15 +591,16 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: isSelected ? p.color + '22' : isHov ? p.color : isDark ? '#1a1816' : '#E8E0CC',
-          border: `1.5px solid ${isSelected ? p.color : isHov ? p.color : isDark ? '#2a2720' : '#C8C0A8'}`,
-          borderRadius: 999, padding: '3px 12px',
-          fontFamily: mono, fontSize: isSelected ? 12 : 11, letterSpacing: '0.08em',
+          background: isSelected ? (isDark ? '#1a1816' : '#fff') : isHov ? p.color : isDark ? '#1a1816' : '#E8E0CC',
+          border: `${isSelected ? '2px' : '1px'} solid ${isSelected || isHov ? p.color : isDark ? '#2a2720' : '#C8C0A8'}`,
+          borderRadius: 999, padding: isSelected ? '4px 14px' : '3px 12px',
+          fontFamily: mono, fontSize: isSelected ? 12 : 11, fontWeight: isSelected ? 600 : 400,
+          letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
-          color: isSelected ? p.color : isHov ? '#fff' : p.color,
+          color: isHov ? '#fff' : p.color,
           cursor: 'pointer',
-          opacity: dimmed ? 0.4 : 1,
-          boxShadow: isSelected ? `0 0 12px ${p.color}44, 0 2px 8px rgba(0,0,0,0.15)`
+          opacity: dimmed ? 0.45 : 1,
+          boxShadow: isSelected ? `0 0 16px ${p.color}55, 0 2px 8px rgba(0,0,0,0.2)`
                    : isDark ? '0 2px 6px rgba(0,0,0,0.3)' : '0 1px 4px rgba(0,0,0,0.08)',
           transition: 'all 0.3s',
           userSelect: 'none',
@@ -949,17 +950,14 @@ function SelectionBeacon({ projects, selectedProject }) {
   const selected = selectedProject ? projects.find(p => p.tag === selectedProject) : null;
   if (!selected) return null;
   return (
-    <group position={[selected.x, selected.height * 0.5, selected.z]}>
-      {/* Vertical light pillar */}
-      <mesh position={[0, selected.height * 0.5 + 1.5, 0]}>
-        <cylinderGeometry args={[0.02, 0.08, 3, 8]} />
-        <meshBasicMaterial color={selected.color} transparent opacity={0.3} depthWrite={false} />
+    <group position={[selected.x, 0, selected.z]}>
+      {/* Vertical light pillar — from ground through peak and above */}
+      <mesh position={[0, selected.height * 0.5 + 0.5, 0]}>
+        <cylinderGeometry args={[0.01, 0.06, selected.height + 1, 8]} />
+        <meshBasicMaterial color={selected.color} transparent opacity={0.25} depthWrite={false} />
       </mesh>
-      {/* Base glow ring */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.05, 0]}>
-        <ringGeometry args={[0.3, 0.5, 24]} />
-        <meshBasicMaterial color={selected.color} transparent opacity={0.25} depthWrite={false} side={THREE.DoubleSide} />
-      </mesh>
+      {/* Glow at peak */}
+      <pointLight position={[0, selected.height, 0]} color={selected.color} intensity={2} distance={2} decay={2} />
     </group>
   );
 }
