@@ -100,7 +100,7 @@ export default function NavBar(props) {
   const {
     activeProject, date,
     searchOpen, setSearchOpen, searchQuery, setSearchQuery, searchInputRef, srLoading,
-    onGoHome, onGoToProjects, onOpenSettings, onSelectDate,
+    onGoHome, onGoToProjects, onBack, onOpenSettings, onSelectDate,
   } = props;
 
   const openSearch  = () => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); };
@@ -232,13 +232,25 @@ export default function NavBar(props) {
             >›</button>
           </div>
         ) : (
-          <span style={{
-            fontFamily: mono, fontSize: 13, letterSpacing: '0.12em',
-            textTransform: 'uppercase', color: titleColor,
-            whiteSpace: 'nowrap', userSelect: 'none',
-          }}>
-            {centerLabel}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, pointerEvents: 'auto' }}>
+            {isProject && onBack && (
+              <button onClick={onBack} style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: "var(--dl-middle)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
+                lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
+              }}
+                onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
+              >‹</button>
+            )}
+            <span style={{
+              fontFamily: mono, fontSize: 13, letterSpacing: '0.12em',
+              textTransform: 'uppercase', color: titleColor,
+              whiteSpace: 'nowrap', userSelect: 'none',
+            }}>
+              {centerLabel}
+            </span>
+          </div>
         )}
       </div>
 
