@@ -246,13 +246,14 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
     for (const p of projects) {
       const dx = x - p.x, dz = z - p.z;
       const d = Math.sqrt(dx * dx + dz * dz);
-      const r = 0.6 + p.score * 0.3;
+      const r = (0.6 + p.score * 0.3) * (p.isHot ? 1.5 : 1.0);
       if (d < r * 2.0) {
         const f = Math.max(0, 1 - d / (r * 2.0));
         if (p.isHot) {
-          // Volcano shape: flat crater top, steeper sides
-          const volcano = f < 0.7 ? f * f : 0.49 - (f - 0.7) * 0.5;
-          h += p.height * volcano;
+          // Volcano: wider base, flat top at full height
+          // Use smoothstep so it reaches full height but plateaus
+          const s = f * f * (3 - 2 * f); // smoothstep — reaches 1.0 but with a flat top
+          h += p.height * s;
         } else {
           h += p.height * f * f * f;
         }
