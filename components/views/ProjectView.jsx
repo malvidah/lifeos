@@ -528,63 +528,65 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           </button>
         }
       >
-        <div style={{ display: 'flex', minHeight: 220 }}>
-          {/* Left panel: note list — hidden when notesListCollapsed */}
-          {!notesListCollapsed && (
-            <div style={{ width: 164, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 440, paddingRight: 2 }}>
-              {sortedNotes.length === 0 && (
-                <button onClick={() => { skipPhantomBlur.current = true; addNote(); }} style={{ background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'text', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: "var(--dl-middle)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}>Untitled</button>
-              )}
-              {sortedNotes.map(note => (
-                <div
-                  key={note.id}
-                  style={{ display: 'flex', alignItems: 'center', borderRadius: 6, background: note.id === activeNoteId ? "var(--dl-well)" : 'transparent', transition: 'background 0.1s' }}
-                  onMouseEnter={() => setHoveredNoteId(note.id)}
-                  onMouseLeave={() => setHoveredNoteId(null)}
-                >
+        <div style={{ display: 'flex', flexDirection: 'column', minHeight: 220 }}>
+          {/* Tab row: horizontal scrolling note tabs */}
+          <div style={{
+            display: 'flex', gap: 4, overflowX: 'auto', overflowY: 'hidden',
+            paddingBottom: 8, marginBottom: 8,
+            borderBottom: '1px solid var(--dl-border)',
+            scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+          }}>
+            {sortedNotes.length === 0 && (
+              <button onClick={() => { skipPhantomBlur.current = true; addNote(); }}
+                style={{
+                  background: 'var(--dl-border-15, rgba(128,120,100,0.1))', border: 'none',
+                  borderRadius: 100, padding: '5px 14px', cursor: 'text',
+                  fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: "var(--dl-middle)",
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                }}>Untitled</button>
+            )}
+            {sortedNotes.map(note => {
+              const active = note.id === activeNoteId;
+              return (
+                <div key={note.id} style={{ display: 'flex', alignItems: 'center', gap: 0, flexShrink: 0 }}>
                   <button
                     onClick={() => selectNote(note.id)}
-                    style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase', color: note.id === activeNoteId ? "var(--dl-strong)" : "var(--dl-highlight)", whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.5 }}
+                    style={{
+                      background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
+                      border: 'none', borderRadius: 100,
+                      padding: '5px 12px', cursor: 'pointer',
+                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
+                      textTransform: 'uppercase', whiteSpace: 'nowrap',
+                      color: active ? "var(--dl-strong)" : "var(--dl-middle)",
+                      transition: 'all 0.15s', maxWidth: 160,
+                      overflow: 'hidden', textOverflow: 'ellipsis',
+                    }}
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = "var(--dl-glass-active, var(--dl-accent-13))"; }}}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.background = "transparent"; }}}
                   >{noteName(note)}</button>
-                  {(note.project_tags || []).filter(t => t !== project?.toLowerCase()).map(t => (
-                    <span key={t} title={tagDisplayName(t)} style={{ flexShrink: 0, width: 6, height: 6, borderRadius: '50%', background: projectColor(t), marginRight: 2, opacity: 0.7 }}/>
-                  ))}
-                  <button
-                    onClick={e => { e.stopPropagation(); setDeleteConfirm({ id: note.id, name: noteName(note) }); }}
-                    title="Delete"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px 6px', color: "var(--dl-middle)", fontSize: 14, lineHeight: 1, flexShrink: 0, opacity: hoveredNoteId === note.id ? 0.6 : 0, transition: 'opacity 0.12s', borderRadius: 4 }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                    onMouseLeave={e => e.currentTarget.style.opacity = hoveredNoteId === note.id ? '0.6' : '0'}
-                  >×</button>
+                  {active && (
+                    <button
+                      onClick={e => { e.stopPropagation(); setDeleteConfirm({ id: note.id, name: noteName(note) }); }}
+                      title="Delete"
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        padding: '2px 4px', color: "var(--dl-middle)", fontSize: 12,
+                        lineHeight: 1, flexShrink: 0, opacity: 0.5,
+                        transition: 'opacity 0.12s', borderRadius: 4,
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+                      onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+                    >×</button>
+                  )}
                 </div>
-              ))}
-            </div>
-          )}
-
-          {/* Vertical divider with collapse chevron */}
-          <div
-            onClick={toggleNotesList}
-            title={notesListCollapsed ? 'Show list' : 'Hide list'}
-            style={{ width: 16, flexShrink: 0, position: 'relative', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onMouseEnter={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-middle)"}
-            onMouseLeave={e => e.currentTarget.querySelector('.notes-chevron').style.color = "var(--dl-border)"}
-          >
-            {/* Line above chevron */}
-            <div style={{ position: 'absolute', top: 0, bottom: '50%', marginBottom: 10, left: '50%', width: 1, background: 'var(--dl-border)' }}/>
-            {/* Line below chevron */}
-            <div style={{ position: 'absolute', top: '50%', marginTop: 10, bottom: 0, left: '50%', width: 1, background: 'var(--dl-border)' }}/>
-            <div className="notes-chevron" style={{ position: 'relative', zIndex: 1, color: 'var(--dl-border)', transition: 'color 0.15s', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <svg width="7" height="10" viewBox="0 0 7 10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                {notesListCollapsed
-                  ? <polyline points="1.5,1.5 5.5,5 1.5,8.5"/>
-                  : <polyline points="5.5,1.5 1.5,5 5.5,8.5"/>}
-              </svg>
-            </div>
+              );
+            })}
           </div>
 
-          {/* Right: editor + photos — full width when list collapsed */}
+          {/* Editor + photos — full width */}
           <div
-            style={{ flex: 1, minWidth: 0, paddingLeft: 10 }}
+            style={{ flex: 1, minWidth: 0 }}
             onDragEnter={handleNoteDragEnter}
             onDragLeave={handleNoteDragLeave}
             onDragOver={handleNoteDragOver}
