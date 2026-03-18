@@ -21,6 +21,7 @@ import { JournalEditor, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
+import NotesCard from "./widgets/NotesCard.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
@@ -454,8 +455,10 @@ function DashboardInner() {
             </div>
           ) : (
             <>
-              {/* 5. Notes placeholder — wired up in Phase 3 */}
-              <div id="notes-placeholder"/>
+              {/* 5. Notes — all notes (no project) or project-filtered notes */}
+              <ErrorBoundary label="Notes">
+                <NotesCard project={projectFilter} token={token} userId={userId} />
+              </ErrorBoundary>
 
               {/* 6–9. Journal, Tasks, Meals, Workouts */}
               {mobile ? (
@@ -465,7 +468,7 @@ function DashboardInner() {
                     collapsed={collapseMap[leftWidget.id]}
                     onToggle={toggleMap[leftWidget.id]}
                     headerRight={leftWidget.headerRight?.()} autoHeight>
-                    <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
+                    <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                   </Card>
                   </ErrorBoundary>
                   {rightWidgets.map(w=>(
@@ -474,7 +477,9 @@ function DashboardInner() {
                       collapsed={collapseMap[w.id]}
                       onToggle={toggleMap[w.id]}
                       headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
-                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
+                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
+                        taskFilter={w.id==='tasks'?taskFilter:undefined}
+                        project={w.id==='tasks'&&projectFilter?projectFilter:undefined}/>
                     </Card>
                     </ErrorBoundary>
                   ))}
@@ -489,7 +494,7 @@ function DashboardInner() {
                         collapsed={collapseMap[leftWidget.id]}
                         onToggle={toggleMap[leftWidget.id]}
                         headerRight={leftWidget.headerRight?.()}>
-                        <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
+                        <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                       </Card>
                       </ErrorBoundary>
                     </div>
@@ -506,7 +511,9 @@ function DashboardInner() {
                           collapsed={collapseMap[w.id]}
                           onToggle={toggleMap[w.id]}
                           headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
-                          <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} taskFilter={w.id==='tasks'?taskFilter:undefined}/>
+                          <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
+                            taskFilter={w.id==='tasks'?taskFilter:undefined}
+                            project={w.id==='tasks'&&projectFilter?projectFilter:undefined}/>
                         </Card>
                         </ErrorBoundary>
                       </div>
