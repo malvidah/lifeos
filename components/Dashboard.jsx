@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { mono, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
@@ -70,6 +70,15 @@ function DashboardInner() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
+  const scrollContainerRef = useRef(null);
+  const savedScrollTopRef = useRef(0);
+
+  // Preserve scroll position when projectFilter changes (prevents layout-shift jump)
+  useLayoutEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    el.scrollTop = savedScrollTopRef.current;
+  }, [activeProject]);
 
 
   // Persist selected date and active project for hard-refresh recovery
@@ -404,7 +413,7 @@ function DashboardInner() {
         )}
 
         {/* ── Single unified scroll container ── */}
-        <div style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0}}>
+        <div ref={scrollContainerRef} style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0}}>
         <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Spacer for fixed header */}
@@ -434,7 +443,7 @@ function DashboardInner() {
               habits={graphData.habits}
               healthDots={healthDots}
               selectedProject={projectFilter}
-              onSelectProject={p => setActiveProject(p)}
+              onSelectProject={p => { savedScrollTopRef.current = scrollContainerRef.current?.scrollTop ?? 0; setActiveProject(p); }}
             />
           )}
 
