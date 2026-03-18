@@ -62,7 +62,11 @@ function DashboardInner() {
   const [lastSync,  setLastSync]  = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [activeProject, setActiveProject] = useState(() => {
-    try { return localStorage.getItem('daylab:activeProject') || null; } catch { return null; }
+    try {
+      const v = localStorage.getItem('daylab:activeProject');
+      // __graph__ had special meaning in the old two-view architecture — treat as null now
+      return (v && v !== '__graph__') ? v : null;
+    } catch { return null; }
   });
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -489,7 +493,7 @@ function DashboardInner() {
                     <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                   </Card>
                   </ErrorBoundary>
-                  {rightWidgets.filter(w => !projectFilter || w.id === 'tasks').map(w=>(
+                  {rightWidgets.map(w=>(
                     <ErrorBoundary key={w.id} label={w.label}>
                     <Card label={w.label} color={w.color()}
                       collapsed={collapseMap[w.id]}
@@ -519,10 +523,10 @@ function DashboardInner() {
                   </div>
                   {/* Right widgets — Tasks, Meals, Workouts */}
                   <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                    {rightWidgets.filter(w => !projectFilter || w.id === 'tasks').map((w, i, arr)=>(
+                    {rightWidgets.map((w, i)=>(
                       <div key={w.id} style={{
                         display:"flex", flexDirection:"column",
-                        flex: (!collapseMap[w.id] && i === arr.length - 1) ? 1 : "0 0 auto",
+                        flex: (!collapseMap[w.id] && i === rightWidgets.length - 1) ? 1 : "0 0 auto",
                         minHeight: collapseMap[w.id]?0:200}}>
                         <ErrorBoundary label={w.label}>
                         <Card label={w.label} color={w.color()}
