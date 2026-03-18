@@ -142,6 +142,9 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
 
   // Notes sort mode — must be declared before sortedNotes which depends on it
   const [notesSortRecent, toggleNotesSort] = useCollapse(`pv:${project}:notes-sort`, false);
+  // In recent-sort mode: track which note was last clicked so it stays leftmost
+  // Must be declared before sortedNotes which depends on it
+  const [recentPinnedId, setRecentPinnedId] = useState(null);
 
   // Sort notes: manual order (persisted) or most recent (updated_at desc)
   const sortedNotes = useMemo(() => {
@@ -173,9 +176,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     updated[project] = { ...(updated[project] || {}), noteOrder: orderedIds };
     setProjectsMeta(updated, { skipHistory: true });
   }, [project, projectsMeta, setProjectsMeta]);
-
-  // In recent-sort mode: track which note was last clicked so it stays leftmost
-  const [recentPinnedId, setRecentPinnedId] = useState(null);
 
   // FLIP animation refs
   const tabElemsRef = useRef({}); // { [noteId]: DOM element }
