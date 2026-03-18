@@ -593,39 +593,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           <div style={{ position: 'relative', marginBottom: 8 }}>
             <div
               ref={tabRowRef}
-              onPointerMove={e => {
-                const p = tabPending.current;
-                if (!p && !tabDragging) return;
-                if (p && !tabDragging) {
-                  if (Math.abs(e.clientX - p.startX) < 5) return;
-                  setTabDragging(true);
-                  setTabDragIdx(p.idx);
-                  setTabOverIdx(p.idx);
-                  tabPending.current = null;
-                }
-                if (tabDragging) setTabOverIdx(calcTabOverIdx(e.clientX));
-              }}
-              onPointerUp={() => {
-                const wasDragging = tabDragging;
-                if (wasDragging && tabDragIdx != null && tabOverIdx != null && tabDragIdx !== tabOverIdx) {
-                  const ids = sortedNotes.map(n => n.id);
-                  const [moved] = ids.splice(tabDragIdx, 1);
-                  ids.splice(tabOverIdx, 0, moved);
-                  saveNoteOrder(ids);
-                }
-                tabPending.current = null;
-                setTabDragging(false);
-                setTabDragIdx(null);
-                setTabOverIdx(null);
-              }}
-              onPointerLeave={() => {
-                if (tabDragging) {
-                  tabPending.current = null;
-                  setTabDragging(false);
-                  setTabDragIdx(null);
-                  setTabOverIdx(null);
-                }
-              }}
               style={{
                 display: 'flex', gap: 2, overflowX: 'auto', overflowY: 'hidden',
                 paddingBottom: 8, paddingRight: 40,
@@ -653,10 +620,45 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                     ref={el => { if (el) tabWidths.current[idx] = el.offsetWidth + 2; }}
                     onPointerDown={e => {
                       if (notesSortRecent) return;
-                      tabPending.current = { idx, startX: e.clientX };
+                      tabPending.current = { idx, startX: e.clientX, pointerId: e.pointerId };
                       e.currentTarget.setPointerCapture(e.pointerId);
                     }}
-                    onClick={() => { if (!tabDragging) selectNote(note.id); }}
+                    onPointerMove={e => {
+                      const p = tabPending.current;
+                      if (!p && !tabDragging) return;
+                      if (p && !tabDragging) {
+                        if (Math.abs(e.clientX - p.startX) < 5) return;
+                        setTabDragging(true);
+                        setTabDragIdx(p.idx);
+                        setTabOverIdx(p.idx);
+                        tabPending.current = null;
+                      }
+                      if (tabDragging) setTabOverIdx(calcTabOverIdx(e.clientX));
+                    }}
+                    onPointerUp={e => {
+                      try { e.currentTarget.releasePointerCapture(e.pointerId); } catch {}
+                      const wasDragging = tabDragging;
+                      if (wasDragging && tabDragIdx != null && tabOverIdx != null && tabDragIdx !== tabOverIdx) {
+                        const ids = sortedNotes.map(n => n.id);
+                        const [moved] = ids.splice(tabDragIdx, 1);
+                        ids.splice(tabOverIdx, 0, moved);
+                        saveNoteOrder(ids);
+                      }
+                      if (!wasDragging && tabPending.current) {
+                        selectNote(note.id);
+                      }
+                      tabPending.current = null;
+                      setTabDragging(false);
+                      setTabDragIdx(null);
+                      setTabOverIdx(null);
+                    }}
+                    onPointerCancel={() => {
+                      tabPending.current = null;
+                      setTabDragging(false);
+                      setTabDragIdx(null);
+                      setTabOverIdx(null);
+                    }}
+                    onClick={e => e.preventDefault()}
                     style={{
                       background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
                       border: 'none', borderRadius: 100,
