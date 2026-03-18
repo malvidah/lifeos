@@ -282,24 +282,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .not('html', 'ilike', '%data-recurrence=%');
   if (delErr) throw delErr;
 
-  // Legacy: clean up any recurrence_parent_id orphans
-  const { data: recurringInstances } = await supabase
-    .from('tasks')
-    .select('id, text, recurrence_parent_id, done')
-    .eq('user_id', user.id).eq('date', date)
-    .not('recurrence_parent_id', 'is', null);
-
-  if (recurringInstances?.length) {
-    const savedTexts = new Set(ownRows.map(r => r.text?.trim()));
-    const removed = recurringInstances.filter(ri => !ri.done && !savedTexts.has(ri.text?.trim()));
-    if (removed.length) {
-      await supabase.from('tasks').update({ done: true, completed_at: today })
-        .in('id', removed.map(r => r.id));
-    }
-  }
-
-  // Tasks with /d recurrence chips stay as regular tasks — the chip is just
-  // inline metadata like project tags and due dates. No template extraction.
+  // Save own-date tasks (regular tasks created on this date).
   if (ownRows.length > 0) {
     const rows = ownRows.map(t => {
       const prev = matchExisting(t.text);
@@ -320,35 +303,8 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     if (insErr) throw insErr;
   }
 
-  // Update foreign (due-date) tasks in place — toggle done, update text
-  for (const t of foreignTasks) {
-    if (!t.task_id) continue;
-    const patch = { done: t.done, html: t.html, text: t.text };
-    if (t.done) patch.completed_at = today;
-    else patch.completed_at = null;
-    await supabase.from('tasks').update(patch)
-      .eq('id', t.task_id).eq('user_id', user.id);
-  }
-
-  // Delete foreign tasks that were in the editor but got removed by the user
-  // (loaded as dueTasks but absent from the saved HTML)
-  const { data: loadedDue } = await supabase
-    .from('tasks')
-    .select('id')
-    .eq('user_id', user.id)
-    .not('due_date', 'is', null)
-    .lte('date', date)
-    .eq('done', false)
-    .neq('date', date);
-  const savedForeignIds = new Set(foreignTasks.map(t => t.task_id).filter(Boolean));
-  const removedIds = (loadedDue ?? [])
-    .map(t => t.id)
-    .filter(id => !savedForeignIds.has(id));
-  if (removedIds.length > 0) {
-    await supabase.from('tasks').delete()
-      .eq('user_id', user.id)
-      .in('id', removedIds);
-  }
+  // Foreign updates (persistent/recurring edits) already handled above in the
+  // foreignUpdates loop. No separate processing needed here.
 
   return Response.json({ ok: true, tasks: parsed.length });
 });
