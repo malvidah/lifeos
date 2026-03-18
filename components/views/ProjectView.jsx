@@ -169,12 +169,14 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   }, [project, projectsMeta, setProjectsMeta]);
 
   // Drag-to-reorder state (pointer events on container — same as PhotoStrip)
+  // Use refs for drag/over indices so pointerUp always sees latest values
   const tabRowRef = useRef(null);
   const tabPending = useRef(null);
   const tabItemWidths = useRef([]);
+  const tabDragIdxRef = useRef(null);
+  const tabOverIdxRef = useRef(null);
   const [tabDragging, setTabDragging] = useState(false);
-  const [tabDragIdx, setTabDragIdx] = useState(null);
-  const [tabOverIdx, setTabOverIdx] = useState(null);
+  const [, tabBump] = useState(0); // force re-render on overIdx change
 
   const canReorderTabs = !notesSortRecent && sortedNotes.length > 1;
 
@@ -202,26 +204,31 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     if (!p && !tabDragging) return;
     if (p && !tabDragging) {
       if (Math.abs(e.clientX - p.startX) < 5) return;
+      tabDragIdxRef.current = p.idx;
+      tabOverIdxRef.current = p.idx;
       setTabDragging(true);
-      setTabDragIdx(p.idx);
-      setTabOverIdx(p.idx);
       tabPending.current = null;
     }
-    if (tabDragging) setTabOverIdx(calcTabOver(e.clientX));
+    if (tabDragIdxRef.current != null) {
+      tabOverIdxRef.current = calcTabOver(e.clientX);
+      tabBump(n => n + 1);
+    }
   };
 
   const handleTabPointerUp = () => {
     const wasPending = tabPending.current;
-    const wasDragging = tabDragging;
+    const wasDragging = tabDragIdxRef.current != null;
+    const dragFrom = tabDragIdxRef.current;
+    const dragTo = tabOverIdxRef.current;
 
     if (wasPending?.pointerId != null) {
       try { tabRowRef.current?.releasePointerCapture(wasPending.pointerId); } catch {}
     }
 
-    if (wasDragging && tabDragIdx != null && tabOverIdx != null && tabDragIdx !== tabOverIdx) {
+    if (wasDragging && dragFrom != null && dragTo != null && dragFrom !== dragTo) {
       const ids = sortedNotes.map(n => n.id);
-      const [moved] = ids.splice(tabDragIdx, 1);
-      ids.splice(tabOverIdx, 0, moved);
+      const [moved] = ids.splice(dragFrom, 1);
+      ids.splice(dragTo, 0, moved);
       saveNoteOrder(ids);
     }
 
@@ -231,17 +238,19 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     }
 
     tabPending.current = null;
+    tabDragIdxRef.current = null;
+    tabOverIdxRef.current = null;
     setTabDragging(false);
-    setTabDragIdx(null);
-    setTabOverIdx(null);
   };
 
   // Compute visual tab order during drag
+  const dragFrom = tabDragIdxRef.current;
+  const dragTo = tabOverIdxRef.current;
   let displayNotes = sortedNotes;
-  if (tabDragging && tabDragIdx != null && tabOverIdx != null && tabDragIdx !== tabOverIdx) {
+  if (tabDragging && dragFrom != null && dragTo != null && dragFrom !== dragTo) {
     displayNotes = [...sortedNotes];
-    const [moved] = displayNotes.splice(tabDragIdx, 1);
-    displayNotes.splice(tabOverIdx, 0, moved);
+    const [moved] = displayNotes.splice(dragFrom, 1);
+    displayNotes.splice(dragTo, 0, moved);
   }
 
   const addNote = async (initialName = '', { silent = false, initialContent } = {}) => {
@@ -662,7 +671,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
               )}
               {displayNotes.map((note, idx) => {
                 const active = note.id === activeNoteId;
-                const isDragged = tabDragging && sortedNotes[tabDragIdx]?.id === note.id;
+                const isDragged = tabDragging && sortedNotes[tabDragIdxRef.current]?.id === note.id;
                 return (
                   <button
                     key={note.id}
