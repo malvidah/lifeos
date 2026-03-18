@@ -73,7 +73,14 @@ function DashboardInner() {
   const scrollContainerRef = useRef(null);
   const savedScrollTopRef = useRef(0);
 
-  // Preserve scroll position when projectFilter changes (prevents layout-shift jump)
+  // Wrap setActiveProject so scroll is always saved before the state change,
+  // then restored synchronously after DOM updates (before paint).
+  const selectProject = useCallback((p) => {
+    savedScrollTopRef.current = scrollContainerRef.current?.scrollTop ?? 0;
+    setActiveProject(p);
+  }, []);
+
+  // Restore scroll synchronously after DOM updates caused by project change.
   useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
@@ -392,13 +399,13 @@ function DashboardInner() {
     }}}>
     <ToastContainer/>
     <NavigationContext.Provider value={{
-      navigateToProject: (name) => setActiveProject(name),
+      navigateToProject: (name) => selectProject(name),
       navigateToNote: (name) => {
         window.dispatchEvent(new CustomEvent('daylab:go-to-note', { detail: { name } }));
       },
     }}>
     <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
-      <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+      <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{selectProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── Main scroll area ─── */}
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
@@ -408,7 +415,7 @@ function DashboardInner() {
           <ProjectSettingsPanel
             project={projectFilter} token={token}
             open={settingsOpen} onClose={() => setSettingsOpen(false)}
-            onRenamed={slug => { setActiveProject(slug); setSettingsOpen(false); }}
+            onRenamed={slug => { selectProject(slug); setSettingsOpen(false); }}
           />
         )}
 
@@ -426,8 +433,8 @@ function DashboardInner() {
             searchOpen={searchOpen} setSearchOpen={setSearchOpen}
             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
             searchInputRef={searchInputRef} srLoading={srLoading}
-            onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
-            onBack={projectFilter ? () => setActiveProject(null) : undefined}
+            onGoHome={() => { selectProject(null); setSelected(todayKey()); }}
+            onBack={projectFilter ? () => selectProject(null) : undefined}
             onSelectDate={setSelected}
             onOpenSettings={projectFilter ? () => setSettingsOpen(true) : () => setHomeSettingsOpen(true)}
           />
@@ -443,7 +450,7 @@ function DashboardInner() {
               habits={graphData.habits}
               healthDots={healthDots}
               selectedProject={projectFilter}
-              onSelectProject={p => { savedScrollTopRef.current = scrollContainerRef.current?.scrollTop ?? 0; setActiveProject(p); }}
+              onSelectProject={selectProject}
             />
           )}
 
