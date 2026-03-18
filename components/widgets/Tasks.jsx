@@ -41,7 +41,7 @@ function migrateTasksToHtml(raw) {
   return items ? `<ul data-type="taskList">${items}</ul>` : '';
 }
 
-// Client-side parseTasks — exported for use in ProjectView.
+// Client-side parseTasks — used internally and exported for tests/consumers.
 export function clientParseTasks(data) {
   if (Array.isArray(data)) {
     return data.filter(t => t?.text).map((t, i) => ({ id: t.id ?? `old_${i}`, text: t.text, done: !!t.done }));
@@ -66,7 +66,7 @@ export function clientParseTasks(data) {
   return [];
 }
 
-// Serialise [{id,text,done}] back to TipTap HTML — exported for ProjectView.
+// Serialise [{id,text,done}] back to TipTap HTML.
 // {name} and [note] tokens in plain text are converted to TipTap chip spans so
 // DayLabEditor renders them as clickable chip nodes rather than literal text.
 export function tasksToHtml(tasks) {
