@@ -111,7 +111,7 @@ export default function NavBar(props) {
   const isProject    = activeProject && !isGraph && !isEverything;
 
   const today = todayKey();
-  const relLabel = !activeProject ? fmtRelative(date, today) : null;
+  const relLabel = fmtRelative(date, today);
   const isToday = date === today;
   const centerLabel = !activeProject  ? fmtNavDate(date)
     : isGraph                         ? 'ALL PROJECTS'

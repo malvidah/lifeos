@@ -415,23 +415,24 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange })
         collapsed={notesCollapsed}
         onToggle={toggleNotes}
         headerRight={
-          <button
-            onClick={e => { e.stopPropagation(); toggleNotesSort(); }}
-            title={notesSortRecent ? "Sort: recent" : "Sort: manual order"}
-            style={{ background:'none', border:'none', cursor:'pointer', padding:'2px 8px', color:"var(--dl-middle)", display:'flex', alignItems:'center', borderRadius:4, transition:'color 0.12s' }}
-            onMouseEnter={e => e.currentTarget.style.color="var(--dl-strong)"}
-            onMouseLeave={e => e.currentTarget.style.color="var(--dl-middle)"}
-          >
-            {notesSortRecent ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/>
-              </svg>
-            )}
-          </button>
+          <div style={{ display:'flex', gap:2, background:'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius:100, padding:2 }} onClick={e => e.stopPropagation()}>
+            {[{key:false,label:'Manual'},{key:true,label:'Recent'}].map(({key,label}) => {
+              const active = notesSortRecent === key;
+              return (
+                <button key={String(key)} onClick={() => { if (!active) toggleNotesSort(); }}
+                  style={{
+                    fontFamily: mono, fontSize:'10px', letterSpacing:'0.06em',
+                    padding:'4px 10px', borderRadius:100, cursor:'pointer', border:'none',
+                    background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
+                    color: active ? 'var(--dl-strong)' : 'var(--dl-middle)',
+                    transition:'all 0.15s',
+                  }}
+                  onMouseEnter={e => { if (!active) { e.currentTarget.style.color='var(--dl-strong)'; e.currentTarget.style.background='var(--dl-glass-active, var(--dl-accent-13))'; } }}
+                  onMouseLeave={e => { if (!active) { e.currentTarget.style.color='var(--dl-middle)'; e.currentTarget.style.background='transparent'; } }}
+                >{label}</button>
+              );
+            })}
+          </div>
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 220 }}>
