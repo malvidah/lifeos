@@ -133,8 +133,13 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }
   }
 
+  // Assign recurring tasks positions after all own tasks to avoid position collisions.
+  // Both sets start at position 0; without adjustment recurring tasks sort to the top.
+  const maxPosition = regularTasks.reduce((max, t) => Math.max(max, t.position ?? 0), -1);
+  const adjustedRecurring = recurringTasks.map((t, i) => ({ ...t, position: maxPosition + 1 + i }));
+
   return Response.json({
-    data: tasksToHtml([...regularTasks, ...recurringTasks]),
+    data: tasksToHtml([...regularTasks, ...adjustedRecurring]),
     dueTasks: dedupedPersistent,
   });
 });
@@ -167,12 +172,23 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .eq('done', false).neq('date', date)
     .not('html', 'ilike', '%data-recurrence=%');
 
-  const { data: injectedRecurring } = await supabase
+  // Fetch recurring candidates from other dates, then filter to only those that
+  // actually match this day's schedule. Without this filter, the foreign-deletion
+  // loop (below) would delete the original whenever the task isn't shown on this
+  // day — i.e., every autosave on a non-recurrence day destroys the original.
+  const { data: recurringCandidatesPost } = await supabase
     .from('tasks')
-    .select('id, text')
+    .select('id, text, html, date')
     .eq('user_id', user.id)
     .neq('date', date)
     .ilike('html', '%data-recurrence=%');
+
+  const injectedRecurring = (recurringCandidatesPost ?? []).filter(t => {
+    const match = t.html?.match(/data-recurrence="([^"]+)"/);
+    if (!match) return false;
+    const rec = keyToRecurrence(match[1], t.date);
+    return rec && matchesSchedule(date, rec);
+  });
 
   // Texts of tasks that were display-only (from other dates)
   const injectedTexts = new Set();
