@@ -1,11 +1,11 @@
 "use client";
 import { useState, useEffect, useRef, useCallback, Fragment } from "react";
-import { serif, mono, F, R, projectColor } from "@/lib/tokens";
+import { serif, mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { toKey, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { extractTags } from "@/lib/tags";
 import { useNavigation } from "@/lib/contexts";
 import { createClient } from "@/lib/supabase";
-import { TagChip } from "../ui/primitives.jsx";
+import { TagChip, NoteChip } from "../ui/primitives.jsx";
 
 export function useSearch(query, token, userId) {
   const [results, setResults] = useState(null); // null=idle, []=empty, [...]=hits
@@ -74,25 +74,67 @@ export function useSearch(query, token, userId) {
   return { results, loading };
 }
 
+// ─── Highlight plain text segment with query match ────────────────────────────
+function HighlightText({ text, q }) {
+  if (!q || !text) return <>{text}</>;
+  const idx = text.toLowerCase().indexOf(q.toLowerCase());
+  if (idx === -1) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, idx)}
+      <mark style={{ background: "var(--dl-accent-19)", color: "var(--dl-accent)", borderRadius: 2, padding: '0 1px', fontStyle: 'normal' }}>
+        {text.slice(idx, idx + q.length)}
+      </mark>
+      {text.slice(idx + q.length)}
+    </>
+  );
+}
+
+// ─── Rich task/journal line renderer ─────────────────────────────────────────
+// Parses {project}, [note], @YYYY-MM-DD tokens and renders as styled chips.
+// Plain text segments get query highlighting.
+function RichText({ text, q }) {
+  const { navigateToProject, navigateToNote } = useNavigation();
+  if (!text) return null;
+
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const re = /\{([^}]+)\}|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})/g;
+  const parts = [];
+  let last = 0, k = 0, m;
+
+  while ((m = re.exec(text)) !== null) {
+    if (m.index > last) {
+      parts.push(<HighlightText key={k++} text={text.slice(last, m.index)} q={q} />);
+    }
+    if (m[1] != null) {
+      const name = m[1];
+      parts.push(
+        <TagChip key={k++} name={name} onClick={() => navigateToProject(name)} />
+      );
+    } else if (m[2] != null) {
+      const name = m[2];
+      parts.push(
+        <NoteChip key={k++} name={name} onClick={() => navigateToNote(name)} />
+      );
+    } else if (m[3] != null) {
+      const d = m[3];
+      const dt = new Date(d + 'T12:00:00');
+      const label = MONTHS[dt.getMonth()] + ' ' + dt.getDate();
+      parts.push(
+        <span key={k++} style={{ ...CHIP_TOKENS.date("var(--dl-blue)") }}>{label}</span>
+      );
+    }
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) {
+    parts.push(<HighlightText key={k++} text={text.slice(last)} q={q} />);
+  }
+  return <>{parts}</>;
+}
+
 // ─── SearchResults: renders result blocks with keyword highlight ──────────────
 export function SearchResults({ results, loading, query, onSelectDate }) {
-  const TYPE_LABEL = { journal: 'Journal', task: 'Task', meal: 'Meal', activity: 'Workout' };
   const TYPE_COLOR = { journal: "var(--dl-accent)", task: "var(--dl-accent)", meal: "var(--dl-red)", activity: "var(--dl-blue)" };
-
-  function highlight(text, q) {
-    if (!q || !text) return text;
-    const idx = text.toLowerCase().indexOf(q.toLowerCase());
-    if (idx === -1) return text;
-    return (
-      <>
-        {text.slice(0, idx)}
-        <mark style={{ background: "var(--dl-accent-19)", color: "var(--dl-accent)", borderRadius: 2, padding: '0 1px', fontStyle: 'normal' }}>
-          {text.slice(idx, idx + q.length)}
-        </mark>
-        {text.slice(idx + q.length)}
-      </>
-    );
-  }
 
   if (loading && !results) return (
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 40 }}>
@@ -171,18 +213,23 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
                     borderBottom: i < byType[type].length - 1 ? "1px solid var(--dl-border)" : 'none',
                   }}>
                     {type === 'task' && (
-                      <div style={{ width: 13, height: 13, flexShrink: 0, borderRadius: 3, marginTop: 5,
-                        border: `1.5px solid ${hit.done ? "var(--dl-accent)" : "var(--dl-border2)"}`,
-                        background: hit.done ? "var(--dl-accent)" : 'transparent',
+                      <div style={{ width: 15, height: 15, flexShrink: 0, borderRadius: 4, marginTop: 4,
+                        border: `1.5px solid ${hit.done ? "var(--dl-strong)" : "var(--dl-border2)"}`,
+                        background: hit.done ? "var(--dl-strong)" : 'transparent',
                         display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {hit.done && <span style={{ fontSize: 9, color: "var(--dl-bg)", lineHeight: 1 }}>✓</span>}
+                        {hit.done && (
+                          <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke={"var(--dl-accent)"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="1.5,5 4,7.5 8.5,2"/>
+                          </svg>
+                        )}
                       </div>
                     )}
-                    <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: 1.6,
-                      color: hit.done ? "var(--dl-highlight)" : "var(--dl-strong)", whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                    <div style={{ flex: 1, fontFamily: serif, fontSize: F.md, lineHeight: 1.7,
+                      color: hit.done ? "var(--dl-highlight)" : "var(--dl-strong)",
+                      wordBreak: 'break-word', display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0 4px',
                       textDecoration: hit.done ? 'line-through' : 'none',
                       opacity: hit.done ? 0.5 : 1 }}>
-                      {highlight(hit.text, query.trim())}
+                      <RichText text={hit.text} q={query.trim()} />
                     </div>
                   </div>
                 ))}
