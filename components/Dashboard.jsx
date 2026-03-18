@@ -418,9 +418,8 @@ function DashboardInner() {
             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
             searchInputRef={searchInputRef} srLoading={srLoading}
             onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
-            onGoToProjects={() => setActiveProject('__graph__')}
             onBack={projectFilter ? () => setActiveProject(null) : undefined}
-            onSelectDate={!activeProject ? setSelected : undefined}
+            onSelectDate={setSelected}
             onOpenSettings={projectFilter ? () => setSettingsOpen(true) : () => setHomeSettingsOpen(true)}
           />
 

@@ -179,79 +179,66 @@ export default function NavBar(props) {
             <line x1="8"  y1="2"  x2="8"  y2="6"/>
           </svg>
         </NavIconBtn>
-        <NavIconBtn onClick={onGoToProjects} active={!!activeProject} title="All projects">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <polygon points="12,4 2,20 22,20"/>
-          </svg>
-        </NavIconBtn>
       </div>
 
-      {/* ── Center title — absolutely centred ─────────────────────────── */}
+      {/* ── Center — absolutely centred ────────────────────────────────── */}
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         pointerEvents: 'none',
       }}>
-        {!activeProject && onSelectDate ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
-            <button onClick={() => onSelectDate(stepDateKey(date, -1))} style={{
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
+          {/* Prev-day arrow (back arrow deselects project if active) */}
+          <button
+            onClick={() => isProject && onBack ? onBack() : onSelectDate?.(stepDateKey(date, -1))}
+            style={{
               background: 'none', border: 'none', cursor: 'pointer',
               color: "var(--dl-highlight)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
               lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
             }}
-              onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-              onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
-            >‹</button>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-              {relLabel && (
-                <span style={{
-                  fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
-                  color: isToday ? "var(--dl-orange)" : "var(--dl-middle)",
-                  lineHeight: 1, marginBottom: -1,
-                }}>{relLabel}</span>
-              )}
-              <button onClick={onGoHome} style={{
-                background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
-                fontFamily: mono, fontSize: 13, fontWeight: 400, letterSpacing: '0.12em',
+            onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+            onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+          >‹</button>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
+            {/* Project name row — only when project is active */}
+            {isProject && (
+              <span style={{
+                fontFamily: mono, fontSize: 10, letterSpacing: '0.12em',
                 textTransform: 'uppercase', color: titleColor,
-                whiteSpace: 'nowrap', userSelect: 'none', transition: 'opacity 0.15s',
-              }}
-                onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
-                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-              >
-                {centerLabel}
-              </button>
-            </div>
-            <button onClick={() => onSelectDate(stepDateKey(date, +1))} style={{
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: "var(--dl-highlight)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
-              lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
-            }}
-              onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-              onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
-            >›</button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, pointerEvents: 'auto' }}>
-            {isProject && onBack && (
-              <button onClick={onBack} style={{
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: "var(--dl-middle)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
-                lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
-              }}
-                onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
-              >‹</button>
+                whiteSpace: 'nowrap', userSelect: 'none', lineHeight: 1, marginBottom: 1,
+              }}>{centerLabel}</span>
             )}
-            <span style={{
-              fontFamily: mono, fontSize: 13, letterSpacing: '0.12em',
-              textTransform: 'uppercase', color: titleColor,
-              whiteSpace: 'nowrap', userSelect: 'none',
-            }}>
-              {centerLabel}
-            </span>
+            {/* Relative label (TODAY / YESTERDAY / etc) — only in day view */}
+            {!isProject && relLabel && (
+              <span style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
+                color: isToday ? "var(--dl-orange)" : "var(--dl-middle)",
+                lineHeight: 1, marginBottom: -1,
+              }}>{relLabel}</span>
+            )}
+            {/* Date — always shown */}
+            <button onClick={onGoHome} style={{
+              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
+              fontFamily: mono, fontSize: isProject ? 11 : 13, fontWeight: 400, letterSpacing: '0.12em',
+              textTransform: 'uppercase', color: isProject ? "var(--dl-highlight)" : titleColor,
+              whiteSpace: 'nowrap', userSelect: 'none', transition: 'opacity 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
+              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+            >{fmtNavDate(date)}</button>
           </div>
-        )}
+
+          {/* Next-day arrow */}
+          <button onClick={() => onSelectDate?.(stepDateKey(date, +1))} style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: "var(--dl-highlight)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
+            lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
+          }}
+            onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+            onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+          >›</button>
+        </div>
       </div>
 
       {/* ── Right icons ─────────────────────────────────────────────────── */}

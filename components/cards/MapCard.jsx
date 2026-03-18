@@ -575,7 +575,7 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
     <Html position={[p.x, labelY, p.z]} center
       zIndexRange={isSelected ? [9998, 9998] : isHov ? [9999, 9999] : [16, 0]}
       style={{ pointerEvents: 'auto' }}>
-      <div onClick={() => onSelect(p.tag)}
+      <div data-map-label onClick={() => onSelect(p.tag)}
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
@@ -1036,11 +1036,32 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
 
   const sky = skyColors(weather);
 
+  // Track pointer-down position so we can distinguish drag from click
+  const pointerDownPos = useRef(null);
+
+  const handlePointerDown = (e) => {
+    pointerDownPos.current = { x: e.clientX, y: e.clientY };
+  };
+  const handleClick = (e) => {
+    if (!selectedProject) return;
+    const down = pointerDownPos.current;
+    if (!down) return;
+    const dx = e.clientX - down.x, dy = e.clientY - down.y;
+    if (Math.sqrt(dx*dx + dy*dy) > 5) return; // was a drag, not a click
+    // Only deselect if the click target is the canvas itself, not a label pill
+    if (e.target.closest && e.target.closest('[data-map-label]')) return;
+    onSelectProject(null);
+  };
+
   return (
-    <div style={{
-      height: 450, borderRadius: 12, overflow: 'hidden',
-      background: `linear-gradient(180deg, ${sky.skyTop} 0%, ${sky.skyBot} 100%)`,
-    }}>
+    <div
+      style={{
+        height: 450, borderRadius: 12, overflow: 'hidden',
+        background: `linear-gradient(180deg, ${sky.skyTop} 0%, ${sky.skyBot} 100%)`,
+      }}
+      onPointerDown={handlePointerDown}
+      onClick={handleClick}
+    >
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         dpr={[1, 1.5]}
