@@ -1,66 +1,22 @@
 "use client";
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, Fragment, useContext } from "react";
-import { serif, mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
-import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useContext } from "react";
+import { serif, mono, F } from "@/lib/tokens";
+import { todayKey, fmtDate } from "@/lib/dates";
 import { api } from "@/lib/api";
-import { extractTags, tagDisplayName } from "@/lib/tags";
-import { useDbSave, dbLoad, dbSave, MEM } from "@/lib/db";
+import { useDbSave, MEM } from "@/lib/db";
 import { useProjects } from "@/lib/useProjects";
 import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
-import { useNavigation, useProjectNames, NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
-import { Card, Ring, ChevronBtn, TagChip, RichLine, Shimmer } from "../ui/primitives.jsx";
+import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
+import { Card } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
-import { useTheme } from "@/lib/theme";
-import Tasks, { TaskFilterBtns, clientParseTasks, tasksToHtml, injectTaskListStyles } from "../widgets/Tasks.jsx";
-import { AddJournalLine, extractImages, stripImageChips, PhotoStrip, Slideshow, DropZone } from "../widgets/JournalEditor.jsx";
+import Tasks, { TaskFilterBtns } from "../widgets/Tasks.jsx";
+import { extractImages, stripImageChips, PhotoStrip, Slideshow, DropZone } from "../widgets/JournalEditor.jsx";
 import { uploadImageFile, deleteImageFile } from "@/lib/images";
 import { ProjectSettingsPanel } from "./ProjectSettingsPanel.jsx";
 
-// ─── HealthAllMeals ───────────────────────────────────────────────────────────
-// EntryBlock — renders one paragraph block (may span multiple lines joined by \n).
-// In edit mode, opens a multi-line DayLabEditor for the whole block.
-function EntryLine({ entry, date, editing, onStartEdit, onSave, dimTag }) {
-  const baseStyle = { fontFamily: serif, fontSize: F.md, lineHeight: '1.7', padding: '2px 0', wordBreak: 'break-word' };
-  const ctxProjects = useContext(ProjectNamesContext);
-  const ctxNotes    = useContext(NoteContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
-
-  if (editing) {
-    return (
-      <DayLabEditor
-        value={entry.content || entry.text}
-        onBlur={html => onSave(html)}
-        placeholder=""
-        projectNames={ctxProjects}
-        noteNames={ctxNotes.notes}
-        onCreateNote={ctxNotes.onCreateNote}
-        onProjectClick={name => navigateToProject(name)}
-        onNoteClick={name => navigateToNote(name)}
-        textColor={"var(--dl-strong)"}
-        mutedColor={"var(--dl-middle)"}
-        color={"var(--dl-accent)"}
-        style={{ width: '100%', minHeight: '1.7em' }}
-      />
-    );
-  }
-  // Multi-line blocks: render each line through RichLine, separated by line breaks
-  const lines = entry.text.split('\n');
-  return (
-    <div style={{ ...baseStyle, color:"var(--dl-strong)", cursor:'text' }} onClick={onStartEdit}>
-      {lines.map((line, i) => (
-        <Fragment key={i}>
-          {i > 0 && <br/>}
-          <RichLine text={line} dimTag={dimTag}/>
-        </Fragment>
-      ))}
-    </div>
-  );
-}
-
-// ProjectDateTaskEditor removed — project view now reuses the day-view Tasks
-// component with CSS-based project filtering. This eliminates the merge logic
-// that was the source of task duplication and cross-project tag pollution.
+// ProjectDateTaskEditor and EntryLine removed — Tasks uses CSS-based project
+// filtering; JournalEditor is the single journal surface (Phase 2).
 
 // ─── ProjectView ──────────────────────────────────────────────────────────────
 export default function ProjectView({ project, token, userId, onBack, onSelectDate, taskFilter, setTaskFilter, settingsOpen, onCloseSettings, onRenamed }) {
@@ -94,7 +50,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   }, []);
   const pvTaskFilter = taskFilter;
   const setPvTaskFilter = setTaskFilter;
-  const [editingEntry, setEditingEntry] = useState(null); // {date,lineIndex,text}
 
   // Notes — independent entities from the `notes` table, tagged to projects via project_tags
   const [notesList, setNotesList] = useState([]);
@@ -504,7 +459,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   // Per-project collapse state (persisted)
   const [notesCollapsed,      toggleNotes]      = useCollapse(`pv:${project}:journal`,    false);
   const [tasksCollapsed,      toggleTasks]      = useCollapse(`pv:${project}:tasks`,      false);
-  const [entriesCollapsed,    toggleEntries]    = useCollapse(`pv:${project}:entries`,    false);
   const [workoutsCollapsed,   toggleWorkouts]   = useCollapse(`pv:${project}:workouts`,   false);
   const [mealsCollapsed,      toggleMeals]      = useCollapse(`pv:${project}:meals`,      false);
   const [hoveredNoteId,       setHoveredNoteId] = useState(null);
@@ -559,114 +513,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       .catch(() => setEntries({ journalEntries: [], taskEntries: [] }));
   }, [project, token, entriesRev]); // eslint-disable-line
 
-  // Group journal entries by date (oldest first)
-  const journalByDate = useMemo(() => {
-    if (!entries?.journalEntries?.length) return [];
-    const map = {};
-    entries.journalEntries.forEach(e => {
-      if (!map[e.date]) map[e.date] = [];
-      map[e.date].push(e);
-    });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
-  }, [entries]);
-
-  const taskEntries = entries?.taskEntries || [];
-  const openTasks = taskEntries.filter(t => !t.done);
-  const doneTasks = taskEntries.filter(t => t.done);
-
-  // Group tasks by date (oldest first)
-  const tasksByDate = useMemo(() => {
-    if (!taskEntries.length) return [];
-    const map = {};
-    // Preserve DB order — do NOT split into open/done (that causes reorder on toggle)
-    taskEntries.forEach(t => {
-      if (!map[t.date]) map[t.date] = { all: [], open: [], done: [] };
-      map[t.date].all.push(t);
-      if (t.done) map[t.date].done.push(t);
-      else map[t.date].open.push(t);
-    });
-    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
-  }, [taskEntries]);
-
-  // Register any new tags found in edited text into projectsMeta
-  function registerNewTags(text) {
-    const tags = extractTags(text).filter(t => !t.startsWith('__'));
-    if (!tags.length) return;
-    const meta = projectsMeta || {};
-    const newTags = tags.filter(t => !meta[t]);
-    if (!newTags.length) return;
-    const updated = { ...meta };
-    newTags.forEach(t => { updated[t] = { description: '', createdAt: new Date().toISOString() }; });
-    setProjectsMeta(updated, { skipHistory: true });
-  }
-
-  async function saveJournalEdit(date, lineIndex, newHtml, blockLength = 1) {
-    const current = await dbLoad(date, 'journal', token);
-    if (current === null) return;
-    // Journal content is HTML (<p>…</p> blocks). Split into blocks for editing.
-    const paraRe = /<p\b[^>]*>[\s\S]*?<\/p>/gi;
-    const blocks = (current || '').match(paraRe) || [];
-    // Editor returns HTML — extract <p> blocks from it
-    const newBlocks = newHtml.match(paraRe) || [`<p>${newHtml}</p>`];
-    blocks.splice(lineIndex, blockLength, ...newBlocks);
-    const updated = blocks.join('');
-    await dbSave(date, 'journal', updated, token);
-    // Update module-level cache so daily view reflects immediately
-    MEM[`${userId}:${date}:journal`] = updated;
-    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'], _pvSource: pvId.current } }));
-    // Convert HTML to plain text for local state + tag registration
-    const newText = newHtml
-      .replace(/<span[^>]*data-project-tag="([^"]+)"[^>]*>[^<]*<\/span>/g, '{$1}')
-      .replace(/<span[^>]*data-note-link="([^"]+)"[^>]*>[^<]*<\/span>/g, '[$1]')
-      .replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
-      .replace(/\s+/g, ' ').trim();
-    registerNewTags(newText);
-    setEntries(prev => prev ? {
-      ...prev,
-      journalEntries: prev.journalEntries.map(e =>
-        (e.date === date && e.lineIndex === lineIndex) ? { ...e, text: newText, content: newHtml } : e
-      ),
-    } : prev);
-  }
-
-
-  async function addNewJournal(text) {
-    if (!text.trim()) return;
-    const today = todayKey();
-    let entryText = text.trim();
-    // Auto-tag with project chip (skip for __everything__ — no project to tag)
-    if (project !== '__everything__') {
-      const chip = `{${project.toLowerCase()}}`;
-      const hasTag = entryText.endsWith(`#${project}`) || entryText.includes(chip);
-      if (!hasTag) entryText = `${entryText} ${chip}`;
-    }
-    const current = await dbLoad(today, 'journal', token);
-    const existing = (typeof current === 'string' ? current : '') || '';
-    // Journal content is HTML — append as a new <p> block
-    const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const newBlock = `<p>${escHtml(entryText)}</p>`;
-    const updated = existing ? existing + newBlock : newBlock;
-    const paraRe = /<p\b[^>]*>[\s\S]*?<\/p>/gi;
-    const allBlocks = updated.match(paraRe) || [];
-    const newLineIndex = allBlocks.length - 1;
-    await dbSave(today, 'journal', updated, token);
-    MEM[`${userId}:${today}:journal`] = updated;
-    window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['journal'], _pvSource: pvId.current } }));
-    registerNewTags(entryText);
-    setEntries(prev => prev ? {
-      ...prev,
-      journalEntries: [...(prev.journalEntries || []), { date: today, lineIndex: newLineIndex, text: entryText }],
-    } : prev);
-  }
-
-  const loadingCards = (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <Shimmer width="80%" height={13}/><Shimmer width="65%" height={13}/><Shimmer width="72%" height={13}/>
-    </div>
-  );
-
-  const _pcol = project === '__everything__' ? "var(--dl-accent)" : projectColor(project);
   const noteNamesForContext = allNoteNames;
 
   return (
@@ -875,62 +721,6 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           taskFilter={pvTaskFilter}
           project={project === '__everything__' ? undefined : project}
         />
-      </Card>
-
-      {/* Journal Entries */}
-      <Card
-        label={entries?.journalEntries?.length ? `Journal · ${entries.journalEntries.length}` : 'Journal'}
-        color={"var(--dl-accent)"} autoHeight
-        collapsed={entriesCollapsed} onToggle={toggleEntries}
-        headerLeft={null}
-      >
-        {entries === null ? loadingCards
-          : (() => {
-            const today = todayKey();
-            const otherDates = journalByDate.filter(([d]) => d !== today);
-            const todayLines = journalByDate.find(([d]) => d === today)?.[1] || [];
-            const allDates = [[today, todayLines], ...otherDates];
-
-            function renderLines(date, lines) {
-              return lines.map(entry => (
-                <EntryLine
-                  key={`${date}-${entry.lineIndex}`}
-                  entry={entry} date={date}
-                  editing={editingEntry?.date === date && editingEntry?.lineIndex === entry.lineIndex}
-                  onStartEdit={() => setEditingEntry({ date, lineIndex: entry.lineIndex, text: entry.text, content: entry.content })}
-                  onSave={async (text) => { await saveJournalEdit(date, entry.lineIndex, text, entry.blockLength ?? 1); setEditingEntry(null); }}
-                  dimTag={project === '__everything__' ? null : project}
-                />
-              ));
-            }
-
-            return (
-              <div style={{ display:'flex', flexDirection:'column' }}>
-                {allDates.map(([date, lines], dateIdx) => {
-                  const isToday = date === today;
-                  if (!isToday && lines.length === 0) return null;
-                  return (
-                    <div key={date}>
-                      <div style={{
-                        fontFamily: mono, fontSize: 10,
-                        color: isToday ? "var(--dl-accent)" : "var(--dl-highlight)",
-                        letterSpacing: '0.06em', textTransform: 'uppercase',
-                        marginTop: dateIdx === 0 ? 0 : 4, marginBottom: 8,
-                      }}>{isToday ? 'Today' : fmtDate(date)}</div>
-                      {isToday && (
-                        <AddJournalLine project={project} onAdd={addNewJournal} />
-                      )}
-                      <div style={{ display:'flex', flexDirection:'column', gap:16 }}>
-                        {renderLines(date, lines)}
-                      </div>
-                      <div style={{ borderTop:"1px solid var(--dl-border)", marginTop:16, marginBottom:4 }}/>
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })()
-        }
       </Card>
 
       {/* Workouts tagged to this project */}

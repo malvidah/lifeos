@@ -323,7 +323,9 @@ export function DropZone({ uploading }) {
 }
 
 // ── JournalEditor ─────────────────────────────────────────────────────────────
-export function JournalEditor({date,userId,token}) {
+// When `project` is provided, renders a filtered read-only view of blocks tagged
+// to that project for the selected date. When null, full editable journal.
+export function JournalEditor({date,userId,token,project}) {
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
@@ -438,6 +440,26 @@ export function JournalEditor({date,userId,token}) {
       <Shimmer width="70%" height={14}/>
     </div>
   );
+
+  // Project-filtered view: parse <p> blocks and show only those tagged to the project
+  if (project && project !== '__everything__') {
+    const paraRe = /<p\b[^>]*>[\s\S]*?<\/p>/gi;
+    const blocks = (value || '').match(paraRe) || [];
+    const tagPattern = `data-project-tag="${project}"`;
+    const matched = blocks.filter(b => b.includes(tagPattern));
+    if (matched.length === 0) return null;
+    return (
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        {matched.map((block, i) => (
+          <div
+            key={i}
+            style={{fontFamily:serif,fontSize:F.md,lineHeight:1.7,color:'var(--dl-strong)',wordBreak:'break-word'}}
+            dangerouslySetInnerHTML={{__html: block}}
+          />
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div
