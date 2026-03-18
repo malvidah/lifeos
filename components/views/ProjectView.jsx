@@ -172,10 +172,12 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   // Save note tab order to project metadata
   const saveNoteOrder = useCallback((orderedIds) => {
     if (!project || project.startsWith('__')) return;
-    const updated = { ...(projectsMeta || {}) };
-    updated[project] = { ...(updated[project] || {}), noteOrder: orderedIds };
-    setProjectsMeta(updated, { skipHistory: true });
-  }, [project, projectsMeta, setProjectsMeta]);
+    setProjectsMeta(prev => {
+      const updated = { ...(prev || {}) };
+      updated[project] = { ...(updated[project] || {}), noteOrder: orderedIds };
+      return updated;
+    }, { skipHistory: true });
+  }, [project, setProjectsMeta]);
 
   // FLIP animation refs
   const tabElemsRef = useRef({}); // { [noteId]: DOM element }

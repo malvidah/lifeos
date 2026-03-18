@@ -1,11 +1,10 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ThemeProvider, useTheme } from "@/lib/theme";
-import { mono, F, injectBlurWebFont, projectColor } from "@/lib/tokens";
+import { mono, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
 import { api } from "@/lib/api";
 import { todayKey, toKey, shift } from "@/lib/dates";
-import { tagDisplayName } from "@/lib/tags";
 import { bustOuraCache } from "@/lib/ouraCache";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
@@ -113,10 +112,10 @@ function DashboardInner() {
     return () => window.removeEventListener('daylab:create-project', handler);
   }, []); // eslint-disable-line
 
-  // Graph data — declared HERE so token is already defined (avoids TDZ in minified bundle)
+  // Graph data — load eagerly on login so MapCard is always ready
   const [graphData, setGraphData] = useState(null);
   useEffect(() => {
-    if (activeProject !== '__graph__' || !token) return;
+    if (!token) return;
     if (graphData) return;
     Promise.all([
       api.get('/api/all-tags', token),
@@ -132,7 +131,7 @@ function DashboardInner() {
         habits: statsRes?.habits || {},
       });
     }).catch(() => { setGraphData({ allTags: [], connections: [], recency: {}, entryCounts: {}, completedTasks: {} }); });
-  }, [activeProject, token]); // eslint-disable-line
+  }, [token]); // eslint-disable-line
   const { results: srResults, loading: srLoading } = useSearch(searchQuery, token, userId);
 
   // Expose token to native iOS layer (Swift reads this for HealthKit sync)
@@ -363,89 +362,116 @@ function DashboardInner() {
   ];
   const [leftWidget,...rightWidgets] = WIDGETS;
 
+  // activeProject is now a filter, not a view switch.
+  // __graph__ is kept for back-compat (navigateToNote uses it) but treated as no filter.
+  const isGraph = activeProject === '__graph__';
+  const projectFilter = (!activeProject || isGraph) ? null : activeProject;
+
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
     <ToastContainer/>
     <NavigationContext.Provider value={{
       navigateToProject: (name) => setActiveProject(name),
       navigateToNote: (name) => {
-        // Navigate to __graph__ (which renders MapCard + the __everything__ ProjectView below it).
-        // Navigating to __everything__ directly showed an orphaned bare list with no map.
-        setActiveProject('__graph__');
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('daylab:go-to-note', { detail: { name } }));
-        }, 150);
+        window.dispatchEvent(new CustomEvent('daylab:go-to-note', { detail: { name } }));
       },
     }}>
-    <div style={{background:activeProject?"var(--dl-bg)":"transparent",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
-      {!activeProject && <WeatherBackground date={selected} theme={theme}/>}
+    <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
+      <WeatherBackground date={selected} theme={theme}/>
 
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
-      {/* No top vignette needed — glassmorphic header handles the transition */}
+      {/* ── Main scroll area ─── */}
+      <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
 
+        <HomeSettingsPanel open={homeSettingsOpen} onClose={() => setHomeSettingsOpen(false)} />
 
-      {/* ── Main scroll area — full width for mouse wheel, max-width for content ─── */}
-        <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
+        {/* ── Single unified scroll container ── */}
+        <div style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0}}>
+        <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
 
-          <HomeSettingsPanel open={homeSettingsOpen} onClose={() => setHomeSettingsOpen(false)} />
+          {/* Spacer for fixed header */}
+          <div style={{height:"calc(env(safe-area-inset-top, 0px) + 70px)",flexShrink:0}}/>
 
-          {/* ── Day View scroll — calendar, health, cards ── */}
-          {!activeProject && (
-            <div style={{
-              flex:1, minHeight:0, overflowY:"auto",
-              paddingBottom:mobile?200:0}}>
-            <div style={{
-              maxWidth:1200, width:"100%", margin:"0 auto",
-              padding:10, paddingTop:0,
-              display:"flex", flexDirection:"column", gap:8}}>
-              {/* Spacer for fixed header — clears header + safe area + breathing room */}
-              <div style={{height:"calc(env(safe-area-inset-top, 0px) + 70px)",flexShrink:0}}/>
-              {/* NavBar — in scroll flow, same component on every page */}
-              <NavBar
-                activeProject={activeProject}
-                date={selected}
-                searchOpen={searchOpen} setSearchOpen={setSearchOpen}
-                searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-                searchInputRef={searchInputRef} srLoading={srLoading}
-                onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
-                onGoToProjects={() => setActiveProject('__graph__')}
-                onSelectDate={setSelected}
-                onOpenSettings={() => setHomeSettingsOpen(true)}
+          {/* NavBar — date nav always */}
+          <NavBar
+            activeProject={null}
+            date={selected}
+            searchOpen={searchOpen} setSearchOpen={setSearchOpen}
+            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
+            searchInputRef={searchInputRef} srLoading={srLoading}
+            onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
+            onGoToProjects={() => setActiveProject('__graph__')}
+            onSelectDate={setSelected}
+            onOpenSettings={() => setHomeSettingsOpen(true)}
+          />
+
+          {/* Cal + Health — hidden during search */}
+          {!searchOpen && (
+            <>
+              <div style={{flexShrink:0}}>
+                <ErrorBoundary label="Calendar">
+                <CalendarCard selected={selected} onSelect={setSelected}
+                  events={events} setEvents={setEvents} healthDots={healthDots}
+                  token={token} collapsed={calCollapsed} onToggle={toggleCal}
+                  calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
+                </ErrorBoundary>
+              </div>
+              <div style={{flexShrink:0}}>
+                <ErrorBoundary label="Health">
+                <HealthCard date={selected} token={token} userId={userId}
+                  onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
+                  collapsed={healthCollapsed} onToggle={toggleHealth}/>
+                </ErrorBoundary>
+              </div>
+            </>
+          )}
+
+          {/* MapCard — always rendered once graph data is ready */}
+          {graphData && (
+            <MapCard
+              allTags={graphData.allTags}
+              connections={graphData.connections}
+              recency={graphData.recency}
+              entryCounts={graphData.entryCounts}
+              completedTasks={graphData.completedTasks}
+              habits={graphData.habits}
+              healthDots={healthDots}
+              selectedProject={projectFilter}
+              onSelectProject={p => setActiveProject(p)}
+            />
+          )}
+
+          {/* Search results or widgets */}
+          {searchOpen ? (
+            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease' }}>
+              <SearchResults
+                results={srResults}
+                loading={srLoading}
+                query={searchQuery}
+                onSelectDate={d => { setSearchOpen(false); setSearchQuery(''); setSelected(d); }}
               />
-                              {/* Cal + Health — hidden during search */}
-                {!searchOpen && (
-                  <>
-                    <div style={{flexShrink:0}}>
-                      <ErrorBoundary label="Calendar">
-                      <CalendarCard selected={selected} onSelect={setSelected}
-                        events={events} setEvents={setEvents} healthDots={healthDots}
-                        token={token} collapsed={calCollapsed} onToggle={toggleCal}
-                        calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
-                      </ErrorBoundary>
-                    </div>
-                    <div style={{flexShrink:0}}>
-                      <ErrorBoundary label="Health">
-                      <HealthCard date={selected} token={token} userId={userId}
-                        onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-                        collapsed={healthCollapsed} onToggle={toggleHealth}/>
-                      </ErrorBoundary>
-                    </div>
-                  </>
-                )}
-              {/* Search results or widgets */}
-              {searchOpen ? (
-                <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease' }}>
-                  <SearchResults
-                    results={srResults}
-                    loading={srLoading}
-                    query={searchQuery}
-                    onSelectDate={d => { setSearchOpen(false); setSearchQuery(''); setSelected(d); }}
-                  />
-                </div>
-              ) : (
-                <>
-              {/* Widgets — row on wide, flat stack on narrow */}
+            </div>
+          ) : (
+            <>
+              {/* Notes + tasks + journal — ProjectView handles project filtering */}
+              <ErrorBoundary label="Project">
+              <ProjectView
+                project={projectFilter ? projectFilter : '__everything__'}
+                token={token}
+                userId={userId}
+                onBack={() => setActiveProject(null)}
+                onSelectDate={d => { setActiveProject(null); setSelected(d); }}
+                taskFilter={taskFilter} setTaskFilter={setTaskFilter}
+                {...(projectFilter && {
+                  settingsOpen,
+                  onCloseSettings: () => setSettingsOpen(false),
+                  onRenamed: slug => { setActiveProject(slug); setSettingsOpen(false); },
+                })}
+              />
+              </ErrorBoundary>
+
+              {/* Day widgets — Journal, Tasks, Meals, Workouts */}
               {mobile ? (
                 <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
                   <ErrorBoundary label={leftWidget.label}>
@@ -468,14 +494,9 @@ function DashboardInner() {
                   ))}
                 </div>
               ) : (
-                <div style={{display:"flex", gap:10,
-                  flexDirection:"row",
-                  alignItems:"stretch"}}>
-
-                  {/* Left column: Journal — stretches to match right col height */}
-                  <div style={{flex:"1 1 0", minWidth:0,
-                    display:"flex", flexDirection:"column", gap:10,
-                    paddingBottom:180}}>
+                <div style={{display:"flex", gap:10, flexDirection:"row", alignItems:"stretch"}}>
+                  {/* Left column: Journal */}
+                  <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
                     <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
                       <ErrorBoundary label={leftWidget.label}>
                       <Card label={leftWidget.label} color={leftWidget.color()}
@@ -487,11 +508,8 @@ function DashboardInner() {
                       </ErrorBoundary>
                     </div>
                   </div>
-
-                  {/* Right widgets — column always; last card stretches to fill */}
-                  <div style={{flex:"1 1 0", minWidth:0,
-                    display:"flex", flexDirection:"column", gap:10,
-                    paddingBottom:180}}>
+                  {/* Right widgets */}
+                  <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
                     {rightWidgets.map((w, i)=>(
                       <div key={w.id} style={{
                         display:"flex", flexDirection:"column",
@@ -512,71 +530,11 @@ function DashboardInner() {
               )}
             </>
           )}
-          </div>
-          </div>
-          )}
 
-          {/* ── Project view ── */}
-          {activeProject && (
-            (() => {
-              const isGraph  = activeProject === '__graph__';
-              const pcol = isGraph ? "var(--dl-accent)" : projectColor(activeProject);
-              return (
-                <>
-                  {/* Scrollable content — full width scroll, max-width content */}
-                  <div style={{flex:1,minHeight:0,overflow:'auto'}}>
-                  <div style={{maxWidth:1200,width:"100%",margin:"0 auto",padding:10,paddingTop:0,boxSizing:'border-box',
-                    display:'flex',flexDirection:'column',gap:8}}>
-                    {/* Spacer for fixed header — same as day view */}
-                    <div style={{height:"calc(env(safe-area-inset-top, 0px) + 70px)",flexShrink:0}}/>
-                    <NavBar
-                      activeProject={activeProject}
-                      date={selected}
-                      searchOpen={searchOpen} setSearchOpen={setSearchOpen}
-                      searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-                      searchInputRef={searchInputRef} srLoading={srLoading}
-                      onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
-                      onGoToProjects={() => setActiveProject('__graph__')}
-                      onBack={() => setActiveProject('__graph__')}
-                      onOpenSettings={() => setSettingsOpen(true)}
-                    />
-                    {/* MapCard as background for all project views */}
-                    {graphData && (
-                      <MapCard
-                        allTags={graphData.allTags}
-                        connections={graphData.connections}
-                        recency={graphData.recency}
-                        entryCounts={graphData.entryCounts}
-                        completedTasks={graphData.completedTasks}
-                        habits={graphData.habits}
-                        healthDots={healthDots}
-                        selectedProject={isGraph ? null : activeProject}
-                        onSelectProject={p => { if (p === '__graph__') return; setActiveProject(p); }}
-                      />
-                    )}
-                    <ErrorBoundary label="Project">
-                    <ProjectView
-                      project={isGraph ? '__everything__' : activeProject}
-                      token={token}
-                      userId={userId}
-                      onBack={isGraph ? () => {} : () => setActiveProject('__graph__')}
-                      onSelectDate={d => { setActiveProject(null); setSelected(d); }}
-                      taskFilter={taskFilter} setTaskFilter={setTaskFilter}
-                      {...(!isGraph && {
-                        settingsOpen,
-                        onCloseSettings: () => setSettingsOpen(false),
-                        onRenamed: slug => { setActiveProject(slug); setSettingsOpen(false); },
-                      })}
-                    />
-                    </ErrorBoundary>
-                  </div>{/* close max-width inner */}
-                  </div>{/* close scroll outer */}
-                </>
-              );
-            })()
-          )}
+        </div>{/* close max-width inner */}
+        </div>{/* close scroll outer */}
 
-        </div>
+      </div>
 
       {/* Bottom vignette — fades content up into the AI bar */}
       <div style={{
