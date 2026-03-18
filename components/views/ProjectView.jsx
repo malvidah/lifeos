@@ -168,22 +168,81 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     setProjectsMeta(updated, { skipHistory: true });
   }, [project, projectsMeta, setProjectsMeta]);
 
-  // Drag-to-reorder state (HTML5 drag API — reliable across browsers)
-  const [tabDragId, setTabDragId] = useState(null);
-  const [tabOverId, setTabOverId] = useState(null);
+  // Drag-to-reorder state (pointer events on container — same as PhotoStrip)
+  const tabRowRef = useRef(null);
+  const tabPending = useRef(null);
+  const tabItemWidths = useRef([]);
+  const [tabDragging, setTabDragging] = useState(false);
+  const [tabDragIdx, setTabDragIdx] = useState(null);
+  const [tabOverIdx, setTabOverIdx] = useState(null);
+
+  const canReorderTabs = !notesSortRecent && sortedNotes.length > 1;
+
+  const calcTabOver = (clientX) => {
+    const rect = tabRowRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const relX = clientX - rect.left + (tabRowRef.current?.scrollLeft || 0);
+    let accum = 0;
+    for (let i = 0; i < tabItemWidths.current.length; i++) {
+      accum += tabItemWidths.current[i];
+      if (relX < accum - tabItemWidths.current[i] / 2) return i;
+    }
+    return Math.max(0, tabItemWidths.current.length - 1);
+  };
+
+  const handleTabPointerDown = (e, idx) => {
+    if (!canReorderTabs) return;
+    e.preventDefault();
+    tabPending.current = { idx, pointerId: e.pointerId, startX: e.clientX };
+    tabRowRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  const handleTabPointerMove = (e) => {
+    const p = tabPending.current;
+    if (!p && !tabDragging) return;
+    if (p && !tabDragging) {
+      if (Math.abs(e.clientX - p.startX) < 5) return;
+      setTabDragging(true);
+      setTabDragIdx(p.idx);
+      setTabOverIdx(p.idx);
+      tabPending.current = null;
+    }
+    if (tabDragging) setTabOverIdx(calcTabOver(e.clientX));
+  };
+
+  const handleTabPointerUp = () => {
+    const wasPending = tabPending.current;
+    const wasDragging = tabDragging;
+
+    if (wasPending?.pointerId != null) {
+      try { tabRowRef.current?.releasePointerCapture(wasPending.pointerId); } catch {}
+    }
+
+    if (wasDragging && tabDragIdx != null && tabOverIdx != null && tabDragIdx !== tabOverIdx) {
+      const ids = sortedNotes.map(n => n.id);
+      const [moved] = ids.splice(tabDragIdx, 1);
+      ids.splice(tabOverIdx, 0, moved);
+      saveNoteOrder(ids);
+    }
+
+    // Click (no drag) — select note
+    if (wasPending && !wasDragging) {
+      selectNote(sortedNotes[wasPending.idx]?.id);
+    }
+
+    tabPending.current = null;
+    setTabDragging(false);
+    setTabDragIdx(null);
+    setTabOverIdx(null);
+  };
 
   // Compute visual tab order during drag
-  const displayNotes = useMemo(() => {
-    if (!tabDragId || !tabOverId || tabDragId === tabOverId) return sortedNotes;
-    const ids = sortedNotes.map(n => n.id);
-    const fromIdx = ids.indexOf(tabDragId);
-    const toIdx = ids.indexOf(tabOverId);
-    if (fromIdx < 0 || toIdx < 0) return sortedNotes;
-    const reordered = [...sortedNotes];
-    const [moved] = reordered.splice(fromIdx, 1);
-    reordered.splice(toIdx, 0, moved);
-    return reordered;
-  }, [sortedNotes, tabDragId, tabOverId]);
+  let displayNotes = sortedNotes;
+  if (tabDragging && tabDragIdx != null && tabOverIdx != null && tabDragIdx !== tabOverIdx) {
+    displayNotes = [...sortedNotes];
+    const [moved] = displayNotes.splice(tabDragIdx, 1);
+    displayNotes.splice(tabOverIdx, 0, moved);
+  }
 
   const addNote = async (initialName = '', { silent = false, initialContent } = {}) => {
     const content = initialContent || initialName || '';
@@ -579,11 +638,16 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
           {/* Tab row: draggable note tabs with pinned + button */}
           <div style={{ position: 'relative', marginBottom: 8 }}>
             <div
+              ref={tabRowRef}
+              onPointerMove={handleTabPointerMove}
+              onPointerUp={handleTabPointerUp}
+              onPointerCancel={handleTabPointerUp}
               style={{
-                display: 'flex', gap: 2, overflowX: 'auto', overflowY: 'hidden',
+                display: 'flex', gap: 2, overflowX: tabDragging ? 'hidden' : 'auto', overflowY: 'hidden',
                 paddingBottom: 8, paddingRight: 40,
                 borderBottom: '1px solid var(--dl-border)',
                 scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+                touchAction: canReorderTabs ? 'none' : 'auto',
               }}
             >
               {sortedNotes.length === 0 && (
@@ -596,40 +660,19 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                     whiteSpace: 'nowrap', flexShrink: 0,
                   }}>Untitled</button>
               )}
-              {displayNotes.map(note => {
+              {displayNotes.map((note, idx) => {
                 const active = note.id === activeNoteId;
-                const isDragged = note.id === tabDragId;
+                const isDragged = tabDragging && sortedNotes[tabDragIdx]?.id === note.id;
                 return (
                   <button
                     key={note.id}
-                    draggable={!notesSortRecent}
-                    onClick={() => selectNote(note.id)}
-                    onDragStart={e => {
-                      setTabDragId(note.id);
-                      e.dataTransfer.effectAllowed = 'move';
-                      // Use a transparent drag image so the browser ghost doesn't interfere
-                      const img = new Image(); img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-                      e.dataTransfer.setDragImage(img, 0, 0);
-                    }}
-                    onDragOver={e => { e.preventDefault(); setTabOverId(note.id); }}
-                    onDragEnd={() => {
-                      if (tabDragId && tabOverId && tabDragId !== tabOverId) {
-                        const ids = sortedNotes.map(n => n.id);
-                        const fromIdx = ids.indexOf(tabDragId);
-                        const toIdx = ids.indexOf(tabOverId);
-                        if (fromIdx >= 0 && toIdx >= 0) {
-                          ids.splice(fromIdx, 1);
-                          ids.splice(toIdx, 0, tabDragId);
-                          saveNoteOrder(ids);
-                        }
-                      }
-                      setTabDragId(null);
-                      setTabOverId(null);
-                    }}
+                    ref={el => { if (el) tabItemWidths.current[idx] = el.offsetWidth + 2; }}
+                    onPointerDown={e => handleTabPointerDown(e, idx)}
+                    onClick={() => { if (!canReorderTabs) selectNote(note.id); }}
                     style={{
                       background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
                       border: 'none', borderRadius: 100,
-                      padding: '5px 12px', cursor: notesSortRecent ? 'pointer' : 'grab', flexShrink: 0,
+                      padding: '5px 12px', cursor: canReorderTabs ? 'grab' : 'pointer', flexShrink: 0,
                       fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
                       textTransform: 'uppercase', whiteSpace: 'nowrap',
                       color: active ? "var(--dl-strong)" : "var(--dl-middle)",
@@ -637,8 +680,8 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                       transition: 'all 0.2s cubic-bezier(.4,0,.2,1)',
                       maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
                     }}
-                    onMouseEnter={e => { if (!active) e.currentTarget.style.color = "var(--dl-strong)"; }}
-                    onMouseLeave={e => { if (!active) e.currentTarget.style.color = "var(--dl-middle)"; }}
+                    onMouseEnter={e => { if (!active && !tabDragging) e.currentTarget.style.color = "var(--dl-strong)"; }}
+                    onMouseLeave={e => { if (!active && !tabDragging) e.currentTarget.style.color = "var(--dl-middle)"; }}
                   >{noteName(note)}</button>
                 );
               })}
