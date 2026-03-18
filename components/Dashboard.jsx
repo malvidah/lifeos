@@ -72,19 +72,41 @@ function DashboardInner() {
   const searchInputRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const savedScrollTopRef = useRef(0);
+  const scrollLockRafRef = useRef(null);
 
-  // Wrap setActiveProject so scroll is always saved before the state change,
-  // then restored synchronously after DOM updates (before paint).
+  // Wrap setActiveProject so scroll is always saved before the state change.
   const selectProject = useCallback((p) => {
     savedScrollTopRef.current = scrollContainerRef.current?.scrollTop ?? 0;
     setActiveProject(p);
   }, []);
 
-  // Restore scroll synchronously after DOM updates caused by project change.
+  // After a project change: restore scrollTop synchronously (first paint),
+  // then hold it via rAF loop for ~300ms to absorb async content re-renders
+  // (Notes/Journal fetch new data and shift layout after initial paint).
   useLayoutEffect(() => {
     const el = scrollContainerRef.current;
     if (!el) return;
-    el.scrollTop = savedScrollTopRef.current;
+    const target = savedScrollTopRef.current;
+    el.scrollTop = target;
+
+    // Cancel any previous lock loop
+    if (scrollLockRafRef.current) cancelAnimationFrame(scrollLockRafRef.current);
+
+    const deadline = performance.now() + 350; // hold for 350ms
+    const lock = () => {
+      if (!scrollContainerRef.current) return;
+      if (scrollContainerRef.current.scrollTop !== target) {
+        scrollContainerRef.current.scrollTop = target;
+      }
+      if (performance.now() < deadline) {
+        scrollLockRafRef.current = requestAnimationFrame(lock);
+      }
+    };
+    scrollLockRafRef.current = requestAnimationFrame(lock);
+
+    return () => {
+      if (scrollLockRafRef.current) cancelAnimationFrame(scrollLockRafRef.current);
+    };
   }, [activeProject]);
 
 
@@ -420,7 +442,7 @@ function DashboardInner() {
         )}
 
         {/* ── Single unified scroll container ── */}
-        <div ref={scrollContainerRef} style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0}}>
+        <div ref={scrollContainerRef} style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0, overflowAnchor:'none'}}>
         <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Spacer for fixed header */}
