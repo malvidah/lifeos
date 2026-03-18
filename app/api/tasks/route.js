@@ -168,43 +168,64 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return arr?.length ? arr.shift() : null;
   }
 
-  // Separate tasks into own-date vs foreign (due-date) vs recurring (update original)
-  const ownRows = [];
-  const foreignTasks = [];
-  const recurringUpdates = []; // edits to recurring proxies → update the original row
+  // Separate tasks into categories
+  const ownRows = [];           // regular tasks for this date
+  const foreignTasks = [];      // due-date tasks from other dates
+  const recurringPresent = [];  // recurring proxies still in the editor
   for (const t of parsed) {
     if (t.recurring && t.task_id) {
-      // Recurring proxy was edited — update the original row's text/html
-      recurringUpdates.push(t);
+      recurringPresent.push(t);
       continue;
     }
-    if (t.recurring) continue; // unchanged recurring proxy — skip
+    if (t.recurring) continue;
     if (t.origin_date && t.origin_date !== date) {
       foreignTasks.push(t);
     } else {
-      ownRows.push(t);
+      // Don't re-create recurring originals as new rows
+      if (t.html?.includes('data-recurrence=') && t.task_id) {
+        recurringPresent.push(t);
+      } else {
+        ownRows.push(t);
+      }
     }
   }
 
-  // Apply edits to recurring originals
-  for (const t of recurringUpdates) {
-    await supabase.from('tasks').update({
-      text: t.text,
-      html: t.html,
-      done: t.done,
-      project_tags: t.project_tags ?? [],
-    }).eq('id', t.task_id).eq('user_id', user.id);
+  // Update recurring originals that were edited
+  for (const t of recurringPresent) {
+    if (t.task_id) {
+      await supabase.from('tasks').update({
+        text: t.text,
+        html: t.html,
+        done: t.done,
+        project_tags: t.project_tags ?? [],
+      }).eq('id', t.task_id).eq('user_id', user.id);
+    }
   }
 
-  // Full-replace own-date tasks — preserve recurring instances (managed by habits API)
+  // Check if any recurring originals from this date were DELETED by the user
+  // (they were in the editor but are now missing from the parsed output)
+  const { data: existingRecurring } = await supabase
+    .from('tasks')
+    .select('id')
+    .eq('user_id', user.id).eq('date', date)
+    .ilike('html', '%data-recurrence=%');
+
+  const recurringIdsInEditor = new Set(recurringPresent.map(t => t.task_id).filter(Boolean));
+  const deletedRecurring = (existingRecurring ?? []).filter(t => !recurringIdsInEditor.has(t.id));
+  if (deletedRecurring.length) {
+    await supabase.from('tasks').delete()
+      .in('id', deletedRecurring.map(t => t.id))
+      .eq('user_id', user.id);
+  }
+
+  // Full-replace own-date NON-recurring tasks only
   const { error: delErr } = await supabase
     .from('tasks').delete()
     .eq('user_id', user.id).eq('date', date)
-    .is('recurrence_parent_id', null);
+    .not('html', 'ilike', '%data-recurrence=%');
   if (delErr) throw delErr;
 
-  // Recurring instances removed from the editor: mark done so habits API
-  // won't recreate them (it skips dates that already have an instance).
+  // Legacy: clean up any recurrence_parent_id orphans
   const { data: recurringInstances } = await supabase
     .from('tasks')
     .select('id, text, recurrence_parent_id, done')
