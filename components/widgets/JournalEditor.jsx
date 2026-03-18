@@ -323,9 +323,33 @@ export function DropZone({ uploading }) {
 }
 
 // ── JournalEditor ─────────────────────────────────────────────────────────────
-// When `project` is provided, renders a filtered read-only view of blocks tagged
-// to that project for the selected date. When null, full editable journal.
+// When `project` is provided, fetches all journal entries tagged to that project
+// across all dates and renders them read-only grouped by date.
+// When null, shows the full editable journal for the selected date.
 export function JournalEditor({date,userId,token,project}) {
+  // Project-mode: fetch cross-date entries from /api/project-entries
+  const [projectEntries, setProjectEntries] = useState(null); // null=loading, []=empty
+  const [projectEntriesRev, setProjectEntriesRev] = useState(0);
+  useEffect(() => {
+    if (!project || project === '__everything__' || !token) return;
+    let stale = false;
+    setProjectEntries(null);
+    api.get(`/api/project-entries?project=${encodeURIComponent(project)}`, token)
+      .then(d => { if (!stale) setProjectEntries(d?.journalEntries || []); })
+      .catch(() => { if (!stale) setProjectEntries([]); });
+    return () => { stale = true; };
+  }, [project, token, projectEntriesRev]);
+  // Re-fetch when journal changes elsewhere
+  useEffect(() => {
+    if (!project) return;
+    const handler = (e) => {
+      if (!e.detail?.types || e.detail.types.includes('journal'))
+        setProjectEntriesRev(r => r + 1);
+    };
+    window.addEventListener('daylab:refresh', handler);
+    return () => window.removeEventListener('daylab:refresh', handler);
+  }, [project]);
+
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
@@ -441,22 +465,37 @@ export function JournalEditor({date,userId,token,project}) {
     </div>
   );
 
-  // Project-filtered view: parse <p> blocks and show only those tagged to the project
+  // Project-filtered view: show cross-date journal entries for the project
   if (project && project !== '__everything__') {
-    const paraRe = /<p\b[^>]*>[\s\S]*?<\/p>/gi;
-    const blocks = (value || '').match(paraRe) || [];
-    const tagPattern = `data-project-tag="${project}"`;
-    const matched = blocks.filter(b => b.includes(tagPattern));
-    if (matched.length === 0) return null;
+    if (projectEntries === null) return (
+      <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+        <Shimmer width="80%" height={14}/><Shimmer width="60%" height={14}/>
+      </div>
+    );
+    if (projectEntries.length === 0) return null;
+    // Group by date, sort descending
+    const byDate = {};
+    for (const e of projectEntries) {
+      if (!byDate[e.date]) byDate[e.date] = [];
+      byDate[e.date].push(e);
+    }
+    const sortedDates = Object.keys(byDate).sort((a,b) => b.localeCompare(a));
     return (
-      <div style={{display:'flex',flexDirection:'column',gap:4}}>
-        {matched.map((block, i) => (
-          <div
-            key={i}
-            style={{fontFamily:serif,fontSize:F.md,lineHeight:1.7,color:'var(--dl-strong)',wordBreak:'break-word'}}
-            dangerouslySetInnerHTML={{__html: block}}
-          />
-        ))}
+      <div style={{display:'flex',flexDirection:'column',gap:12}}>
+        {sortedDates.map(d => {
+          const [y,m,day] = d.split('-').map(Number);
+          const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+          const label = `${months[m-1]} ${day}, ${y}`;
+          return (
+            <div key={d}>
+              <div style={{fontFamily:mono,fontSize:10,letterSpacing:'0.08em',textTransform:'uppercase',color:'var(--dl-highlight)',marginBottom:4}}>{label}</div>
+              {byDate[d].map((e, i) => (
+                <div key={i} style={{fontFamily:serif,fontSize:F.md,lineHeight:1.7,color:'var(--dl-strong)',wordBreak:'break-word',padding:'1px 0'}}
+                  dangerouslySetInnerHTML={{__html: e.text}}/>
+              ))}
+            </div>
+          );
+        })}
       </div>
     );
   }

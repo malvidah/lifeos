@@ -489,7 +489,7 @@ function DashboardInner() {
                     <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                   </Card>
                   </ErrorBoundary>
-                  {rightWidgets.map(w=>(
+                  {rightWidgets.filter(w => !projectFilter || w.id === 'tasks').map(w=>(
                     <ErrorBoundary key={w.id} label={w.label}>
                     <Card label={w.label} color={w.color()}
                       collapsed={collapseMap[w.id]}
@@ -519,10 +519,10 @@ function DashboardInner() {
                   </div>
                   {/* Right widgets — Tasks, Meals, Workouts */}
                   <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                    {rightWidgets.map((w, i)=>(
+                    {rightWidgets.filter(w => !projectFilter || w.id === 'tasks').map((w, i, arr)=>(
                       <div key={w.id} style={{
                         display:"flex", flexDirection:"column",
-                        flex: (!collapseMap[w.id] && i === rightWidgets.length - 1) ? 1 : "0 0 auto",
+                        flex: (!collapseMap[w.id] && i === arr.length - 1) ? 1 : "0 0 auto",
                         minHeight: collapseMap[w.id]?0:200}}>
                         <ErrorBoundary label={w.label}>
                         <Card label={w.label} color={w.color()}
