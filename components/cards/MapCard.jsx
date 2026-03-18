@@ -171,7 +171,8 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
       label: tagDisplayName(tag),
       score: Math.max(entryScore, connScore, 0.3),
       isActive: daysSinceActive < 7,
-      isHot: daysSinceActive < 1,     // active today → volcanic
+      // Volcanic: active within 2 weeks AND in the top tier of activity
+      isHot: daysSinceActive < 14 && entryScore > 0.3,
       recencyScore: rScore,
       completedTasks: completedTasks?.[tag] || 0,
       habits: habits?.[tag] || [], // [{text, flagCount, topScore, streak}]
