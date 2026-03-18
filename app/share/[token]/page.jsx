@@ -172,34 +172,40 @@ export default function SharedProjectPage() {
           {/* ── Notes Card ───────────────────────────────────────────── */}
           {hasNotes && (
             <Card label="Notes" color="var(--dl-highlight)" autoHeight>
-              <div style={{ display: 'flex', minHeight: 220 }}>
-                {/* Note list sidebar */}
+              <div style={{ display: 'flex', flexDirection: 'column', minHeight: 220 }}>
+                {/* Tab bar — same style as NotesCard.jsx */}
                 {notes.length > 1 && (
-                  <>
-                    <div style={{ width: 164, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 1, overflowY: 'auto', maxHeight: 440, paddingRight: 2 }}>
-                      {notes.map((note, i) => (
+                  <div style={{
+                    display: 'flex', gap: 2, overflowX: 'auto', overflowY: 'hidden',
+                    paddingBottom: 8, borderBottom: '1px solid var(--dl-border)',
+                    marginBottom: 10, scrollbarWidth: 'none',
+                  }}>
+                    {notes.map((note, i) => {
+                      const active = i === activeNoteIdx;
+                      return (
                         <button
                           key={i}
                           onClick={() => setActiveNoteIdx(i)}
                           style={{
-                            background: i === activeNoteIdx ? 'var(--dl-well)' : 'transparent',
-                            border: 'none', padding: '6px 8px', textAlign: 'left', cursor: 'pointer',
-                            fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em', textTransform: 'uppercase',
-                            color: i === activeNoteIdx ? 'var(--dl-strong)' : 'var(--dl-highlight)',
-                            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                            lineHeight: 1.5, borderRadius: 6, transition: 'background 0.1s',
+                            background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
+                            border: 'none', borderRadius: 100,
+                            padding: '5px 12px', cursor: 'pointer', flexShrink: 0,
+                            fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
+                            textTransform: 'uppercase', whiteSpace: 'nowrap',
+                            color: active ? 'var(--dl-strong)' : 'var(--dl-middle)',
+                            transition: 'color 0.15s, background 0.15s',
+                            maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
                           }}
+                          onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--dl-strong)'; }}
+                          onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--dl-middle)'; }}
                         >{noteName(note)}</button>
-                      ))}
-                    </div>
-
-                    {/* Divider */}
-                    <div style={{ width: 1, flexShrink: 0, background: 'var(--dl-border)' }} />
-                  </>
+                      );
+                    })}
+                  </div>
                 )}
 
                 {/* Note content */}
-                <div style={{ flex: 1, minWidth: 0, paddingLeft: notes.length > 1 ? 10 : 0 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   {activeNoteImages.length > 0 && (
                     <NotePhotos images={activeNoteImages} />
                   )}
