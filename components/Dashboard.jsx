@@ -22,7 +22,6 @@ import Tasks, { TaskFilterBtns } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
-import ProjectView from "./views/ProjectView.jsx";
 import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 
@@ -203,10 +202,9 @@ function DashboardInner() {
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [homeSettingsOpen, setHomeSettingsOpen] = useState(false);
-  // Close settings whenever we navigate to a different project
-  useEffect(() => { setSettingsOpen(false); setHomeSettingsOpen(false); }, [activeProject]);
+  // Close home settings whenever we navigate to a different project
+  useEffect(() => { setHomeSettingsOpen(false); }, [activeProject]);
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
   const collapseMap = {journal:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
@@ -406,29 +404,20 @@ function DashboardInner() {
             onOpenSettings={() => setHomeSettingsOpen(true)}
           />
 
-          {/* Cal + Health — hidden during search */}
+          {/* 2. CalendarCard — hidden during search */}
           {!searchOpen && (
-            <>
-              <div style={{flexShrink:0}}>
-                <ErrorBoundary label="Calendar">
-                <CalendarCard selected={selected} onSelect={setSelected}
-                  events={events} setEvents={setEvents} healthDots={healthDots}
-                  token={token} collapsed={calCollapsed} onToggle={toggleCal}
-                  calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
-                </ErrorBoundary>
-              </div>
-              <div style={{flexShrink:0}}>
-                <ErrorBoundary label="Health">
-                <HealthCard date={selected} token={token} userId={userId}
-                  onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-                  collapsed={healthCollapsed} onToggle={toggleHealth}/>
-                </ErrorBoundary>
-              </div>
-            </>
+            <div style={{flexShrink:0}}>
+              <ErrorBoundary label="Calendar">
+              <CalendarCard selected={selected} onSelect={setSelected}
+                events={events} setEvents={setEvents} healthDots={healthDots}
+                token={token} collapsed={calCollapsed} onToggle={toggleCal}
+                calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
+              </ErrorBoundary>
+            </div>
           )}
 
-          {/* MapCard — always rendered once graph data is ready */}
-          {graphData && (
+          {/* 3. MapCard — always rendered once graph data is ready */}
+          {graphData && !searchOpen && (
             <MapCard
               allTags={graphData.allTags}
               connections={graphData.connections}
@@ -442,7 +431,18 @@ function DashboardInner() {
             />
           )}
 
-          {/* Search results or widgets */}
+          {/* 4. HealthCard — hidden during search */}
+          {!searchOpen && (
+            <div style={{flexShrink:0}}>
+              <ErrorBoundary label="Health">
+              <HealthCard date={selected} token={token} userId={userId}
+                onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
+                collapsed={healthCollapsed} onToggle={toggleHealth}/>
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {/* Search results replace cards 5-9 when open */}
           {searchOpen ? (
             <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease' }}>
               <SearchResults
@@ -454,24 +454,10 @@ function DashboardInner() {
             </div>
           ) : (
             <>
-              {/* Notes + tasks + journal — ProjectView handles project filtering */}
-              <ErrorBoundary label="Project">
-              <ProjectView
-                project={projectFilter ? projectFilter : '__everything__'}
-                token={token}
-                userId={userId}
-                onBack={() => setActiveProject(null)}
-                onSelectDate={d => { setActiveProject(null); setSelected(d); }}
-                taskFilter={taskFilter} setTaskFilter={setTaskFilter}
-                {...(projectFilter && {
-                  settingsOpen,
-                  onCloseSettings: () => setSettingsOpen(false),
-                  onRenamed: slug => { setActiveProject(slug); setSettingsOpen(false); },
-                })}
-              />
-              </ErrorBoundary>
+              {/* 5. Notes placeholder — wired up in Phase 3 */}
+              <div id="notes-placeholder"/>
 
-              {/* Day widgets — Journal, Tasks, Meals, Workouts */}
+              {/* 6–9. Journal, Tasks, Meals, Workouts */}
               {mobile ? (
                 <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
                   <ErrorBoundary label={leftWidget.label}>
@@ -508,7 +494,7 @@ function DashboardInner() {
                       </ErrorBoundary>
                     </div>
                   </div>
-                  {/* Right widgets */}
+                  {/* Right widgets — Tasks, Meals, Workouts */}
                   <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
                     {rightWidgets.map((w, i)=>(
                       <div key={w.id} style={{
