@@ -229,12 +229,6 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       continue;
     }
 
-    // Also catch recurring originals from THIS date by checking HTML
-    if (t.html?.includes('data-recurrence=') || (key && injectedTexts.has(key))) {
-      foreignTextsSeen.add(key);
-      continue; // Don't re-create
-    }
-
     ownRows.push(t);
   }
 
@@ -247,25 +241,8 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     }).eq('id', u.id).eq('user_id', user.id);
   }
 
-  // Delete recurring originals from THIS date that the user removed from the editor
-  const { data: existingRecurring } = await supabase
-    .from('tasks').select('id, text')
-    .eq('user_id', user.id).eq('date', date)
-    .ilike('html', '%data-recurrence=%');
-
-  for (const r of (existingRecurring ?? [])) {
-    const key = r.text?.trim().toLowerCase();
-    if (!key || !foreignTextsSeen.has(key)) {
-      // This recurring task was removed from the editor → delete the original
-      // But only if it's truly gone (not just renamed)
-      const stillPresent = parsed.some(t => t.text?.trim().toLowerCase() === key);
-      if (!stillPresent) {
-        await supabase.from('tasks').delete().eq('id', r.id).eq('user_id', user.id);
-      }
-    }
-  }
-
-  // Delete injected persistent/recurring originals that the user removed
+  // Delete injected persistent/recurring originals from OTHER dates
+  // that the user removed from the editor (proxy deletion = original deletion)
   for (const [key, id] of injectedIds) {
     if (!foreignTextsSeen.has(key)) {
       const stillPresent = parsed.some(t => t.text?.trim().toLowerCase() === key);
@@ -275,11 +252,11 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  // Full-replace own-date NON-recurring tasks only
+  // Full-replace ALL own-date tasks (including recurring originals — they'll
+  // be re-inserted from ownRows with their recurrence chip intact)
   const { error: delErr } = await supabase
     .from('tasks').delete()
-    .eq('user_id', user.id).eq('date', date)
-    .not('html', 'ilike', '%data-recurrence=%');
+    .eq('user_id', user.id).eq('date', date);
   if (delErr) throw delErr;
 
   // Save own-date tasks (regular tasks created on this date).
