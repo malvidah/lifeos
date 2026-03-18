@@ -11,7 +11,6 @@ import { useIsMobile, useCollapse } from "@/lib/hooks";
 import { useProjects } from "@/lib/useProjects";
 import { NoteContext, NavigationContext, ProjectNamesContext } from "@/lib/contexts";
 import { Card, ErrorBoundary } from "./ui/primitives.jsx";
-import WeatherBackground from "./ui/WeatherBackground.jsx";
 import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
@@ -390,8 +389,6 @@ function DashboardInner() {
       },
     }}>
     <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
-      <WeatherBackground date={selected} theme={theme}/>
-
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{setActiveProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── Main scroll area ─── */}
@@ -427,19 +424,7 @@ function DashboardInner() {
             onOpenSettings={projectFilter ? () => setSettingsOpen(true) : () => setHomeSettingsOpen(true)}
           />
 
-          {/* 2. CalendarCard — hidden during search */}
-          {!searchOpen && (
-            <div style={{flexShrink:0}}>
-              <ErrorBoundary label="Calendar">
-              <CalendarCard selected={selected} onSelect={setSelected}
-                events={events} setEvents={setEvents} healthDots={healthDots}
-                token={token} collapsed={calCollapsed} onToggle={toggleCal}
-                calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* 3. MapCard — always rendered once graph data is ready */}
+          {/* 2. MapCard — always rendered once graph data is ready */}
           {graphData && !searchOpen && (
             <MapCard
               allTags={graphData.allTags}
@@ -452,6 +437,18 @@ function DashboardInner() {
               selectedProject={projectFilter}
               onSelectProject={p => setActiveProject(p)}
             />
+          )}
+
+          {/* 3. CalendarCard — hidden during search */}
+          {!searchOpen && (
+            <div style={{flexShrink:0}}>
+              <ErrorBoundary label="Calendar">
+              <CalendarCard selected={selected} onSelect={setSelected}
+                events={events} setEvents={setEvents} healthDots={healthDots}
+                token={token} collapsed={calCollapsed} onToggle={toggleCal}
+                calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
+              </ErrorBoundary>
+            </div>
           )}
 
           {/* 4. HealthCard — hidden during search */}

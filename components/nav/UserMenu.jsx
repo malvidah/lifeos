@@ -209,8 +209,11 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
         width:32,height:32,borderRadius:"50%",padding:0,cursor:"pointer",
         border:`1.5px solid var(--dl-border2)`,background:avatar?"transparent":"var(--dl-surface)",
         overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
-        {avatar?<img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""/>
-          :<span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)"}}>{initials}</span>}
+        {avatar
+          ? <img src={avatar} width={32} height={32} style={{objectFit:"cover"}} alt=""
+              onError={e => { e.currentTarget.style.display='none'; e.currentTarget.nextSibling.style.display='flex'; }}/>
+          : null}
+        <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)",display:avatar?'none':'flex'}}>{initials}</span>
       </button>
 
       {open&&(
