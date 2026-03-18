@@ -693,11 +693,11 @@ function Foliage({ projects }) {
   return (
     <>
       {items.map(item => {
-        const P = { key: item.key, position: item.pos, scale: item.scale };
-        if (item.type === 'tree') return <Tree {...P} />;
-        if (item.type === 'roundTree') return <RoundTree {...P} />;
-        if (item.type === 'grass') return <Grass {...P} />;
-        return <Rock {...P} />;
+        const props = { position: item.pos, scale: item.scale };
+        if (item.type === 'tree') return <Tree key={item.key} {...props} />;
+        if (item.type === 'roundTree') return <RoundTree key={item.key} {...props} />;
+        if (item.type === 'grass') return <Grass key={item.key} {...props} />;
+        return <Rock key={item.key} {...props} />;
       })}
     </>
   );
