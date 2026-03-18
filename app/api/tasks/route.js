@@ -99,9 +99,22 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const dedupedPersistent = (persistentTasks ?? []).filter(t => !ownIds.has(t.id));
   const persistentIds = new Set(dedupedPersistent.map(t => t.id));
 
+  // Build a set of normalized texts already covered by own/persistent tasks,
+  // so a recurring template is suppressed when there's already a completion row for today.
+  const ownTexts = new Set(
+    [...(ownTasks ?? []), ...dedupedPersistent]
+      .map(t => t.text?.trim().toLowerCase())
+      .filter(Boolean)
+  );
+
   const recurringTasks = (recurringCandidates ?? []).filter(t => {
     if (ownIds.has(t.id)) return false; // already in ownTasks
     if (persistentIds.has(t.id)) return false; // already in dedupedPersistent
+    // Suppress if there's already a completion row for this date with the same text
+    // (i.e., the user checked it off — a copy was created in ownTasks).
+    // The completion row has the recurrence chip stripped, so compare clean text.
+    const cleanTemplateText = (t.text ?? '').replace(/\/r\s+\S+/gi, '').trim().toLowerCase();
+    if (cleanTemplateText && ownTexts.has(cleanTemplateText)) return false;
     const match = t.html?.match(/data-recurrence="([^"]+)"/);
     if (!match) return false;
     const recurrence = keyToRecurrence(match[1], t.date);
@@ -193,11 +206,20 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // Texts of tasks that were display-only (from other dates)
   const injectedTexts = new Set();
   const injectedIds = new Map(); // text → id for updates
-  for (const t of [...(injectedPersistent ?? []), ...(injectedRecurring ?? [])]) {
+  const injectedRecurringIds = new Set(); // ids that are recurring templates (not persistent)
+  for (const t of (injectedPersistent ?? [])) {
     const key = t.text?.trim().toLowerCase();
     if (key) {
       injectedTexts.add(key);
       injectedIds.set(key, t.id);
+    }
+  }
+  for (const t of (injectedRecurring ?? [])) {
+    const key = t.text?.trim().toLowerCase();
+    if (key) {
+      injectedTexts.add(key);
+      injectedIds.set(key, t.id);
+      injectedRecurringIds.add(t.id);
     }
   }
 
@@ -218,7 +240,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 
   // Separate tasks into categories using text matching (data attrs get stripped by TipTap)
   const ownRows = [];           // regular tasks for this date → DELETE + INSERT
-  const foreignUpdates = [];    // edits to persistent/recurring tasks → UPDATE original
+  const foreignUpdates = [];    // edits to persistent tasks → UPDATE original
   const foreignTextsSeen = new Set(); // track which injected tasks are still present
 
   for (const t of parsed) {
@@ -227,18 +249,51 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     // Check if this task matches an injected persistent/recurring task by text
     if (key && injectedTexts.has(key)) {
       foreignTextsSeen.add(key);
-      // Update the original if text/done changed
       const origId = injectedIds.get(key);
       if (origId) {
-        foreignUpdates.push({ id: origId, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
+        if (injectedRecurringIds.has(origId)) {
+          // Recurring template: never modify the original.
+          // If checked off, create a completion row for this specific date instead.
+          // If unchecked, nothing to persist (GET will show it unchecked anyway).
+          if (t.done) {
+            // Strip the recurrence chip from the completion copy's html so it
+            // doesn't generate new virtual instances from this date.
+            const completionHtml = t.html
+              ?.replace(/<span\b[^>]*\bdata-recurrence="[^"]*"[^>]*>[^<]*<\/span>/g, '')
+              ?? t.html;
+            const completionText = t.text
+              ?.replace(/\/r\s+\S+/g, '')
+              .trim() ?? t.text;
+            ownRows.push({
+              ...t,
+              html: completionHtml,
+              text: completionText || t.text,
+              done: true,
+            });
+          }
+        } else {
+          // Persistent (due_date) task: update the original row
+          foreignUpdates.push({ id: origId, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
+        }
       }
-      continue; // Don't add to ownRows — this is a display echo
+      continue; // Don't fall through to ownRows for foreign tasks
     }
 
     // Check explicit data attributes (may survive if TipTap preserves them)
     if (t.recurring && t.task_id) {
       foreignTextsSeen.add(key);
-      foreignUpdates.push({ id: t.task_id, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
+      if (injectedRecurringIds.has(t.task_id)) {
+        // Recurring template: create completion row if checked, skip if unchecked
+        if (t.done) {
+          const completionHtml = t.html
+            ?.replace(/<span\b[^>]*\bdata-recurrence="[^"]*"[^>]*>[^<]*<\/span>/g, '')
+            ?? t.html;
+          const completionText = t.text?.replace(/\/r\s+\S+/g, '').trim() ?? t.text;
+          ownRows.push({ ...t, html: completionHtml, text: completionText || t.text, done: true });
+        }
+      } else {
+        foreignUpdates.push({ id: t.task_id, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
+      }
       continue;
     }
     if (t.recurring && t.origin_date && t.origin_date !== date) continue;
