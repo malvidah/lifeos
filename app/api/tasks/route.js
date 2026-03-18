@@ -145,13 +145,43 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   const today  = TODAY();
 
   // Fetch existing rows for this date so we can preserve due_dates
-  // (due_date is not stored in the HTML, only in the DB row)
   const { data: existing } = await supabase
     .from('tasks')
-    .select('id, position, text, due_date, completed_at')
+    .select('id, position, text, due_date, completed_at, html')
     .eq('user_id', user.id)
     .eq('date', date)
     .order('position', { ascending: true });
+
+  // Build a set of texts from tasks that were INJECTED by GET (persistent + recurring
+  // from other dates). These appear in the editor but shouldn't create new rows.
+  // We identify them by: tasks from other dates that match the current date's schedule
+  // or have due_dates. Simplest: fetch what GET would have injected and match by text.
+  const { data: injectedPersistent } = await supabase
+    .from('tasks')
+    .select('id, text')
+    .eq('user_id', user.id)
+    .not('due_date', 'is', null)
+    .lte('date', date).gte('due_date', date)
+    .eq('done', false).neq('date', date)
+    .not('html', 'ilike', '%data-recurrence=%');
+
+  const { data: injectedRecurring } = await supabase
+    .from('tasks')
+    .select('id, text')
+    .eq('user_id', user.id)
+    .neq('date', date)
+    .ilike('html', '%data-recurrence=%');
+
+  // Texts of tasks that were display-only (from other dates)
+  const injectedTexts = new Set();
+  const injectedIds = new Map(); // text → id for updates
+  for (const t of [...(injectedPersistent ?? []), ...(injectedRecurring ?? [])]) {
+    const key = t.text?.trim().toLowerCase();
+    if (key) {
+      injectedTexts.add(key);
+      injectedIds.set(key, t.id);
+    }
+  }
 
   // Match by text content (not position) so reordering tasks doesn't
   // shuffle due_dates. Each matched row is consumed to handle duplicates.
@@ -168,54 +198,81 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return arr?.length ? arr.shift() : null;
   }
 
-  // Separate tasks into categories
-  const ownRows = [];           // regular tasks for this date
-  const foreignTasks = [];      // due-date tasks from other dates
-  const recurringPresent = [];  // recurring proxies still in the editor
+  // Separate tasks into categories using text matching (data attrs get stripped by TipTap)
+  const ownRows = [];           // regular tasks for this date → DELETE + INSERT
+  const foreignUpdates = [];    // edits to persistent/recurring tasks → UPDATE original
+  const foreignTextsSeen = new Set(); // track which injected tasks are still present
+
   for (const t of parsed) {
+    const key = t.text?.trim().toLowerCase();
+
+    // Check if this task matches an injected persistent/recurring task by text
+    if (key && injectedTexts.has(key)) {
+      foreignTextsSeen.add(key);
+      // Update the original if text/done changed
+      const origId = injectedIds.get(key);
+      if (origId) {
+        foreignUpdates.push({ id: origId, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
+      }
+      continue; // Don't add to ownRows — this is a display echo
+    }
+
+    // Check explicit data attributes (may survive if TipTap preserves them)
     if (t.recurring && t.task_id) {
-      recurringPresent.push(t);
+      foreignTextsSeen.add(key);
+      foreignUpdates.push({ id: t.task_id, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
       continue;
     }
     if (t.recurring) continue;
     if (t.origin_date && t.origin_date !== date) {
-      foreignTasks.push(t);
-    } else {
-      // Don't re-create recurring originals as new rows
-      if (t.html?.includes('data-recurrence=') && t.task_id) {
-        recurringPresent.push(t);
-      } else {
-        ownRows.push(t);
+      foreignUpdates.push({ id: t.task_id, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
+      continue;
+    }
+
+    // Also catch recurring originals from THIS date by checking HTML
+    if (t.html?.includes('data-recurrence=') || (key && injectedTexts.has(key))) {
+      foreignTextsSeen.add(key);
+      continue; // Don't re-create
+    }
+
+    ownRows.push(t);
+  }
+
+  // Update originals that were edited
+  for (const u of foreignUpdates) {
+    if (!u.id) continue;
+    await supabase.from('tasks').update({
+      text: u.text, html: u.html, done: u.done,
+      project_tags: u.project_tags ?? [],
+    }).eq('id', u.id).eq('user_id', user.id);
+  }
+
+  // Delete recurring originals from THIS date that the user removed from the editor
+  const { data: existingRecurring } = await supabase
+    .from('tasks').select('id, text')
+    .eq('user_id', user.id).eq('date', date)
+    .ilike('html', '%data-recurrence=%');
+
+  for (const r of (existingRecurring ?? [])) {
+    const key = r.text?.trim().toLowerCase();
+    if (!key || !foreignTextsSeen.has(key)) {
+      // This recurring task was removed from the editor → delete the original
+      // But only if it's truly gone (not just renamed)
+      const stillPresent = parsed.some(t => t.text?.trim().toLowerCase() === key);
+      if (!stillPresent) {
+        await supabase.from('tasks').delete().eq('id', r.id).eq('user_id', user.id);
       }
     }
   }
 
-  // Update recurring originals that were edited
-  for (const t of recurringPresent) {
-    if (t.task_id) {
-      await supabase.from('tasks').update({
-        text: t.text,
-        html: t.html,
-        done: t.done,
-        project_tags: t.project_tags ?? [],
-      }).eq('id', t.task_id).eq('user_id', user.id);
+  // Delete injected persistent/recurring originals that the user removed
+  for (const [key, id] of injectedIds) {
+    if (!foreignTextsSeen.has(key)) {
+      const stillPresent = parsed.some(t => t.text?.trim().toLowerCase() === key);
+      if (!stillPresent) {
+        await supabase.from('tasks').delete().eq('id', id).eq('user_id', user.id);
+      }
     }
-  }
-
-  // Check if any recurring originals from this date were DELETED by the user
-  // (they were in the editor but are now missing from the parsed output)
-  const { data: existingRecurring } = await supabase
-    .from('tasks')
-    .select('id')
-    .eq('user_id', user.id).eq('date', date)
-    .ilike('html', '%data-recurrence=%');
-
-  const recurringIdsInEditor = new Set(recurringPresent.map(t => t.task_id).filter(Boolean));
-  const deletedRecurring = (existingRecurring ?? []).filter(t => !recurringIdsInEditor.has(t.id));
-  if (deletedRecurring.length) {
-    await supabase.from('tasks').delete()
-      .in('id', deletedRecurring.map(t => t.id))
-      .eq('user_id', user.id);
   }
 
   // Full-replace own-date NON-recurring tasks only
