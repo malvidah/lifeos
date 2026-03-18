@@ -579,7 +579,7 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: (isSelected || isHov) ? `${p.color}28` : isDark ? 'rgba(20,18,14,0.65)' : 'rgba(240,235,220,0.65)',
+          background: isSelected ? (isDark ? `${p.color}28` : `var(--dl-bg)`) : isHov ? `${p.color}28` : isDark ? 'rgba(20,18,14,0.65)' : 'rgba(240,235,220,0.65)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
           border: `1px solid ${(isSelected || isHov) ? p.color : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'}`,
