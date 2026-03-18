@@ -27,6 +27,21 @@ import LoginScreen from "./views/LoginScreen.jsx";
 import { HomeSettingsPanel, ProjectSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 
+// Static widget definitions — outside component so they're not recreated each render
+const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span></span>;
+const ACT_HDR = <span style={{display:"flex",gap:0}}>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:60,textAlign:"center"}}>dist</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:100,textAlign:"center"}}>pace</span>
+  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span>
+</span>;
+const WIDGETS = [
+  {id:"journal",  label:"Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor},
+  {id:"tasks",    label:"Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks},
+  {id:"meals",    label:"Meals",    color:()=>"var(--dl-red)",    Comp:Meals,    headerRight:()=>MEALS_HDR},
+  {id:"workouts", label:"Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
+];
+const [leftWidget, ...rightWidgets] = WIDGETS;
+
 function DashboardInner() {
   const { theme, preference, setTheme } = useTheme();
 
@@ -45,7 +60,6 @@ function DashboardInner() {
   });
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
-  const [googleToken,setGoogleToken] = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
   const [activeProject, setActiveProject] = useState(() => {
     try { return localStorage.getItem('daylab:activeProject') || null; } catch { return null; }
@@ -354,20 +368,6 @@ function DashboardInner() {
   if(!session) return <LoginScreen/>;
 
   const syncStatus={syncing:syncing.size>0,lastSync};
-
-  const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span></span>;
-  const ACT_HDR = <span style={{display:"flex",gap:0}}>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:60,textAlign:"center"}}>dist</span>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:100,textAlign:"center"}}>pace</span>
-    <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span>
-  </span>;
-  const WIDGETS = [
-    {id:"journal",  label:"Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor},
-    {id:"tasks",    label:"Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks},
-    {id:"meals",    label:"Meals",    color:()=>"var(--dl-red)",    Comp:Meals,    headerRight:()=>MEALS_HDR},
-    {id:"workouts", label:"Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
-  ];
-  const [leftWidget,...rightWidgets] = WIDGETS;
 
   // __graph__ is treated as no project filter (shows all notes/entries).
   // Any other non-null activeProject is a real project slug.

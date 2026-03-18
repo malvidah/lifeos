@@ -96,7 +96,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange })
   }, [allNoteNames.join(',')]); // eslint-disable-line
 
   const saveNoteOrder = useCallback((orderedIds) => {
-    if (!effectiveProject || effectiveProject === '__everything__') return;
+    if (effectiveProject === '__everything__') return;
     setProjectsMeta(prev => {
       const updated = { ...(prev || {}) };
       updated[effectiveProject] = { ...(updated[effectiveProject] || {}), noteOrder: orderedIds };
