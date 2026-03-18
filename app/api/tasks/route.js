@@ -95,8 +95,13 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .neq('date', date)
     .ilike('html', '%data-recurrence=%');
 
+  // Dedup persistent against ownTasks
+  const dedupedPersistent = (persistentTasks ?? []).filter(t => !ownIds.has(t.id));
+  const persistentIds = new Set(dedupedPersistent.map(t => t.id));
+
   const recurringTasks = (recurringCandidates ?? []).filter(t => {
     if (ownIds.has(t.id)) return false; // already in ownTasks
+    if (persistentIds.has(t.id)) return false; // already in dedupedPersistent
     const match = t.html?.match(/data-recurrence="([^"]+)"/);
     if (!match) return false;
     const recurrence = keyToRecurrence(match[1], t.date);
@@ -111,9 +116,6 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     completed_at: null,
     html: t.html?.replace(/data-checked="true"/, 'data-checked="false"') ?? t.html,
   }));
-
-  // Dedup persistent against ownTasks
-  const dedupedPersistent = (persistentTasks ?? []).filter(t => !ownIds.has(t.id));
 
   // Inject data attributes for client-side tracking
   const regularTasks = [...(ownTasks ?? []), ...dedupedPersistent];
@@ -223,7 +225,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       foreignUpdates.push({ id: t.task_id, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
       continue;
     }
-    if (t.recurring) continue;
+    if (t.recurring && t.origin_date && t.origin_date !== date) continue;
     if (t.origin_date && t.origin_date !== date) {
       foreignUpdates.push({ id: t.task_id, text: t.text, html: t.html, done: t.done, project_tags: t.project_tags });
       continue;
