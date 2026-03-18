@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo, Fragment, useContext } from "react";
+import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, Fragment, useContext } from "react";
 import { serif, mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { toKey, todayKey, shift, fmtDate, MONTHS_SHORT, DAYS_SHORT } from "@/lib/dates";
 import { api } from "@/lib/api";
@@ -146,7 +146,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
   // Sort notes: manual order (persisted) or most recent (updated_at desc)
   const sortedNotes = useMemo(() => {
     if (notesSortRecent) {
-      return [...notesList].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+      const byDate = [...notesList].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
+      // Move the last-clicked note to the front (pinned-to-left behavior)
+      if (recentPinnedId && byDate.length > 1 && byDate[0]?.id !== recentPinnedId) {
+        const pinnedIdx = byDate.findIndex(n => n.id === recentPinnedId);
+        if (pinnedIdx > 0) { const [p] = byDate.splice(pinnedIdx, 1); byDate.unshift(p); }
+      }
+      return byDate;
     }
     const order = (projectsMeta || {})[project]?.noteOrder || [];
     const orderMap = new Map(order.map((id, i) => [id, i]));
@@ -156,7 +162,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       if (ai !== bi) return ai - bi;
       return new Date(a.created_at || 0) - new Date(b.created_at || 0);
     });
-  }, [notesList, projectsMeta, project, notesSortRecent]);
+  }, [notesList, projectsMeta, project, notesSortRecent, recentPinnedId]);
   // All current note names (for {note} autocomplete)
   const allNoteNames = notesList.map(noteName).filter(Boolean);
 
@@ -167,6 +173,13 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     updated[project] = { ...(updated[project] || {}), noteOrder: orderedIds };
     setProjectsMeta(updated, { skipHistory: true });
   }, [project, projectsMeta, setProjectsMeta]);
+
+  // In recent-sort mode: track which note was last clicked so it stays leftmost
+  const [recentPinnedId, setRecentPinnedId] = useState(null);
+
+  // FLIP animation refs
+  const tabElemsRef = useRef({}); // { [noteId]: DOM element }
+  const pendingFlipSnap = useRef(null); // position snapshot before reorder
 
   // Drag-to-reorder state (pointer events on container — same as PhotoStrip)
   // Use refs for drag/over indices so pointerUp always sees latest values
@@ -210,7 +223,16 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       tabPending.current = null;
     }
     if (tabDragIdxRef.current != null) {
-      tabOverIdxRef.current = calcTabOver(e.clientX);
+      const newOver = calcTabOver(e.clientX);
+      if (newOver !== tabOverIdxRef.current) {
+        // Snapshot positions before visual reorder for FLIP animation
+        const snap = {};
+        Object.entries(tabElemsRef.current).forEach(([nid, el]) => {
+          if (el) snap[nid] = el.getBoundingClientRect().left;
+        });
+        pendingFlipSnap.current = snap;
+      }
+      tabOverIdxRef.current = newOver;
       tabBump(n => n + 1);
     }
   };
@@ -253,6 +275,26 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
     displayNotes.splice(dragTo, 0, moved);
   }
 
+  // FLIP: after reorder (drag or recent-select), animate tabs from old→new positions
+  useLayoutEffect(() => {
+    const snap = pendingFlipSnap.current;
+    if (!snap) return;
+    pendingFlipSnap.current = null;
+    Object.entries(tabElemsRef.current).forEach(([id, el]) => {
+      if (!el || snap[id] == null) return;
+      const newX = el.getBoundingClientRect().left;
+      const delta = snap[id] - newX;
+      if (Math.abs(delta) < 1) return;
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${delta}px)`;
+      el.offsetHeight; // force reflow
+      el.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
+      el.style.transform = 'translateX(0)';
+      const cleanup = () => { el.style.transition = ''; el.style.transform = ''; };
+      el.addEventListener('transitionend', cleanup, { once: true });
+    });
+  });
+
   const addNote = async (initialName = '', { silent = false, initialContent } = {}) => {
     const content = initialContent || initialName || '';
     const res = await api.post('/api/notes', { content, origin_project: project }, token);
@@ -261,7 +303,19 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
       if (!silent) setActiveNoteId(res.note.id);
     }
   };
-  const selectNote = (id) => setActiveNoteId(id);
+
+  const selectNote = (id) => {
+    setActiveNoteId(id);
+    if (notesSortRecent && sortedNotes[0]?.id !== id) {
+      // Snapshot positions for FLIP before recentPinnedId causes reorder
+      const snap = {};
+      Object.entries(tabElemsRef.current).forEach(([nid, el]) => {
+        if (el) snap[nid] = el.getBoundingClientRect().left;
+      });
+      pendingFlipSnap.current = snap;
+      setRecentPinnedId(id);
+    }
+  };
 
   // Navigate-to-note from journal chip clicks
   useEffect(() => {
@@ -675,7 +729,10 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                 return (
                   <button
                     key={note.id}
-                    ref={el => { if (el) tabItemWidths.current[idx] = el.offsetWidth + 2; }}
+                    ref={el => {
+                      if (el) tabItemWidths.current[idx] = el.offsetWidth + 2;
+                      tabElemsRef.current[note.id] = el;
+                    }}
                     onPointerDown={e => handleTabPointerDown(e, idx)}
                     onClick={() => { if (!canReorderTabs) selectNote(note.id); }}
                     style={{
@@ -686,7 +743,7 @@ export default function ProjectView({ project, token, userId, onBack, onSelectDa
                       textTransform: 'uppercase', whiteSpace: 'nowrap',
                       color: active ? "var(--dl-strong)" : "var(--dl-middle)",
                       opacity: isDragged ? 0.4 : 1,
-                      transition: 'all 0.2s cubic-bezier(.4,0,.2,1)',
+                      transition: 'color 0.15s, opacity 0.15s, background 0.15s',
                       maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
                     }}
                     onMouseEnter={e => { if (!active && !tabDragging) e.currentTarget.style.color = "var(--dl-strong)"; }}
