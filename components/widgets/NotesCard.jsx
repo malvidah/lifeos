@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import { useDbSave, MEM } from "@/lib/db";
-import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
+import { ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
 import { extractImages, stripImageChips, PhotoStrip, Slideshow, DropZone } from "./JournalEditor.jsx";
@@ -13,20 +13,19 @@ import { uploadImageFile, deleteImageFile } from "@/lib/images";
 
 // ─── NotesCard ────────────────────────────────────────────────────────────────
 // Self-contained Notes tab card.
-// project: null or "__everything__" → show all notes
-//          any other string → show notes tagged to that project
-export default function NotesCard({ project, token, userId }) {
+// project: null → show all notes; any string → show notes tagged to that project
+// onNoteNamesChange: called whenever note list changes so Dashboard can sync NoteContext
+export default function NotesCard({ project, token, userId, onNoteNamesChange }) {
   const pvProjectNames = useContext(ProjectNamesContext);
   const { navigateToProject } = useContext(NavigationContext);
 
-  // Normalize: null and __everything__ both mean "all notes"
-  const effectiveProject = (!project || project === '__everything__') ? '__everything__' : project;
+  // null means "all notes"
+  const effectiveProject = project || '__everything__';
 
   const { value: projectsMeta, setValue: setProjectsMeta } =
     useDbSave('global', 'projects', {}, token, userId);
 
   const [notesList, setNotesList] = useState([]);
-  const [notesLoaded, setNotesLoaded] = useState(false);
   const [activeNoteId, setActiveNoteId] = useState(null);
   const deletedNoteIds = useRef(new Set());
 
@@ -41,7 +40,6 @@ export default function NotesCard({ project, token, userId }) {
   useEffect(() => {
     if (!token) return;
     let stale = false;
-    setNotesLoaded(false);
     const url = effectiveProject === '__everything__'
       ? '/api/notes'
       : `/api/notes?project=${encodeURIComponent(effectiveProject)}`;
@@ -50,10 +48,9 @@ export default function NotesCard({ project, token, userId }) {
         if (stale) return;
         const notes = res?.notes || [];
         setNotesList(notes);
-        setNotesLoaded(true);
         setActiveNoteId(prev => notes.find(n => n.id === prev) ? prev : notes[0]?.id ?? null);
       })
-      .catch(() => { if (!stale) setNotesLoaded(true); });
+      .catch(() => {});
     return () => { stale = true; };
   }, [effectiveProject, token]); // eslint-disable-line
 
@@ -92,6 +89,11 @@ export default function NotesCard({ project, token, userId }) {
   }, [notesList, projectsMeta, effectiveProject, notesSortRecent, recentPinnedId]);
 
   const allNoteNames = notesList.map(noteName).filter(Boolean);
+
+  // Propagate note names to Dashboard so NoteContext.Provider at that level stays current
+  useEffect(() => {
+    onNoteNamesChange?.(allNoteNames);
+  }, [allNoteNames.join(',')]); // eslint-disable-line
 
   const saveNoteOrder = useCallback((orderedIds) => {
     if (!effectiveProject || effectiveProject === '__everything__') return;
@@ -403,10 +405,8 @@ export default function NotesCard({ project, token, userId }) {
 
   const [notesCollapsed, toggleNotes] = useCollapse(`pv:${effectiveProject}:journal`, false);
 
-  const noteNamesForContext = allNoteNames;
-
   return (
-    <NoteContext.Provider value={{ notes: noteNamesForContext, onCreateNote: (name, opts) => addNote(name, opts) }}>
+    <>
 
       {/* Notes card */}
       <Card
@@ -636,6 +636,6 @@ export default function NotesCard({ project, token, userId }) {
           </div>
         </>
       )}
-    </NoteContext.Provider>
+    </>
   );
 }

@@ -8,7 +8,8 @@ import { todayKey, toKey, shift } from "@/lib/dates";
 import { bustOuraCache } from "@/lib/ouraCache";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
-import { NavigationContext, ProjectNamesContext } from "@/lib/contexts";
+import { useProjects } from "@/lib/useProjects";
+import { NoteContext, NavigationContext, ProjectNamesContext } from "@/lib/contexts";
 import { Card, ErrorBoundary } from "./ui/primitives.jsx";
 import WeatherBackground from "./ui/WeatherBackground.jsx";
 import Header from "./nav/Header.jsx";
@@ -23,7 +24,7 @@ import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import NotesCard from "./widgets/NotesCard.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
-import { HomeSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
+import { HomeSettingsPanel, ProjectSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 
 function DashboardInner() {
@@ -200,16 +201,27 @@ function DashboardInner() {
   // ── Collapse state ─────────────────────────────────────────────────────
   const [calCollapsed,    toggleCal]      = useCollapse("cal",     false);
   const [healthCollapsed, toggleHealth]   = useCollapse("health",  true);
-  const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
+  const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [homeSettingsOpen, setHomeSettingsOpen] = useState(false);
-  // Close home settings whenever we navigate to a different project
-  useEffect(() => { setHomeSettingsOpen(false); }, [activeProject]);
+  // Close settings panels whenever we navigate to a different project
+  useEffect(() => { setSettingsOpen(false); setHomeSettingsOpen(false); }, [activeProject]);
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
-  const collapseMap = {journal:notesCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
-  const toggleMap   = {journal:toggleNotes,  tasks:toggleTasks,  meals:toggleMeals,  workouts:toggleAct};
+  const collapseMap = {journal:journalCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
+  const toggleMap   = {journal:toggleJournal,   tasks:toggleTasks,  meals:toggleMeals,  workouts:toggleAct};
+
+  // ── Note names for NoteContext — shared across Journal + Notes editors ──────
+  const [allNoteNames, setAllNoteNames] = useState([]);
+
+  // ── Project recency tracking — update last_active when a project is selected ─
+  const { updateProject } = useProjects(token);
+  useEffect(() => {
+    if (!activeProject || activeProject.startsWith('__') || !token) return;
+    updateProject(activeProject, { last_active: todayKey() });
+  }, [activeProject, token]); // eslint-disable-line
 
   // ── Global undo/redo keyboard shortcut ──────────────────────────────────
   useEffect(() => {
@@ -261,7 +273,6 @@ function DashboardInner() {
     const fetchCal=()=>api.get(`/api/calendar?start=${start}&end=${end}&tz=${encodeURIComponent(tz)}`,token)
       .then(d=>{
         if(d?.events) setEvents(prev=>({...prev,...d.events}));
-        if(d?.googleToken) setGoogleToken(d.googleToken);
       })
       .catch(()=>{})
       .finally(()=>endSync("cal"));
@@ -361,13 +372,15 @@ function DashboardInner() {
   ];
   const [leftWidget,...rightWidgets] = WIDGETS;
 
-  // activeProject is now a filter, not a view switch.
-  // __graph__ is kept for back-compat (navigateToNote uses it) but treated as no filter.
-  const isGraph = activeProject === '__graph__';
-  const projectFilter = (!activeProject || isGraph) ? null : activeProject;
+  // __graph__ is treated as no project filter (shows all notes/entries).
+  // Any other non-null activeProject is a real project slug.
+  const projectFilter = (activeProject && activeProject !== '__graph__') ? activeProject : null;
 
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
+    <NoteContext.Provider value={{ notes: allNoteNames, onCreateNote: (name) => {
+      window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name } }));
+    }}}>
     <ToastContainer/>
     <NavigationContext.Provider value={{
       navigateToProject: (name) => setActiveProject(name),
@@ -384,6 +397,13 @@ function DashboardInner() {
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
 
         <HomeSettingsPanel open={homeSettingsOpen} onClose={() => setHomeSettingsOpen(false)} />
+        {projectFilter && (
+          <ProjectSettingsPanel
+            project={projectFilter} token={token}
+            open={settingsOpen} onClose={() => setSettingsOpen(false)}
+            onRenamed={slug => { setActiveProject(slug); setSettingsOpen(false); }}
+          />
+        )}
 
         {/* ── Single unified scroll container ── */}
         <div style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0}}>
@@ -392,17 +412,18 @@ function DashboardInner() {
           {/* Spacer for fixed header */}
           <div style={{height:"calc(env(safe-area-inset-top, 0px) + 70px)",flexShrink:0}}/>
 
-          {/* NavBar — date nav always */}
+          {/* NavBar — reflects active project for title, back button, gear icon */}
           <NavBar
-            activeProject={null}
+            activeProject={activeProject}
             date={selected}
             searchOpen={searchOpen} setSearchOpen={setSearchOpen}
             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
             searchInputRef={searchInputRef} srLoading={srLoading}
             onGoHome={() => { setActiveProject(null); setSelected(todayKey()); }}
             onGoToProjects={() => setActiveProject('__graph__')}
-            onSelectDate={setSelected}
-            onOpenSettings={() => setHomeSettingsOpen(true)}
+            onBack={projectFilter ? () => setActiveProject(null) : undefined}
+            onSelectDate={!activeProject ? setSelected : undefined}
+            onOpenSettings={projectFilter ? () => setSettingsOpen(true) : () => setHomeSettingsOpen(true)}
           />
 
           {/* 2. CalendarCard — hidden during search */}
@@ -457,7 +478,7 @@ function DashboardInner() {
             <>
               {/* 5. Notes — all notes (no project) or project-filtered notes */}
               <ErrorBoundary label="Notes">
-                <NotesCard project={projectFilter} token={token} userId={userId} />
+                <NotesCard project={projectFilter} token={token} userId={userId} onNoteNamesChange={setAllNoteNames} />
               </ErrorBoundary>
 
               {/* 6–9. Journal, Tasks, Meals, Workouts */}
@@ -543,6 +564,7 @@ function DashboardInner() {
       )}
     </div>
     </NavigationContext.Provider>
+    </NoteContext.Provider>
     </ProjectNamesContext.Provider>
   );
 }
