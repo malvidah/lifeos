@@ -971,7 +971,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, sele
         maxPolarAngle={Math.PI / 2.1}
         minPolarAngle={Math.PI / 8}
         target={[0, peakY, 0]}
-        autoRotate autoRotateSpeed={0.3}
+        autoRotate autoRotateSpeed={0.1}
         onChange={e => {
           const dist = e?.target?.object?.position?.length();
           if (dist) localStorage.setItem('daylab:map-zoom', dist.toFixed(1));
