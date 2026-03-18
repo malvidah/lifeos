@@ -403,7 +403,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange })
   }, []);
   const handleNoteDragOver = useCallback((e) => { e.preventDefault(); }, []);
 
-  const [notesCollapsed, toggleNotes] = useCollapse(`pv:${effectiveProject}:journal`, false);
+  const [notesCollapsed, toggleNotes] = useCollapse(`pv:${effectiveProject}:notes`, false);
 
   return (
     <>

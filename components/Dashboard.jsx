@@ -93,14 +93,8 @@ function DashboardInner() {
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
 
-  // Project names — fetched once on login, used by all editors for #tag autocomplete
+  // Project names — used by all editors for #tag autocomplete
   const [allProjectNames, setAllProjectNames] = useState([]);
-  useEffect(() => {
-    if (!token) return;
-    api.get('/api/all-tags', token)
-      .then(d => { if (Array.isArray(d?.tags)) setAllProjectNames(d.tags); })
-      .catch(() => {});
-  }, [token]); // eslint-disable-line
 
   // Listen for new project chip creation (/p + new name in any editor)
   useEffect(() => {
@@ -113,7 +107,8 @@ function DashboardInner() {
     return () => window.removeEventListener('daylab:create-project', handler);
   }, []); // eslint-disable-line
 
-  // Graph data — load eagerly on login so MapCard is always ready
+  // Graph data — load eagerly on login so MapCard is always ready.
+  // Also populates allProjectNames from the same /api/all-tags fetch to avoid a duplicate request.
   const [graphData, setGraphData] = useState(null);
   useEffect(() => {
     if (!token) return;
@@ -123,8 +118,10 @@ function DashboardInner() {
       api.get('/api/tag-connections', token),
       api.get('/api/project-stats', token),
     ]).then(([tagsRes, connsRes, statsRes]) => {
+      const allTags = Array.isArray(tagsRes?.tags) ? tagsRes.tags : [];
+      setAllProjectNames(allTags);
       setGraphData({
-        allTags: Array.isArray(tagsRes?.tags) ? tagsRes.tags : [],
+        allTags,
         connections: Array.isArray(connsRes?.connections) ? connsRes.connections : [],
         recency: connsRes?.recency || {},
         entryCounts: statsRes?.counts || {},
