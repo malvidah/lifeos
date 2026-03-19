@@ -1031,15 +1031,6 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
     return saved ? Math.max(6, Math.min(30, parseFloat(saved))) : 25;
   }, []);
 
-  if (!projects.length) {
-    return (
-      <div style={{ height: 320, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", background: 'var(--dl-well)', borderRadius: 12 }}>
-        No projects yet
-      </div>
-    );
-  }
-
   const sky = skyColors(weather);
 
   // Track pointer-down position so we can distinguish drag from click

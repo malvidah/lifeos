@@ -296,14 +296,14 @@ function DashboardInner() {
   }, []);
 
   // ── Collapse state ─────────────────────────────────────────────────────
-  const [calCollapsed,    toggleCal]      = useCollapse("cal",     false);
+  const [calCollapsed,    toggleCal]      = useCollapse("cal",     true);
   const [healthCollapsed, toggleHealth]   = useCollapse("health",  true);
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
-  const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
-  const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
-  const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
+  const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   true);
+  const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
+  const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
   const [mapCollapsed,    toggleMap_]     = useCollapse("map",     false);
   const collapseMap = {journal:journalCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
   const toggleMap   = {journal:toggleJournal,   tasks:toggleTasks,  meals:toggleMeals,  workouts:toggleAct};
