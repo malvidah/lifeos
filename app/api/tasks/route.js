@@ -33,7 +33,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       .from('tasks')
       .select('id, date, due_date, text, html, done, completed_at, project_tags, position')
       .eq('user_id', user.id)
-  
+      .is('deleted_at', null)
       .contains('project_tags', [project.toLowerCase()])
       .order('date', { ascending: false })
       .order('position', { ascending: true });
@@ -69,6 +69,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const { data: ownTasks, error: e1 } = await supabase
     .from('tasks').select(cols)
     .eq('user_id', user.id).eq('date', date)
+    .is('deleted_at', null)
     .order('position', { ascending: true });
   if (e1) throw e1;
   const ownIds = new Set((ownTasks ?? []).map(t => t.id));
@@ -79,6 +80,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const { data: persistentTasks, error: e2 } = await supabase
     .from('tasks').select(cols)
     .eq('user_id', user.id)
+    .is('deleted_at', null)
     .not('due_date', 'is', null)
     .lte('date', date)       // created on or before this date
     .gte('due_date', date)   // due date is today or in the future
@@ -92,6 +94,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const { data: recurringCandidates } = await supabase
     .from('tasks').select(cols)
     .eq('user_id', user.id)
+    .is('deleted_at', null)
     .neq('date', date)
     .ilike('html', '%data-recurrence=%');
 
@@ -170,6 +173,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .select('id, position, text, due_date, completed_at, html')
     .eq('user_id', user.id)
     .eq('date', date)
+    .is('deleted_at', null)
     .order('position', { ascending: true });
 
   // Build a set of texts from tasks that were INJECTED by GET (persistent + recurring
@@ -180,6 +184,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .from('tasks')
     .select('id, text')
     .eq('user_id', user.id)
+    .is('deleted_at', null)
     .not('due_date', 'is', null)
     .lte('date', date).gte('due_date', date)
     .eq('done', false).neq('date', date)
@@ -193,6 +198,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .from('tasks')
     .select('id, text, html, date')
     .eq('user_id', user.id)
+    .is('deleted_at', null)
     .neq('date', date)
     .ilike('html', '%data-recurrence=%');
 
@@ -320,16 +326,16 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     if (!foreignTextsSeen.has(key)) {
       const stillPresent = parsed.some(t => t.text?.trim().toLowerCase() === key);
       if (!stillPresent) {
-        await supabase.from('tasks').delete().eq('id', id).eq('user_id', user.id);
+        await supabase.from('tasks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', user.id);
       }
     }
   }
 
-  // Full-replace ALL own-date tasks (including recurring originals — they'll
-  // be re-inserted from ownRows with their recurrence chip intact)
+  // Full-replace ALL own-date tasks: soft-delete existing rows, then insert fresh ones.
+  // Old soft-deleted rows remain in the DB but are excluded from all queries.
   const { error: delErr } = await supabase
-    .from('tasks').delete()
-    .eq('user_id', user.id).eq('date', date);
+    .from('tasks').update({ deleted_at: new Date().toISOString() })
+    .eq('user_id', user.id).eq('date', date).is('deleted_at', null);
   if (delErr) throw delErr;
 
   // Save own-date tasks (regular tasks created on this date).
@@ -387,7 +393,7 @@ export const DELETE = withAuth(async (req, { supabase, user }) => {
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
 
   const { error } = await supabase
-    .from('tasks').delete()
+    .from('tasks').update({ deleted_at: new Date().toISOString() })
     .eq('id', id).eq('user_id', user.id);
   if (error) throw error;
 

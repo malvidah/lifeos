@@ -21,7 +21,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   let query = supabase
     .from('notes')
     .select('id, title, content, project_tags, created_at, updated_at')
-    .eq('user_id', user.id);
+    .eq('user_id', user.id)
+    .is('deleted_at', null);
 
   if (id) {
     const { data, error } = await query.eq('id', id).maybeSingle();
@@ -95,7 +96,7 @@ export const DELETE = withAuth(async (req, { supabase, user }) => {
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
 
   const { error } = await supabase
-    .from('notes').delete()
+    .from('notes').update({ deleted_at: new Date().toISOString() })
     .eq('id', id).eq('user_id', user.id);
   if (error) throw error;
 

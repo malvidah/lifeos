@@ -11,6 +11,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     const { data, error } = await supabase
       .from('entries').select('data')
       .eq('date', date).eq('type', type).eq('user_id', user.id)
+      .is('deleted_at', null)
       .maybeSingle();
     if (error) throw error;
     return Response.json({ data: data?.data ?? null });
@@ -18,7 +19,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   const { data, error } = await supabase
     .from('entries').select('type, data')
-    .eq('date', date).eq('user_id', user.id);
+    .eq('date', date).eq('user_id', user.id)
+    .is('deleted_at', null);
   if (error) throw error;
   const day = {};
   for (const row of data || []) day[row.type] = row.data;
