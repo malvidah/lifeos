@@ -516,12 +516,18 @@ function DashboardInner() {
             />
           )}
 
-          {/* Dock — card toggle bar below map */}
+          {/* Dock — glass toggle bar below map */}
           {!searchOpen && (
             <div style={{
-              display:'flex', justifyContent:'center', gap:2,
-              padding:'4px 6px', borderRadius:10,
-              background:'var(--dl-card)', border:'1px solid var(--dl-border)',
+              display:'flex', alignItems:'center', justifyContent:'center', gap:2,
+              height:44, flexShrink:0,
+              background:'var(--dl-glass)',
+              backdropFilter:'blur(20px) saturate(1.4)',
+              WebkitBackdropFilter:'blur(20px) saturate(1.4)',
+              border:'1px solid var(--dl-glass-border)',
+              borderRadius:100,
+              padding:'0 5px',
+              boxShadow:'var(--dl-glass-shadow)',
             }}>
               {DOCK_ITEMS.map(item => {
                 const isOpen = item.id === 'cal' ? !calCollapsed
@@ -537,44 +543,41 @@ function DashboardInner() {
                     title={item.label}
                     style={{
                       display:'flex', alignItems:'center', justifyContent:'center',
-                      gap:5, padding:'5px 10px', borderRadius:8,
-                      border:'none', cursor:'pointer',
-                      background: isOpen ? 'var(--dl-glass-active, rgba(128,120,100,0.12))' : 'transparent',
-                      color: isOpen ? 'var(--dl-highlight)' : 'var(--dl-middle)',
-                      fontFamily:mono, fontSize:F.sm, letterSpacing:'0.04em',
-                      textTransform:'uppercase',
-                      transition:'all 0.15s ease',
+                      width:34, height:34, borderRadius:100,
+                      border:'none', cursor:'pointer', flexShrink:0,
+                      background: isOpen ? 'var(--dl-glass-active)' : 'transparent',
+                      color: isOpen ? 'var(--dl-strong)' : 'var(--dl-highlight)',
+                      transition:'background 0.2s, color 0.2s',
                     }}
-                    onMouseEnter={e => { if (!isOpen) e.currentTarget.style.color = 'var(--dl-highlight)'; }}
-                    onMouseLeave={e => { if (!isOpen) e.currentTarget.style.color = 'var(--dl-middle)'; }}
+                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--dl-strong)'; e.currentTarget.style.background = 'var(--dl-glass-active)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.color = isOpen ? 'var(--dl-strong)' : 'var(--dl-highlight)'; e.currentTarget.style.background = isOpen ? 'var(--dl-glass-active)' : 'transparent'; }}
                   >
                     {item.icon}
-                    {isOpen && <span>{item.label}</span>}
                   </button>
                 );
               })}
             </div>
           )}
 
-          {/* 3. CalendarCard — hidden during search */}
-          {!searchOpen && (
+          {/* 3. CalendarCard — hidden when toggled off in dock */}
+          {!searchOpen && !calCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Calendar">
               <CalendarCard selected={selected} onSelect={setSelected}
                 events={events} setEvents={setEvents} healthDots={healthDots}
-                token={token} collapsed={calCollapsed} onToggle={toggleCal}
+                token={token} collapsed={false} onToggle={toggleCal}
                 calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
               </ErrorBoundary>
             </div>
           )}
 
-          {/* 4. HealthCard — hidden during search */}
-          {!searchOpen && (
+          {/* 4. HealthCard — hidden when toggled off in dock */}
+          {!searchOpen && !healthCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Health">
               <HealthCard date={selected} token={token} userId={userId}
                 onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-                collapsed={healthCollapsed} onToggle={toggleHealth}/>
+                collapsed={false} onToggle={toggleHealth}/>
               </ErrorBoundary>
             </div>
           )}
@@ -591,27 +594,27 @@ function DashboardInner() {
             </div>
           ) : (
             <>
-              {/* 5. Notes — all notes (no project) or project-filtered notes */}
-              <ErrorBoundary label="Notes">
-                <NotesCard project={projectFilter} token={token} userId={userId} onNoteNamesChange={setAllNoteNames} collapsed={notesCollapsed} onToggle={toggleNotes} />
-              </ErrorBoundary>
+              {/* 5. Notes — hidden when toggled off in dock */}
+              {!notesCollapsed && (
+                <ErrorBoundary label="Notes">
+                  <NotesCard project={projectFilter} token={token} userId={userId} onNoteNamesChange={setAllNoteNames} collapsed={false} onToggle={toggleNotes} />
+                </ErrorBoundary>
+              )}
 
               {/* 6–9. Journal, Tasks, Meals, Workouts */}
               {mobile ? (
                 <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
-                  <ErrorBoundary label={leftWidget.label}>
-                  <Card label={leftWidget.label} color={leftWidget.color()}
-                    collapsed={collapseMap[leftWidget.id]}
-                    onToggle={toggleMap[leftWidget.id]}
-                    headerRight={leftWidget.headerRight?.()} autoHeight>
-                    <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
-                  </Card>
-                  </ErrorBoundary>
-                  {rightWidgets.map(w=>(
+                  {!collapseMap[leftWidget.id] && (
+                    <ErrorBoundary label={leftWidget.label}>
+                    <Card label={leftWidget.label} color={leftWidget.color()}
+                      headerRight={leftWidget.headerRight?.()} autoHeight>
+                      <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
+                    </Card>
+                    </ErrorBoundary>
+                  )}
+                  {rightWidgets.map(w=> !collapseMap[w.id] && (
                     <ErrorBoundary key={w.id} label={w.label}>
                     <Card label={w.label} color={w.color()}
-                      collapsed={collapseMap[w.id]}
-                      onToggle={toggleMap[w.id]}
                       headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
                       <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
                         taskFilter={w.id==='tasks'?taskFilter:undefined}
@@ -623,38 +626,38 @@ function DashboardInner() {
               ) : (
                 <div style={{display:"flex", gap:10, flexDirection:"row", alignItems:"stretch"}}>
                   {/* Left column: Journal */}
-                  <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                    <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
-                      <ErrorBoundary label={leftWidget.label}>
-                      <Card label={leftWidget.label} color={leftWidget.color()}
-                        collapsed={collapseMap[leftWidget.id]}
-                        onToggle={toggleMap[leftWidget.id]}
-                        headerRight={leftWidget.headerRight?.()}>
-                        <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
-                      </Card>
-                      </ErrorBoundary>
-                    </div>
-                  </div>
-                  {/* Right widgets — Tasks, Meals, Workouts */}
-                  <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                    {rightWidgets.map((w, i)=>(
-                      <div key={w.id} style={{
-                        display:"flex", flexDirection:"column",
-                        flex: (!collapseMap[w.id] && i === rightWidgets.length - 1) ? 1 : "0 0 auto",
-                        minHeight: collapseMap[w.id]?0:200}}>
-                        <ErrorBoundary label={w.label}>
-                        <Card label={w.label} color={w.color()}
-                          collapsed={collapseMap[w.id]}
-                          onToggle={toggleMap[w.id]}
-                          headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
-                          <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
-                            taskFilter={w.id==='tasks'?taskFilter:undefined}
-                            project={w.id==='tasks'&&projectFilter?projectFilter:undefined}/>
+                  {!collapseMap[leftWidget.id] && (
+                    <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
+                      <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
+                        <ErrorBoundary label={leftWidget.label}>
+                        <Card label={leftWidget.label} color={leftWidget.color()}
+                          headerRight={leftWidget.headerRight?.()}>
+                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                         </Card>
                         </ErrorBoundary>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  )}
+                  {/* Right widgets — Tasks, Meals, Workouts (only visible ones) */}
+                  {rightWidgets.some(w => !collapseMap[w.id]) && (
+                    <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
+                      {rightWidgets.filter(w => !collapseMap[w.id]).map((w, i, arr)=>(
+                        <div key={w.id} style={{
+                          display:"flex", flexDirection:"column",
+                          flex: i === arr.length - 1 ? 1 : "0 0 auto",
+                          minHeight: 200}}>
+                          <ErrorBoundary label={w.label}>
+                          <Card label={w.label} color={w.color()}
+                            headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
+                            <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
+                              taskFilter={w.id==='tasks'?taskFilter:undefined}
+                              project={w.id==='tasks'&&projectFilter?projectFilter:undefined}/>
+                          </Card>
+                          </ErrorBoundary>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>
