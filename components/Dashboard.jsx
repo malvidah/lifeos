@@ -473,7 +473,7 @@ function DashboardInner() {
       },
     }}>
     <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
-      <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{selectProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+      <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onSelectDate={setSelected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{selectProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── Main scroll area ─── */}
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
@@ -494,17 +494,25 @@ function DashboardInner() {
           {/* Spacer for fixed header */}
           <div style={{height:"calc(env(safe-area-inset-top, 0px) + 70px)",flexShrink:0}}/>
 
-          {/* NavBar — reflects active project for title, back button, gear icon */}
+          {/* NavBar — dock icons centered between settings and search */}
           <NavBar
-            activeProject={activeProject}
-            date={selected}
             searchOpen={searchOpen} setSearchOpen={setSearchOpen}
             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
             searchInputRef={searchInputRef} srLoading={srLoading}
-            onGoHome={() => { selectProject(null); setSelected(todayKey()); }}
-            onBack={projectFilter ? () => selectProject(null) : undefined}
-            onSelectDate={setSelected}
             onOpenSettings={projectFilter ? () => setSettingsOpen(true) : () => setHomeSettingsOpen(true)}
+            dockItems={DOCK_ITEMS.map(item => ({
+              ...item,
+              isOpen: item.id === 'map' ? !mapCollapsed
+                : item.id === 'cal' ? !calCollapsed
+                : item.id === 'health' ? !healthCollapsed
+                : item.id === 'notes' ? !notesCollapsed
+                : !collapseMap[item.id],
+              onToggle: item.id === 'map' ? toggleMap_
+                : item.id === 'cal' ? toggleCal
+                : item.id === 'health' ? toggleHealth
+                : item.id === 'notes' ? toggleNotes
+                : toggleMap[item.id],
+            }))}
           />
 
           {/* 2. MapCard — hidden when toggled off in dock */}
@@ -520,51 +528,6 @@ function DashboardInner() {
               selectedProject={projectFilter}
               onSelectProject={selectProject}
             />
-          )}
-
-          {/* Dock — glass toggle bar below map */}
-          {!searchOpen && (
-            <div style={{
-              display:'flex', alignItems:'center', justifyContent:'center', gap:2,
-              height:44, flexShrink:0,
-              background:'var(--dl-glass)',
-              backdropFilter:'blur(20px) saturate(1.4)',
-              WebkitBackdropFilter:'blur(20px) saturate(1.4)',
-              border:'1px solid var(--dl-glass-border)',
-              borderRadius:100,
-              padding:'0 5px',
-              boxShadow:'var(--dl-glass-shadow)',
-            }}>
-              {DOCK_ITEMS.map(item => {
-                const isOpen = item.id === 'map' ? !mapCollapsed
-                  : item.id === 'cal' ? !calCollapsed
-                  : item.id === 'health' ? !healthCollapsed
-                  : item.id === 'notes' ? !notesCollapsed
-                  : !collapseMap[item.id];
-                const toggle = item.id === 'map' ? toggleMap_
-                  : item.id === 'cal' ? toggleCal
-                  : item.id === 'health' ? toggleHealth
-                  : item.id === 'notes' ? toggleNotes
-                  : toggleMap[item.id];
-                return (
-                  <button key={item.id} onClick={toggle}
-                    title={item.label}
-                    style={{
-                      display:'flex', alignItems:'center', justifyContent:'center',
-                      width:34, height:34, borderRadius:100,
-                      border:'none', cursor:'pointer', flexShrink:0,
-                      background: isOpen ? 'var(--dl-glass-active)' : 'transparent',
-                      color: isOpen ? 'var(--dl-strong)' : 'var(--dl-highlight)',
-                      transition:'background 0.2s, color 0.2s',
-                    }}
-                    onMouseEnter={e => { e.currentTarget.style.color = 'var(--dl-strong)'; e.currentTarget.style.background = 'var(--dl-glass-active)'; }}
-                    onMouseLeave={e => { e.currentTarget.style.color = isOpen ? 'var(--dl-strong)' : 'var(--dl-highlight)'; e.currentTarget.style.background = isOpen ? 'var(--dl-glass-active)' : 'transparent'; }}
-                  >
-                    {item.icon}
-                  </button>
-                );
-              })}
-            </div>
           )}
 
           {/* 3. CalendarCard — hidden when toggled off in dock */}

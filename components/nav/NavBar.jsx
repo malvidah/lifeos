@@ -1,60 +1,7 @@
 "use client";
 import { mono, serif, F, projectColor } from "@/lib/tokens";
 import { tagDisplayName } from "@/lib/tags";
-import { MONTHS_FULL, todayKey } from "@/lib/dates";
-
-// ── Format date key → "MARCH 13, 2026" ───────────────────────────────────────
-function fmtNavDate(dateKey) {
-  if (!dateKey) return '';
-  const [y, m, d] = dateKey.split('-').map(Number);
-  return `${MONTHS_FULL[m - 1].toUpperCase()} ${d}, ${y}`;
-}
-
-// ── Relative date label ──────────────────────────────────────────────────────
-const DAYS_FULL = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
-function fmtRelative(dateKey, todayKey) {
-  if (!dateKey || !todayKey) return null;
-  if (dateKey === todayKey) return 'TODAY';
-  const d = new Date(dateKey + 'T12:00:00');
-  const t = new Date(todayKey + 'T12:00:00');
-  const diffDays = Math.round((t - d) / 86400000);
-
-  if (diffDays === 1) return 'YESTERDAY';
-  if (diffDays === -1) return 'TOMORROW';
-
-  const absDays = Math.abs(diffDays);
-  const dayName = DAYS_FULL[d.getDay()];
-
-  // Past dates
-  if (diffDays > 0) {
-    if (absDays <= 6) return `LAST ${dayName}`;
-    if (absDays < 30) {
-      const half = Math.round(absDays / 7 * 2) / 2; // round to nearest 0.5
-      return `${half} WEEK${half === 1 ? '' : 'S'} AGO`;
-    }
-    const totalMonths = (t.getFullYear() - d.getFullYear()) * 12 + (t.getMonth() - d.getMonth());
-    if (totalMonths < 2) return 'LAST MONTH';
-    if (totalMonths < 12) return `${totalMonths} MONTHS AGO`;
-    const yrs = Math.floor(totalMonths / 12);
-    const mos = totalMonths % 12;
-    if (mos === 0) return yrs === 1 ? 'LAST YEAR' : `${yrs} YEARS AGO`;
-    return `${yrs} YEAR${yrs > 1 ? 'S' : ''} ${mos} MONTH${mos > 1 ? 'S' : ''} AGO`;
-  }
-
-  // Future dates
-  if (absDays <= 6) return `THIS ${dayName}`;
-  if (absDays < 30) {
-    const half = Math.round(absDays / 7 * 2) / 2;
-    return `IN ${half} WEEK${half === 1 ? '' : 'S'}`;
-  }
-  const totalMonths = (d.getFullYear() - t.getFullYear()) * 12 + (d.getMonth() - t.getMonth());
-  if (totalMonths < 2) return 'NEXT MONTH';
-  if (totalMonths < 12) return `IN ${totalMonths} MONTHS`;
-  const yrs = Math.floor(totalMonths / 12);
-  const mos = totalMonths % 12;
-  if (mos === 0) return yrs === 1 ? 'NEXT YEAR' : `IN ${yrs} YEARS`;
-  return `IN ${yrs} YEAR${yrs > 1 ? 'S' : ''} ${mos} MONTH${mos > 1 ? 'S' : ''}`;
-}
+import { todayKey } from "@/lib/dates";
 
 // ── Apple-style liquid glass pill button ──────────────────────────────────────
 function NavIconBtn({ onClick, active, title, children }) {
@@ -80,46 +27,22 @@ function NavIconBtn({ onClick, active, title, children }) {
 }
 
 // ── NavBar ────────────────────────────────────────────────────────────────────
-// Layout: [cal] [grid]  ···  BIG TITLE  ···  [gear?] [search]
+// Layout: [gear]  ···  [dock icons]  ···  [search]
 //
 // Props:
-//   activeProject   – null = daily view, string = project/graph/everything view
-//   date            – selected date key "YYYY-MM-DD" (shown as title in daily view)
-//   onGoHome        – calendar icon → daily view / today
-//   onGoToProjects  – grid icon → all-projects / graph view
-//   onOpenSettings  – gear icon (only shown when truthy, i.e. real project view)
+//   onOpenSettings  – gear icon (only shown when truthy)
+//   dockItems       – array of { id, label, icon, isOpen, onToggle }
 //   searchOpen / setSearchOpen / searchQuery / setSearchQuery / searchInputRef / srLoading
-function stepDateKey(dateKey, dir) {
-  const [y, m, d] = dateKey.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + dir);
-  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-}
-
 export default function NavBar(props) {
   const {
-    activeProject, date,
     searchOpen, setSearchOpen, searchQuery, setSearchQuery, searchInputRef, srLoading,
-    onGoHome, onGoToProjects, onBack, onOpenSettings, onSelectDate,
+    onOpenSettings, dockItems,
   } = props;
 
   const openSearch  = () => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); };
   const closeSearch = () => { setSearchOpen(false); setSearchQuery(''); };
 
-  const isGraph      = activeProject === '__graph__';
-  const isEverything = activeProject === '__everything__';
-  const isProject    = activeProject && !isGraph && !isEverything;
-
-  const today = todayKey();
-  const relLabel = fmtRelative(date, today);
-  const isToday = date === today;
-  const centerLabel = !activeProject  ? fmtNavDate(date)
-    : isGraph                         ? 'ALL PROJECTS'
-    : isEverything                    ? 'ALL'
-    : tagDisplayName(activeProject);
-
-  const titleColor = isProject ? projectColor(activeProject) : "var(--dl-strong)";
-  const showGear   = !!onOpenSettings;
+  const showGear = !!onOpenSettings;
 
   const glassBar = {
     display: 'flex', alignItems: 'center', height: 44, flexShrink: 0, position: 'relative',
@@ -165,11 +88,11 @@ export default function NavBar(props) {
     );
   }
 
-  // ── Normal nav bar ─────────────────────────────────────────────────
+  // ── Normal nav bar: [gear] ··· [dock icons] ··· [search] ────────────
   return (
     <div style={glassBar}>
 
-      {/* ── Left icons ──────────────────────────────────────────────────── */}
+      {/* ── Left: settings ─────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', zIndex: 2, flexShrink: 0 }}>
         {showGear && (
           <NavIconBtn onClick={onOpenSettings} title="Settings">
@@ -181,51 +104,22 @@ export default function NavBar(props) {
         )}
       </div>
 
-      {/* ── Center title — absolutely centred ─────────────────────────── */}
+      {/* ── Center: dock icons ─────────────────────────────────────────── */}
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         pointerEvents: 'none',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
-          <button onClick={() => onSelectDate?.(stepDateKey(date, -1))} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: "var(--dl-highlight)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
-            lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
-          }}
-            onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-            onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
-          >‹</button>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
-            {relLabel && (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
-                color: isToday ? "var(--dl-orange)" : "var(--dl-middle)",
-                lineHeight: 1, marginBottom: -1,
-              }}>{relLabel}</span>
-            )}
-            <button onClick={onGoHome} style={{
-              background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
-              fontFamily: mono, fontSize: 13, fontWeight: 400, letterSpacing: '0.12em',
-              textTransform: 'uppercase', color: "var(--dl-strong)",
-              whiteSpace: 'nowrap', userSelect: 'none', transition: 'opacity 0.15s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.opacity = '0.6'}
-              onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-            >{fmtNavDate(date)}</button>
-          </div>
-          <button onClick={() => onSelectDate?.(stepDateKey(date, +1))} style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: "var(--dl-highlight)", padding: '2px 6px', fontFamily: mono, fontSize: 16,
-            lineHeight: 1, transition: 'color 0.15s', userSelect: 'none',
-          }}
-            onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-            onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
-          >›</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 2, pointerEvents: 'auto' }}>
+          {dockItems?.map(item => (
+            <NavIconBtn key={item.id} onClick={item.onToggle} active={item.isOpen} title={item.label}>
+              {item.icon}
+            </NavIconBtn>
+          ))}
         </div>
       </div>
 
-      {/* ── Right icons ─────────────────────────────────────────────────── */}
+      {/* ── Right: search ──────────────────────────────────────────────── */}
       <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', zIndex: 2, flexShrink: 0 }}>
         <NavIconBtn onClick={openSearch} title="Search">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
