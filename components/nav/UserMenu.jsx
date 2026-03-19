@@ -5,6 +5,10 @@ import { createClient } from "@/lib/supabase";
 import { ouraKey } from "@/lib/ouraCache";
 import { IntegrationToggle, IntegrationRow, InfoTip, Card, DayLabLoader } from "../ui/primitives.jsx";
 
+// ── Feature flags — set to true to re-enable ────────────────────────────────
+const ENABLE_GARMIN = false;
+const ENABLE_GOOGLE_TASKS = false;
+
 export default function UserMenu({session,token,userId,theme,themePreference,onThemeChange,stravaConnected,onStravaChange}) {
   const [open,setOpen]=useState(false);
   const [ouraKey,setOuraKey]=useState("");
@@ -290,7 +294,8 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
 
           {divider}
 
-          {/* Garmin */}
+          {/* Garmin — gated behind ENABLE_GARMIN feature flag */}
+          {ENABLE_GARMIN && <>
           <div style={row}>
             <IntegrationRow
               label="Garmin"
@@ -322,6 +327,7 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           </div>
 
           {divider}
+          </>}
 
           {/* Strava */}
           <div style={row}>
@@ -381,7 +387,8 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
 
           {divider}
 
-          {/* Google Tasks Import */}
+          {/* Google Tasks Import — gated behind ENABLE_GOOGLE_TASKS feature flag (doubles tasks bug) */}
+          {ENABLE_GOOGLE_TASKS && <>
           <div style={row}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-highlight)"}}>
@@ -421,6 +428,7 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           </div>
 
           {divider}
+          </>}
 
           {/* Theme */}
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
