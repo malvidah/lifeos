@@ -97,7 +97,7 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
             )}
             <button onClick={onGoHome} style={{
               background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
-              fontFamily: mono, fontSize: 14, fontWeight: 400, letterSpacing: '0.14em',
+              fontFamily: blurweb, fontSize: 16, fontWeight: 400, letterSpacing: '0.06em',
               textTransform: 'uppercase', color: "var(--dl-strong)",
               whiteSpace: 'nowrap', userSelect: 'none', transition: 'opacity 0.15s',
             }}

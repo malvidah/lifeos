@@ -30,7 +30,7 @@ import { ToastContainer } from "./ui/Toast.jsx";
 const DOCK_ITEMS = [
   { id: 'map',      label: 'Map',      icon: (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M8 3L2 6v15l6-3 8 4 6-3V4l-6 3-8-4z"/><line x1="8" y1="3" x2="8" y2="18"/><line x1="16" y1="7" x2="16" y2="22"/>
+      <path d="M8 21l8-14 8 14H0z" transform="translate(0,-1)"/><path d="M2 21l5-8 4 5" transform="translate(0,-1)"/>
     </svg>
   )},
   { id: 'cal',      label: 'Cal',      icon: (
@@ -492,7 +492,7 @@ function DashboardInner() {
         <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Spacer for fixed header */}
-          <div style={{height:"calc(env(safe-area-inset-top, 0px) + 70px)",flexShrink:0}}/>
+          <div style={{height:"calc(env(safe-area-inset-top, 0px) + 84px)",flexShrink:0}}/>
 
           {/* NavBar — dock icons centered between settings and search */}
           <NavBar
