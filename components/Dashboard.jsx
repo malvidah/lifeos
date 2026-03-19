@@ -28,6 +28,11 @@ import { ToastContainer } from "./ui/Toast.jsx";
 
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
+  { id: 'map',      label: 'Map',      icon: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3L2 6v15l6-3 8 4 6-3V4l-6 3-8-4z"/><line x1="8" y1="3" x2="8" y2="18"/><line x1="16" y1="7" x2="16" y2="22"/>
+    </svg>
+  )},
   { id: 'cal',      label: 'Cal',      icon: (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
@@ -302,6 +307,7 @@ function DashboardInner() {
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
+  const [mapCollapsed,    toggleMap_]     = useCollapse("map",     false);
   const collapseMap = {journal:journalCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
   const toggleMap   = {journal:toggleJournal,   tasks:toggleTasks,  meals:toggleMeals,  workouts:toggleAct};
 
@@ -501,8 +507,8 @@ function DashboardInner() {
             onOpenSettings={projectFilter ? () => setSettingsOpen(true) : () => setHomeSettingsOpen(true)}
           />
 
-          {/* 2. MapCard — always rendered once graph data is ready */}
-          {graphData && !searchOpen && (
+          {/* 2. MapCard — hidden when toggled off in dock */}
+          {graphData && !searchOpen && !mapCollapsed && (
             <MapCard
               allTags={graphData.allTags}
               connections={graphData.connections}
@@ -530,11 +536,13 @@ function DashboardInner() {
               boxShadow:'var(--dl-glass-shadow)',
             }}>
               {DOCK_ITEMS.map(item => {
-                const isOpen = item.id === 'cal' ? !calCollapsed
+                const isOpen = item.id === 'map' ? !mapCollapsed
+                  : item.id === 'cal' ? !calCollapsed
                   : item.id === 'health' ? !healthCollapsed
                   : item.id === 'notes' ? !notesCollapsed
                   : !collapseMap[item.id];
-                const toggle = item.id === 'cal' ? toggleCal
+                const toggle = item.id === 'map' ? toggleMap_
+                  : item.id === 'cal' ? toggleCal
                   : item.id === 'health' ? toggleHealth
                   : item.id === 'notes' ? toggleNotes
                   : toggleMap[item.id];
@@ -607,6 +615,7 @@ function DashboardInner() {
                   {!collapseMap[leftWidget.id] && (
                     <ErrorBoundary label={leftWidget.label}>
                     <Card label={leftWidget.label} color={leftWidget.color()}
+                      collapsed={false} onToggle={toggleMap[leftWidget.id]}
                       headerRight={leftWidget.headerRight?.()} autoHeight>
                       <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                     </Card>
@@ -615,6 +624,7 @@ function DashboardInner() {
                   {rightWidgets.map(w=> !collapseMap[w.id] && (
                     <ErrorBoundary key={w.id} label={w.label}>
                     <Card label={w.label} color={w.color()}
+                      collapsed={false} onToggle={toggleMap[w.id]}
                       headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
                       <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
                         taskFilter={w.id==='tasks'?taskFilter:undefined}
@@ -631,6 +641,7 @@ function DashboardInner() {
                       <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
                         <ErrorBoundary label={leftWidget.label}>
                         <Card label={leftWidget.label} color={leftWidget.color()}
+                          collapsed={false} onToggle={toggleMap[leftWidget.id]}
                           headerRight={leftWidget.headerRight?.()}>
                           <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                         </Card>
@@ -648,6 +659,7 @@ function DashboardInner() {
                           minHeight: 200}}>
                           <ErrorBoundary label={w.label}>
                           <Card label={w.label} color={w.color()}
+                            collapsed={false} onToggle={toggleMap[w.id]}
                             headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
                             <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
                               taskFilter={w.id==='tasks'?taskFilter:undefined}
