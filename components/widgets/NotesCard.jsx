@@ -15,7 +15,7 @@ import { uploadImageFile, deleteImageFile } from "@/lib/images";
 // Self-contained Notes tab card.
 // project: null → show all notes; any string → show notes tagged to that project
 // onNoteNamesChange: called whenever note list changes so Dashboard can sync NoteContext
-export default function NotesCard({ project, token, userId, onNoteNamesChange }) {
+export default function NotesCard({ project, token, userId, onNoteNamesChange, collapsed: externalCollapsed, onToggle: externalToggle }) {
   const pvProjectNames = useContext(ProjectNamesContext);
   const { navigateToProject } = useContext(NavigationContext);
 
@@ -403,7 +403,9 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange })
   }, []);
   const handleNoteDragOver = useCallback((e) => { e.preventDefault(); }, []);
 
-  const [notesCollapsed, toggleNotes] = useCollapse(`pv:${effectiveProject}:notes`, false);
+  const [internalCollapsed, internalToggle] = useCollapse(`pv:${effectiveProject}:notes`, false);
+  const notesCollapsed = externalCollapsed != null ? externalCollapsed : internalCollapsed;
+  const toggleNotes = externalToggle || internalToggle;
 
   return (
     <>
