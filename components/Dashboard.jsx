@@ -23,7 +23,8 @@ import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import NotesCard from "./widgets/NotesCard.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
-import { HomeSettingsPanel, ProjectSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
+// Settings panels on ice — keep files, just don't render
+// import { HomeSettingsPanel, ProjectSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
@@ -300,10 +301,6 @@ function DashboardInner() {
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [homeSettingsOpen, setHomeSettingsOpen] = useState(false);
-  // Close settings panels whenever we navigate to a different project
-  useEffect(() => { setSettingsOpen(false); setHomeSettingsOpen(false); }, [activeProject]);
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   false);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",false);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   false);
@@ -478,15 +475,6 @@ function DashboardInner() {
       {/* ── Main scroll area ─── */}
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
 
-        <HomeSettingsPanel open={homeSettingsOpen} onClose={() => setHomeSettingsOpen(false)} />
-        {projectFilter && (
-          <ProjectSettingsPanel
-            project={projectFilter} token={token}
-            open={settingsOpen} onClose={() => setSettingsOpen(false)}
-            onRenamed={slug => { selectProject(slug); setSettingsOpen(false); }}
-          />
-        )}
-
         {/* ── Single unified scroll container ── */}
         <div ref={scrollContainerRef} style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0, overflowAnchor:'none'}}>
         <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
@@ -499,7 +487,6 @@ function DashboardInner() {
             searchOpen={searchOpen} setSearchOpen={setSearchOpen}
             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
             searchInputRef={searchInputRef} srLoading={srLoading}
-            onOpenSettings={projectFilter ? () => setSettingsOpen(true) : () => setHomeSettingsOpen(true)}
             dockItems={DOCK_ITEMS.map(item => ({
               ...item,
               isOpen: item.id === 'map' ? !mapCollapsed

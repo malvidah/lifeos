@@ -481,6 +481,45 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
 
           {divider}
 
+          {/* Export Data */}
+          <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-highlight)"}}>
+              Export Data
+            </span>
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch("/api/export", {
+                    headers: { Authorization: `Bearer ${token}` },
+                  });
+                  if (!res.ok) throw new Error("Export failed");
+                  const blob = await res.blob();
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement("a");
+                  const today = new Date().toISOString().slice(0, 10);
+                  a.href = url;
+                  a.download = `daylab-export-${today}.zip`;
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
+                } catch (e) {
+                  console.warn("Export failed:", e);
+                  alert("Export failed. Please try again.");
+                }
+              }}
+              style={{
+                fontFamily:mono, fontSize:10, letterSpacing:"0.04em", textTransform:"uppercase",
+                padding:"4px 10px", borderRadius:4, cursor:"pointer",
+                border:"1px solid var(--dl-border2)", background:"none", color:"var(--dl-highlight)",
+              }}
+            >
+              Download
+            </button>
+          </div>
+
+          {divider}
+
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <a href="/about"
               style={{background:"none",border:"none",padding:0,cursor:"pointer",

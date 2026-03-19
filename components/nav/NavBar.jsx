@@ -27,22 +27,23 @@ function NavIconBtn({ onClick, active, title, children }) {
 }
 
 // ── NavBar ────────────────────────────────────────────────────────────────────
-// Layout: [gear]  ···  [dock icons]  ···  [search]
+// Layout: [mountain]  ···  [dock icons]  ···  [search]
 //
 // Props:
-//   onOpenSettings  – gear icon (only shown when truthy)
 //   dockItems       – array of { id, label, icon, isOpen, onToggle }
 //   searchOpen / setSearchOpen / searchQuery / setSearchQuery / searchInputRef / srLoading
 export default function NavBar(props) {
   const {
     searchOpen, setSearchOpen, searchQuery, setSearchQuery, searchInputRef, srLoading,
-    onOpenSettings, dockItems,
+    dockItems,
   } = props;
 
   const openSearch  = () => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); };
   const closeSearch = () => { setSearchOpen(false); setSearchQuery(''); };
 
-  const showGear = !!onOpenSettings;
+  // Extract mountain/map item from dock to render on the left
+  const mapItem = dockItems?.find(item => item.id === 'map');
+  const remainingDockItems = dockItems?.filter(item => item.id !== 'map');
 
   const glassBar = {
     display: 'flex', alignItems: 'center', height: 44, flexShrink: 0, position: 'relative',
@@ -88,30 +89,27 @@ export default function NavBar(props) {
     );
   }
 
-  // ── Normal nav bar: [gear] ··· [dock icons] ··· [search] ────────────
+  // ── Normal nav bar: [mountain] ··· [dock icons] ··· [search] ────────
   return (
     <div style={glassBar}>
 
-      {/* ── Left: settings ─────────────────────────────────────────────── */}
+      {/* ── Left: mountain/map toggle ────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', zIndex: 2, flexShrink: 0 }}>
-        {showGear && (
-          <NavIconBtn onClick={onOpenSettings} title="Settings">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
+        {mapItem && (
+          <NavIconBtn onClick={mapItem.onToggle} active={mapItem.isOpen} title={mapItem.label}>
+            {mapItem.icon}
           </NavIconBtn>
         )}
       </div>
 
-      {/* ── Center: dock icons ─────────────────────────────────────────── */}
+      {/* ── Center: dock icons (excluding map) ───────────────────────── */}
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         pointerEvents: 'none',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, pointerEvents: 'auto' }}>
-          {dockItems?.map(item => (
+          {remainingDockItems?.map(item => (
             <NavIconBtn key={item.id} onClick={item.onToggle} active={item.isOpen} title={item.label}>
               {item.icon}
             </NavIconBtn>
