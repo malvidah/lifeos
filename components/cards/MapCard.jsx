@@ -1070,11 +1070,11 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
             });
           }}
           style={{
-            position: 'absolute', top: 12, right: 12, zIndex: 10,
+            position: 'absolute', top: 16, right: 18, zIndex: 10,
             fontFamily: mono, fontSize: 13,
             fontVariantNumeric: 'tabular-nums',
             letterSpacing: '0.04em',
-            color: 'rgba(255,255,255,0.55)',
+            color: 'rgba(255,255,255,0.35)',
             cursor: 'pointer',
             userSelect: 'none',
           }}>
