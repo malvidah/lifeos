@@ -1005,14 +1005,16 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
     return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 50;
   }, [healthDots]);
 
-  // Weather condition for island atmosphere
+  // Weather condition for island atmosphere + temperature
   const [weather, setWeather] = useState('clear');
+  const [temperature, setTemperature] = useState(null);
   useEffect(() => {
     const loc = getCachedLocation() || DEFAULT_LOCATION;
     const today = new Date();
     const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
     fetchWeather(dateStr, loc.lat, loc.lng).then(w => {
       if (w?.condition) setWeather(w.condition);
+      if (w?.temperature != null) setTemperature(w.temperature);
     });
   }, []);
 
@@ -1057,12 +1059,30 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
   return (
     <div
       style={{
-        height: 450, borderRadius: 12, overflow: 'hidden',
+        height: 450, borderRadius: 12, overflow: 'hidden', position: 'relative',
         background: `linear-gradient(180deg, ${sky.skyTop} 0%, ${sky.skyBot} 100%)`,
       }}
       onPointerDown={handlePointerDown}
       onClick={handleClick}
     >
+      {temperature != null && (
+        <div style={{
+          position: 'absolute', top: 12, right: 12, zIndex: 10,
+          background: 'rgba(255,255,255,0.08)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 10, padding: '6px 12px',
+          fontFamily: mono, fontSize: 13,
+          fontVariantNumeric: 'tabular-nums',
+          letterSpacing: '0.04em',
+          color: 'rgba(255,255,255,0.75)',
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}>
+          {Math.round(temperature)}°C
+        </div>
+      )}
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         dpr={[1, 1.5]}
