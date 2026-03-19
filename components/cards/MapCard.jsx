@@ -983,7 +983,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, sele
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────
-export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, selectedProject, onSelectProject }) {
+export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, selectedProject, onSelectProject, date }) {
   const { theme } = useTheme();
   const appDark = theme === 'dark';
   const [hovered, setHovered] = useState(null);
@@ -1014,13 +1014,12 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
   });
   useEffect(() => {
     const loc = getCachedLocation() || DEFAULT_LOCATION;
-    const today = new Date();
-    const dateStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+    const dateStr = date || (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
     fetchWeather(dateStr, loc.lat, loc.lng).then(w => {
       if (w?.condition) setWeather(w.condition);
       if (w?.temperature != null) setTemperature(w.temperature);
     });
-  }, []);
+  }, [date]);
 
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
   const radius = useMemo(() => islandRadius(projects.length), [projects.length]);

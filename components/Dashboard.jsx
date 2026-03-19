@@ -527,6 +527,7 @@ function DashboardInner() {
               healthDots={healthDots}
               selectedProject={projectFilter}
               onSelectProject={selectProject}
+              date={selected}
             />
           )}
 
