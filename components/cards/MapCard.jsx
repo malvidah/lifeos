@@ -1008,6 +1008,10 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
   // Weather condition for island atmosphere + temperature
   const [weather, setWeather] = useState('clear');
   const [temperature, setTemperature] = useState(null);
+  const [useCelsius, setUseCelsius] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('daylab:temp-unit') === 'C';
+  });
   useEffect(() => {
     const loc = getCachedLocation() || DEFAULT_LOCATION;
     const today = new Date();
@@ -1066,21 +1070,30 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
       onClick={handleClick}
     >
       {temperature != null && (
-        <div style={{
-          position: 'absolute', top: 12, right: 12, zIndex: 10,
-          background: 'rgba(255,255,255,0.08)',
-          backdropFilter: 'blur(12px)',
-          WebkitBackdropFilter: 'blur(12px)',
-          border: '1px solid rgba(255,255,255,0.12)',
-          borderRadius: 10, padding: '6px 12px',
-          fontFamily: mono, fontSize: 13,
-          fontVariantNumeric: 'tabular-nums',
-          letterSpacing: '0.04em',
-          color: 'rgba(255,255,255,0.75)',
-          pointerEvents: 'none',
-          userSelect: 'none',
-        }}>
-          {Math.round(temperature)}°F
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setUseCelsius(prev => {
+              const next = !prev;
+              localStorage.setItem('daylab:temp-unit', next ? 'C' : 'F');
+              return next;
+            });
+          }}
+          style={{
+            position: 'absolute', top: 12, right: 12, zIndex: 10,
+            background: 'rgba(255,255,255,0.08)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: '1px solid rgba(255,255,255,0.12)',
+            borderRadius: 10, padding: '6px 12px',
+            fontFamily: mono, fontSize: 13,
+            fontVariantNumeric: 'tabular-nums',
+            letterSpacing: '0.04em',
+            color: 'rgba(255,255,255,0.75)',
+            cursor: 'pointer',
+            userSelect: 'none',
+          }}>
+          {useCelsius ? `${Math.round((temperature - 32) * 5 / 9)}°C` : `${Math.round(temperature)}°F`}
         </div>
       )}
       <Canvas
