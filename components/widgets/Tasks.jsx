@@ -249,7 +249,7 @@ export function TaskFilterBtns({ filter, setFilter }) {
           <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }}
             style={{
               fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em',
-              padding: b.label ? '4px 10px' : '4px 7px',
+              padding: b.label ? '3px 8px' : '3px 6px',
               borderRadius: 100, cursor: 'pointer', border: 'none',
               background: active ? "var(--dl-glass-active, var(--dl-accent-13))" : 'transparent',
               color: active ? "var(--dl-strong)" : "var(--dl-middle)",
