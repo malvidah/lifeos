@@ -87,6 +87,7 @@ export function Card({
         ...((collapsed || useAutoHeight) ? {height:"auto"} : {flex:1}),
       }}>
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
+          minHeight:44,boxSizing:"border-box",
           borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0,
           cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
           {headerLeft}
