@@ -1071,15 +1071,10 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
           }}
           style={{
             position: 'absolute', top: 12, right: 12, zIndex: 10,
-            background: 'rgba(255,255,255,0.08)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: '1px solid rgba(255,255,255,0.12)',
-            borderRadius: 10, padding: '6px 12px',
             fontFamily: mono, fontSize: 13,
             fontVariantNumeric: 'tabular-nums',
             letterSpacing: '0.04em',
-            color: 'rgba(255,255,255,0.75)',
+            color: 'rgba(255,255,255,0.55)',
             cursor: 'pointer',
             userSelect: 'none',
           }}>
