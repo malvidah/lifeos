@@ -49,8 +49,7 @@ export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft,
   return (
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
       minHeight:44,boxSizing:"border-box",
-      borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0,
-      cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
+      borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0}}>
       {headerLeft}
       <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
         textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}>{label}</span>
@@ -77,7 +76,7 @@ export function Card({
   }
 
   // Panel mode (with label — header + collapsible content)
-  const useAutoHeight = autoHeight || (!onToggle && !collapsed);
+  const useAutoHeight = !!autoHeight;
   return (
     <div style={slim ? {} : {flex:useAutoHeight?"0 0 auto":1,display:"flex",flexDirection:"column"}}>
       <div style={{
@@ -87,8 +86,7 @@ export function Card({
       }}>
         <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
           minHeight:44,boxSizing:"border-box",
-          borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0,
-          cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
+          borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0}}>
           {headerLeft}
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
             textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}>{label}</span>

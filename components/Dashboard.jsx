@@ -524,7 +524,7 @@ function DashboardInner() {
               <ErrorBoundary label="Calendar">
               <CalendarCard selected={selected} onSelect={setSelected}
                 events={events} setEvents={setEvents} healthDots={healthDots}
-                token={token} collapsed={false} onToggle={toggleCal}
+                token={token} collapsed={false}
                 calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
               </ErrorBoundary>
             </div>
@@ -536,7 +536,7 @@ function DashboardInner() {
               <ErrorBoundary label="Health">
               <HealthCard date={selected} token={token} userId={userId}
                 onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-                collapsed={false} onToggle={toggleHealth}/>
+                collapsed={false}/>
               </ErrorBoundary>
             </div>
           )}
@@ -556,7 +556,7 @@ function DashboardInner() {
               {/* 5. Notes — hidden when toggled off in dock */}
               {!notesCollapsed && (
                 <ErrorBoundary label="Notes">
-                  <NotesCard project={projectFilter} token={token} userId={userId} onNoteNamesChange={setAllNoteNames} collapsed={false} onToggle={toggleNotes} />
+                  <NotesCard project={projectFilter} token={token} userId={userId} onNoteNamesChange={setAllNoteNames} collapsed={false} />
                 </ErrorBoundary>
               )}
 
@@ -566,7 +566,7 @@ function DashboardInner() {
                   {!collapseMap[leftWidget.id] && (
                     <ErrorBoundary label={leftWidget.label}>
                     <Card label={leftWidget.label} color={leftWidget.color()}
-                      collapsed={false} onToggle={toggleMap[leftWidget.id]}
+                      collapsed={false}
                       headerRight={leftWidget.headerRight?.()} autoHeight>
                       <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                     </Card>
@@ -592,7 +592,7 @@ function DashboardInner() {
                       <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
                         <ErrorBoundary label={leftWidget.label}>
                         <Card label={leftWidget.label} color={leftWidget.color()}
-                          collapsed={false} onToggle={toggleMap[leftWidget.id]}
+                          collapsed={false}
                           headerRight={leftWidget.headerRight?.()}>
                           <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
                         </Card>
@@ -610,7 +610,7 @@ function DashboardInner() {
                           minHeight: 200}}>
                           <ErrorBoundary label={w.label}>
                           <Card label={w.label} color={w.color()}
-                            collapsed={false} onToggle={toggleMap[w.id]}
+                            collapsed={false}
                             headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
                             <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
                               taskFilter={w.id==='tasks'?taskFilter:undefined}
