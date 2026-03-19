@@ -1080,7 +1080,7 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
           pointerEvents: 'none',
           userSelect: 'none',
         }}>
-          {Math.round(temperature)}°C
+          {Math.round(temperature)}°F
         </div>
       )}
       <Canvas
