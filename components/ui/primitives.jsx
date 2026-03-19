@@ -52,7 +52,6 @@ export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft,
       borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0,
       cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
       {headerLeft}
-      {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
       <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
         textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}>{label}</span>
       {!collapsed && headerRight}
@@ -91,7 +90,6 @@ export function Card({
           borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0,
           cursor:onToggle?"pointer":"default"}} onClick={onToggle}>
           {headerLeft}
-          {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
             textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}>{label}</span>
           {!collapsed && headerRight}
