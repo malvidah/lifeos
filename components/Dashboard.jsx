@@ -5,6 +5,7 @@ import { mono, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
 import { api } from "@/lib/api";
 import { todayKey, toKey, shift } from "@/lib/dates";
+import { tagDisplayName } from "@/lib/tags";
 import { bustOuraCache } from "@/lib/ouraCache";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
@@ -113,6 +114,7 @@ function DashboardInner() {
     } catch { return null; }
   });
   const [searchOpen, setSearchOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -457,6 +459,10 @@ function DashboardInner() {
   // Any other non-null activeProject is a real project slug.
   const projectFilter = (activeProject && activeProject !== '__graph__') ? activeProject : null;
 
+  const activeProjectName = projectFilter
+    ? (tagDisplayName ? tagDisplayName(projectFilter) : projectFilter)
+    : 'All Projects';
+
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
     <NoteContext.Provider value={{ notes: allNoteNames, onCreateNote: (name) => {
@@ -487,6 +493,8 @@ function DashboardInner() {
             searchOpen={searchOpen} setSearchOpen={setSearchOpen}
             searchQuery={searchQuery} setSearchQuery={setSearchQuery}
             searchInputRef={searchInputRef} srLoading={srLoading}
+            toolsOpen={toolsOpen} setToolsOpen={setToolsOpen}
+            activeProjectName={activeProjectName}
             dockItems={DOCK_ITEMS.map(item => ({
               ...item,
               isOpen: item.id === 'map' ? !mapCollapsed

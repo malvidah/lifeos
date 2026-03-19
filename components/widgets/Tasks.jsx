@@ -215,7 +215,7 @@ export default function Tasks({date, token, userId, taskFilter="all", project}) 
             color: 'var(--dl-middle)', pointerEvents: 'none',
             fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
           }}>
-            Add a task. Use / for commands.
+            Add a task.
           </div>
         )}
       </div>

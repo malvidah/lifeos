@@ -27,23 +27,23 @@ function NavIconBtn({ onClick, active, title, children }) {
 }
 
 // ── NavBar ────────────────────────────────────────────────────────────────────
-// Layout: [mountain]  ···  [dock icons]  ···  [search]
+// Layout (tools closed): [tools btn]  ···  [project name]  ···  [search]
+// Layout (tools open):   [tools btn]  ···  [dock icons]    ···  [search]
 //
 // Props:
 //   dockItems       – array of { id, label, icon, isOpen, onToggle }
+//   toolsOpen / setToolsOpen – toggle between project name and dock icons
+//   activeProjectName – string like "All Projects" or "Big Think"
 //   searchOpen / setSearchOpen / searchQuery / setSearchQuery / searchInputRef / srLoading
 export default function NavBar(props) {
   const {
     searchOpen, setSearchOpen, searchQuery, setSearchQuery, searchInputRef, srLoading,
     dockItems,
+    toolsOpen, setToolsOpen, activeProjectName,
   } = props;
 
   const openSearch  = () => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); };
   const closeSearch = () => { setSearchOpen(false); setSearchQuery(''); };
-
-  // Extract mountain/map item from dock to render on the left
-  const mapItem = dockItems?.find(item => item.id === 'map');
-  const remainingDockItems = dockItems?.filter(item => item.id !== 'map');
 
   const glassBar = {
     display: 'flex', alignItems: 'center', height: 44, flexShrink: 0, position: 'relative',
@@ -89,32 +89,42 @@ export default function NavBar(props) {
     );
   }
 
-  // ── Normal nav bar: [mountain] ··· [dock icons] ··· [search] ────────
+  // ── Normal nav bar: [tools] ··· [name/dock] ··· [search] ───────────
   return (
     <div style={glassBar}>
 
-      {/* ── Left: mountain/map toggle ────────────────────────────────── */}
+      {/* ── Left: tools toggle ────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', zIndex: 2, flexShrink: 0 }}>
-        {mapItem && (
-          <NavIconBtn onClick={mapItem.onToggle} active={mapItem.isOpen} title={mapItem.label}>
-            {mapItem.icon}
-          </NavIconBtn>
-        )}
+        <NavIconBtn onClick={() => setToolsOpen(!toolsOpen)} active={toolsOpen} title="Toggle cards">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>
+          </svg>
+        </NavIconBtn>
       </div>
 
-      {/* ── Center: dock icons (excluding map) ───────────────────────── */}
+      {/* ── Center: project name OR dock icons ─────────────────────────── */}
       <div style={{
         position: 'absolute', inset: 0,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         pointerEvents: 'none',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, pointerEvents: 'auto' }}>
-          {remainingDockItems?.map(item => (
-            <NavIconBtn key={item.id} onClick={item.onToggle} active={item.isOpen} title={item.label}>
-              {item.icon}
-            </NavIconBtn>
-          ))}
-        </div>
+        {toolsOpen ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, pointerEvents: 'auto' }}>
+            {dockItems?.map(item => (
+              <NavIconBtn key={item.id} onClick={item.onToggle} active={item.isOpen} title={item.label}>
+                {item.icon}
+              </NavIconBtn>
+            ))}
+          </div>
+        ) : (
+          <span style={{
+            fontFamily: mono, fontSize: 11, letterSpacing: '0.1em',
+            textTransform: 'uppercase', color: 'var(--dl-highlight)',
+            pointerEvents: 'auto', cursor: 'default',
+          }}>
+            {activeProjectName || 'All Projects'}
+          </span>
+        )}
       </div>
 
       {/* ── Right: search ──────────────────────────────────────────────── */}

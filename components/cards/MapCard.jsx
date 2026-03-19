@@ -1086,6 +1086,21 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
           {useCelsius ? `${Math.round((temperature - 32) * 5 / 9)}°C` : `${Math.round(temperature)}°F`}
         </div>
       )}
+      {projects.length === 0 && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10, pointerEvents: 'none',
+        }}>
+          <span style={{
+            fontFamily: mono, fontSize: 13, letterSpacing: '0.06em',
+            color: 'rgba(255,255,255,0.6)', textAlign: 'center',
+            textTransform: 'lowercase', lineHeight: 1.6,
+          }}>
+            welcome to day lab.<br/>use / commands to create your first project.
+          </span>
+        </div>
+      )}
       <Canvas
         shadows={{ type: THREE.PCFShadowMap }}
         dpr={[1, 1.5]}
