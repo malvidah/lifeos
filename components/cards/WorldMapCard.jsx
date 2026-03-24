@@ -243,7 +243,6 @@ function MapInner({ token }) {
   const [newNotes, setNewNotes] = useState('');
   const [creatingType, setCreatingType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
-  const [newTypeColor, setNewTypeColor] = useState(PIN_COLORS[0]);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [leafletReady, setLeafletReady] = useState(false);
   const LRef = useRef(null);
@@ -277,13 +276,21 @@ function MapInner({ token }) {
       keepBuffer: 6,        // keep extra tiles in memory to reduce flash
     }).addTo(map);
 
-    map.on('click', (e) => {
+    // Single click deselects; double-click drops a pin
+    map.on('click', () => {
+      setSelectedPlace(null);
+      setAddingPlace(null);
+    });
+    map.on('dblclick', (e) => {
+      e.originalEvent.preventDefault();
       setSelectedPlace(null);
       setAddingPlace({ lat: e.latlng.lat, lng: e.latlng.lng });
       setNewName('');
       setNewType('');
       setNewNotes('');
     });
+    // Disable default double-click zoom since we use it for pins
+    map.doubleClickZoom.disable();
 
     mapInstance.current = map;
     return () => { map.remove(); mapInstance.current = null; };
@@ -511,14 +518,20 @@ function MapInner({ token }) {
     if (result?.place) setPlaces(prev => [result.place, ...prev]);
     setAddingPlace(null);
     setNewName('');
-  }, [addingPlace, newName, newType, token]);
+    setNewType('');
+    setNewNotes('');
+  }, [addingPlace, newName, newType, newNotes, token]);
 
-  // Create new type
-  const createType = useCallback(async () => {
-    if (!newTypeName.trim() || !token) return;
+  // Create new type — auto-assigns next color from palette
+  const createType = useCallback(async (name) => {
+    const trimmed = (name || newTypeName).trim();
+    if (!trimmed || !token) return;
+    // Auto-pick the next unused color from the palette
+    const usedColors = new Set(placeTypes.map(t => t.color));
+    const autoColor = PIN_COLORS.find(c => !usedColors.has(c)) || PIN_COLORS[placeTypes.length % PIN_COLORS.length];
     const result = await api.post('/api/place-types', {
-      name: newTypeName.trim(),
-      color: newTypeColor,
+      name: trimmed,
+      color: autoColor,
     }, token);
     if (result?.type) {
       setPlaceTypes(prev => [...prev, result.type]);
@@ -526,7 +539,7 @@ function MapInner({ token }) {
     }
     setCreatingType(false);
     setNewTypeName('');
-  }, [newTypeName, newTypeColor, token]);
+  }, [newTypeName, placeTypes, token]);
 
   // Edit place
   const [editingPlace, setEditingPlace] = useState(null);
@@ -579,7 +592,8 @@ function MapInner({ token }) {
     mapInstance.current.flyTo([result.lat, result.lng], 16, { duration: 0.8 });
     setAddingPlace({ lat: result.lat, lng: result.lng });
     setNewName(result.name);
-    setNewCategory('pin');
+    setNewType('');
+    setNewNotes('');
     setSelectedPlace(null);
   }, []);
 
@@ -589,7 +603,8 @@ function MapInner({ token }) {
     const c = mapInstance.current.getCenter();
     setAddingPlace({ lat: c.lat, lng: c.lng });
     setNewName('');
-    setNewCategory('pin');
+    setNewType('');
+    setNewNotes('');
     setSelectedPlace(null);
   }, []);
 
@@ -792,27 +807,18 @@ function MapInner({ token }) {
                 {t.name}
               </button>
             ))}
-            {/* New type button / inline form */}
+            {/* New type — inline input, Enter creates with auto-color */}
             {creatingType ? (
-              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                <input autoFocus value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') createType(); if (e.key === 'Escape') setCreatingType(false); }}
-                  placeholder="Type name"
-                  style={{ width: 90, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 4, padding: '2px 6px', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none' }}
-                />
-                <div style={{ display: 'flex', gap: 2 }}>
-                  {PIN_COLORS.map(c => (
-                    <button key={c} onClick={() => setNewTypeColor(c)}
-                      style={{ width: 14, height: 14, borderRadius: '50%', background: c, border: newTypeColor === c ? '2px solid var(--dl-strong)' : '1px solid var(--dl-border)', cursor: 'pointer', padding: 0 }}
-                    />
-                  ))}
-                </div>
-                <button onClick={createType} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: mono, fontSize: 11, color: 'var(--dl-accent)' }}>Add</button>
-              </div>
+              <input autoFocus value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && newTypeName.trim()) createType(); if (e.key === 'Escape') setCreatingType(false); }}
+                onBlur={() => { if (newTypeName.trim()) createType(); else setCreatingType(false); }}
+                placeholder="Label name…"
+                style={{ width: 100, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.04em' }}
+              />
             ) : (
-              <button onClick={() => { setCreatingType(true); setNewTypeColor(PIN_COLORS[(placeTypes.length) % PIN_COLORS.length]); }}
+              <button onClick={() => setCreatingType(true)}
                 style={{ background: 'none', border: '1px dashed var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--dl-middle)', fontFamily: mono, letterSpacing: '0.04em' }}>
-                + New type
+                + Label
               </button>
             )}
           </div>
