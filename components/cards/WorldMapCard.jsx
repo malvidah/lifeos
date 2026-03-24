@@ -244,6 +244,7 @@ function MapInner({ token }) {
   const [creatingType, setCreatingType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [selectedPlace, setSelectedPlace] = useState(null);
+  const [hoveredPlace, setHoveredPlace] = useState(null);
   const [leafletReady, setLeafletReady] = useState(false);
   const LRef = useRef(null);
 
@@ -398,8 +399,13 @@ function MapInner({ token }) {
       marker.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
         setSelectedPlace(place);
+        setHoveredPlace(null);
         setAddingPlace(null);
       });
+      marker.on('mouseover', () => {
+        if (!selectedPlace || selectedPlace.id !== place.id) setHoveredPlace(place);
+      });
+      marker.on('mouseout', () => setHoveredPlace(null));
       markersRef.current.push(marker);
     });
   }, [places, placeTypes, mode, activeFilter, leafletReady, isDark, selectedPlace]); // eslint-disable-line
@@ -586,14 +592,11 @@ function MapInner({ token }) {
     setAddingPlace(null);
   }, []);
 
-  // Navigate to a geocoded result
+  // Navigate to a geocoded result — just fly there, don't add a pin
   const goToGeo = useCallback((result) => {
     if (!mapInstance.current) return;
     mapInstance.current.flyTo([result.lat, result.lng], 16, { duration: 0.8 });
-    setAddingPlace({ lat: result.lat, lng: result.lng });
-    setNewName(result.name);
-    setNewType('');
-    setNewNotes('');
+    setAddingPlace(null);
     setSelectedPlace(null);
   }, []);
 
@@ -867,14 +870,47 @@ function MapInner({ token }) {
         </div>
       )}
 
+      {/* Hovered place tooltip */}
+      {hoveredPlace && mode === 'places' && !selectedPlace && !editingPlace && (
+        <div style={{
+          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+          background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+          borderRadius: 10,
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          padding: '10px 14px',
+          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.1)',
+          pointerEvents: 'none',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: (() => { const t = placeTypes.find(pt => pt.name.toLowerCase() === (hoveredPlace.category || '').toLowerCase()); return t?.color || 'var(--dl-accent)'; })(), flexShrink: 0 }} />
+            <span style={{ fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', letterSpacing: '0.03em' }}>
+              {hoveredPlace.name}
+            </span>
+            {hoveredPlace.category && hoveredPlace.category !== 'pin' && (
+              <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                {hoveredPlace.category}
+              </span>
+            )}
+          </div>
+          {hoveredPlace.notes && (
+            <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', marginTop: 4 }}>
+              {hoveredPlace.notes}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Selected place detail */}
       {selectedPlace && mode === 'places' && !editingPlace && (
         <div style={{
           position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
-          background: 'var(--dl-bg)', borderRadius: 10,
-          border: '1px solid var(--dl-border)',
+          background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+          borderRadius: 10,
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
           padding: '10px 14px',
-          boxShadow: 'var(--dl-shadow)',
+          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.1)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
