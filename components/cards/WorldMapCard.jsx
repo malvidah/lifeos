@@ -808,7 +808,7 @@ function MapInner({ token }) {
     const zoom = isArea ? 10 : 16;
     mapInstance.current.flyTo([result.lat, result.lng], zoom, { duration: 0.8 });
     lastGeoRef.current = result;
-    setPreviewGeo(isArea ? null : result); // show preview card for places, not areas
+    setPreviewGeo({ ...result, isArea });
     setAddingPlace(null);
     setSelectedPlace(null);
     setSelectedDiscovered(null);
@@ -835,6 +835,27 @@ function MapInner({ token }) {
     setNewNotes(g.fullName || '');
     setPreviewGeo(null);
   }, [previewGeo]);
+
+  // Save area directly from preview card
+  const saveAreaFromPreview = useCallback(async () => {
+    if (!previewGeo || !token) return;
+    const g = previewGeo;
+    const name = g.rawName || g.name.split(',')[0];
+    const country = g.country || name;
+    const geoType = SMALL_COUNTRY_TYPES.has(g.type) ? 'country' : (['state', 'administrative'].includes(g.type) ? 'state' : 'city');
+    const result = await api.post('/api/discovered', {
+      name, country,
+      type: geoType,
+      lat: g.lat,
+      lng: g.lng,
+    }, token);
+    if (result?.place) {
+      setDiscoveredPlaces(prev => [...prev, result.place]);
+      setDiscoveredCountries(prev => prev.includes(country) ? prev : [...prev, country]);
+    }
+    lastGeoRef.current = null;
+    setPreviewGeo(null);
+  }, [previewGeo, token]);
 
   // + button: add pin at map center (detect area from last search)
   const addAtCenter = useCallback(() => {
@@ -1147,16 +1168,23 @@ function MapInner({ token }) {
                 {previewGeo.rawName || previewGeo.name.split(',')[0]}
               </span>
               {previewGeo.type && (
-                <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
-                  {previewGeo.type}
+                <span style={{ fontFamily: mono, fontSize: 10, color: previewGeo.isArea ? 'var(--dl-accent)' : 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
+                  {previewGeo.isArea ? (previewGeo.type === 'city' || previewGeo.type === 'town' ? 'city' : previewGeo.type) : previewGeo.type}
                 </span>
               )}
             </div>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button onClick={addFromPreview}
-                style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
-                + Save
-              </button>
+              {previewGeo.isArea ? (
+                <button onClick={saveAreaFromPreview}
+                  style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                  Mark discovered
+                </button>
+              ) : (
+                <button onClick={addFromPreview}
+                  style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                  + Save pin
+                </button>
+              )}
               <button onClick={() => setPreviewGeo(null)}
                 style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
                 &times;
