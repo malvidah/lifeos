@@ -27,11 +27,12 @@ const TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.
 const TILES_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
 const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-// ─── Search bar ─────────────────────────────────────────────────────────────
-function MapSearch({ places, onSelect, onGeoSelect, isDark }) {
+// ─── Search bar (glassmorphic, location-biased) ─────────────────────────────
+function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [geoResults, setGeoResults] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
   const timerRef = useRef(null);
   const inputRef = useRef(null);
@@ -43,41 +44,81 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark }) {
     setResults(places.filter(p => p.name.toLowerCase().includes(q)).slice(0, 5));
   }, [query, places]);
 
-  // Geocode via Nominatim (debounced)
+  // Geocode via Nominatim — biased to current map viewport
   useEffect(() => {
     clearTimeout(timerRef.current);
-    if (!query.trim() || query.length < 3) { setGeoResults([]); return; }
+    if (!query.trim() || query.length < 2) { setGeoResults([]); setSearching(false); return; }
+    setSearching(true);
     timerRef.current = setTimeout(async () => {
       try {
+        // Get current map bounds for location bias
+        const map = mapInstance?.current;
+        let viewbox = '';
+        let bounded = '';
+        if (map) {
+          const b = map.getBounds();
+          // Nominatim viewbox: lon1,lat1,lon2,lat2 (SW to NE)
+          viewbox = `&viewbox=${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
+          bounded = '&bounded=0'; // prefer but don't restrict to viewport
+        }
+        // Also pass the center as a proximity hint
+        const loc = map ? map.getCenter() : (getCachedLocation() || DEFAULT_LOCATION);
+
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`,
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1${viewbox}${bounded}`,
           { headers: { 'User-Agent': 'DayLab/1.0' } }
         );
         if (res.ok) {
           const data = await res.json();
-          setGeoResults(data.map(d => ({
-            name: d.display_name.split(',').slice(0, 2).join(','),
-            fullName: d.display_name,
-            lat: parseFloat(d.lat),
-            lng: parseFloat(d.lon),
-          })));
+          // Sort by distance from map center so nearby results rank first
+          const withDist = data.map(d => {
+            const dlat = parseFloat(d.lat) - loc.lat;
+            const dlng = parseFloat(d.lon) - loc.lng;
+            return { ...d, dist: Math.sqrt(dlat * dlat + dlng * dlng) };
+          });
+          withDist.sort((a, b) => a.dist - b.dist);
+
+          setGeoResults(withDist.map(d => {
+            // Build a clean short name from address parts
+            const addr = d.address || {};
+            const name = addr.amenity || addr.shop || addr.tourism || addr.leisure
+              || addr.restaurant || addr.cafe || addr.building
+              || d.display_name.split(',')[0];
+            const area = addr.neighbourhood || addr.suburb || addr.city_district
+              || addr.city || addr.town || '';
+            return {
+              name: name + (area ? `, ${area}` : ''),
+              fullName: d.display_name,
+              lat: parseFloat(d.lat),
+              lng: parseFloat(d.lon),
+              type: d.type,
+            };
+          }));
         }
       } catch {}
-    }, 400);
+      setSearching(false);
+    }, 350);
     return () => clearTimeout(timerRef.current);
-  }, [query]);
+  }, [query]); // eslint-disable-line
 
   const hasResults = results.length > 0 || geoResults.length > 0;
+  const showDropdown = open && (hasResults || searching);
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', flex: 1 }}>
+      {/* Glassmorphic search pill */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        background: 'var(--dl-bg)', borderRadius: 8,
-        border: '1px solid var(--dl-border)',
-        padding: '4px 8px',
+        display: 'flex', alignItems: 'center', gap: 8,
+        backdropFilter: 'blur(20px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+        background: 'var(--dl-glass)',
+        border: '1px solid var(--dl-glass-border)',
+        borderRadius: 100,
+        padding: '6px 14px',
+        boxShadow: 'var(--dl-glass-shadow)',
+        transition: 'box-shadow 0.18s ease',
       }}>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.6 }}>
           <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
         <input
@@ -86,58 +127,82 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark }) {
           onChange={e => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 200)}
-          placeholder="Search places..."
+          placeholder="Search nearby..."
           style={{
-            background: 'none', border: 'none', outline: 'none',
+            flex: 1, background: 'none', border: 'none', outline: 'none',
             fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)',
-            letterSpacing: '0.03em', width: 140,
+            letterSpacing: '0.03em',
+            minWidth: 0,
           }}
         />
+        {query && (
+          <button onClick={() => { setQuery(''); setResults([]); setGeoResults([]); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--dl-middle)', fontSize: 14, lineHeight: 1 }}>
+            &times;
+          </button>
+        )}
       </div>
-      {open && hasResults && (
+
+      {/* Dropdown */}
+      {showDropdown && (
         <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
-          background: 'var(--dl-bg)', borderRadius: 8,
-          border: '1px solid var(--dl-border)',
+          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 6,
+          backdropFilter: 'blur(20px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+          background: 'var(--dl-glass)',
+          border: '1px solid var(--dl-glass-border)',
+          borderRadius: 14,
           boxShadow: 'var(--dl-shadow)',
-          maxHeight: 240, overflowY: 'auto', zIndex: 1001,
+          maxHeight: 280, overflowY: 'auto', zIndex: 1001,
+          padding: '4px 0',
         }}>
           {results.length > 0 && (
-            <div style={{ padding: '4px 8px', fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Saved
-            </div>
+            <>
+              <div style={{ padding: '6px 14px 2px', fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6 }}>
+                Your places
+              </div>
+              {results.map(p => (
+                <button key={p.id}
+                  onMouseDown={() => { onSelect(p); setQuery(''); setOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                    background: 'none', border: 'none', padding: '8px 14px', cursor: 'pointer',
+                    fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)',
+                    textAlign: 'left', transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-glass-active)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  <span style={{ fontSize: 13, flexShrink: 0 }}>{categoryEmoji(p.category)}</span>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                </button>
+              ))}
+            </>
           )}
-          {results.map(p => (
-            <button key={p.id}
-              onMouseDown={() => { onSelect(p); setQuery(''); setOpen(false); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
-                background: 'none', border: 'none', padding: '6px 10px', cursor: 'pointer',
-                fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)',
-                textAlign: 'left',
-              }}>
-              <span>{categoryEmoji(p.category)}</span>
-              <span>{p.name}</span>
-            </button>
-          ))}
-          {geoResults.length > 0 && (
-            <div style={{ padding: '4px 8px', fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: results.length ? '1px solid var(--dl-border)' : 'none' }}>
-              Search
-            </div>
+          {(geoResults.length > 0 || searching) && (
+            <>
+              {(results.length > 0) && <div style={{ height: 1, background: 'var(--dl-glass-border)', margin: '4px 12px' }} />}
+              <div style={{ padding: '6px 14px 2px', fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.1em', textTransform: 'uppercase', opacity: 0.6 }}>
+                {searching ? 'Searching...' : 'Nearby'}
+              </div>
+              {geoResults.map((r, i) => (
+                <button key={i}
+                  onMouseDown={() => { onGeoSelect(r); setQuery(''); setOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+                    background: 'none', border: 'none', padding: '8px 14px', cursor: 'pointer',
+                    fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)',
+                    textAlign: 'left', transition: 'background 0.1s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-glass-active)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5 }}>
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                  </svg>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                </button>
+              ))}
+            </>
           )}
-          {geoResults.map((r, i) => (
-            <button key={i}
-              onMouseDown={() => { onGeoSelect(r); setQuery(''); setOpen(false); }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
-                background: 'none', border: 'none', padding: '6px 10px', cursor: 'pointer',
-                fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)',
-                textAlign: 'left',
-              }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-            </button>
-          ))}
         </div>
       )}
     </div>
@@ -420,60 +485,63 @@ function MapInner({ token }) {
         .leaflet-control-zoom a:hover { background: var(--dl-surface) !important; }
       `}</style>
 
-      {/* Top bar: mode toggle (left) + search (center) + add button (right) */}
+      {/* Top bar: mode toggle (left) + search pill (center) + add button (right) */}
       <div style={{
         position: 'absolute', top: 10, left: 10, right: 10, zIndex: 1000,
-        display: 'flex', alignItems: 'flex-start', gap: 8,
+        display: 'flex', alignItems: 'center', gap: 6,
       }}>
-        {/* Mode toggle — icon buttons */}
+        {/* Mode toggle — glassmorphic pill */}
         <div style={{
-          display: 'flex', gap: 2,
-          background: 'var(--dl-bg)', borderRadius: 8,
-          border: '1px solid var(--dl-border)',
-          padding: 2, flexShrink: 0,
+          display: 'flex', gap: 1,
+          backdropFilter: 'blur(20px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+          background: 'var(--dl-glass)',
+          border: '1px solid var(--dl-glass-border)',
+          borderRadius: 100, padding: 3, flexShrink: 0,
+          boxShadow: 'var(--dl-glass-shadow)',
         }}>
-          {/* Places — pin icon */}
           <button onClick={() => { setMode('places'); setAddingPlace(null); setSelectedPlace(null); }}
             title="Places"
             style={{
-              background: mode === 'places' ? 'var(--dl-accent-10)' : 'none',
-              border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer',
+              background: mode === 'places' ? 'var(--dl-accent-15)' : 'none',
+              border: 'none', borderRadius: 100, padding: '5px 8px', cursor: 'pointer',
               color: mode === 'places' ? 'var(--dl-accent)' : 'var(--dl-middle)',
               display: 'flex', alignItems: 'center', transition: 'all 0.15s',
             }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
             </svg>
           </button>
-          {/* Timeline — clock/path icon */}
           <button onClick={() => { setMode('timeline'); setAddingPlace(null); setSelectedPlace(null); }}
             title="Location timeline"
             style={{
-              background: mode === 'timeline' ? 'var(--dl-accent-10)' : 'none',
-              border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer',
+              background: mode === 'timeline' ? 'var(--dl-accent-15)' : 'none',
+              border: 'none', borderRadius: 100, padding: '5px 8px', cursor: 'pointer',
               color: mode === 'timeline' ? 'var(--dl-accent)' : 'var(--dl-middle)',
               display: 'flex', alignItems: 'center', transition: 'all 0.15s',
             }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
           </button>
         </div>
 
-        {/* Search */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} />
-        </div>
+        {/* Search pill */}
+        <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} mapInstance={mapInstance} />
 
-        {/* + Add pin button */}
+        {/* + Add pin button — glassmorphic */}
         {mode === 'places' && (
           <button onClick={addAtCenter}
             title="Add a pin"
             style={{
-              background: 'var(--dl-bg)', border: '1px solid var(--dl-border)',
-              borderRadius: 8, padding: '5px 8px', cursor: 'pointer',
+              backdropFilter: 'blur(20px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+              background: 'var(--dl-glass)',
+              border: '1px solid var(--dl-glass-border)',
+              borderRadius: 100, padding: '6px 8px', cursor: 'pointer',
               color: 'var(--dl-accent)', display: 'flex', alignItems: 'center',
-              flexShrink: 0, transition: 'all 0.15s',
+              flexShrink: 0, boxShadow: 'var(--dl-glass-shadow)',
+              transition: 'all 0.15s',
             }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
