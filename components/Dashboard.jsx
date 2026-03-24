@@ -92,10 +92,7 @@ function DashboardInner() {
 
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);
-  const [selected,  setSelected]  = useState(() => {
-    try { const s = localStorage.getItem('daylab:selected'); if (s && /^\d{4}-\d{2}-\d{2}$/.test(s)) return s; } catch {}
-    return todayKey();
-  });
+  const [selected,  setSelected]  = useState(() => todayKey());
   const [calView,   setCalView]   = useState(() => localStorage.getItem('calView') || 'day');
   const [events,    setEvents]    = useState({});
   const [healthDots,setHealthDots]= useState(()=>{
@@ -160,6 +157,20 @@ function DashboardInner() {
   // Persist selected date and active project for hard-refresh recovery
   useEffect(() => { try { localStorage.setItem('daylab:selected', selected); } catch {} }, [selected]);
   useEffect(() => { try { if (activeProject) localStorage.setItem('daylab:activeProject', activeProject); else localStorage.removeItem('daylab:activeProject'); } catch {} }, [activeProject]);
+
+  // Auto-update selected date at midnight and on tab focus
+  useEffect(() => {
+    const check = () => {
+      const today = todayKey();
+      setSelected(prev => prev === today ? prev : today);
+    };
+    // Check every 30s for midnight crossing
+    const timer = setInterval(check, 30_000);
+    // Also check when tab becomes visible (e.g. after sleeping overnight)
+    const onVis = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
+  }, []);
 
   // Theme is now handled by ThemeContext
 
