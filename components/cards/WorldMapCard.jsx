@@ -307,7 +307,9 @@ function MapInner({ token }) {
     tileLayerRef.current = L.tileLayer(isDark ? TILES_DARK : TILES_LIGHT, {
       attribution: TILE_ATTR,
       maxZoom: 19,
-      keepBuffer: 6,        // keep extra tiles in memory to reduce flash
+      keepBuffer: 8,
+      updateWhenZooming: false, // don't load tiles mid-zoom animation
+      updateWhenIdle: true,     // load after zoom settles
     }).addTo(map);
 
     // Single click deselects; double-click drops a pin
@@ -339,7 +341,9 @@ function MapInner({ token }) {
     tileLayerRef.current = L.tileLayer(isDark ? TILES_DARK : TILES_LIGHT, {
       attribution: TILE_ATTR,
       maxZoom: 19,
-      keepBuffer: 6,
+      keepBuffer: 8,
+      updateWhenZooming: false,
+      updateWhenIdle: true,
     }).addTo(mapInstance.current);
   }, [isDark]);
 
@@ -387,7 +391,10 @@ function MapInner({ token }) {
       if (discoveredLayerRef.current) { discoveredLayerRef.current.remove(); }
 
       // Visible fill, no outline stroke — clickable to select
+      // Canvas renderer with large padding for smooth zoom (no redraw flash)
+      const renderer = L.canvas({ padding: 1.0 });
       discoveredLayerRef.current = L.geoJSON(filtered, {
+        renderer,
         style: {
           color: 'transparent',
           weight: 0,
@@ -839,6 +846,8 @@ function MapInner({ token }) {
         .leaflet-tile-pane {
           filter: saturate(0.3) sepia(0.15) ${isDark ? 'brightness(0.7)' : 'brightness(1.02)'};
         }
+        .leaflet-fade-anim .leaflet-tile { opacity: 0; transition: opacity 0.2s; }
+        .leaflet-fade-anim .leaflet-tile-loaded { opacity: 1; }
         /* Match tile background to container so no white flash */
         .leaflet-container { background: ${bgColor} !important; }
         .leaflet-control-zoom a {
