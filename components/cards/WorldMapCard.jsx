@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { getCachedLocation, DEFAULT_LOCATION } from "@/lib/weather";
 import { useTheme } from "@/lib/theme";
 import dynamic from "next/dynamic";
+import { feature as topoFeature } from "topojson-client";
 
 // ─── Pin color palette for user-created types ──────────────────────────────
 const PIN_COLORS = [
@@ -84,14 +85,19 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
               const coords = f.geometry?.coordinates || [];
               const name = p.name || p.street || query;
               const area = p.city || p.district || p.county || p.state || '';
+              const osmType = p.osm_value || p.type || '';
               return {
                 name: name + (area ? `, ${area}` : ''),
                 rawName: name,
                 fullName: [name, p.street, p.city, p.state, p.country].filter(Boolean).join(', '),
                 lat: coords[1],
                 lng: coords[0],
-                type: p.osm_value || p.type || '',
+                type: osmType,
                 country: p.country || '',
+                street: p.street || '',
+                city: p.city || p.district || '',
+                state: p.state || '',
+                osmKey: p.osm_key || '',
               };
             }));
             setSearching(false);
@@ -350,11 +356,10 @@ function MapInner({ token }) {
       // Fetch TopoJSON + convert to GeoJSON, cache result
       if (!geoJsonCacheRef.current) {
         try {
-          const { feature } = await import('topojson-client');
           const res = await fetch(COUNTRIES_TOPOJSON_URL);
           const topo = await res.json();
-          geoJsonCacheRef.current = feature(topo, topo.objects.countries);
-        } catch { return; }
+          geoJsonCacheRef.current = topoFeature(topo, topo.objects.countries);
+        } catch (err) { console.error('Failed to load country boundaries:', err); return; }
       }
       const geo = geoJsonCacheRef.current;
 
@@ -1185,6 +1190,13 @@ function MapInner({ token }) {
               {selectedPlace.notes}
             </div>
           )}
+          <a
+            href={`https://www.google.com/maps/search/?api=1&query=${selectedPlace.lat},${selectedPlace.lng}`}
+            target="_blank" rel="noopener noreferrer"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-accent)', marginTop: 6, textDecoration: 'none', opacity: 0.8 }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Google Maps
+          </a>
         </div>
       )}
     </div>
