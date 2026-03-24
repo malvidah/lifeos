@@ -389,22 +389,32 @@ function MapInner({ token }) {
   const [userLoc, setUserLoc] = useState(() => getCachedLocation());
   const [locating, setLocating] = useState(false);
 
-  // Locate me — actively request geolocation, update marker, fly to it
+  // Locate me — request geolocation, fly to position
+  // Try without high accuracy first (fast Wi-Fi/IP lookup), fall back to high accuracy
   const locateMe = useCallback(() => {
     if (!navigator.geolocation) return;
     setLocating(true);
+    const onSuccess = (pos) => {
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      try { localStorage.setItem('daylab:geo', JSON.stringify(loc)); } catch {}
+      setUserLoc(loc);
+      setLocating(false);
+      if (mapInstance.current) {
+        mapInstance.current.flyTo([loc.lat, loc.lng], 15, { duration: 0.8 });
+      }
+    };
+    const onError = () => {
+      // Fast lookup failed — try high accuracy as fallback
+      navigator.geolocation.getCurrentPosition(
+        onSuccess,
+        () => setLocating(false),
+        { timeout: 15000, enableHighAccuracy: true, maximumAge: 300000 }
+      );
+    };
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        try { localStorage.setItem('daylab:geo', JSON.stringify(loc)); } catch {}
-        setUserLoc(loc);
-        setLocating(false);
-        if (mapInstance.current) {
-          mapInstance.current.flyTo([loc.lat, loc.lng], 15, { duration: 0.8 });
-        }
-      },
-      () => setLocating(false),
-      { timeout: 10000, enableHighAccuracy: true }
+      onSuccess,
+      onError,
+      { timeout: 5000, enableHighAccuracy: false, maximumAge: 300000 }
     );
   }, []);
 
