@@ -328,7 +328,8 @@ export function DropZone({ uploading }) {
 // ─── Recent Entries View ─────────────────────────────────────────────────────
 // Read-only scrollable list of the N most recent journal dates.
 
-function RecentEntries({ token }) {
+function RecentEntries({ token, userId, date }) {
+  const todayStr = date || new Date().toISOString().slice(0, 10);
   const [entries, setEntries] = useState(null);
 
   useEffect(() => {
@@ -358,6 +359,23 @@ function RecentEntries({ token }) {
         const [y, m, d] = entry.date.split('-').map(Number);
         const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
         const label = `${months[m - 1]} ${d}, ${y}`;
+        const isToday = entry.date === todayStr;
+
+        if (isToday) {
+          return (
+            <div key={entry.date}>
+              <div style={{
+                fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
+                textTransform:'uppercase', color:'var(--dl-middle)',
+                marginBottom:6, opacity:0.7,
+              }}>
+                {label} — today
+              </div>
+              <JournalEditor date={entry.date} userId={userId} token={token} />
+            </div>
+          );
+        }
+
         const html = entry.blocks
           .sort((a, b) => a.position - b.position)
           .map(b => b.content)
@@ -391,7 +409,7 @@ function RecentEntries({ token }) {
 
 export function JournalEditor({date,userId,token,project,journalMode}) {
   // In recent mode, show the recent entries view instead of the editor
-  if (journalMode === 'recent') return <RecentEntries token={token} />;
+  if (journalMode === 'recent') return <RecentEntries token={token} userId={userId} date={date} />;
 
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   const { notes: ctxNotes } = useContext(NoteContext);
