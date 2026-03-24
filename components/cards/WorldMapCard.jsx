@@ -525,6 +525,47 @@ function MapInner({ token }) {
     };
   }, [discoveredPlaces, leafletReady, isDark]);
 
+  // Render discovered city outline circles (no fill — won't stack with country/state fills)
+  const cityCirclesRef = useRef([]);
+  useEffect(() => {
+    if (!mapInstance.current || !leafletReady) return;
+    const L = LRef.current;
+    const map = mapInstance.current;
+
+    cityCirclesRef.current.forEach(m => m.remove());
+    cityCirclesRef.current = [];
+
+    if (!discoveredPlaces.length || mode !== 'places') return;
+
+    const cities = discoveredPlaces.filter(p => p.lat && p.lng && p.type === 'city');
+    if (!cities.length) return;
+
+    const strokeColor = isDark ? '#8A7A60' : '#9A8A68';
+
+    const updateCircles = () => {
+      cityCirclesRef.current.forEach(m => m.remove());
+      cityCirclesRef.current = [];
+      const z = map.getZoom();
+      const opacity = z <= 3 ? 0.25 : z <= 5 ? 0.18 : z <= 8 ? 0.12 : 0.06;
+
+      cities.forEach(place => {
+        const circle = L.circle([place.lat, place.lng], {
+          radius: 15000,
+          color: strokeColor,
+          weight: 1,
+          opacity,
+          fill: false,
+          interactive: false,
+        }).addTo(map);
+        cityCirclesRef.current.push(circle);
+      });
+    };
+
+    updateCircles();
+    map.on('zoomend', updateCircles);
+    return () => { map.off('zoomend', updateCircles); };
+  }, [discoveredPlaces, leafletReady, isDark, mode]);
+
   // Preview pin at clicked location
   const previewMarkerRef = useRef(null);
   useEffect(() => {
