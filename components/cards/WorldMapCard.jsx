@@ -770,13 +770,15 @@ function MapInner({ token }) {
 
       {/* Add-place popup */}
       {addingPlace && mode === 'places' && !editingPlace && (
-        <div style={{
-          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
-          background: 'var(--dl-bg)', borderRadius: 10,
-          border: '1px solid var(--dl-border)',
-          padding: '10px 14px',
-          boxShadow: 'var(--dl-shadow)',
-        }}>
+        <div
+          onKeyDown={e => { if (e.key === 'Enter' && !creatingType && newName.trim()) savePlace(); }}
+          style={{
+            position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+            background: 'var(--dl-bg)', borderRadius: 10,
+            border: '1px solid var(--dl-border)',
+            padding: '10px 14px',
+            boxShadow: 'var(--dl-shadow)',
+          }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
             <input autoFocus value={newName}
               onChange={e => setNewName(e.target.value)}
@@ -788,6 +790,7 @@ function MapInner({ token }) {
             <button onClick={() => setAddingPlace(null)} style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>&times;</button>
           </div>
           <input value={newNotes} onChange={e => setNewNotes(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
             placeholder="Description (optional)"
             style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '5px 10px', marginBottom: 8, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
           />
