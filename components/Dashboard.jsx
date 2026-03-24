@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { todayKey, toKey, shift } from "@/lib/dates";
 import { tagDisplayName } from "@/lib/tags";
 import { bustOuraCache } from "@/lib/ouraCache";
+import { saveLocationIfNeeded } from "@/lib/weather";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
 import { useProjects } from "@/lib/useProjects";
@@ -86,6 +87,43 @@ const WIDGETS = [
   {id:"workouts", label:"Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
 ];
 const [leftWidget, ...rightWidgets] = WIDGETS;
+
+// Toggle between day editor and recent entries view
+function JournalModeToggle({ mode, setMode }) {
+  return (
+    <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+      <button
+        onClick={() => setMode('day')}
+        title="Day view"
+        style={{
+          background: 'none', border: 'none', padding: '2px 6px', cursor: 'pointer',
+          color: mode === 'day' ? 'var(--dl-accent)' : 'var(--dl-middle)',
+          opacity: mode === 'day' ? 1 : 0.5,
+          transition: 'opacity 0.15s',
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>
+      </button>
+      <button
+        onClick={() => setMode('recent')}
+        title="Recent entries"
+        style={{
+          background: 'none', border: 'none', padding: '2px 6px', cursor: 'pointer',
+          color: mode === 'recent' ? 'var(--dl-accent)' : 'var(--dl-middle)',
+          opacity: mode === 'recent' ? 1 : 0.5,
+          transition: 'opacity 0.15s',
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  );
+}
 
 function DashboardInner() {
   const { theme, preference, setTheme } = useTheme();
@@ -245,6 +283,9 @@ function DashboardInner() {
   }, [token]); // eslint-disable-line
   const { results: srResults, loading: srLoading } = useSearch(searchQuery, token, userId);
 
+  // Save today's location to DB on first load (fire-and-forget)
+  useEffect(() => { saveLocationIfNeeded(token); }, [token]);
+
   // Expose token to native iOS layer (Swift reads this for HealthKit sync)
   // @supabase/ssr uses cookies not localStorage, so we bridge it manually
   useEffect(()=>{
@@ -314,6 +355,7 @@ function DashboardInner() {
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
+  const [journalMode, setJournalMode] = useState('day'); // 'day' | 'recent'
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   true);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
@@ -534,6 +576,7 @@ function DashboardInner() {
               selectedProject={projectFilter}
               onSelectProject={selectProject}
               date={selected}
+              token={token}
             />
           )}
 
@@ -586,8 +629,8 @@ function DashboardInner() {
                     <ErrorBoundary label={leftWidget.label}>
                     <Card label={leftWidget.label} color={leftWidget.color()}
                       collapsed={false}
-                      headerRight={leftWidget.headerRight?.()} autoHeight>
-                      <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
+                      headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>} autoHeight>
+                      <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
                     </Card>
                     </ErrorBoundary>
                   )}
@@ -612,8 +655,8 @@ function DashboardInner() {
                         <ErrorBoundary label={leftWidget.label}>
                         <Card label={leftWidget.label} color={leftWidget.color()}
                           collapsed={false}
-                          headerRight={leftWidget.headerRight?.()}>
-                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined}/>
+                          headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}>
+                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
                         </Card>
                         </ErrorBoundary>
                       </div>

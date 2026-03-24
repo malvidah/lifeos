@@ -13,6 +13,39 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const { searchParams } = new URL(req.url);
   const date    = searchParams.get('date');
   const project = searchParams.get('project');
+  const recent  = searchParams.get('recent');
+
+  // ── Recent entries: N most recent dates with journal blocks ────────────────
+  if (recent) {
+    const limit = Math.min(Math.max(1, parseInt(recent, 10) || 5), 20);
+    // Get distinct dates with journal blocks, most recent first
+    const { data: dates, error: dErr } = await supabase
+      .from('journal_blocks')
+      .select('date')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false });
+    if (dErr) throw dErr;
+    // Deduplicate dates and take top N
+    const uniqueDates = [...new Set((dates ?? []).map(r => r.date))].slice(0, limit);
+    if (!uniqueDates.length) return Response.json({ entries: [] });
+    // Fetch all blocks for those dates
+    const { data: blocks, error: bErr } = await supabase
+      .from('journal_blocks')
+      .select('id, date, position, content, project_tags, note_tags')
+      .eq('user_id', user.id)
+      .in('date', uniqueDates)
+      .order('date', { ascending: false })
+      .order('position', { ascending: true });
+    if (bErr) throw bErr;
+    // Group by date
+    const grouped = {};
+    for (const b of (blocks ?? [])) {
+      if (!grouped[b.date]) grouped[b.date] = [];
+      grouped[b.date].push(b);
+    }
+    const entries = uniqueDates.map(d => ({ date: d, blocks: grouped[d] || [] }));
+    return Response.json({ entries });
+  }
 
   // ── Project view: all blocks tagged to this project ───────────────────────
   if (project) {

@@ -325,7 +325,70 @@ export function DropZone({ uploading }) {
 // ── JournalEditor ─────────────────────────────────────────────────────────────
 // When `project` is provided, renders a filtered read-only view of <p> blocks
 // tagged to that project for the selected date. When null, full editable journal.
-export function JournalEditor({date,userId,token,project}) {
+// ─── Recent Entries View ─────────────────────────────────────────────────────
+// Read-only scrollable list of the N most recent journal dates.
+
+function RecentEntries({ token }) {
+  const [entries, setEntries] = useState(null);
+
+  useEffect(() => {
+    if (!token) return;
+    api.get('/api/journal?recent=5', token).then(d => {
+      setEntries(d?.entries ?? []);
+    }).catch(() => setEntries([]));
+  }, [token]);
+
+  if (entries === null) return (
+    <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+      <Shimmer width="80%" height={14}/>
+      <Shimmer width="60%" height={14}/>
+      <Shimmer width="70%" height={14}/>
+    </div>
+  );
+
+  if (entries.length === 0) return (
+    <div style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-middle)',padding:'12px 0',letterSpacing:'0.04em'}}>
+      No journal entries yet.
+    </div>
+  );
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:16,overflowY:'auto'}}>
+      {entries.map(entry => {
+        const [y, m, d] = entry.date.split('-').map(Number);
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const label = `${months[m - 1]} ${d}, ${y}`;
+        const html = entry.blocks
+          .sort((a, b) => a.position - b.position)
+          .map(b => b.content)
+          .join('');
+        return (
+          <div key={entry.date}>
+            <div style={{
+              fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
+              textTransform:'uppercase', color:'var(--dl-middle)',
+              marginBottom:6, opacity:0.7,
+            }}>
+              {label}
+            </div>
+            <div
+              style={{
+                fontFamily:serif, fontSize:F.md, lineHeight:1.7,
+                color:'var(--dl-strong)', wordBreak:'break-word',
+              }}
+              dangerouslySetInnerHTML={{__html: html}}
+            />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function JournalEditor({date,userId,token,project,journalMode}) {
+  // In recent mode, show the recent entries view instead of the editor
+  if (journalMode === 'recent') return <RecentEntries token={token} />;
+
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);

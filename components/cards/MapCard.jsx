@@ -983,7 +983,7 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, sele
 }
 
 // ── Exports ──────────────────────────────────────────────────────────────────
-export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, selectedProject, onSelectProject, date }) {
+export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, selectedProject, onSelectProject, date, token }) {
   const { theme } = useTheme();
   const appDark = theme === 'dark';
   const [hovered, setHovered] = useState(null);
@@ -1008,18 +1008,57 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
   // Weather condition for island atmosphere + temperature
   const [weather, setWeather] = useState('clear');
   const [temperature, setTemperature] = useState(null);
+  const [cityName, setCityName] = useState(null);
   const [useCelsius, setUseCelsius] = useState(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem('daylab:temp-unit') === 'C';
   });
   useEffect(() => {
-    const loc = getCachedLocation() || DEFAULT_LOCATION;
-    const dateStr = date || (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
-    fetchWeather(dateStr, loc.lat, loc.lng).then(w => {
-      if (w?.condition) setWeather(w.condition);
-      if (w?.temperature != null) setTemperature(w.temperature);
-    });
-  }, [date]);
+    const todayStr = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })();
+    const dateStr = date || todayStr;
+    const isToday = dateStr === todayStr;
+
+    // For past dates with a token, fetch saved location from DB
+    if (!isToday && token) {
+      fetch(`/api/location?date=${dateStr}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          const loc = d?.location;
+          if (loc?.lat != null && loc?.lng != null) {
+            setCityName(loc.city || null);
+            return fetchWeather(dateStr, loc.lat, loc.lng);
+          }
+          // No saved location — fall back to cached browser location
+          setCityName(null);
+          const fallback = getCachedLocation() || DEFAULT_LOCATION;
+          return fetchWeather(dateStr, fallback.lat, fallback.lng);
+        })
+        .then(w => {
+          if (w?.condition) setWeather(w.condition);
+          if (w?.temperature != null) setTemperature(w.temperature);
+        })
+        .catch(() => {});
+    } else {
+      // Today or no token: use browser location
+      const loc = getCachedLocation() || DEFAULT_LOCATION;
+      setCityName(null);
+      fetchWeather(dateStr, loc.lat, loc.lng).then(w => {
+        if (w?.condition) setWeather(w.condition);
+        if (w?.temperature != null) setTemperature(w.temperature);
+      });
+      // Also try to load city name for today from saved location
+      if (isToday && token) {
+        fetch(`/api/location?date=${dateStr}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => { if (d?.location?.city) setCityName(d.location.city); })
+          .catch(() => {});
+      }
+    }
+  }, [date, token]);
 
   const hour = new Date().getHours() + new Date().getMinutes() / 60;
   const radius = useMemo(() => islandRadius(projects.length), [projects.length]);
@@ -1079,6 +1118,19 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
             userSelect: 'none',
           }}>
           {useCelsius ? `${Math.round((temperature - 32) * 5 / 9)}°C` : `${Math.round(temperature)}°F`}
+        </div>
+      )}
+      {cityName && (
+        <div style={{
+          position: 'absolute', bottom: 16, left: 18, zIndex: 10,
+          fontFamily: mono, fontSize: 12,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          color: 'rgba(255,255,255,0.35)',
+          userSelect: 'none',
+          pointerEvents: 'none',
+        }}>
+          {cityName}
         </div>
       )}
       {projects.length === 0 && (
