@@ -28,8 +28,9 @@ const TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.
 const TILES_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
 const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-// ─── Country boundaries for discovered regions ──────────────────────────────
+// ─── Boundary data for discovered regions ────────────────────────────────────
 const COUNTRIES_TOPOJSON_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+const US_STATES_TOPOJSON_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
 // Map user-friendly names → GeoJSON feature names
 const COUNTRY_NAME_MAP = {
   'United States': 'United States of America',
@@ -278,8 +279,9 @@ function MapInner({ token }) {
   const [selectedDiscovered, setSelectedDiscovered] = useState(null);
   const [previewGeo, setPreviewGeo] = useState(null); // search result preview before adding
   const discoveredLayerRef = useRef(null);
-  const discoveredMarkersRef = useRef([]);
+  const statesLayerRef = useRef(null);
   const geoJsonCacheRef = useRef(null);
+  const statesGeoJsonCacheRef = useRef(null);
   const LRef = useRef(null);
 
   // Load Leaflet
@@ -447,48 +449,72 @@ function MapInner({ token }) {
     };
   }, [discoveredCountries, leafletReady, isDark]);
 
-  // Render discovered city circles + labels
+  // Render discovered US state boundaries
   useEffect(() => {
-    if (!mapInstance.current || !leafletReady) return;
+    if (!mapInstance.current || !leafletReady || !discoveredPlaces.length) {
+      if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; }
+      return;
+    }
     const L = LRef.current;
     const map = mapInstance.current;
 
-    discoveredMarkersRef.current.forEach(m => m.remove());
-    discoveredMarkersRef.current = [];
+    const renderStates = async () => {
+      if (!statesGeoJsonCacheRef.current) {
+        try {
+          const res = await fetch(US_STATES_TOPOJSON_URL);
+          const topo = await res.json();
+          statesGeoJsonCacheRef.current = topoFeature(topo, topo.objects.states);
+        } catch (err) { console.error('Failed to load US states:', err); return; }
+      }
+      const geo = statesGeoJsonCacheRef.current;
 
-    if (!discoveredPlaces.length || mode !== 'places') return;
+      // Collect discovered state names (type=state) within the US
+      const stateNames = new Set(
+        discoveredPlaces
+          .filter(p => p.type === 'state' && (p.country === 'United States' || p.country === 'USA'))
+          .map(p => p.name.toLowerCase())
+      );
+      if (stateNames.size === 0) { if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; } return; }
 
-    const cities = discoveredPlaces.filter(p => p.lat && p.lng && p.type !== 'country');
-    const fillColor = isDark ? '#8A7A60' : '#9A8A68';
+      const filtered = {
+        type: 'FeatureCollection',
+        features: geo.features.filter(f => stateNames.has((f.properties?.name || '').toLowerCase())),
+      };
 
-    const updateMarkers = () => {
-      discoveredMarkersRef.current.forEach(m => m.remove());
-      discoveredMarkersRef.current = [];
-      const zoom = map.getZoom();
+      if (statesLayerRef.current) statesLayerRef.current.remove();
 
-      // Brighter when zoomed out
-      const circleOpacity = zoom <= 3 ? (isDark ? 0.20 : 0.22) : zoom <= 5 ? (isDark ? 0.15 : 0.17) : (isDark ? 0.10 : 0.12);
-
-      cities.forEach(place => {
-        // Draw a subtle circle for each discovered city — radius scales with type
-        const radiusMeters = place.type === 'state' ? 80000 : (place.type === 'region' ? 60000 : 20000);
-        const circle = L.circle([place.lat, place.lng], {
-          radius: radiusMeters,
+      const renderer = L.canvas({ padding: 1.0 });
+      statesLayerRef.current = L.geoJSON(filtered, {
+        renderer,
+        style: {
           color: 'transparent',
           weight: 0,
-          fillColor,
-          fillOpacity: circleOpacity,
-          interactive: false,
-        }).addTo(map);
-        discoveredMarkersRef.current.push(circle);
+          fillColor: isDark ? '#8A7A60' : '#9A8A68',
+          fillOpacity: isDark ? 0.08 : 0.10,
+        },
+        interactive: false,
+      }).addTo(map);
+      statesLayerRef.current.bringToBack();
 
-      });
+      // Zoom-responsive opacity
+      const updateOpacity = () => {
+        if (!statesLayerRef.current) return;
+        const z = map.getZoom();
+        const opacity = z <= 3 ? (isDark ? 0.18 : 0.20) : z <= 5 ? (isDark ? 0.13 : 0.15) : (isDark ? 0.08 : 0.10);
+        statesLayerRef.current.setStyle({ fillOpacity: opacity });
+      };
+      updateOpacity();
+      map.on('zoomend', updateOpacity);
+      statesLayerRef.current._zoomHandler = updateOpacity;
     };
 
-    updateMarkers();
-    map.on('zoomend', updateMarkers);
-    return () => { map.off('zoomend', updateMarkers); };
-  }, [discoveredPlaces, leafletReady, isDark, mode]); // eslint-disable-line
+    renderStates();
+    return () => {
+      if (statesLayerRef.current?._zoomHandler) {
+        map.off('zoomend', statesLayerRef.current._zoomHandler);
+      }
+    };
+  }, [discoveredPlaces, leafletReady, isDark]);
 
   // Preview pin at clicked location
   const previewMarkerRef = useRef(null);
