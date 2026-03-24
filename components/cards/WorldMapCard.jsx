@@ -276,6 +276,7 @@ function MapInner({ token }) {
   const [discoveredCountries, setDiscoveredCountries] = useState([]);
   const [discoveredPlaces, setDiscoveredPlaces] = useState([]);
   const [selectedDiscovered, setSelectedDiscovered] = useState(null);
+  const [previewGeo, setPreviewGeo] = useState(null); // search result preview before adding
   const discoveredLayerRef = useRef(null);
   const discoveredMarkersRef = useRef([]);
   const geoJsonCacheRef = useRef(null);
@@ -316,6 +317,7 @@ function MapInner({ token }) {
     map.on('click', () => {
       setSelectedPlace(null);
       setSelectedDiscovered(null);
+      setPreviewGeo(null);
       setAddingPlace(null);
     });
     map.on('dblclick', (e) => {
@@ -804,9 +806,33 @@ function MapInner({ token }) {
     const zoom = isArea ? 5 : (SMALL_COUNTRY_TYPES.has(result.type) ? 5 : 16);
     mapInstance.current.flyTo([result.lat, result.lng], zoom, { duration: 0.8 });
     lastGeoRef.current = result;
+    setPreviewGeo(isArea ? null : result); // show preview card for places, not areas
     setAddingPlace(null);
     setSelectedPlace(null);
+    setSelectedDiscovered(null);
   }, []);
+
+  // Convert preview to add-place form, pre-filled
+  const addFromPreview = useCallback(() => {
+    if (!previewGeo) return;
+    const g = previewGeo;
+    // Guess category from OSM type/key
+    const t = (g.type || '').toLowerCase();
+    const k = (g.osmKey || '').toLowerCase();
+    let guess = '';
+    if (['restaurant', 'fast_food', 'food_court', 'bbq'].includes(t) || k === 'restaurant') guess = 'Food';
+    else if (['cafe', 'ice_cream', 'bakery', 'confectionery', 'pastry'].includes(t) || k === 'cafe') guess = 'Cafes & Desserts';
+    else if (['bar', 'pub', 'biergarten', 'nightclub', 'music_venue', 'theatre', 'cinema', 'arts_centre'].includes(t)) guess = 'Bars & Events';
+    else if (['park', 'garden', 'nature_reserve', 'beach', 'swimming_pool', 'sports_centre', 'pitch', 'water_park', 'golf_course'].includes(t) || k === 'leisure') guess = 'Outdoor & Exercise';
+    else if (['shop', 'supermarket', 'mall', 'marketplace', 'clothes', 'books', 'department_store'].includes(t) || k === 'shop') guess = 'Stores';
+    else if (['museum', 'gallery', 'artwork', 'attraction', 'viewpoint', 'monument', 'memorial', 'castle', 'ruins', 'zoo', 'aquarium', 'theme_park'].includes(t) || k === 'tourism' || k === 'historic') guess = 'Experiences';
+
+    setAddingPlace({ lat: g.lat, lng: g.lng });
+    setNewName(g.rawName || g.name.split(',')[0]);
+    setNewType(guess);
+    setNewNotes(g.fullName || '');
+    setPreviewGeo(null);
+  }, [previewGeo]);
 
   // + button: add pin at map center (detect area from last search)
   const addAtCenter = useCallback(() => {
@@ -1093,6 +1119,50 @@ function MapInner({ token }) {
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Search result preview card */}
+      {previewGeo && mode === 'places' && !addingPlace && !editingPlace && !selectedPlace && (
+        <div style={{
+          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+          background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+          borderRadius: 10,
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          padding: '10px 14px',
+          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.1)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', minWidth: 0 }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-accent)" strokeWidth="2" style={{ flexShrink: 0 }}>
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+              </svg>
+              <span style={{ fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', letterSpacing: '0.03em', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {previewGeo.rawName || previewGeo.name.split(',')[0]}
+              </span>
+              {previewGeo.type && (
+                <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
+                  {previewGeo.type}
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <button onClick={addFromPreview}
+                style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                + Save
+              </button>
+              <button onClick={() => setPreviewGeo(null)}
+                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
+                &times;
+              </button>
+            </div>
+          </div>
+          {previewGeo.fullName && (
+            <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', marginTop: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {previewGeo.fullName}
+            </div>
+          )}
         </div>
       )}
 
