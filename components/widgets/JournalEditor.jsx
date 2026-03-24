@@ -354,29 +354,29 @@ function RecentEntries({ token, userId, date }) {
     </div>
   );
 
+  const selectedHasEntry = entries.some(e => e.date === todayStr);
+  const formatLabel = (dateStr) => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[m - 1]} ${d}, ${y}`;
+  };
+
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16,overflowY:'auto'}}>
-      {entries.map(entry => {
-        const [y, m, d] = entry.date.split('-').map(Number);
-        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        const label = `${months[m - 1]} ${d}, ${y}`;
-        const isToday = entry.date === todayStr;
+      {/* Selected day — always editable */}
+      <div>
+        <div style={{
+          fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
+          textTransform:'uppercase', color:'var(--dl-middle)',
+          marginBottom:6, opacity:0.7,
+        }}>
+          {todayStr === new Date().toISOString().slice(0, 10) ? 'today' : formatLabel(todayStr)}
+        </div>
+        <JournalEditor date={todayStr} userId={userId} token={token} />
+      </div>
 
-        if (isToday) {
-          return (
-            <div key={entry.date}>
-              <div style={{
-                fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
-                textTransform:'uppercase', color:'var(--dl-middle)',
-                marginBottom:6, opacity:0.7,
-              }}>
-                {label} — today
-              </div>
-              <JournalEditor date={entry.date} userId={userId} token={token} />
-            </div>
-          );
-        }
-
+      {/* Past entries — read-only */}
+      {entries.filter(e => e.date !== todayStr).map(entry => {
         const html = entry.blocks
           .sort((a, b) => a.position - b.position)
           .map(b => b.content)
@@ -389,7 +389,7 @@ function RecentEntries({ token, userId, date }) {
               textTransform:'uppercase', color:'var(--dl-middle)',
               marginBottom:6, opacity:0.7,
             }}>
-              {label}
+              {formatLabel(entry.date)}
             </div>
             {images.length > 0 && (
               <PhotoStrip images={images} onViewImage={() => {}} />
@@ -436,14 +436,14 @@ function MemoriesView({ token, userId, date }) {
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16,overflowY:'auto'}}>
-      {/* Today — editable */}
+      {/* Selected day — editable */}
       <div>
         <div style={{
           fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
           textTransform:'uppercase', color:'var(--dl-middle)',
           marginBottom:6, opacity:0.7,
         }}>
-          today
+          {date === new Date().toISOString().slice(0, 10) ? 'today' : formatDate(date)}
         </div>
         <JournalEditor date={date} userId={userId} token={token} />
       </div>
