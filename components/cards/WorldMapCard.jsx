@@ -27,20 +27,21 @@ const TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.
 const TILES_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
 const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-// ─── Country GeoJSON for discovered regions ─────────────────────────────────
-const COUNTRIES_GEOJSON_URL = 'https://cdn.jsdelivr.net/npm/@simonepri/geo-maps@0.6.0/world/countries/250m.geo.json';
-// Map user-friendly names → GeoJSON feature names (Natural Earth / ISO)
+// ─── Country boundaries for discovered regions ──────────────────────────────
+const COUNTRIES_TOPOJSON_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
+// Map user-friendly names → GeoJSON feature names
 const COUNTRY_NAME_MAP = {
   'United States': 'United States of America',
   'USA': 'United States of America',
   'UK': 'United Kingdom',
   'England': 'United Kingdom',
-  'South Korea': 'Korea',
+  'South Korea': 'South Korea',
   'Turkiye': 'Turkey',
   'The Netherlands': 'Netherlands',
   'Czech Republic': 'Czechia',
-  'Caribbean': null, // skip — not a country
+  'Caribbean': null,
   'Europe': null,
+  'Puerto Rico': 'Puerto Rico',
 };
 
 // ─── Search bar (glassmorphic, location-biased) ─────────────────────────────
@@ -346,11 +347,13 @@ function MapInner({ token }) {
     const map = mapInstance.current;
 
     const renderBoundaries = async () => {
-      // Fetch + cache GeoJSON
+      // Fetch TopoJSON + convert to GeoJSON, cache result
       if (!geoJsonCacheRef.current) {
         try {
-          const res = await fetch(COUNTRIES_GEOJSON_URL);
-          geoJsonCacheRef.current = await res.json();
+          const { feature } = await import('topojson-client');
+          const res = await fetch(COUNTRIES_TOPOJSON_URL);
+          const topo = await res.json();
+          geoJsonCacheRef.current = feature(topo, topo.objects.countries);
         } catch { return; }
       }
       const geo = geoJsonCacheRef.current;
@@ -366,8 +369,7 @@ function MapInner({ token }) {
       const filtered = {
         type: 'FeatureCollection',
         features: geo.features.filter(f => {
-          const name = (f.properties?.A3 || f.properties?.name || f.properties?.NAME || f.properties?.ADMIN || '');
-          // Try exact match first, then check if any discovered name is contained
+          const name = (f.properties?.name || '');
           if (normalizedNames.has(name.toLowerCase())) return true;
           for (const dn of normalizedNames) {
             if (name.toLowerCase().includes(dn) || dn.includes(name.toLowerCase())) return true;
@@ -390,7 +392,7 @@ function MapInner({ token }) {
         onEachFeature: (feature, layer) => {
           layer.on('click', (e) => {
             L.DomEvent.stopPropagation(e);
-            const fname = (feature.properties?.A3 || feature.properties?.name || feature.properties?.NAME || feature.properties?.ADMIN || '');
+            const fname = (feature.properties?.name || '');
             // Find matching country in discovered list
             const match = discoveredCountries.find(c => {
               const mapped = COUNTRY_NAME_MAP.hasOwnProperty(c) ? COUNTRY_NAME_MAP[c] : c;

@@ -40,6 +40,7 @@
     "simplex-noise": "^4.0.3",
     "stripe": "^20.4.0",
     "three": "^0.183.2",
+    "topojson-client": "^3.1.0",
     "zustand": "^5.0.11"
   }
 }
