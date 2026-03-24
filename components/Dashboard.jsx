@@ -358,7 +358,13 @@ function DashboardInner() {
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
-  const [journalMode, setJournalMode] = useState('day'); // 'day' | 'recent'
+  const [journalMode, setJournalMode_] = useState(() => {
+    try { return localStorage.getItem('daylab:journalMode') || 'day'; } catch { return 'day'; }
+  });
+  const setJournalMode = useCallback((m) => {
+    setJournalMode_(m);
+    try { localStorage.setItem('daylab:journalMode', m); } catch {}
+  }, []);
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   true);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
