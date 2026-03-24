@@ -407,9 +407,93 @@ function RecentEntries({ token, userId, date }) {
   );
 }
 
+// ─── Memories View ───────────────────────────────────────────────────────────
+// Shows today's editable entry + same day from previous years (read-only).
+
+function MemoriesView({ token, userId, date }) {
+  const [pastEntries, setPastEntries] = useState(null);
+
+  useEffect(() => {
+    if (!token || !date) return;
+    api.get(`/api/journal?memories=${date}`, token).then(d => {
+      setPastEntries(d?.entries ?? []);
+    }).catch(() => setPastEntries([]));
+  }, [token, date]);
+
+  const formatDate = (d) => {
+    const [y, m, day] = d.split('-').map(Number);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return `${months[m - 1]} ${day}, ${y}`;
+  };
+
+  const yearsAgo = (d) => {
+    const then = parseInt(d.split('-')[0], 10);
+    const now = parseInt(date.split('-')[0], 10);
+    const diff = now - then;
+    return diff === 1 ? '1 year ago' : `${diff} years ago`;
+  };
+
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:16,overflowY:'auto'}}>
+      {/* Today — editable */}
+      <div>
+        <div style={{
+          fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
+          textTransform:'uppercase', color:'var(--dl-middle)',
+          marginBottom:6, opacity:0.7,
+        }}>
+          today
+        </div>
+        <JournalEditor date={date} userId={userId} token={token} />
+      </div>
+
+      {/* Past years */}
+      {pastEntries === null ? (
+        <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+          <Shimmer width="60%" height={14}/>
+          <Shimmer width="80%" height={14}/>
+        </div>
+      ) : pastEntries.length === 0 ? (
+        <div style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-middle)',padding:'8px 0',letterSpacing:'0.04em',opacity:0.6}}>
+          No memories for this day yet.
+        </div>
+      ) : (
+        pastEntries.map(entry => {
+          const html = entry.blocks
+            .sort((a, b) => a.position - b.position)
+            .map(b => b.content)
+            .join('');
+          const images = extractImages(html);
+          return (
+            <div key={entry.date} style={{opacity:0.85}}>
+              <div style={{
+                fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
+                textTransform:'uppercase', color:'var(--dl-middle)',
+                marginBottom:6, opacity:0.7,
+              }}>
+                {formatDate(entry.date)} — {yearsAgo(entry.date)}
+              </div>
+              {images.length > 0 && (
+                <PhotoStrip images={images} onViewImage={() => {}} />
+              )}
+              <div
+                style={{
+                  fontFamily:serif, fontSize:F.md, lineHeight:1.7,
+                  color:'var(--dl-strong)', wordBreak:'break-word',
+                }}
+                dangerouslySetInnerHTML={{__html: stripImageChips(html)}}
+              />
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
 export function JournalEditor({date,userId,token,project,journalMode}) {
-  // In recent mode, show the recent entries view instead of the editor
   if (journalMode === 'recent') return <RecentEntries token={token} userId={userId} date={date} />;
+  if (journalMode === 'memories') return <MemoriesView token={token} userId={userId} date={date} />;
 
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   const { notes: ctxNotes } = useContext(NoteContext);

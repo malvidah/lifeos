@@ -11,9 +11,39 @@ import { withAuth } from '../_lib/auth.js';
 
 export const GET = withAuth(async (req, { supabase, user }) => {
   const { searchParams } = new URL(req.url);
-  const date    = searchParams.get('date');
-  const project = searchParams.get('project');
-  const recent  = searchParams.get('recent');
+  const date     = searchParams.get('date');
+  const project  = searchParams.get('project');
+  const recent   = searchParams.get('recent');
+  const memories = searchParams.get('memories');
+
+  // ── Memories: same day in previous years ────────────────────────────────────
+  if (memories) {
+    const [, mm, dd] = memories.split('-');
+    const thisYear = parseInt(memories.split('-')[0], 10);
+    // Build list of same month-day for previous years
+    const pastDates = [];
+    for (let y = thisYear - 1; y >= thisYear - 10; y--) {
+      pastDates.push(`${y}-${mm}-${dd}`);
+    }
+    const { data: blocks, error } = await supabase
+      .from('journal_blocks')
+      .select('id, date, position, content, project_tags, note_tags')
+      .eq('user_id', user.id)
+      .in('date', pastDates)
+      .order('date', { ascending: false })
+      .order('position', { ascending: true });
+    if (error) throw error;
+    // Group by date, only include dates that have blocks
+    const grouped = {};
+    for (const b of (blocks ?? [])) {
+      if (!grouped[b.date]) grouped[b.date] = [];
+      grouped[b.date].push(b);
+    }
+    const entries = Object.keys(grouped)
+      .sort((a, b) => b.localeCompare(a))
+      .map(d => ({ date: d, blocks: grouped[d] }));
+    return Response.json({ entries });
+  }
 
   // ── Recent entries: N most recent dates with journal blocks ────────────────
   if (recent) {
