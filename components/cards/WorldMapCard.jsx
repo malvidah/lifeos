@@ -6,21 +6,21 @@ import { getCachedLocation, DEFAULT_LOCATION } from "@/lib/weather";
 import { useTheme } from "@/lib/theme";
 import dynamic from "next/dynamic";
 
-// ─── Category config ────────────────────────────────────────────────────────
-const CATEGORIES = [
-  { id: 'pin',       label: 'Pin',       emoji: '📍' },
-  { id: 'cafe',      label: 'Cafe',      emoji: '☕' },
-  { id: 'food',      label: 'Food',      emoji: '🍽' },
-  { id: 'viewpoint', label: 'Viewpoint', emoji: '👁' },
-  { id: 'park',      label: 'Park',      emoji: '🌲' },
-  { id: 'shop',      label: 'Shop',      emoji: '🛍' },
-  { id: 'home',      label: 'Home',      emoji: '🏠' },
-  { id: 'work',      label: 'Work',      emoji: '💼' },
+// ─── Pin color palette for user-created types ──────────────────────────────
+const PIN_COLORS = [
+  '#D08828', // amber (default)
+  '#4A9A68', // green
+  '#4878A8', // blue
+  '#8860B8', // purple
+  '#B04840', // red
+  '#B88828', // gold
+  '#6A8A6A', // sage
+  '#888888', // grey
+  '#CCCCCC', // white/light
+  '#C17B4A', // copper
+  '#6B8EB8', // steel blue
+  '#A07AB0', // lavender
 ];
-
-function categoryEmoji(cat) {
-  return CATEGORIES.find(c => c.id === cat)?.emoji || '📍';
-}
 
 // ─── Tile URLs ──────────────────────────────────────────────────────────────
 const TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png';
@@ -221,12 +221,17 @@ function MapInner({ token }) {
   const currentLocMarker = useRef(null);
 
   const [places, setPlaces] = useState([]);
+  const [placeTypes, setPlaceTypes] = useState([]);
   const [locations, setLocations] = useState([]);
   const [mode, setMode] = useState('places');
+  const [activeFilter, setActiveFilter] = useState(null); // null = show all, type name = filter
   const [addingPlace, setAddingPlace] = useState(null);
   const [newName, setNewName] = useState('');
-  const [newCategory, setNewCategory] = useState('pin');
+  const [newType, setNewType] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  const [creatingType, setCreatingType] = useState(false);
+  const [newTypeName, setNewTypeName] = useState('');
+  const [newTypeColor, setNewTypeColor] = useState(PIN_COLORS[0]);
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [leafletReady, setLeafletReady] = useState(false);
   const LRef = useRef(null);
@@ -264,7 +269,7 @@ function MapInner({ token }) {
       setSelectedPlace(null);
       setAddingPlace({ lat: e.latlng.lat, lng: e.latlng.lng });
       setNewName('');
-      setNewCategory('pin');
+      setNewType('');
       setNewNotes('');
     });
 
@@ -304,10 +309,11 @@ function MapInner({ token }) {
     previewMarkerRef.current = L.marker([addingPlace.lat, addingPlace.lng], { icon, interactive: false }).addTo(mapInstance.current);
   }, [addingPlace, leafletReady, isDark]);
 
-  // Fetch places
+  // Fetch places + types
   useEffect(() => {
     if (!token) return;
     api.get('/api/places', token).then(d => setPlaces(d?.places ?? []));
+    api.get('/api/place-types', token).then(d => setPlaceTypes(d?.types ?? []));
   }, [token]);
 
   // Listen for place chip clicks from editors — fly to the place on map
@@ -343,8 +349,18 @@ function MapInner({ token }) {
     markersRef.current = [];
     if (mode !== 'places') return;
 
-    places.forEach(place => {
-      const color = place.color || (isDark ? '#D08828' : '#B87018');
+    // Helper: get pin color from place type
+    const typeColor = (cat) => {
+      const t = placeTypes.find(pt => pt.name.toLowerCase() === (cat || '').toLowerCase());
+      return t?.color || (isDark ? '#D08828' : '#B87018');
+    };
+
+    const filtered = activeFilter
+      ? places.filter(p => (p.category || '').toLowerCase() === activeFilter.toLowerCase())
+      : places;
+
+    filtered.forEach(place => {
+      const color = place.color || typeColor(place.category);
       const isSelected = selectedPlace?.id === place.id;
       const size = isSelected ? 16 : 12;
       const icon = L.divIcon({
@@ -367,7 +383,7 @@ function MapInner({ token }) {
       });
       markersRef.current.push(marker);
     });
-  }, [places, mode, leafletReady, isDark, selectedPlace]); // eslint-disable-line
+  }, [places, placeTypes, mode, activeFilter, leafletReady, isDark, selectedPlace]); // eslint-disable-line
 
   // Render current location
   useEffect(() => {
@@ -445,13 +461,57 @@ function MapInner({ token }) {
     if (!addingPlace || !newName.trim() || !token) return;
     const result = await api.post('/api/places', {
       lat: addingPlace.lat, lng: addingPlace.lng,
-      name: newName.trim(), category: newCategory,
+      name: newName.trim(), category: newType || 'pin',
       notes: newNotes.trim() || null,
     }, token);
     if (result?.place) setPlaces(prev => [result.place, ...prev]);
     setAddingPlace(null);
     setNewName('');
   }, [addingPlace, newName, newCategory, token]);
+
+  // Create new type
+  const createType = useCallback(async () => {
+    if (!newTypeName.trim() || !token) return;
+    const result = await api.post('/api/place-types', {
+      name: newTypeName.trim(),
+      color: newTypeColor,
+    }, token);
+    if (result?.type) {
+      setPlaceTypes(prev => [...prev, result.type]);
+      setNewType(result.type.name);
+    }
+    setCreatingType(false);
+    setNewTypeName('');
+  }, [newTypeName, newTypeColor, token]);
+
+  // Edit place
+  const [editingPlace, setEditingPlace] = useState(null);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+
+  const startEdit = useCallback((place) => {
+    setEditingPlace(place);
+    setEditName(place.name);
+    setEditType(place.category || '');
+    setEditNotes(place.notes || '');
+    setSelectedPlace(null);
+  }, []);
+
+  const saveEdit = useCallback(async () => {
+    if (!editingPlace || !editName.trim() || !token) return;
+    // Delete old and recreate (simple approach since we don't have PATCH)
+    await api.post(`/api/places?delete=${editingPlace.id}`, {}, token);
+    const result = await api.post('/api/places', {
+      lat: editingPlace.lat, lng: editingPlace.lng,
+      name: editName.trim(), category: editType || 'pin',
+      notes: editNotes.trim() || null,
+    }, token);
+    if (result?.place) {
+      setPlaces(prev => prev.filter(p => p.id !== editingPlace.id).concat(result.place));
+    }
+    setEditingPlace(null);
+  }, [editingPlace, editName, editType, editNotes, token]);
 
   // Delete place
   const deletePlace = useCallback(async (id) => {
@@ -589,8 +649,44 @@ function MapInner({ token }) {
         )}
       </div>
 
+      {/* Type filter pills — below top bar */}
+      {mode === 'places' && placeTypes.length > 0 && (
+        <div style={{
+          position: 'absolute', top: 50, left: 10, right: 10, zIndex: 999,
+          display: 'flex', gap: 4, flexWrap: 'wrap',
+        }}>
+          <button onClick={() => setActiveFilter(null)}
+            style={{
+              backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+              background: !activeFilter ? 'var(--dl-accent-20)' : 'var(--dl-glass)',
+              border: `1px solid ${!activeFilter ? 'var(--dl-accent)' : 'var(--dl-glass-border)'}`,
+              borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
+              color: !activeFilter ? 'var(--dl-accent)' : 'var(--dl-middle)',
+              textTransform: 'uppercase',
+            }}>
+            All
+          </button>
+          {placeTypes.map(t => (
+            <button key={t.id} onClick={() => setActiveFilter(activeFilter === t.name ? null : t.name)}
+              style={{
+                backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+                background: activeFilter === t.name ? t.color + '33' : 'var(--dl-glass)',
+                border: `1px solid ${activeFilter === t.name ? t.color : 'var(--dl-glass-border)'}`,
+                borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
+                fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
+                color: activeFilter === t.name ? t.color : 'var(--dl-middle)',
+                textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Add-place popup */}
-      {addingPlace && mode === 'places' && (
+      {addingPlace && mode === 'places' && !editingPlace && (
         <div style={{
           position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
           background: 'var(--dl-bg)', borderRadius: 10,
@@ -599,63 +695,95 @@ function MapInner({ token }) {
           boxShadow: 'var(--dl-shadow)',
         }}>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-            <input
-              autoFocus
-              value={newName}
+            <input autoFocus value={newName}
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
               placeholder="Name this place..."
-              style={{
-                flex: 1, background: 'var(--dl-well)', border: '1px solid var(--dl-border)',
-                borderRadius: 6, padding: '6px 10px',
-                fontFamily: mono, fontSize: F.sm,
-                color: 'var(--dl-strong)', outline: 'none',
-                letterSpacing: '0.03em',
-              }}
+              style={{ flex: 1, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em' }}
             />
-            <button onClick={savePlace}
-              style={{
-                background: 'var(--dl-accent)', border: 'none', borderRadius: 6,
-                padding: '6px 14px', cursor: 'pointer',
-                fontFamily: mono, fontSize: F.sm, fontWeight: 600,
-                color: '#fff', letterSpacing: '0.04em',
-              }}>
-              Save
-            </button>
-            <button onClick={() => setAddingPlace(null)}
-              style={{
-                background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6,
-                padding: '6px 10px', cursor: 'pointer',
-                fontFamily: mono, fontSize: F.sm,
-                color: 'var(--dl-middle)',
-              }}>
-              &times;
-            </button>
+            <button onClick={savePlace} style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>Save</button>
+            <button onClick={() => setAddingPlace(null)} style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>&times;</button>
           </div>
-          <input
-            value={newNotes}
-            onChange={e => setNewNotes(e.target.value)}
+          <input value={newNotes} onChange={e => setNewNotes(e.target.value)}
             placeholder="Description (optional)"
-            style={{
-              width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)',
-              borderRadius: 6, padding: '5px 10px', marginBottom: 8,
-              fontFamily: mono, fontSize: F.sm - 1,
-              color: 'var(--dl-strong)', outline: 'none',
-              letterSpacing: '0.03em',
-            }}
+            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '5px 10px', marginBottom: 8, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
+          />
+          {/* Type selector */}
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+            {placeTypes.map(t => (
+              <button key={t.id} onClick={() => setNewType(newType === t.name ? '' : t.name)}
+                style={{
+                  background: newType === t.name ? t.color + '22' : 'var(--dl-well)',
+                  border: `1px solid ${newType === t.name ? t.color : 'var(--dl-border)'}`,
+                  borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+                  fontSize: 11, color: newType === t.name ? t.color : 'var(--dl-strong)',
+                  fontFamily: mono, letterSpacing: '0.04em',
+                  display: 'flex', alignItems: 'center', gap: 4,
+                }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color }} />
+                {t.name}
+              </button>
+            ))}
+            {/* New type button / inline form */}
+            {creatingType ? (
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <input autoFocus value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') createType(); if (e.key === 'Escape') setCreatingType(false); }}
+                  placeholder="Type name"
+                  style={{ width: 90, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 4, padding: '2px 6px', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none' }}
+                />
+                <div style={{ display: 'flex', gap: 2 }}>
+                  {PIN_COLORS.map(c => (
+                    <button key={c} onClick={() => setNewTypeColor(c)}
+                      style={{ width: 14, height: 14, borderRadius: '50%', background: c, border: newTypeColor === c ? '2px solid var(--dl-strong)' : '1px solid var(--dl-border)', cursor: 'pointer', padding: 0 }}
+                    />
+                  ))}
+                </div>
+                <button onClick={createType} style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: mono, fontSize: 11, color: 'var(--dl-accent)' }}>Add</button>
+              </div>
+            ) : (
+              <button onClick={() => { setCreatingType(true); setNewTypeColor(PIN_COLORS[(placeTypes.length) % PIN_COLORS.length]); }}
+                style={{ background: 'none', border: '1px dashed var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--dl-middle)', fontFamily: mono, letterSpacing: '0.04em' }}>
+                + New type
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Edit place popup */}
+      {editingPlace && (
+        <div style={{
+          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+          background: 'var(--dl-bg)', borderRadius: 10,
+          border: '1px solid var(--dl-border)',
+          padding: '10px 14px',
+          boxShadow: 'var(--dl-shadow)',
+        }}>
+          <div style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>Edit place</div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+            <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditingPlace(null); }}
+              style={{ flex: 1, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)', outline: 'none' }}
+            />
+            <button onClick={saveEdit} style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff' }}>Save</button>
+            <button onClick={() => setEditingPlace(null)} style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>&times;</button>
+          </div>
+          <input value={editNotes} onChange={e => setEditNotes(e.target.value)} placeholder="Description (optional)"
+            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '5px 10px', marginBottom: 8, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-strong)', outline: 'none', boxSizing: 'border-box' }}
           />
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-            {CATEGORIES.map(cat => (
-              <button key={cat.id}
-                onClick={() => setNewCategory(cat.id)}
+            {placeTypes.map(t => (
+              <button key={t.id} onClick={() => setEditType(editType === t.name ? '' : t.name)}
                 style={{
-                  background: newCategory === cat.id ? 'var(--dl-accent-10)' : 'var(--dl-well)',
-                  border: `1px solid ${newCategory === cat.id ? 'var(--dl-accent)' : 'var(--dl-border)'}`,
+                  background: editType === t.name ? t.color + '22' : 'var(--dl-well)',
+                  border: `1px solid ${editType === t.name ? t.color : 'var(--dl-border)'}`,
                   borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
-                  fontSize: 12, color: 'var(--dl-strong)',
-                  transition: 'all 0.1s',
+                  fontSize: 11, color: editType === t.name ? t.color : 'var(--dl-strong)',
+                  fontFamily: mono, display: 'flex', alignItems: 'center', gap: 4,
                 }}>
-                {cat.emoji} {cat.label}
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color }} />
+                {t.name}
               </button>
             ))}
           </div>
@@ -663,7 +791,7 @@ function MapInner({ token }) {
       )}
 
       {/* Selected place detail */}
-      {selectedPlace && mode === 'places' && (
+      {selectedPlace && mode === 'places' && !editingPlace && (
         <div style={{
           position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
           background: 'var(--dl-bg)', borderRadius: 10,
@@ -672,29 +800,28 @@ function MapInner({ token }) {
           boxShadow: 'var(--dl-shadow)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <span style={{ fontSize: 14, marginRight: 6 }}>{categoryEmoji(selectedPlace.category)}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: (() => { const t = placeTypes.find(pt => pt.name.toLowerCase() === (selectedPlace.category || '').toLowerCase()); return t?.color || 'var(--dl-accent)'; })(), flexShrink: 0 }} />
               <span style={{ fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', letterSpacing: '0.03em' }}>
                 {selectedPlace.name}
               </span>
+              {selectedPlace.category && selectedPlace.category !== 'pin' && (
+                <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  {selectedPlace.category}
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => startEdit(selectedPlace)}
+                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-highlight)' }}>
+                Edit
+              </button>
               <button onClick={() => deletePlace(selectedPlace.id)}
-                style={{
-                  background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6,
-                  padding: '3px 10px', cursor: 'pointer',
-                  fontFamily: mono, fontSize: F.sm - 1,
-                  color: 'var(--dl-red)',
-                }}>
+                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-red)' }}>
                 Delete
               </button>
               <button onClick={() => setSelectedPlace(null)}
-                style={{
-                  background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6,
-                  padding: '3px 8px', cursor: 'pointer',
-                  fontFamily: mono, fontSize: F.sm,
-                  color: 'var(--dl-middle)',
-                }}>
+                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
                 &times;
               </button>
             </div>
