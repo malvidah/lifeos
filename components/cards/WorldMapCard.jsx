@@ -369,11 +369,13 @@ function MapInner({ token }) {
       }
       const geo = geoJsonCacheRef.current;
 
-      // Build a set of normalized names to match
+      // Build a set of normalized names to match — skip huge countries
+      const BIG_GEO = new Set(['united states', 'united states of america', 'china', 'russia', 'canada', 'australia', 'brazil', 'india', 'argentina']);
       const normalizedNames = new Set();
       discoveredCountries.forEach(name => {
+        if (BIG_GEO.has(name.toLowerCase())) return; // skip huge countries
         const mapped = COUNTRY_NAME_MAP.hasOwnProperty(name) ? COUNTRY_NAME_MAP[name] : name;
-        if (mapped) normalizedNames.add(mapped.toLowerCase());
+        if (mapped && !BIG_GEO.has(mapped.toLowerCase())) normalizedNames.add(mapped.toLowerCase());
       });
 
       // Filter features to discovered countries
