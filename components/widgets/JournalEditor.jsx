@@ -362,6 +362,7 @@ function RecentEntries({ token }) {
           .sort((a, b) => a.position - b.position)
           .map(b => b.content)
           .join('');
+        const images = extractImages(html);
         return (
           <div key={entry.date}>
             <div style={{
@@ -371,12 +372,15 @@ function RecentEntries({ token }) {
             }}>
               {label}
             </div>
+            {images.length > 0 && (
+              <PhotoStrip images={images} onViewImage={() => {}} />
+            )}
             <div
               style={{
                 fontFamily:serif, fontSize:F.md, lineHeight:1.7,
                 color:'var(--dl-strong)', wordBreak:'break-word',
               }}
-              dangerouslySetInnerHTML={{__html: html}}
+              dangerouslySetInnerHTML={{__html: stripImageChips(html)}}
             />
           </div>
         );
