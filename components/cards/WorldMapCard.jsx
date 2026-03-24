@@ -1190,13 +1190,15 @@ function MapInner({ token }) {
               {selectedPlace.notes}
             </div>
           )}
-          <a
-            href={`https://www.google.com/maps/search/?api=1&query=${selectedPlace.lat},${selectedPlace.lng}`}
-            target="_blank" rel="noopener noreferrer"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-accent)', marginTop: 6, textDecoration: 'none', opacity: 0.8 }}>
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-            Google Maps
-          </a>
+          {selectedPlace.category && selectedPlace.category !== 'pin' && (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedPlace.name)}`}
+              target="_blank" rel="noopener noreferrer"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-accent)', marginTop: 6, textDecoration: 'none', opacity: 0.8 }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+              Google Maps
+            </a>
+          )}
         </div>
       )}
     </div>
