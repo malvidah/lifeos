@@ -46,6 +46,9 @@ const COUNTRY_NAME_MAP = {
   'Puerto Rico': 'Puerto Rico',
 };
 
+// ─── Area type detection (shared between search + map) ──────────────────────
+const AREA_GEO_TYPES = new Set(['state', 'administrative', 'island', 'archipelago', 'territory', 'city', 'town', 'village', 'municipality', 'district', 'borough', 'county', 'country']);
+
 // ─── Search bar (glassmorphic, location-biased) ─────────────────────────────
 function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
   const [query, setQuery] = useState('');
@@ -235,9 +238,15 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-glass-active)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5 }}>
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
-                  </svg>
+                  {AREA_GEO_TYPES.has(r.type) ? (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-accent)" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.6 }}>
+                      <circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2" style={{ flexShrink: 0, opacity: 0.5 }}>
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                    </svg>
+                  )}
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
                 </button>
               ))}
