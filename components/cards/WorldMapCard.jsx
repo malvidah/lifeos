@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { mono, F } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { getCachedLocation, DEFAULT_LOCATION } from "@/lib/weather";
@@ -22,13 +22,129 @@ function categoryEmoji(cat) {
   return CATEGORIES.find(c => c.id === cat)?.emoji || '📍';
 }
 
-// ─── Tile URLs for light/dark ───────────────────────────────────────────────
-// CartoDB Positron (light) and Dark Matter (dark) — free, minimalist, no key
+// ─── Tile URLs ──────────────────────────────────────────────────────────────
 const TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png';
 const TILES_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
 const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
-// ─── Map component (must be client-only, no SSR) ───────────────────────────
+// ─── Search bar ─────────────────────────────────────────────────────────────
+function MapSearch({ places, onSelect, onGeoSelect, isDark }) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState([]);
+  const [geoResults, setGeoResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Filter saved places
+  useEffect(() => {
+    if (!query.trim()) { setResults([]); setGeoResults([]); return; }
+    const q = query.toLowerCase();
+    setResults(places.filter(p => p.name.toLowerCase().includes(q)).slice(0, 5));
+  }, [query, places]);
+
+  // Geocode via Nominatim (debounced)
+  useEffect(() => {
+    clearTimeout(timerRef.current);
+    if (!query.trim() || query.length < 3) { setGeoResults([]); return; }
+    timerRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`,
+          { headers: { 'User-Agent': 'DayLab/1.0' } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setGeoResults(data.map(d => ({
+            name: d.display_name.split(',').slice(0, 2).join(','),
+            fullName: d.display_name,
+            lat: parseFloat(d.lat),
+            lng: parseFloat(d.lon),
+          })));
+        }
+      } catch {}
+    }, 400);
+    return () => clearTimeout(timerRef.current);
+  }, [query]);
+
+  const hasResults = results.length > 0 || geoResults.length > 0;
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        background: 'var(--dl-bg)', borderRadius: 8,
+        border: '1px solid var(--dl-border)',
+        padding: '4px 8px',
+      }}>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={e => { setQuery(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          placeholder="Search places..."
+          style={{
+            background: 'none', border: 'none', outline: 'none',
+            fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)',
+            letterSpacing: '0.03em', width: 140,
+          }}
+        />
+      </div>
+      {open && hasResults && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+          background: 'var(--dl-bg)', borderRadius: 8,
+          border: '1px solid var(--dl-border)',
+          boxShadow: 'var(--dl-shadow)',
+          maxHeight: 240, overflowY: 'auto', zIndex: 1001,
+        }}>
+          {results.length > 0 && (
+            <div style={{ padding: '4px 8px', fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Saved
+            </div>
+          )}
+          {results.map(p => (
+            <button key={p.id}
+              onMouseDown={() => { onSelect(p); setQuery(''); setOpen(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                background: 'none', border: 'none', padding: '6px 10px', cursor: 'pointer',
+                fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)',
+                textAlign: 'left',
+              }}>
+              <span>{categoryEmoji(p.category)}</span>
+              <span>{p.name}</span>
+            </button>
+          ))}
+          {geoResults.length > 0 && (
+            <div style={{ padding: '4px 8px', fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase', borderTop: results.length ? '1px solid var(--dl-border)' : 'none' }}>
+              Search
+            </div>
+          )}
+          {geoResults.map((r, i) => (
+            <button key={i}
+              onMouseDown={() => { onGeoSelect(r); setQuery(''); setOpen(false); }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                background: 'none', border: 'none', padding: '6px 10px', cursor: 'pointer',
+                fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)',
+                textAlign: 'left',
+              }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Map component (client-only) ────────────────────────────────────────────
 function MapInner({ token }) {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
@@ -41,18 +157,17 @@ function MapInner({ token }) {
 
   const [places, setPlaces] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [mode, setMode] = useState('places'); // 'places' | 'timeline'
-  const [addingPlace, setAddingPlace] = useState(null); // { lat, lng } when user clicked to add
+  const [mode, setMode] = useState('places');
+  const [addingPlace, setAddingPlace] = useState(null);
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState('pin');
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [leafletReady, setLeafletReady] = useState(false);
-  const LRef = useRef(null); // Leaflet module reference
+  const LRef = useRef(null);
 
-  // Load Leaflet dynamically (client-only)
+  // Load Leaflet
   useEffect(() => {
     import('leaflet').then(L => {
-      // Import CSS
       import('leaflet/dist/leaflet.css');
       LRef.current = L.default || L;
       setLeafletReady(true);
@@ -63,7 +178,6 @@ function MapInner({ token }) {
   useEffect(() => {
     if (!leafletReady || !mapRef.current || mapInstance.current) return;
     const L = LRef.current;
-
     const loc = getCachedLocation() || DEFAULT_LOCATION;
     const map = L.map(mapRef.current, {
       center: [loc.lat, loc.lng],
@@ -72,16 +186,14 @@ function MapInner({ token }) {
       attributionControl: false,
     });
 
-    // Add zoom control bottom-right
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    // Add tile layer
     tileLayerRef.current = L.tileLayer(isDark ? TILES_DARK : TILES_LIGHT, {
       attribution: TILE_ATTR,
       maxZoom: 19,
+      keepBuffer: 6,        // keep extra tiles in memory to reduce flash
     }).addTo(map);
 
-    // Click to add place
     map.on('click', (e) => {
       setSelectedPlace(null);
       setAddingPlace({ lat: e.latlng.lat, lng: e.latlng.lng });
@@ -90,14 +202,10 @@ function MapInner({ token }) {
     });
 
     mapInstance.current = map;
-
-    return () => {
-      map.remove();
-      mapInstance.current = null;
-    };
+    return () => { map.remove(); mapInstance.current = null; };
   }, [leafletReady]); // eslint-disable-line
 
-  // Switch tile layer on theme change
+  // Switch tiles on theme change
   useEffect(() => {
     if (!mapInstance.current || !tileLayerRef.current) return;
     const L = LRef.current;
@@ -105,6 +213,7 @@ function MapInner({ token }) {
     tileLayerRef.current = L.tileLayer(isDark ? TILES_DARK : TILES_LIGHT, {
       attribution: TILE_ATTR,
       maxZoom: 19,
+      keepBuffer: 6,
     }).addTo(mapInstance.current);
   }, [isDark]);
 
@@ -127,18 +236,14 @@ function MapInner({ token }) {
     if (!mapInstance.current || !leafletReady) return;
     const L = LRef.current;
     const map = mapInstance.current;
-
-    // Clear old markers
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
-
     if (mode !== 'places') return;
 
     places.forEach(place => {
       const color = place.color || (isDark ? '#D08828' : '#B87018');
       const isSelected = selectedPlace?.id === place.id;
       const size = isSelected ? 16 : 12;
-
       const icon = L.divIcon({
         className: '',
         html: `<div style="
@@ -146,13 +251,11 @@ function MapInner({ token }) {
           background:${color};
           border:2px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)'};
           box-shadow:0 1px 4px rgba(0,0,0,0.3);
-          transition:all 0.15s;
-          cursor:pointer;
+          transition:all 0.15s;cursor:pointer;
         "></div>`,
         iconSize: [size, size],
         iconAnchor: [size / 2, size / 2],
       });
-
       const marker = L.marker([place.lat, place.lng], { icon }).addTo(map);
       marker.on('click', (e) => {
         L.DomEvent.stopPropagation(e);
@@ -167,15 +270,9 @@ function MapInner({ token }) {
   useEffect(() => {
     if (!mapInstance.current || !leafletReady) return;
     const L = LRef.current;
-
-    if (currentLocMarker.current) {
-      currentLocMarker.current.remove();
-      currentLocMarker.current = null;
-    }
-
+    if (currentLocMarker.current) { currentLocMarker.current.remove(); currentLocMarker.current = null; }
     const loc = getCachedLocation();
     if (!loc) return;
-
     const accentColor = isDark ? '#D08828' : '#B87018';
     const icon = L.divIcon({
       className: '',
@@ -186,45 +283,33 @@ function MapInner({ token }) {
       iconSize: [20, 20],
       iconAnchor: [10, 10],
     });
-
     currentLocMarker.current = L.marker([loc.lat, loc.lng], { icon, interactive: false }).addTo(mapInstance.current);
   }, [leafletReady, isDark, mode]);
 
-  // Render location history dots
+  // Render location history
   useEffect(() => {
     if (!mapInstance.current || !leafletReady) return;
     const L = LRef.current;
     const map = mapInstance.current;
-
-    // Clear old
     locationDotsRef.current.forEach(m => m.remove());
     locationDotsRef.current = [];
-
     if (mode !== 'timeline' || !locations.length) return;
 
-    // Draw connecting line
     const coords = locations.map(l => [l.lat, l.lng]);
     const polyline = L.polyline(coords, {
       color: isDark ? '#D08828' : '#B87018',
-      weight: 1.5,
-      opacity: 0.25,
-      dashArray: '6,6',
+      weight: 1.5, opacity: 0.25, dashArray: '6,6',
     }).addTo(map);
     locationDotsRef.current.push(polyline);
 
-    // Group stays for sizing
     const stays = [];
     let cur = { ...locations[0], days: 1 };
     for (let i = 1; i < locations.length; i++) {
       const loc = locations[i];
       const same = (loc.city && loc.city === cur.city) ||
         (Math.abs(loc.lat - cur.lat) < 0.5 && Math.abs(loc.lng - cur.lng) < 0.5);
-      if (same) {
-        cur.days++;
-      } else {
-        stays.push(cur);
-        cur = { ...loc, days: 1 };
-      }
+      if (same) cur.days++;
+      else { stays.push(cur); cur = { ...loc, days: 1 }; }
     }
     stays.push(cur);
 
@@ -233,16 +318,10 @@ function MapInner({ token }) {
       const color = isDark ? '#D08828' : '#B87018';
       const icon = L.divIcon({
         className: '',
-        html: `<div style="
-          width:${size}px;height:${size}px;border-radius:50%;
-          background:${color};opacity:0.55;
-          border:1.5px solid ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.7)'};
-          box-shadow:0 1px 3px rgba(0,0,0,0.2);
-        "></div>`,
+        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};opacity:0.55;border:1.5px solid ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.7)'};box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`,
         iconSize: [size, size],
         iconAnchor: [size / 2, size / 2],
       });
-
       const marker = L.marker([stay.lat, stay.lng], { icon }).addTo(map);
       marker.bindTooltip(
         `<div style="font-family:monospace;font-size:11px;letter-spacing:0.04em;">
@@ -255,24 +334,17 @@ function MapInner({ token }) {
       locationDotsRef.current.push(marker);
     });
 
-    // Fit bounds to show all
-    if (coords.length > 1) {
-      map.fitBounds(L.latLngBounds(coords).pad(0.1));
-    }
+    if (coords.length > 1) map.fitBounds(L.latLngBounds(coords).pad(0.1));
   }, [locations, mode, leafletReady, isDark]); // eslint-disable-line
 
   // Save new place
   const savePlace = useCallback(async () => {
     if (!addingPlace || !newName.trim() || !token) return;
     const result = await api.post('/api/places', {
-      lat: addingPlace.lat,
-      lng: addingPlace.lng,
-      name: newName.trim(),
-      category: newCategory,
+      lat: addingPlace.lat, lng: addingPlace.lng,
+      name: newName.trim(), category: newCategory,
     }, token);
-    if (result?.place) {
-      setPlaces(prev => [result.place, ...prev]);
-    }
+    if (result?.place) setPlaces(prev => [result.place, ...prev]);
     setAddingPlace(null);
     setNewName('');
   }, [addingPlace, newName, newCategory, token]);
@@ -285,12 +357,41 @@ function MapInner({ token }) {
     setSelectedPlace(null);
   }, [token]);
 
+  // Navigate to a saved place
+  const goToPlace = useCallback((place) => {
+    if (!mapInstance.current) return;
+    mapInstance.current.flyTo([place.lat, place.lng], 16, { duration: 0.8 });
+    setSelectedPlace(place);
+    setAddingPlace(null);
+  }, []);
+
+  // Navigate to a geocoded result
+  const goToGeo = useCallback((result) => {
+    if (!mapInstance.current) return;
+    mapInstance.current.flyTo([result.lat, result.lng], 16, { duration: 0.8 });
+    setAddingPlace({ lat: result.lat, lng: result.lng });
+    setNewName(result.name);
+    setNewCategory('pin');
+    setSelectedPlace(null);
+  }, []);
+
+  // + button: add pin at map center
+  const addAtCenter = useCallback(() => {
+    if (!mapInstance.current) return;
+    const c = mapInstance.current.getCenter();
+    setAddingPlace({ lat: c.lat, lng: c.lng });
+    setNewName('');
+    setNewCategory('pin');
+    setSelectedPlace(null);
+  }, []);
+
+  // Background color to match tiles while loading
+  const bgColor = isDark ? '#1a1a2e' : '#e8e4d8';
+
   return (
-    <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 400 }}>
-      {/* Map container */}
+    <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 400, background: bgColor }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
-      {/* Custom CSS for map theming */}
       <style>{`
         .daylab-tooltip {
           background: var(--dl-bg) !important;
@@ -300,53 +401,85 @@ function MapInner({ token }) {
           color: var(--dl-strong) !important;
           padding: 4px 8px !important;
         }
-        .daylab-tooltip::before {
-          border-top-color: var(--dl-border) !important;
-        }
+        .daylab-tooltip::before { border-top-color: var(--dl-border) !important; }
         @keyframes mapPulse {
           0%, 100% { transform: scale(1); opacity: 0.2; }
           50% { transform: scale(1.8); opacity: 0; }
         }
-        /* Tint the tiles to match DayLab palette */
         .leaflet-tile-pane {
           filter: saturate(0.3) sepia(0.15) ${isDark ? 'brightness(0.7)' : 'brightness(1.02)'};
         }
+        /* Match tile background to container so no white flash */
+        .leaflet-container { background: ${bgColor} !important; }
         .leaflet-control-zoom a {
           background: var(--dl-bg) !important;
           color: var(--dl-strong) !important;
           border-color: var(--dl-border) !important;
           font-family: ${mono} !important;
         }
-        .leaflet-control-zoom a:hover {
-          background: var(--dl-surface) !important;
-        }
+        .leaflet-control-zoom a:hover { background: var(--dl-surface) !important; }
       `}</style>
 
-      {/* Mode toggle — top left */}
+      {/* Top bar: mode toggle (left) + search (center) + add button (right) */}
       <div style={{
-        position: 'absolute', top: 10, left: 10, zIndex: 1000,
-        display: 'flex', gap: 2,
-        background: 'var(--dl-bg)', borderRadius: 8,
-        border: '1px solid var(--dl-border)',
-        padding: 2,
+        position: 'absolute', top: 10, left: 10, right: 10, zIndex: 1000,
+        display: 'flex', alignItems: 'flex-start', gap: 8,
       }}>
-        {[
-          { id: 'places', label: 'Places', icon: '📍' },
-          { id: 'timeline', label: 'Timeline', icon: '🕰' },
-        ].map(m => (
-          <button key={m.id} onClick={() => { setMode(m.id); setAddingPlace(null); setSelectedPlace(null); }}
+        {/* Mode toggle — icon buttons */}
+        <div style={{
+          display: 'flex', gap: 2,
+          background: 'var(--dl-bg)', borderRadius: 8,
+          border: '1px solid var(--dl-border)',
+          padding: 2, flexShrink: 0,
+        }}>
+          {/* Places — pin icon */}
+          <button onClick={() => { setMode('places'); setAddingPlace(null); setSelectedPlace(null); }}
+            title="Places"
             style={{
-              background: mode === m.id ? 'var(--dl-accent-10)' : 'none',
-              border: 'none', borderRadius: 6,
-              padding: '4px 10px', cursor: 'pointer',
-              fontFamily: mono, fontSize: F.sm,
-              letterSpacing: '0.04em',
-              color: mode === m.id ? 'var(--dl-accent)' : 'var(--dl-middle)',
-              transition: 'all 0.15s',
+              background: mode === 'places' ? 'var(--dl-accent-10)' : 'none',
+              border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer',
+              color: mode === 'places' ? 'var(--dl-accent)' : 'var(--dl-middle)',
+              display: 'flex', alignItems: 'center', transition: 'all 0.15s',
             }}>
-            {m.label}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
           </button>
-        ))}
+          {/* Timeline — clock/path icon */}
+          <button onClick={() => { setMode('timeline'); setAddingPlace(null); setSelectedPlace(null); }}
+            title="Location timeline"
+            style={{
+              background: mode === 'timeline' ? 'var(--dl-accent-10)' : 'none',
+              border: 'none', borderRadius: 6, padding: '5px 8px', cursor: 'pointer',
+              color: mode === 'timeline' ? 'var(--dl-accent)' : 'var(--dl-middle)',
+              display: 'flex', alignItems: 'center', transition: 'all 0.15s',
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Search */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} />
+        </div>
+
+        {/* + Add pin button */}
+        {mode === 'places' && (
+          <button onClick={addAtCenter}
+            title="Add a pin"
+            style={{
+              background: 'var(--dl-bg)', border: '1px solid var(--dl-border)',
+              borderRadius: 8, padding: '5px 8px', cursor: 'pointer',
+              color: 'var(--dl-accent)', display: 'flex', alignItems: 'center',
+              flexShrink: 0, transition: 'all 0.15s',
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* Add-place popup */}
@@ -458,7 +591,6 @@ function MapInner({ token }) {
   );
 }
 
-// Wrap in dynamic() to prevent SSR (Leaflet requires window)
 const MapInnerNoSSR = dynamic(() => Promise.resolve(MapInner), { ssr: false });
 
 export default function WorldMapCard({ token }) {
