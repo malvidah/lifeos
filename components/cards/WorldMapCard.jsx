@@ -1285,12 +1285,29 @@ function MapInner({ token }) {
               )}
             </div>
             <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              {previewGeo.isArea ? (
-                <button onClick={saveAreaFromPreview}
-                  style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
-                  Mark discovered
-                </button>
-              ) : (
+              {previewGeo.isArea ? (() => {
+                const previewName = (previewGeo.rawName || previewGeo.name.split(',')[0]).toLowerCase();
+                const existing = discoveredPlaces.find(p => p.name.toLowerCase() === previewName);
+                return existing ? (
+                  <button onClick={async () => {
+                    if (!token) return;
+                    await api.post(`/api/discovered?delete=${existing.id}`, {}, token);
+                    setDiscoveredPlaces(prev => prev.filter(p => p.id !== existing.id));
+                    const country = existing.country;
+                    const stillHasCountry = discoveredPlaces.some(p => p.id !== existing.id && p.country === country);
+                    if (!stillHasCountry) setDiscoveredCountries(prev => prev.filter(c => c !== country));
+                    setPreviewGeo(null);
+                  }}
+                    style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: 'var(--dl-red)', letterSpacing: '0.04em' }}>
+                    Remove
+                  </button>
+                ) : (
+                  <button onClick={saveAreaFromPreview}
+                    style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                    Mark discovered
+                  </button>
+                );
+              })() : (
                 <button onClick={addFromPreview}
                   style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
                   + Save pin
