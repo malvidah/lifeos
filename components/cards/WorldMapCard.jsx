@@ -430,7 +430,7 @@ function MapInner({ token }) {
     renderBoundaries();
   }, [discoveredCountries, leafletReady, isDark]);
 
-  // Render discovered city labels — only when very zoomed in
+  // Render discovered city circles + labels
   useEffect(() => {
     if (!mapInstance.current || !leafletReady) return;
     const L = LRef.current;
@@ -442,40 +442,54 @@ function MapInner({ token }) {
     if (!discoveredPlaces.length || mode !== 'places') return;
 
     const cities = discoveredPlaces.filter(p => p.lat && p.lng && p.type !== 'country');
-    const labelColor = isDark ? 'var(--dl-middle)' : 'var(--dl-dim)';
+    const fillColor = isDark ? '#8A7A60' : '#9A8A68';
 
-    const updateLabels = () => {
+    const updateMarkers = () => {
       discoveredMarkersRef.current.forEach(m => m.remove());
       discoveredMarkersRef.current = [];
       const zoom = map.getZoom();
-      if (zoom < 8) return; // only show labels when very zoomed in
 
       cities.forEach(place => {
-        const label = L.marker([place.lat, place.lng], {
+        // Draw a subtle circle for each discovered city — radius scales with type
+        const radiusMeters = place.type === 'state' ? 80000 : (place.type === 'region' ? 60000 : 20000);
+        const circle = L.circle([place.lat, place.lng], {
+          radius: radiusMeters,
+          color: 'transparent',
+          weight: 0,
+          fillColor,
+          fillOpacity: isDark ? 0.10 : 0.12,
           interactive: false,
-          icon: L.divIcon({
-            className: '',
-            html: `<div style="
-              font-family: ${mono};
-              font-size: ${zoom >= 10 ? 11 : 9}px;
-              color: ${labelColor};
-              opacity: 0.6;
-              white-space: nowrap;
-              text-shadow: 0 0 4px ${isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)'};
-              pointer-events: none;
-              letter-spacing: 0.04em;
-            ">${place.name}</div>`,
-            iconSize: [0, 0],
-            iconAnchor: [-8, 6],
-          }),
         }).addTo(map);
-        discoveredMarkersRef.current.push(label);
+        discoveredMarkersRef.current.push(circle);
+
+        // Show label only when zoomed in enough
+        if (zoom >= 8) {
+          const label = L.marker([place.lat, place.lng], {
+            interactive: false,
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="
+                font-family: ${mono};
+                font-size: ${zoom >= 10 ? 11 : 9}px;
+                color: ${isDark ? 'var(--dl-middle)' : 'var(--dl-dim)'};
+                opacity: 0.6;
+                white-space: nowrap;
+                text-shadow: 0 0 4px ${isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)'};
+                pointer-events: none;
+                letter-spacing: 0.04em;
+              ">${place.name}</div>`,
+              iconSize: [0, 0],
+              iconAnchor: [-8, 6],
+            }),
+          }).addTo(map);
+          discoveredMarkersRef.current.push(label);
+        }
       });
     };
 
-    updateLabels();
-    map.on('zoomend', updateLabels);
-    return () => { map.off('zoomend', updateLabels); };
+    updateMarkers();
+    map.on('zoomend', updateMarkers);
+    return () => { map.off('zoomend', updateMarkers); };
   }, [discoveredPlaces, leafletReady, isDark, mode]); // eslint-disable-line
 
   // Preview pin at clicked location
@@ -852,10 +866,28 @@ function MapInner({ token }) {
     if (result?.place) {
       setDiscoveredPlaces(prev => [...prev, result.place]);
       setDiscoveredCountries(prev => prev.includes(country) ? prev : [...prev, country]);
+
+      // Animate: expanding circle from the saved location
+      if (mapInstance.current && LRef.current) {
+        const L = LRef.current;
+        const fillColor = isDark ? '#8A7A60' : '#9A8A68';
+        const anim = L.divIcon({
+          className: '',
+          html: `<div style="
+            width: 200px; height: 200px; border-radius: 50%;
+            background: ${fillColor};
+            animation: discoverExpand 0.8s ease-out forwards;
+          "></div>`,
+          iconSize: [200, 200],
+          iconAnchor: [100, 100],
+        });
+        const marker = L.marker([g.lat, g.lng], { icon: anim, interactive: false }).addTo(mapInstance.current);
+        setTimeout(() => marker.remove(), 900);
+      }
     }
     lastGeoRef.current = null;
     setPreviewGeo(null);
-  }, [previewGeo, token]);
+  }, [previewGeo, token, isDark]);
 
   // + button: add pin at map center (detect area from last search)
   const addAtCenter = useCallback(() => {
@@ -899,6 +931,11 @@ function MapInner({ token }) {
         @keyframes mapPulse {
           0%, 100% { transform: scale(1); opacity: 0.2; }
           50% { transform: scale(1.8); opacity: 0; }
+        }
+        @keyframes discoverExpand {
+          0% { transform: scale(0); opacity: 0.3; }
+          60% { transform: scale(1.2); opacity: 0.15; }
+          100% { transform: scale(1); opacity: 0; }
         }
         .leaflet-tile-pane {
           filter: saturate(0.3) sepia(0.15) ${isDark ? 'brightness(0.7)' : 'brightness(1.02)'};
