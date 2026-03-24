@@ -27,6 +27,22 @@ const TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.
 const TILES_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
 const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
 
+// ─── Country GeoJSON for discovered regions ─────────────────────────────────
+const COUNTRIES_GEOJSON_URL = 'https://cdn.jsdelivr.net/npm/@simonepri/geo-maps@0.6.0/world/countries/250m.geo.json';
+// Map user-friendly names → GeoJSON feature names (Natural Earth / ISO)
+const COUNTRY_NAME_MAP = {
+  'United States': 'United States of America',
+  'USA': 'United States of America',
+  'UK': 'United Kingdom',
+  'England': 'United Kingdom',
+  'South Korea': 'Korea',
+  'Turkiye': 'Turkey',
+  'The Netherlands': 'Netherlands',
+  'Czech Republic': 'Czechia',
+  'Caribbean': null, // skip — not a country
+  'Europe': null,
+};
+
 // ─── Search bar (glassmorphic, location-biased) ─────────────────────────────
 function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
   const [query, setQuery] = useState('');
@@ -246,6 +262,11 @@ function MapInner({ token }) {
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [hoveredPlace, setHoveredPlace] = useState(null);
   const [leafletReady, setLeafletReady] = useState(false);
+  const [discoveredCountries, setDiscoveredCountries] = useState([]);
+  const [discoveredPlaces, setDiscoveredPlaces] = useState([]);
+  const discoveredLayerRef = useRef(null);
+  const discoveredMarkersRef = useRef([]);
+  const geoJsonCacheRef = useRef(null);
   const LRef = useRef(null);
 
   // Load Leaflet
@@ -309,6 +330,129 @@ function MapInner({ token }) {
     }).addTo(mapInstance.current);
   }, [isDark]);
 
+  // Render discovered country boundaries
+  useEffect(() => {
+    if (!mapInstance.current || !leafletReady || !discoveredCountries.length) {
+      if (discoveredLayerRef.current) { discoveredLayerRef.current.remove(); discoveredLayerRef.current = null; }
+      return;
+    }
+    const L = LRef.current;
+    const map = mapInstance.current;
+
+    const renderBoundaries = async () => {
+      // Fetch + cache GeoJSON
+      if (!geoJsonCacheRef.current) {
+        try {
+          const res = await fetch(COUNTRIES_GEOJSON_URL);
+          geoJsonCacheRef.current = await res.json();
+        } catch { return; }
+      }
+      const geo = geoJsonCacheRef.current;
+
+      // Build a set of normalized names to match
+      const normalizedNames = new Set();
+      discoveredCountries.forEach(name => {
+        const mapped = COUNTRY_NAME_MAP.hasOwnProperty(name) ? COUNTRY_NAME_MAP[name] : name;
+        if (mapped) normalizedNames.add(mapped.toLowerCase());
+      });
+
+      // Filter features to discovered countries
+      const filtered = {
+        type: 'FeatureCollection',
+        features: geo.features.filter(f => {
+          const name = (f.properties?.A3 || f.properties?.name || f.properties?.NAME || f.properties?.ADMIN || '');
+          // Try exact match first, then check if any discovered name is contained
+          if (normalizedNames.has(name.toLowerCase())) return true;
+          for (const dn of normalizedNames) {
+            if (name.toLowerCase().includes(dn) || dn.includes(name.toLowerCase())) return true;
+          }
+          return false;
+        }),
+      };
+
+      // Remove old layer
+      if (discoveredLayerRef.current) { discoveredLayerRef.current.remove(); }
+
+      // Subtle fill only — no outline stroke
+      discoveredLayerRef.current = L.geoJSON(filtered, {
+        style: {
+          color: 'transparent',
+          weight: 0,
+          fillColor: isDark ? '#D08828' : '#B87018',
+          fillOpacity: isDark ? 0.07 : 0.09,
+        },
+        interactive: false,
+      }).addTo(map);
+
+      // Send to back so pins render on top
+      discoveredLayerRef.current.bringToBack();
+    };
+
+    renderBoundaries();
+  }, [discoveredCountries, leafletReady, isDark]);
+
+  // Render discovered city labels + pins
+  useEffect(() => {
+    if (!mapInstance.current || !leafletReady) return;
+    const L = LRef.current;
+    const map = mapInstance.current;
+
+    // Clear old markers
+    discoveredMarkersRef.current.forEach(m => m.remove());
+    discoveredMarkersRef.current = [];
+
+    if (!discoveredPlaces.length || mode !== 'places') return;
+
+    // Only show cities/regions with coords (skip country-level entries)
+    const cities = discoveredPlaces.filter(p => p.lat && p.lng && p.type !== 'country');
+    const accentColor = isDark ? '#D08828' : '#B87018';
+
+    const updateLabels = () => {
+      discoveredMarkersRef.current.forEach(m => m.remove());
+      discoveredMarkersRef.current = [];
+      const zoom = map.getZoom();
+
+      cities.forEach(place => {
+        if (zoom < 4) {
+          // Zoomed out: small orange dot
+          const dot = L.circleMarker([place.lat, place.lng], {
+            radius: 3,
+            color: 'transparent',
+            fillColor: accentColor,
+            fillOpacity: 0.5,
+            interactive: false,
+          }).addTo(map);
+          discoveredMarkersRef.current.push(dot);
+        } else {
+          // Zoomed in: orange text label
+          const label = L.marker([place.lat, place.lng], {
+            interactive: false,
+            icon: L.divIcon({
+              className: '',
+              html: `<div style="
+                font-family: ${mono};
+                font-size: ${zoom >= 8 ? 11 : 9}px;
+                color: ${accentColor};
+                opacity: 0.7;
+                white-space: nowrap;
+                text-shadow: 0 0 4px ${isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)'};
+                pointer-events: none;
+                letter-spacing: 0.04em;
+              ">${place.name}</div>`,
+              iconSize: [0, 0],
+              iconAnchor: [-8, 6],
+            }),
+          }).addTo(map);
+          discoveredMarkersRef.current.push(label);
+        }
+      });
+    };
+
+    updateLabels();
+    map.on('zoomend', updateLabels);
+    return () => { map.off('zoomend', updateLabels); };
+  }, [discoveredPlaces, leafletReady, isDark, mode]); // eslint-disable-line
+
   // Preview pin at clicked location
   const previewMarkerRef = useRef(null);
   useEffect(() => {
@@ -334,6 +478,10 @@ function MapInner({ token }) {
     if (!token) return;
     api.get('/api/places', token).then(d => setPlaces(d?.places ?? []));
     api.get('/api/place-types', token).then(d => setPlaceTypes(d?.types ?? []));
+    api.get('/api/discovered', token).then(d => {
+      setDiscoveredCountries(d?.countries ?? []);
+      setDiscoveredPlaces(d?.discovered ?? []);
+    });
   }, [token]);
 
   // Listen for place chip clicks from editors — fly to the place on map
@@ -612,7 +760,7 @@ function MapInner({ token }) {
   }, []);
 
   // Background color to match tiles while loading
-  const bgColor = isDark ? '#1a1a2e' : '#e8e4d8';
+  const bgColor = 'var(--dl-bg)';
 
   return (
     <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 400, background: bgColor }}>
