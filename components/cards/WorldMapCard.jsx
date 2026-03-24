@@ -843,16 +843,12 @@ function MapInner({ token }) {
   const lastGeoRef = useRef(null);
 
   // Navigate to a geocoded result — just fly there, don't add a pin
-  // Only small countries, states, cities, islands count as discoverable areas — not huge countries or continents
-  const AREA_TYPES = new Set(['state', 'administrative', 'island', 'archipelago', 'territory', 'city', 'town', 'village', 'municipality', 'district', 'borough', 'county']);
-  const SMALL_COUNTRY_TYPES = new Set(['country']);
   const BIG_COUNTRIES = new Set(['united states', 'united states of america', 'china', 'russia', 'canada', 'australia', 'brazil', 'india', 'argentina', 'europe', 'africa', 'asia']);
   const goToGeo = useCallback((result) => {
     if (!mapInstance.current) return;
-    const nameLower = (result.rawName || result.name || '').toLowerCase();
-    const isSmallCountry = SMALL_COUNTRY_TYPES.has(result.type) && !BIG_COUNTRIES.has(nameLower);
-    const isArea = AREA_TYPES.has(result.type) || isSmallCountry;
-    const zoom = isArea ? 10 : 16;
+    const isArea = AREA_GEO_TYPES.has(result.type);
+    const isBigCountry = result.type === 'country' && BIG_COUNTRIES.has((result.rawName || result.name || '').toLowerCase());
+    const zoom = isBigCountry ? 4 : isArea ? 10 : 16;
     mapInstance.current.flyTo([result.lat, result.lng], zoom, { duration: 0.8 });
     lastGeoRef.current = result;
     setPreviewGeo({ ...result, isArea });
@@ -889,7 +885,7 @@ function MapInner({ token }) {
     const g = previewGeo;
     const name = g.rawName || g.name.split(',')[0];
     const country = g.country || name;
-    const geoType = SMALL_COUNTRY_TYPES.has(g.type) ? 'country' : (['state', 'administrative'].includes(g.type) ? 'state' : 'city');
+    const geoType = g.type === 'country' ? 'country' : (['state', 'administrative'].includes(g.type) ? 'state' : 'city');
     const result = await api.post('/api/discovered', {
       name, country,
       type: geoType,
@@ -927,11 +923,9 @@ function MapInner({ token }) {
     if (!mapInstance.current) return;
     const c = mapInstance.current.getCenter();
     const geo = lastGeoRef.current;
-    const geoName = geo ? (geo.rawName || geo.name || '').toLowerCase() : '';
-    const isSmallCountry = geo && SMALL_COUNTRY_TYPES.has(geo.type) && !BIG_COUNTRIES.has(geoName);
-    const isArea = geo && (AREA_TYPES.has(geo.type) || isSmallCountry);
+    const isArea = geo && AREA_GEO_TYPES.has(geo.type);
     if (isArea) {
-      const geoType = SMALL_COUNTRY_TYPES.has(geo.type) ? 'country' : (['state', 'administrative'].includes(geo.type) ? 'state' : 'city');
+      const geoType = geo.type === 'country' ? 'country' : (['state', 'administrative'].includes(geo.type) ? 'state' : 'city');
       setAddingPlace({ lat: geo.lat, lng: geo.lng, isArea: true, geoName: geo.rawName || geo.name, geoCountry: geo.country || geo.rawName || geo.name, geoType });
       setNewName(geo.rawName || geo.name);
     } else {
