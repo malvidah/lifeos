@@ -44,42 +44,54 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
     setResults(places.filter(p => p.name.toLowerCase().includes(q)).slice(0, 5));
   }, [query, places]);
 
-  // Geocode via Nominatim — biased to current map viewport
+  // Search via Photon (OSM-based, good POI search, native location bias)
+  // Falls back to Nominatim if Photon returns nothing
   useEffect(() => {
     clearTimeout(timerRef.current);
     if (!query.trim() || query.length < 2) { setGeoResults([]); setSearching(false); return; }
     setSearching(true);
     timerRef.current = setTimeout(async () => {
       try {
-        // Get current map bounds for location bias
         const map = mapInstance?.current;
-        let viewbox = '';
-        let bounded = '';
-        if (map) {
-          const b = map.getBounds();
-          // Nominatim viewbox: lon1,lat1,lon2,lat2 (SW to NE)
-          viewbox = `&viewbox=${b.getWest()},${b.getSouth()},${b.getEast()},${b.getNorth()}`;
-          bounded = '&bounded=0'; // prefer but don't restrict to viewport
-        }
-        // Also pass the center as a proximity hint
         const loc = map ? map.getCenter() : (getCachedLocation() || DEFAULT_LOCATION);
 
-        const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1${viewbox}${bounded}`,
-          { headers: { 'User-Agent': 'DayLab/1.0' } }
-        );
+        // Photon API — location-biased POI search (free, no key)
+        const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${loc.lat}&lon=${loc.lng}&limit=8`;
+        const res = await fetch(photonUrl);
         if (res.ok) {
           const data = await res.json();
-          // Sort by distance from map center so nearby results rank first
-          const withDist = data.map(d => {
+          const features = data?.features || [];
+          if (features.length > 0) {
+            setGeoResults(features.map(f => {
+              const p = f.properties || {};
+              const coords = f.geometry?.coordinates || [];
+              const name = p.name || p.street || query;
+              const area = p.city || p.district || p.county || p.state || '';
+              return {
+                name: name + (area ? `, ${area}` : ''),
+                fullName: [name, p.street, p.city, p.state, p.country].filter(Boolean).join(', '),
+                lat: coords[1],
+                lng: coords[0],
+                type: p.osm_value || p.type || '',
+              };
+            }));
+            setSearching(false);
+            return;
+          }
+        }
+
+        // Fallback: Nominatim for broader coverage
+        const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1`;
+        const nomRes = await fetch(nomUrl, { headers: { 'User-Agent': 'DayLab/1.0' } });
+        if (nomRes.ok) {
+          const nomData = await nomRes.json();
+          const withDist = nomData.map(d => {
             const dlat = parseFloat(d.lat) - loc.lat;
             const dlng = parseFloat(d.lon) - loc.lng;
             return { ...d, dist: Math.sqrt(dlat * dlat + dlng * dlng) };
           });
           withDist.sort((a, b) => a.dist - b.dist);
-
           setGeoResults(withDist.map(d => {
-            // Build a clean short name from address parts
             const addr = d.address || {};
             const name = addr.amenity || addr.shop || addr.tourism || addr.leisure
               || addr.restaurant || addr.cafe || addr.building
