@@ -462,28 +462,6 @@ function MapInner({ token }) {
         }).addTo(map);
         discoveredMarkersRef.current.push(circle);
 
-        // Show label only when zoomed in enough
-        if (zoom >= 8) {
-          const label = L.marker([place.lat, place.lng], {
-            interactive: false,
-            icon: L.divIcon({
-              className: '',
-              html: `<div style="
-                font-family: ${mono};
-                font-size: ${zoom >= 10 ? 11 : 9}px;
-                color: ${isDark ? 'var(--dl-middle)' : 'var(--dl-dim)'};
-                opacity: 0.6;
-                white-space: nowrap;
-                text-shadow: 0 0 4px ${isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)'};
-                pointer-events: none;
-                letter-spacing: 0.04em;
-              ">${place.name}</div>`,
-              iconSize: [0, 0],
-              iconAnchor: [-8, 6],
-            }),
-          }).addTo(map);
-          discoveredMarkersRef.current.push(label);
-        }
       });
     };
 
