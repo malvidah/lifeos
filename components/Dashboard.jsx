@@ -19,6 +19,7 @@ import CalendarCard from "./cards/CalendarCard.jsx";
 import HealthCard from "./cards/HealthCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
+import WorldMapCard from "./cards/WorldMapCard.jsx";
 import { JournalEditor, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
@@ -34,6 +35,11 @@ const DOCK_ITEMS = [
   { id: 'map',      label: 'Map',      icon: (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M8 21l8-14 8 14H0z" transform="translate(0,-1)"/><path d="M2 21l5-8 4 5" transform="translate(0,-1)"/>
+    </svg>
+  )},
+  { id: 'timeline', label: 'Timeline', icon: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
     </svg>
   )},
   { id: 'cal',      label: 'Cal',      icon: (
@@ -369,6 +375,7 @@ function DashboardInner() {
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
   const [mapCollapsed,    toggleMap_]     = useCollapse("map",     false);
+  const [timelineCollapsed, toggleTimeline] = useCollapse("timeline", true);
   const collapseMap = {journal:journalCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
   const toggleMap   = {journal:toggleJournal,   tasks:toggleTasks,  meals:toggleMeals,  workouts:toggleAct};
 
@@ -560,11 +567,13 @@ function DashboardInner() {
             dockItems={DOCK_ITEMS.map(item => ({
               ...item,
               isOpen: item.id === 'map' ? !mapCollapsed
+                : item.id === 'timeline' ? !timelineCollapsed
                 : item.id === 'cal' ? !calCollapsed
                 : item.id === 'health' ? !healthCollapsed
                 : item.id === 'notes' ? !notesCollapsed
                 : !collapseMap[item.id],
               onToggle: item.id === 'map' ? toggleMap_
+                : item.id === 'timeline' ? toggleTimeline
                 : item.id === 'cal' ? toggleCal
                 : item.id === 'health' ? toggleHealth
                 : item.id === 'notes' ? toggleNotes
@@ -587,6 +596,11 @@ function DashboardInner() {
               date={selected}
               token={token}
             />
+          )}
+
+          {/* 2b. WorldMapCard — location timeline */}
+          {!searchOpen && !timelineCollapsed && (
+            <WorldMapCard token={token} />
           )}
 
           {/* 3. CalendarCard — hidden when toggled off in dock */}
