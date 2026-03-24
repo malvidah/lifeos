@@ -391,8 +391,8 @@ function MapInner({ token }) {
         style: {
           color: 'transparent',
           weight: 0,
-          fillColor: isDark ? '#D08828' : '#9A7830',
-          fillOpacity: isDark ? 0.15 : 0.14,
+          fillColor: isDark ? '#8A7A60' : '#9A8A68',
+          fillOpacity: isDark ? 0.08 : 0.10,
         },
         onEachFeature: (feature, layer) => {
           layer.on('click', (e) => {
