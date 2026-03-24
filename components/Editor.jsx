@@ -275,7 +275,8 @@ const URLExtension = Extension.create({
             let m; URL_RE.lastIndex = 0;
             while ((m = URL_RE.exec(node.text)) !== null) {
               decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                nodeName: 'a', href: m[0], rel: 'noreferrer',
+                nodeName: 'span',
+                'data-href': m[0],
                 class: 'dl-url-link',
                 style: `color:${WARM};text-decoration:underline;text-underline-offset:2px;cursor:pointer`,
               }));
@@ -284,13 +285,15 @@ const URLExtension = Extension.create({
           return DecorationSet.create(state.doc, decos);
         },
         handleClick(view, pos, event) {
-          const link = event.target.closest?.('a.dl-url-link');
+          const link = event.target.closest?.('.dl-url-link');
           if (!link) return false;
           event.preventDefault();
-          // Dispatch custom event so the React popover can pick it up
+          event.stopPropagation();
           const rect = link.getBoundingClientRect();
+          const url = link.getAttribute('data-href');
+          if (!url) return false;
           window.dispatchEvent(new CustomEvent('daylab:link-click', {
-            detail: { url: link.getAttribute('href'), rect, pos, linkEl: link },
+            detail: { url, rect, pos, linkEl: link },
           }));
           return true;
         },
@@ -354,6 +357,25 @@ function FormatToolbar({ editor }) {
       {btn('B', () => editor.chain().focus().toggleBold().run(), editor.isActive('bold'))}
       {btn('I', () => editor.chain().focus().toggleItalic().run(), editor.isActive('italic'))}
       {btn('U', () => editor.chain().focus().toggleUnderline().run(), editor.isActive('underline'))}
+      {(() => {
+        // Check if selection contains a URL
+        const { from, to } = editor.state.selection;
+        const text = editor.state.doc.textBetween(from, to, ' ');
+        const urlMatch = text.match(/https?:\/\/[^\s<>"')\[\]]+/);
+        if (!urlMatch) return null;
+        return btn('\u{1F517}', () => {
+          // Find the link element in the DOM and trigger popover
+          const domAtPos = editor.view.domAtPos(from);
+          const container = domAtPos.node.nodeType === 1 ? domAtPos.node : domAtPos.node.parentElement;
+          const linkEl = container?.closest('.dl-url-link') || container?.querySelector('.dl-url-link');
+          if (linkEl) {
+            const rect = linkEl.getBoundingClientRect();
+            window.dispatchEvent(new CustomEvent('daylab:link-click', {
+              detail: { url: linkEl.getAttribute('data-href'), rect, pos: from, linkEl },
+            }));
+          }
+        }, false);
+      })()}
     </div>
   );
 }
