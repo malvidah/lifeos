@@ -696,7 +696,7 @@ function MapInner({ token }) {
       const result = await api.post('/api/discovered', {
         name: newName.trim(),
         country,
-        type: 'country',
+        type: addingPlace.geoType || 'city',
         lat: addingPlace.lat,
         lng: addingPlace.lng,
       }, token);
@@ -797,15 +797,15 @@ function MapInner({ token }) {
 
   // Navigate to a geocoded result — just fly there, don't add a pin
   // Only small countries, states, cities, islands count as discoverable areas — not huge countries or continents
-  const AREA_TYPES = new Set(['state', 'administrative', 'island', 'archipelago', 'territory']);
-  const SMALL_COUNTRY_TYPES = new Set(['country']); // countries are area only if not too large
+  const AREA_TYPES = new Set(['state', 'administrative', 'island', 'archipelago', 'territory', 'city', 'town', 'village', 'municipality', 'district', 'borough', 'county']);
+  const SMALL_COUNTRY_TYPES = new Set(['country']);
   const BIG_COUNTRIES = new Set(['united states', 'united states of america', 'china', 'russia', 'canada', 'australia', 'brazil', 'india', 'argentina', 'europe', 'africa', 'asia']);
   const goToGeo = useCallback((result) => {
     if (!mapInstance.current) return;
     const nameLower = (result.rawName || result.name || '').toLowerCase();
     const isSmallCountry = SMALL_COUNTRY_TYPES.has(result.type) && !BIG_COUNTRIES.has(nameLower);
     const isArea = AREA_TYPES.has(result.type) || isSmallCountry;
-    const zoom = isArea ? 5 : (SMALL_COUNTRY_TYPES.has(result.type) ? 5 : 16);
+    const zoom = isArea ? 10 : 16;
     mapInstance.current.flyTo([result.lat, result.lng], zoom, { duration: 0.8 });
     lastGeoRef.current = result;
     setPreviewGeo(isArea ? null : result); // show preview card for places, not areas
@@ -841,9 +841,12 @@ function MapInner({ token }) {
     if (!mapInstance.current) return;
     const c = mapInstance.current.getCenter();
     const geo = lastGeoRef.current;
-    const isArea = geo && AREA_TYPES.has(geo.type);
+    const geoName = geo ? (geo.rawName || geo.name || '').toLowerCase() : '';
+    const isSmallCountry = geo && SMALL_COUNTRY_TYPES.has(geo.type) && !BIG_COUNTRIES.has(geoName);
+    const isArea = geo && (AREA_TYPES.has(geo.type) || isSmallCountry);
     if (isArea) {
-      setAddingPlace({ lat: geo.lat, lng: geo.lng, isArea: true, geoName: geo.rawName || geo.name, geoCountry: geo.country || geo.rawName || geo.name });
+      const geoType = SMALL_COUNTRY_TYPES.has(geo.type) ? 'country' : (['state', 'administrative'].includes(geo.type) ? 'state' : 'city');
+      setAddingPlace({ lat: geo.lat, lng: geo.lng, isArea: true, geoName: geo.rawName || geo.name, geoCountry: geo.country || geo.rawName || geo.name, geoType });
       setNewName(geo.rawName || geo.name);
     } else {
       setAddingPlace({ lat: c.lat, lng: c.lng });
