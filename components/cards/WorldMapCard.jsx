@@ -425,9 +425,26 @@ function MapInner({ token }) {
 
       // Send to back so pins render on top
       discoveredLayerRef.current.bringToBack();
+
+      // Adjust opacity based on zoom — brighter when zoomed out
+      const updateOpacity = () => {
+        if (!discoveredLayerRef.current) return;
+        const z = map.getZoom();
+        const opacity = z <= 3 ? (isDark ? 0.18 : 0.20) : z <= 5 ? (isDark ? 0.13 : 0.15) : (isDark ? 0.08 : 0.10);
+        discoveredLayerRef.current.setStyle({ fillOpacity: opacity });
+      };
+      updateOpacity();
+      map.on('zoomend', updateOpacity);
+      // Store cleanup ref
+      discoveredLayerRef.current._zoomHandler = updateOpacity;
     };
 
     renderBoundaries();
+    return () => {
+      if (discoveredLayerRef.current?._zoomHandler) {
+        map.off('zoomend', discoveredLayerRef.current._zoomHandler);
+      }
+    };
   }, [discoveredCountries, leafletReady, isDark]);
 
   // Render discovered city circles + labels
@@ -449,6 +466,9 @@ function MapInner({ token }) {
       discoveredMarkersRef.current = [];
       const zoom = map.getZoom();
 
+      // Brighter when zoomed out
+      const circleOpacity = zoom <= 3 ? (isDark ? 0.20 : 0.22) : zoom <= 5 ? (isDark ? 0.15 : 0.17) : (isDark ? 0.10 : 0.12);
+
       cities.forEach(place => {
         // Draw a subtle circle for each discovered city — radius scales with type
         const radiusMeters = place.type === 'state' ? 80000 : (place.type === 'region' ? 60000 : 20000);
@@ -457,7 +477,7 @@ function MapInner({ token }) {
           color: 'transparent',
           weight: 0,
           fillColor,
-          fillOpacity: isDark ? 0.10 : 0.12,
+          fillOpacity: circleOpacity,
           interactive: false,
         }).addTo(map);
         discoveredMarkersRef.current.push(circle);
