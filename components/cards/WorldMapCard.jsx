@@ -226,6 +226,7 @@ function MapInner({ token }) {
   const [addingPlace, setAddingPlace] = useState(null);
   const [newName, setNewName] = useState('');
   const [newCategory, setNewCategory] = useState('pin');
+  const [newNotes, setNewNotes] = useState('');
   const [selectedPlace, setSelectedPlace] = useState(null);
   const [leafletReady, setLeafletReady] = useState(false);
   const LRef = useRef(null);
@@ -264,6 +265,7 @@ function MapInner({ token }) {
       setAddingPlace({ lat: e.latlng.lat, lng: e.latlng.lng });
       setNewName('');
       setNewCategory('pin');
+      setNewNotes('');
     });
 
     mapInstance.current = map;
@@ -282,11 +284,47 @@ function MapInner({ token }) {
     }).addTo(mapInstance.current);
   }, [isDark]);
 
+  // Preview pin at clicked location
+  const previewMarkerRef = useRef(null);
+  useEffect(() => {
+    if (!mapInstance.current || !leafletReady) return;
+    const L = LRef.current;
+    if (previewMarkerRef.current) { previewMarkerRef.current.remove(); previewMarkerRef.current = null; }
+    if (!addingPlace) return;
+    const accentColor = isDark ? '#D08828' : '#B87018';
+    const icon = L.divIcon({
+      className: '',
+      html: `<div style="position:relative;width:24px;height:24px;">
+        <div style="position:absolute;inset:0;border-radius:50%;background:${accentColor};opacity:0.15;"></div>
+        <div style="position:absolute;top:6px;left:6px;width:12px;height:12px;border-radius:50%;background:${accentColor};border:2px solid ${isDark ? '#111' : '#fff'};box-shadow:0 2px 6px rgba(0,0,0,0.3);"></div>
+      </div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+    previewMarkerRef.current = L.marker([addingPlace.lat, addingPlace.lng], { icon, interactive: false }).addTo(mapInstance.current);
+  }, [addingPlace, leafletReady, isDark]);
+
   // Fetch places
   useEffect(() => {
     if (!token) return;
     api.get('/api/places', token).then(d => setPlaces(d?.places ?? []));
   }, [token]);
+
+  // Listen for place chip clicks from editors — fly to the place on map
+  useEffect(() => {
+    const handler = (e) => {
+      const name = e.detail?.name;
+      if (!name || !mapInstance.current) return;
+      const place = places.find(p => p.name.toLowerCase() === name.toLowerCase());
+      if (place) {
+        mapInstance.current.flyTo([place.lat, place.lng], 16, { duration: 0.8 });
+        setSelectedPlace(place);
+        setMode('places');
+      }
+    };
+    window.addEventListener('daylab:go-to-place', handler);
+    return () => window.removeEventListener('daylab:go-to-place', handler);
+  }, [places]); // eslint-disable-line
 
   // Fetch location history
   useEffect(() => {
@@ -408,6 +446,7 @@ function MapInner({ token }) {
     const result = await api.post('/api/places', {
       lat: addingPlace.lat, lng: addingPlace.lng,
       name: newName.trim(), category: newCategory,
+      notes: newNotes.trim() || null,
     }, token);
     if (result?.place) setPlaces(prev => [result.place, ...prev]);
     setAddingPlace(null);
@@ -593,6 +632,18 @@ function MapInner({ token }) {
               &times;
             </button>
           </div>
+          <input
+            value={newNotes}
+            onChange={e => setNewNotes(e.target.value)}
+            placeholder="Description (optional)"
+            style={{
+              width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)',
+              borderRadius: 6, padding: '5px 10px', marginBottom: 8,
+              fontFamily: mono, fontSize: F.sm - 1,
+              color: 'var(--dl-strong)', outline: 'none',
+              letterSpacing: '0.03em',
+            }}
+          />
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
             {CATEGORIES.map(cat => (
               <button key={cat.id}

@@ -46,14 +46,18 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   }
 
   // ── Recent entries: N most recent dates with journal blocks ────────────────
+  // ?recent=5&before=YYYY-MM-DD → 5 dates with entries on or before the given date
   if (recent) {
     const limit = Math.min(Math.max(1, parseInt(recent, 10) || 5), 20);
-    // Get distinct dates with journal blocks, most recent first
-    const { data: dates, error: dErr } = await supabase
+    const before = searchParams.get('before');
+    // Get distinct dates with journal blocks, on or before the anchor date
+    let query = supabase
       .from('journal_blocks')
       .select('date')
       .eq('user_id', user.id)
       .order('date', { ascending: false });
+    if (before) query = query.lte('date', before);
+    const { data: dates, error: dErr } = await query;
     if (dErr) throw dErr;
     // Deduplicate dates and take top N
     const uniqueDates = [...new Set((dates ?? []).map(r => r.date))].slice(0, limit);

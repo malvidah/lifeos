@@ -122,6 +122,25 @@ const NoteLinkNode = Node.create({
   },
 });
 
+// PlaceTag: stored as <span data-place-tag="name">, rendered as blue pin chip.
+const PlaceTagNode = Node.create({
+  name: 'placeTag', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() { return { name: { default: '' } }; },
+  parseHTML() {
+    return [{ tag: 'span[data-place-tag]', getAttrs: el => ({ name: el.getAttribute('data-place-tag') || '' }) }];
+  },
+  renderHTML({ node }) {
+    const name = node.attrs.name || '';
+    return ['span', {
+      'data-place-tag': name,
+      style: Object.entries({ ...CHIP_TOKENS.place, cursor: 'pointer', userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
+    }, '\u{1F4CD} ' + name.toUpperCase()];
+  },
+});
+
 // DateTag: stored as @YYYY-MM-DD, rendered as urgency-colored chip.
 const DateTagNode = Node.create({
   name: 'dateTag', group: 'inline', inline: true,
@@ -552,6 +571,7 @@ export function docToText(docJson) {
       if (c.type === 'text')        return c.text ?? '';
       if (c.type === 'hardBreak')   return '\n';
       if (c.type === 'projectTag')  return `{${c.attrs?.name ?? ''}}`;
+      if (c.type === 'placeTag')    return `{l:${c.attrs?.name ?? ''}}`;
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
       if (c.type === 'recurrenceTag') return `{r:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       return '';
@@ -625,8 +645,8 @@ function makeSlashSuggestionMatch() {
       const prev = i > 0 ? nodeText[i - 1] : ' ';
       if (!/\s/.test(prev) && i !== 0) continue; // require space-before or line start
       const after = nodeText.slice(i + 1);
-      // Match bare / (show command menu), /p..., or /n...
-      if (after.length > 0 && !/^[pn@dr]/i.test(after)) continue;
+      // Match bare / (show command menu), /p, /n, /l, /@, /d, /r...
+      if (after.length > 0 && !/^[pnl@dr]/i.test(after)) continue;
       return {
         range: { from: nodeStart + i, to: $position.pos },
         query: after,           // "" (bare /), "p", "p big think", "n", "n my note"
@@ -702,20 +722,25 @@ function SuggestionDropdown({ state, onSelect }) {
         const isExistingProject  = item.startsWith('__project__:');
         const isNewProject       = item.startsWith('__create_project__:');
         const isProject          = isExistingProject || isNewProject;
-        const isCreate           = item.startsWith('__create__:') || isNewProject;
+        const isExistingPlace    = item.startsWith('__place__:');
+        const isNewPlace         = item.startsWith('__create_place__:');
+        const isPlace            = isExistingPlace || isNewPlace;
+        const isCreate           = item.startsWith('__create__:') || isNewProject || isNewPlace;
         const rawLabel           = isCmd ? item.slice(8)
-                                 : isDate ? item.slice(20) // after __date__:YYYY-MM-DD:
+                                 : isDate ? item.slice(20)
                                  : isRecurrence ? item.split(':').slice(2).join(':')
                                  : isNewProject ? item.slice(19)
                                  : isExistingProject ? item.slice(12)
+                                 : isNewPlace ? item.slice(16)
+                                 : isExistingPlace ? item.slice(10)
                                  : item.startsWith('__create__:') ? item.slice(11)
-                                 : item.slice(9); // __note__: = 9
+                                 : item.slice(9);
         const dateStr            = isDate ? item.slice(9, 19) : null;
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'r' ? '/r  Repeat' : '/m  Media')
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === 'l' ? '/l  Location' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'r' ? '/r  Repeat' : '/m  Media')
                                  : isRecurrence ? `↻ ${rawLabel}`
                                  : isDate ? rawLabel
-                                 : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : rawLabel;
-        const col                = isProject ? projectColor(rawLabel) : isDate ? dateChipColor(dateStr) : isRecurrence ? 'var(--dl-green)' : null;
+                                 : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : isPlace ? `📍 ${rawLabel.toUpperCase()}` : rawLabel;
+        const col                = isProject ? projectColor(rawLabel) : isPlace ? 'var(--dl-blue)' : isDate ? dateChipColor(dateStr) : isRecurrence ? 'var(--dl-green)' : null;
         const selected  = i === state.selectedIndex;
         return (
           <button
@@ -727,7 +752,7 @@ function SuggestionDropdown({ state, onSelect }) {
               padding: '7px 14px', cursor: 'pointer',
               background: selected ? 'var(--dl-border)' : 'transparent',
               fontFamily: mono, fontSize: 12,
-              letterSpacing: isProject && !isCreate ? '0.08em' : '0.04em',
+              letterSpacing: (isProject || isPlace) && !isCreate ? '0.08em' : '0.04em',
               color: isCmd ? 'var(--dl-highlight)' : isCreate ? 'var(--dl-highlight)' : col || 'var(--dl-strong)',
               transition: 'background 0.08s',
             }}
@@ -766,8 +791,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onImageDelete,     // (src) — called when an imageChip is deleted (orphan cleanup)
   noteNames,
   projectNames,
+  placeNames,
   onProjectClick,
   onNoteClick,
+  onPlaceClick,
   onCreateNote,      // (name, {silent}) — called when /n creates a new note
   onCreateProject,   // (name) — called when /p creates a new project
   placeholder,
@@ -799,8 +826,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onImageDeleteRef    = useRef(onImageDelete);
   const noteNamesRef        = useRef(noteNames || []);
   const projectNamesRef     = useRef(projectNames || []);
+  const placeNamesRef       = useRef(placeNames || []);
   const onProjectClickRef   = useRef(onProjectClick);
   const onNoteClickRef      = useRef(onNoteClick);
+  const onPlaceClickRef     = useRef(onPlaceClick);
   const onCreateNoteRef     = useRef(onCreateNote);
   const onCreateProjectRef  = useRef(onCreateProject);
   const onUpdateRef         = useRef(onUpdate);
@@ -819,8 +848,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onImageDeleteRef.current     = onImageDelete; },    [onImageDelete]);
   useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
+  useEffect(() => { placeNamesRef.current        = placeNames || []; },  [placeNames]);
   useEffect(() => { onProjectClickRef.current    = onProjectClick; },   [onProjectClick]);
   useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
+  useEffect(() => { onPlaceClickRef.current      = onPlaceClick; },     [onPlaceClick]);
   useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
   useEffect(() => { onCreateProjectRef.current   = onCreateProject; },  [onCreateProject]);
   useEffect(() => { onUpdateRef.current          = onUpdate; },         [onUpdate]);
@@ -942,6 +973,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       URLExtension,
       ProjectTagNode,
       NoteLinkNode,
+      PlaceTagNode,
       RecurrenceTagNode,
       DateTagNode,
       ...(singleLine ? [] : [ImageBlock, ImageChip]),
@@ -964,7 +996,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         findMatch: makeSlashSuggestionMatch(),
         itemsFn: (query) => {
           // Bare / — show command menu
-          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:d', '__cmd__:r', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
+          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:l', '__cmd__:d', '__cmd__:r', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
@@ -995,6 +1027,18 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             }
             // Never return empty — keeps the suggestion plugin alive while typing
             return matches.length ? matches : ['__create_project__:' + (qTrim || 'project')];
+          }
+          if (cmd === 'l') {
+            const q      = search.toLowerCase().replace(/\s/g, '');
+            const qTrim  = search.trim();
+            const names  = placeNamesRef.current || [];
+            const matches = names
+              .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
+              .map(n => `__place__:${n}`);
+            if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+              matches.push(`__create_place__:${qTrim}`);
+            }
+            return matches.length ? matches : ['__create_place__:' + (qTrim || 'place')];
           }
           if (cmd === 'n') {
             const names   = noteNamesRef.current || [];
@@ -1052,8 +1096,17 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             return;
           }
 
-          if (name.startsWith('__project__:') || name.startsWith('__create_project__:')) {
-            // Existing project: "__project__:name"  |  New project: "__create_project__:name"
+          if (name.startsWith('__place__:') || name.startsWith('__create_place__:')) {
+            const isNew = name.startsWith('__create_place__:');
+            const placeName = isNew ? name.slice(16) : name.slice(10);
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'placeTag', attrs: { name: placeName } },
+              { type: 'text', text: ' ' },
+            ]).run();
+            if (isNew) {
+              window.dispatchEvent(new CustomEvent('daylab:create-place', { detail: { name: placeName } }));
+            }
+          } else if (name.startsWith('__project__:') || name.startsWith('__create_project__:')) {
             const isNew = name.startsWith('__create_project__:');
             const pName = (isNew ? name.slice(19) : name.slice(12)).toLowerCase();
             editor.chain().focus().deleteRange(range).insertContent([
@@ -1132,6 +1185,18 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             editorRef.current.view?.dom?.blur();
           }
           onProjectClickRef.current(projectEl.getAttribute('data-project-tag'));
+          return true;
+        }
+        const placeEl = t.closest?.('[data-place-tag]');
+        if (placeEl && onPlaceClickRef.current) {
+          if (onBlurRef.current && editorRef.current) {
+            const serialised = singleLineRef.current
+              ? docToText(editorRef.current.getJSON())
+              : editorRef.current.getHTML();
+            onBlurRef.current(serialised);
+            editorRef.current.view?.dom?.blur();
+          }
+          onPlaceClickRef.current(placeEl.getAttribute('data-place-tag'));
           return true;
         }
         const noteEl = t.closest?.('[data-note-link]');

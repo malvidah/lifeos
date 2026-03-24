@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef, useCallback, useContext, useMemo, Fragment } from "react";
 import { mono, serif, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
-import { NoteContext, ProjectNamesContext, NavigationContext } from "@/lib/contexts";
+import { NoteContext, ProjectNamesContext, PlaceNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
 import { api } from "@/lib/api";
@@ -334,10 +334,11 @@ function RecentEntries({ token, userId, date }) {
 
   useEffect(() => {
     if (!token) return;
-    api.get('/api/journal?recent=5', token).then(d => {
+    const beforeParam = todayStr ? `&before=${todayStr}` : '';
+    api.get(`/api/journal?recent=5${beforeParam}`, token).then(d => {
       setEntries(d?.entries ?? []);
     }).catch(() => setEntries([]));
-  }, [token]);
+  }, [token, todayStr]);
 
   if (entries === null) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
@@ -498,7 +499,8 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+  const ctxPlaces = useContext(PlaceNamesContext);
+  const { navigateToProject, navigateToNote, navigateToPlace } = useContext(NavigationContext);
 
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -654,8 +656,10 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
           onImageDelete={src => deleteImageFile(src, token)}
           noteNames={ctxNotes}
           projectNames={ctxProjects}
+          placeNames={ctxPlaces}
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
+          onPlaceClick={name => navigateToPlace(name)}
           placeholder="What's on your mind?"
           textColor={"var(--dl-strong)"}
           mutedColor={"var(--dl-middle)"}
@@ -880,14 +884,16 @@ export function Meals({date,token,userId}) { return <RowList date={date} type="m
 export function AddJournalLine({ project, onAdd, placeholder }) {
   const col = project && project !== '__everything__' ? projectColor(project) : "var(--dl-accent)";
   const ctxProjects = useContext(ProjectNamesContext);
+  const ctxPlaces   = useContext(PlaceNamesContext);
   const ctxNotes    = useContext(NoteContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+  const { navigateToProject, navigateToNote, navigateToPlace } = useContext(NavigationContext);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
       <DayLabEditor
         singleLine
         placeholder={placeholder || 'Add an entry…'}
         projectNames={ctxProjects}
+        placeNames={ctxPlaces}
         noteNames={ctxNotes.notes}
         textColor={"var(--dl-strong)"}
         mutedColor={"var(--dl-middle)"}
@@ -895,6 +901,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         style={{ flex: 1, padding: 0 }}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
+        onPlaceClick={name => navigateToPlace(name)}
         onEnterCommit={text => { if (text.trim()) onAdd(text.trim()); }}
         onBlur={text => { if (text.trim()) onAdd(text.trim()); }}
       />

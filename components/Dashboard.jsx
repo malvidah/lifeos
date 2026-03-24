@@ -11,7 +11,7 @@ import { saveLocationIfNeeded } from "@/lib/weather";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
 import { useProjects } from "@/lib/useProjects";
-import { NoteContext, NavigationContext, ProjectNamesContext } from "@/lib/contexts";
+import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext } from "@/lib/contexts";
 import { Card, ErrorBoundary } from "./ui/primitives.jsx";
 import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
@@ -255,6 +255,24 @@ function DashboardInner() {
 
   // Project names — used by all editors for #tag autocomplete
   const [allProjectNames, setAllProjectNames] = useState([]);
+
+  // Place names — used by editors for /l autocomplete
+  const [allPlaceNames, setAllPlaceNames] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    api.get('/api/places', token).then(d => {
+      setAllPlaceNames((d?.places ?? []).map(p => p.name));
+    });
+  }, [token]);
+  // Listen for new place chip creation (/l + new name)
+  useEffect(() => {
+    const handler = (e) => {
+      const name = e.detail?.name;
+      if (name) setAllPlaceNames(prev => prev.includes(name) ? prev : [...prev, name]);
+    };
+    window.addEventListener('daylab:create-place', handler);
+    return () => window.removeEventListener('daylab:create-place', handler);
+  }, []);
 
   // Listen for new project chip creation (/p + new name in any editor)
   useEffect(() => {
@@ -534,6 +552,7 @@ function DashboardInner() {
 
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
+    <PlaceNamesContext.Provider value={allPlaceNames}>
     <NoteContext.Provider value={{ notes: allNoteNames, onCreateNote: (name) => {
       window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name } }));
     }}}>
@@ -542,6 +561,9 @@ function DashboardInner() {
       navigateToProject: (name) => selectProject(name),
       navigateToNote: (name) => {
         window.dispatchEvent(new CustomEvent('daylab:go-to-note', { detail: { name } }));
+      },
+      navigateToPlace: (name) => {
+        window.dispatchEvent(new CustomEvent('daylab:go-to-place', { detail: { name } }));
       },
     }}>
     <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
@@ -731,6 +753,7 @@ function DashboardInner() {
     </div>
     </NavigationContext.Provider>
     </NoteContext.Provider>
+    </PlaceNamesContext.Provider>
     </ProjectNamesContext.Provider>
   );
 }
