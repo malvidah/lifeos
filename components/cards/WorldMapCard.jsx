@@ -441,7 +441,7 @@ function MapInner({ token }) {
       const updateOpacity = () => {
         if (!discoveredLayerRef.current) return;
         const z = map.getZoom();
-        const opacity = z <= 3 ? (isDark ? 0.18 : 0.20) : z <= 5 ? (isDark ? 0.13 : 0.15) : (isDark ? 0.08 : 0.10);
+        const opacity = z <= 3 ? (isDark ? 0.14 : 0.16) : z <= 5 ? (isDark ? 0.09 : 0.11) : z <= 8 ? (isDark ? 0.05 : 0.06) : (isDark ? 0.03 : 0.04);
         discoveredLayerRef.current.setStyle({ fillOpacity: opacity });
       };
       updateOpacity();
@@ -509,7 +509,7 @@ function MapInner({ token }) {
       const updateOpacity = () => {
         if (!statesLayerRef.current) return;
         const z = map.getZoom();
-        const opacity = z <= 3 ? (isDark ? 0.18 : 0.20) : z <= 5 ? (isDark ? 0.13 : 0.15) : (isDark ? 0.08 : 0.10);
+        const opacity = z <= 3 ? (isDark ? 0.14 : 0.16) : z <= 5 ? (isDark ? 0.09 : 0.11) : z <= 8 ? (isDark ? 0.05 : 0.06) : (isDark ? 0.03 : 0.04);
         statesLayerRef.current.setStyle({ fillOpacity: opacity });
       };
       updateOpacity();
