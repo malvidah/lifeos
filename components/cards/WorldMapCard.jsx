@@ -85,10 +85,12 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
               const area = p.city || p.district || p.county || p.state || '';
               return {
                 name: name + (area ? `, ${area}` : ''),
+                rawName: name,
                 fullName: [name, p.street, p.city, p.state, p.country].filter(Boolean).join(', '),
                 lat: coords[1],
                 lng: coords[0],
                 type: p.osm_value || p.type || '',
+                country: p.country || '',
               };
             }));
             setSearching(false);
@@ -116,10 +118,12 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
               || addr.city || addr.town || '';
             return {
               name: name + (area ? `, ${area}` : ''),
+              rawName: name,
               fullName: d.display_name,
               lat: parseFloat(d.lat),
               lng: parseFloat(d.lon),
               type: d.type,
+              country: addr.country || '',
             };
           }));
         }
@@ -264,6 +268,7 @@ function MapInner({ token }) {
   const [leafletReady, setLeafletReady] = useState(false);
   const [discoveredCountries, setDiscoveredCountries] = useState([]);
   const [discoveredPlaces, setDiscoveredPlaces] = useState([]);
+  const [selectedDiscovered, setSelectedDiscovered] = useState(null);
   const discoveredLayerRef = useRef(null);
   const discoveredMarkersRef = useRef([]);
   const geoJsonCacheRef = useRef(null);
@@ -301,6 +306,7 @@ function MapInner({ token }) {
     // Single click deselects; double-click drops a pin
     map.on('click', () => {
       setSelectedPlace(null);
+      setSelectedDiscovered(null);
       setAddingPlace(null);
     });
     map.on('dblclick', (e) => {
@@ -373,15 +379,30 @@ function MapInner({ token }) {
       // Remove old layer
       if (discoveredLayerRef.current) { discoveredLayerRef.current.remove(); }
 
-      // Subtle fill only — no outline stroke
+      // Visible fill, no outline stroke — clickable to select
       discoveredLayerRef.current = L.geoJSON(filtered, {
         style: {
           color: 'transparent',
           weight: 0,
-          fillColor: isDark ? '#D08828' : '#B87018',
-          fillOpacity: isDark ? 0.07 : 0.09,
+          fillColor: isDark ? '#D08828' : '#9A7830',
+          fillOpacity: isDark ? 0.15 : 0.14,
         },
-        interactive: false,
+        onEachFeature: (feature, layer) => {
+          layer.on('click', (e) => {
+            L.DomEvent.stopPropagation(e);
+            const fname = (feature.properties?.A3 || feature.properties?.name || feature.properties?.NAME || feature.properties?.ADMIN || '');
+            // Find matching country in discovered list
+            const match = discoveredCountries.find(c => {
+              const mapped = COUNTRY_NAME_MAP.hasOwnProperty(c) ? COUNTRY_NAME_MAP[c] : c;
+              return mapped && (mapped.toLowerCase() === fname.toLowerCase() || fname.toLowerCase().includes(mapped.toLowerCase()) || mapped.toLowerCase().includes(fname.toLowerCase()));
+            });
+            if (match) {
+              setSelectedDiscovered(match);
+              setSelectedPlace(null);
+              setAddingPlace(null);
+            }
+          });
+        },
       }).addTo(map);
 
       // Send to back so pins render on top
@@ -391,60 +412,46 @@ function MapInner({ token }) {
     renderBoundaries();
   }, [discoveredCountries, leafletReady, isDark]);
 
-  // Render discovered city labels + pins
+  // Render discovered city labels — only when very zoomed in
   useEffect(() => {
     if (!mapInstance.current || !leafletReady) return;
     const L = LRef.current;
     const map = mapInstance.current;
 
-    // Clear old markers
     discoveredMarkersRef.current.forEach(m => m.remove());
     discoveredMarkersRef.current = [];
 
     if (!discoveredPlaces.length || mode !== 'places') return;
 
-    // Only show cities/regions with coords (skip country-level entries)
     const cities = discoveredPlaces.filter(p => p.lat && p.lng && p.type !== 'country');
-    const accentColor = isDark ? '#D08828' : '#B87018';
+    const labelColor = isDark ? 'var(--dl-middle)' : 'var(--dl-dim)';
 
     const updateLabels = () => {
       discoveredMarkersRef.current.forEach(m => m.remove());
       discoveredMarkersRef.current = [];
       const zoom = map.getZoom();
+      if (zoom < 8) return; // only show labels when very zoomed in
 
       cities.forEach(place => {
-        if (zoom < 4) {
-          // Zoomed out: small orange dot
-          const dot = L.circleMarker([place.lat, place.lng], {
-            radius: 3,
-            color: 'transparent',
-            fillColor: accentColor,
-            fillOpacity: 0.5,
-            interactive: false,
-          }).addTo(map);
-          discoveredMarkersRef.current.push(dot);
-        } else {
-          // Zoomed in: orange text label
-          const label = L.marker([place.lat, place.lng], {
-            interactive: false,
-            icon: L.divIcon({
-              className: '',
-              html: `<div style="
-                font-family: ${mono};
-                font-size: ${zoom >= 8 ? 11 : 9}px;
-                color: ${accentColor};
-                opacity: 0.7;
-                white-space: nowrap;
-                text-shadow: 0 0 4px ${isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)'};
-                pointer-events: none;
-                letter-spacing: 0.04em;
-              ">${place.name}</div>`,
-              iconSize: [0, 0],
-              iconAnchor: [-8, 6],
-            }),
-          }).addTo(map);
-          discoveredMarkersRef.current.push(label);
-        }
+        const label = L.marker([place.lat, place.lng], {
+          interactive: false,
+          icon: L.divIcon({
+            className: '',
+            html: `<div style="
+              font-family: ${mono};
+              font-size: ${zoom >= 10 ? 11 : 9}px;
+              color: ${labelColor};
+              opacity: 0.6;
+              white-space: nowrap;
+              text-shadow: 0 0 4px ${isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)'};
+              pointer-events: none;
+              letter-spacing: 0.04em;
+            ">${place.name}</div>`,
+            iconSize: [0, 0],
+            iconAnchor: [-8, 6],
+          }),
+        }).addTo(map);
+        discoveredMarkersRef.current.push(label);
       });
     };
 
@@ -661,15 +668,33 @@ function MapInner({ token }) {
     if (coords.length > 1) map.fitBounds(L.latLngBounds(coords).pad(0.1));
   }, [locations, mode, leafletReady, isDark]); // eslint-disable-line
 
-  // Save new place
+  // Save new place (or discovered area)
   const savePlace = useCallback(async () => {
     if (!addingPlace || !newName.trim() || !token) return;
-    const result = await api.post('/api/places', {
-      lat: addingPlace.lat, lng: addingPlace.lng,
-      name: newName.trim(), category: newType || 'pin',
-      notes: newNotes.trim() || null,
-    }, token);
-    if (result?.place) setPlaces(prev => [result.place, ...prev]);
+
+    if (addingPlace.isArea) {
+      // Save as discovered area
+      const country = addingPlace.geoCountry || newName.trim();
+      const result = await api.post('/api/discovered', {
+        name: newName.trim(),
+        country,
+        type: 'country',
+        lat: addingPlace.lat,
+        lng: addingPlace.lng,
+      }, token);
+      if (result?.place) {
+        setDiscoveredPlaces(prev => [...prev, result.place]);
+        setDiscoveredCountries(prev => prev.includes(country) ? prev : [...prev, country]);
+      }
+    } else {
+      const result = await api.post('/api/places', {
+        lat: addingPlace.lat, lng: addingPlace.lng,
+        name: newName.trim(), category: newType || 'pin',
+        notes: newNotes.trim() || null,
+      }, token);
+      if (result?.place) setPlaces(prev => [result.place, ...prev]);
+    }
+    lastGeoRef.current = null;
     setAddingPlace(null);
     setNewName('');
     setNewType('');
@@ -694,6 +719,15 @@ function MapInner({ token }) {
     setCreatingType(false);
     setNewTypeName('');
   }, [newTypeName, placeTypes, token]);
+
+  // Delete discovered area (removes all entries for that country)
+  const deleteDiscovered = useCallback(async (countryName) => {
+    if (!token || !countryName) return;
+    await api.post(`/api/discovered?deleteCountry=${encodeURIComponent(countryName)}`, {}, token);
+    setDiscoveredPlaces(prev => prev.filter(p => p.country !== countryName));
+    setDiscoveredCountries(prev => prev.filter(c => c !== countryName));
+    setSelectedDiscovered(null);
+  }, [token]);
 
   // Edit place
   const [editingPlace, setEditingPlace] = useState(null);
@@ -740,20 +774,34 @@ function MapInner({ token }) {
     setAddingPlace(null);
   }, []);
 
+  // Track last geo search result for area detection
+  const lastGeoRef = useRef(null);
+
   // Navigate to a geocoded result — just fly there, don't add a pin
+  const AREA_TYPES = new Set(['country', 'state', 'administrative', 'continent', 'island', 'archipelago', 'territory']);
   const goToGeo = useCallback((result) => {
     if (!mapInstance.current) return;
-    mapInstance.current.flyTo([result.lat, result.lng], 16, { duration: 0.8 });
+    const isArea = AREA_TYPES.has(result.type);
+    const zoom = isArea ? 5 : 16;
+    mapInstance.current.flyTo([result.lat, result.lng], zoom, { duration: 0.8 });
+    lastGeoRef.current = result;
     setAddingPlace(null);
     setSelectedPlace(null);
   }, []);
 
-  // + button: add pin at map center
+  // + button: add pin at map center (detect area from last search)
   const addAtCenter = useCallback(() => {
     if (!mapInstance.current) return;
     const c = mapInstance.current.getCenter();
-    setAddingPlace({ lat: c.lat, lng: c.lng });
-    setNewName('');
+    const geo = lastGeoRef.current;
+    const isArea = geo && AREA_TYPES.has(geo.type);
+    if (isArea) {
+      setAddingPlace({ lat: geo.lat, lng: geo.lng, isArea: true, geoName: geo.rawName || geo.name, geoCountry: geo.country || geo.rawName || geo.name });
+      setNewName(geo.rawName || geo.name);
+    } else {
+      setAddingPlace({ lat: c.lat, lng: c.lng });
+      setNewName('');
+    }
     setNewType('');
     setNewNotes('');
     setSelectedPlace(null);
@@ -930,52 +978,61 @@ function MapInner({ token }) {
             padding: '10px 14px',
             boxShadow: 'var(--dl-shadow)',
           }}>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+          {addingPlace.isArea && (
+            <div style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
+              Mark as discovered area
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: addingPlace.isArea ? 0 : 8 }}>
             <input autoFocus value={newName}
               onChange={e => setNewName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
-              placeholder="Name this place..."
+              placeholder={addingPlace.isArea ? 'Area name...' : 'Name this place...'}
               style={{ flex: 1, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em' }}
             />
             <button onClick={savePlace} style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>Save</button>
-            <button onClick={() => setAddingPlace(null)} style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>&times;</button>
+            <button onClick={() => { setAddingPlace(null); lastGeoRef.current = null; }} style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>&times;</button>
           </div>
-          <input value={newNotes} onChange={e => setNewNotes(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
-            placeholder="Description (optional)"
-            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '5px 10px', marginBottom: 8, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
-          />
-          {/* Type selector */}
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
-            {placeTypes.map(t => (
-              <button key={t.id} onClick={() => setNewType(newType === t.name ? '' : t.name)}
-                style={{
-                  background: newType === t.name ? t.color + '22' : 'var(--dl-well)',
-                  border: `1px solid ${newType === t.name ? t.color : 'var(--dl-border)'}`,
-                  borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
-                  fontSize: 11, color: newType === t.name ? t.color : 'var(--dl-strong)',
-                  fontFamily: mono, letterSpacing: '0.04em',
-                  display: 'flex', alignItems: 'center', gap: 4,
-                }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color }} />
-                {t.name}
-              </button>
-            ))}
-            {/* New type — inline input, Enter creates with auto-color */}
-            {creatingType ? (
-              <input autoFocus value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && newTypeName.trim()) createType(); if (e.key === 'Escape') setCreatingType(false); }}
-                onBlur={() => { if (newTypeName.trim()) createType(); else setCreatingType(false); }}
-                placeholder="Label name…"
-                style={{ width: 100, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.04em' }}
+          {!addingPlace.isArea && (
+            <>
+              <input value={newNotes} onChange={e => setNewNotes(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
+                placeholder="Description (optional)"
+                style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '5px 10px', marginBottom: 8, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
               />
-            ) : (
-              <button onClick={() => setCreatingType(true)}
-                style={{ background: 'none', border: '1px dashed var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--dl-middle)', fontFamily: mono, letterSpacing: '0.04em' }}>
-                + Label
-              </button>
-            )}
-          </div>
+              {/* Type selector */}
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                {placeTypes.map(t => (
+                  <button key={t.id} onClick={() => setNewType(newType === t.name ? '' : t.name)}
+                    style={{
+                      background: newType === t.name ? t.color + '22' : 'var(--dl-well)',
+                      border: `1px solid ${newType === t.name ? t.color : 'var(--dl-border)'}`,
+                      borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+                      fontSize: 11, color: newType === t.name ? t.color : 'var(--dl-strong)',
+                      fontFamily: mono, letterSpacing: '0.04em',
+                      display: 'flex', alignItems: 'center', gap: 4,
+                    }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color }} />
+                    {t.name}
+                  </button>
+                ))}
+                {/* New type — inline input, Enter creates with auto-color */}
+                {creatingType ? (
+                  <input autoFocus value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && newTypeName.trim()) createType(); if (e.key === 'Escape') setCreatingType(false); }}
+                    onBlur={() => { if (newTypeName.trim()) createType(); else setCreatingType(false); }}
+                    placeholder="Label name…"
+                    style={{ width: 100, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.04em' }}
+                  />
+                ) : (
+                  <button onClick={() => setCreatingType(true)}
+                    style={{ background: 'none', border: '1px dashed var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--dl-middle)', fontFamily: mono, letterSpacing: '0.04em' }}>
+                    + Label
+                  </button>
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -1014,6 +1071,40 @@ function MapInner({ token }) {
                 {t.name}
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Selected discovered area */}
+      {selectedDiscovered && mode === 'places' && !editingPlace && !addingPlace && (
+        <div style={{
+          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+          background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+          borderRadius: 10,
+          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          padding: '10px 14px',
+          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.1)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', letterSpacing: '0.03em' }}>
+                {selectedDiscovered}
+              </span>
+              <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                discovered
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => deleteDiscovered(selectedDiscovered)}
+                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-red)' }}>
+                Remove
+              </button>
+              <button onClick={() => setSelectedDiscovered(null)}
+                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
+                &times;
+              </button>
+            </div>
           </div>
         </div>
       )}
