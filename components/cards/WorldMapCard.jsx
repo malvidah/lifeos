@@ -792,11 +792,16 @@ function MapInner({ token }) {
   const lastGeoRef = useRef(null);
 
   // Navigate to a geocoded result — just fly there, don't add a pin
-  const AREA_TYPES = new Set(['country', 'state', 'administrative', 'continent', 'island', 'archipelago', 'territory']);
+  // Only small countries, states, cities, islands count as discoverable areas — not huge countries or continents
+  const AREA_TYPES = new Set(['state', 'administrative', 'island', 'archipelago', 'territory']);
+  const SMALL_COUNTRY_TYPES = new Set(['country']); // countries are area only if not too large
+  const BIG_COUNTRIES = new Set(['united states', 'united states of america', 'china', 'russia', 'canada', 'australia', 'brazil', 'india', 'argentina', 'europe', 'africa', 'asia']);
   const goToGeo = useCallback((result) => {
     if (!mapInstance.current) return;
-    const isArea = AREA_TYPES.has(result.type);
-    const zoom = isArea ? 5 : 16;
+    const nameLower = (result.rawName || result.name || '').toLowerCase();
+    const isSmallCountry = SMALL_COUNTRY_TYPES.has(result.type) && !BIG_COUNTRIES.has(nameLower);
+    const isArea = AREA_TYPES.has(result.type) || isSmallCountry;
+    const zoom = isArea ? 5 : (SMALL_COUNTRY_TYPES.has(result.type) ? 5 : 16);
     mapInstance.current.flyTo([result.lat, result.lng], zoom, { duration: 0.8 });
     lastGeoRef.current = result;
     setAddingPlace(null);
