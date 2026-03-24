@@ -172,7 +172,7 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
                   }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-glass-active)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                  <span style={{ fontSize: 13, flexShrink: 0 }}>{categoryEmoji(p.category)}</span>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color || 'var(--dl-accent)', flexShrink: 0 }} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                 </button>
               ))}
@@ -385,13 +385,35 @@ function MapInner({ token }) {
     });
   }, [places, placeTypes, mode, activeFilter, leafletReady, isDark, selectedPlace]); // eslint-disable-line
 
-  // Render current location
+  // Current location state — updated by locate button or cached
+  const [userLoc, setUserLoc] = useState(() => getCachedLocation());
+  const [locating, setLocating] = useState(false);
+
+  // Locate me — actively request geolocation, update marker, fly to it
+  const locateMe = useCallback(() => {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        try { localStorage.setItem('daylab:geo', JSON.stringify(loc)); } catch {}
+        setUserLoc(loc);
+        setLocating(false);
+        if (mapInstance.current) {
+          mapInstance.current.flyTo([loc.lat, loc.lng], 15, { duration: 0.8 });
+        }
+      },
+      () => setLocating(false),
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  }, []);
+
+  // Render current location marker
   useEffect(() => {
     if (!mapInstance.current || !leafletReady) return;
     const L = LRef.current;
     if (currentLocMarker.current) { currentLocMarker.current.remove(); currentLocMarker.current = null; }
-    const loc = getCachedLocation();
-    if (!loc) return;
+    if (!userLoc) return;
     const accentColor = isDark ? '#D08828' : '#B87018';
     const icon = L.divIcon({
       className: '',
@@ -402,8 +424,8 @@ function MapInner({ token }) {
       iconSize: [20, 20],
       iconAnchor: [10, 10],
     });
-    currentLocMarker.current = L.marker([loc.lat, loc.lng], { icon, interactive: false }).addTo(mapInstance.current);
-  }, [leafletReady, isDark, mode]);
+    currentLocMarker.current = L.marker([userLoc.lat, userLoc.lng], { icon, interactive: false }).addTo(mapInstance.current);
+  }, [userLoc, leafletReady, isDark, mode]);
 
   // Render location history
   useEffect(() => {
@@ -467,7 +489,7 @@ function MapInner({ token }) {
     if (result?.place) setPlaces(prev => [result.place, ...prev]);
     setAddingPlace(null);
     setNewName('');
-  }, [addingPlace, newName, newCategory, token]);
+  }, [addingPlace, newName, newType, token]);
 
   // Create new type
   const createType = useCallback(async () => {
@@ -566,6 +588,7 @@ function MapInner({ token }) {
           padding: 4px 8px !important;
         }
         .daylab-tooltip::before { border-top-color: var(--dl-border) !important; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
         @keyframes mapPulse {
           0%, 100% { transform: scale(1); opacity: 0.2; }
           50% { transform: scale(1.8); opacity: 0; }
@@ -583,6 +606,29 @@ function MapInner({ token }) {
         }
         .leaflet-control-zoom a:hover { background: var(--dl-surface) !important; }
       `}</style>
+
+      {/* Locate me button — above zoom controls, bottom right */}
+      <button onClick={locateMe} title="Find my location"
+        style={{
+          position: 'absolute', bottom: 80, right: 10, zIndex: 1000,
+          width: 30, height: 30,
+          background: 'var(--dl-bg)', border: '1px solid var(--dl-border)',
+          borderRadius: 4, cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: locating ? 'var(--dl-accent)' : 'var(--dl-strong)',
+          boxShadow: 'var(--dl-shadow-sm)',
+          transition: 'color 0.15s',
+        }}>
+        {locating ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
+            <circle cx="12" cy="12" r="10"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+          </svg>
+        )}
+      </button>
 
       {/* Top bar: mode toggle (left) + search pill (center) + add button (right) */}
       <div style={{
