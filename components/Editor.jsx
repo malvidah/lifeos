@@ -40,6 +40,8 @@ function injectEditorStyles() {
     .dl-tasklist .ProseMirror p.is-empty::before { content: none !important; }
     .dl-tasklist .ProseMirror > p:last-child { display: none; }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
+    .dl-editor .ProseMirror a[href] { color: var(--dl-accent) !important; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+    .dl-editor .ProseMirror a[href]:visited { color: var(--dl-accent) !important; }
     .dl-editor .ProseMirror-selectednode img { outline: 2px solid ${ACCENT}; border-radius: 8px; }
     .dl-editor .ProseMirror .ProseMirror-selectednode { outline: 2px solid ${ACCENT}55; outline-offset: 1px; border-radius: 999px; }
     .dl-hide-images .ProseMirror div[data-imageblock] { display: none; }
@@ -259,6 +261,7 @@ const ImageBlock = Node.create({
 });
 
 // URLExtension: decoration-only — URLs stay as plain text in storage.
+const URL_RE = /(?<!\[img:)(https?:\/\/[^\s<>"')[  \]]+)/g;
 const URLExtension = Extension.create({
   name: 'urlDecoration',
   addProseMirrorPlugins() {
@@ -267,18 +270,29 @@ const URLExtension = Extension.create({
       props: {
         decorations(state) {
           const decos = [];
-          const re = /(?<!\[img:)(https?:\/\/[^\s<>"')[  \]]+)/g;
           state.doc.descendants((node, pos) => {
             if (!node.isText) return;
-            let m; re.lastIndex = 0;
-            while ((m = re.exec(node.text)) !== null) {
+            let m; URL_RE.lastIndex = 0;
+            while ((m = URL_RE.exec(node.text)) !== null) {
               decos.push(Decoration.inline(pos + m.index, pos + m.index + m[0].length, {
-                nodeName: 'a', href: m[0], target: '_blank', rel: 'noreferrer',
+                nodeName: 'a', href: m[0], rel: 'noreferrer',
+                class: 'dl-url-link',
                 style: `color:${WARM};text-decoration:underline;text-underline-offset:2px;cursor:pointer`,
               }));
             }
           });
           return DecorationSet.create(state.doc, decos);
+        },
+        handleClick(view, pos, event) {
+          const link = event.target.closest?.('a.dl-url-link');
+          if (!link) return false;
+          event.preventDefault();
+          // Dispatch custom event so the React popover can pick it up
+          const rect = link.getBoundingClientRect();
+          window.dispatchEvent(new CustomEvent('daylab:link-click', {
+            detail: { url: link.getAttribute('href'), rect, pos, linkEl: link },
+          }));
+          return true;
         },
       },
     })];
@@ -341,6 +355,178 @@ function FormatToolbar({ editor }) {
       {btn('I', () => editor.chain().focus().toggleItalic().run(), editor.isActive('italic'))}
       {btn('U', () => editor.chain().focus().toggleUnderline().run(), editor.isActive('underline'))}
     </div>
+  );
+}
+
+// ── Link popover (Google Docs style) ──────────────────────────────────────────
+function LinkPopover({ editor }) {
+  const [state, setState] = useState(null); // { url, rect, pos, linkEl }
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+  const popRef = useRef(null);
+  const inputRef = useRef(null);
+
+  // Listen for link clicks from URLExtension
+  useEffect(() => {
+    const handler = (e) => {
+      const { url, rect, pos, linkEl } = e.detail;
+      setState({ url, rect, pos, linkEl });
+      setEditing(false);
+      setDraft(url);
+    };
+    window.addEventListener('daylab:link-click', handler);
+    return () => window.removeEventListener('daylab:link-click', handler);
+  }, []);
+
+  // Close on outside click or scroll
+  useEffect(() => {
+    if (!state) return;
+    const close = (e) => {
+      if (popRef.current?.contains(e.target)) return;
+      setState(null);
+    };
+    const closeScroll = () => setState(null);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('scroll', closeScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('scroll', closeScroll, true);
+    };
+  }, [state]);
+
+  // Focus input when entering edit mode
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  if (!state) return null;
+
+  const { url, rect, linkEl } = state;
+  // Position below the link
+  const top = rect.bottom + 6;
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - 320));
+
+  const handleOpen = () => {
+    window.open(url, '_blank', 'noreferrer');
+    setState(null);
+  };
+
+  const handleRemove = () => {
+    if (!editor || !linkEl) { setState(null); return; }
+    // Find the URL text range in the doc and just leave the text (it's already plain text in storage)
+    // Since URLs are decorations on plain text, "removing" the link means nothing in storage.
+    // But we can delete the URL text entirely if user wants.
+    const view = editor.view;
+    const linkText = linkEl.textContent;
+    // Find position of this text
+    let found = null;
+    view.state.doc.descendants((node, pos) => {
+      if (found) return false;
+      if (!node.isText) return;
+      const idx = node.text.indexOf(linkText);
+      if (idx >= 0) {
+        found = { from: pos + idx, to: pos + idx + linkText.length };
+      }
+    });
+    if (found) {
+      editor.chain().focus().deleteRange(found).run();
+    }
+    setState(null);
+  };
+
+  const handleSave = () => {
+    if (!editor || !linkEl) { setState(null); return; }
+    const oldText = linkEl.textContent;
+    const newUrl = draft.trim();
+    if (!newUrl || newUrl === oldText) { setEditing(false); return; }
+    // Find and replace the old URL text
+    const view = editor.view;
+    let found = null;
+    view.state.doc.descendants((node, pos) => {
+      if (found) return false;
+      if (!node.isText) return;
+      const idx = node.text.indexOf(oldText);
+      if (idx >= 0) {
+        found = { from: pos + idx, to: pos + idx + oldText.length };
+      }
+    });
+    if (found) {
+      editor.chain().focus()
+        .deleteRange(found)
+        .insertContentAt(found.from, newUrl)
+        .run();
+    }
+    setState(null);
+  };
+
+  const btnStyle = {
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    padding: '4px 8px', borderRadius: 4, fontSize: 12, fontFamily: mono,
+    color: 'var(--dl-strong)', letterSpacing: '0.02em',
+  };
+  const btnHover = 'var(--dl-border)';
+
+  return createPortal(
+    <div ref={popRef} style={{
+      position: 'fixed', top, left, zIndex: 9999,
+      background: 'var(--dl-surface)', border: '1px solid var(--dl-border)',
+      borderRadius: 10, boxShadow: 'var(--dl-shadow)', padding: '6px 10px',
+      display: 'flex', alignItems: 'center', gap: 6, maxWidth: 360,
+    }}>
+      {editing ? (
+        <>
+          <input
+            ref={inputRef}
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { e.preventDefault(); handleSave(); }
+              if (e.key === 'Escape') { e.preventDefault(); setEditing(false); }
+            }}
+            style={{
+              flex: 1, minWidth: 160, background: 'var(--dl-bg, #000)',
+              border: '1px solid var(--dl-border)', borderRadius: 6,
+              padding: '4px 8px', fontSize: 12, fontFamily: mono,
+              color: 'var(--dl-strong)', outline: 'none',
+            }}
+          />
+          <button
+            onMouseDown={e => { e.preventDefault(); handleSave(); }}
+            style={{ ...btnStyle, color: 'var(--dl-accent)', fontWeight: 600 }}
+          >Save</button>
+        </>
+      ) : (
+        <>
+          <span style={{
+            flex: 1, fontSize: 12, fontFamily: mono, color: 'var(--dl-accent)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            maxWidth: 180, cursor: 'default',
+          }}>{url}</span>
+          <button
+            onMouseDown={e => { e.preventDefault(); handleOpen(); }}
+            style={btnStyle}
+            onMouseEnter={e => e.target.style.background = btnHover}
+            onMouseLeave={e => e.target.style.background = 'transparent'}
+          >Open</button>
+          <button
+            onMouseDown={e => { e.preventDefault(); setEditing(true); }}
+            style={btnStyle}
+            onMouseEnter={e => e.target.style.background = btnHover}
+            onMouseLeave={e => e.target.style.background = 'transparent'}
+          >Edit</button>
+          <button
+            onMouseDown={e => { e.preventDefault(); handleRemove(); }}
+            style={{ ...btnStyle, color: 'var(--dl-red, #c44)' }}
+            onMouseEnter={e => e.target.style.background = btnHover}
+            onMouseLeave={e => e.target.style.background = 'transparent'}
+          >Remove</button>
+        </>
+      )}
+    </div>,
+    document.body
   );
 }
 
@@ -1167,6 +1353,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         ...style,
       }}>
         {noteTitle && <FormatToolbar editor={editor} />}
+        <LinkPopover editor={editor} />
         <EditorContent editor={editor} />
       </div>
       {/* Hidden file input for /m media upload */}
