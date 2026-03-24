@@ -284,19 +284,6 @@ const URLExtension = Extension.create({
           });
           return DecorationSet.create(state.doc, decos);
         },
-        handleClick(view, pos, event) {
-          const link = event.target.closest?.('.dl-url-link');
-          if (!link) return false;
-          event.preventDefault();
-          event.stopPropagation();
-          const rect = link.getBoundingClientRect();
-          const url = link.getAttribute('data-href');
-          if (!url) return false;
-          window.dispatchEvent(new CustomEvent('daylab:link-click', {
-            detail: { url, rect, pos, linkEl: link },
-          }));
-          return true;
-        },
       },
     })];
   },
@@ -1157,6 +1144,20 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             editorRef.current.view?.dom?.blur();
           }
           onNoteClickRef.current(noteEl.getAttribute('data-note-link'));
+          return true;
+        }
+        // URL link click → show popover instead of navigating
+        const linkEl = t.closest?.('.dl-url-link');
+        if (linkEl) {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = linkEl.getBoundingClientRect();
+          const url = linkEl.getAttribute('data-href');
+          if (url) {
+            window.dispatchEvent(new CustomEvent('daylab:link-click', {
+              detail: { url, rect, pos, linkEl },
+            }));
+          }
           return true;
         }
         return false;
