@@ -138,7 +138,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
         setTick(t => t + 1);
       });
     });
-  },[safe.map(r=>r.text).join("\n"),loaded,token]); // eslint-disable-line
+  },[estimateFlag,loaded,token]); // eslint-disable-line
 
   // AI kcal estimation for synced rows without native calories
   useEffect(()=>{
@@ -183,11 +183,15 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
       return { id: Date.now() + Math.random(), text, dist, pace, kcal: null };
     });
   }
-  function handleBlur(html) { setManualRows(parseEditorHtml(html)); }
+  const [estimateFlag, setEstimateFlag] = useState(0);
+  function handleBlur(html) { setManualRows(parseEditorHtml(html)); setEstimateFlag(f => f + 1); }
   const updateTimer = useRef(null);
   function handleUpdate(html) {
     clearTimeout(updateTimer.current);
     updateTimer.current = setTimeout(() => setManualRows(parseEditorHtml(html)), 400);
+  }
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') setEstimateFlag(f => f + 1);
   }
 
   const KCOL=72, DCOL=60, PCOL=100;
@@ -235,7 +239,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
           </div>
         ))}
         {/* Manual entries — single multi-line editor + stats columns */}
-        <div style={{display:"flex",gap:0}}>
+        <div style={{display:"flex",gap:0}} onKeyDown={handleKeyDown}>
           <DayLabEditor
             value={rowsToHtml(safe)}
             onBlur={handleBlur}

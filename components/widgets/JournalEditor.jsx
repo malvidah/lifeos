@@ -736,7 +736,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
           setTick(t => t + 1);
         });
       });
-  }, [safe.map(r=>r.text).join("\n"), loaded, token]); // eslint-disable-line
+  }, [estimateFlag, loaded, token]); // eslint-disable-line
 
   // Estimate for synced rows with no native calories
   useEffect(() => {
@@ -785,11 +785,16 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
       return { id: Date.now() + Math.random(), text, kcal: null, protein: null };
     });
   }
-  function handleBlur(html) { setRows(parseEditorHtml(html)); }
+  // estimateFlag increments only on Enter or blur — the estimation effects depend on it
+  const [estimateFlag, setEstimateFlag] = useState(0);
+  function handleBlur(html) { setRows(parseEditorHtml(html)); setEstimateFlag(f => f + 1); }
   const updateTimer = useRef(null);
   function handleUpdate(html) {
     clearTimeout(updateTimer.current);
     updateTimer.current = setTimeout(() => setRows(parseEditorHtml(html)), 400);
+  }
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') setEstimateFlag(f => f + 1);
   }
 
   if (!loaded) return (
@@ -832,7 +837,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
           </div>
         ))}
         {/* Manual entries — single multi-line editor + stats column */}
-        <div style={{display:"flex",gap:0}}>
+        <div style={{display:"flex",gap:0}} onKeyDown={handleKeyDown}>
           <DayLabEditor
             value={rowsToHtml(safe)}
             onBlur={handleBlur}
