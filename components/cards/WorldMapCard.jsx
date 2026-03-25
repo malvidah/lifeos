@@ -1344,7 +1344,7 @@ function MapInner({ token }) {
               const d = dragRef.current;
               if (!d.down) return;
               const dx = e.clientX - d.startX;
-              if (Math.abs(dx) > 3) d.moved = true;
+              if (Math.abs(dx) > 8) d.moved = true;
               carouselRef.current.scrollLeft = d.scrollLeft - dx;
             }}
             onPointerUp={e => {
