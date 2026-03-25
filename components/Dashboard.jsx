@@ -29,6 +29,7 @@ import LoginScreen from "./views/LoginScreen.jsx";
 // Settings panels on ice — keep files, just don't render
 // import { HomeSettingsPanel, ProjectSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
+import { OfflineBanner } from "./ui/OfflineBanner.jsx";
 
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
@@ -557,6 +558,7 @@ function DashboardInner() {
       window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name } }));
     }}}>
     <ToastContainer/>
+    <OfflineBanner/>
     <NavigationContext.Provider value={{
       navigateToProject: (name) => selectProject(name),
       navigateToNote: (name) => {
