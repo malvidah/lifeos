@@ -1006,7 +1006,7 @@ function MapInner({ token }) {
           100% { transform: scale(1); opacity: 0; }
         }
         .leaflet-tile-pane {
-          filter: saturate(0.25) ${isDark ? 'sepia(0.15) brightness(0.7)' : 'sepia(0.45) brightness(0.95) contrast(0.88)'};
+          filter: saturate(0.2) ${isDark ? 'sepia(0.15) brightness(0.7)' : 'brightness(0.82) contrast(1.15) sepia(0.5)'};
         }
         .leaflet-fade-anim .leaflet-tile { opacity: 0; transition: opacity 0.2s; }
         .leaflet-fade-anim .leaflet-tile-loaded { opacity: 1; }
