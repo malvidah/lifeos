@@ -1208,8 +1208,8 @@ function MapInner({ token }) {
                 position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden',
                 backdropFilter: 'blur(20px) saturate(1.4)', WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
                 background: 'var(--dl-glass)', borderRadius: 12, padding: 10,
-                border: `1.5px solid ${color}`,
-                boxShadow: 'var(--dl-glass-shadow)', transition: 'border-color 0.15s',
+                border: `1.5px solid ${isSelected || isEditing ? color : color + '40'}`,
+                boxShadow: 'var(--dl-glass-shadow)', transition: 'border-color 0.15s, opacity 0.15s',
                 opacity: isSelected || isEditing ? 1 : isHovered ? 0.95 : 0.85,
               };
               return (
