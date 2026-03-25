@@ -912,7 +912,15 @@ function MapInner({ token }) {
     await api.post(`/api/discovered?deleteCountry=${encodeURIComponent(countryName)}`, {}, token);
     setDiscoveredPlaces(prev => prev.filter(p => p.country !== countryName));
     setDiscoveredCountries(prev => prev.filter(c => c !== countryName));
-    setSelectedDiscovered(null);
+  }, [token]);
+
+  const reDiscoverCountry = useCallback(async (countryName) => {
+    if (!token || !countryName) return;
+    const result = await api.post('/api/discovered', { name: countryName, country: countryName, type: 'country' }, token);
+    if (result?.place) {
+      setDiscoveredPlaces(prev => [...prev, result.place]);
+      setDiscoveredCountries(prev => prev.includes(countryName) ? prev : [...prev, countryName]);
+    }
   }, [token]);
 
   // Edit place
@@ -1553,7 +1561,6 @@ function MapInner({ token }) {
                     const country = existing.country;
                     const stillHasCountry = discoveredPlaces.some(p => p.id !== existing.id && p.country === country);
                     if (!stillHasCountry) setDiscoveredCountries(prev => prev.filter(c => c !== country));
-                    setPreviewGeo(null);
                   }}
                     style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: 'var(--dl-red)', letterSpacing: '0.04em' }}>
                     Remove
@@ -1585,7 +1592,9 @@ function MapInner({ token }) {
       )}
 
       {/* Selected discovered area */}
-      {selectedDiscovered && mode === 'places' && !editingPlace && !addingPlace && (
+      {selectedDiscovered && mode === 'places' && !editingPlace && !addingPlace && (() => {
+        const isDisc = discoveredCountries.includes(selectedDiscovered);
+        return (
         <div style={{
           position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
           background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
@@ -1600,15 +1609,24 @@ function MapInner({ token }) {
               <span style={{ fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', letterSpacing: '0.03em' }}>
                 {selectedDiscovered}
               </span>
-              <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                discovered
-              </span>
+              {isDisc && (
+                <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  discovered
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => deleteDiscovered(selectedDiscovered)}
-                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-red)' }}>
-                Remove
-              </button>
+              {isDisc ? (
+                <button onClick={() => deleteDiscovered(selectedDiscovered)}
+                  style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: 'var(--dl-red)', letterSpacing: '0.04em' }}>
+                  Remove
+                </button>
+              ) : (
+                <button onClick={() => reDiscoverCountry(selectedDiscovered)}
+                  style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                  Mark discovered
+                </button>
+              )}
               <button onClick={() => setSelectedDiscovered(null)}
                 style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
                 &times;
@@ -1616,7 +1634,8 @@ function MapInner({ token }) {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* No separate tooltip or selected popup — carousel handles all place interactions */}
     </div>
