@@ -1006,19 +1006,26 @@ function MapInner({ token }) {
           100% { transform: scale(1); opacity: 0; }
         }
         .leaflet-tile-pane {
-          filter: saturate(0.3) sepia(0.15) ${isDark ? 'brightness(0.7)' : 'brightness(1.02)'};
+          filter: saturate(0.25) ${isDark ? 'sepia(0.15) brightness(0.7)' : 'sepia(0.45) brightness(0.95) contrast(0.88)'};
         }
         .leaflet-fade-anim .leaflet-tile { opacity: 0; transition: opacity 0.2s; }
         .leaflet-fade-anim .leaflet-tile-loaded { opacity: 1; }
         /* Match tile background to container so no white flash */
         .leaflet-container { background: ${bgColor} !important; }
-        .leaflet-control-zoom a {
-          background: var(--dl-bg) !important;
-          color: var(--dl-strong) !important;
-          border-color: var(--dl-border) !important;
-          font-family: ${mono} !important;
+        .leaflet-control-zoom {
+          border: none !important;
+          box-shadow: none !important;
         }
-        .leaflet-control-zoom a:hover { background: var(--dl-surface) !important; }
+        .leaflet-control-zoom a {
+          background: var(--dl-glass) !important;
+          backdrop-filter: blur(20px) saturate(1.4) !important;
+          -webkit-backdrop-filter: blur(20px) saturate(1.4) !important;
+          color: var(--dl-highlight) !important;
+          border: 1px solid var(--dl-glass-border) !important;
+          font-family: ${mono} !important;
+          box-shadow: var(--dl-glass-shadow) !important;
+        }
+        .leaflet-control-zoom a:hover { background: var(--dl-glass-active) !important; color: var(--dl-strong) !important; }
       `}</style>
 
       {/* Locate me button — above zoom controls, bottom right */}
@@ -1026,11 +1033,14 @@ function MapInner({ token }) {
         style={{
           position: 'absolute', bottom: 80, right: 10, zIndex: 1000,
           width: 30, height: 30,
-          background: 'var(--dl-bg)', border: '1px solid var(--dl-border)',
+          background: 'var(--dl-glass)',
+          backdropFilter: 'blur(20px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+          border: '1px solid var(--dl-glass-border)',
           borderRadius: 4, cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: locating ? 'var(--dl-accent)' : 'var(--dl-strong)',
-          boxShadow: 'var(--dl-shadow-sm)',
+          color: locating ? 'var(--dl-accent)' : 'var(--dl-highlight)',
+          boxShadow: 'var(--dl-glass-shadow)',
           transition: 'color 0.15s',
         }}>
         {locating ? (
