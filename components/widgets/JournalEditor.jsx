@@ -699,6 +699,7 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
   const [tick, setTick] = useState(0);
+  const [estimateFlag, setEstimateFlag] = useState(0);
 
   const safe = Array.isArray(rows) ? rows : [];
   const estMap = (estimatesLoaded && savedEstimates && typeof savedEstimates === "object") ? savedEstimates : {};
@@ -786,7 +787,6 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
     });
   }
   // estimateFlag increments only on Enter or blur — the estimation effects depend on it
-  const [estimateFlag, setEstimateFlag] = useState(0);
   function handleBlur(html) { setRows(parseEditorHtml(html)); setEstimateFlag(f => f + 1); }
   const updateTimer = useRef(null);
   function handleUpdate(html) {

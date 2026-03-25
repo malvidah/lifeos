@@ -74,6 +74,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
   const [tick, setTick] = useState(0);
+  const [estimateFlag, setEstimateFlag] = useState(0);
   const safe = Array.isArray(manualRows) ? manualRows : [];
   const estMap = (estLoaded && savedEstimates && typeof savedEstimates==="object") ? savedEstimates : {};
 
@@ -183,7 +184,6 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
       return { id: Date.now() + Math.random(), text, dist, pace, kcal: null };
     });
   }
-  const [estimateFlag, setEstimateFlag] = useState(0);
   function handleBlur(html) { setManualRows(parseEditorHtml(html)); setEstimateFlag(f => f + 1); }
   const updateTimer = useRef(null);
   function handleUpdate(html) {
