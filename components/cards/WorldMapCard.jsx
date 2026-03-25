@@ -1135,15 +1135,22 @@ function MapInner({ token }) {
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [places, mapBounds, mode, activeFilter]);
 
-  // Scroll selected card to center of carousel — manual calc for reliability
+  // Scroll selected card to center of carousel — fires after visiblePlaces settles
+  const scrollTimerRef = useRef(null);
   useEffect(() => {
     if (!selectedPlace || !carouselRef.current) return;
-    const container = carouselRef.current;
-    const el = container.querySelector(`[data-place-id="${selectedPlace.id}"]`);
-    if (!el) return;
-    const scrollTarget = el.offsetLeft - (container.clientWidth / 2) + (el.offsetWidth / 2);
-    container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
-  }, [selectedPlace]);
+    // Debounce: wait for visiblePlaces to stabilize (map pan triggers multiple updates)
+    clearTimeout(scrollTimerRef.current);
+    scrollTimerRef.current = setTimeout(() => {
+      const container = carouselRef.current;
+      if (!container) return;
+      const el = container.querySelector(`[data-place-id="${selectedPlace.id}"]`);
+      if (!el) return;
+      const scrollTarget = el.offsetLeft - (container.clientWidth / 2) + (el.offsetWidth / 2);
+      container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
+    }, 450); // wait for panTo animation (400ms) to finish
+    return () => clearTimeout(scrollTimerRef.current);
+  }, [selectedPlace, visiblePlaces]); // eslint-disable-line
 
   // Background color to match tiles while loading
   const bgColor = 'var(--dl-bg)';
