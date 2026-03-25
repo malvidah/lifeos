@@ -1011,7 +1011,7 @@ function MapInner({ token }) {
   const bgColor = 'var(--dl-bg)';
 
   return (
-    <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 400, background: bgColor }}>
+    <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 520, background: bgColor }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
       <style>{`
@@ -1194,7 +1194,7 @@ function MapInner({ token }) {
           pointerEvents: 'none',
         }}>
           <div ref={carouselRef} style={{
-            display: 'flex', gap: 6, padding: '0 10px',
+            display: 'flex', gap: 8, padding: '0 10px',
             overflowX: 'auto', overflowY: 'hidden',
             scrollbarWidth: 'none', msOverflowStyle: 'none',
             pointerEvents: 'auto',
@@ -1217,62 +1217,79 @@ function MapInner({ token }) {
                   onMouseEnter={() => setHoveredPlace(place)}
                   onMouseLeave={() => setHoveredPlace(null)}
                   style={{
-                    flexShrink: 0, width: 150,
+                    flexShrink: 0, width: 120, height: 120,
                     backdropFilter: 'blur(20px) saturate(1.4)',
                     WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
                     background: isSelected ? 'var(--dl-glass-active)' : 'var(--dl-glass)',
                     border: `1px solid ${isSelected ? color : isHovered ? 'var(--dl-middle)' : 'var(--dl-glass-border)'}`,
-                    borderRadius: 10, padding: '7px 10px',
+                    borderRadius: 12, padding: 10,
                     boxShadow: 'var(--dl-glass-shadow)',
                     cursor: 'pointer', transition: 'border-color 0.15s',
+                    display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
                   }}
                 >
-                  {/* Name row with inline action icons */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
-                    <span style={{
+                  {/* Top: color dot + category label */}
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                      <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                      {place.category && place.category !== 'pin' && (
+                        <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                          {place.category}
+                        </span>
+                      )}
+                    </div>
+                    {/* Name — wraps up to 2 lines */}
+                    <div style={{
                       fontFamily: mono, fontSize: F.sm, fontWeight: 600,
-                      color: 'var(--dl-strong)', letterSpacing: '0.02em',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                      color: 'var(--dl-strong)', letterSpacing: '0.02em', lineHeight: 1.3,
+                      overflow: 'hidden', display: '-webkit-box',
+                      WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                     }}>
                       {place.name}
-                    </span>
-                    {isSelected && (
-                      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-                        <button
-                          onClick={e => { e.stopPropagation(); startEdit(place); }}
-                          title="Edit"
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-                            color: 'var(--dl-highlight)', display: 'flex', transition: 'color 0.1s',
-                          }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </button>
-                        <button
-                          onClick={e => { e.stopPropagation(); deletePlace(place.id); }}
-                          title="Delete"
-                          style={{
-                            background: 'none', border: 'none', cursor: 'pointer', padding: 2,
-                            color: 'var(--dl-red)', display: 'flex', transition: 'color 0.1s',
-                          }}
-                        >
-                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
-                        </button>
+                    </div>
+                    {/* Notes — single line below name */}
+                    {place.notes && (
+                      <div style={{
+                        fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', marginTop: 3,
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      }}>
+                        {place.notes}
                       </div>
                     )}
                   </div>
-                  {/* Notes / category subtitle — always visible, single line */}
-                  {(place.notes || (place.category && place.category !== 'pin')) && (
-                    <div style={{
-                      fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', marginTop: 3,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {place.notes || place.category}
+                  {/* Bottom: edit/delete actions when selected */}
+                  {isSelected && (
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); startEdit(place); }}
+                        title="Edit"
+                        style={{
+                          background: 'none', border: '1px solid var(--dl-glass-border)',
+                          borderRadius: 6, padding: '3px 6px', cursor: 'pointer',
+                          color: 'var(--dl-highlight)', display: 'flex', alignItems: 'center', gap: 3,
+                          fontFamily: mono, fontSize: 9, letterSpacing: '0.04em',
+                        }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                        Edit
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); deletePlace(place.id); }}
+                        title="Delete"
+                        style={{
+                          background: 'none', border: '1px solid var(--dl-glass-border)',
+                          borderRadius: 6, padding: '3px 6px', cursor: 'pointer',
+                          color: 'var(--dl-red)', display: 'flex', alignItems: 'center', gap: 3,
+                          fontFamily: mono, fontSize: 9, letterSpacing: '0.04em',
+                        }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        Delete
+                      </button>
                     </div>
                   )}
                 </div>
