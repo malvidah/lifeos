@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { mono, F, blurweb } from "@/lib/tokens";
 import { toKey, todayKey, MONTHS_FULL } from "@/lib/dates";
 import UserMenu from "./UserMenu.jsx";
+import { OfflineIndicator } from "../ui/OfflineBanner.jsx";
 
 function fmtNavDate(dateKey) {
   if (!dateKey) return '';
@@ -116,14 +117,17 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
         </div>
       </div>
 
-      {/* User menu — overlaid far right */}
+      {/* Offline indicator (left) + User menu (right) — overlaid */}
       <div style={{
         maxWidth: 1200, margin: "0 auto",
         height: 0,
-        display: "flex", alignItems: "flex-start", justifyContent: "flex-end",
+        display: "flex", alignItems: "flex-start", justifyContent: "space-between",
         transform: "translateY(-36px)",
         WebkitAppRegion: "drag",
       }}>
+        <div style={{WebkitAppRegion:"no-drag", position:"relative", zIndex:101, padding: '8px 0'}}>
+          <OfflineIndicator/>
+        </div>
         <div style={{WebkitAppRegion:"no-drag", position:"relative", zIndex:101}}>
           <UserMenu session={session} token={token} userId={userId} theme={theme} themePreference={themePreference} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
         </div>
