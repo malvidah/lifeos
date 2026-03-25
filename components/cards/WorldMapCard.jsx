@@ -984,26 +984,25 @@ function MapInner({ token }) {
     setSelectedPlace(null);
   }, []);
 
-  // ─── Carousel: visible places in current bounds & active filter ──────────
+  // ─── Carousel: visible places in current map bounds ──────────────────────
   const carouselRef = useRef(null);
 
   const visiblePlaces = useMemo(() => {
-    if (!mapBounds || mode !== 'places' || !activeFilter) return [];
+    if (!mapBounds || mode !== 'places') return [];
     return places
       .filter(p => {
-        if ((p.category || '').toLowerCase() !== activeFilter.toLowerCase()) return false;
+        if (activeFilter && (p.category || '').toLowerCase() !== activeFilter.toLowerCase()) return false;
         return mapBounds.contains({ lat: p.lat, lng: p.lng });
       })
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [places, mapBounds, mode, activeFilter]);
 
-  // Scroll carousel to hovered/selected place
-  const activeCarouselPlace = selectedPlace || hoveredPlace;
+  // Scroll carousel only when a place is clicked/selected (not on hover)
   useEffect(() => {
-    if (!activeCarouselPlace || !carouselRef.current) return;
-    const el = carouselRef.current.querySelector(`[data-place-id="${activeCarouselPlace.id}"]`);
+    if (!selectedPlace || !carouselRef.current) return;
+    const el = carouselRef.current.querySelector(`[data-place-id="${selectedPlace.id}"]`);
     if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
-  }, [activeCarouselPlace]);
+  }, [selectedPlace]);
 
   // Background color to match tiles while loading
   const bgColor = 'var(--dl-bg)';
@@ -1192,14 +1191,14 @@ function MapInner({ token }) {
           pointerEvents: 'none',
         }}>
           <div ref={carouselRef} style={{
-            display: 'flex', gap: 8, padding: '0 10px',
+            display: 'flex', gap: 6, padding: '0 10px',
             overflowX: 'auto', overflowY: 'hidden',
             scrollbarWidth: 'none', msOverflowStyle: 'none',
             pointerEvents: 'auto',
-            scrollBehavior: 'smooth',
           }}>
             {visiblePlaces.map(place => {
-              const isActive = activeCarouselPlace?.id === place.id;
+              const isSelected = selectedPlace?.id === place.id;
+              const isHovered = hoveredPlace?.id === place.id;
               const typeObj = placeTypes.find(pt => pt.name.toLowerCase() === (place.category || '').toLowerCase());
               const color = place.color || typeObj?.color || 'var(--dl-accent)';
               return (
@@ -1207,27 +1206,27 @@ function MapInner({ token }) {
                   key={place.id}
                   data-place-id={place.id}
                   onClick={() => {
-                    setSelectedPlace(isActive ? null : place);
-                    if (!isActive && mapInstance.current) {
+                    setSelectedPlace(isSelected ? null : place);
+                    if (!isSelected && mapInstance.current) {
                       mapInstance.current.panTo([place.lat, place.lng], { animate: true, duration: 0.4 });
                     }
                   }}
-                  onMouseEnter={() => { if (!selectedPlace) setHoveredPlace(place); }}
+                  onMouseEnter={() => setHoveredPlace(place)}
                   onMouseLeave={() => setHoveredPlace(null)}
                   style={{
-                    flexShrink: 0, minWidth: 140, maxWidth: 180,
+                    flexShrink: 0, width: 150,
                     backdropFilter: 'blur(20px) saturate(1.4)',
                     WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-                    background: isActive ? 'var(--dl-glass-active)' : 'var(--dl-glass)',
-                    border: `1px solid ${isActive ? color : 'var(--dl-glass-border)'}`,
-                    borderRadius: 10, padding: '8px 10px',
-                    boxShadow: isActive ? 'var(--dl-shadow)' : 'var(--dl-glass-shadow)',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                    display: 'flex', flexDirection: 'column', gap: 4,
+                    background: isSelected ? 'var(--dl-glass-active)' : 'var(--dl-glass)',
+                    border: `1px solid ${isSelected ? color : isHovered ? 'var(--dl-middle)' : 'var(--dl-glass-border)'}`,
+                    borderRadius: 10, padding: '7px 10px',
+                    boxShadow: 'var(--dl-glass-shadow)',
+                    cursor: 'pointer', transition: 'border-color 0.15s',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                  {/* Name row with inline action icons */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
                     <span style={{
                       fontFamily: mono, fontSize: F.sm, fontWeight: 600,
                       color: 'var(--dl-strong)', letterSpacing: '0.02em',
@@ -1235,47 +1234,42 @@ function MapInner({ token }) {
                     }}>
                       {place.name}
                     </span>
+                    {isSelected && (
+                      <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
+                        <button
+                          onClick={e => { e.stopPropagation(); startEdit(place); }}
+                          title="Edit"
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                            color: 'var(--dl-highlight)', display: 'flex', transition: 'color 0.1s',
+                          }}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </button>
+                        <button
+                          onClick={e => { e.stopPropagation(); deletePlace(place.id); }}
+                          title="Delete"
+                          style={{
+                            background: 'none', border: 'none', cursor: 'pointer', padding: 2,
+                            color: 'var(--dl-red)', display: 'flex', transition: 'color 0.1s',
+                          }}
+                        >
+                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  {place.notes && !isActive && (
+                  {/* Notes / category subtitle — always visible, single line */}
+                  {(place.notes || (place.category && place.category !== 'pin')) && (
                     <div style={{
-                      fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)',
+                      fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', marginTop: 3,
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                     }}>
-                      {place.notes}
-                    </div>
-                  )}
-                  {isActive && (
-                    <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                      <button
-                        onClick={e => { e.stopPropagation(); startEdit(place); }}
-                        style={{
-                          background: 'none', border: '1px solid var(--dl-glass-border)',
-                          borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          fontFamily: mono, fontSize: 10, color: 'var(--dl-highlight)',
-                          letterSpacing: '0.04em',
-                        }}
-                      >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                        </svg>
-                        Edit
-                      </button>
-                      <button
-                        onClick={e => { e.stopPropagation(); deletePlace(place.id); }}
-                        style={{
-                          background: 'none', border: '1px solid var(--dl-glass-border)',
-                          borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', gap: 4,
-                          fontFamily: mono, fontSize: 10, color: 'var(--dl-red)',
-                          letterSpacing: '0.04em',
-                        }}
-                      >
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                        Delete
-                      </button>
+                      {place.notes || place.category}
                     </div>
                   )}
                 </div>
@@ -1509,91 +1503,7 @@ function MapInner({ token }) {
         </div>
       )}
 
-      {/* Hovered place tooltip — hidden when carousel is active */}
-      {hoveredPlace && mode === 'places' && !selectedPlace && !editingPlace && !activeFilter && (
-        <div style={{
-          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
-          background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
-          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-          borderRadius: 10,
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-          padding: '10px 14px',
-          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.1)',
-          pointerEvents: 'none',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: (() => { const t = placeTypes.find(pt => pt.name.toLowerCase() === (hoveredPlace.category || '').toLowerCase()); return t?.color || 'var(--dl-accent)'; })(), flexShrink: 0 }} />
-            <span style={{ fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', letterSpacing: '0.03em' }}>
-              {hoveredPlace.name}
-            </span>
-            {hoveredPlace.category && hoveredPlace.category !== 'pin' && (
-              <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                {hoveredPlace.category}
-              </span>
-            )}
-          </div>
-          {hoveredPlace.notes && (
-            <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', marginTop: 4 }}>
-              {hoveredPlace.notes}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Selected place detail — hidden when carousel is active */}
-      {selectedPlace && mode === 'places' && !editingPlace && !activeFilter && (
-        <div style={{
-          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
-          background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
-          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-          borderRadius: 10,
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
-          padding: '10px 14px',
-          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.1)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: (() => { const t = placeTypes.find(pt => pt.name.toLowerCase() === (selectedPlace.category || '').toLowerCase()); return t?.color || 'var(--dl-accent)'; })(), flexShrink: 0 }} />
-              <span style={{ fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', letterSpacing: '0.03em' }}>
-                {selectedPlace.name}
-              </span>
-              {selectedPlace.category && selectedPlace.category !== 'pin' && (
-                <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                  {selectedPlace.category}
-                </span>
-              )}
-            </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => startEdit(selectedPlace)}
-                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-highlight)' }}>
-                Edit
-              </button>
-              <button onClick={() => deletePlace(selectedPlace.id)}
-                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-red)' }}>
-                Delete
-              </button>
-              <button onClick={() => setSelectedPlace(null)}
-                style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
-                &times;
-              </button>
-            </div>
-          </div>
-          {selectedPlace.notes && (
-            <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', marginTop: 4 }}>
-              {selectedPlace.notes}
-            </div>
-          )}
-          {selectedPlace.category && selectedPlace.category !== 'pin' && (
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedPlace.name)}`}
-              target="_blank" rel="noopener noreferrer"
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-accent)', marginTop: 6, textDecoration: 'none', opacity: 0.8 }}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-              Google Maps
-            </a>
-          )}
-        </div>
-      )}
+      {/* No separate tooltip or selected popup — carousel handles all place interactions */}
     </div>
   );
 }
