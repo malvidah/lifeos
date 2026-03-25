@@ -1125,22 +1125,44 @@ function MapInner({ token }) {
   const carouselRef = useRef(null);
   const dragRef = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
 
-  // Static geographic sort — cluster by longitude so nearby places are adjacent.
+  // Static geographic sort — grid-based clustering so same-city cards stay together.
+  // Round lat/lng to ~11km grid cells, sort by cell, then by name within each cell.
   // This never changes on pan/zoom, so cards don't re-render.
   const visiblePlaces = useMemo(() => {
     if (mode !== 'places') return [];
+    const GRID = 0.1; // ~11km at equator
     return places
       .filter(p => {
         if (activeFilter && (p.category || '').toLowerCase() !== activeFilter.toLowerCase()) return false;
         return true;
       })
       .sort((a, b) => {
-        // Primary: longitude (west to east). Secondary: latitude (south to north).
-        const dLng = (a.lng || 0) - (b.lng || 0);
-        if (Math.abs(dLng) > 0.01) return dLng;
-        return (a.lat || 0) - (b.lat || 0);
+        const aLng = Math.round((a.lng || 0) / GRID);
+        const bLng = Math.round((b.lng || 0) / GRID);
+        if (aLng !== bLng) return aLng - bLng;
+        const aLat = Math.round((a.lat || 0) / GRID);
+        const bLat = Math.round((b.lat || 0) / GRID);
+        if (aLat !== bLat) return aLat - bLat;
+        return (a.name || '').localeCompare(b.name || '');
       });
   }, [places, mode, activeFilter]);
+
+  // Scroll carousel to nearest card — used on pan settle, filter change, and initial load
+  const scrollToNearest = useCallback((smooth = true) => {
+    const map = mapInstance.current;
+    if (!map || !carouselRef.current || !visiblePlaces.length) return;
+    const center = map.getCenter();
+    let nearest = visiblePlaces[0], bestDist = Infinity;
+    for (const p of visiblePlaces) {
+      const d = (p.lat - center.lat) ** 2 + (p.lng - center.lng) ** 2;
+      if (d < bestDist) { bestDist = d; nearest = p; }
+    }
+    const container = carouselRef.current;
+    const el = container.querySelector(`[data-place-id="${nearest.id}"]`);
+    if (!el) return;
+    const scrollTarget = el.offsetLeft - (container.clientWidth / 2) + (el.offsetWidth / 2);
+    container.scrollTo({ left: scrollTarget, behavior: smooth ? 'smooth' : 'instant' });
+  }, [visiblePlaces]);
 
   // Scroll selected card to center of carousel
   useEffect(() => {
@@ -1152,25 +1174,20 @@ function MapInner({ token }) {
     container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
   }, [selectedPlace]);
 
+  // Auto-scroll to nearest on filter change and initial load
+  useEffect(() => {
+    if (selectedPlace) return;
+    // Small delay so DOM has rendered the cards
+    const t = setTimeout(() => scrollToNearest(false), 100);
+    return () => clearTimeout(t);
+  }, [visiblePlaces]); // eslint-disable-line
+
   // Auto-scroll carousel to nearest card when map stops moving
   const idleScrollRef = useRef(null);
   useEffect(() => {
     if (!mapBounds || !carouselRef.current || !visiblePlaces.length || selectedPlace) return;
     clearTimeout(idleScrollRef.current);
-    idleScrollRef.current = setTimeout(() => {
-      const center = mapBounds.getCenter();
-      let nearest = visiblePlaces[0], bestDist = Infinity;
-      for (const p of visiblePlaces) {
-        const d = (p.lat - center.lat) ** 2 + (p.lng - center.lng) ** 2;
-        if (d < bestDist) { bestDist = d; nearest = p; }
-      }
-      const container = carouselRef.current;
-      if (!container) return;
-      const el = container.querySelector(`[data-place-id="${nearest.id}"]`);
-      if (!el) return;
-      const scrollTarget = el.offsetLeft - (container.clientWidth / 2) + (el.offsetWidth / 2);
-      container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
-    }, 600); // wait for map interaction to settle
+    idleScrollRef.current = setTimeout(() => scrollToNearest(true), 600);
     return () => clearTimeout(idleScrollRef.current);
   }, [mapBounds]); // eslint-disable-line
 
