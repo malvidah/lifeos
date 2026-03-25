@@ -1127,13 +1127,19 @@ function MapInner({ token }) {
 
   const visiblePlaces = useMemo(() => {
     if (mode !== 'places') return [];
+    const center = mapBounds ? mapBounds.getCenter() : null;
     return places
       .filter(p => {
         if (activeFilter && (p.category || '').toLowerCase() !== activeFilter.toLowerCase()) return false;
         return true;
       })
-      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  }, [places, mode, activeFilter]);
+      .sort((a, b) => {
+        if (!center) return (a.name || '').localeCompare(b.name || '');
+        const da = (a.lat - center.lat) ** 2 + (a.lng - center.lng) ** 2;
+        const db = (b.lat - center.lat) ** 2 + (b.lng - center.lng) ** 2;
+        return da - db;
+      });
+  }, [places, mode, activeFilter, mapBounds]);
 
   // Scroll selected card to center of carousel
   useEffect(() => {
