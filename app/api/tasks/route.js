@@ -167,6 +167,16 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   const parsed = parseTaskBlocks(html || '');
   const today  = TODAY();
 
+  // Guard: if the HTML is empty/blank, don't wipe existing tasks.
+  // This prevents stale localStorage cache or offline glitches from deleting real data.
+  if (!html || !html.trim() || html.trim() === '<ul data-type="taskList"></ul>') {
+    // Check if there are existing tasks — if so, refuse the empty write
+    const { data: check } = await supabase.from('tasks').select('id').eq('user_id', user.id).eq('date', date).is('deleted_at', null).limit(1);
+    if (check?.length) {
+      return Response.json({ ok: true, tasks: 0, skipped: 'empty write blocked' });
+    }
+  }
+
   // Fetch existing rows for this date so we can preserve due_dates
   const { data: existing } = await supabase
     .from('tasks')
