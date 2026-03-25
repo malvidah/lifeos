@@ -852,6 +852,7 @@ function MapInner({ token }) {
     setEditName(place.name);
     setEditType(place.category || '');
     setEditNotes(place.notes || '');
+    setSelectedPlace(null);
   }, []);
 
   const saveEdit = useCallback(async () => {
@@ -1187,7 +1188,7 @@ function MapInner({ token }) {
       )}
 
       {/* ─── Place carousel ─── */}
-      {visiblePlaces.length > 0 && !addingPlace && !previewGeo && !selectedDiscovered && (
+      {visiblePlaces.length > 0 && !addingPlace && !editingPlace && !previewGeo && !selectedDiscovered && (
         <div style={{
           position: 'absolute', bottom: 10, left: 0, right: 0, zIndex: 999,
           pointerEvents: 'none',
@@ -1201,121 +1202,70 @@ function MapInner({ token }) {
             {visiblePlaces.map(place => {
               const isSelected = selectedPlace?.id === place.id;
               const isHovered = hoveredPlace?.id === place.id;
-              const isEditing = editingPlace?.id === place.id;
               const typeObj = placeTypes.find(pt => pt.name.toLowerCase() === (place.category || '').toLowerCase());
               const color = place.color || typeObj?.color || 'var(--dl-accent)';
-              const cardStyle = {
-                position: 'absolute', inset: 0, backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden',
-                backdropFilter: 'blur(20px) saturate(1.4)', WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-                background: 'var(--dl-glass)', borderRadius: 12, padding: 10,
-                border: `1.5px solid ${isSelected || isEditing ? color : color + '40'}`,
-                boxShadow: 'var(--dl-glass-shadow)', transition: 'border-color 0.15s, opacity 0.15s',
-                opacity: isSelected || isEditing ? 1 : isHovered ? 0.95 : 0.85,
-              };
               return (
-                <div key={place.id} data-place-id={place.id} style={{
-                  flexShrink: 0, width: 120, height: 120,
-                  perspective: 600, cursor: 'pointer',
-                }}>
+                <div
+                  key={place.id}
+                  data-place-id={place.id}
+                  onClick={() => {
+                    setSelectedPlace(isSelected ? null : place);
+                    if (!isSelected && mapInstance.current) {
+                      mapInstance.current.panTo([place.lat, place.lng], { animate: true, duration: 0.4 });
+                    }
+                  }}
+                  onMouseEnter={() => setHoveredPlace(place)}
+                  onMouseLeave={() => setHoveredPlace(null)}
+                  style={{
+                    flexShrink: 0, width: 120, height: 120,
+                    backdropFilter: 'blur(20px) saturate(1.4)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                    background: 'var(--dl-glass)', borderRadius: 12, padding: 10,
+                    border: `1.5px solid ${isSelected ? color : color + '40'}`,
+                    boxShadow: 'var(--dl-glass-shadow)',
+                    cursor: 'pointer', transition: 'border-color 0.15s, opacity 0.15s',
+                    opacity: isSelected ? 1 : isHovered ? 0.95 : 0.85,
+                    display: 'flex', flexDirection: 'column',
+                  }}
+                >
+                  {/* Name — primary */}
                   <div style={{
-                    width: '100%', height: '100%', position: 'relative',
-                    transformStyle: 'preserve-3d', transition: 'transform 0.4s ease',
-                    transform: isEditing ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                    fontFamily: mono, fontSize: F.sm, fontWeight: 600,
+                    color: 'var(--dl-strong)', letterSpacing: '0.02em', lineHeight: 1.3,
+                    overflow: 'hidden', display: '-webkit-box',
+                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                   }}>
-                    {/* ── Front face ── */}
-                    <div
-                      style={{ ...cardStyle, display: 'flex', flexDirection: 'column' }}
-                      onClick={() => {
-                        if (isEditing) return;
-                        setSelectedPlace(isSelected ? null : place);
-                        if (!isSelected && mapInstance.current) {
-                          mapInstance.current.panTo([place.lat, place.lng], { animate: true, duration: 0.4 });
-                        }
-                      }}
-                      onMouseEnter={() => setHoveredPlace(place)}
-                      onMouseLeave={() => setHoveredPlace(null)}
-                    >
-                      {/* Name — primary, top */}
-                      <div style={{
-                        fontFamily: mono, fontSize: F.sm, fontWeight: 600,
-                        color: 'var(--dl-strong)', letterSpacing: '0.02em', lineHeight: 1.3,
-                        overflow: 'hidden', display: '-webkit-box',
-                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-                      }}>
-                        {place.name}
-                      </div>
-                      {/* Description */}
-                      {place.notes && (
-                        <div style={{
-                          fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', marginTop: 4,
-                          overflow: 'hidden', display: '-webkit-box',
-                          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.3,
-                          flex: 1,
-                        }}>
-                          {place.notes}
-                        </div>
-                      )}
-                      {!place.notes && <div style={{ flex: 1 }} />}
-                      {/* Edit/Delete icons — bottom right, only when selected */}
-                      {isSelected && (
-                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                          <button onClick={e => { e.stopPropagation(); startEdit(place); }} title="Edit"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-highlight)', display: 'flex' }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                            </svg>
-                          </button>
-                          <button onClick={e => { e.stopPropagation(); deletePlace(place.id); }} title="Delete"
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-red)', display: 'flex' }}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                    {/* ── Back face (edit form) ── */}
-                    <div style={{ ...cardStyle, transform: 'rotateY(180deg)', display: 'flex', flexDirection: 'column', gap: 4 }}
-                      onClick={e => e.stopPropagation()}>
-                      <input autoFocus={isEditing} value={isEditing ? editName : ''} onChange={e => setEditName(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { saveEdit(); setEditingPlace(null); } if (e.key === 'Escape') setEditingPlace(null); }}
-                        placeholder="Name"
-                        style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 5, padding: '4px 6px', fontFamily: mono, fontSize: 10, color: 'var(--dl-strong)', outline: 'none', boxSizing: 'border-box' }}
-                      />
-                      <input value={isEditing ? editNotes : ''} onChange={e => setEditNotes(e.target.value)}
-                        onKeyDown={e => { if (e.key === 'Enter') { saveEdit(); setEditingPlace(null); } if (e.key === 'Escape') setEditingPlace(null); }}
-                        placeholder="Notes"
-                        style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 5, padding: '4px 6px', fontFamily: mono, fontSize: 10, color: 'var(--dl-strong)', outline: 'none', boxSizing: 'border-box' }}
-                      />
-                      {/* Type selector — color dots */}
-                      <div style={{ display: 'flex', gap: 3, flexWrap: 'wrap' }}>
-                        {placeTypes.map(t => {
-                          const active = isEditing && editType === t.name;
-                          return (
-                            <button key={t.id} onClick={() => setEditType(active ? '' : t.name)} title={t.name}
-                              style={{
-                                width: 16, height: 16, borderRadius: '50%', cursor: 'pointer', padding: 0,
-                                background: active ? t.color : 'var(--dl-well)',
-                                border: `2px solid ${active ? t.color : 'var(--dl-border)'}`,
-                                transition: 'all 0.1s',
-                              }} />
-                          );
-                        })}
-                      </div>
-                      <div style={{ flex: 1 }} />
-                      {/* Save / Cancel */}
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={() => { saveEdit(); setEditingPlace(null); }}
-                          style={{ flex: 1, background: 'var(--dl-accent)', border: 'none', borderRadius: 5, padding: '4px 0', cursor: 'pointer', fontFamily: mono, fontSize: 9, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
-                          Save
-                        </button>
-                        <button onClick={() => setEditingPlace(null)}
-                          style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 5, padding: '4px 6px', cursor: 'pointer', fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)' }}>
-                          &times;
-                        </button>
-                      </div>
-                    </div>
+                    {place.name}
                   </div>
+                  {/* Description */}
+                  {place.notes && (
+                    <div style={{
+                      fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', marginTop: 4,
+                      overflow: 'hidden', display: '-webkit-box',
+                      WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.3,
+                      flex: 1,
+                    }}>
+                      {place.notes}
+                    </div>
+                  )}
+                  {!place.notes && <div style={{ flex: 1 }} />}
+                  {/* Edit/Delete icons — bottom right, selected only */}
+                  {isSelected && (
+                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                      <button onClick={e => { e.stopPropagation(); startEdit(place); }} title="Edit"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-highlight)', display: 'flex' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                      <button onClick={e => { e.stopPropagation(); deletePlace(place.id); }} title="Delete"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-red)', display: 'flex' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1392,7 +1342,66 @@ function MapInner({ token }) {
         </div>
       )}
 
-      {/* Edit popup removed — editing happens on flipped carousel card */}
+      {/* Edit place panel — glassmorphic bottom bar */}
+      {editingPlace && (
+        <div
+          onKeyDown={e => { if (e.key === 'Enter') { saveEdit(); setEditingPlace(null); } if (e.key === 'Escape') setEditingPlace(null); }}
+          style={{
+            position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+            backdropFilter: 'blur(20px) saturate(1.4)',
+            WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+            background: 'var(--dl-glass)',
+            border: '1px solid var(--dl-glass-border)',
+            borderRadius: 14,
+            padding: '12px 16px',
+            boxShadow: 'var(--dl-shadow)',
+          }}>
+          {/* Header row: label + save/cancel */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Edit place
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={() => { saveEdit(); setEditingPlace(null); }}
+                style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                Save
+              </button>
+              <button onClick={() => setEditingPlace(null)}
+                style={{ background: 'none', border: '1px solid var(--dl-glass-border)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
+                &times;
+              </button>
+            </div>
+          </div>
+          {/* Name input */}
+          <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+            placeholder="Place name"
+            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 8, fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
+          />
+          {/* Description input */}
+          <input value={editNotes} onChange={e => setEditNotes(e.target.value)}
+            placeholder="Description (optional)"
+            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
+          />
+          {/* Type selector — full labeled pills */}
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {placeTypes.map(t => (
+              <button key={t.id} onClick={() => setEditType(editType === t.name ? '' : t.name)}
+                style={{
+                  background: editType === t.name ? t.color + '22' : 'var(--dl-well)',
+                  border: `1.5px solid ${editType === t.name ? t.color : 'var(--dl-border)'}`,
+                  borderRadius: 100, padding: '4px 12px', cursor: 'pointer',
+                  fontFamily: mono, fontSize: 11, letterSpacing: '0.04em',
+                  color: editType === t.name ? t.color : 'var(--dl-highlight)',
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  transition: 'all 0.12s',
+                }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                {t.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search result preview card */}
       {previewGeo && mode === 'places' && !addingPlace && !editingPlace && !selectedPlace && (
