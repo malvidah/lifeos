@@ -595,7 +595,14 @@ function MapInner({ token }) {
   // Fetch places + types
   useEffect(() => {
     if (!token) return;
-    api.get('/api/places', token).then(d => setPlaces(d?.places ?? []));
+    api.get('/api/places', token).then(d => {
+      const all = d?.places ?? [];
+      const seen = new Set();
+      setPlaces(all.filter(p => {
+        const key = `${p.name}|${p.lat}|${p.lng}`;
+        return seen.has(key) ? false : (seen.add(key), true);
+      }));
+    });
     api.get('/api/place-types', token).then(d => setPlaceTypes(d?.types ?? []));
     api.get('/api/discovered', token).then(d => {
       setDiscoveredCountries(d?.countries ?? []);
