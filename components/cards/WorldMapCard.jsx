@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { mono, F } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { getCachedLocation, DEFAULT_LOCATION } from "@/lib/weather";
@@ -287,6 +287,7 @@ function MapInner({ token }) {
   const [discoveredPlaces, setDiscoveredPlaces] = useState([]);
   const [selectedDiscovered, setSelectedDiscovered] = useState(null);
   const [previewGeo, setPreviewGeo] = useState(null); // search result preview before adding
+  const [mapBounds, setMapBounds] = useState(null); // track visible bounds for carousel
   const discoveredLayerRef = useRef(null);
   const statesLayerRef = useRef(null);
   const geoJsonCacheRef = useRef(null);
@@ -343,6 +344,11 @@ function MapInner({ token }) {
     map.doubleClickZoom.disable();
 
     mapInstance.current = map;
+    // Track visible bounds for carousel
+    const updateBounds = () => setMapBounds(map.getBounds());
+    map.on('moveend', updateBounds);
+    map.on('zoomend', updateBounds);
+    updateBounds();
     return () => { map.remove(); mapInstance.current = null; };
   }, [leafletReady]); // eslint-disable-line
 
@@ -978,6 +984,27 @@ function MapInner({ token }) {
     setSelectedPlace(null);
   }, []);
 
+  // ─── Carousel: visible places in current bounds & active filter ──────────
+  const carouselRef = useRef(null);
+
+  const visiblePlaces = useMemo(() => {
+    if (!mapBounds || mode !== 'places' || !activeFilter) return [];
+    return places
+      .filter(p => {
+        if ((p.category || '').toLowerCase() !== activeFilter.toLowerCase()) return false;
+        return mapBounds.contains({ lat: p.lat, lng: p.lng });
+      })
+      .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [places, mapBounds, mode, activeFilter]);
+
+  // Scroll carousel to hovered/selected place
+  const activeCarouselPlace = selectedPlace || hoveredPlace;
+  useEffect(() => {
+    if (!activeCarouselPlace || !carouselRef.current) return;
+    const el = carouselRef.current.querySelector(`[data-place-id="${activeCarouselPlace.id}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+  }, [activeCarouselPlace]);
+
   // Background color to match tiles while loading
   const bgColor = 'var(--dl-bg)';
 
@@ -1006,7 +1033,10 @@ function MapInner({ token }) {
           100% { transform: scale(1); opacity: 0; }
         }
         .leaflet-tile-pane {
-          filter: saturate(0.2) ${isDark ? 'sepia(0.15) brightness(0.7)' : 'brightness(0.82) contrast(1.15) sepia(0.5)'};
+          filter: ${isDark
+            ? 'saturate(0.2) sepia(0.15) brightness(0.7)'
+            : 'grayscale(1) sepia(0.55) saturate(0.6) brightness(0.92) contrast(1.05)'
+          };
         }
         .leaflet-fade-anim .leaflet-tile { opacity: 0; transition: opacity 0.2s; }
         .leaflet-fade-anim .leaflet-tile-loaded { opacity: 1; }
