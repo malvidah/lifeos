@@ -340,26 +340,13 @@ function RecentEntries({ token, userId, date }) {
     }).catch(() => setEntries([]));
   }, [token, todayStr]);
 
-  if (entries === null) return (
-    <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
-      <Shimmer width="80%" height={14}/>
-      <Shimmer width="60%" height={14}/>
-      <Shimmer width="70%" height={14}/>
-    </div>
-  );
-
-  if (entries.length === 0) return (
-    <div style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-middle)',padding:'12px 0',letterSpacing:'0.04em'}}>
-      No journal entries yet.
-    </div>
-  );
-
-  const selectedHasEntry = entries.some(e => e.date === todayStr);
   const formatLabel = (dateStr) => {
     const [y, m, d] = dateStr.split('-').map(Number);
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return `${months[m - 1]} ${d}, ${y}`;
   };
+
+  const pastEntries = (entries || []).filter(e => e.date !== todayStr);
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:16,overflowY:'auto'}}>
@@ -375,8 +362,16 @@ function RecentEntries({ token, userId, date }) {
         <JournalEditor date={todayStr} userId={userId} token={token} />
       </div>
 
+      {/* Loading shimmer for past entries */}
+      {entries === null && (
+        <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
+          <Shimmer width="80%" height={14}/>
+          <Shimmer width="60%" height={14}/>
+        </div>
+      )}
+
       {/* Past entries — read-only */}
-      {entries.filter(e => e.date !== todayStr).map(entry => {
+      {pastEntries.map(entry => {
         const html = entry.blocks
           .sort((a, b) => a.position - b.position)
           .map(b => b.content)
