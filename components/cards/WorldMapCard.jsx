@@ -1123,6 +1123,7 @@ function MapInner({ token }) {
 
   // ─── Carousel: visible places in current map bounds ──────────────────────
   const carouselRef = useRef(null);
+  const dragRef = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
 
   const visiblePlaces = useMemo(() => {
     if (!mapBounds || mode !== 'places') return [];
@@ -1330,11 +1331,33 @@ function MapInner({ token }) {
       {/* Place carousel */}
       {visiblePlaces.length > 0 && !addingPlace && !editingPlace && !previewGeo && !selectedDiscovered && (
         <div style={{ pointerEvents: 'none' }}>
-          <div ref={carouselRef} style={{
+          <div ref={carouselRef}
+            onPointerDown={e => {
+              const d = dragRef.current;
+              d.down = true; d.moved = false;
+              d.startX = e.clientX;
+              d.scrollLeft = carouselRef.current.scrollLeft;
+              carouselRef.current.setPointerCapture(e.pointerId);
+              carouselRef.current.style.cursor = 'grabbing';
+            }}
+            onPointerMove={e => {
+              const d = dragRef.current;
+              if (!d.down) return;
+              const dx = e.clientX - d.startX;
+              if (Math.abs(dx) > 3) d.moved = true;
+              carouselRef.current.scrollLeft = d.scrollLeft - dx;
+            }}
+            onPointerUp={e => {
+              dragRef.current.down = false;
+              carouselRef.current.releasePointerCapture(e.pointerId);
+              carouselRef.current.style.cursor = 'grab';
+            }}
+            style={{
             display: 'flex', gap: 8, padding: '0 10px',
             overflowX: 'auto', overflowY: 'hidden',
             scrollbarWidth: 'none', msOverflowStyle: 'none',
             pointerEvents: 'auto', userSelect: 'none', WebkitUserSelect: 'none',
+            cursor: 'grab',
           }}>
             {visiblePlaces.map(place => {
               const isSelected = selectedPlace?.id === place.id;
@@ -1346,6 +1369,7 @@ function MapInner({ token }) {
                   key={place.id}
                   data-place-id={place.id}
                   onClick={() => {
+                    if (dragRef.current.moved) return; // ignore click after drag
                     setSelectedPlace(isSelected ? null : place);
                     if (!isSelected && mapInstance.current) {
                       mapInstance.current.panTo([place.lat, place.lng], { animate: true, duration: 0.4 });
