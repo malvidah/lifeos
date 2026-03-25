@@ -31,6 +31,7 @@ const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM<
 // ─── Boundary data for discovered regions ────────────────────────────────────
 const COUNTRIES_TOPOJSON_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 const US_STATES_TOPOJSON_URL = 'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json';
+const ADMIN1_TOPOJSON_URL = '/admin1-provinces.topojson';
 // Map user-friendly names → GeoJSON feature names
 const COUNTRY_NAME_MAP = {
   'United States': 'United States of America',
@@ -292,6 +293,7 @@ function MapInner({ token }) {
   const statesLayerRef = useRef(null);
   const geoJsonCacheRef = useRef(null);
   const statesGeoJsonCacheRef = useRef(null);
+  const admin1CacheRef = useRef(null);
   const LRef = useRef(null);
 
   // Load Leaflet
@@ -462,7 +464,7 @@ function MapInner({ token }) {
     };
   }, [discoveredCountries, leafletReady, isDark]);
 
-  // Render discovered state/province boundaries (US states + global admin-1 regions)
+  // Render discovered state/province boundaries (global admin-1 + US states high-res)
   useEffect(() => {
     if (!mapInstance.current || !leafletReady || !discoveredPlaces.length) {
       if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; }
@@ -477,11 +479,27 @@ function MapInner({ token }) {
       const allStates = discoveredPlaces.filter(p => stateType.has(p.type));
       if (allStates.length === 0) { if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; } return; }
 
-      // US states — use dedicated high-res US atlas
+      const stateNames = new Set(allStates.map(p => p.name.toLowerCase()));
+
+      // Load global admin-1 TopoJSON (1.6MB, cached)
+      let allFeatures = [];
+      if (!admin1CacheRef.current) {
+        try {
+          const res = await fetch(ADMIN1_TOPOJSON_URL);
+          const topo = await res.json();
+          admin1CacheRef.current = topoFeature(topo, topo.objects.admin1);
+        } catch { /* admin-1 data unavailable */ }
+      }
+      if (admin1CacheRef.current) {
+        allFeatures = admin1CacheRef.current.features.filter(f => {
+          const name = (f.properties?.name || '').toLowerCase();
+          return stateNames.has(name);
+        });
+      }
+
+      // Also check US high-res atlas for US states (sharper boundaries)
       const usStates = allStates.filter(p => p.country === 'United States' || p.country === 'USA');
       const usNames = new Set(usStates.map(p => p.name.toLowerCase()));
-
-      let usFeatures = [];
       if (usNames.size > 0) {
         if (!statesGeoJsonCacheRef.current) {
           try {
@@ -491,16 +509,19 @@ function MapInner({ token }) {
           } catch { /* US states unavailable */ }
         }
         if (statesGeoJsonCacheRef.current) {
-          usFeatures = statesGeoJsonCacheRef.current.features.filter(f =>
+          // Replace admin-1 US features with high-res versions
+          allFeatures = allFeatures.filter(f => {
+            const name = (f.properties?.name || '').toLowerCase();
+            return !usNames.has(name); // remove low-res admin-1 US duplicates
+          });
+          const usFeatures = statesGeoJsonCacheRef.current.features.filter(f =>
             usNames.has((f.properties?.name || '').toLowerCase())
           );
+          allFeatures.push(...usFeatures);
         }
       }
 
-      // Non-US states/provinces — use the countries TopoJSON and render circles instead
-      // (no global admin-1 TopoJSON small enough for client-side use)
-
-      const filtered = { type: 'FeatureCollection', features: usFeatures };
+      const filtered = { type: 'FeatureCollection', features: allFeatures };
 
       if (statesLayerRef.current) statesLayerRef.current.remove();
 
