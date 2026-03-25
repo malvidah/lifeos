@@ -1185,6 +1185,106 @@ function MapInner({ token }) {
         </div>
       )}
 
+      {/* ─── Place carousel ─── */}
+      {visiblePlaces.length > 0 && !addingPlace && !editingPlace && !previewGeo && !selectedDiscovered && (
+        <div style={{
+          position: 'absolute', bottom: 10, left: 0, right: 0, zIndex: 999,
+          pointerEvents: 'none',
+        }}>
+          <div ref={carouselRef} style={{
+            display: 'flex', gap: 8, padding: '0 10px',
+            overflowX: 'auto', overflowY: 'hidden',
+            scrollbarWidth: 'none', msOverflowStyle: 'none',
+            pointerEvents: 'auto',
+            scrollBehavior: 'smooth',
+          }}>
+            {visiblePlaces.map(place => {
+              const isActive = activeCarouselPlace?.id === place.id;
+              const typeObj = placeTypes.find(pt => pt.name.toLowerCase() === (place.category || '').toLowerCase());
+              const color = place.color || typeObj?.color || 'var(--dl-accent)';
+              return (
+                <div
+                  key={place.id}
+                  data-place-id={place.id}
+                  onClick={() => {
+                    setSelectedPlace(isActive ? null : place);
+                    if (!isActive && mapInstance.current) {
+                      mapInstance.current.panTo([place.lat, place.lng], { animate: true, duration: 0.4 });
+                    }
+                  }}
+                  onMouseEnter={() => { if (!selectedPlace) setHoveredPlace(place); }}
+                  onMouseLeave={() => setHoveredPlace(null)}
+                  style={{
+                    flexShrink: 0, minWidth: 140, maxWidth: 180,
+                    backdropFilter: 'blur(20px) saturate(1.4)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                    background: isActive ? 'var(--dl-glass-active)' : 'var(--dl-glass)',
+                    border: `1px solid ${isActive ? color : 'var(--dl-glass-border)'}`,
+                    borderRadius: 10, padding: '8px 10px',
+                    boxShadow: isActive ? 'var(--dl-shadow)' : 'var(--dl-glass-shadow)',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    display: 'flex', flexDirection: 'column', gap: 4,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                    <span style={{
+                      fontFamily: mono, fontSize: F.sm, fontWeight: 600,
+                      color: 'var(--dl-strong)', letterSpacing: '0.02em',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+                    }}>
+                      {place.name}
+                    </span>
+                  </div>
+                  {place.notes && !isActive && (
+                    <div style={{
+                      fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {place.notes}
+                    </div>
+                  )}
+                  {isActive && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                      <button
+                        onClick={e => { e.stopPropagation(); startEdit(place); }}
+                        style={{
+                          background: 'none', border: '1px solid var(--dl-glass-border)',
+                          borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          fontFamily: mono, fontSize: 10, color: 'var(--dl-highlight)',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                        Edit
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); deletePlace(place.id); }}
+                        style={{
+                          background: 'none', border: '1px solid var(--dl-glass-border)',
+                          borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', gap: 4,
+                          fontFamily: mono, fontSize: 10, color: 'var(--dl-red)',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Add-place popup */}
       {addingPlace && mode === 'places' && !editingPlace && (
         <div
@@ -1409,8 +1509,8 @@ function MapInner({ token }) {
         </div>
       )}
 
-      {/* Hovered place tooltip */}
-      {hoveredPlace && mode === 'places' && !selectedPlace && !editingPlace && (
+      {/* Hovered place tooltip — hidden when carousel is active */}
+      {hoveredPlace && mode === 'places' && !selectedPlace && !editingPlace && !activeFilter && (
         <div style={{
           position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
           background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
@@ -1440,8 +1540,8 @@ function MapInner({ token }) {
         </div>
       )}
 
-      {/* Selected place detail */}
-      {selectedPlace && mode === 'places' && !editingPlace && (
+      {/* Selected place detail — hidden when carousel is active */}
+      {selectedPlace && mode === 'places' && !editingPlace && !activeFilter && (
         <div style={{
           position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
           background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
