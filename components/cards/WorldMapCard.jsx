@@ -811,7 +811,10 @@ function MapInner({ token }) {
         name: newName.trim(), category: newType || 'pin',
         notes: newNotes.trim() || null,
       }, token);
-      if (result?.place) setPlaces(prev => [result.place, ...prev]);
+      if (result?.place) setPlaces(prev => {
+        const without = prev.filter(p => p.id !== result.place.id);
+        return [result.place, ...without];
+      });
     }
     lastGeoRef.current = null;
     setAddingPlace(null);
@@ -864,15 +867,19 @@ function MapInner({ token }) {
 
   const saveEdit = useCallback(async () => {
     if (!editingPlace || !editName.trim() || !token) return;
+    const oldId = editingPlace.id;
     // Delete old and recreate (simple approach since we don't have PATCH)
-    await api.post(`/api/places?delete=${editingPlace.id}`, {}, token);
+    await api.post(`/api/places?delete=${oldId}`, {}, token);
     const result = await api.post('/api/places', {
       lat: editingPlace.lat, lng: editingPlace.lng,
       name: editName.trim(), category: editType || 'pin',
       notes: editNotes.trim() || null,
     }, token);
     if (result?.place) {
-      setPlaces(prev => prev.filter(p => p.id !== editingPlace.id).concat(result.place));
+      setPlaces(prev => {
+        const without = prev.filter(p => p.id !== oldId && p.id !== result.place.id);
+        return [...without, result.place];
+      });
     }
     setEditingPlace(null);
   }, [editingPlace, editName, editType, editNotes, token]);
