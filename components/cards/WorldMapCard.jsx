@@ -386,13 +386,11 @@ function MapInner({ token }) {
       }
       const geo = geoJsonCacheRef.current;
 
-      // Build a set of normalized names to match — skip huge countries
-      const BIG_GEO = new Set(['united states', 'united states of america', 'china', 'russia', 'canada', 'australia', 'brazil', 'india', 'argentina']);
+      // Build a set of normalized names to match
       const normalizedNames = new Set();
       discoveredCountries.forEach(name => {
-        if (BIG_GEO.has(name.toLowerCase())) return; // skip huge countries
         const mapped = COUNTRY_NAME_MAP.hasOwnProperty(name) ? COUNTRY_NAME_MAP[name] : name;
-        if (mapped && !BIG_GEO.has(mapped.toLowerCase())) normalizedNames.add(mapped.toLowerCase());
+        if (mapped) normalizedNames.add(mapped.toLowerCase());
       });
 
       // Filter features to discovered countries
@@ -464,7 +462,7 @@ function MapInner({ token }) {
     };
   }, [discoveredCountries, leafletReady, isDark]);
 
-  // Render discovered US state boundaries
+  // Render discovered state/province boundaries (US states + global admin-1 regions)
   useEffect(() => {
     if (!mapInstance.current || !leafletReady || !discoveredPlaces.length) {
       if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; }
@@ -474,53 +472,62 @@ function MapInner({ token }) {
     const map = mapInstance.current;
 
     const renderStates = async () => {
-      if (!statesGeoJsonCacheRef.current) {
-        try {
-          const res = await fetch(US_STATES_TOPOJSON_URL);
-          const topo = await res.json();
-          statesGeoJsonCacheRef.current = topoFeature(topo, topo.objects.states);
-        } catch (err) { console.error('Failed to load US states:', err); return; }
+      // Collect all discovered state/admin-level places
+      const stateType = new Set(['state', 'administrative', 'territory', 'district']);
+      const allStates = discoveredPlaces.filter(p => stateType.has(p.type));
+      if (allStates.length === 0) { if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; } return; }
+
+      // US states — use dedicated high-res US atlas
+      const usStates = allStates.filter(p => p.country === 'United States' || p.country === 'USA');
+      const usNames = new Set(usStates.map(p => p.name.toLowerCase()));
+
+      let usFeatures = [];
+      if (usNames.size > 0) {
+        if (!statesGeoJsonCacheRef.current) {
+          try {
+            const res = await fetch(US_STATES_TOPOJSON_URL);
+            const topo = await res.json();
+            statesGeoJsonCacheRef.current = topoFeature(topo, topo.objects.states);
+          } catch { /* US states unavailable */ }
+        }
+        if (statesGeoJsonCacheRef.current) {
+          usFeatures = statesGeoJsonCacheRef.current.features.filter(f =>
+            usNames.has((f.properties?.name || '').toLowerCase())
+          );
+        }
       }
-      const geo = statesGeoJsonCacheRef.current;
 
-      // Collect discovered state names (type=state) within the US
-      const stateNames = new Set(
-        discoveredPlaces
-          .filter(p => p.type === 'state' && (p.country === 'United States' || p.country === 'USA'))
-          .map(p => p.name.toLowerCase())
-      );
-      if (stateNames.size === 0) { if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; } return; }
+      // Non-US states/provinces — use the countries TopoJSON and render circles instead
+      // (no global admin-1 TopoJSON small enough for client-side use)
 
-      const filtered = {
-        type: 'FeatureCollection',
-        features: geo.features.filter(f => stateNames.has((f.properties?.name || '').toLowerCase())),
-      };
+      const filtered = { type: 'FeatureCollection', features: usFeatures };
 
       if (statesLayerRef.current) statesLayerRef.current.remove();
 
-      const renderer = L.canvas({ padding: 1.0 });
-      statesLayerRef.current = L.geoJSON(filtered, {
-        renderer,
-        style: {
-          color: 'transparent',
-          weight: 0,
-          fillColor: isDark ? '#8A7A60' : '#9A8A68',
-          fillOpacity: isDark ? 0.08 : 0.10,
-        },
-        interactive: false,
-      }).addTo(map);
-      statesLayerRef.current.bringToBack();
+      if (filtered.features.length > 0) {
+        const renderer = L.canvas({ padding: 1.0 });
+        statesLayerRef.current = L.geoJSON(filtered, {
+          renderer,
+          style: {
+            color: 'transparent',
+            weight: 0,
+            fillColor: isDark ? '#8A7A60' : '#9A8A68',
+            fillOpacity: isDark ? 0.08 : 0.10,
+          },
+          interactive: false,
+        }).addTo(map);
+        statesLayerRef.current.bringToBack();
 
-      // Zoom-responsive opacity
-      const updateOpacity = () => {
-        if (!statesLayerRef.current) return;
-        const z = map.getZoom();
-        const opacity = z <= 3 ? (isDark ? 0.14 : 0.16) : z <= 5 ? (isDark ? 0.09 : 0.11) : z <= 8 ? (isDark ? 0.05 : 0.06) : (isDark ? 0.03 : 0.04);
-        statesLayerRef.current.setStyle({ fillOpacity: opacity });
-      };
-      updateOpacity();
-      map.on('zoomend', updateOpacity);
-      statesLayerRef.current._zoomHandler = updateOpacity;
+        const updateOpacity = () => {
+          if (!statesLayerRef.current) return;
+          const z = map.getZoom();
+          const opacity = z <= 3 ? (isDark ? 0.14 : 0.16) : z <= 5 ? (isDark ? 0.09 : 0.11) : z <= 8 ? (isDark ? 0.05 : 0.06) : (isDark ? 0.03 : 0.04);
+          statesLayerRef.current.setStyle({ fillOpacity: opacity });
+        };
+        updateOpacity();
+        map.on('zoomend', updateOpacity);
+        statesLayerRef.current._zoomHandler = updateOpacity;
+      }
     };
 
     renderStates();
@@ -543,7 +550,8 @@ function MapInner({ token }) {
 
     if (!discoveredPlaces.length || mode !== 'places') return;
 
-    const cities = discoveredPlaces.filter(p => p.lat && p.lng && p.type === 'city');
+    // Render circles for all discovered places with coordinates (cities, regions, etc.)
+    const cities = discoveredPlaces.filter(p => p.lat && p.lng);
     if (!cities.length) return;
 
     const strokeColor = isDark ? '#8A7A60' : '#9A8A68';
@@ -555,8 +563,11 @@ function MapInner({ token }) {
       const opacity = z <= 3 ? 0.25 : z <= 5 ? 0.18 : z <= 8 ? 0.12 : 0.06;
 
       cities.forEach(place => {
+        // Larger radius for states/regions, smaller for cities/towns
+        const isRegion = place.type === 'state' || place.type === 'administrative' || place.type === 'territory' || place.type === 'district';
+        const radius = isRegion ? 40000 : 15000;
         const circle = L.circle([place.lat, place.lng], {
-          radius: 15000,
+          radius,
           color: strokeColor,
           weight: 1,
           opacity,
