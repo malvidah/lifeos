@@ -1011,7 +1011,7 @@ function MapInner({ token }) {
   const bgColor = 'var(--dl-bg)';
 
   return (
-    <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 520, background: bgColor }}>
+    <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 520, background: bgColor, userSelect: 'none', WebkitUserSelect: 'none' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
       <style>{`
@@ -1197,7 +1197,7 @@ function MapInner({ token }) {
             display: 'flex', gap: 8, padding: '0 10px',
             overflowX: 'auto', overflowY: 'hidden',
             scrollbarWidth: 'none', msOverflowStyle: 'none',
-            pointerEvents: 'auto',
+            pointerEvents: 'auto', userSelect: 'none', WebkitUserSelect: 'none',
           }}>
             {visiblePlaces.map(place => {
               const isSelected = selectedPlace?.id === place.id;
