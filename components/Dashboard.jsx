@@ -312,6 +312,11 @@ function DashboardInner() {
   // Save today's location to DB on first load (fire-and-forget)
   useEffect(() => { saveLocationIfNeeded(token); }, [token]);
 
+  // Replay offline queue once authenticated
+  useEffect(() => {
+    if (token) import('@/lib/offlineQueue').then(m => m.replayIfNeeded(token));
+  }, [token]);
+
   // Expose token to native iOS layer (Swift reads this for HealthKit sync)
   // @supabase/ssr uses cookies not localStorage, so we bridge it manually
   useEffect(()=>{
