@@ -1,4 +1,5 @@
 import { withAuth } from '../_lib/auth.js';
+import { extractTags } from '@/lib/tags';
 
 // GET /api/project-entries?project=big+think[&terms=sleep,running]
 //   Returns all content tagged to that project, split by type.
@@ -31,23 +32,6 @@ function htmlToText(html) {
     .replace(/\s+/g, ' ').trim();
 }
 
-// Extract {project} tags from text
-function extractTags(text) {
-  if (!text || typeof text !== 'string') return [];
-  const seen = new Set(); const tags = [];
-  const reNew = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/g;
-  let m;
-  while ((m = reNew.exec(text)) !== null) {
-    const lower = m[1].toLowerCase();
-    if (!seen.has(lower)) { seen.add(lower); tags.push(lower); }
-  }
-  const reLegacy = /#([A-Za-z][A-Za-z0-9]+)(?![A-Za-z0-9])/g;
-  while ((m = reLegacy.exec(text)) !== null) {
-    const lower = m[1].toLowerCase();
-    if (!seen.has(lower)) { seen.add(lower); tags.push(lower); }
-  }
-  return tags;
-}
 
 export const GET = withAuth(async (req, { supabase, user }) => {
   const params  = new URL(req.url).searchParams;

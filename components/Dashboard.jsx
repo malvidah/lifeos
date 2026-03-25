@@ -26,8 +26,6 @@ import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import NotesCard from "./widgets/NotesCard.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
-// Settings panels on ice — keep files, just don't render
-// import { HomeSettingsPanel, ProjectSettingsPanel } from "./views/ProjectSettingsPanel.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
 
@@ -357,11 +355,9 @@ function DashboardInner() {
     sessionStorage.setItem(key, '1');
     api.post('/api/scores-backfill', {}, token)
       .then(d => {
-        console.log(`[daylab] scores-backfill result:`, d);
         loadDots(); // always reload — shows correct colored vs grey dots
       })
-      .catch(e => {
-        console.warn('[daylab] scores-backfill failed:', e);
+      .catch(() => {
         // Backfill failed (likely timeout) — clear flag so it retries next session
         sessionStorage.removeItem(key);
       });
@@ -506,7 +502,6 @@ function DashboardInner() {
     // to avoid session/RLS issues with the browser client
     api.get(`/api/health/scores?start=${since}&end=${todayKey()}`, token)
       .then(data=>{
-        console.log(`[daylab] loadDots: ${data?.rows?.length ?? 0} score rows loaded`);
         if(!data?.rows)return;
         setHealthDots(prev => {
           const next = {...prev};
