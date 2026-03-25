@@ -1125,26 +1125,28 @@ function MapInner({ token }) {
   const carouselRef = useRef(null);
   const dragRef = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
 
-  // Static geographic sort — grid-based clustering so same-city cards stay together.
-  // Round lat/lng to ~11km grid cells, sort by cell, then by name within each cell.
+  // Static geographic sort using Morton code (Z-order curve).
+  // Interleaves lat/lng bits so nearby places on the map are adjacent in the list.
   // This never changes on pan/zoom, so cards don't re-render.
   const visiblePlaces = useMemo(() => {
     if (mode !== 'places') return [];
-    const GRID = 0.1; // ~11km at equator
+    // Convert lat/lng to 16-bit unsigned ints, then interleave for a Z-order key
+    const mortonKey = (lat, lng) => {
+      const x = Math.round(((lng || 0) + 180) / 360 * 0xFFFF) & 0xFFFF;
+      const y = Math.round(((lat || 0) + 90) / 180 * 0xFFFF) & 0xFFFF;
+      let z = 0;
+      for (let i = 15; i >= 0; i--) {
+        z = z * 4 + ((x >> i) & 1) * 2 + ((y >> i) & 1);
+      }
+      return z;
+    };
     return places
       .filter(p => {
         if (activeFilter && (p.category || '').toLowerCase() !== activeFilter.toLowerCase()) return false;
         return true;
       })
-      .sort((a, b) => {
-        const aLng = Math.round((a.lng || 0) / GRID);
-        const bLng = Math.round((b.lng || 0) / GRID);
-        if (aLng !== bLng) return aLng - bLng;
-        const aLat = Math.round((a.lat || 0) / GRID);
-        const bLat = Math.round((b.lat || 0) / GRID);
-        if (aLat !== bLat) return aLat - bLat;
-        return (a.name || '').localeCompare(b.name || '');
-      });
+      .map(p => ({ ...p, _z: mortonKey(p.lat, p.lng) }))
+      .sort((a, b) => a._z - b._z);
   }, [places, mode, activeFilter]);
 
   // Scroll carousel to nearest card — used on pan settle, filter change, and initial load
