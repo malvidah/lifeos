@@ -466,6 +466,7 @@ function MapInner({ token }) {
   }, [discoveredCountries, leafletReady, isDark]);
 
   // Render discovered state/province boundaries (global admin-1 + US states high-res)
+  // Provinces are highlighted if: explicitly discovered OR contain a discovered city
   useEffect(() => {
     if (!mapInstance.current || !leafletReady || !discoveredPlaces.length) {
       if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; }
@@ -474,16 +475,35 @@ function MapInner({ token }) {
     const L = LRef.current;
     const map = mapInstance.current;
 
-    const renderStates = async () => {
-      // Collect all discovered state/admin-level places
-      const stateType = new Set(['state', 'administrative', 'territory', 'district']);
-      const allStates = discoveredPlaces.filter(p => stateType.has(p.type));
-      if (allStates.length === 0) { if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; } return; }
+    // Point-in-polygon (ray casting) for matching cities to provinces
+    const pointInRing = (point, ring) => {
+      let inside = false;
+      const [px, py] = point;
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const [xi, yi] = ring[i], [xj, yj] = ring[j];
+        if ((yi > py) !== (yj > py) && px < (xj - xi) * (py - yi) / (yj - yi) + xi) inside = !inside;
+      }
+      return inside;
+    };
+    const pointInPolygon = (point, geometry) => {
+      if (!geometry) return false;
+      const { type, coordinates } = geometry;
+      if (type === 'Polygon') return coordinates.some(ring => pointInRing(point, ring));
+      if (type === 'MultiPolygon') return coordinates.some(poly => poly.some(ring => pointInRing(point, ring)));
+      return false;
+    };
 
-      const stateNames = new Set(allStates.map(p => p.name.toLowerCase()));
+    const renderStates = async () => {
+      // Collect explicitly discovered state names
+      const stateType = new Set(['state', 'administrative', 'territory', 'district']);
+      const stateNames = new Set(
+        discoveredPlaces.filter(p => stateType.has(p.type)).map(p => p.name.toLowerCase())
+      );
+
+      // Collect discovered cities with coordinates (for point-in-polygon matching)
+      const cities = discoveredPlaces.filter(p => p.lat && p.lng && !stateType.has(p.type) && p.type !== 'country');
 
       // Load global admin-1 TopoJSON (1.6MB, cached)
-      let allFeatures = [];
       if (!admin1CacheRef.current) {
         try {
           const res = await fetch(ADMIN1_TOPOJSON_URL);
@@ -491,17 +511,28 @@ function MapInner({ token }) {
           admin1CacheRef.current = topoFeature(topo, topo.objects.admin1);
         } catch { /* admin-1 data unavailable */ }
       }
+
+      let allFeatures = [];
       if (admin1CacheRef.current) {
         allFeatures = admin1CacheRef.current.features.filter(f => {
           const name = (f.properties?.name || '').toLowerCase();
-          return stateNames.has(name);
+          // Match by explicit state name
+          if (stateNames.has(name)) return true;
+          // Match by city containment — check if any discovered city falls within this province
+          const country = (f.properties?.admin || '').toLowerCase();
+          const countryCities = cities.filter(c => (c.country || '').toLowerCase() === country);
+          return countryCities.some(c => pointInPolygon([c.lng, c.lat], f.geometry));
         });
       }
 
       // Also check US high-res atlas for US states (sharper boundaries)
-      const usStates = allStates.filter(p => p.country === 'United States' || p.country === 'USA');
-      const usNames = new Set(usStates.map(p => p.name.toLowerCase()));
-      if (usNames.size > 0) {
+      const usDiscovered = discoveredPlaces.filter(p =>
+        p.country === 'United States' || p.country === 'USA'
+      );
+      const usStateNames = new Set(usDiscovered.filter(p => stateType.has(p.type)).map(p => p.name.toLowerCase()));
+      const usCities = usDiscovered.filter(p => p.lat && p.lng && !stateType.has(p.type) && p.type !== 'country');
+
+      if (usStateNames.size > 0 || usCities.length > 0) {
         if (!statesGeoJsonCacheRef.current) {
           try {
             const res = await fetch(US_STATES_TOPOJSON_URL);
@@ -510,17 +541,24 @@ function MapInner({ token }) {
           } catch { /* US states unavailable */ }
         }
         if (statesGeoJsonCacheRef.current) {
-          // Replace admin-1 US features with high-res versions
+          // Find matching US state features (by name or city containment)
+          const matchedUSNames = new Set();
+          const usFeatures = statesGeoJsonCacheRef.current.features.filter(f => {
+            const name = (f.properties?.name || '').toLowerCase();
+            if (usStateNames.has(name)) { matchedUSNames.add(name); return true; }
+            if (usCities.some(c => pointInPolygon([c.lng, c.lat], f.geometry))) { matchedUSNames.add(name); return true; }
+            return false;
+          });
+          // Replace low-res admin-1 US features with high-res versions
           allFeatures = allFeatures.filter(f => {
             const name = (f.properties?.name || '').toLowerCase();
-            return !usNames.has(name); // remove low-res admin-1 US duplicates
+            return !matchedUSNames.has(name);
           });
-          const usFeatures = statesGeoJsonCacheRef.current.features.filter(f =>
-            usNames.has((f.properties?.name || '').toLowerCase())
-          );
           allFeatures.push(...usFeatures);
         }
       }
+
+      if (allFeatures.length === 0) { if (statesLayerRef.current) { statesLayerRef.current.remove(); statesLayerRef.current = null; } return; }
 
       const filtered = { type: 'FeatureCollection', features: allFeatures };
 
