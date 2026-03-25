@@ -560,7 +560,7 @@ function MapInner({ token }) {
     };
   }, [discoveredPlaces, leafletReady, isDark]);
 
-  // Render discovered city outline circles (no fill — won't stack with country/state fills)
+  // Render discovered place markers — circle (city), square (state), hexagon (country)
   const cityCirclesRef = useRef([]);
   useEffect(() => {
     if (!mapInstance.current || !leafletReady) return;
@@ -572,31 +572,47 @@ function MapInner({ token }) {
 
     if (!discoveredPlaces.length || mode !== 'places') return;
 
-    // Render circles for all discovered places with coordinates (cities, regions, etc.)
-    const cities = discoveredPlaces.filter(p => p.lat && p.lng);
-    if (!cities.length) return;
+    const withCoords = discoveredPlaces.filter(p => p.lat && p.lng);
+    if (!withCoords.length) return;
 
     const strokeColor = isDark ? '#8A7A60' : '#9A8A68';
+
+    const stateTypes = new Set(['state', 'administrative', 'territory', 'district']);
+    const shapeFor = (type) => {
+      if (type === 'country') return 'hexagon';
+      if (stateTypes.has(type)) return 'square';
+      return 'circle';
+    };
+
+    const svgIcon = (shape, size, color, op) => {
+      let svg;
+      if (shape === 'circle') {
+        svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${size/2-1}" fill="none" stroke="${color}" stroke-width="1.5" opacity="${op}"/></svg>`;
+      } else if (shape === 'square') {
+        const r = 3;
+        svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><rect x="1" y="1" width="${size-2}" height="${size-2}" rx="${r}" fill="none" stroke="${color}" stroke-width="1.5" opacity="${op}"/></svg>`;
+      } else {
+        // hexagon
+        const cx = size/2, cy = size/2, r = size/2-1;
+        const pts = Array.from({length:6},(_,i)=>{const a=Math.PI/3*i-Math.PI/2;return`${cx+r*Math.cos(a)},${cy+r*Math.sin(a)}`;}).join(' ');
+        svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><polygon points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" opacity="${op}"/></svg>`;
+      }
+      return L.divIcon({ className: '', html: svg, iconSize: [size, size], iconAnchor: [size/2, size/2] });
+    };
 
     const updateCircles = () => {
       cityCirclesRef.current.forEach(m => m.remove());
       cityCirclesRef.current = [];
       const z = map.getZoom();
-      const opacity = z <= 3 ? 0.25 : z <= 5 ? 0.18 : z <= 8 ? 0.12 : 0.06;
+      const opacity = z <= 3 ? 0.5 : z <= 5 ? 0.35 : z <= 8 ? 0.25 : 0.15;
+      const baseSize = z <= 3 ? 14 : z <= 5 ? 16 : z <= 8 ? 18 : 20;
 
-      cities.forEach(place => {
-        // Larger radius for states/regions, smaller for cities/towns
-        const isRegion = place.type === 'state' || place.type === 'administrative' || place.type === 'territory' || place.type === 'district';
-        const radius = isRegion ? 40000 : 15000;
-        const circle = L.circle([place.lat, place.lng], {
-          radius,
-          color: strokeColor,
-          weight: 1,
-          opacity,
-          fill: false,
-          interactive: false,
-        }).addTo(map);
-        cityCirclesRef.current.push(circle);
+      withCoords.forEach(place => {
+        const shape = shapeFor(place.type);
+        const size = shape === 'hexagon' ? baseSize + 4 : shape === 'square' ? baseSize + 2 : baseSize;
+        const icon = svgIcon(shape, size, strokeColor, opacity);
+        const marker = L.marker([place.lat, place.lng], { icon, interactive: false }).addTo(map);
+        cityCirclesRef.current.push(marker);
       });
     };
 
