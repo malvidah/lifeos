@@ -1126,31 +1126,24 @@ function MapInner({ token }) {
   const dragRef = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
 
   const visiblePlaces = useMemo(() => {
-    if (!mapBounds || mode !== 'places') return [];
+    if (mode !== 'places') return [];
     return places
       .filter(p => {
         if (activeFilter && (p.category || '').toLowerCase() !== activeFilter.toLowerCase()) return false;
-        return mapBounds.contains({ lat: p.lat, lng: p.lng });
+        return true;
       })
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  }, [places, mapBounds, mode, activeFilter]);
+  }, [places, mode, activeFilter]);
 
-  // Scroll selected card to center of carousel — fires after visiblePlaces settles
-  const scrollTimerRef = useRef(null);
+  // Scroll selected card to center of carousel
   useEffect(() => {
     if (!selectedPlace || !carouselRef.current) return;
-    // Debounce: wait for visiblePlaces to stabilize (map pan triggers multiple updates)
-    clearTimeout(scrollTimerRef.current);
-    scrollTimerRef.current = setTimeout(() => {
-      const container = carouselRef.current;
-      if (!container) return;
-      const el = container.querySelector(`[data-place-id="${selectedPlace.id}"]`);
-      if (!el) return;
-      const scrollTarget = el.offsetLeft - (container.clientWidth / 2) + (el.offsetWidth / 2);
-      container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
-    }, 450); // wait for panTo animation (400ms) to finish
-    return () => clearTimeout(scrollTimerRef.current);
-  }, [selectedPlace, visiblePlaces]); // eslint-disable-line
+    const container = carouselRef.current;
+    const el = container.querySelector(`[data-place-id="${selectedPlace.id}"]`);
+    if (!el) return;
+    const scrollTarget = el.offsetLeft - (container.clientWidth / 2) + (el.offsetWidth / 2);
+    container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
+  }, [selectedPlace]);
 
   // Background color to match tiles while loading
   const bgColor = 'var(--dl-bg)';
