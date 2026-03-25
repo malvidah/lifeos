@@ -997,11 +997,14 @@ function MapInner({ token }) {
       .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [places, mapBounds, mode, activeFilter]);
 
-  // Scroll carousel only when a place is clicked/selected (not on hover)
+  // Scroll selected card to center of carousel — manual calc for reliability
   useEffect(() => {
     if (!selectedPlace || !carouselRef.current) return;
-    const el = carouselRef.current.querySelector(`[data-place-id="${selectedPlace.id}"]`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    const container = carouselRef.current;
+    const el = container.querySelector(`[data-place-id="${selectedPlace.id}"]`);
+    if (!el) return;
+    const scrollTarget = el.offsetLeft - (container.clientWidth / 2) + (el.offsetWidth / 2);
+    container.scrollTo({ left: scrollTarget, behavior: 'smooth' });
   }, [selectedPlace]);
 
   // Background color to match tiles while loading
