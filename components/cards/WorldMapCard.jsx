@@ -260,6 +260,56 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
   );
 }
 
+// ─── Map Bottom Strip — collapsible container for carousel + info panels ─────
+function MapBottomStrip({ collapsed, onToggle, children }) {
+  // Check if there's any visible content in children
+  const hasContent = !!children;
+  if (!hasContent) return null;
+
+  return (
+    <div style={{
+      position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 999,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      pointerEvents: 'none',
+    }}>
+      {/* Chevron toggle */}
+      <button onClick={onToggle} style={{
+        pointerEvents: 'auto',
+        background: 'var(--dl-glass)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid var(--dl-glass-border)',
+        borderRadius: '8px 8px 0 0',
+        padding: '2px 16px 0',
+        cursor: 'pointer',
+        color: 'var(--dl-middle)',
+        display: 'flex', alignItems: 'center',
+        opacity: 0.7,
+        transition: 'opacity 0.15s',
+      }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {/* Content area */}
+      <div style={{
+        width: '100%',
+        padding: '0 10px 10px',
+        pointerEvents: 'auto',
+        maxHeight: collapsed ? 0 : 200,
+        overflow: 'hidden',
+        transition: 'max-height 0.25s ease',
+        boxSizing: 'border-box',
+      }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ─── Map component (client-only) ────────────────────────────────────────────
 function MapInner({ token }) {
   const { theme } = useTheme();
@@ -289,6 +339,7 @@ function MapInner({ token }) {
   const [discoveredPlaces, setDiscoveredPlaces] = useState([]);
   const [selectedDiscovered, setSelectedDiscovered] = useState(null);
   const [previewGeo, setPreviewGeo] = useState(null); // search result preview before adding
+  const [bottomCollapsed, setBottomCollapsed] = useState(false);
   const [mapBounds, setMapBounds] = useState(null); // track visible bounds for carousel
   const discoveredLayerRef = useRef(null);
   const statesLayerRef = useRef(null);
@@ -1273,12 +1324,12 @@ function MapInner({ token }) {
         </div>
       )}
 
-      {/* ─── Place carousel ─── */}
+      {/* ─── Map Bottom Strip ─── */}
+      <MapBottomStrip collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed(c => !c)}>
+
+      {/* Place carousel */}
       {visiblePlaces.length > 0 && !addingPlace && !editingPlace && !previewGeo && !selectedDiscovered && (
-        <div style={{
-          position: 'absolute', bottom: 10, left: 0, right: 0, zIndex: 999,
-          pointerEvents: 'none',
-        }}>
+        <div style={{ pointerEvents: 'none' }}>
           <div ref={carouselRef} style={{
             display: 'flex', gap: 8, padding: '0 10px',
             overflowX: 'auto', overflowY: 'hidden',
@@ -1364,7 +1415,7 @@ function MapInner({ token }) {
         <div
           onKeyDown={e => { if (e.key === 'Enter' && !creatingType && newName.trim()) savePlace(); }}
           style={{
-            position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+            margin: '0 2px',
             background: 'var(--dl-bg)', borderRadius: 10,
             border: '1px solid var(--dl-border)',
             padding: '10px 14px',
@@ -1492,7 +1543,7 @@ function MapInner({ token }) {
       {/* Search result preview card */}
       {previewGeo && mode === 'places' && !addingPlace && !editingPlace && !selectedPlace && (
         <div style={{
-          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+          margin: '0 2px',
           background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
           backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
           borderRadius: 10,
@@ -1575,7 +1626,7 @@ function MapInner({ token }) {
         const isDisc = discoveredCountries.includes(selectedDiscovered);
         return (
         <div style={{
-          position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
+          margin: '0 2px',
           background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
           backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
           borderRadius: 10,
@@ -1616,6 +1667,7 @@ function MapInner({ token }) {
         );
       })()}
 
+      </MapBottomStrip>
       {/* No separate tooltip or selected popup — carousel handles all place interactions */}
     </div>
   );
