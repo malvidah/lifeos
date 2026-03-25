@@ -136,6 +136,7 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
               lng: parseFloat(d.lon),
               type: d.type,
               country: addr.country || '',
+              state: addr.state || '',
             };
           }));
         }
@@ -824,18 +825,33 @@ function MapInner({ token }) {
     if (!addingPlace || !newName.trim() || !token) return;
 
     if (addingPlace.isArea) {
-      // Save as discovered area
+      // Save as discovered area — cascade city → state → country
       const country = addingPlace.geoCountry || newName.trim();
-      const result = await api.post('/api/discovered', {
-        name: newName.trim(),
-        country,
-        type: addingPlace.geoType || 'city',
-        lat: addingPlace.lat,
-        lng: addingPlace.lng,
-      }, token);
-      if (result?.place) {
-        setDiscoveredPlaces(prev => [...prev, result.place]);
-        setDiscoveredCountries(prev => prev.includes(country) ? prev : [...prev, country]);
+      const geoType = addingPlace.geoType || 'city';
+      const existingNames = new Set(discoveredPlaces.map(p => p.name.toLowerCase()));
+      const toSave = [];
+
+      if (!existingNames.has(newName.trim().toLowerCase())) {
+        toSave.push({ name: newName.trim(), country, type: geoType, lat: addingPlace.lat, lng: addingPlace.lng });
+      }
+      if (geoType === 'city' && addingPlace.geoState && !existingNames.has(addingPlace.geoState.toLowerCase())) {
+        toSave.push({ name: addingPlace.geoState, country, type: 'state', lat: addingPlace.lat, lng: addingPlace.lng });
+      }
+      if (geoType !== 'country' && country && !existingNames.has(country.toLowerCase())) {
+        toSave.push({ name: country, country, type: 'country', lat: null, lng: null });
+      }
+
+      const newPlaces = [];
+      for (const item of toSave) {
+        const result = await api.post('/api/discovered', item, token);
+        if (result?.place) newPlaces.push(result.place);
+      }
+      if (newPlaces.length > 0) {
+        setDiscoveredPlaces(prev => [...prev, ...newPlaces]);
+        setDiscoveredCountries(prev => {
+          const all = new Set([...prev, ...newPlaces.map(p => p.country)]);
+          return [...all];
+        });
       }
     } else {
       const result = await api.post('/api/places', {
@@ -972,22 +988,43 @@ function MapInner({ token }) {
     setPreviewGeo(null);
   }, [previewGeo]);
 
-  // Save area directly from preview card
+  // Save area directly from preview card — cascades city → state → country
   const saveAreaFromPreview = useCallback(async () => {
     if (!previewGeo || !token) return;
     const g = previewGeo;
     const name = g.rawName || g.name.split(',')[0];
     const country = g.country || name;
     const geoType = g.type === 'country' ? 'country' : (['state', 'administrative'].includes(g.type) ? 'state' : 'city');
-    const result = await api.post('/api/discovered', {
-      name, country,
-      type: geoType,
-      lat: g.lat,
-      lng: g.lng,
-    }, token);
-    if (result?.place) {
-      setDiscoveredPlaces(prev => [...prev, result.place]);
-      setDiscoveredCountries(prev => prev.includes(country) ? prev : [...prev, country]);
+
+    // Build cascade: city → state/province → country (skip duplicates)
+    const toSave = [];
+    const existingNames = new Set(discoveredPlaces.map(p => p.name.toLowerCase()));
+
+    // 1. The item itself
+    if (!existingNames.has(name.toLowerCase())) {
+      toSave.push({ name, country, type: geoType, lat: g.lat, lng: g.lng });
+    }
+    // 2. State/province (if this is a city and we know the state)
+    if (geoType === 'city' && g.state && !existingNames.has(g.state.toLowerCase())) {
+      toSave.push({ name: g.state, country, type: 'state', lat: g.lat, lng: g.lng });
+    }
+    // 3. Country (if not already discovered)
+    if (geoType !== 'country' && country && !existingNames.has(country.toLowerCase())) {
+      toSave.push({ name: country, country, type: 'country', lat: null, lng: null });
+    }
+
+    const newPlaces = [];
+    for (const item of toSave) {
+      const result = await api.post('/api/discovered', item, token);
+      if (result?.place) newPlaces.push(result.place);
+    }
+
+    if (newPlaces.length > 0) {
+      setDiscoveredPlaces(prev => [...prev, ...newPlaces]);
+      setDiscoveredCountries(prev => {
+        const all = new Set([...prev, ...newPlaces.map(p => p.country)]);
+        return [...all];
+      });
 
       // Animate: expanding circle from the saved location
       if (mapInstance.current && LRef.current) {
@@ -1009,7 +1046,7 @@ function MapInner({ token }) {
     }
     lastGeoRef.current = null;
     setPreviewGeo(null);
-  }, [previewGeo, token, isDark]);
+  }, [previewGeo, token, isDark, discoveredPlaces]);
 
   // + button: add pin at map center (detect area from last search)
   const addAtCenter = useCallback(() => {
