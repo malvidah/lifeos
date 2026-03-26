@@ -1267,8 +1267,10 @@ function MapInner({ token }) {
     const map = mapInstance.current;
     if (!map || !carouselRef.current || !visiblePlaces.length) return;
     const center = map.getCenter();
+    if (!center) return;
     let nearest = visiblePlaces[0], bestDist = Infinity;
     for (const p of visiblePlaces) {
+      if (!p.lat || !p.lng) continue;
       const d = (p.lat - center.lat) ** 2 + (p.lng - center.lng) ** 2;
       if (d < bestDist) { bestDist = d; nearest = p; }
     }
