@@ -33,8 +33,8 @@ import { useRealtimeSync } from "@/lib/useRealtimeSync";
 
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
-  { id: 'map',      label: 'Projects', icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span> },
-  { id: 'timeline', label: 'Map',      icon: <span style={{fontSize:14,lineHeight:1}}>📍</span> },
+  { id: 'project-graph', label: 'Projects', icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span> },
+  { id: 'world-map',     label: 'Map',      icon: <span style={{fontSize:14,lineHeight:1}}>📍</span> },
   { id: 'cal',      label: 'Calendar', icon: <span style={{fontSize:14,lineHeight:1}}>📅</span> },
   { id: 'health',   label: 'Health',   icon: <span style={{fontSize:14,lineHeight:1}}>💚</span> },
   { id: 'habits',   label: 'Habits',   icon: <span style={{fontSize:14,lineHeight:1}}>🎯</span> },
@@ -332,8 +332,17 @@ function DashboardInner() {
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   true);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
-  const [mapCollapsed,    toggleMap_]     = useCollapse("map",     false);
-  const [timelineCollapsed, toggleTimeline] = useCollapse("timeline", true);
+  // Migrate old localStorage keys for renamed dock IDs
+  if (typeof window !== "undefined") {
+    for (const [oldKey, newKey] of [["collapse:map","collapse:project-graph"],["collapse:timeline","collapse:world-map"]]) {
+      if (localStorage.getItem(oldKey) !== null && localStorage.getItem(newKey) === null) {
+        localStorage.setItem(newKey, localStorage.getItem(oldKey));
+        localStorage.removeItem(oldKey);
+      }
+    }
+  }
+  const [mapCollapsed,    toggleMap_]     = useCollapse("project-graph", false);
+  const [timelineCollapsed, toggleTimeline] = useCollapse("world-map", true);
   const collapseMap = {journal:journalCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
   const toggleMap   = {journal:toggleJournal,   tasks:toggleTasks,  meals:toggleMeals,  workouts:toggleAct};
 
@@ -419,7 +428,7 @@ function DashboardInner() {
   // onHealthChange: called when raw health data loads — kept as prop, used for InsightsCard healthKey.
   const onHealthChange=useCallback(()=>{},[]);
 
-  // onScoresReady: called by HealthStrip when /api/scores returns fresh computed scores.
+  // onScoresReady: called by HealthStrip when /api/health/scores returns fresh computed scores.
   // Updates the calendar dot for that specific date with correct values.
   const onScoresReady=useCallback((date, d)=>{
     setHealthDots(prev=>({...prev,[date]:{
@@ -537,15 +546,15 @@ function DashboardInner() {
             onBack={activeProject ? () => { selectProject(null); setSelected(todayKey()); } : null}
             dockItems={DOCK_ITEMS.map(item => ({
               ...item,
-              isOpen: item.id === 'map' ? !mapCollapsed
-                : item.id === 'timeline' ? !timelineCollapsed
+              isOpen: item.id === 'project-graph' ? !mapCollapsed
+                : item.id === 'world-map' ? !timelineCollapsed
                 : item.id === 'cal' ? !calCollapsed
                 : item.id === 'health' ? !healthCollapsed
                 : item.id === 'habits' ? !habitsCollapsed
                 : item.id === 'notes' ? !notesCollapsed
                 : !collapseMap[item.id],
-              onToggle: item.id === 'map' ? toggleMap_
-                : item.id === 'timeline' ? toggleTimeline
+              onToggle: item.id === 'project-graph' ? toggleMap_
+                : item.id === 'world-map' ? toggleTimeline
                 : item.id === 'cal' ? toggleCal
                 : item.id === 'health' ? toggleHealth
                 : item.id === 'habits' ? toggleHabits

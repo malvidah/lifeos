@@ -131,9 +131,9 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
 
   const purple = "var(--dl-purple)";
 
-  // ── Scores: single /api/scores call per date ─────────────────────────────
-  // /api/scores handles everything: for past dates it returns cached scores
-  // WITH sparklines in one fast DB read. For today it computes fresh.
+  // ── Scores: single /api/health/scores call per date ──────────────────────
+  // /api/health/scores handles everything: for past dates it returns cached
+  // scores WITH sparklines in one fast DB read. For today it computes fresh.
   // One call, one setScores — no flicker, no lost sparklines.
   const [scores, setScores] = useState(null);
   const scoredKeyRef = useRef(null); // tracks date+fingerprint to avoid redundant fetches
@@ -160,7 +160,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
     if(h.activeMinutes)  p.set('activeMinutes',  h.activeMinutes);
     if(h.stressMins)     p.set('stressMins',     h.stressMins);
     if(h.recoveryMins)   p.set('recoveryMins',   h.recoveryMins);
-    api.get(`/api/scores?${p}`, token)
+    api.get(`/api/health/scores?${p}`, token)
       .then(d => {
         if (cancelled || !d || d.error) return;
         setScores(d);
