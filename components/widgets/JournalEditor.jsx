@@ -6,6 +6,7 @@ import { NoteContext, ProjectNamesContext, PlaceNamesContext, NavigationContext 
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
 import { api } from "@/lib/api";
+import { todayKey } from "@/lib/dates";
 import { DayLabEditor } from "../Editor.jsx";
 
 // Strip image chip spans (which may contain nested child spans) from HTML.
@@ -329,7 +330,7 @@ export function DropZone({ uploading }) {
 // Read-only scrollable list of the N most recent journal dates.
 
 function RecentEntries({ token, userId, date, project }) {
-  const todayStr = date || new Date().toISOString().slice(0, 10);
+  const todayStr = date || todayKey();
   const [entries, setEntries] = useState(null);
 
   useEffect(() => {
@@ -353,7 +354,7 @@ function RecentEntries({ token, userId, date, project }) {
     return e.blocks?.some(b => (b.project_tags || []).some(t => t.toLowerCase() === project.toLowerCase()));
   });
 
-  const isToday = todayStr === new Date().toISOString().slice(0, 10);
+  const isToday = todayStr === todayKey();
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:8,overflowY:'auto'}}>
@@ -430,7 +431,7 @@ function MemoriesView({ token, userId, date }) {
           textTransform:'uppercase', color:'var(--dl-middle)',
           marginBottom:6, opacity:0.7,
         }}>
-          {date === new Date().toISOString().slice(0, 10) ? 'today' : formatDate(date)}
+          {date === todayKey() ? 'today' : formatDate(date)}
         </div>
         <JournalEditor date={date} userId={userId} token={token} />
       </div>
