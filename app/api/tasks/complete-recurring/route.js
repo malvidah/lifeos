@@ -52,7 +52,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ task: doneRow, already_completed: true });
   }
 
-  // If there's an unchecked row (e.g., the virtual appearance was materialized), mark it done
+  // If there's an unchecked row with matching text, mark it done
   const uncheckedRow = matchingRows.find(r => !r.done);
   if (uncheckedRow) {
     const { data: updated } = await supabase.from('tasks')
@@ -62,10 +62,14 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ task: updated || uncheckedRow });
   }
 
-  // Find max position of existing tasks for this date so completion sorts at the end
-  const { data: posRows } = await supabase.from('tasks')
-    .select('position').eq('user_id', user.id).eq('date', date).is('deleted_at', null);
-  const maxPos = (posRows ?? []).reduce((max, r) => Math.max(max, r.position ?? 0), -1);
+  // Set position: if template is from this same date, use its position.
+  // Otherwise, put after all existing tasks (where recurring tasks appear).
+  let completionPosition = template.position ?? 0;
+  if (template.date !== date) {
+    const { data: posRows } = await supabase.from('tasks')
+      .select('position').eq('user_id', user.id).eq('date', date).is('deleted_at', null);
+    completionPosition = (posRows ?? []).reduce((max, r) => Math.max(max, r.position ?? 0), -1) + 1;
+  }
 
   // Create completion row
   const { data: row, error: insertErr } = await supabase.from('tasks').insert({
@@ -78,7 +82,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     completed_at: TODAY(),
     project_tags: template.project_tags || [],
     note_tags: template.note_tags || [],
-    position: maxPos + 1,
+    position: completionPosition,
   }).select().single();
 
   if (insertErr) throw insertErr;
