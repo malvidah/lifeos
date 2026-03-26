@@ -1428,7 +1428,7 @@ function MapInner({ token }) {
                     flexShrink: 0, width: 110, height: 100,
                     backdropFilter: 'blur(20px) saturate(1.4)',
                     WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-                    background: 'var(--dl-glass)', borderRadius: 12, padding: 10,
+                    background: `linear-gradient(135deg, ${color}12 0%, var(--dl-glass) 60%)`, borderRadius: 12, padding: 10,
                     border: `1.5px solid ${isSelected ? color : color + '40'}`,
                     boxShadow: 'var(--dl-glass-shadow)',
                     cursor: 'pointer', transition: 'border-color 0.15s, opacity 0.15s',
