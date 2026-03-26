@@ -85,16 +85,17 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .eq('done', false)
     .neq('date', date)       // not already in ownTasks
     .not('html', 'ilike', '%data-recurrence=%')
+    .not('html', 'ilike', '%data-habit=%')
     .order('date', { ascending: true });
   if (e2) throw e2;
 
-  // C) RECURRING tasks: have /r chip, schedule matches this day
+  // C) RECURRING tasks: have /r or /h chip, schedule matches this day
   const { data: recurringCandidates } = await supabase
     .from('tasks').select(cols)
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .neq('date', date)
-    .ilike('html', '%data-recurrence=%');
+    .or('html.ilike.%data-recurrence=%,html.ilike.%data-habit=%');
 
   // Dedup persistent against ownTasks
   const dedupedPersistent = (persistentTasks ?? []).filter(t => !ownIds.has(t.id));
@@ -104,7 +105,12 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   // so a recurring template is suppressed when there's already a completion row for today.
   const ownTexts = new Set(
     [...(ownTasks ?? []), ...dedupedPersistent]
-      .map(t => t.text?.trim().toLowerCase())
+      .map(t => (t.text ?? '')
+        .replace(/\/[hr]\s+\S+/gi, '')
+        .replace(/\{[hr]:[^}]+\}/g, '')
+        .replace(/🎯\s*[A-Za-z·\s]+/g, '')
+        .replace(/↻\s*[A-Za-z·\s]+/g, '')
+        .trim().toLowerCase())
       .filter(Boolean)
   );
 
@@ -112,13 +118,19 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     if (ownIds.has(t.id)) return false; // already in ownTasks
     if (persistentIds.has(t.id)) return false; // already in dedupedPersistent
     // Suppress if there's already a completion row for this date with the same text
-    // (i.e., the user checked it off — a copy was created in ownTasks).
-    // The completion row has the recurrence chip stripped, so compare clean text.
-    const cleanTemplateText = (t.text ?? '').replace(/\/r\s+\S+/gi, '').trim().toLowerCase();
+    const cleanTemplateText = (t.text ?? '')
+      .replace(/\/[hr]\s+\S+/gi, '')
+      .replace(/\{[hr]:[^}]+\}/g, '')
+      .replace(/🎯\s*[A-Za-z·\s]+/g, '')
+      .replace(/↻\s*[A-Za-z·\s]+/g, '')
+      .trim().toLowerCase();
     if (cleanTemplateText && ownTexts.has(cleanTemplateText)) return false;
-    const match = t.html?.match(/data-recurrence="([^"]+)"/);
-    if (!match) return false;
-    const recurrence = keyToRecurrence(match[1], t.date);
+    // Match either data-recurrence or data-habit attribute for schedule
+    const recMatch = t.html?.match(/data-recurrence="([^"]+)"/);
+    const habMatch = t.html?.match(/data-habit="([^"]+)"/);
+    const scheduleKey = recMatch?.[1] || habMatch?.[1];
+    if (!scheduleKey) return false;
+    const recurrence = keyToRecurrence(scheduleKey, t.date);
     if (!recurrence || !matchesSchedule(date, recurrence)) return false;
     // If task has a due_date, only show up to the due_date
     if (t.due_date && t.due_date < date) return false;
@@ -261,24 +273,25 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .not('due_date', 'is', null)
     .lte('date', date)
     .eq('done', false).neq('date', date)
-    .not('html', 'ilike', '%data-recurrence=%');
+    .not('html', 'ilike', '%data-recurrence=%')
+    .not('html', 'ilike', '%data-habit=%');
 
-  // Fetch recurring candidates from other dates, then filter to only those that
-  // actually match this day's schedule. Without this filter, the foreign-deletion
-  // loop (below) would delete the original whenever the task isn't shown on this
-  // day — i.e., every autosave on a non-recurrence day destroys the original.
+  // Fetch recurring candidates from other dates (both /r and /h tasks), then
+  // filter to only those that match this day's schedule.
   const { data: recurringCandidatesPost } = await supabase
     .from('tasks')
     .select('id, text, html, date')
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .neq('date', date)
-    .ilike('html', '%data-recurrence=%');
+    .or('html.ilike.%data-recurrence=%,html.ilike.%data-habit=%');
 
   const injectedRecurring = (recurringCandidatesPost ?? []).filter(t => {
-    const match = t.html?.match(/data-recurrence="([^"]+)"/);
-    if (!match) return false;
-    const rec = keyToRecurrence(match[1], t.date);
+    const recMatch = t.html?.match(/data-recurrence="([^"]+)"/);
+    const habMatch = t.html?.match(/data-habit="([^"]+)"/);
+    const key = recMatch?.[1] || habMatch?.[1];
+    if (!key) return false;
+    const rec = keyToRecurrence(key, t.date);
     return rec && matchesSchedule(date, rec);
   });
 

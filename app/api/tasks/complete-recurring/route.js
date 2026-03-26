@@ -25,13 +25,17 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'template not found' }, { status: 404 });
   }
 
-  // Strip recurrence chip from HTML and text for the completion copy
+  // Strip recurrence and habit chips from HTML and text for the completion copy
   const completionHtml = (template.html || '')
     .replace(/<span\b[^>]*\bdata-recurrence="[^"]*"[^>]*>[^<]*<\/span>/g, '')
+    .replace(/<span\b[^>]*\bdata-habit="[^"]*"[^>]*>[^<]*<\/span>/g, '')
     .replace(/data-checked="false"/, 'data-checked="true"');
 
   const completionText = (template.text || '')
-    .replace(/\/r\s+\S+/gi, '')
+    .replace(/\/[hr]\s+\S+/gi, '')
+    .replace(/\{[hr]:[^}]+\}/g, '')
+    .replace(/🎯\s*[A-Za-z·\s]+/g, '')
+    .replace(/↻\s*[A-Za-z·\s]+/g, '')
     .trim();
 
   // Check if a completion row already exists for this date + text
