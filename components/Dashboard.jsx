@@ -204,15 +204,19 @@ function DashboardInner() {
   useEffect(() => { try { localStorage.setItem('daylab:selected', selected); } catch {} }, [selected]);
   useEffect(() => { try { if (activeProject) localStorage.setItem('daylab:activeProject', activeProject); else localStorage.removeItem('daylab:activeProject'); } catch {} }, [activeProject]);
 
-  // Auto-update selected date at midnight and on tab focus
+  // Auto-advance selected date at midnight — only if user was on the previous "today"
+  const prevTodayRef = useRef(todayKey());
   useEffect(() => {
     const check = () => {
       const today = todayKey();
-      setSelected(prev => prev === today ? prev : today);
+      const prevToday = prevTodayRef.current;
+      if (today !== prevToday) {
+        // Midnight crossed — advance only if user was viewing the old today
+        setSelected(prev => prev === prevToday ? today : prev);
+        prevTodayRef.current = today;
+      }
     };
-    // Check every 30s for midnight crossing
     const timer = setInterval(check, 30_000);
-    // Also check when tab becomes visible (e.g. after sleeping overnight)
     const onVis = () => { if (document.visibilityState === 'visible') check(); };
     document.addEventListener('visibilitychange', onVis);
     return () => { clearInterval(timer); document.removeEventListener('visibilitychange', onVis); };
