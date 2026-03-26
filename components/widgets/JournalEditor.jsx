@@ -328,7 +328,7 @@ export function DropZone({ uploading }) {
 // ─── Recent Entries View ─────────────────────────────────────────────────────
 // Read-only scrollable list of the N most recent journal dates.
 
-function RecentEntries({ token, userId, date }) {
+function RecentEntries({ token, userId, date, project }) {
   const todayStr = date || new Date().toISOString().slice(0, 10);
   const [entries, setEntries] = useState(null);
 
@@ -346,7 +346,12 @@ function RecentEntries({ token, userId, date }) {
     return `${months[m - 1]} ${d}, ${y}`;
   };
 
-  const pastEntries = (entries || []).filter(e => e.date !== todayStr);
+  const pastEntries = (entries || []).filter(e => {
+    if (e.date === todayStr) return false;
+    if (!project) return true;
+    // Filter: at least one block must have this project in its tags
+    return e.blocks?.some(b => (b.project_tags || []).some(t => t.toLowerCase() === project.toLowerCase()));
+  });
 
   return (
     <div style={{display:'flex',flexDirection:'column',gap:8,overflowY:'auto'}}>
@@ -472,7 +477,7 @@ function MemoriesView({ token, userId, date }) {
 }
 
 export function JournalEditor({date,userId,token,project,journalMode}) {
-  if (journalMode === 'recent') return <RecentEntries token={token} userId={userId} date={date} />;
+  if (journalMode === 'recent') return <RecentEntries token={token} userId={userId} date={date} project={project} />;
   if (journalMode === 'memories') return <MemoriesView token={token} userId={userId} date={date} />;
 
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);

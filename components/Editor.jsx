@@ -137,7 +137,7 @@ const PlaceTagNode = Node.create({
       style: Object.entries({ ...CHIP_TOKENS.place, cursor: 'pointer', userSelect: 'none' })
         .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
         .join(';'),
-    }, '\u{1F5FA}\uFE0F ' + name.toUpperCase()];
+    }, '\u{1F4CD} ' + name.toUpperCase()];
   },
 });
 
