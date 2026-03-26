@@ -43,40 +43,6 @@ function dayNum(dateStr) {
   return parseInt(dateStr.slice(8), 10);
 }
 
-// ── Drag-to-scroll ───────────────────────────────────────────────────────────
-function useDragScroll(ref) {
-  const dragging = useRef(false);
-  const startX = useRef(0);
-  const scrollStart = useRef(0);
-
-  const onMouseDown = useCallback(e => {
-    if (!ref.current) return;
-    dragging.current = true;
-    startX.current = e.clientX;
-    scrollStart.current = ref.current.scrollLeft;
-    ref.current.style.cursor = 'grabbing';
-    ref.current.style.userSelect = 'none';
-  }, [ref]);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const onMove = e => {
-      if (!dragging.current) return;
-      el.scrollLeft = scrollStart.current - (e.clientX - startX.current);
-    };
-    const onUp = () => {
-      dragging.current = false;
-      if (el) { el.style.cursor = 'grab'; el.style.userSelect = ''; }
-    };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-  }, [ref]);
-
-  return { onMouseDown };
-}
-
 // ── Mode toggle for card header ──────────────────────────────────────────────
 const CalIcon = () => (
   <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -116,7 +82,30 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const scrollRef = useRef(null);
-  const { onMouseDown } = useDragScroll(scrollRef);
+
+  // Drag-to-scroll state
+  const dragState = useRef({ dragging: false, startX: 0, scrollStart: 0, moved: false });
+
+  const onPointerDown = useCallback(e => {
+    const el = scrollRef.current;
+    if (!el) return;
+    dragState.current = { dragging: true, startX: e.clientX, scrollStart: el.scrollLeft, moved: false };
+    el.style.cursor = 'grabbing';
+    el.setPointerCapture(e.pointerId);
+  }, []);
+
+  const onPointerMove = useCallback(e => {
+    const ds = dragState.current;
+    if (!ds.dragging) return;
+    const dx = e.clientX - ds.startX;
+    if (Math.abs(dx) > 3) ds.moved = true;
+    scrollRef.current.scrollLeft = ds.scrollStart - dx;
+  }, []);
+
+  const onPointerUp = useCallback(e => {
+    dragState.current.dragging = false;
+    if (scrollRef.current) scrollRef.current.style.cursor = 'grab';
+  }, []);
 
   const today = todayKey();
   const startDate = addDays(date || today, -42);
@@ -125,12 +114,13 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
   const dates = [];
   for (let d = startDate; d <= endDate; d = addDays(d, 1)) dates.push(d);
 
+  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
+
   // Re-fetch when tasks are saved
   useEffect(() => {
-    const handler = () => setRefreshKey(k => k + 1);
-    window.addEventListener('daylab:tasks-saved', handler);
-    return () => window.removeEventListener('daylab:tasks-saved', handler);
-  }, []);
+    window.addEventListener('daylab:tasks-saved', refresh);
+    return () => window.removeEventListener('daylab:tasks-saved', refresh);
+  }, [refresh]);
 
   useEffect(() => {
     if (!token || !userId) return;
@@ -152,6 +142,51 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
       scrollRef.current.scrollLeft = Math.max(0, todayIdx * colW - containerW / 2);
     }
   }, [loading, today, habitMode]);
+
+  // Toggle a habit completion for a specific date
+  const toggleCompletion = useCallback(async (habit, cellDate) => {
+    if (!token) return;
+    const wasDone = habit.completions?.[cellDate] === true;
+
+    // Optimistic update
+    setHabits(prev => prev?.map(h => {
+      if (h.id !== habit.id) return h;
+      const newCompletions = { ...h.completions, [cellDate]: !wasDone };
+      return { ...h, completions: newCompletions };
+    }));
+
+    try {
+      if (wasDone) {
+        // Uncomplete: find the completion task for this date and mark done=false
+        // We need to find the task ID — fetch tasks for that date
+        const res = await api.get(`/api/tasks?date=${cellDate}`, token);
+        const tasks = res?.tasks ?? [];
+        const cleanHabitText = habit.text.trim().toLowerCase();
+        const match = tasks.find(t => {
+          const cText = (t.text || '')
+            .replace(/\{[^}]+\}/g, '').replace(/\/[hr]\s+\S+/gi, '').replace(/@\d{4}-\d{2}-\d{2}/g, '')
+            .trim().toLowerCase();
+          return cText === cleanHabitText && t.done;
+        });
+        if (match) {
+          await api.patch('/api/tasks', { id: match.id, done: false }, token);
+        }
+      } else {
+        // Complete: create a completion row via complete-recurring
+        await api.post('/api/tasks/complete-recurring', {
+          template_id: habit.id,
+          date: cellDate,
+        }, token);
+      }
+      // Refresh to get accurate streak counts
+      refresh();
+      // Also notify tasks card
+      window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+    } catch (err) {
+      console.warn('[habits] toggle failed:', err);
+      refresh(); // revert optimistic update
+    }
+  }, [token, refresh]);
 
   if (loading || !habits) {
     return (
@@ -183,7 +218,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
     <div style={{ display: 'flex' }}>
       {/* Left: habit names table with COUNT and BEST columns */}
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {/* Header row — aligns with date header in calendar mode or top of grid in count mode */}
+        {/* Header row */}
         <div style={{ height: mode === 'calendar' ? 28 + rowH : rowH, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
           <span style={{ flex: 1 }} />
           <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center' }}>
@@ -195,13 +230,10 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
         </div>
         {/* Habit rows */}
         {habits.map(h => (
-          <div key={h.id} style={{
-            height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10,
-          }}>
+          <div key={h.id} style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
             <span style={{ fontFamily: mono, fontSize: 13, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1 }}>
               {h.text}
             </span>
-            {/* Count chip */}
             <div style={{ width: 44, display: 'flex', justifyContent: 'center' }}>
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 2,
@@ -215,23 +247,29 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
                 {h.streak}
               </span>
             </div>
-            {/* Best */}
             <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 36, textAlign: 'center' }}>
-              {h.bestStreak || '—'}
+              {h.bestStreak || '\u2014'}
             </span>
           </div>
         ))}
       </div>
 
       {/* Right: scrollable grid */}
-      <div ref={scrollRef} onMouseDown={onMouseDown} style={{
-        flex: 1, overflowX: 'auto', overflowY: 'hidden', cursor: 'grab',
-        scrollbarWidth: 'none', msOverflowStyle: 'none',
-        margin: '0 -14px 0 0', paddingRight: 14,
-      }}>
+      <div
+        ref={scrollRef}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        style={{
+          flex: 1, overflowX: 'auto', overflowY: 'hidden', cursor: 'grab',
+          scrollbarWidth: 'none', msOverflowStyle: 'none',
+          margin: '0 -14px 0 0', paddingRight: 14,
+          touchAction: 'pan-y',
+        }}
+      >
         <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW }}>
 
-          {/* Header spacer + date header — aligns with left column */}
+          {/* Header spacer + date header */}
           <div style={{ height: mode === 'calendar' ? 28 + rowH : rowH }}>
             {mode === 'calendar' && (
               <div style={{ display: 'flex', height: 28 + rowH, alignItems: 'flex-end' }}>
@@ -267,20 +305,26 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
                 const isPast = d <= today;
 
                 if (!scheduled) {
-                  // Calendar mode: empty spacer. Count mode: skip (filtered out above).
                   return mode === 'calendar' ? <div key={d} style={{ width: colW }} /> : null;
                 }
 
                 return (
                   <div key={d} style={{ width: colW, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div style={{
-                      width: cellSize, height: cellSize, borderRadius: 4,
-                      background: done ? 'var(--dl-accent)' : 'transparent',
-                      border: done ? 'none' : `1.5px solid ${isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
-                      opacity: !isPast && !done ? 0.35 : 1,
-                      transition: 'all 0.15s',
-                      cursor: isPast ? 'pointer' : 'default',
-                    }} />
+                    <div
+                      onClick={e => {
+                        // Don't toggle if we just dragged
+                        if (dragState.current.moved) return;
+                        if (isPast) toggleCompletion(h, d);
+                      }}
+                      style={{
+                        width: cellSize, height: cellSize, borderRadius: 4,
+                        background: done ? 'var(--dl-accent)' : 'transparent',
+                        border: done ? 'none' : `1.5px solid ${isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
+                        opacity: !isPast && !done ? 0.35 : 1,
+                        transition: 'all 0.15s',
+                        cursor: isPast ? 'pointer' : 'default',
+                      }}
+                    />
                   </div>
                 );
               })}
