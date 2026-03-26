@@ -1590,7 +1590,7 @@ function MapInner({ token }) {
                           const exact = placeTypes.some(t => t.name.toLowerCase() === tagQuery.trim().toLowerCase());
                           if (!filtered.length && !tagQuery.trim()) return null;
                           return (
-                            <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, background: 'var(--dl-card)', border: '1px solid var(--dl-border)', borderRadius: 8, boxShadow: 'var(--dl-shadow)', padding: 4, maxHeight: 140, overflowY: 'auto', minWidth: 140, zIndex: 10 }}>
+                            <div style={{ position: 'fixed', bottom: 130, background: 'var(--dl-card)', border: '1px solid var(--dl-border)', borderRadius: 8, boxShadow: 'var(--dl-shadow)', padding: 4, maxHeight: 160, overflowY: 'auto', minWidth: 160, zIndex: 10000 }}>
                               {filtered.map(t => (
                                 <button key={t.name} onMouseDown={e => { e.preventDefault(); setEditType(t.name); setTagQuery(''); setShowTagSugg(false); }}
                                   style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', background: 'none', border: 'none', padding: '4px 8px', cursor: 'pointer', fontFamily: mono, fontSize: 10, color: 'var(--dl-strong)', borderRadius: 4, textAlign: 'left' }}
