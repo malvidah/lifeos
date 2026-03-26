@@ -11,11 +11,11 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // Get all active (non-deleted) tasks for this date
   const { data: tasks, error } = await supabase
     .from('tasks')
-    .select('id, text, created_at')
+    .select('id, text')
     .eq('user_id', user.id)
     .eq('date', date)
     .is('deleted_at', null)
-    .order('created_at', { ascending: false });
+    .order('id', { ascending: false });
 
   if (error) throw error;
   if (!tasks?.length) return Response.json({ ok: true, kept: 0, removed: 0 });
