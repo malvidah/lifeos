@@ -85,15 +85,19 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
 }
 
 // ── New task input (always at the bottom) ─────────────────────────────────────
-function NewTaskInput({ onAdd, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, inputRef, project }) {
-  // onEnterCommit for singleLine passes (text) — plain text with tokens
+function NewTaskInput({ onAdd, onFocusPrev, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, inputRef, project }) {
   const handleAdd = useCallback((text) => {
     if (!text?.trim()) return;
     onAdd(text);
   }, [onAdd]);
 
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0' }}>
+    <div
+      onKeyDown={e => {
+        if (e.key === 'ArrowUp') { e.preventDefault(); onFocusPrev?.(); }
+      }}
+      style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0' }}
+    >
       <div style={{
         width: 15, height: 15, flexShrink: 0, borderRadius: 4, marginTop: 4,
         border: '1.5px solid var(--dl-border2)', background: 'transparent',
@@ -110,7 +114,8 @@ function NewTaskInput({ onAdd, projectNames, noteNames, placeNames, onProjectCli
           mutedColor={"var(--dl-middle)"}
           color={"var(--dl-accent)"}
           style={{ padding: 0 }}
-          onEnterCommit={(html, text) => handleAdd(html, text)}
+          onEnterCommit={text => handleAdd(text)}
+          onBackspaceEmpty={() => onFocusPrev?.()}
           onProjectClick={onProjectClick}
           onNoteClick={onNoteClick}
         />
@@ -209,6 +214,10 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       ))}
       <NewTaskInput
         onAdd={handleAdd}
+        onFocusPrev={() => {
+          const last = filteredTasks[filteredTasks.length - 1];
+          if (last) taskRefs.current[last.id]?.focus?.();
+        }}
         inputRef={newTaskRef}
         project={project}
         projectNames={projectNames}
