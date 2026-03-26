@@ -1020,7 +1020,39 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       DateTagNode,
       ...(singleLine ? [] : [ImageBlock, ImageChip]),
       ...(noteTitle ? [Table.configure({ resizable: true }), TableRow, TableCell, TableHeader] : []),
-      ...(taskList ? [TaskList, TaskItem.configure({ nested: false })] : []),
+      ...(taskList ? [
+        TaskList,
+        TaskItem.configure({ nested: false }).extend({
+          addAttributes() {
+            return {
+              ...this.parent?.(),
+              // Preserve task tracking attributes through TipTap's parse/render cycle.
+              // Without these, data-task-id etc. are lost in getHTML() and the diff
+              // layer can't match edited tasks back to their server-side originals.
+              taskId: {
+                default: null,
+                parseHTML: el => el.getAttribute('data-task-id'),
+                renderHTML: attrs => attrs.taskId ? { 'data-task-id': attrs.taskId } : {},
+              },
+              originDate: {
+                default: null,
+                parseHTML: el => el.getAttribute('data-origin-date'),
+                renderHTML: attrs => attrs.originDate ? { 'data-origin-date': attrs.originDate } : {},
+              },
+              recurring: {
+                default: false,
+                parseHTML: el => el.getAttribute('data-recurring') === 'true',
+                renderHTML: attrs => attrs.recurring ? { 'data-recurring': 'true' } : {},
+              },
+              completedDate: {
+                default: null,
+                parseHTML: el => el.getAttribute('data-completed-date'),
+                renderHTML: attrs => attrs.completedDate ? { 'data-completed-date': attrs.completedDate } : {},
+              },
+            };
+          },
+        }),
+      ] : []),
 
       Placeholder.configure({
         placeholder: noteTitle
