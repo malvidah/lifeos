@@ -488,8 +488,15 @@ function DashboardInner() {
       },
       navigateToPlace: (name) => {
         // Ensure world map is visible before navigating
-        if (timelineCollapsed) toggleTimeline();
-        window.dispatchEvent(new CustomEvent('daylab:go-to-place', { detail: { name } }));
+        if (timelineCollapsed) {
+          toggleTimeline();
+          // Delay event until map component mounts and registers listener
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('daylab:go-to-place', { detail: { name } }));
+          }, 500);
+        } else {
+          window.dispatchEvent(new CustomEvent('daylab:go-to-place', { detail: { name } }));
+        }
       },
     }}>
     <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>

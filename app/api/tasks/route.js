@@ -350,12 +350,24 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   if (ownRows.length > 0) {
     const rows = ownRows.map(t => {
       const prev = matchExisting(t.text);
+      // Preserve recurrence chip if the previous version had one but the new doesn't
+      // (protects against editor accidentally stripping the recurrence span)
+      let html = t.html;
+      let text = t.text;
+      if (prev?.html?.includes('data-recurrence=') && !html?.includes('data-recurrence=')) {
+        const recMatch = prev.html.match(/<span\b[^>]*\bdata-recurrence="[^"]*"[^>]*>[^<]*<\/span>/);
+        if (recMatch) {
+          html = html.replace(/<\/li>$/, recMatch[0] + '</li>');
+          const recTextMatch = prev.text?.match(/\/r\s+\S+/);
+          if (recTextMatch) text = text + ' ' + recTextMatch[0];
+        }
+      }
       return {
         user_id:      user.id,
         date,
         position:     t.position,
-        html:         t.html,
-        text:         t.text,
+        html,
+        text,
         done:         t.done,
         due_date:     t.due_date ?? prev?.due_date ?? null,
         completed_at: t.done ? (prev?.completed_at ?? today) : null,
