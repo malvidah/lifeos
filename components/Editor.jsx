@@ -1020,7 +1020,57 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       DateTagNode,
       ...(singleLine ? [] : [ImageBlock, ImageChip]),
       ...(noteTitle ? [Table.configure({ resizable: true }), TableRow, TableCell, TableHeader] : []),
-      ...(taskList ? [TaskList, TaskItem.configure({ nested: false })] : []),
+      ...(taskList ? [
+        TaskList,
+        TaskItem.configure({ nested: false }),
+        // Intercept checkbox toggles on recurring/habit tasks before they modify the document
+        Extension.create({
+          name: 'recurringCheckboxInterceptor',
+          addProseMirrorPlugins() {
+            const editorInstance = this.editor;
+            return [new Plugin({
+              key: new PluginKey('recurringCheckboxInterceptor'),
+              filterTransaction(tr) {
+                if (!tr.docChanged || !onRecurringToggleRef.current) return true;
+                // Check if this transaction sets `checked` on a taskItem
+                for (let i = 0; i < tr.steps.length; i++) {
+                  const step = tr.steps[i];
+                  // SetNodeMarkup steps have a `from` position
+                  if (step.toJSON?.()?.stepType === 'replaceAround' || step.toJSON?.()?.stepType === 'setAttrs') {
+                    // Check for attr change
+                  }
+                }
+                // Simpler approach: compare the old and new doc for checked changes on recurring items
+                const oldDoc = tr.before;
+                const newDoc = tr.doc;
+                // Walk both docs looking for taskItem nodes where checked changed
+                let blocked = false;
+                newDoc.descendants((node, pos) => {
+                  if (blocked) return false;
+                  if (node.type.name !== 'taskItem') return;
+                  const oldNode = oldDoc.nodeAt(pos);
+                  if (!oldNode || oldNode.type.name !== 'taskItem') return;
+                  if (node.attrs.checked === oldNode.attrs.checked) return;
+                  // Check if this task has data-recurring="true" in its rendered attributes
+                  // The DOM element has this attribute, but the ProseMirror node doesn't directly.
+                  // We need to check the DOM:
+                  const domNode = editorInstance.view.nodeDOM(pos);
+                  if (domNode?.getAttribute?.('data-recurring') === 'true') {
+                    const taskId = domNode.getAttribute('data-task-id');
+                    if (taskId) {
+                      blocked = true;
+                      // Call the handler asynchronously (can't do async in filterTransaction)
+                      setTimeout(() => onRecurringToggleRef.current(taskId, node.attrs.checked), 0);
+                    }
+                  }
+                });
+                if (blocked) return false; // block the transaction
+                return true;
+              },
+            })];
+          },
+        }),
+      ] : []),
 
       Placeholder.configure({
         placeholder: noteTitle
@@ -1220,29 +1270,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     editable,
 
     editorProps: {
-      handleDOMEvents: {
-        // Intercept checkbox clicks on recurring/habit tasks BEFORE TipTap modifies the document.
-        // This prevents the diff save from patching the template — instead we call complete-recurring directly.
-        mousedown(view, event) {
-          if (!onRecurringToggleRef.current) return false;
-          const target = event.target;
-          // Only intercept checkbox inputs inside task items
-          if (target.tagName !== 'INPUT' || target.type !== 'checkbox') return false;
-          const li = target.closest?.('[data-type="taskItem"]');
-          if (!li) return false;
-          // Only intercept if this is a recurring task
-          if (li.getAttribute('data-recurring') !== 'true') return false;
-          const taskId = li.getAttribute('data-task-id');
-          if (!taskId) return false;
-          // Prevent TipTap from toggling the checkbox
-          event.preventDefault();
-          event.stopPropagation();
-          // Current state: data-checked tells us if it's currently done
-          const currentlyDone = li.getAttribute('data-checked') === 'true';
-          onRecurringToggleRef.current(taskId, !currentlyDone);
-          return true;
-        },
-      },
       handleClick(view, pos, event) {
         // Skip navigation if a chip was just inserted (dropdown mouse-click leaks a click event)
         if (justInsertedRef.current) return false;
