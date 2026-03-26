@@ -47,7 +47,17 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     };
   }).filter(Boolean);
 
-  if (!habits.length) return Response.json({ habits: [] });
+  // Deduplicate habits by cleaned text — keep the earliest (original template)
+  const seen = new Map();
+  for (const h of habits) {
+    const key = h.matchKey;
+    if (!seen.has(key) || h.date < seen.get(key).date) {
+      seen.set(key, h);
+    }
+  }
+  const dedupedHabits = [...seen.values()];
+
+  if (!dedupedHabits.length) return Response.json({ habits: [] });
 
   // Fetch all completions in the date range
   const { data: completions, error: cErr } = await supabase
@@ -62,7 +72,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (cErr) throw cErr;
 
   // Build completion map per habit
-  for (const habit of habits) {
+  for (const habit of dedupedHabits) {
     const recurrence = keyToRecurrence(habit.schedule, habit.date);
     const completionMap = {};
     const habitTextLower = habit.matchKey; // lowercased clean text for comparison
@@ -138,5 +148,5 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     habit.freezes = freezes;
   }
 
-  return Response.json({ habits });
+  return Response.json({ habits: dedupedHabits });
 });

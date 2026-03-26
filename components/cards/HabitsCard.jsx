@@ -227,7 +227,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
   for (let i = 1; i < visibleDates.length; i++) {
     if (dayNum(visibleDates[i]) === 1) monthBoundaries.add(i);
   }
-  const dividerW = 20;
+  const dividerW = 24;
 
   return (
     <div style={{ display: 'flex', userSelect: 'none', WebkitUserSelect: 'none' }}>
@@ -360,35 +360,34 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
   );
 }
 
-// ── Month divider — vertical line with rotated month label ───────────────────
+// ── Month divider — vertical line with horizontal month label ─────────────────
 function MonthDivider({ label, height, rowIndex, rowH }) {
   // Only render the label + full line on the first habit row
   if (rowIndex !== 0) {
-    return <div style={{ width: 20, position: 'relative' }}>
-      <div style={{ position: 'absolute', left: 9, top: 0, bottom: 0, width: 1, background: 'var(--dl-border)' }} />
+    return <div style={{ width: 24, position: 'relative' }}>
+      <div style={{ position: 'absolute', left: 11, top: 0, bottom: 0, width: 1, background: 'var(--dl-border)' }} />
     </div>;
   }
 
   return (
-    <div style={{ width: 20, position: 'relative' }}>
+    <div style={{ width: 24, position: 'relative' }}>
       {/* Vertical line spanning all rows */}
       <div style={{
-        position: 'absolute', left: 9, top: -30, width: 1,
+        position: 'absolute', left: 11, top: -30, width: 1,
         height: height + 30,
         background: 'var(--dl-border)',
       }} />
-      {/* Rotated month label centered on the line */}
+      {/* Horizontal month label at the top, centered on the line */}
       <div style={{
-        position: 'absolute', left: 0, top: -24, width: 20, height: 20,
+        position: 'absolute', left: 0, top: -22, width: 24,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}>
         <span style={{
           fontFamily: mono, fontSize: 8, fontWeight: 600,
-          color: 'var(--dl-middle)', letterSpacing: '0.06em',
+          color: 'var(--dl-middle)', letterSpacing: '0.04em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
-          transform: 'rotate(-90deg)',
           background: 'var(--dl-card, var(--dl-bg))',
-          padding: '0 2px',
+          padding: '0 1px',
         }}>
           {label}
         </span>
