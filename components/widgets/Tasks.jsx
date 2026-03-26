@@ -30,8 +30,13 @@ export function TaskCheckbox({ done, onToggle }) {
   );
 }
 
+// Check if any TipTap suggestion dropdown is currently visible
+function isSuggestionOpen() {
+  return !!document.querySelector('.dl-suggestion-dropdown');
+}
+
 // ── Single task row ──────────────────────────────────────────────────────────
-function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, isFirst, placeholder }) {
+function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onEnterCreate, onFocusPrev, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, isFirst, placeholder }) {
   const handleCommit = useCallback((text) => {
     if (!text?.trim()) return;
     if (text !== task.text) {
@@ -43,8 +48,9 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
     <div
       onKeyDown={e => {
         // Don't intercept arrow keys when suggestion dropdown is open
-        if (document.querySelector('.dl-suggestion-dropdown')) return;
-        if (e.key === 'ArrowDown') { e.preventDefault(); onEnterDown?.(); }
+        if (isSuggestionOpen()) return;
+        // Only navigate if at very start (ArrowUp) or end (ArrowDown) of content
+        if (e.key === 'ArrowDown' && onEnterDown) { e.preventDefault(); onEnterDown(); }
         if (e.key === 'ArrowUp' && onFocusPrev) { e.preventDefault(); onFocusPrev(); }
       }}
       style={{
@@ -72,7 +78,7 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
           onBlur={text => handleCommit(text)}
           onEnterCommit={text => {
             handleCommit(text);
-            onEnterDown?.();
+            onEnterCreate?.();
           }}
           onBackspaceEmpty={onDelete ? () => {
             onDelete(task.id);
@@ -214,67 +220,9 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         .task-done .ProseMirror p { text-decoration: line-through; text-decoration-color: var(--dl-middle); }
         .task-done .ProseMirror p span { text-decoration: none !important; }
       `}</style>
-      {filteredTasks.map((task, idx) => (
-        <TaskRow
-          key={task.id}
-          task={task}
-          onToggle={toggleTask}
-          onEdit={updateTask}
-          onDelete={idx === 0 && filteredTasks.length === 1 ? null : deleteTask}
-          onEnterDown={() => {
-            const next = filteredTasks[idx + 1];
-            if (next) {
-              taskRefs.current[next.id]?.focus?.();
-            } else if (drafts.length > 0) {
-              draftRefs.current[drafts[0].id]?.focus?.();
-            } else {
-              addDraft();
-            }
-          }}
-          onFocusPrev={idx === 0 ? null : () => {
-            const prev = filteredTasks[idx - 1];
-            if (prev) taskRefs.current[prev.id]?.focus?.();
-          }}
-          editorRef={el => { taskRefs.current[task.id] = el; }}
-          projectNames={projectNames}
-          noteNames={noteNames}
-          placeNames={placeNames}
-          onProjectClick={name => navigateToProject(name)}
-          onNoteClick={name => navigateToNote(name)}
-          isFirst={idx === 0}
-          placeholder={filteredTasks.length === 1 && idx === 0 && !task.text ? 'Add a task...' : ''}
-        />
-      ))}
-      {/* Draft rows — local-only, not saved until text is committed */}
-      {drafts.map((draft, idx) => (
-        <TaskRow
-          key={draft.id}
-          task={{ id: draft.id, text: '', done: false, _source: 'own', _editable: true }}
-          onToggle={() => {}}
-          onEdit={(id, patch) => {
-            if (patch.text?.trim()) commitDraft(id, patch.text);
-          }}
-          onDelete={() => removeDraft(draft.id)}
-          onEnterDown={() => addDraft()}
-          onFocusPrev={() => {
-            if (idx === 0) {
-              const lastTask = filteredTasks[filteredTasks.length - 1];
-              if (lastTask) taskRefs.current[lastTask.id]?.focus?.();
-            } else {
-              draftRefs.current[drafts[idx - 1].id]?.focus?.();
-            }
-          }}
-          editorRef={el => { draftRefs.current[draft.id] = el; }}
-          projectNames={projectNames}
-          noteNames={noteNames}
-          placeNames={placeNames}
-          onProjectClick={name => navigateToProject(name)}
-          onNoteClick={name => navigateToNote(name)}
-          placeholder=""
-        />
-      ))}
-      {/* If no tasks at all, show a single empty row */}
-      {filteredTasks.length === 0 && drafts.length === 0 && (
+      {/* Render tasks with draft rows interleaved at correct positions */}
+      {filteredTasks.length === 0 && drafts.length === 0 ? (
+        // Empty state — single editable row
         <TaskRow
           task={{ id: '__empty__', text: '', done: false, _source: 'own', _editable: true }}
           onToggle={() => {}}
@@ -282,17 +230,80 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
             if (patch.text?.trim()) addTask(patch.text, { project_tags: project ? [project.toLowerCase()] : [] });
           }}
           onDelete={null}
-          onEnterDown={() => addDraft()}
+          onEnterCreate={() => {
+            const draftId = `draft-${Date.now()}`;
+            setDrafts(prev => [...prev, { id: draftId, afterIdx: -1 }]);
+            setTimeout(() => draftRefs.current[draftId]?.focus?.(), 50);
+          }}
           onFocusPrev={null}
           editorRef={el => { taskRefs.current['__empty__'] = el; }}
-          projectNames={projectNames}
-          noteNames={noteNames}
-          placeNames={placeNames}
+          projectNames={projectNames} noteNames={noteNames} placeNames={placeNames}
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
           isFirst={true}
           placeholder="Add a task..."
         />
+      ) : (
+        // Build interleaved list: task, drafts-after-task, task, drafts-after-task...
+        filteredTasks.flatMap((task, idx) => {
+          const draftsAfter = drafts.filter(d => d.afterIdx === idx);
+          return [
+            <TaskRow
+              key={task.id}
+              task={task}
+              onToggle={toggleTask}
+              onEdit={updateTask}
+              onDelete={deleteTask}
+              onEnterDown={() => {
+                // Check if there's a draft right after this task
+                const draftAfter = drafts.find(d => d.afterIdx === idx);
+                if (draftAfter) { draftRefs.current[draftAfter.id]?.focus?.(); return; }
+                const next = filteredTasks[idx + 1];
+                if (next) taskRefs.current[next.id]?.focus?.();
+              }}
+              onEnterCreate={() => {
+                const draftId = `draft-${Date.now()}`;
+                setDrafts(prev => [...prev, { id: draftId, afterIdx: idx }]);
+                setTimeout(() => draftRefs.current[draftId]?.focus?.(), 50);
+              }}
+              onFocusPrev={idx === 0 ? null : () => {
+                const prev = filteredTasks[idx - 1];
+                if (prev) taskRefs.current[prev.id]?.focus?.();
+              }}
+              editorRef={el => { taskRefs.current[task.id] = el; }}
+              projectNames={projectNames} noteNames={noteNames} placeNames={placeNames}
+              onProjectClick={name => navigateToProject(name)}
+              onNoteClick={name => navigateToNote(name)}
+              isFirst={idx === 0}
+              placeholder=""
+            />,
+            ...draftsAfter.map(draft => (
+              <TaskRow
+                key={draft.id}
+                task={{ id: draft.id, text: '', done: false, _source: 'own', _editable: true }}
+                onToggle={() => {}}
+                onEdit={(id, patch) => {
+                  if (patch.text?.trim()) {
+                    removeDraft(id);
+                    addTask(patch.text, { project_tags: project ? [project.toLowerCase()] : [] });
+                  }
+                }}
+                onDelete={() => removeDraft(draft.id)}
+                onEnterCreate={() => {
+                  const draftId = `draft-${Date.now()}`;
+                  setDrafts(prev => [...prev, { id: draftId, afterIdx: idx }]);
+                  setTimeout(() => draftRefs.current[draftId]?.focus?.(), 50);
+                }}
+                onFocusPrev={() => taskRefs.current[task.id]?.focus?.()}
+                editorRef={el => { draftRefs.current[draft.id] = el; }}
+                projectNames={projectNames} noteNames={noteNames} placeNames={placeNames}
+                onProjectClick={name => navigateToProject(name)}
+                onNoteClick={name => navigateToNote(name)}
+                placeholder=""
+              />
+            )),
+          ];
+        })
       )}
     </div>
   );
