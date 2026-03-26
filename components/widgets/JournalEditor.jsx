@@ -397,47 +397,72 @@ function RecentEntries({ token, userId, date, project }) {
 }
 
 // ─── Memories View ───────────────────────────────────────────────────────────
-// Shows today's entry + entries from 1 month, 6 months, 1 year, 3 years ago.
-// Falls back to nearest date if exact date has no entry.
+// Shows today's entry + past entries at exponentially increasing intervals.
+// Adapts to however much history exists — stops after the last found entry.
+
+const MEMORY_INTERVALS = [
+  { days: 1, label: 'Yesterday' },
+  { days: 3, label: '3 days ago' },
+  { days: 7, label: '1 week ago' },
+  { days: 14, label: '2 weeks ago' },
+  { days: 30, label: '1 month ago' },
+  { days: 60, label: '2 months ago' },
+  { days: 120, label: '4 months ago' },
+  { days: 240, label: '8 months ago' },
+  { days: 365, label: '1 year ago' },
+  { days: 730, label: '2 years ago' },
+  { days: 1095, label: '3 years ago' },
+];
 
 function MemoriesView({ token, userId, date }) {
   const [memories, setMemories] = useState(null);
 
-  // Generate target dates: 1 month, 6 months, 1 year, 3 years ago
-  const targets = useMemo(() => {
-    const [y, m, d] = date.split('-').map(Number);
-    const make = (months) => {
-      const dt = new Date(y, m - 1 - months, d);
-      return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-    };
-    return [
-      { key: '1mo', label: '1 month ago', date: make(1) },
-      { key: '6mo', label: '6 months ago', date: make(6) },
-      { key: '1yr', label: '1 year ago', date: make(12) },
-      { key: '3yr', label: '3 years ago', date: make(36) },
-    ];
-  }, [date]);
-
   useEffect(() => {
     if (!token || !date) return;
-    // Fetch recent entries around each target date (±3 days window)
-    Promise.all(targets.map(async t => {
-      // Try exact date first
-      const d = await api.get(`/api/journal?date=${t.date}`, token);
-      if (d?.blocks?.length) return { ...t, entry: { date: t.date, blocks: d.blocks } };
-      // Fallback: check nearby dates (±3 days)
-      for (let offset = 1; offset <= 3; offset++) {
-        for (const dir of [-1, 1]) {
-          const dt = new Date(t.date + 'T12:00:00');
-          dt.setDate(dt.getDate() + offset * dir);
-          const nearby = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
-          const nd = await api.get(`/api/journal?date=${nearby}`, token);
-          if (nd?.blocks?.length) return { ...t, entry: { date: nearby, blocks: nd.blocks } };
+    let cancelled = false;
+
+    const findMemories = async () => {
+      const results = [];
+      const seenDates = new Set([date]); // don't show the selected date again
+
+      for (const interval of MEMORY_INTERVALS) {
+        const target = new Date(date + 'T12:00:00');
+        target.setDate(target.getDate() - interval.days);
+        const targetStr = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
+
+        // Search target date and nearby (±3 days), prefer exact then closest
+        let found = null;
+        const candidates = [targetStr];
+        for (let o = 1; o <= 3; o++) {
+          for (const dir of [-1, 1]) {
+            const dt = new Date(target);
+            dt.setDate(dt.getDate() + o * dir);
+            candidates.push(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`);
+          }
+        }
+
+        for (const c of candidates) {
+          if (seenDates.has(c)) continue;
+          const d = await api.get(`/api/journal?date=${c}`, token);
+          if (cancelled) return;
+          if (d?.blocks?.length) {
+            found = c;
+            break;
+          }
+        }
+
+        if (found) {
+          seenDates.add(found);
+          results.push({ key: interval.label, label: interval.label, date: found });
         }
       }
-      return { ...t, entry: null };
-    })).then(setMemories).catch(() => setMemories([]));
-  }, [token, date, targets]);
+
+      if (!cancelled) setMemories(results);
+    };
+
+    findMemories().catch(() => { if (!cancelled) setMemories([]); });
+    return () => { cancelled = true; };
+  }, [token, date]);
 
   const formatDate = (d) => {
     const [y, m, day] = d.split('-').map(Number);
@@ -462,11 +487,16 @@ function MemoriesView({ token, userId, date }) {
         <JournalEditor date={date} userId={userId} token={token} />
       </div>
 
-      {/* Memory slots */}
+      {/* Memory slots — only entries that exist */}
       {memories === null ? (
         <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
           <Shimmer width="60%" height={14}/>
           <Shimmer width="80%" height={14}/>
+          <Shimmer width="40%" height={14}/>
+        </div>
+      ) : memories.length === 0 ? (
+        <div style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-middle)',padding:'8px 0',opacity:0.4}}>
+          No memories yet — keep writing!
         </div>
       ) : (
         memories.map(mem => (
@@ -476,15 +506,9 @@ function MemoriesView({ token, userId, date }) {
               textTransform:'uppercase', color:'var(--dl-middle)',
               marginBottom:4, opacity:0.5,
             }}>
-              {mem.label}{mem.entry ? ` — ${formatDate(mem.entry.date)}` : ''}
+              {mem.label} — {formatDate(mem.date)}
             </div>
-            {mem.entry ? (
-              <JournalEditor date={mem.entry.date} userId={userId} token={token} />
-            ) : (
-              <div style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-middle)',padding:'4px 0',opacity:0.4}}>
-                No entry
-              </div>
-            )}
+            <JournalEditor date={mem.date} userId={userId} token={token} />
           </div>
         ))
       )}
