@@ -119,32 +119,37 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
   const sorted = [...tags].sort((a, b) => recencyScore(b) - recencyScore(a));
 
   const placed = new Map();
-  const baseRadius = sorted.length <= 3 ? 2.0 : 1.8;
+  const n = sorted.length;
+  // Spread projects more — larger base radius, more spacing for more projects
+  const baseRadius = n <= 3 ? 2.5 : 2.0 + n * 0.3;
   sorted.forEach((tag, i) => {
-    const angle = (i / sorted.length) * Math.PI * 2 + Math.PI / 4;
-    // More recent → smaller radius (closer to center)
+    const angle = (i / n) * Math.PI * 2 + Math.PI / 4;
     const rScore = recencyScore(tag);
-    const radius = i === 0 ? 0 : (baseRadius + (1 - rScore) * 2.5) + (i / sorted.length) * 1.5;
+    // First project at center, rest spread outward — more projects = more spacing
+    const radius = i === 0 ? 0 : (baseRadius + (1 - rScore) * 3.0) + (i / n) * 2.5;
     placed.set(tag, { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius });
   });
-  for (let iter = 0; iter < 5; iter++) {
+  // More iterations and stronger repulsion for better separation
+  for (let iter = 0; iter < 15; iter++) {
+    // Weaker connection pull — prevent clumping
     (connections || []).forEach(({ source, target, weight }) => {
       const a = placed.get(source), b = placed.get(target);
       if (!a || !b) return;
-      const pull = 0.015 * Math.min(weight, 5);
+      const pull = 0.008 * Math.min(weight, 3);
       const dx = b.x - a.x, dz = b.z - a.z;
       a.x += dx * pull; a.z += dz * pull;
       b.x -= dx * pull; b.z -= dz * pull;
     });
+    // Stronger repulsion with larger minimum distance
     const entries = [...placed.entries()];
     for (let j = 0; j < entries.length; j++) {
       for (let k = j + 1; k < entries.length; k++) {
         const a = entries[j][1], b = entries[k][1];
         const dx = a.x - b.x, dz = a.z - b.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
-        const minDist = 2.0;
+        const minDist = 3.5;
         if (dist < minDist && dist > 0.01) {
-          const push = (minDist - dist) * 0.3 / dist;
+          const push = (minDist - dist) * 0.4 / dist;
           a.x += dx * push; a.z += dz * push;
           b.x -= dx * push; b.z -= dz * push;
         }
@@ -181,7 +186,8 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
 }
 
 function islandRadius(projectCount) {
-  return 3.5 + Math.sqrt(Math.max(1, projectCount)) * 1.8;
+  // Bigger island — grows faster with more projects to give each one space
+  return 4.5 + Math.sqrt(Math.max(1, projectCount)) * 2.8;
 }
 
 // Shared sky/fog colors based on time of day + weather condition
