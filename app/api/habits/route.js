@@ -1,174 +1,134 @@
 import { withAuth } from '../_lib/auth.js';
-import { parseRecurrence, matchesSchedule, calculateStreak } from '@/lib/recurrence.js';
+import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
 
-// GET /api/habits?date=YYYY-MM-DD
-//   Returns recurring task instances for this date + creates missing instances.
-//
-// POST /api/habits  { text, schedule }
-//   Create a recurring task template. schedule is the raw "/d ..." text.
-//
-// PATCH /api/habits  { id, done }
-//   Toggle a recurring task instance (flag it).
-//
-// GET /api/habits?stats=true&project=name
-//   Returns flag counts and streaks per habit for a project.
+// GET /api/habits?start=YYYY-MM-DD&end=YYYY-MM-DD
+// Returns habit definitions + completion status for a date range.
+// Habits are tasks with data-habit="schedule" in their HTML.
 
 export const GET = withAuth(async (req, { supabase, user }) => {
   const { searchParams } = new URL(req.url);
-  const date = searchParams.get('date');
-  const stats = searchParams.get('stats');
-  const project = searchParams.get('project');
+  const start = searchParams.get('start');
+  const end = searchParams.get('end');
 
-  // ── Stats mode: flag counts + streaks per habit for a project ────────
-  if (stats && project) {
-    const { data: templates } = await supabase
-      .from('tasks')
-      .select('id, text, recurrence, project_tags')
-      .eq('user_id', user.id)
-      .eq('is_template', true)
-      .contains('project_tags', [project.toLowerCase()]);
+  if (!start || !end) return Response.json({ error: 'start and end required' }, { status: 400 });
 
-    if (!templates?.length) return Response.json({ habits: [] });
-
-    const habitStats = await Promise.all(templates.map(async t => {
-      const { data: instances } = await supabase
-        .from('tasks')
-        .select('date, done')
-        .eq('recurrence_parent_id', t.id)
-        .eq('user_id', user.id)
-        .order('date', { ascending: false })
-        .limit(365);
-
-      const flagCount = (instances || []).filter(i => i.done).length;
-      const streak = calculateStreak(instances || [], t.recurrence);
-
-      return {
-        id: t.id,
-        text: t.text,
-        recurrence: t.recurrence,
-        flagCount,
-        streak,
-      };
-    }));
-
-    return Response.json({ habits: habitStats });
-  }
-
-  // ── Date mode: get/create instances for this date ───────────────────
-  if (!date) return Response.json({ error: 'date required' }, { status: 400 });
-
-  // Find all active templates for this user
-  const { data: templates } = await supabase
+  // Fetch all habit templates (tasks with data-habit attribute)
+  const { data: templates, error: tErr } = await supabase
     .from('tasks')
-    .select('id, text, html, recurrence, project_tags, note_tags')
+    .select('id, date, text, html, done, project_tags, position')
     .eq('user_id', user.id)
-    .eq('is_template', true);
+    .is('deleted_at', null)
+    .ilike('html', '%data-habit=%');
 
-  if (!templates?.length) return Response.json({ instances: [] });
+  if (tErr) throw tErr;
 
-  // Filter to templates that match this date
-  const matching = templates.filter(t => matchesSchedule(date, t.recurrence));
-  if (!matching.length) return Response.json({ instances: [] });
+  // Parse schedule from each template
+  const habits = (templates ?? []).map(t => {
+    const match = t.html?.match(/data-habit="([^"]+)"/);
+    const schedule = match ? match[1] : null;
+    if (!schedule) return null;
 
-  // Check which already have instances for this date
-  const templateIds = matching.map(t => t.id);
-  const { data: existing } = await supabase
-    .from('tasks')
-    .select('id, recurrence_parent_id, done, text, html, project_tags')
-    .eq('user_id', user.id)
-    .eq('date', date)
-    .in('recurrence_parent_id', templateIds);
+    // Clean text for display
+    const cleanText = (t.text || '')
+      .replace(/\{h:[^}]+\}/g, '')
+      .replace(/\{r:[^}]+\}/g, '')
+      .replace(/\/[hr]\s+\S+/gi, '')
+      .trim();
 
-  const existingParents = new Set((existing || []).map(e => e.recurrence_parent_id));
-
-  // Create missing instances
-  const toCreate = matching
-    .filter(t => !existingParents.has(t.id))
-    .map(t => ({
-      user_id: user.id,
-      date,
-      text: t.text,
-      html: t.html || `<li data-type="taskItem" data-checked="false"><p>${t.text}</p></li>`,
-      done: false,
+    return {
+      id: t.id,
+      date: t.date,
+      text: cleanText || t.text,
+      schedule,
       project_tags: t.project_tags || [],
-      note_tags: t.note_tags || [],
-      recurrence_parent_id: t.id,
-      position: 9000, // sort to end
-    }));
+    };
+  }).filter(Boolean);
 
-  if (toCreate.length) {
-    await supabase.from('tasks').insert(toCreate);
-  }
+  if (!habits.length) return Response.json({ habits: [] });
 
-  // Return all instances for this date with recurrence info from parent
-  const { data: allInstances } = await supabase
+  // Fetch all completions in the date range
+  const { data: completions, error: cErr } = await supabase
     .from('tasks')
-    .select('id, text, html, done, project_tags, recurrence_parent_id, date')
+    .select('id, date, text, done')
     .eq('user_id', user.id)
-    .eq('date', date)
-    .not('recurrence_parent_id', 'is', null);
+    .is('deleted_at', null)
+    .eq('done', true)
+    .gte('date', start)
+    .lte('date', end);
 
-  // Attach recurrence schedule from parent templates
-  const parentIds = [...new Set((allInstances || []).map(i => i.recurrence_parent_id))];
-  const templateMap = {};
-  if (parentIds.length) {
-    const { data: parents } = await supabase
-      .from('tasks').select('id, recurrence').in('id', parentIds);
-    (parents || []).forEach(p => { templateMap[p.id] = p.recurrence; });
+  if (cErr) throw cErr;
+
+  // Build completion map per habit
+  for (const habit of habits) {
+    const recurrence = keyToRecurrence(habit.schedule, habit.date);
+    const completionMap = {};
+    const habitTextLower = habit.text.trim().toLowerCase();
+
+    // Find scheduled dates in range
+    const startDate = new Date(start + 'T12:00:00');
+    const endDate = new Date(end + 'T12:00:00');
+    const scheduledDates = [];
+
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      if (recurrence && matchesSchedule(dateStr, recurrence)) {
+        scheduledDates.push(dateStr);
+        completionMap[dateStr] = false;
+      }
+    }
+
+    // Match completions by cleaned text
+    for (const c of (completions ?? [])) {
+      const cText = (c.text || '')
+        .replace(/\{[^}]+\}/g, '')
+        .replace(/\/[hr]\s+\S+/gi, '')
+        .replace(/@\d{4}-\d{2}-\d{2}/g, '')
+        .trim().toLowerCase();
+      if (cText === habitTextLower && c.done && completionMap.hasOwnProperty(c.date)) {
+        completionMap[c.date] = true;
+      }
+    }
+
+    // Calculate streak with freeze mechanic:
+    // - Consecutive completions from most recent backward = current streak
+    // - Every time you pass your best streak, earn a freeze (1 miss forgiven)
+    // - If frozen and miss, consume freeze (streak stays), tag → snowflake
+    // - If miss again, streak resets to 0, tag → horse
+    let streak = 0;
+    let bestStreak = 0;
+    let freezes = 0;
+    let frozen = false;
+
+    // Walk forward through scheduled dates to track best/freezes properly
+    let runningStreak = 0;
+    for (let i = 0; i < scheduledDates.length; i++) {
+      if (completionMap[scheduledDates[i]]) {
+        runningStreak++;
+        frozen = false;
+        if (runningStreak > bestStreak) {
+          bestStreak = runningStreak;
+          freezes++; // earned a freeze by beating high score
+        }
+      } else {
+        // Miss
+        if (freezes > 0 && !frozen) {
+          freezes--;
+          frozen = true;
+          // streak doesn't reset — it's frozen
+        } else {
+          runningStreak = 0;
+          frozen = false;
+        }
+      }
+    }
+    streak = runningStreak;
+
+    habit.completions = completionMap;
+    habit.streak = streak;
+    habit.bestStreak = bestStreak;
+    habit.frozen = frozen;
+    habit.freezes = freezes;
   }
-  const enriched = (allInstances || []).map(i => ({
-    ...i,
-    recurrence: templateMap[i.recurrence_parent_id] || null,
-  }));
 
-  return Response.json({ instances: enriched });
-});
-
-export const POST = withAuth(async (req, { supabase, user }) => {
-  const { text, project } = await req.json();
-  if (!text) return Response.json({ error: 'text required' }, { status: 400 });
-
-  const today = new Date().toISOString().slice(0, 10);
-  const { cleanText, recurrence } = parseRecurrence(text, today);
-
-  if (!recurrence) {
-    return Response.json({ error: 'Could not parse schedule. Use /d daily, /d m w f, /d every monday, etc.' }, { status: 400 });
-  }
-
-  const tags = project ? [project.toLowerCase()] : [];
-
-  const { data, error } = await supabase
-    .from('tasks')
-    .insert({
-      user_id: user.id,
-      date: today,
-      text: cleanText,
-      html: `<li data-type="taskItem" data-checked="false"><p>${cleanText}</p></li>`,
-      done: false,
-      is_template: true,
-      recurrence,
-      project_tags: tags,
-      position: 0,
-    })
-    .select()
-    .single();
-
-  if (error) throw error;
-  return Response.json({ template: data });
-});
-
-export const PATCH = withAuth(async (req, { supabase, user }) => {
-  const { id, done } = await req.json();
-  if (!id) return Response.json({ error: 'id required' }, { status: 400 });
-
-  const patch = { done: !!done };
-  if (done) patch.completed_at = new Date().toISOString().slice(0, 10);
-  else patch.completed_at = null;
-
-  const { error } = await supabase
-    .from('tasks').update(patch)
-    .eq('id', id).eq('user_id', user.id);
-  if (error) throw error;
-
-  return Response.json({ ok: true });
+  return Response.json({ habits });
 });

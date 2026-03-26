@@ -251,6 +251,36 @@ const RecurrenceTagNode = Node.create({
   },
 });
 
+// HabitTag: stored as {h:key:label}, rendered as 🎯 M·W·F chip.
+// Similar to RecurrenceTag but implies the task shows in the Habits card.
+const HabitTagNode = Node.create({
+  name: 'habitTag', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() {
+    return {
+      key: { default: '' },
+      label: { default: '' },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'span[data-habit]', getAttrs: el => ({
+      key: el.getAttribute('data-habit') || '',
+      label: el.getAttribute('data-habit-label') || el.textContent || '',
+    }) }];
+  },
+  renderHTML({ node }) {
+    const label = node.attrs.label || node.attrs.key || '';
+    const col = 'var(--dl-accent, #D08828)';
+    return ['span', {
+      'data-habit': node.attrs.key,
+      'data-habit-label': label,
+      style: Object.entries({ ...CHIP_TOKENS.date(col), userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
+    }, '\u{1F3AF} ' + label];
+  },
+});
+
 // ImageBlock: stored as [img:url], rendered as block image atom node.
 const ImageBlock = Node.create({
   name: 'imageBlock', group: 'block', atom: true, selectable: true, draggable: false,
@@ -575,6 +605,7 @@ export function docToText(docJson) {
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
       if (c.type === 'recurrenceTag') return `{r:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       if (c.type === 'dateTag')    return `@${c.attrs?.date ?? ''}`;
+      if (c.type === 'habitTag')   return `{h:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       return '';
     }).join('');
   }
@@ -589,17 +620,18 @@ export function docToText(docJson) {
 
 function parseLineContent(line) {
   const content = [];
-  // Tokens: {project} | {l:place} | {r:key:label} | [note] | @YYYY-MM-DD | legacy #Tag
-  const re = /\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})|#([A-Za-z][A-Za-z0-9]+)/g;
+  // Tokens: {project} | {l:place} | {r:key:label} | {h:key:label} | [note] | @YYYY-MM-DD | legacy #Tag
+  const re = /\{h:([^:}]+):([^}]*)\}|\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})|#([A-Za-z][A-Za-z0-9]+)/g;
   let last = 0, m;
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
-    if (m[1] != null)      content.push({ type: 'recurrenceTag', attrs: { key: m[1], label: m[2] } });
-    else if (m[3] != null) content.push({ type: 'placeTag',  attrs: { name: m[3] } });
-    else if (m[4] != null) content.push({ type: 'projectTag', attrs: { name: m[4] } });
-    else if (m[5] != null) content.push({ type: 'noteLink',   attrs: { name: m[5] } });
-    else if (m[6] != null) content.push({ type: 'dateTag',    attrs: { date: m[6] } });
-    else if (m[7] != null) content.push({ type: 'projectTag', attrs: { name: m[7].toLowerCase() } });
+    if (m[1] != null)      content.push({ type: 'habitTag',      attrs: { key: m[1], label: m[2] } });
+    else if (m[3] != null) content.push({ type: 'recurrenceTag', attrs: { key: m[3], label: m[4] } });
+    else if (m[5] != null) content.push({ type: 'placeTag',  attrs: { name: m[5] } });
+    else if (m[6] != null) content.push({ type: 'projectTag', attrs: { name: m[6] } });
+    else if (m[7] != null) content.push({ type: 'noteLink',   attrs: { name: m[7] } });
+    else if (m[8] != null) content.push({ type: 'dateTag',    attrs: { date: m[8] } });
+    else if (m[9] != null) content.push({ type: 'projectTag', attrs: { name: m[9].toLowerCase() } });
     last = m.index + m[0].length;
   }
   if (last < line.length) content.push({ type: 'text', text: line.slice(last) });
@@ -723,6 +755,7 @@ function SuggestionDropdown({ state, onSelect }) {
         const isCmd              = item.startsWith('__cmd__:');
         const isDate             = item.startsWith('__date__:');
         const isRecurrence       = item.startsWith('__recurrence__:');
+        const isHabit            = item.startsWith('__habit__:');
         const isExistingProject  = item.startsWith('__project__:');
         const isNewProject       = item.startsWith('__create_project__:');
         const isProject          = isExistingProject || isNewProject;
@@ -732,7 +765,7 @@ function SuggestionDropdown({ state, onSelect }) {
         const isCreate           = item.startsWith('__create__:') || isNewProject || isNewPlace;
         const rawLabel           = isCmd ? item.slice(8)
                                  : isDate ? item.slice(20)
-                                 : isRecurrence ? item.split(':').slice(2).join(':')
+                                 : (isRecurrence || isHabit) ? item.split(':').slice(2).join(':')
                                  : isNewProject ? item.slice(19)
                                  : isExistingProject ? item.slice(12)
                                  : isNewPlace ? item.slice(16)
@@ -740,11 +773,12 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9);
         const dateStr            = isDate ? item.slice(9, 19) : null;
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === 'l' ? '/l  Location' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'r' ? '/r  Repeat' : '/m  Media')
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === 'l' ? '/l  Location' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'r' ? '/r  Repeat' : rawLabel === 'h' ? '/h  Habit' : '/m  Media')
+                                 : isHabit ? `🎯 ${rawLabel}`
                                  : isRecurrence ? `↻ ${rawLabel}`
                                  : isDate ? rawLabel
                                  : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : isPlace ? `📍 ${rawLabel.toUpperCase()}` : rawLabel;
-        const col                = isProject ? projectColor(rawLabel) : isPlace ? 'var(--dl-blue)' : isDate ? dateChipColor(dateStr) : isRecurrence ? 'var(--dl-green)' : null;
+        const col                = isProject ? projectColor(rawLabel) : isPlace ? 'var(--dl-blue)' : isDate ? dateChipColor(dateStr) : isHabit ? 'var(--dl-accent)' : isRecurrence ? 'var(--dl-green)' : null;
         const selected  = i === state.selectedIndex;
         return (
           <button
@@ -979,6 +1013,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       NoteLinkNode,
       PlaceTagNode,
       RecurrenceTagNode,
+      HabitTagNode,
       DateTagNode,
       ...(singleLine ? [] : [ImageBlock, ImageChip]),
       ...(noteTitle ? [Table.configure({ resizable: true }), TableRow, TableCell, TableHeader] : []),
@@ -1000,7 +1035,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         findMatch: makeSlashSuggestionMatch(),
         itemsFn: (query) => {
           // Bare / — show command menu
-          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:l', '__cmd__:d', '__cmd__:r', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
+          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:l', '__cmd__:d', '__cmd__:r', '__cmd__:h', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
@@ -1068,6 +1103,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             // Repeat/recurrence suggestions
             return getRecurrenceSuggestions(search);
           }
+          if (cmd === 'h') {
+            // Habit suggestions — same schedule options as /r but inserts habitTag
+            return getRecurrenceSuggestions(search).map(s => s.replace('__recurrence__:', '__habit__:'));
+          }
           return [];
         },
         commandFn: ({ editor, range, name }) => {
@@ -1077,6 +1116,17 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
           justInsertedRef.current = true;
           setTimeout(() => { justInsertedRef.current = false; }, 150);
+
+          if (name.startsWith('__habit__:')) {
+            const parts = name.split(':');
+            const key = parts[1];
+            const label = parts.slice(2).join(':');
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'habitTag', attrs: { key, label } },
+              { type: 'text', text: ' ' },
+            ]).run();
+            return;
+          }
 
           if (name.startsWith('__recurrence__:')) {
             // __recurrence__:key:Label

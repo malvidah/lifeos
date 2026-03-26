@@ -17,6 +17,7 @@ import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
 import HealthCard from "./cards/HealthCard.jsx";
+import HabitsCard from "./cards/HabitsCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
 import WorldMapCard from "./cards/WorldMapCard.jsx";
@@ -35,6 +36,7 @@ const DOCK_ITEMS = [
   { id: 'timeline', label: 'Map',      icon: <span style={{fontSize:14,lineHeight:1}}>📍</span> },
   { id: 'cal',      label: 'Calendar', icon: <span style={{fontSize:14,lineHeight:1}}>📅</span> },
   { id: 'health',   label: 'Health',   icon: <span style={{fontSize:14,lineHeight:1}}>💚</span> },
+  { id: 'habits',   label: 'Habits',   icon: <span style={{fontSize:14,lineHeight:1}}>🎯</span> },
   { id: 'notes',    label: 'Notes',    icon: <span style={{fontSize:14,lineHeight:1}}>📝</span> },
   { id: 'journal',  label: 'Journal',  icon: <span style={{fontSize:14,lineHeight:1}}>✏️</span> },
   { id: 'tasks',    label: 'Tasks',    icon: <span style={{fontSize:14,lineHeight:1}}>☑️</span> },
@@ -312,6 +314,7 @@ function DashboardInner() {
   // ── Collapse state ─────────────────────────────────────────────────────
   const [calCollapsed,    toggleCal]      = useCollapse("cal",     true);
   const [healthCollapsed, toggleHealth]   = useCollapse("health",  true);
+  const [habitsCollapsed, toggleHabits]   = useCollapse("habits",  true);
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
@@ -527,12 +530,14 @@ function DashboardInner() {
                 : item.id === 'timeline' ? !timelineCollapsed
                 : item.id === 'cal' ? !calCollapsed
                 : item.id === 'health' ? !healthCollapsed
+                : item.id === 'habits' ? !habitsCollapsed
                 : item.id === 'notes' ? !notesCollapsed
                 : !collapseMap[item.id],
               onToggle: item.id === 'map' ? toggleMap_
                 : item.id === 'timeline' ? toggleTimeline
                 : item.id === 'cal' ? toggleCal
                 : item.id === 'health' ? toggleHealth
+                : item.id === 'habits' ? toggleHabits
                 : item.id === 'notes' ? toggleNotes
                 : toggleMap[item.id],
             }))}
@@ -579,6 +584,17 @@ function DashboardInner() {
               <HealthCard date={selected} token={token} userId={userId}
                 onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
                 collapsed={false}/>
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {/* 4b. HabitsCard — below health, toggle-able */}
+          {!searchOpen && !habitsCollapsed && (
+            <div style={{flexShrink:0}}>
+              <ErrorBoundary label="Habits">
+                <Card label="Habits" color="var(--dl-accent)" collapsed={false} autoHeight>
+                  <HabitsCard date={selected} token={token} userId={userId}/>
+                </Card>
               </ErrorBoundary>
             </div>
           )}
