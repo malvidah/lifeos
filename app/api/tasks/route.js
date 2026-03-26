@@ -184,6 +184,8 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       let inner = (rawText || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
       // Convert {r:key:label} → recurrence span
       inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
+      // Convert {h:key:label} → habit span
+      inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, '<span data-habit="$1" data-habit-label="$2">🎯 $2</span>');
       // Convert {l:name} → place span
       inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
       // Convert {project} → project span
@@ -207,7 +209,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
       let m;
       while ((m = re.exec(text || '')) !== null) {
-        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:')) {
+        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:')) {
           tags.push(m[1].toLowerCase());
         }
       }
@@ -515,7 +517,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
       const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
       let m;
       while ((m = re.exec(text)) !== null) {
-        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:')) {
+        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:')) {
           tags.push(m[1].toLowerCase());
         }
       }
@@ -525,6 +527,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     if (!('html' in patch)) {
       let inner = text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
       inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
+      inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, '<span data-habit="$1" data-habit-label="$2">🎯 $2</span>');
       inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
       inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');
       inner = inner.replace(/@(\d{4}-\d{2}-\d{2})/g, '<span data-date-tag="$1">⏳ $1</span>');
