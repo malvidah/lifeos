@@ -1193,7 +1193,7 @@ function MapInner({ token }) {
   }, [mapBounds]); // eslint-disable-line
 
   // Background color to match tiles while loading
-  const bgColor = 'var(--dl-bg)';
+  const bgColor = isDark ? 'var(--dl-bg)' : '#F2EDE5';
 
   return (
     <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 520, background: bgColor, userSelect: 'none', WebkitUserSelect: 'none' }}>
@@ -1418,6 +1418,10 @@ function MapInner({ token }) {
                       mapInstance.current.panTo([place.lat, place.lng], { animate: true, duration: 0.4 });
                     }
                   }}
+                  onDoubleClick={e => {
+                    e.stopPropagation();
+                    startEdit(place);
+                  }}
                   onMouseEnter={() => setHoveredPlace(place)}
                   onMouseLeave={() => setHoveredPlace(null)}
                   style={{
@@ -1453,29 +1457,26 @@ function MapInner({ token }) {
                     </div>
                   )}
                   {!place.notes && <div style={{ flex: 1 }} />}
-                  {/* Category color dot */}
-                  {!isSelected && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto', paddingTop: 4 }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0, opacity: 0.7 }} />
-                    </div>
-                  )}
-                  {/* Edit/Delete icons — bottom right, selected only */}
-                  {isSelected && (
-                    <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                      <button onClick={e => { e.stopPropagation(); startEdit(place); }} title="Edit"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-highlight)', display: 'flex' }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                        </svg>
-                      </button>
-                      <button onClick={e => { e.stopPropagation(); deletePlace(place.id); }} title="Delete"
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-red)', display: 'flex' }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                      </button>
-                    </div>
-                  )}
+                  {/* Category color dot + edit/delete when selected */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0, opacity: 0.7 }} />
+                    {isSelected && (
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button onClick={e => { e.stopPropagation(); startEdit(place); }} title="Edit"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-highlight)', display: 'flex' }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                          </svg>
+                        </button>
+                        <button onClick={e => { e.stopPropagation(); deletePlace(place.id); }} title="Delete"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-red)', display: 'flex' }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                          </svg>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               );
             })}
