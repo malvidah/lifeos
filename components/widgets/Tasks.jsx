@@ -40,12 +40,18 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
   }, [task.id, task.text, onEdit]);
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0',
-      opacity: task.done ? 0.6 : 1,
-      transition: 'opacity 0.15s',
-    }}>
-      <TaskCheckbox done={task.done} onToggle={e => { e?.preventDefault?.(); onToggle(task.id); }} />
+    <div
+      onKeyDown={e => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); onEnterDown?.(); }
+        if (e.key === 'ArrowUp') { e.preventDefault(); onFocusPrev?.(); }
+      }}
+      style={{
+        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0',
+        opacity: task.done ? 0.6 : 1,
+        transition: 'opacity 0.15s',
+      }}
+    >
+      <TaskCheckbox done={task.done} onToggle={() => onToggle(task.id)} />
       <div className={task.done ? 'task-done' : ''} style={{ flex: 1, minWidth: 0 }}>
         <DayLabEditor
           ref={editorRef}
@@ -57,7 +63,7 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
           projectNames={projectNames}
           noteNames={noteNames}
           placeNames={placeNames}
-          textColor={"var(--dl-strong)"}
+          textColor={task.done ? "var(--dl-middle)" : "var(--dl-strong)"}
           mutedColor={"var(--dl-middle)"}
           color={"var(--dl-accent)"}
           style={{ padding: 0 }}
@@ -70,7 +76,6 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
             onDelete(task.id);
             onFocusPrev?.();
           }}
-          onArrowUpAtStart={() => onFocusPrev?.()}
           onProjectClick={onProjectClick}
           onNoteClick={onNoteClick}
         />
@@ -182,12 +187,8 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   return (
     <div>
       <style>{`
-        .task-done .dl-editor p { text-decoration: line-through; text-decoration-color: var(--dl-middle); }
-        .task-done .dl-editor p span[data-project-tag],
-        .task-done .dl-editor p span[data-date-tag],
-        .task-done .dl-editor p span[data-recurrence],
-        .task-done .dl-editor p span[data-note-link],
-        .task-done .dl-editor p span[data-place-tag] { text-decoration: none; }
+        .task-done .ProseMirror p { text-decoration: line-through; text-decoration-color: var(--dl-middle); }
+        .task-done .ProseMirror p span { text-decoration: none !important; }
       `}</style>
       {filteredTasks.map(task => (
         <TaskRow

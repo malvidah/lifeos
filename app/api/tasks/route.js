@@ -175,15 +175,51 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // Triggered when 'text' is present and 'data' is absent
   if (body.text !== undefined && html === undefined) {
     const { text, done, due_date, project_tags, note_tags, position, html: taskHtml } = body;
+
+    // Generate proper HTML with data attributes from text tokens
+    function textToTaskHtml(rawText) {
+      let inner = (rawText || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      // Convert {r:key:label} → recurrence span
+      inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
+      // Convert {l:name} → place span
+      inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
+      // Convert {project} → project span
+      inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');
+      // Convert @YYYY-MM-DD → date span
+      inner = inner.replace(/@(\d{4}-\d{2}-\d{2})/g, '<span data-date-tag="$1">⏳ $1</span>');
+      // Convert [note] → note span
+      inner = inner.replace(/\[([^\]]+)\]/g, '<span data-note-link="$1">$1</span>');
+      return `<li data-type="taskItem" data-checked="${done ? 'true' : 'false'}"><label><input type="checkbox"${done ? ' checked="checked"' : ''}><span></span></label><div><p>${inner}</p></div></li>`;
+    }
+
+    // Parse due_date from text if not provided
+    const parsedDueDate = due_date || (() => {
+      const m = (text || '').match(/@(\d{4}-\d{2}-\d{2})/);
+      return m ? m[1] : null;
+    })();
+
+    // Parse project tags from text if not provided
+    const parsedTags = (project_tags && project_tags.length) ? project_tags : (() => {
+      const tags = [];
+      const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
+      let m;
+      while ((m = re.exec(text || '')) !== null) {
+        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:')) {
+          tags.push(m[1].toLowerCase());
+        }
+      }
+      return tags;
+    })();
+
     const { data: row, error } = await supabase.from('tasks').insert({
       user_id: user.id,
       date,
       text: text || '',
-      html: taskHtml || `<li data-type="taskItem" data-checked="${done ? 'true' : 'false'}"><label><input type="checkbox"${done ? ' checked="checked"' : ''}><span></span></label><div><p>${(text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p></div></li>`,
+      html: taskHtml || textToTaskHtml(text),
       done: !!done,
-      due_date: due_date || null,
+      due_date: parsedDueDate,
       completed_at: done ? TODAY() : null,
-      project_tags: project_tags || [],
+      project_tags: parsedTags,
       note_tags: note_tags || [],
       position: position ?? 0,
     }).select().single();
