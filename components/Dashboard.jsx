@@ -31,12 +31,12 @@ import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
 
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
-  { id: 'map',      label: 'Map',      icon: (
+  { id: 'map',      label: 'Mountain', icon: (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M8 21l8-14 8 14H0z" transform="translate(0,-1)"/><path d="M2 21l5-8 4 5" transform="translate(0,-1)"/>
     </svg>
   )},
-  { id: 'timeline', label: 'Timeline', icon: (
+  { id: 'timeline', label: 'Map',     icon: (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
     </svg>
@@ -568,8 +568,8 @@ function DashboardInner() {
         window.dispatchEvent(new CustomEvent('daylab:go-to-note', { detail: { name } }));
       },
       navigateToPlace: (name) => {
-        // Ensure map is visible before navigating
-        if (mapCollapsed) toggleMap_();
+        // Ensure world map is visible before navigating
+        if (timelineCollapsed) toggleTimeline();
         window.dispatchEvent(new CustomEvent('daylab:go-to-place', { detail: { name } }));
       },
     }}>
