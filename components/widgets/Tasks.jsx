@@ -132,12 +132,22 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
         // Only save if there are actual changes
         if (diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length) {
+          // Check if any recurring tasks had done changes (routed to complete-recurring)
+          const hadRecurringDone = diff.toUpdate.some(t => t._doneChanged && t._source === 'recurring');
+
           await applyDiff(date, diff, token);
 
           // Reload from server to get fresh state with IDs
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
+            // If a recurring task was completed/uncompleted, the editor HTML is now
+            // out of sync (completion row has different text than template).
+            // Rebuild the editor HTML from fresh server state to prevent cascading diffs.
+            if (hadRecurringDone) {
+              const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
+              setHtmlValue(freshHtml);
+            }
           }
           // Notify other components (e.g. HabitsCard) that tasks changed
           window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
