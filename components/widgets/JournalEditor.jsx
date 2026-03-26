@@ -397,22 +397,9 @@ function RecentEntries({ token, userId, date, project }) {
 }
 
 // ─── Memories View ───────────────────────────────────────────────────────────
-// Shows today's entry + past entries at exponentially increasing intervals.
-// Adapts to however much history exists — stops after the last found entry.
-
-const MEMORY_INTERVALS = [
-  { days: 1, label: 'Yesterday' },
-  { days: 3, label: '3 days ago' },
-  { days: 7, label: '1 week ago' },
-  { days: 14, label: '2 weeks ago' },
-  { days: 30, label: '1 month ago' },
-  { days: 60, label: '2 months ago' },
-  { days: 120, label: '4 months ago' },
-  { days: 240, label: '8 months ago' },
-  { days: 365, label: '1 year ago' },
-  { days: 730, label: '2 years ago' },
-  { days: 1095, label: '3 years ago' },
-];
+// Shows today's entry + 4 past entries spread across the user's full history.
+// Uses the recent entries API to find dates with content, then picks 4 evenly
+// spaced across the range.
 
 function MemoriesView({ token, userId, date }) {
   const [memories, setMemories] = useState(null);
@@ -422,42 +409,25 @@ function MemoriesView({ token, userId, date }) {
     let cancelled = false;
 
     const findMemories = async () => {
-      const results = [];
-      const seenDates = new Set([date]); // don't show the selected date again
+      // Fetch up to 20 recent dates with entries (enough to span history)
+      const d = await api.get(`/api/journal?recent=20&before=${date}`, token);
+      if (cancelled) return;
+      const entries = (d?.entries ?? []).filter(e => e.date !== date);
+      if (!entries.length) { setMemories([]); return; }
 
-      for (const interval of MEMORY_INTERVALS) {
-        const target = new Date(date + 'T12:00:00');
-        target.setDate(target.getDate() - interval.days);
-        const targetStr = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
-
-        // Search target date and nearby (±3 days), prefer exact then closest
-        let found = null;
-        const candidates = [targetStr];
-        for (let o = 1; o <= 3; o++) {
-          for (const dir of [-1, 1]) {
-            const dt = new Date(target);
-            dt.setDate(dt.getDate() + o * dir);
-            candidates.push(`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`);
-          }
-        }
-
-        for (const c of candidates) {
-          if (seenDates.has(c)) continue;
-          const d = await api.get(`/api/journal?date=${c}`, token);
-          if (cancelled) return;
-          if (d?.blocks?.length) {
-            found = c;
-            break;
-          }
-        }
-
-        if (found) {
-          seenDates.add(found);
-          results.push({ key: interval.label, label: interval.label, date: found });
+      // Pick 4 evenly spaced entries from the list
+      const count = 4;
+      const picked = [];
+      if (entries.length <= count) {
+        picked.push(...entries);
+      } else {
+        for (let i = 0; i < count; i++) {
+          const idx = Math.round(i * (entries.length - 1) / (count - 1));
+          picked.push(entries[idx]);
         }
       }
 
-      if (!cancelled) setMemories(results);
+      if (!cancelled) setMemories(picked.map(e => ({ date: e.date })));
     };
 
     findMemories().catch(() => { if (!cancelled) setMemories([]); });
@@ -468,6 +438,20 @@ function MemoriesView({ token, userId, date }) {
     const [y, m, day] = d.split('-').map(Number);
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     return `${months[m - 1]} ${day}, ${y}`;
+  };
+
+  const relativeLabel = (entryDate) => {
+    const now = new Date(date + 'T12:00:00');
+    const then = new Date(entryDate + 'T12:00:00');
+    const days = Math.round((now - then) / 86400000);
+    if (days === 1) return 'yesterday';
+    if (days < 7) return `${days} days ago`;
+    if (days < 14) return '1 week ago';
+    if (days < 30) return `${Math.round(days / 7)} weeks ago`;
+    if (days < 60) return '1 month ago';
+    if (days < 365) return `${Math.round(days / 30)} months ago`;
+    const yrs = Math.round(days / 365);
+    return yrs === 1 ? '1 year ago' : `${yrs} years ago`;
   };
 
   const isToday = date === todayKey();
@@ -487,12 +471,11 @@ function MemoriesView({ token, userId, date }) {
         <JournalEditor date={date} userId={userId} token={token} />
       </div>
 
-      {/* Memory slots — only entries that exist */}
+      {/* Memory slots */}
       {memories === null ? (
         <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
           <Shimmer width="60%" height={14}/>
           <Shimmer width="80%" height={14}/>
-          <Shimmer width="40%" height={14}/>
         </div>
       ) : memories.length === 0 ? (
         <div style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-middle)',padding:'8px 0',opacity:0.4}}>
@@ -500,13 +483,13 @@ function MemoriesView({ token, userId, date }) {
         </div>
       ) : (
         memories.map(mem => (
-          <div key={mem.key}>
+          <div key={mem.date}>
             <div style={{
               fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
               textTransform:'uppercase', color:'var(--dl-middle)',
               marginBottom:4, opacity:0.5,
             }}>
-              {mem.label} — {formatDate(mem.date)}
+              {relativeLabel(mem.date)} — {formatDate(mem.date)}
             </div>
             <JournalEditor date={mem.date} userId={userId} token={token} />
           </div>
