@@ -343,16 +343,11 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     }).eq('id', u.id).eq('user_id', user.id);
   }
 
-  // Delete injected persistent/recurring originals from OTHER dates
-  // that the user removed from the editor (proxy deletion = original deletion)
-  for (const [key, id] of injectedIds) {
-    if (!foreignTextsSeen.has(key)) {
-      const stillPresent = parsed.some(t => t.text?.trim().toLowerCase() === key);
-      if (!stillPresent) {
-        await supabase.from('tasks').update({ deleted_at: new Date().toISOString() }).eq('id', id).eq('user_id', user.id);
-      }
-    }
-  }
+  // NOTE: Proxy-deletion of foreign task originals was removed.
+  // Previously, if a persistent/recurring task wasn't found in the editor HTML,
+  // its original row was soft-deleted. This caused tasks to disappear when
+  // autosave fired before the editor rendered injected tasks.
+  // Users should delete persistent tasks from their origin date instead.
 
   // Full-replace ALL own-date tasks: soft-delete existing rows, then insert fresh ones.
   // Old soft-deleted rows remain in the DB but are excluded from all queries.
