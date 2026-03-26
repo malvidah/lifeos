@@ -272,6 +272,14 @@ function MapBottomStrip({ collapsed, onToggle, children }) {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       pointerEvents: 'none',
     }}>
+      {/* Vignette fade — rises with the strip */}
+      <div style={{
+        width: '100%', height: collapsed ? 0 : 60,
+        background: 'linear-gradient(to top, var(--dl-bg) 0%, transparent 100%)',
+        pointerEvents: 'none',
+        transition: 'height 0.25s ease, opacity 0.25s ease',
+        opacity: collapsed ? 0 : 1,
+      }} />
       {/* Chevron toggle */}
       <button onClick={onToggle} style={{
         pointerEvents: 'auto',
