@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useRef, Suspense, useEffect } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Html, useGLTF, useAnimations } from "@react-three/drei";
+import { OrbitControls, Html } from "@react-three/drei";
 import { EffectComposer } from "@react-three/postprocessing";
 import { Effect } from "postprocessing";
 import { createNoise2D } from "simplex-noise";
@@ -796,19 +796,8 @@ function Birds({ projects }) {
 
 function Bird({ center, radius, speed, offset }) {
   const ref = useRef();
-  const { scene, animations } = useGLTF('/Stork.glb');
-  const clone = useMemo(() => scene.clone(true), [scene]);
-  const { actions } = useAnimations(animations, clone);
-
-  // Start the flapping animation with offset so birds aren't in sync
-  useEffect(() => {
-    const action = actions[Object.keys(actions)[0]];
-    if (action) {
-      action.play();
-      action.time = offset * 0.5; // stagger animation start
-      action.timeScale = 0.8 + (offset % 1) * 0.4; // slight speed variation
-    }
-  }, [actions, offset]);
+  const leftRef = useRef();
+  const rightRef = useRef();
 
   useFrame(({ clock }) => {
     if (!ref.current) return;
@@ -816,22 +805,41 @@ function Bird({ center, radius, speed, offset }) {
 
     // Circular flight path with gentle bobbing
     ref.current.position.x = center[0] + Math.cos(t) * radius;
-    ref.current.position.y = center[1] + Math.sin(t * 0.7) * 0.12;
+    ref.current.position.y = center[1] + Math.sin(t * 0.7) * 0.1;
     ref.current.position.z = center[2] + Math.sin(t) * radius;
 
-    // Face direction of travel (tangent to circle) — atan2 for proper heading
+    // Face direction of travel
     const dx = -Math.sin(t) * radius * speed;
     const dz = Math.cos(t) * radius * speed;
     ref.current.rotation.y = Math.atan2(dx, dz);
-    // Slight banking into turns
-    ref.current.rotation.z = Math.sin(t) * 0.1;
+
+    // Wing flap — smooth, organic feel with slight pause at top
+    const flapT = clock.elapsedTime * 4.5 + offset * 3;
+    const raw = Math.sin(flapT);
+    const flap = raw > 0 ? raw * 0.7 : raw * 0.5; // bigger upstroke, gentle downstroke
+    if (leftRef.current) leftRef.current.rotation.z = flap;
+    if (rightRef.current) rightRef.current.rotation.z = -flap;
   });
 
   return (
-    <primitive ref={ref} object={clone} scale={0.003} />
+    <group ref={ref}>
+      {/* Left wing — thin flat plane, pivots at center */}
+      <group ref={leftRef}>
+        <mesh position={[0.03, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.06, 0.015]} />
+          <meshBasicMaterial color="#f5f0e8" side={THREE.DoubleSide} transparent opacity={0.9} />
+        </mesh>
+      </group>
+      {/* Right wing */}
+      <group ref={rightRef}>
+        <mesh position={[-0.03, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[0.06, 0.015]} />
+          <meshBasicMaterial color="#f5f0e8" side={THREE.DoubleSide} transparent opacity={0.9} />
+        </mesh>
+      </group>
+    </group>
   );
 }
-useGLTF.preload('/Stork.glb');
 
 function Labels({ projects, onSelect, hovered, setHovered, selectedProject, isDark }) {
   return projects.map(p => (
