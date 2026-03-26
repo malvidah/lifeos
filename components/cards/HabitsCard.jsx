@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { mono, F } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
@@ -219,6 +219,13 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
     ? dates.filter(d => habits.some(h => h.completions?.hasOwnProperty(d)))
     : dates;
 
+  // Precompute month boundary indices (where dayNum === 1, excluding first column)
+  const monthBoundaries = new Set();
+  for (let i = 1; i < visibleDates.length; i++) {
+    if (dayNum(visibleDates[i]) === 1) monthBoundaries.add(i);
+  }
+  const dividerW = 20;
+
   return (
     <div style={{ display: 'flex', userSelect: 'none', WebkitUserSelect: 'none' }}>
       {/* Left: habit names table with COUNT and BEST columns */}
@@ -270,7 +277,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
           userSelect: 'none', WebkitUserSelect: 'none',
         }}
       >
-        <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW }}>
+        <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW + monthBoundaries.size * dividerW }}>
 
           {/* Header spacer + date header */}
           <div style={{ height: mode === 'calendar' ? 30 : rowH }}>
@@ -278,21 +285,19 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
               <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
                 {visibleDates.map((d, i) => {
                   const isToday = d === today;
-                  const showMonth = i === 0 || dayNum(d) === 1;
+                  const isBoundary = monthBoundaries.has(i);
                   return (
-                    <div key={d} style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', position: 'relative', paddingBottom: 2 }}>
-                      {showMonth && (
-                        <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', letterSpacing: '0.04em', textTransform: 'uppercase', position: 'absolute', top: 0 }}>
-                          {monthLabel(d)}
+                    <React.Fragment key={d}>
+                      {isBoundary && <div style={{ width: dividerW }} />}
+                      <div style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 }}>
+                        <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
+                          {dayLabel(d)}
                         </span>
-                      )}
-                      <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
-                        {dayLabel(d)}
-                      </span>
-                      <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
-                        {dayNum(d)}
-                      </span>
-                    </div>
+                        <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
+                          {dayNum(d)}
+                        </span>
+                      </div>
+                    </React.Fragment>
                   );
                 })}
               </div>
@@ -302,38 +307,88 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
           {/* Habit grid rows */}
           {habits.map(h => (
             <div key={h.id} style={{ display: 'flex', height: rowH }}>
-              {visibleDates.map(d => {
+              {visibleDates.map((d, i) => {
                 const scheduled = h.completions?.hasOwnProperty(d);
                 const done = h.completions?.[d] === true;
                 const isPast = d <= today;
+                const isBoundary = monthBoundaries.has(i);
+
+                // Month divider column
+                const divider = isBoundary ? (
+                  <MonthDivider key={`div-${d}`} label={monthLabel(d)} height={rowH * habits.length} rowIndex={habits.indexOf(h)} rowH={rowH} />
+                ) : null;
 
                 if (!scheduled) {
-                  return mode === 'calendar' ? <div key={d} style={{ width: colW }} /> : null;
+                  return (
+                    <React.Fragment key={d}>
+                      {divider}
+                      {mode === 'calendar' ? <div style={{ width: colW }} /> : null}
+                    </React.Fragment>
+                  );
                 }
 
                 return (
-                  <div key={d} style={{ width: colW, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <div
-                      onClick={e => {
-                        // Don't toggle if we just dragged
-                        if (dragState.current.moved) return;
-                        if (isPast) toggleCompletion(h, d);
-                      }}
-                      style={{
-                        width: cellSize, height: cellSize, borderRadius: 4,
-                        background: done ? 'var(--dl-accent)' : 'transparent',
-                        border: done ? 'none' : `1.5px solid ${isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
-                        opacity: !isPast && !done ? 0.35 : 1,
-                        transition: 'all 0.15s',
-                        cursor: isPast ? 'pointer' : 'default',
-                      }}
-                    />
-                  </div>
+                  <React.Fragment key={d}>
+                    {divider}
+                    <div style={{ width: colW, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <div
+                        onClick={e => {
+                          if (dragState.current.moved) return;
+                          if (isPast) toggleCompletion(h, d);
+                        }}
+                        style={{
+                          width: cellSize, height: cellSize, borderRadius: 4,
+                          background: done ? 'var(--dl-accent)' : 'transparent',
+                          border: done ? 'none' : `1.5px solid ${isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
+                          opacity: !isPast && !done ? 0.35 : 1,
+                          transition: 'all 0.15s',
+                          cursor: isPast ? 'pointer' : 'default',
+                        }}
+                      />
+                    </div>
+                  </React.Fragment>
                 );
               })}
             </div>
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Month divider — vertical line with rotated month label ───────────────────
+function MonthDivider({ label, height, rowIndex, rowH }) {
+  // Only render the label + full line on the first habit row
+  if (rowIndex !== 0) {
+    return <div style={{ width: 20, position: 'relative' }}>
+      <div style={{ position: 'absolute', left: 9, top: 0, bottom: 0, width: 1, background: 'var(--dl-border)' }} />
+    </div>;
+  }
+
+  return (
+    <div style={{ width: 20, position: 'relative' }}>
+      {/* Vertical line spanning all rows */}
+      <div style={{
+        position: 'absolute', left: 9, top: -30, width: 1,
+        height: height + 30,
+        background: 'var(--dl-border)',
+      }} />
+      {/* Rotated month label centered on the line */}
+      <div style={{
+        position: 'absolute', left: 0, top: -24, width: 20, height: 20,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <span style={{
+          fontFamily: mono, fontSize: 8, fontWeight: 600,
+          color: 'var(--dl-middle)', letterSpacing: '0.06em',
+          textTransform: 'uppercase', whiteSpace: 'nowrap',
+          transform: 'rotate(-90deg)',
+          background: 'var(--dl-card, var(--dl-bg))',
+          padding: '0 2px',
+        }}>
+          {label}
+        </span>
       </div>
     </div>
   );
