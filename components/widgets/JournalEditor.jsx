@@ -362,9 +362,8 @@ function RecentEntries({ token, userId, date, project }) {
         <div style={{
           fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
           textTransform:'uppercase',
-          color: isToday ? 'var(--dl-accent)' : 'var(--dl-strong)',
-          marginBottom:4, opacity: isToday ? 1 : 0.8,
-          fontWeight: 600,
+          color: isToday ? 'var(--dl-accent)' : 'var(--dl-highlight)',
+          marginBottom:4,
         }}>
           {isToday ? 'today' : formatLabel(todayStr)}
         </div>
