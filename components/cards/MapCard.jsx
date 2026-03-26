@@ -794,6 +794,19 @@ function Birds({ projects }) {
   return birdData.map(b => <Bird key={b.key} {...b} />);
 }
 
+// Tapered wing shape — wide at body, pointed at tip
+const wingGeo = (() => {
+  const g = new THREE.BufferGeometry();
+  // Triangle: body edge (wide) tapering to wingtip (point)
+  g.setAttribute('position', new THREE.Float32BufferAttribute([
+    0, 0, -0.008,    // body trailing edge
+    0, 0, 0.008,     // body leading edge
+    0.065, 0, 0.001, // wingtip (slightly forward)
+  ], 3));
+  g.computeVertexNormals();
+  return g;
+})();
+
 function Bird({ center, radius, speed, offset }) {
   const ref = useRef();
   const leftRef = useRef();
@@ -801,40 +814,40 @@ function Bird({ center, radius, speed, offset }) {
 
   useFrame(({ clock }) => {
     if (!ref.current) return;
-    const t = clock.elapsedTime * speed + offset;
+    const t = clock.elapsedTime * speed * 0.5 + offset; // slower flight
 
-    // Circular flight path with gentle bobbing
+    // Circular path with gentle bobbing
     ref.current.position.x = center[0] + Math.cos(t) * radius;
-    ref.current.position.y = center[1] + Math.sin(t * 0.7) * 0.1;
+    ref.current.position.y = center[1] + Math.sin(t * 0.5) * 0.08;
     ref.current.position.z = center[2] + Math.sin(t) * radius;
 
     // Face direction of travel
-    const dx = -Math.sin(t) * radius * speed;
-    const dz = Math.cos(t) * radius * speed;
+    const dx = -Math.sin(t) * radius;
+    const dz = Math.cos(t) * radius;
     ref.current.rotation.y = Math.atan2(dx, dz);
 
-    // Wing flap — smooth, organic feel with slight pause at top
-    const flapT = clock.elapsedTime * 4.5 + offset * 3;
+    // Slow, lazy wing flap
+    const flapT = clock.elapsedTime * 2.8 + offset * 3;
     const raw = Math.sin(flapT);
-    const flap = raw > 0 ? raw * 0.7 : raw * 0.5; // bigger upstroke, gentle downstroke
+    const flap = raw > 0 ? raw * 0.6 : raw * 0.4;
     if (leftRef.current) leftRef.current.rotation.z = flap;
     if (rightRef.current) rightRef.current.rotation.z = -flap;
   });
 
+  const mat = <meshBasicMaterial color="#f5f0e8" side={THREE.DoubleSide} transparent opacity={0.9} />;
+
   return (
     <group ref={ref}>
-      {/* Left wing — thin flat plane, pivots at center */}
+      {/* Left wing — tapered triangle, pivots at body */}
       <group ref={leftRef}>
-        <mesh position={[0.03, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[0.06, 0.015]} />
-          <meshBasicMaterial color="#f5f0e8" side={THREE.DoubleSide} transparent opacity={0.9} />
+        <mesh geometry={wingGeo}>
+          {mat}
         </mesh>
       </group>
-      {/* Right wing */}
-      <group ref={rightRef}>
-        <mesh position={[-0.03, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
-          <planeGeometry args={[0.06, 0.015]} />
-          <meshBasicMaterial color="#f5f0e8" side={THREE.DoubleSide} transparent opacity={0.9} />
+      {/* Right wing — mirrored */}
+      <group ref={rightRef} scale={[-1, 1, 1]}>
+        <mesh geometry={wingGeo}>
+          {mat}
         </mesh>
       </group>
     </group>
