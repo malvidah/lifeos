@@ -43,6 +43,10 @@ function dayNum(dateStr) {
   return parseInt(dateStr.slice(8), 10);
 }
 
+function yearLabel(dateStr) {
+  return dateStr.slice(0, 4);
+}
+
 // ── Health achievement habits (read-only, synced from health scores) ─────────
 const HEALTH_METRICS = [
   { key: 'sleep',     label: 'Sleep',     field: 'sleep_score' },
@@ -138,8 +142,12 @@ export default function HabitsCard({ date, token, userId, project }) {
   }, []);
 
   const today = todayKey();
-  const startDate = addDays(date || today, -42);
+  const startDate = addDays(date || today, -365);
   const endDate = addDays(date || today, 14);
+
+  // Section collapse state
+  const [manualOpen, setManualOpen] = useState(true);
+  const [syncedOpen, setSyncedOpen] = useState(true);
 
   const dates = [];
   for (let d = startDate; d <= endDate; d = addDays(d, 1)) dates.push(d);
@@ -253,11 +261,15 @@ export default function HabitsCard({ date, token, userId, project }) {
   const colW = 28;
   const rowH = 24;
   const cellSize = 18;
+  const sectionH = 20; // section header row height
 
   // Filter by project if one is selected
   const filteredHabits = project
     ? habits.filter(h => h.project_tags?.some(t => t.toLowerCase() === project.toLowerCase()))
     : habits;
+
+  const manualHabits = filteredHabits.filter(h => !h._isHealth);
+  const syncedHabits = filteredHabits.filter(h => h._isHealth);
 
   if (filteredHabits.length === 0 && project) {
     return (
@@ -267,180 +279,216 @@ export default function HabitsCard({ date, token, userId, project }) {
     );
   }
 
-  // In count mode, only show dates where ANY filtered habit is scheduled
   const visibleDates = dates;
 
-  // Precompute month boundary indices (where dayNum === 1, excluding first column)
+  // Precompute month boundary indices
   const monthBoundaries = new Set();
   for (let i = 1; i < visibleDates.length; i++) {
     if (dayNum(visibleDates[i]) === 1) monthBoundaries.add(i);
   }
-  const dividerW = 24;
+  const dividerW = 28;
+
+  // All visible rows for month divider height calculation
+  const visibleManual = manualOpen ? manualHabits : [];
+  const visibleSynced = syncedOpen ? syncedHabits : [];
+  const allVisible = [...visibleManual, ...visibleSynced];
+
+  // Section header component
+  const SectionLabel = ({ label, open, toggle }) => (
+    <div
+      onClick={toggle}
+      style={{
+        height: sectionH, display: 'flex', alignItems: 'center', gap: 4,
+        cursor: 'pointer', paddingRight: 10,
+      }}
+    >
+      <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="var(--dl-middle)" strokeWidth="1.5" strokeLinecap="round"
+        style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+        <polyline points="3,1 7,5 3,9" />
+      </svg>
+      <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        {label}
+      </span>
+    </div>
+  );
+
+  // Habit name row component
+  const HabitNameRow = ({ h }) => (
+    <div style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
+      <span style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+        {h.text}
+      </span>
+      <div style={{ width: 44, display: 'flex', justifyContent: 'center' }}>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 2,
+          padding: '1px 5px', borderRadius: 100,
+          border: `1.5px solid ${streakColor(h.streak, h.frozen)}`,
+          background: streakBg(h.streak, h.frozen),
+          fontFamily: mono, fontSize: 11, fontWeight: 600, lineHeight: 1,
+          color: streakColor(h.streak, h.frozen), whiteSpace: 'nowrap',
+        }}>
+          <span style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen)}</span>
+          {h.streak}
+        </span>
+      </div>
+      <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 36, textAlign: 'center' }}>
+        {h.bestStreak || '\u2014'}
+      </span>
+    </div>
+  );
+
+  // Grid row for a single habit
+  const HabitGridRow = ({ h, allVisibleHabits }) => {
+    const tag = h.project_tags?.[0];
+    const fillColor = tag ? projectColor(tag) + '55' : 'var(--dl-border2)';
+    return (
+      <div style={{ display: 'flex', height: rowH }}>
+        {visibleDates.map((d, i) => {
+          const scheduled = h.completions?.hasOwnProperty(d);
+          const done = h.completions?.[d] === true;
+          const isPast = d <= today;
+          const isBoundary = monthBoundaries.has(i);
+          const divider = isBoundary ? (
+            <MonthDivider key={`div-${d}`} label={monthLabel(d)} year={yearLabel(d)} height={rowH * allVisibleHabits.length} rowIndex={allVisibleHabits.indexOf(h)} rowH={rowH} />
+          ) : null;
+          if (!scheduled) {
+            return <React.Fragment key={d}>{divider}<div style={{ width: colW }} /></React.Fragment>;
+          }
+          return (
+            <React.Fragment key={d}>
+              {divider}
+              <div style={{ width: colW, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div
+                  onClick={e => {
+                    if (dragState.current.moved) return;
+                    if (isPast && !h._isHealth) toggleCompletion(h, d);
+                  }}
+                  style={{
+                    width: cellSize, height: cellSize, borderRadius: 4,
+                    background: done ? fillColor : 'transparent',
+                    border: `1.5px solid ${done ? (tag ? projectColor(tag) : 'var(--dl-border2)') : isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
+                    opacity: !isPast && !done ? 0.35 : 1,
+                    transition: 'all 0.15s',
+                    cursor: isPast && !h._isHealth ? 'pointer' : 'default',
+                  }}
+                />
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: 'flex', userSelect: 'none', WebkitUserSelect: 'none' }}>
-      {/* Left: habit names table with COUNT and BEST columns */}
+      {/* Left column: names + stats */}
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {/* Header row — aligned with date header */}
+        {/* Header row */}
         <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
           <span style={{ flex: 1 }} />
-          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center' }}>
-            count
-          </span>
-          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center' }}>
-            best
-          </span>
+          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center' }}>count</span>
+          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center' }}>best</span>
         </div>
-        {/* Habit rows */}
-        {filteredHabits.map(h => (
-          <div key={h.id} style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
-            <span style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              {h.text}
-            </span>
-            <div style={{ width: 44, display: 'flex', justifyContent: 'center' }}>
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 2,
-                padding: '1px 5px', borderRadius: 100,
-                border: `1.5px solid ${streakColor(h.streak, h.frozen)}`,
-                background: streakBg(h.streak, h.frozen),
-                fontFamily: mono, fontSize: 11, fontWeight: 600, lineHeight: 1,
-                color: streakColor(h.streak, h.frozen), whiteSpace: 'nowrap',
-              }}>
-                <span style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen)}</span>
-                {h.streak}
-              </span>
-            </div>
-            <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 36, textAlign: 'center' }}>
-              {h.bestStreak || '\u2014'}
-            </span>
-          </div>
-        ))}
+
+        {/* Manual section */}
+        {manualHabits.length > 0 && (
+          <>
+            <SectionLabel label="Manual" open={manualOpen} toggle={() => setManualOpen(o => !o)} />
+            {manualOpen && manualHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
+          </>
+        )}
+
+        {/* Synced section */}
+        {syncedHabits.length > 0 && (
+          <>
+            <SectionLabel label="Synced" open={syncedOpen} toggle={() => setSyncedOpen(o => !o)} />
+            {syncedOpen && syncedHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
+          </>
+        )}
       </div>
 
       {/* Right: scrollable grid */}
-      <div
-        ref={scrollRef}
-        onMouseDown={onMouseDown}
-        style={{
-          flex: 1, overflowX: 'auto', overflowY: 'hidden', cursor: 'grab',
-          scrollbarWidth: 'none', msOverflowStyle: 'none',
-          margin: '0 -14px 0 0', paddingRight: 14,
-          userSelect: 'none', WebkitUserSelect: 'none',
-        }}
-      >
+      <div ref={scrollRef} onMouseDown={onMouseDown} style={{
+        flex: 1, overflowX: 'auto', overflowY: 'hidden', cursor: 'grab',
+        scrollbarWidth: 'none', msOverflowStyle: 'none',
+        margin: '0 -14px 0 0', paddingRight: 14,
+        userSelect: 'none', WebkitUserSelect: 'none',
+      }}>
         <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW + monthBoundaries.size * dividerW }}>
-
-          {/* Header spacer + date header */}
-          <div style={{ height: 30 }}>
-            {
-              <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
-                {visibleDates.map((d, i) => {
-                  const isToday = d === today;
-                  const isBoundary = monthBoundaries.has(i);
-                  return (
-                    <React.Fragment key={d}>
-                      {isBoundary && <div style={{ width: dividerW }} />}
-                      <div style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 }}>
-                        <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
-                          {dayLabel(d)}
-                        </span>
-                        <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
-                          {dayNum(d)}
-                        </span>
-                      </div>
-                    </React.Fragment>
-                  );
-                })}
-              </div>
-            }
+          {/* Date header */}
+          <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
+            {visibleDates.map((d, i) => {
+              const isToday = d === today;
+              const isBoundary = monthBoundaries.has(i);
+              return (
+                <React.Fragment key={d}>
+                  {isBoundary && <div style={{ width: dividerW }} />}
+                  <div style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 }}>
+                    <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayLabel(d)}</span>
+                    <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayNum(d)}</span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
           </div>
 
-          {/* Habit grid rows */}
-          {filteredHabits.map(h => {
-            // Use project color for fill, default to a soft grey
-            const tag = h.project_tags?.[0];
-            const fillColor = tag ? projectColor(tag) + '55' : 'var(--dl-border2)';
-            return (
-            <div key={h.id} style={{ display: 'flex', height: rowH }}>
-              {visibleDates.map((d, i) => {
-                const scheduled = h.completions?.hasOwnProperty(d);
-                const done = h.completions?.[d] === true;
-                const isPast = d <= today;
-                const isBoundary = monthBoundaries.has(i);
+          {/* Manual section grid */}
+          {manualHabits.length > 0 && (
+            <>
+              <div style={{ height: sectionH }} />
+              {manualOpen && manualHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={allVisible} />)}
+            </>
+          )}
 
-                const divider = isBoundary ? (
-                  <MonthDivider key={`div-${d}`} label={monthLabel(d)} height={rowH * filteredHabits.length} rowIndex={filteredHabits.indexOf(h)} rowH={rowH} />
-                ) : null;
-
-                if (!scheduled) {
-                  return (
-                    <React.Fragment key={d}>
-                      {divider}
-                      <div style={{ width: colW }} />
-                    </React.Fragment>
-                  );
-                }
-
-                return (
-                  <React.Fragment key={d}>
-                    {divider}
-                    <div style={{ width: colW, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <div
-                        onClick={e => {
-                          if (dragState.current.moved) return;
-                          if (isPast && !h._isHealth) toggleCompletion(h, d);
-                        }}
-                        style={{
-                          width: cellSize, height: cellSize, borderRadius: 4,
-                          background: done ? fillColor : 'transparent',
-                          border: `1.5px solid ${done ? (tag ? projectColor(tag) : 'var(--dl-border2)') : isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
-                          opacity: !isPast && !done ? 0.35 : 1,
-                          transition: 'all 0.15s',
-                          cursor: isPast && !h._isHealth ? 'pointer' : 'default',
-                        }}
-                      />
-                    </div>
-                  </React.Fragment>
-                );
-              })}
-            </div>
-          );})}
+          {/* Synced section grid */}
+          {syncedHabits.length > 0 && (
+            <>
+              <div style={{ height: sectionH }} />
+              {syncedOpen && syncedHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={allVisible} />)}
+            </>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ── Month divider — vertical line with horizontal month label ─────────────────
-function MonthDivider({ label, height, rowIndex, rowH }) {
-  // Only render the label + full line on the first habit row
+// ── Month divider — vertical line with month + year label ─────────────────────
+function MonthDivider({ label, year, height, rowIndex, rowH }) {
   if (rowIndex !== 0) {
-    return <div style={{ width: 24, position: 'relative' }}>
-      <div style={{ position: 'absolute', left: 11, top: 0, bottom: 0, width: 1, background: 'var(--dl-border)' }} />
+    return <div style={{ width: 28, position: 'relative' }}>
+      <div style={{ position: 'absolute', left: 13, top: 0, bottom: 0, width: 1, background: 'var(--dl-border)' }} />
     </div>;
   }
 
   return (
-    <div style={{ width: 24, position: 'relative' }}>
-      {/* Vertical line spanning all rows */}
+    <div style={{ width: 28, position: 'relative' }}>
       <div style={{
-        position: 'absolute', left: 11, top: -30, width: 1,
+        position: 'absolute', left: 13, top: -30, width: 1,
         height: height + 30,
         background: 'var(--dl-border)',
       }} />
-      {/* Horizontal month label at the top, centered on the line */}
       <div style={{
-        position: 'absolute', left: 0, top: -22, width: 24,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        position: 'absolute', left: 0, top: -28, width: 28,
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0,
       }}>
         <span style={{
           fontFamily: mono, fontSize: 8, fontWeight: 600,
           color: 'var(--dl-middle)', letterSpacing: '0.04em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
-          background: 'var(--dl-card, var(--dl-bg))',
-          padding: '0 1px',
+          background: 'var(--dl-card, var(--dl-bg))', padding: '0 1px',
+          lineHeight: 1,
         }}>
           {label}
+        </span>
+        <span style={{
+          fontFamily: mono, fontSize: 7,
+          color: 'var(--dl-border2)', letterSpacing: '0.02em',
+          whiteSpace: 'nowrap', lineHeight: 1,
+          background: 'var(--dl-card, var(--dl-bg))', padding: '0 1px',
+        }}>
+          {year}
         </span>
       </div>
     </div>
