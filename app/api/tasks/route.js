@@ -74,16 +74,14 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (e1) throw e1;
   const ownIds = new Set((ownTasks ?? []).map(t => t.id));
 
-  // B) PERSISTENT tasks: have due_date, not done, created before today, not recurring
-  //    Show from creation date through due_date (or indefinitely if no due_date? No —
-  //    tasks with NO due_date and NO recurrence only show on their creation date).
+  // B) PERSISTENT tasks: have due_date, not done, created on or before this date.
+  //    Show every day from creation until completed or deleted — even past due_date.
   const { data: persistentTasks, error: e2 } = await supabase
     .from('tasks').select(cols)
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .not('due_date', 'is', null)
     .lte('date', date)       // created on or before this date
-    .gte('due_date', date)   // due date is today or in the future
     .eq('done', false)
     .neq('date', date)       // not already in ownTasks
     .not('html', 'ilike', '%data-recurrence=%')
@@ -196,7 +194,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .not('due_date', 'is', null)
-    .lte('date', date).gte('due_date', date)
+    .lte('date', date)
     .eq('done', false).neq('date', date)
     .not('html', 'ilike', '%data-recurrence=%');
 
