@@ -368,7 +368,7 @@ function RecentEntries({ token, userId, date, project }) {
         }}>
           {isToday ? 'today' : formatLabel(todayStr)}
         </div>
-        <JournalEditor date={todayStr} userId={userId} token={token} />
+        <JournalEditor key={todayStr} date={todayStr} userId={userId} token={token} />
       </div>
 
       {/* Loading shimmer for past entries */}
@@ -389,7 +389,7 @@ function RecentEntries({ token, userId, date, project }) {
           }}>
             {formatLabel(entry.date)}
           </div>
-          <JournalEditor date={entry.date} userId={userId} token={token} />
+          <JournalEditor key={entry.date} date={entry.date} userId={userId} token={token} />
         </div>
       ))}
     </div>
@@ -468,7 +468,7 @@ function MemoriesView({ token, userId, date }) {
         }}>
           {isToday ? 'today' : formatDate(date)}
         </div>
-        <JournalEditor date={date} userId={userId} token={token} />
+        <JournalEditor key={date} date={date} userId={userId} token={token} />
       </div>
 
       {/* Memory slots */}
@@ -491,7 +491,7 @@ function MemoriesView({ token, userId, date }) {
             }}>
               {relativeLabel(mem.date)} — {formatDate(mem.date)}
             </div>
-            <JournalEditor date={mem.date} userId={userId} token={token} />
+            <JournalEditor key={mem.date} date={mem.date} userId={userId} token={token} />
           </div>
         ))
       )}
@@ -541,9 +541,8 @@ export function JournalModeToggle({ mode, setMode }) {
 }
 
 export function JournalEditor({date,userId,token,project,journalMode}) {
-  if (journalMode === 'recent') return <RecentEntries token={token} userId={userId} date={date} project={project} />;
-  if (journalMode === 'memories') return <MemoriesView token={token} userId={userId} date={date} />;
-
+  // All hooks must be called unconditionally (React rules of hooks).
+  // The mode check happens in the render output below.
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
   const { notes: ctxNotes } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
@@ -565,19 +564,21 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   // Persist mode preference to user_settings for public share pages only
   useEffect(() => {
+    if (journalMode) return; // only run in day mode
     const mode = lightboxIdx != null ? 'slideshow' : 'strip';
     try { localStorage.setItem('daylab:photoMode', mode); } catch {}
     if (token) api.patch('/api/settings', { photoMode: mode }, token).catch(() => {});
-  }, [lightboxIdx != null]); // eslint-disable-line
+  }, [lightboxIdx != null, journalMode]); // eslint-disable-line
 
   // Close slideshow when navigating to a day with no images
   useEffect(() => {
+    if (journalMode) return; // only run in day mode
     if (images.length === 0 && lightboxIdx != null) setLightboxIdx(null);
     // Clamp index if beyond available images
     if (lightboxIdx != null && images.length > 0 && lightboxIdx >= images.length) {
       setLightboxIdx(0);
     }
-  }, [images.length]); // eslint-disable-line
+  }, [images.length, journalMode]); // eslint-disable-line
 
   // Format date for chip label: "Mar 16"
   const chipDate = useMemo(() => {
@@ -651,6 +652,10 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     if (dragCounter.current <= 0) { dragCounter.current = 0; setDragging(false); }
   }, []);
   const handleDragOver = useCallback((e) => { e.preventDefault(); }, []);
+
+  // ── Mode-based rendering ──────────────────────────────────────────────────
+  if (journalMode === 'recent') return <RecentEntries token={token} userId={userId} date={date} project={project} />;
+  if (journalMode === 'memories') return <MemoriesView token={token} userId={userId} date={date} />;
 
   if (!loaded) return (
     <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>

@@ -1422,6 +1422,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     onUpdate({ editor }) {
       if (suppressOnUpdateRef.current) return;
       if (programmaticRef.current) return;  // skip mount and programmatic setContent
+      userEditedRef.current = true;
       onUpdateRef.current?.(editor.getHTML());
     },
 
@@ -1464,10 +1465,15 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   // and the last unsaved text is silently dropped.
   // Fix: explicitly flush on unmount via a cleanup with an empty deps array.
   // flushedRef prevents double-save when TipTap's onBlur fires right before unmount.
+  // userEditedRef tracks whether user actually typed — prevents unmount flush from
+  // saving content to the wrong date when TipTap HTML normalization differs from
+  // the loaded value (which would trigger a false-positive "changed" detection).
   const flushedRef = useRef(false);
+  const userEditedRef = useRef(false);
   useEffect(() => {
     return () => {
       if (flushedRef.current) return; // onBlur already saved
+      if (!userEditedRef.current) return; // user never edited — skip unmount save
       const ed = editorRef.current;
       if (!ed || ed.isDestroyed) return;
       try {
@@ -1503,6 +1509,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     if (!editor || value === lastExternalValue.current) return;
     lastExternalValue.current = value;
     flushedRef.current = false; // reset for new content
+    userEditedRef.current = false; // reset — new value came from outside
     if (!editor.isFocused) {
       // Pass emitUpdate=false so programmatic syncs don't trigger onUpdate → setValue loops.
       programmaticRef.current = true;
