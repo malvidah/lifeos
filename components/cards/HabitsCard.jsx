@@ -166,7 +166,7 @@ export default function HabitsCard({ date, token, userId, project }) {
       const taskHabits = habitsData?.habits ?? [];
 
       // Build health achievement habits from score data
-      const healthHabits = buildHealthHabits(healthData?.scores ?? [], startDate, endDate, today);
+      const healthHabits = buildHealthHabits(healthData?.rows ?? [], startDate, endDate, today);
 
       setHabits([...taskHabits, ...healthHabits]);
       setLoading(false);
