@@ -59,7 +59,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     user_id: user.id,
     date,
     text: completionText || template.text,
-    html: completionHtml || template.html,
+    html: completionHtml,
     done: true,
     due_date: null,
     completed_at: TODAY(),

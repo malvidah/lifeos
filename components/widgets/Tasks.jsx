@@ -82,6 +82,8 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   useEffect(() => injectTaskListStyles(accentHex, date), [accentHex, date]);
 
   // Load tasks from server
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     if (!token || !userId || !date) return;
     let cancelled = false;
@@ -100,7 +102,14 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     });
 
     return () => { cancelled = true; };
-  }, [date, token, userId]);
+  }, [date, token, userId, reloadKey]);
+
+  // Reload when habits card toggles a completion
+  useEffect(() => {
+    const handler = () => setReloadKey(k => k + 1);
+    window.addEventListener('daylab:habits-changed', handler);
+    return () => window.removeEventListener('daylab:habits-changed', handler);
+  }, []);
 
   // Diff-based save — debounced 1 second after editor change
   const handleUpdate = useCallback((newHtml) => {

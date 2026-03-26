@@ -12,12 +12,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   if (!start || !end) return Response.json({ error: 'start and end required' }, { status: 400 });
 
-  // Fetch all habit templates (tasks with data-habit attribute)
+  // Fetch habit templates — only unchecked tasks with data-habit attribute.
+  // Completion rows have the data-habit span stripped, so they won't match.
+  // But also filter out done tasks to be safe (a template should never be done).
   const { data: templates, error: tErr } = await supabase
     .from('tasks')
     .select('id, date, text, html, done, project_tags, position')
     .eq('user_id', user.id)
     .is('deleted_at', null)
+    .eq('done', false)
     .ilike('html', '%data-habit=%');
 
   if (tErr) throw tErr;

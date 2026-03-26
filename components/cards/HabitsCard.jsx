@@ -185,8 +185,8 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
       }
       // Refresh to get accurate streak counts
       refresh();
-      // Also notify tasks card
-      window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+      // Notify tasks card to reload (separate event to avoid circular refresh)
+      window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
     } catch (err) {
       console.warn('[habits] toggle failed:', err);
       refresh(); // revert optimistic update
