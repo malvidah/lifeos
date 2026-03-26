@@ -11,7 +11,7 @@ import { DayLabEditor } from "../Editor.jsx";
 export function TaskCheckbox({ done, onToggle }) {
   return (
     <button
-      onClick={onToggle}
+      onMouseDown={e => { e.preventDefault(); onToggle(); }}
       style={{
         width: 15, height: 15, flexShrink: 0, borderRadius: 4, padding: 0,
         cursor: 'pointer', marginTop: 4,
@@ -45,11 +45,8 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
       opacity: task.done ? 0.6 : 1,
       transition: 'opacity 0.15s',
     }}>
-      <TaskCheckbox done={task.done} onToggle={() => onToggle(task.id)} />
-      <div style={{
-        flex: 1, minWidth: 0,
-        textDecoration: task.done ? 'line-through' : 'none',
-      }}>
+      <TaskCheckbox done={task.done} onToggle={e => { e?.preventDefault?.(); onToggle(task.id); }} />
+      <div className={task.done ? 'task-done' : ''} style={{ flex: 1, minWidth: 0 }}>
         <DayLabEditor
           ref={editorRef}
           singleLine
@@ -184,6 +181,14 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
   return (
     <div>
+      <style>{`
+        .task-done .dl-editor p { text-decoration: line-through; text-decoration-color: var(--dl-middle); }
+        .task-done .dl-editor p span[data-project-tag],
+        .task-done .dl-editor p span[data-date-tag],
+        .task-done .dl-editor p span[data-recurrence],
+        .task-done .dl-editor p span[data-note-link],
+        .task-done .dl-editor p span[data-place-tag] { text-decoration: none; }
+      `}</style>
       {filteredTasks.map(task => (
         <TaskRow
           key={task.id}
