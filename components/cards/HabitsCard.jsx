@@ -43,6 +43,64 @@ function dayNum(dateStr) {
   return parseInt(dateStr.slice(8), 10);
 }
 
+// ── Health achievement habits (read-only, synced from health scores) ─────────
+const HEALTH_METRICS = [
+  { key: 'sleep',     label: 'Sleep',     field: 'sleep_score' },
+  { key: 'readiness', label: 'Readiness', field: 'readiness_score' },
+  { key: 'activity',  label: 'Activity',  field: 'activity_score' },
+  { key: 'recovery',  label: 'Recovery',  field: 'recovery_score' },
+];
+const HEALTH_THRESHOLD = 85;
+
+function buildHealthHabits(scores, startDate, endDate, today) {
+  // scores: [{ date, sleep_score, readiness_score, activity_score, recovery_score }]
+  const scoreByDate = {};
+  for (const s of scores) { if (s.date) scoreByDate[s.date] = s; }
+
+  return HEALTH_METRICS.map(metric => {
+    // Build completions map — every day is "scheduled", ≥85 = done
+    const completions = {};
+    let d = startDate;
+    while (d <= endDate) {
+      const score = scoreByDate[d]?.[metric.field];
+      if (d <= today) {
+        completions[d] = score != null && score >= HEALTH_THRESHOLD;
+      }
+      d = addDays(d, 1);
+    }
+
+    // Calculate streak (consecutive ≥85 days backward from today)
+    let streak = 0;
+    let bestStreak = 0;
+    let running = 0;
+    let checkDate = startDate;
+    while (checkDate <= today) {
+      if (completions[checkDate]) {
+        running++;
+        if (running > bestStreak) bestStreak = running;
+      } else {
+        running = 0;
+      }
+      checkDate = addDays(checkDate, 1);
+    }
+    streak = running;
+
+    return {
+      id: `__health__:${metric.key}`,
+      text: metric.label,
+      matchKey: metric.key,
+      schedule: 'daily',
+      completions,
+      streak,
+      bestStreak,
+      frozen: false,
+      freezes: 0,
+      project_tags: ['health'],
+      _isHealth: true, // marker: read-only, no click toggle
+    };
+  });
+}
+
 // ── HabitsCard ───────────────────────────────────────────────────────────────
 export default function HabitsCard({ date, token, userId, project }) {
   const [habits, setHabits] = useState(null);
@@ -98,9 +156,22 @@ export default function HabitsCard({ date, token, userId, project }) {
     if (!token || !userId) return;
     let cancelled = false;
     setLoading(true);
-    api.get(`/api/habits?start=${startDate}&end=${endDate}`, token)
-      .then(data => { if (!cancelled) { setHabits(data?.habits ?? []); setLoading(false); } })
-      .catch(() => { if (!cancelled) setLoading(false); });
+
+    // Fetch task-based habits and health scores in parallel
+    Promise.all([
+      api.get(`/api/habits?start=${startDate}&end=${endDate}`, token),
+      api.get(`/api/health/scores?start=${startDate}&end=${endDate}`, token).catch(() => null),
+    ]).then(([habitsData, healthData]) => {
+      if (cancelled) return;
+      const taskHabits = habitsData?.habits ?? [];
+
+      // Build health achievement habits from score data
+      const healthHabits = buildHealthHabits(healthData?.scores ?? [], startDate, endDate, today);
+
+      setHabits([...taskHabits, ...healthHabits]);
+      setLoading(false);
+    }).catch(() => { if (!cancelled) setLoading(false); });
+
     return () => { cancelled = true; };
   }, [token, userId, startDate, endDate, refreshKey]);
 
@@ -317,7 +388,7 @@ export default function HabitsCard({ date, token, userId, project }) {
                       <div
                         onClick={e => {
                           if (dragState.current.moved) return;
-                          if (isPast) toggleCompletion(h, d);
+                          if (isPast && !h._isHealth) toggleCompletion(h, d);
                         }}
                         style={{
                           width: cellSize, height: cellSize, borderRadius: 4,
@@ -325,7 +396,7 @@ export default function HabitsCard({ date, token, userId, project }) {
                           border: `1.5px solid ${done ? (tag ? projectColor(tag) : 'var(--dl-border2)') : isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
                           opacity: !isPast && !done ? 0.35 : 1,
                           transition: 'all 0.15s',
-                          cursor: isPast ? 'pointer' : 'default',
+                          cursor: isPast && !h._isHealth ? 'pointer' : 'default',
                         }}
                       />
                     </div>
