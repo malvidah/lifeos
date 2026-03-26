@@ -31,25 +31,15 @@ export function TaskCheckbox({ done, onToggle }) {
 }
 
 // ── Single task row ──────────────────────────────────────────────────────────
-// Extract inner <p> content from a full <li> task HTML wrapper
-function extractInnerContent(taskHtml) {
-  if (!taskHtml) return '';
-  // Extract content inside <div><p>...</p></div> or just <p>...</p>
-  const divMatch = taskHtml.match(/<div><p>([\s\S]*?)<\/p><\/div>/);
-  if (divMatch) return `<p>${divMatch[1]}</p>`;
-  const pMatch = taskHtml.match(/<p>([\s\S]*?)<\/p>/);
-  if (pMatch) return `<p>${pMatch[1]}</p>`;
-  // Fallback: return the text content
-  return taskHtml.replace(/<[^>]+>/g, '');
-}
-
 function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick }) {
-  const innerHtml = useMemo(() => extractInnerContent(task.html), [task.html]);
-
-  const handleCommit = useCallback((html, text) => {
-    if (!text?.trim()) return; // Don't delete on empty — user must explicitly delete
-    onEdit(task.id, { text, html });
-  }, [task.id, onEdit]);
+  // DayLabEditor singleLine expects plain text with tokens ({project}, @date, /r)
+  // and returns plain text from onEnterCommit and onBlur
+  const handleCommit = useCallback((text) => {
+    if (!text?.trim()) return; // Don't delete on empty
+    if (text !== task.text) {
+      onEdit(task.id, { text });
+    }
+  }, [task.id, task.text, onEdit]);
 
   return (
     <div style={{
@@ -65,7 +55,8 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, pro
         <DayLabEditor
           ref={editorRef}
           singleLine
-          value={innerHtml}
+          clearOnEnter={false}
+          value={task.text || ''}
           editable={task._editable !== false}
           placeholder=""
           projectNames={projectNames}
@@ -75,9 +66,9 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, pro
           mutedColor={"var(--dl-middle)"}
           color={"var(--dl-accent)"}
           style={{ padding: 0 }}
-          onBlur={(html, text) => handleCommit(html, text)}
-          onEnterCommit={(html, text) => {
-            handleCommit(html, text);
+          onBlur={text => handleCommit(text)}
+          onEnterCommit={text => {
+            handleCommit(text);
             onEnterDown?.();
           }}
           onProjectClick={onProjectClick}
@@ -90,9 +81,10 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, pro
 
 // ── New task input (always at the bottom) ─────────────────────────────────────
 function NewTaskInput({ onAdd, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, inputRef, project }) {
-  const handleAdd = useCallback((html, text) => {
+  // onEnterCommit for singleLine passes (text) — plain text with tokens
+  const handleAdd = useCallback((text) => {
     if (!text?.trim()) return;
-    onAdd(text, html);
+    onAdd(text);
   }, [onAdd]);
 
   return (
@@ -166,11 +158,10 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   }, [filteredTasks]);
 
   // Handle adding a new task
-  const handleAdd = useCallback(async (text, html) => {
-    const result = await addTask(text, html, {
+  const handleAdd = useCallback(async (text) => {
+    await addTask(text, {
       project_tags: project ? [project.toLowerCase()] : [],
     });
-    // Clear the input — DayLabEditor's onEnterCommit should handle this
   }, [addTask, project]);
 
   if (!loaded) return (
