@@ -1,4 +1,5 @@
 import { withAuth } from '../../_lib/auth.js';
+import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
 // POST /api/tasks/complete-recurring { template_id, date }
 // Creates a completion row for a recurring task on a specific date.
@@ -31,32 +32,37 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .replace(/<span\b[^>]*\bdata-habit="[^"]*"[^>]*>[^<]*<\/span>/g, '')
     .replace(/data-checked="false"/, 'data-checked="true"');
 
+  // Clean text uses centralized function (returns lowercase)
+  const completionTextLower = cleanTaskText(template.text);
+  // For storage, preserve original casing — just strip tokens
   const completionText = (template.text || '')
+    .replace(/\{[^}]+\}/g, '')
     .replace(/\/[hr]\s+\S+/gi, '')
-    .replace(/\{[hr]:[^}]+\}/g, '')
     .replace(/🎯\s*[A-Za-z·\s]+/g, '')
     .replace(/↻\s*[A-Za-z·\s]+/g, '')
+    .replace(/@\d{4}-\d{2}-\d{2}/g, '')
+    .replace(/\s+/g, ' ')
     .trim();
 
-  // Check if a completion row already exists for this date + text.
-  // Use wildcard match since text may have extra whitespace or tokens.
-  const { data: existing } = await supabase
+  // Check if a completion row already exists for this date.
+  // Fetch all tasks for this date and compare using centralized cleaning.
+  const { data: dateRows } = await supabase
     .from('tasks')
-    .select('id, done')
+    .select('id, text, done')
     .eq('user_id', user.id)
     .eq('date', date)
-    .ilike('text', `%${completionText}%`)
-    .is('deleted_at', null)
-    .limit(5);
+    .is('deleted_at', null);
+
+  const matchingRows = (dateRows ?? []).filter(r => cleanTaskText(r.text) === completionTextLower);
 
   // If there's already a done completion, return it
-  const doneRow = existing?.find(r => r.done);
+  const doneRow = matchingRows.find(r => r.done);
   if (doneRow) {
     return Response.json({ task: doneRow, already_completed: true });
   }
 
   // If there's an unchecked row (e.g., the virtual appearance was materialized), mark it done
-  const uncheckedRow = existing?.find(r => !r.done);
+  const uncheckedRow = matchingRows.find(r => !r.done);
   if (uncheckedRow) {
     const { data: updated } = await supabase.from('tasks')
       .update({ done: true, completed_at: TODAY() })

@@ -2,6 +2,7 @@ import { withAuth } from '../_lib/auth.js';
 import { parseTaskBlocks, tasksToHtml } from '@/lib/parseBlocks.js';
 import { isValidDate } from '@/lib/validate.js';
 import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
+import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -105,12 +106,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   // so a recurring template is suppressed when there's already a completion row for today.
   const ownTexts = new Set(
     [...(ownTasks ?? []), ...dedupedPersistent]
-      .map(t => (t.text ?? '')
-        .replace(/\/[hr]\s+\S+/gi, '')
-        .replace(/\{[hr]:[^}]+\}/g, '')
-        .replace(/🎯\s*[A-Za-z·\s]+/g, '')
-        .replace(/↻\s*[A-Za-z·\s]+/g, '')
-        .trim().toLowerCase())
+      .map(t => cleanTaskText(t.text))
       .filter(Boolean)
   );
 
@@ -118,12 +114,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     if (ownIds.has(t.id)) return false; // already in ownTasks
     if (persistentIds.has(t.id)) return false; // already in dedupedPersistent
     // Suppress if there's already a completion row for this date with the same text
-    const cleanTemplateText = (t.text ?? '')
-      .replace(/\/[hr]\s+\S+/gi, '')
-      .replace(/\{[hr]:[^}]+\}/g, '')
-      .replace(/🎯\s*[A-Za-z·\s]+/g, '')
-      .replace(/↻\s*[A-Za-z·\s]+/g, '')
-      .trim().toLowerCase();
+    const cleanTemplateText = cleanTaskText(t.text);
     if (cleanTemplateText && ownTexts.has(cleanTemplateText)) return false;
     // Match either data-recurrence or data-habit attribute for schedule
     const recMatch = t.html?.match(/data-recurrence="([^"]+)"/);
@@ -446,8 +437,17 @@ export const POST = withAuth(async (req, { supabase, user }) => {
         const recMatch = prev.html.match(/<span\b[^>]*\bdata-recurrence="[^"]*"[^>]*>[^<]*<\/span>/);
         if (recMatch) {
           html = html.replace(/<\/li>$/, recMatch[0] + '</li>');
-          const recTextMatch = prev.text?.match(/\/r\s+\S+/);
-          if (recTextMatch) text = text + ' ' + recTextMatch[0];
+          const recTextMatch = prev.text?.match(/\{r:[^}]+\}/) || prev.text?.match(/\/r\s+\S+/);
+          if (recTextMatch && !text.includes(recTextMatch[0])) text = text + ' ' + recTextMatch[0];
+        }
+      }
+      // Same preservation for habit chip
+      if (prev?.html?.includes('data-habit=') && !html?.includes('data-habit=')) {
+        const habMatch = prev.html.match(/<span\b[^>]*\bdata-habit="[^"]*"[^>]*>[^<]*<\/span>/);
+        if (habMatch) {
+          html = html.replace(/<\/li>$/, habMatch[0] + '</li>');
+          const habTextMatch = prev.text?.match(/\{h:[^}]+\}/) || prev.text?.match(/\/h\s+\S+/);
+          if (habTextMatch && !text.includes(habTextMatch[0])) text = text + ' ' + habTextMatch[0];
         }
       }
       return {
@@ -476,6 +476,19 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 export const PATCH = withAuth(async (req, { supabase, user }) => {
   const { id, ...updates } = await req.json();
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
+
+  // Guard: don't allow marking a recurring/habit template as done via PATCH.
+  // The diff save layer can accidentally PATCH the template when a virtual
+  // recurring checkbox is toggled. Templates should never be marked done —
+  // completions go through /api/tasks/complete-recurring instead.
+  if (updates.done === true) {
+    const { data: existing } = await supabase
+      .from('tasks').select('html').eq('id', id).eq('user_id', user.id).single();
+    if (existing?.html && (existing.html.includes('data-recurrence=') || existing.html.includes('data-habit='))) {
+      // Silently ignore — the template must stay undone
+      return Response.json({ ok: true, guarded: 'recurring_template' });
+    }
+  }
 
   // Whitelist updatable fields
   const allowed = ['done', 'completed_at', 'due_date', 'text', 'html', 'project_tags'];

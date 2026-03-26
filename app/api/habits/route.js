@@ -1,5 +1,6 @@
 import { withAuth } from '../_lib/auth.js';
 import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
+import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
 // GET /api/habits?start=YYYY-MM-DD&end=YYYY-MM-DD
 // Returns habit definitions + completion status for a date range.
@@ -12,15 +13,16 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   if (!start || !end) return Response.json({ error: 'start and end required' }, { status: 400 });
 
-  // Fetch habit templates — only unchecked tasks with data-habit attribute.
+  // Fetch habit templates — tasks with data-habit attribute in HTML.
   // Completion rows have the data-habit span stripped, so they won't match.
-  // But also filter out done tasks to be safe (a template should never be done).
+  // Don't filter by done — the template may get accidentally marked done by
+  // the diff save layer (which PATCHes the template when a recurring checkbox
+  // is toggled). We still need to show the habit in the tracker.
   const { data: templates, error: tErr } = await supabase
     .from('tasks')
     .select('id, date, text, html, done, project_tags, position')
     .eq('user_id', user.id)
     .is('deleted_at', null)
-    .eq('done', false)
     .ilike('html', '%data-habit=%');
 
   if (tErr) throw tErr;
@@ -31,14 +33,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     const schedule = match ? match[1] : null;
     if (!schedule) return null;
 
-    // Clean text for display — strip all habit/recurrence tokens and rendered chip text
-    const cleanText = (t.text || '')
-      .replace(/\{h:[^}]+\}/g, '')
-      .replace(/\{r:[^}]+\}/g, '')
-      .replace(/\/[hr]\s+\S+/gi, '')
-      .replace(/🎯\s*[A-Za-z·\s]+/g, '')  // rendered habit chip: 🎯 T·R, 🎯 Daily, etc.
-      .replace(/↻\s*[A-Za-z·\s]+/g, '')   // rendered recurrence chip: ↻ M·W·F, etc.
-      .trim();
+    // Clean text for display
+    const cleanText = cleanTaskText(t.text);
 
     return {
       id: t.id,
@@ -67,7 +63,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   for (const habit of habits) {
     const recurrence = keyToRecurrence(habit.schedule, habit.date);
     const completionMap = {};
-    const habitTextLower = habit.text.trim().toLowerCase();
+    const habitTextLower = habit.text; // already cleaned + lowercased by cleanTaskText
 
     // Find scheduled dates in range
     const startDate = new Date(start + 'T12:00:00');
@@ -84,13 +80,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
     // Match completions by cleaned text
     for (const c of (completions ?? [])) {
-      const cText = (c.text || '')
-        .replace(/\{[^}]+\}/g, '')
-        .replace(/\/[hr]\s+\S+/gi, '')
-        .replace(/@\d{4}-\d{2}-\d{2}/g, '')
-        .replace(/🎯\s*[A-Za-z·\s]+/g, '')
-        .replace(/↻\s*[A-Za-z·\s]+/g, '')
-        .trim().toLowerCase();
+      const cText = cleanTaskText(c.text);
       if (cText === habitTextLower && c.done && completionMap.hasOwnProperty(c.date)) {
         completionMap[c.date] = true;
       }
