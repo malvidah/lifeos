@@ -796,26 +796,87 @@ function Birds({ projects }) {
 
 function Bird({ center, radius, speed, offset }) {
   const ref = useRef();
+  const leftWingRef = useRef();
+  const rightWingRef = useRef();
+
   useFrame(({ clock }) => {
     if (!ref.current) return;
     const t = clock.elapsedTime * speed + offset;
+
+    // Circular flight path with gentle bobbing
     ref.current.position.x = center[0] + Math.cos(t) * radius;
-    ref.current.position.y = center[1] + Math.sin(t * 0.7) * 0.1;
+    ref.current.position.y = center[1] + Math.sin(t * 0.7) * 0.15;
     ref.current.position.z = center[2] + Math.sin(t) * radius;
+
+    // Face direction of travel (tangent to circle)
     ref.current.rotation.y = -t + Math.PI / 2;
+    // Slight banking into turns
+    ref.current.rotation.z = Math.sin(t) * 0.15;
+
+    // Wing flapping — smooth sine wave with faster downstroke
+    const flap = Math.sin(clock.elapsedTime * 6 + offset * 3);
+    const wingAngle = flap > 0 ? flap * 0.6 : flap * 0.8; // asymmetric: faster down, slower up
+    if (leftWingRef.current) leftWingRef.current.rotation.z = wingAngle;
+    if (rightWingRef.current) rightWingRef.current.rotation.z = -wingAngle;
   });
 
+  const bodyColor = '#2a2520';
+  const wingColor = '#3a3530';
+
   return (
-    <group ref={ref}>
-      {/* Simple V-shape bird */}
-      <mesh rotation={[0, 0, 0.3]}>
-        <planeGeometry args={[0.08, 0.02]} />
-        <meshBasicMaterial color="#222" side={THREE.DoubleSide} />
+    <group ref={ref} scale={[0.025, 0.025, 0.025]}>
+      {/* Body — tapered ellipsoid */}
+      <mesh>
+        <sphereGeometry args={[1, 6, 4]} />
+        <meshBasicMaterial color={bodyColor} />
       </mesh>
-      <mesh rotation={[0, 0, -0.3]}>
-        <planeGeometry args={[0.08, 0.02]} />
-        <meshBasicMaterial color="#222" side={THREE.DoubleSide} />
+      <mesh scale={[0.7, 0.5, 1.8]}>
+        <sphereGeometry args={[1, 6, 4]} />
+        <meshBasicMaterial color={bodyColor} />
       </mesh>
+
+      {/* Head */}
+      <mesh position={[0, 0.3, 1.4]}>
+        <sphereGeometry args={[0.5, 5, 4]} />
+        <meshBasicMaterial color={bodyColor} />
+      </mesh>
+
+      {/* Beak */}
+      <mesh position={[0, 0.2, 2.0]} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.15, 0.5, 4]} />
+        <meshBasicMaterial color="#5a4a30" />
+      </mesh>
+
+      {/* Tail */}
+      <mesh position={[0, 0.1, -1.8]} scale={[0.6, 0.1, 1.2]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshBasicMaterial color={wingColor} />
+      </mesh>
+
+      {/* Left wing — pivots at body attachment point */}
+      <group ref={leftWingRef} position={[0.6, 0.2, 0]}>
+        <mesh position={[1.2, 0, 0]} scale={[2.4, 0.08, 1.0]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial color={wingColor} />
+        </mesh>
+        {/* Wing tip — slightly angled */}
+        <mesh position={[2.6, 0, -0.2]} scale={[0.8, 0.06, 0.6]} rotation={[0, 0.3, 0]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial color={wingColor} />
+        </mesh>
+      </group>
+
+      {/* Right wing */}
+      <group ref={rightWingRef} position={[-0.6, 0.2, 0]}>
+        <mesh position={[-1.2, 0, 0]} scale={[2.4, 0.08, 1.0]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial color={wingColor} />
+        </mesh>
+        <mesh position={[-2.6, 0, -0.2]} scale={[0.8, 0.06, 0.6]} rotation={[0, -0.3, 0]}>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial color={wingColor} />
+        </mesh>
+      </group>
     </group>
   );
 }
