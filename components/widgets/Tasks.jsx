@@ -31,11 +31,9 @@ export function TaskCheckbox({ done, onToggle }) {
 }
 
 // ── Single task row ──────────────────────────────────────────────────────────
-function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick }) {
-  // DayLabEditor singleLine expects plain text with tokens ({project}, @date, /r)
-  // and returns plain text from onEnterCommit and onBlur
+function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick }) {
   const handleCommit = useCallback((text) => {
-    if (!text?.trim()) return; // Don't delete on empty
+    if (!text?.trim()) return;
     if (text !== task.text) {
       onEdit(task.id, { text });
     }
@@ -71,6 +69,11 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, pro
             handleCommit(text);
             onEnterDown?.();
           }}
+          onBackspaceEmpty={() => {
+            onDelete(task.id);
+            onFocusPrev?.();
+          }}
+          onArrowUpAtStart={() => onFocusPrev?.()}
           onProjectClick={onProjectClick}
           onNoteClick={onNoteClick}
         />
@@ -157,6 +160,15 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     }
   }, [filteredTasks]);
 
+  // Handle backspace/arrow-up — focus previous task
+  const focusPrev = useCallback((currentId) => {
+    const idx = filteredTasks.findIndex(t => t.id === currentId);
+    if (idx > 0) {
+      const prevTask = filteredTasks[idx - 1];
+      taskRefs.current[prevTask.id]?.focus?.();
+    }
+  }, [filteredTasks]);
+
   // Handle adding a new task
   const handleAdd = useCallback(async (text) => {
     await addTask(text, {
@@ -180,6 +192,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           onEdit={updateTask}
           onDelete={deleteTask}
           onEnterDown={() => focusNext(task.id)}
+          onFocusPrev={() => focusPrev(task.id)}
           editorRef={el => { taskRefs.current[task.id] = el; }}
           projectNames={projectNames}
           noteNames={noteNames}
