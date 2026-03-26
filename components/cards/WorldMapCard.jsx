@@ -1428,7 +1428,7 @@ function MapInner({ token }) {
                     flexShrink: 0, width: 110, height: 100,
                     backdropFilter: 'blur(20px) saturate(1.4)',
                     WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-                    background: `linear-gradient(135deg, ${color}12 0%, var(--dl-glass) 60%)`, borderRadius: 12, padding: 10,
+                    background: `${color}0D`, borderRadius: 12, padding: 10,
                     border: `1.5px solid ${isSelected ? color : color + '40'}`,
                     boxShadow: 'var(--dl-glass-shadow)',
                     cursor: 'pointer', transition: 'border-color 0.15s, opacity 0.15s',
@@ -1495,55 +1495,64 @@ function MapInner({ token }) {
             padding: '10px 14px',
             boxShadow: 'var(--dl-shadow)',
           }}>
-          {addingPlace.isArea && (
-            <div style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-accent)', letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6 }}>
-              Mark as discovered area
+          {/* Header: label + actions */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              {addingPlace.isArea ? 'Discover area' : 'New place'}
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button onClick={savePlace}
+                style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 8, padding: '5px 16px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                Save
+              </button>
+              <button onClick={() => { setAddingPlace(null); lastGeoRef.current = null; }}
+                style={{ background: 'var(--dl-well)', border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
+                &times;
+              </button>
             </div>
-          )}
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: addingPlace.isArea ? 0 : 8 }}>
-            <input autoFocus value={newName}
-              onChange={e => setNewName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
-              placeholder={addingPlace.isArea ? 'Area name...' : 'Name this place...'}
-              style={{ flex: 1, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em' }}
-            />
-            <button onClick={savePlace} style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>Save</button>
-            <button onClick={() => { setAddingPlace(null); lastGeoRef.current = null; }} style={{ background: 'none', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>&times;</button>
           </div>
+          {/* Name */}
+          <input autoFocus value={newName}
+            onChange={e => setNewName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
+            placeholder={addingPlace.isArea ? 'Area name...' : 'Place name'}
+            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.02em', boxSizing: 'border-box' }}
+          />
           {!addingPlace.isArea && (
             <>
+              {/* Description */}
               <input value={newNotes} onChange={e => setNewNotes(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
                 placeholder="Description (optional)"
-                style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '5px 10px', marginBottom: 8, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
+                style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '7px 12px', marginBottom: 10, fontFamily: mono, fontSize: F.sm, color: 'var(--dl-highlight)', outline: 'none', letterSpacing: '0.02em', boxSizing: 'border-box' }}
               />
-              {/* Type selector */}
-              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+              {/* Type pills */}
+              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
                 {placeTypes.map(t => (
                   <button key={t.id} onClick={() => setNewType(newType === t.name ? '' : t.name)}
                     style={{
-                      background: newType === t.name ? t.color + '22' : 'var(--dl-well)',
-                      border: `1px solid ${newType === t.name ? t.color : 'var(--dl-border)'}`,
-                      borderRadius: 6, padding: '3px 8px', cursor: 'pointer',
-                      fontSize: 11, color: newType === t.name ? t.color : 'var(--dl-strong)',
+                      background: newType === t.name ? t.color + '18' : 'transparent',
+                      border: `1.5px solid ${newType === t.name ? t.color : 'var(--dl-border)'}`,
+                      borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
+                      fontSize: 11, color: newType === t.name ? t.color : 'var(--dl-highlight)',
                       fontFamily: mono, letterSpacing: '0.04em',
-                      display: 'flex', alignItems: 'center', gap: 4,
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      transition: 'all 0.12s',
                     }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color }} />
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
                     {t.name}
                   </button>
                 ))}
-                {/* New type — inline input, Enter creates with auto-color */}
                 {creatingType ? (
                   <input autoFocus value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && newTypeName.trim()) createType(); if (e.key === 'Escape') setCreatingType(false); }}
                     onBlur={() => { if (newTypeName.trim()) createType(); else setCreatingType(false); }}
-                    placeholder="Label name…"
-                    style={{ width: 100, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 6, padding: '3px 8px', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.04em' }}
+                    placeholder="Label…"
+                    style={{ width: 80, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 100, padding: '3px 10px', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none' }}
                   />
                 ) : (
                   <button onClick={() => setCreatingType(true)}
-                    style={{ background: 'none', border: '1px dashed var(--dl-border)', borderRadius: 6, padding: '3px 8px', cursor: 'pointer', fontSize: 11, color: 'var(--dl-middle)', fontFamily: mono, letterSpacing: '0.04em' }}>
+                    style={{ background: 'none', border: '1.5px dashed var(--dl-border)', borderRadius: 100, padding: '3px 10px', cursor: 'pointer', fontSize: 11, color: 'var(--dl-middle)', fontFamily: mono }}>
                     + Label
                   </button>
                 )}
@@ -1553,60 +1562,58 @@ function MapInner({ token }) {
         </div>
       )}
 
-      {/* Edit place panel — glassmorphic bottom bar */}
+      {/* Edit place panel */}
       {editingPlace && (
         <div
           onKeyDown={e => { if (e.key === 'Enter') { saveEdit(); setEditingPlace(null); } if (e.key === 'Escape') setEditingPlace(null); }}
           style={{
-            position: 'absolute', bottom: 12, left: 12, right: 12, zIndex: 1000,
-            backdropFilter: 'blur(20px) saturate(1.4)',
-            WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-            background: 'var(--dl-glass)',
-            border: '1px solid var(--dl-glass-border)',
+            margin: '0 2px',
+            background: 'var(--dl-card)',
+            border: '1px solid var(--dl-border)',
             borderRadius: 14,
             padding: '12px 16px',
             boxShadow: 'var(--dl-shadow)',
           }}>
-          {/* Header row: label + save/cancel */}
+          {/* Header: label + actions */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Edit place
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
               <button onClick={() => { saveEdit(); setEditingPlace(null); }}
-                style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '5px 14px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 8, padding: '5px 16px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
                 Save
               </button>
               <button onClick={() => setEditingPlace(null)}
-                style={{ background: 'none', border: '1px solid var(--dl-glass-border)', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
+                style={{ background: 'var(--dl-well)', border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
                 &times;
               </button>
             </div>
           </div>
-          {/* Name input */}
+          {/* Name */}
           <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
             placeholder="Place name"
-            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 8, fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
+            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.02em', boxSizing: 'border-box' }}
           />
-          {/* Description input */}
+          {/* Description */}
           <input value={editNotes} onChange={e => setEditNotes(e.target.value)}
             placeholder="Description (optional)"
-            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontFamily: mono, fontSize: F.sm - 1, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.03em', boxSizing: 'border-box' }}
+            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '7px 12px', marginBottom: 10, fontFamily: mono, fontSize: F.sm, color: 'var(--dl-highlight)', outline: 'none', letterSpacing: '0.02em', boxSizing: 'border-box' }}
           />
-          {/* Type selector — full labeled pills */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {/* Type pills */}
+          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
             {placeTypes.map(t => (
               <button key={t.id} onClick={() => setEditType(editType === t.name ? '' : t.name)}
                 style={{
-                  background: editType === t.name ? t.color + '22' : 'var(--dl-well)',
+                  background: editType === t.name ? t.color + '18' : 'transparent',
                   border: `1.5px solid ${editType === t.name ? t.color : 'var(--dl-border)'}`,
-                  borderRadius: 100, padding: '4px 12px', cursor: 'pointer',
+                  borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
                   fontFamily: mono, fontSize: 11, letterSpacing: '0.04em',
                   color: editType === t.name ? t.color : 'var(--dl-highlight)',
                   display: 'flex', alignItems: 'center', gap: 5,
                   transition: 'all 0.12s',
                 }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
                 {t.name}
               </button>
             ))}
