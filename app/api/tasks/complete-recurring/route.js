@@ -9,7 +9,7 @@ import { cleanTaskText } from '@/lib/cleanTaskText.js';
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
 export const POST = withAuth(async (req, { supabase, user }) => {
-  const { template_id, date } = await req.json();
+  const { template_id, date, position: requestedPosition } = await req.json();
   if (!template_id || !date) {
     return Response.json({ error: 'template_id and date required' }, { status: 400 });
   }
@@ -62,14 +62,9 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ task: updated || uncheckedRow });
   }
 
-  // Set position: if template is from this same date, use its position.
-  // Otherwise, put after all existing tasks (where recurring tasks appear).
-  let completionPosition = template.position ?? 0;
-  if (template.date !== date) {
-    const { data: posRows } = await supabase.from('tasks')
-      .select('position').eq('user_id', user.id).eq('date', date).is('deleted_at', null);
-    completionPosition = (posRows ?? []).reduce((max, r) => Math.max(max, r.position ?? 0), -1) + 1;
-  }
+  // Use the position from the request (the position the task had in the editor)
+  // if provided. Otherwise fall back to template position or max+1.
+  let completionPosition = requestedPosition ?? template.position ?? 0;
 
   // Create completion row
   const { data: row, error: insertErr } = await supabase.from('tasks').insert({
