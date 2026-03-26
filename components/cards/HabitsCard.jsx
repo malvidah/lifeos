@@ -83,28 +83,33 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
   const [refreshKey, setRefreshKey] = useState(0);
   const scrollRef = useRef(null);
 
-  // Drag-to-scroll state
+  // Drag-to-scroll via window mouse events (no pointer capture — allows cell clicks)
   const dragState = useRef({ dragging: false, startX: 0, scrollStart: 0, moved: false });
 
-  const onPointerDown = useCallback(e => {
+  const onMouseDown = useCallback(e => {
     const el = scrollRef.current;
     if (!el) return;
+    // Only start drag on left button
+    if (e.button !== 0) return;
     dragState.current = { dragging: true, startX: e.clientX, scrollStart: el.scrollLeft, moved: false };
     el.style.cursor = 'grabbing';
-    el.setPointerCapture(e.pointerId);
   }, []);
 
-  const onPointerMove = useCallback(e => {
-    const ds = dragState.current;
-    if (!ds.dragging) return;
-    const dx = e.clientX - ds.startX;
-    if (Math.abs(dx) > 3) ds.moved = true;
-    scrollRef.current.scrollLeft = ds.scrollStart - dx;
-  }, []);
-
-  const onPointerUp = useCallback(e => {
-    dragState.current.dragging = false;
-    if (scrollRef.current) scrollRef.current.style.cursor = 'grab';
+  useEffect(() => {
+    const onMove = e => {
+      const ds = dragState.current;
+      if (!ds.dragging) return;
+      const dx = e.clientX - ds.startX;
+      if (Math.abs(dx) > 3) ds.moved = true;
+      if (scrollRef.current) scrollRef.current.scrollLeft = ds.scrollStart - dx;
+    };
+    const onUp = () => {
+      dragState.current.dragging = false;
+      if (scrollRef.current) scrollRef.current.style.cursor = 'grab';
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
   }, []);
 
   const today = todayKey();
@@ -215,7 +220,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
     : dates;
 
   return (
-    <div style={{ display: 'flex' }}>
+    <div style={{ display: 'flex', userSelect: 'none', WebkitUserSelect: 'none' }}>
       {/* Left: habit names table with COUNT and BEST columns */}
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
         {/* Header row — aligned with date header */}
@@ -257,14 +262,12 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
       {/* Right: scrollable grid */}
       <div
         ref={scrollRef}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
+        onMouseDown={onMouseDown}
         style={{
           flex: 1, overflowX: 'auto', overflowY: 'hidden', cursor: 'grab',
           scrollbarWidth: 'none', msOverflowStyle: 'none',
           margin: '0 -14px 0 0', paddingRight: 14,
-          touchAction: 'pan-y',
+          userSelect: 'none', WebkitUserSelect: 'none',
         }}
       >
         <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW }}>

@@ -85,6 +85,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
         .replace(/\{[^}]+\}/g, '')
         .replace(/\/[hr]\s+\S+/gi, '')
         .replace(/@\d{4}-\d{2}-\d{2}/g, '')
+        .replace(/🎯\s*[A-Za-z·\s]+/g, '')
+        .replace(/↻\s*[A-Za-z·\s]+/g, '')
         .trim().toLowerCase();
       if (cText === habitTextLower && c.done && completionMap.hasOwnProperty(c.date)) {
         completionMap[c.date] = true;
