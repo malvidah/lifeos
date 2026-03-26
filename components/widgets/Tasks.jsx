@@ -133,24 +133,12 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
         // Only save if there are actual changes
         if (diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length) {
-          // Check if any recurring tasks had done changes (routed to complete-recurring)
-          const hadRecurringDone = diff.toUpdate.some(t => t._doneChanged && t._source === 'recurring');
-
           await applyDiff(date, diff, token);
 
           // Reload from server to get fresh state with IDs
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
-            // If a recurring task was completed/uncompleted, the editor HTML is now
-            // out of sync (completion row has different text than template).
-            // Force a full editor remount with fresh server HTML to prevent
-            // cascading diffs from the stale editor state.
-            if (hadRecurringDone) {
-              const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
-              setHtmlValue(freshHtml);
-              setEditorKey(k => k + 1); // force TipTap to remount with new content
-            }
           }
           // Notify other components (e.g. HabitsCard) that tasks changed
           window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
@@ -167,6 +155,49 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   useEffect(() => {
     return () => clearTimeout(saveTimerRef.current);
   }, [date]);
+
+  // Handle recurring/habit checkbox toggle — bypasses diff save entirely
+  const handleRecurringToggle = useCallback(async (taskId, newDone) => {
+    if (!token) return;
+    try {
+      if (newDone) {
+        await api.post('/api/tasks/complete-recurring', { template_id: taskId, date }, token);
+      } else {
+        // Find and delete the completion row for this date
+        const res = await api.get(`/api/tasks?date=${date}`, token);
+        const tasks = res?.tasks ?? [];
+        // Find the completion row that matches this template
+        const templateTask = serverTasksRef.current.find(t => t.id === taskId);
+        if (templateTask) {
+          const templateClean = (templateTask.text || '')
+            .replace(/\{[^}]+\}/g, '').replace(/\/[hr]\s+\S+/gi, '')
+            .replace(/🎯\s*[A-Za-z·\s]+/g, '').replace(/↻\s*[A-Za-z·\s]+/g, '')
+            .replace(/@\d{4}-\d{2}-\d{2}/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+          const completion = tasks.find(t => {
+            if (!t.done) return false;
+            const cClean = (t.text || '')
+              .replace(/\{[^}]+\}/g, '').replace(/\/[hr]\s+\S+/gi, '')
+              .replace(/🎯\s*[A-Za-z·\s]+/g, '').replace(/↻\s*[A-Za-z·\s]+/g, '')
+              .replace(/@\d{4}-\d{2}-\d{2}/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+            return cClean === templateClean;
+          });
+          if (completion) await api.delete(`/api/tasks?id=${completion.id}`, token);
+        }
+      }
+      // Reload editor with fresh state
+      const fresh = await api.get(`/api/tasks?date=${date}`, token);
+      if (fresh?.tasks) {
+        serverTasksRef.current = fresh.tasks;
+        const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
+        setHtmlValue(freshHtml);
+        setEditorKey(k => k + 1);
+      }
+      // Notify habits card
+      window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+    } catch (err) {
+      console.warn('[tasks] recurring toggle failed:', err);
+    }
+  }, [date, token]);
 
   // Project filter — CSS injection to hide non-matching tasks
   const filterId = useRef(`tasks-${Math.random().toString(36).slice(2, 8)}`).current;
@@ -206,6 +237,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         color={"var(--dl-accent)"}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
+        onRecurringToggle={handleRecurringToggle}
         style={{ padding: 0 }}
       />
     </div>

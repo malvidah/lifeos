@@ -848,6 +848,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   editable     = true,
   hideInlineImages = false,
   onUpdate,
+  onRecurringToggle,  // (taskId, done) — called when a recurring/habit checkbox is clicked
 }, ref) {
   useEffect(injectEditorStyles, []);
 
@@ -870,6 +871,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onPlaceClickRef     = useRef(onPlaceClick);
   const onCreateNoteRef     = useRef(onCreateNote);
   const onCreateProjectRef  = useRef(onCreateProject);
+  const onRecurringToggleRef = useRef(onRecurringToggle);
   const onUpdateRef         = useRef(onUpdate);
   const taskListRef         = useRef(taskList);
   const noteTitleRef        = useRef(noteTitle);
@@ -893,6 +895,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
   useEffect(() => { onCreateProjectRef.current   = onCreateProject; },  [onCreateProject]);
   useEffect(() => { onUpdateRef.current          = onUpdate; },         [onUpdate]);
+  useEffect(() => { onRecurringToggleRef.current = onRecurringToggle; }, [onRecurringToggle]);
 
   useImperativeHandle(ref, () => ({
     focus: () => editorRef.current?.commands.focus('end'),
@@ -1217,6 +1220,29 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     editable,
 
     editorProps: {
+      handleDOMEvents: {
+        // Intercept checkbox clicks on recurring/habit tasks BEFORE TipTap modifies the document.
+        // This prevents the diff save from patching the template — instead we call complete-recurring directly.
+        mousedown(view, event) {
+          if (!onRecurringToggleRef.current) return false;
+          const target = event.target;
+          // Only intercept checkbox inputs inside task items
+          if (target.tagName !== 'INPUT' || target.type !== 'checkbox') return false;
+          const li = target.closest?.('[data-type="taskItem"]');
+          if (!li) return false;
+          // Only intercept if this is a recurring task
+          if (li.getAttribute('data-recurring') !== 'true') return false;
+          const taskId = li.getAttribute('data-task-id');
+          if (!taskId) return false;
+          // Prevent TipTap from toggling the checkbox
+          event.preventDefault();
+          event.stopPropagation();
+          // Current state: data-checked tells us if it's currently done
+          const currentlyDone = li.getAttribute('data-checked') === 'true';
+          onRecurringToggleRef.current(taskId, !currentlyDone);
+          return true;
+        },
+      },
       handleClick(view, pos, event) {
         // Skip navigation if a chip was just inserted (dropdown mouse-click leaks a click event)
         if (justInsertedRef.current) return false;
