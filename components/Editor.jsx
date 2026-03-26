@@ -99,7 +99,7 @@ const ProjectTagNode = Node.create({
       style: Object.entries({ ...CHIP_TOKENS.project(col), cursor: 'pointer', userSelect: 'none' })
         .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
         .join(';'),
-    }, name.toUpperCase()];
+    }, '\u26F0\uFE0F ' + name.toUpperCase()];
   },
 });
 
