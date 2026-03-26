@@ -73,6 +73,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   // State
   const [loaded, setLoaded] = useState(false);
   const [htmlValue, setHtmlValue] = useState('');
+  const [editorKey, setEditorKey] = useState(0); // increment to force editor remount
   const serverTasksRef = useRef([]); // Last-known server state for diffing
   const saveTimerRef = useRef(null);
   const savingRef = useRef(false);
@@ -143,10 +144,12 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
             serverTasksRef.current = fresh.tasks;
             // If a recurring task was completed/uncompleted, the editor HTML is now
             // out of sync (completion row has different text than template).
-            // Rebuild the editor HTML from fresh server state to prevent cascading diffs.
+            // Force a full editor remount with fresh server HTML to prevent
+            // cascading diffs from the stale editor state.
             if (hadRecurringDone) {
               const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
               setHtmlValue(freshHtml);
+              setEditorKey(k => k + 1); // force TipTap to remount with new content
             }
           }
           // Notify other components (e.g. HabitsCard) that tasks changed
@@ -190,7 +193,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       '--task-fill': theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
     }}>
       <DayLabEditor
-        key={date}
+        key={`${date}-${editorKey}`}
         taskList
         value={htmlValue}
         onUpdate={handleUpdate}
