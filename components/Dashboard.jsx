@@ -33,7 +33,7 @@ import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
 const DOCK_ITEMS = [
   { id: 'map',      label: 'Mountain', icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span> },
   { id: 'timeline', label: 'Map',      icon: <span style={{fontSize:14,lineHeight:1}}>🗺️</span> },
-  { id: 'cal',      label: 'Cal',      icon: <span style={{fontSize:14,lineHeight:1}}>📅</span> },
+  { id: 'cal',      label: 'Calendar', icon: <span style={{fontSize:14,lineHeight:1}}>📅</span> },
   { id: 'health',   label: 'Health',   icon: <span style={{fontSize:14,lineHeight:1}}>💚</span> },
   { id: 'notes',    label: 'Notes',    icon: <span style={{fontSize:14,lineHeight:1}}>📝</span> },
   { id: 'journal',  label: 'Journal',  icon: <span style={{fontSize:14,lineHeight:1}}>✏️</span> },
