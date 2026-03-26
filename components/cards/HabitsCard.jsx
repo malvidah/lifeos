@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { mono, F } from "@/lib/tokens";
+import { mono, F, projectColor } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
 import { Shimmer } from "../ui/primitives.jsx";
@@ -43,41 +43,8 @@ function dayNum(dateStr) {
   return parseInt(dateStr.slice(8), 10);
 }
 
-// ── Mode toggle for card header ──────────────────────────────────────────────
-const CalIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="3" width="12" height="11" rx="2"/><line x1="2" y1="7" x2="14" y2="7"/>
-    <line x1="6" y1="3" x2="6" y2="1"/><line x1="10" y1="3" x2="10" y2="1"/>
-  </svg>
-);
-const CountIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="1" y="5" width="4" height="4" rx="1"/><rect x="6" y="5" width="4" height="4" rx="1"/><rect x="11" y="5" width="4" height="4" rx="1"/>
-  </svg>
-);
-
-export function HabitModeBtns({ mode, setMode }) {
-  return (
-    <div style={{ display: 'flex', gap: 2, background: 'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius: 100, padding: 2 }}>
-      {[{ key: 'calendar', Icon: CalIcon }, { key: 'count', Icon: CountIcon }].map(({ key, Icon }) => {
-        const active = mode === key;
-        return (
-          <button key={key} onClick={e => { e.stopPropagation(); setMode(key); }} style={{
-            padding: '3px 6px', borderRadius: 100, cursor: 'pointer', border: 'none',
-            background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
-            color: active ? 'var(--dl-strong)' : 'var(--dl-middle)',
-            display: 'flex', alignItems: 'center', transition: 'all 0.15s',
-          }}>
-            <Icon />
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 // ── HabitsCard ───────────────────────────────────────────────────────────────
-export default function HabitsCard({ date, token, userId, habitMode = 'calendar', project }) {
+export default function HabitsCard({ date, token, userId, project }) {
   const [habits, setHabits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -142,11 +109,11 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
     if (!scrollRef.current || loading) return;
     const todayIdx = dates.indexOf(today);
     if (todayIdx >= 0) {
-      const colW = habitMode === 'count' ? 18 : 28;
+      const colW = 28;
       const containerW = scrollRef.current.clientWidth;
       scrollRef.current.scrollLeft = Math.max(0, todayIdx * colW - containerW / 2);
     }
-  }, [loading, today, habitMode]);
+  }, [loading, today]);
 
   // Toggle a habit completion for a specific date
   const toggleCompletion = useCallback(async (habit, cellDate) => {
@@ -212,10 +179,9 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
     );
   }
 
-  const mode = habitMode;
-  const colW = mode === 'count' ? 18 : 28;
-  const rowH = mode === 'count' ? 18 : 24;
-  const cellSize = mode === 'count' ? 14 : 18;
+  const colW = 28;
+  const rowH = 24;
+  const cellSize = 18;
 
   // Filter by project if one is selected
   const filteredHabits = project
@@ -231,9 +197,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
   }
 
   // In count mode, only show dates where ANY filtered habit is scheduled
-  const visibleDates = mode === 'count'
-    ? dates.filter(d => filteredHabits.some(h => h.completions?.hasOwnProperty(d)))
-    : dates;
+  const visibleDates = dates;
 
   // Precompute month boundary indices (where dayNum === 1, excluding first column)
   const monthBoundaries = new Set();
@@ -247,7 +211,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
       {/* Left: habit names table with COUNT and BEST columns */}
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
         {/* Header row — aligned with date header */}
-        <div style={{ height: mode === 'calendar' ? 30 : rowH, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
+        <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
           <span style={{ flex: 1 }} />
           <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center' }}>
             count
@@ -296,8 +260,8 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
         <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW + monthBoundaries.size * dividerW }}>
 
           {/* Header spacer + date header */}
-          <div style={{ height: mode === 'calendar' ? 30 : rowH }}>
-            {mode === 'calendar' && (
+          <div style={{ height: 30 }}>
+            {
               <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
                 {visibleDates.map((d, i) => {
                   const isToday = d === today;
@@ -317,11 +281,15 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
                   );
                 })}
               </div>
-            )}
+            }
           </div>
 
           {/* Habit grid rows */}
-          {filteredHabits.map(h => (
+          {filteredHabits.map(h => {
+            // Use project color for fill, default to a soft grey
+            const tag = h.project_tags?.[0];
+            const fillColor = tag ? projectColor(tag) : 'var(--dl-border2)';
+            return (
             <div key={h.id} style={{ display: 'flex', height: rowH }}>
               {visibleDates.map((d, i) => {
                 const scheduled = h.completions?.hasOwnProperty(d);
@@ -329,7 +297,6 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
                 const isPast = d <= today;
                 const isBoundary = monthBoundaries.has(i);
 
-                // Month divider column
                 const divider = isBoundary ? (
                   <MonthDivider key={`div-${d}`} label={monthLabel(d)} height={rowH * filteredHabits.length} rowIndex={filteredHabits.indexOf(h)} rowH={rowH} />
                 ) : null;
@@ -338,7 +305,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
                   return (
                     <React.Fragment key={d}>
                       {divider}
-                      {mode === 'calendar' ? <div style={{ width: colW }} /> : null}
+                      <div style={{ width: colW }} />
                     </React.Fragment>
                   );
                 }
@@ -354,7 +321,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
                         }}
                         style={{
                           width: cellSize, height: cellSize, borderRadius: 4,
-                          background: done ? 'var(--dl-accent)' : 'transparent',
+                          background: done ? fillColor : 'transparent',
                           border: done ? 'none' : `1.5px solid ${isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
                           opacity: !isPast && !done ? 0.35 : 1,
                           transition: 'all 0.15s',
@@ -366,7 +333,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
                 );
               })}
             </div>
-          ))}
+          );})}
         </div>
       </div>
     </div>

@@ -17,7 +17,7 @@ import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
 import HealthCard from "./cards/HealthCard.jsx";
-import HabitsCard, { HabitModeBtns } from "./cards/HabitsCard.jsx";
+import HabitsCard from "./cards/HabitsCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
 import WorldMapCard from "./cards/WorldMapCard.jsx";
@@ -315,13 +315,6 @@ function DashboardInner() {
   const [calCollapsed,    toggleCal]      = useCollapse("cal",     true);
   const [healthCollapsed, toggleHealth]   = useCollapse("health",  true);
   const [habitsCollapsed, toggleHabits]   = useCollapse("habits",  true);
-  const [habitMode, setHabitMode] = useState(() => {
-    try { return localStorage.getItem('daylab:habitsMode') || 'calendar'; } catch { return 'calendar'; }
-  });
-  const setHabitModeAndSave = useCallback((m) => {
-    setHabitMode(m);
-    try { localStorage.setItem('daylab:habitsMode', m); } catch {}
-  }, []);
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
@@ -599,9 +592,8 @@ function DashboardInner() {
           {!searchOpen && !habitsCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Habits">
-                <Card label="Habits" color="var(--dl-accent)" collapsed={false} autoHeight
-                  headerRight={<HabitModeBtns mode={habitMode} setMode={setHabitModeAndSave}/>}>
-                  <HabitsCard date={selected} token={token} userId={userId} habitMode={habitMode} project={projectFilter}/>
+                <Card label="Habits" color="var(--dl-accent)" collapsed={false} autoHeight>
+                  <HabitsCard date={selected} token={token} userId={userId} project={projectFilter}/>
                 </Card>
               </ErrorBoundary>
             </div>
