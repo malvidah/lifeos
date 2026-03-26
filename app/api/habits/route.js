@@ -14,15 +14,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (!start || !end) return Response.json({ error: 'start and end required' }, { status: 400 });
 
   // Fetch habit templates — tasks with data-habit attribute in HTML.
-  // Completion rows have the data-habit span stripped, so they won't match.
-  // Don't filter by done — the template may get accidentally marked done by
-  // the diff save layer (which PATCHes the template when a recurring checkbox
-  // is toggled). We still need to show the habit in the tracker.
+  // Now that completion rows keep their chips, we distinguish templates
+  // from completions by done=false. The PATCH guard prevents templates
+  // from being accidentally marked done.
   const { data: templates, error: tErr } = await supabase
     .from('tasks')
     .select('id, date, text, html, done, project_tags, position')
     .eq('user_id', user.id)
     .is('deleted_at', null)
+    .eq('done', false)
     .ilike('html', '%data-habit=%');
 
   if (tErr) throw tErr;

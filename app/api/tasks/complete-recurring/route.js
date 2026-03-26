@@ -26,23 +26,14 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'template not found' }, { status: 404 });
   }
 
-  // Strip recurrence and habit chips from HTML and text for the completion copy
+  // Keep the original HTML and text with chips intact — the completion should
+  // look identical to the template. Just mark it as checked.
   const completionHtml = (template.html || '')
-    .replace(/<span\b[^>]*\bdata-recurrence="[^"]*"[^>]*>[^<]*<\/span>/g, '')
-    .replace(/<span\b[^>]*\bdata-habit="[^"]*"[^>]*>[^<]*<\/span>/g, '')
     .replace(/data-checked="false"/, 'data-checked="true"');
+  const completionText = template.text;
 
-  // Clean text uses centralized function (returns lowercase)
+  // For matching existing completions
   const completionTextLower = cleanTaskText(template.text);
-  // For storage, preserve original casing — just strip tokens
-  const completionText = (template.text || '')
-    .replace(/\{[^}]+\}/g, '')
-    .replace(/\/[hr]\s+\S+/gi, '')
-    .replace(/🎯\s*[A-Za-z·\s]+/g, '')
-    .replace(/↻\s*[A-Za-z·\s]+/g, '')
-    .replace(/@\d{4}-\d{2}-\d{2}/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
   // Check if a completion row already exists for this date.
   // Fetch all tasks for this date and compare using centralized cleaning.
@@ -71,18 +62,23 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ task: updated || uncheckedRow });
   }
 
+  // Find max position of existing tasks for this date so completion sorts at the end
+  const { data: posRows } = await supabase.from('tasks')
+    .select('position').eq('user_id', user.id).eq('date', date).is('deleted_at', null);
+  const maxPos = (posRows ?? []).reduce((max, r) => Math.max(max, r.position ?? 0), -1);
+
   // Create completion row
   const { data: row, error: insertErr } = await supabase.from('tasks').insert({
     user_id: user.id,
     date,
-    text: completionText || template.text,
+    text: completionText,
     html: completionHtml,
     done: true,
     due_date: null,
     completed_at: TODAY(),
     project_tags: template.project_tags || [],
     note_tags: template.note_tags || [],
-    position: template.position ?? 0,
+    position: maxPos + 1,
   }).select().single();
 
   if (insertErr) throw insertErr;
