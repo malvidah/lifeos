@@ -47,12 +47,9 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, pro
   const innerHtml = useMemo(() => extractInnerContent(task.html), [task.html]);
 
   const handleCommit = useCallback((html, text) => {
-    if (!text?.trim()) {
-      if (task._source === 'own') onDelete(task.id);
-      return;
-    }
+    if (!text?.trim()) return; // Don't delete on empty — user must explicitly delete
     onEdit(task.id, { text, html });
-  }, [task.id, task._source, onEdit, onDelete]);
+  }, [task.id, onEdit]);
 
   return (
     <div style={{
@@ -117,7 +114,6 @@ function NewTaskInput({ onAdd, projectNames, noteNames, placeNames, onProjectCli
           color={"var(--dl-accent)"}
           style={{ padding: 0 }}
           onEnterCommit={(html, text) => handleAdd(html, text)}
-          onBlur={(html, text) => handleAdd(html, text)}
           onProjectClick={onProjectClick}
           onNoteClick={onNoteClick}
         />
