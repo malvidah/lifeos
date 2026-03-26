@@ -199,12 +199,13 @@ function skyColors(weather = 'clear') {
   const isNight = phase.light < 0.1;
   const isDusk = phase.light >= 0.1 && phase.light < 0.35;
   // Fog density from weather condition
-  let fogNear = 18, fogFar = 40;
-  if (weather === 'rain' || weather === 'drizzle') { fogNear = 10; fogFar = 25; }
-  else if (weather === 'snow') { fogNear = 8; fogFar = 22; }
-  else if (weather === 'fog') { fogNear = 5; fogFar = 18; }
-  else if (weather === 'overcast' || weather === 'cloudy') { fogNear = 14; fogFar = 32; }
-  else if (weather === 'thunderstorm') { fogNear = 10; fogFar = 24; }
+  // Fog starts further out so the island stays visible when zoomed out
+  let fogNear = 30, fogFar = 80;
+  if (weather === 'rain' || weather === 'drizzle') { fogNear = 20; fogFar = 55; }
+  else if (weather === 'snow') { fogNear = 16; fogFar = 45; }
+  else if (weather === 'fog') { fogNear = 10; fogFar = 35; }
+  else if (weather === 'overcast' || weather === 'cloudy') { fogNear = 25; fogFar = 65; }
+  else if (weather === 'thunderstorm') { fogNear = 18; fogFar = 50; }
   return { isNight, isDusk, skyTop: top, skyBot: bot, fog: bot, fogNear, fogFar, light: phase.light };
 }
 
