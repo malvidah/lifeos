@@ -124,21 +124,19 @@ function buildHealthHabits(scores, startDate, endDate, today) {
 // ── HabitsCard ───────────────────────────────────────────────────────────────
 // ── Habit filter toggle for card header ───────────────────────────────────────
 const TasksIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="12" height="12" rx="2.5"/>
-    <polyline points="5,8.5 7,10.5 11,6"/>
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="10" height="10" rx="2.5"/>
   </svg>
 );
 const SyncIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M4 8a4 4 0 0 1 7.5-2"/><polyline points="12 3 12 6 9 6"/>
-    <path d="M12 8a4 4 0 0 1-7.5 2"/><polyline points="4 13 4 10 7 10"/>
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+    <circle cx="8" cy="8" r="5"/>
   </svg>
 );
 const AllIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="2" y="2" width="12" height="12" rx="2.5"/>
-    <circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none"/>
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="8" cy="8" r="5"/>
+    <rect x="5.5" y="5.5" width="5" height="5" rx="1"/>
   </svg>
 );
 
