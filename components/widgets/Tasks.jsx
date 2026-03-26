@@ -31,7 +31,7 @@ export function TaskCheckbox({ done, onToggle }) {
 }
 
 // ── Single task row ──────────────────────────────────────────────────────────
-function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick }) {
+function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, isFirst, placeholder }) {
   const handleCommit = useCallback((text) => {
     if (!text?.trim()) return;
     if (text !== task.text) {
@@ -43,7 +43,7 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
     <div
       onKeyDown={e => {
         if (e.key === 'ArrowDown') { e.preventDefault(); onEnterDown?.(); }
-        if (e.key === 'ArrowUp') { e.preventDefault(); onFocusPrev?.(); }
+        if (e.key === 'ArrowUp' && onFocusPrev) { e.preventDefault(); onFocusPrev(); }
       }}
       style={{
         display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0',
@@ -59,7 +59,7 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
           clearOnEnter={false}
           value={task.text || ''}
           editable={task._editable !== false}
-          placeholder=""
+          placeholder={placeholder || ''}
           projectNames={projectNames}
           noteNames={noteNames}
           placeNames={placeNames}
@@ -72,10 +72,10 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
             handleCommit(text);
             onEnterDown?.();
           }}
-          onBackspaceEmpty={() => {
+          onBackspaceEmpty={onDelete ? () => {
             onDelete(task.id);
             onFocusPrev?.();
-          }}
+          } : undefined}
           onProjectClick={onProjectClick}
           onNoteClick={onNoteClick}
         />
@@ -177,12 +177,28 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     }
   }, [filteredTasks]);
 
-  // Handle adding a new task
-  const handleAdd = useCallback(async (text) => {
+  // Draft tasks — local-only empty rows for typing, saved on blur/enter with text
+  const [drafts, setDrafts] = useState([]);
+  const draftRefs = useRef({});
+
+  const addDraft = useCallback(() => {
+    const id = `draft-${Date.now()}`;
+    setDrafts(prev => [...prev, { id }]);
+    setTimeout(() => draftRefs.current[id]?.focus?.(), 50);
+    return id;
+  }, []);
+
+  const commitDraft = useCallback(async (draftId, text) => {
+    if (!text?.trim()) return;
+    setDrafts(prev => prev.filter(d => d.id !== draftId));
     await addTask(text, {
       project_tags: project ? [project.toLowerCase()] : [],
     });
   }, [addTask, project]);
+
+  const removeDraft = useCallback((draftId) => {
+    setDrafts(prev => prev.filter(d => d.id !== draftId));
+  }, []);
 
   if (!loaded) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
@@ -196,37 +212,86 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         .task-done .ProseMirror p { text-decoration: line-through; text-decoration-color: var(--dl-middle); }
         .task-done .ProseMirror p span { text-decoration: none !important; }
       `}</style>
-      <NewTaskInput
-        onAdd={handleAdd}
-        onFocusNext={() => {
-          const first = filteredTasks[0];
-          if (first) taskRefs.current[first.id]?.focus?.();
-        }}
-        inputRef={newTaskRef}
-        project={project}
-        projectNames={projectNames}
-        noteNames={noteNames}
-        placeNames={placeNames}
-        onProjectClick={name => navigateToProject(name)}
-        onNoteClick={name => navigateToNote(name)}
-      />
-      {filteredTasks.map(task => (
+      {filteredTasks.map((task, idx) => (
         <TaskRow
           key={task.id}
           task={task}
           onToggle={toggleTask}
           onEdit={updateTask}
-          onDelete={deleteTask}
-          onEnterDown={() => focusNext(task.id)}
-          onFocusPrev={() => focusPrev(task.id)}
+          onDelete={idx === 0 && filteredTasks.length === 1 ? null : deleteTask}
+          onEnterDown={() => {
+            const next = filteredTasks[idx + 1];
+            if (next) {
+              taskRefs.current[next.id]?.focus?.();
+            } else if (drafts.length > 0) {
+              draftRefs.current[drafts[0].id]?.focus?.();
+            } else {
+              addDraft();
+            }
+          }}
+          onFocusPrev={idx === 0 ? null : () => {
+            const prev = filteredTasks[idx - 1];
+            if (prev) taskRefs.current[prev.id]?.focus?.();
+          }}
           editorRef={el => { taskRefs.current[task.id] = el; }}
           projectNames={projectNames}
           noteNames={noteNames}
           placeNames={placeNames}
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
+          isFirst={idx === 0}
+          placeholder={filteredTasks.length === 1 && idx === 0 && !task.text ? 'Add a task...' : ''}
         />
       ))}
+      {/* Draft rows — local-only, not saved until text is committed */}
+      {drafts.map((draft, idx) => (
+        <TaskRow
+          key={draft.id}
+          task={{ id: draft.id, text: '', done: false, _source: 'own', _editable: true }}
+          onToggle={() => {}}
+          onEdit={(id, patch) => {
+            if (patch.text?.trim()) commitDraft(id, patch.text);
+          }}
+          onDelete={() => removeDraft(draft.id)}
+          onEnterDown={() => addDraft()}
+          onFocusPrev={() => {
+            if (idx === 0) {
+              const lastTask = filteredTasks[filteredTasks.length - 1];
+              if (lastTask) taskRefs.current[lastTask.id]?.focus?.();
+            } else {
+              draftRefs.current[drafts[idx - 1].id]?.focus?.();
+            }
+          }}
+          editorRef={el => { draftRefs.current[draft.id] = el; }}
+          projectNames={projectNames}
+          noteNames={noteNames}
+          placeNames={placeNames}
+          onProjectClick={name => navigateToProject(name)}
+          onNoteClick={name => navigateToNote(name)}
+          placeholder=""
+        />
+      ))}
+      {/* If no tasks at all, show a single empty row */}
+      {filteredTasks.length === 0 && drafts.length === 0 && (
+        <TaskRow
+          task={{ id: '__empty__', text: '', done: false, _source: 'own', _editable: true }}
+          onToggle={() => {}}
+          onEdit={(id, patch) => {
+            if (patch.text?.trim()) addTask(patch.text, { project_tags: project ? [project.toLowerCase()] : [] });
+          }}
+          onDelete={null}
+          onEnterDown={() => addDraft()}
+          onFocusPrev={null}
+          editorRef={el => { taskRefs.current['__empty__'] = el; }}
+          projectNames={projectNames}
+          noteNames={noteNames}
+          placeNames={placeNames}
+          onProjectClick={name => navigateToProject(name)}
+          onNoteClick={name => navigateToNote(name)}
+          isFirst={true}
+          placeholder="Add a task..."
+        />
+      )}
     </div>
   );
 }
