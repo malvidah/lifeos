@@ -1340,48 +1340,39 @@ function MapInner({ token }) {
         .leaflet-fade-anim .leaflet-tile-loaded { opacity: 1; }
         /* Match tile background to container so no white flash */
         .leaflet-container { background: ${bgColor} !important; }
-        .leaflet-control-zoom {
-          border: none !important;
-          box-shadow: none !important;
-          margin-bottom: 120px !important;
-        }
-        .leaflet-control-zoom a {
-          background: var(--dl-glass) !important;
-          backdrop-filter: blur(20px) saturate(1.4) !important;
-          -webkit-backdrop-filter: blur(20px) saturate(1.4) !important;
-          color: var(--dl-highlight) !important;
-          border: 1px solid var(--dl-glass-border) !important;
-          font-family: ${mono} !important;
-          box-shadow: var(--dl-glass-shadow) !important;
-        }
-        .leaflet-control-zoom a:hover { background: var(--dl-glass-active) !important; color: var(--dl-strong) !important; }
+        .leaflet-control-zoom { display: none !important; }
       `}</style>
 
-      {/* Locate me button — above zoom controls, bottom right */}
-      <button onClick={locateMe} title="Find my location"
-        style={{
-          position: 'absolute', bottom: 180, right: 10, zIndex: 1000,
-          width: 30, height: 30,
-          background: 'var(--dl-glass)',
-          backdropFilter: 'blur(20px) saturate(1.4)',
-          WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-          border: '1px solid var(--dl-glass-border)',
-          borderRadius: 4, cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: locating ? 'var(--dl-accent)' : 'var(--dl-highlight)',
-          boxShadow: 'var(--dl-glass-shadow)',
-          transition: 'color 0.15s',
-        }}>
-        {locating ? (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}>
-            <circle cx="12" cy="12" r="10"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
-          </svg>
-        ) : (
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
-          </svg>
-        )}
-      </button>
+      {/* Map controls — vertically centered, right-aligned */}
+      <div style={{
+        position: 'absolute', top: '50%', right: 10, transform: 'translateY(-50%)',
+        zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 2,
+      }}>
+        {[
+          { title: 'Find my location', onClick: locateMe, icon: locating
+            ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}><circle cx="12" cy="12" r="10"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
+            : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>,
+            color: locating ? 'var(--dl-accent)' : 'var(--dl-highlight)' },
+          { title: 'Zoom in', onClick: () => mapInstance.current?.zoomIn(), icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> },
+          { title: 'Zoom out', onClick: () => mapInstance.current?.zoomOut(), icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg> },
+        ].map(btn => (
+          <button key={btn.title} onClick={btn.onClick} title={btn.title}
+            style={{
+              width: 30, height: 30,
+              background: 'var(--dl-glass)',
+              backdropFilter: 'blur(20px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+              border: '1px solid var(--dl-glass-border)',
+              borderRadius: 4, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: btn.color || 'var(--dl-highlight)',
+              boxShadow: 'var(--dl-glass-shadow)',
+              transition: 'color 0.15s',
+            }}>
+            {btn.icon}
+          </button>
+        ))}
+      </div>
 
       {/* Top bar: mode toggle (left) + search pill (center) + add button (right) */}
       <div style={{
@@ -1488,7 +1479,7 @@ function MapInner({ token }) {
       <MapBottomStrip collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed(c => !c)}>
 
       {/* Place carousel */}
-      {visiblePlaces.length > 0 && !addingPlace && !previewGeo && !selectedDiscovered && (
+      {(visiblePlaces.length > 0 || addingPlace) && !previewGeo && !selectedDiscovered && (
         <div style={{ pointerEvents: 'none' }}>
           <div ref={carouselRef}
             onMouseDown={e => {
@@ -1514,6 +1505,85 @@ function MapInner({ token }) {
             pointerEvents: 'auto', userSelect: 'none', WebkitUserSelect: 'none',
             cursor: 'grab',
           }}>
+            {/* New place card — appears first when adding */}
+            {addingPlace && !addingPlace.isArea && (
+              <div style={{
+                flexShrink: 0, width: 240, height: 100,
+                backdropFilter: 'blur(20px) saturate(1.4)',
+                WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                background: 'var(--dl-accent)' + '0D', borderRadius: 12, padding: 10,
+                border: '1.5px solid var(--dl-accent)',
+                boxShadow: 'var(--dl-glass-shadow)',
+                display: 'flex', flexDirection: 'column',
+                animation: 'fadeInUp 0.2s ease',
+              }}>
+                <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newName.trim()) { savePlace(); }
+                    if (e.key === 'Escape') { setAddingPlace(null); lastGeoRef.current = null; }
+                  }}
+                  placeholder="Place name"
+                  style={{ width: '100%', background: 'transparent', border: 'none', padding: 0, fontFamily: mono, fontSize: 12, fontWeight: 600, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.02em', lineHeight: 1.3 }}
+                />
+                <input value={newNotes} onChange={e => setNewNotes(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && newName.trim()) { savePlace(); }
+                    if (e.key === 'Escape') { setAddingPlace(null); lastGeoRef.current = null; }
+                  }}
+                  placeholder="Description..."
+                  style={{ width: '100%', background: 'transparent', border: 'none', padding: 0, marginTop: 3, fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', outline: 'none', flex: 1 }}
+                />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto', paddingTop: 4, position: 'relative' }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--dl-accent)', flexShrink: 0 }} />
+                  <input value={tagQuery}
+                    onChange={e => { setTagQuery(e.target.value); setShowTagSugg(true); }}
+                    onFocus={() => setShowTagSugg(true)}
+                    onBlur={() => setTimeout(() => setShowTagSugg(false), 150)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && tagQuery.trim()) {
+                        const match = placeTypes.find(t => t.name.toLowerCase() === tagQuery.trim().toLowerCase());
+                        if (match) setNewType(match.name); else createType(tagQuery.trim());
+                        setTagQuery(''); setShowTagSugg(false);
+                      }
+                      if (e.key === 'Escape') { setAddingPlace(null); lastGeoRef.current = null; setTagQuery(''); }
+                    }}
+                    placeholder={newType || 'Add tag...'}
+                    style={{ flex: 1, background: 'transparent', border: 'none', padding: 0, fontFamily: mono, fontSize: 10, color: 'var(--dl-highlight)', outline: 'none' }}
+                  />
+                  {showTagSugg && (() => {
+                    const filtered = tagQuery.trim() ? placeTypes.filter(t => t.name.toLowerCase().includes(tagQuery.toLowerCase())) : placeTypes;
+                    const exact = placeTypes.some(t => t.name.toLowerCase() === tagQuery.trim().toLowerCase());
+                    if (!filtered.length && !tagQuery.trim()) return null;
+                    return (
+                      <div style={{ position: 'fixed', bottom: 130, background: 'var(--dl-card)', border: '1px solid var(--dl-border)', borderRadius: 8, boxShadow: 'var(--dl-shadow)', padding: 4, maxHeight: 160, overflowY: 'auto', minWidth: 160, zIndex: 10000 }}>
+                        {filtered.map(t => (
+                          <button key={t.name} onMouseDown={e => { e.preventDefault(); setNewType(t.name); setTagQuery(''); setShowTagSugg(false); }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', background: 'none', border: 'none', padding: '4px 8px', cursor: 'pointer', fontFamily: mono, fontSize: 10, color: 'var(--dl-strong)', borderRadius: 4, textAlign: 'left' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-well)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                            <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.color }} />{t.name}
+                          </button>
+                        ))}
+                        {tagQuery.trim() && !exact && (
+                          <button onMouseDown={e => { e.preventDefault(); createType(tagQuery.trim()); setTagQuery(''); setShowTagSugg(false); }}
+                            style={{ display: 'flex', width: '100%', background: 'none', border: 'none', padding: '4px 8px', cursor: 'pointer', fontFamily: mono, fontSize: 10, color: 'var(--dl-accent)', borderRadius: 4, textAlign: 'left' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-well)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                            Create "{tagQuery.trim()}"
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <button onClick={() => { if (newName.trim()) savePlace(); setAddingPlace(null); lastGeoRef.current = null; setTagQuery(''); }} title="Done"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--dl-accent)', display: 'flex', flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            )}
             {visiblePlaces.map(place => {
               const isSelected = selectedPlace?.id === place.id;
               const isHovered = hoveredPlace?.id === place.id;
@@ -1678,31 +1748,7 @@ function MapInner({ token }) {
       )}
 
       {/* Add-place panel */}
-      {addingPlace && mode === 'places' && !editingPlace && !addingPlace.isArea && (
-        <PlaceEditorPanel
-          name={newName} setName={setNewName}
-          notes={newNotes} setNotes={setNewNotes}
-          type={newType} setType={setNewType}
-          tagQuery={tagQuery} setTagQuery={setTagQuery}
-          showTagSugg={showTagSugg} setShowTagSugg={setShowTagSugg}
-          placeTypes={placeTypes} createType={createType}
-          placeholder="Place name"
-          onClose={() => { if (newName.trim()) savePlace(); setAddingPlace(null); lastGeoRef.current = null; setTagQuery(''); }}
-        />
-      )}
-      {/* Discover area panel */}
-      {addingPlace && addingPlace.isArea && !editingPlace && (
-        <PlaceEditorPanel
-          name={newName} setName={setNewName}
-          notes={newNotes} setNotes={setNewNotes}
-          type={newType} setType={setNewType}
-          tagQuery={tagQuery} setTagQuery={setTagQuery}
-          showTagSugg={showTagSugg} setShowTagSugg={setShowTagSugg}
-          placeTypes={placeTypes} createType={createType}
-          placeholder="Area name"
-          onClose={() => { if (newName.trim()) savePlace(); setAddingPlace(null); lastGeoRef.current = null; setTagQuery(''); }}
-        />
-      )}
+      {/* Add/discover panels removed — new pins appear as inline editable cards in carousel */}
 
       {/* Edit mode is now inline in cards — no separate panel */}
 
