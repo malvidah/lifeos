@@ -260,6 +260,113 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
   );
 }
 
+// ─── Place Editor Panel — shared by add + edit modes ─────────────────────────
+function PlaceEditorPanel({ name, setName, notes, setNotes, type, setType, tagQuery, setTagQuery, showTagSugg, setShowTagSugg, placeTypes, createType, onClose, placeholder = 'Place name' }) {
+  const filteredTypes = tagQuery.trim()
+    ? placeTypes.filter(t => t.name.toLowerCase().includes(tagQuery.toLowerCase()))
+    : placeTypes;
+  const exactMatch = placeTypes.some(t => t.name.toLowerCase() === tagQuery.trim().toLowerCase());
+  const typeObj = placeTypes.find(t => t.name === type);
+
+  return (
+    <div style={{ padding: '8px 10px', position: 'relative' }}>
+      {/* Close button */}
+      <button onClick={onClose}
+        style={{ position: 'absolute', top: 8, right: 10, background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--dl-middle)', fontSize: 16, lineHeight: 1 }}>
+        &times;
+      </button>
+      {/* Name */}
+      <input autoFocus value={name} onChange={e => setName(e.target.value)}
+        placeholder={placeholder}
+        style={{ width: 'calc(100% - 30px)', background: 'transparent', border: 'none', borderBottom: '1px solid var(--dl-border)', borderRadius: 0, padding: '4px 0', marginBottom: 4, fontFamily: mono, fontSize: 13, fontWeight: 500, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.02em' }}
+      />
+      {/* Description */}
+      <input value={notes} onChange={e => setNotes(e.target.value)}
+        placeholder="Description (optional)"
+        style={{ width: '100%', background: 'transparent', border: 'none', borderBottom: '1px solid transparent', borderRadius: 0, padding: '4px 0', marginBottom: 8, fontFamily: mono, fontSize: 12, color: 'var(--dl-highlight)', outline: 'none', letterSpacing: '0.02em' }}
+      />
+      {/* Tags row */}
+      <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', position: 'relative' }}>
+        {/* Selected tag */}
+        {type && typeObj && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: typeObj.color + '18', border: `1px solid ${typeObj.color}40`,
+            borderRadius: 100, padding: '2px 8px 2px 6px',
+            fontFamily: mono, fontSize: 11, color: typeObj.color, letterSpacing: '0.04em',
+          }}>
+            <span style={{ width: 5, height: 5, borderRadius: '50%', background: typeObj.color }} />
+            {typeObj.name}
+            <button onClick={() => setType('')}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, marginLeft: 2, color: typeObj.color, fontSize: 11, lineHeight: 1, opacity: 0.6 }}>
+              &times;
+            </button>
+          </span>
+        )}
+        {/* Tag input with autocomplete */}
+        <div style={{ position: 'relative', flex: 1, minWidth: 80 }}>
+          <input value={tagQuery}
+            onChange={e => { setTagQuery(e.target.value); setShowTagSugg(true); }}
+            onFocus={() => setShowTagSugg(true)}
+            onBlur={() => setTimeout(() => setShowTagSugg(false), 150)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && tagQuery.trim()) {
+                const match = placeTypes.find(t => t.name.toLowerCase() === tagQuery.trim().toLowerCase());
+                if (match) { setType(match.name); setTagQuery(''); setShowTagSugg(false); }
+                else { createType(tagQuery.trim()); setTagQuery(''); setShowTagSugg(false); }
+              }
+              if (e.key === 'Escape') { setTagQuery(''); setShowTagSugg(false); }
+            }}
+            placeholder={type ? 'Change tag...' : 'Add tag...'}
+            style={{ width: '100%', background: 'transparent', border: 'none', padding: '2px 0', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.04em' }}
+          />
+          {/* Autocomplete dropdown */}
+          {showTagSugg && (filteredTypes.length > 0 || (tagQuery.trim() && !exactMatch)) && (
+            <div style={{
+              position: 'absolute', bottom: '100%', left: 0, marginBottom: 4,
+              background: 'var(--dl-card)', border: '1px solid var(--dl-border)',
+              borderRadius: 8, boxShadow: 'var(--dl-shadow)', padding: 4,
+              maxHeight: 160, overflowY: 'auto', minWidth: 160, zIndex: 10,
+            }}>
+              {filteredTypes.map(t => (
+                <button key={t.name}
+                  onMouseDown={e => { e.preventDefault(); setType(t.name); setTagQuery(''); setShowTagSugg(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                    background: 'none', border: 'none', padding: '5px 8px', cursor: 'pointer',
+                    fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', borderRadius: 4,
+                    letterSpacing: '0.04em', textAlign: 'left',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-well)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                  {t.name}
+                </button>
+              ))}
+              {tagQuery.trim() && !exactMatch && (
+                <button
+                  onMouseDown={e => { e.preventDefault(); createType(tagQuery.trim()); setTagQuery(''); setShowTagSugg(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                    background: 'none', border: 'none', padding: '5px 8px', cursor: 'pointer',
+                    fontFamily: mono, fontSize: 11, color: 'var(--dl-accent)', borderRadius: 4,
+                    letterSpacing: '0.04em', textAlign: 'left',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-well)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  Create "{tagQuery.trim()}"
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Map Bottom Strip — collapsible floating carousel + info panels ───────────
 function MapBottomStrip({ collapsed, onToggle, children }) {
   const hasContent = !!children;
@@ -329,6 +436,8 @@ function MapInner({ token }) {
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState('');
   const [newNotes, setNewNotes] = useState('');
+  const [tagQuery, setTagQuery] = useState('');
+  const [showTagSugg, setShowTagSugg] = useState(false);
   const [creatingType, setCreatingType] = useState(false);
   const [newTypeName, setNewTypeName] = useState('');
   const [selectedPlace, setSelectedPlace] = useState(null);
@@ -1484,141 +1593,45 @@ function MapInner({ token }) {
         </div>
       )}
 
-      {/* Add-place popup */}
-      {addingPlace && mode === 'places' && !editingPlace && (
-        <div
-          onKeyDown={e => { if (e.key === 'Enter' && !creatingType && newName.trim()) savePlace(); }}
-          style={{
-            margin: '0 2px',
-            background: 'var(--dl-bg)', borderRadius: 10,
-            border: '1px solid var(--dl-border)',
-            padding: '10px 14px',
-            boxShadow: 'var(--dl-shadow)',
-          }}>
-          {/* Header: label + actions */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              {addingPlace.isArea ? 'Discover area' : 'New place'}
-            </span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={savePlace}
-                style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 8, padding: '5px 16px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
-                Save
-              </button>
-              <button onClick={() => { setAddingPlace(null); lastGeoRef.current = null; }}
-                style={{ background: 'var(--dl-well)', border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
-                &times;
-              </button>
-            </div>
-          </div>
-          {/* Name */}
-          <input autoFocus value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
-            placeholder={addingPlace.isArea ? 'Area name...' : 'Place name'}
-            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.02em', boxSizing: 'border-box' }}
-          />
-          {!addingPlace.isArea && (
-            <>
-              {/* Description */}
-              <input value={newNotes} onChange={e => setNewNotes(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') savePlace(); if (e.key === 'Escape') setAddingPlace(null); }}
-                placeholder="Description (optional)"
-                style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '7px 12px', marginBottom: 10, fontFamily: mono, fontSize: F.sm, color: 'var(--dl-highlight)', outline: 'none', letterSpacing: '0.02em', boxSizing: 'border-box' }}
-              />
-              {/* Type pills */}
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
-                {placeTypes.map(t => (
-                  <button key={t.id} onClick={() => setNewType(newType === t.name ? '' : t.name)}
-                    style={{
-                      background: newType === t.name ? t.color + '18' : 'transparent',
-                      border: `1.5px solid ${newType === t.name ? t.color : 'var(--dl-border)'}`,
-                      borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
-                      fontSize: 11, color: newType === t.name ? t.color : 'var(--dl-highlight)',
-                      fontFamily: mono, letterSpacing: '0.04em',
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      transition: 'all 0.12s',
-                    }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
-                    {t.name}
-                  </button>
-                ))}
-                {creatingType ? (
-                  <input autoFocus value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && newTypeName.trim()) createType(); if (e.key === 'Escape') setCreatingType(false); }}
-                    onBlur={() => { if (newTypeName.trim()) createType(); else setCreatingType(false); }}
-                    placeholder="Label…"
-                    style={{ width: 80, background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 100, padding: '3px 10px', fontFamily: mono, fontSize: 11, color: 'var(--dl-strong)', outline: 'none' }}
-                  />
-                ) : (
-                  <button onClick={() => setCreatingType(true)}
-                    style={{ background: 'none', border: '1.5px dashed var(--dl-border)', borderRadius: 100, padding: '3px 10px', cursor: 'pointer', fontSize: 11, color: 'var(--dl-middle)', fontFamily: mono }}>
-                    + Label
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-        </div>
+      {/* Add-place panel */}
+      {addingPlace && mode === 'places' && !editingPlace && !addingPlace.isArea && (
+        <PlaceEditorPanel
+          name={newName} setName={setNewName}
+          notes={newNotes} setNotes={setNewNotes}
+          type={newType} setType={setNewType}
+          tagQuery={tagQuery} setTagQuery={setTagQuery}
+          showTagSugg={showTagSugg} setShowTagSugg={setShowTagSugg}
+          placeTypes={placeTypes} createType={createType}
+          placeholder="Place name"
+          onClose={() => { if (newName.trim()) savePlace(); setAddingPlace(null); lastGeoRef.current = null; setTagQuery(''); }}
+        />
+      )}
+      {/* Discover area panel */}
+      {addingPlace && addingPlace.isArea && !editingPlace && (
+        <PlaceEditorPanel
+          name={newName} setName={setNewName}
+          notes={newNotes} setNotes={setNewNotes}
+          type={newType} setType={setNewType}
+          tagQuery={tagQuery} setTagQuery={setTagQuery}
+          showTagSugg={showTagSugg} setShowTagSugg={setShowTagSugg}
+          placeTypes={placeTypes} createType={createType}
+          placeholder="Area name"
+          onClose={() => { if (newName.trim()) savePlace(); setAddingPlace(null); lastGeoRef.current = null; setTagQuery(''); }}
+        />
       )}
 
       {/* Edit place panel */}
       {editingPlace && (
-        <div
-          onKeyDown={e => { if (e.key === 'Enter') { saveEdit(); setEditingPlace(null); } if (e.key === 'Escape') setEditingPlace(null); }}
-          style={{
-            margin: '0 2px',
-            background: 'var(--dl-card)',
-            border: '1px solid var(--dl-border)',
-            borderRadius: 14,
-            padding: '12px 16px',
-            boxShadow: 'var(--dl-shadow)',
-          }}>
-          {/* Header: label + actions */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-              Edit place
-            </span>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button onClick={() => { saveEdit(); setEditingPlace(null); }}
-                style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 8, padding: '5px 16px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
-                Save
-              </button>
-              <button onClick={() => setEditingPlace(null)}
-                style={{ background: 'var(--dl-well)', border: 'none', borderRadius: 8, padding: '5px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>
-                &times;
-              </button>
-            </div>
-          </div>
-          {/* Name */}
-          <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
-            placeholder="Place name"
-            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontFamily: mono, fontSize: F.md, fontWeight: 600, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.02em', boxSizing: 'border-box' }}
-          />
-          {/* Description */}
-          <input value={editNotes} onChange={e => setEditNotes(e.target.value)}
-            placeholder="Description (optional)"
-            style={{ width: '100%', background: 'var(--dl-well)', border: '1px solid var(--dl-border)', borderRadius: 8, padding: '7px 12px', marginBottom: 10, fontFamily: mono, fontSize: F.sm, color: 'var(--dl-highlight)', outline: 'none', letterSpacing: '0.02em', boxSizing: 'border-box' }}
-          />
-          {/* Type pills */}
-          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-            {placeTypes.map(t => (
-              <button key={t.id} onClick={() => setEditType(editType === t.name ? '' : t.name)}
-                style={{
-                  background: editType === t.name ? t.color + '18' : 'transparent',
-                  border: `1.5px solid ${editType === t.name ? t.color : 'var(--dl-border)'}`,
-                  borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
-                  fontFamily: mono, fontSize: 11, letterSpacing: '0.04em',
-                  color: editType === t.name ? t.color : 'var(--dl-highlight)',
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  transition: 'all 0.12s',
-                }}>
-                <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
-                {t.name}
-              </button>
-            ))}
-          </div>
-        </div>
+        <PlaceEditorPanel
+          name={editName} setName={setEditName}
+          notes={editNotes} setNotes={setEditNotes}
+          type={editType} setType={setEditType}
+          tagQuery={tagQuery} setTagQuery={setTagQuery}
+          showTagSugg={showTagSugg} setShowTagSugg={setShowTagSugg}
+          placeTypes={placeTypes} createType={createType}
+          placeholder="Place name"
+          onClose={() => { saveEdit(); setEditingPlace(null); setTagQuery(''); }}
+        />
       )}
 
       {/* Search result preview card */}
