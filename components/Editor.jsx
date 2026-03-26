@@ -574,6 +574,7 @@ export function docToText(docJson) {
       if (c.type === 'placeTag')    return `{l:${c.attrs?.name ?? ''}}`;
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
       if (c.type === 'recurrenceTag') return `{r:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
+      if (c.type === 'dateTag')    return `@${c.attrs?.date ?? ''}`;
       return '';
     }).join('');
   }
@@ -588,14 +589,17 @@ export function docToText(docJson) {
 
 function parseLineContent(line) {
   const content = [];
-  // {project} | [note] | legacy #Tag
-  const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]|#([A-Za-z][A-Za-z0-9]+)/g;
+  // Tokens: {project} | {l:place} | {r:key:label} | [note] | @YYYY-MM-DD | legacy #Tag
+  const re = /\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})|#([A-Za-z][A-Za-z0-9]+)/g;
   let last = 0, m;
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
-    if (m[1] != null)      content.push({ type: 'projectTag', attrs: { name: m[1] } });
-    else if (m[2] != null) content.push({ type: 'noteLink',   attrs: { name: m[2] } });
-    else if (m[3] != null) content.push({ type: 'projectTag', attrs: { name: m[3].toLowerCase() } });
+    if (m[1] != null)      content.push({ type: 'recurrenceTag', attrs: { key: m[1], label: m[2] } });
+    else if (m[3] != null) content.push({ type: 'placeTag',  attrs: { name: m[3] } });
+    else if (m[4] != null) content.push({ type: 'projectTag', attrs: { name: m[4] } });
+    else if (m[5] != null) content.push({ type: 'noteLink',   attrs: { name: m[5] } });
+    else if (m[6] != null) content.push({ type: 'dateTag',    attrs: { date: m[6] } });
+    else if (m[7] != null) content.push({ type: 'projectTag', attrs: { name: m[7].toLowerCase() } });
     last = m.index + m[0].length;
   }
   if (last < line.length) content.push({ type: 'text', text: line.slice(last) });
