@@ -210,27 +210,33 @@ function HabitRow({ habit, dates, today, date, mode, scrollRef, onMouseDown }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {/* Name row */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ fontSize: 15, lineHeight: 1 }}>
-          {streakEmoji(h.streak, h.frozen)}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{
           fontFamily: mono, fontSize: 13, color: 'var(--dl-strong)',
           fontWeight: 500, lineHeight: 1,
         }}>
           {h.text}
         </span>
+        {/* Streak chip */}
         <span style={{
-          fontFamily: mono, fontSize: 13,
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          padding: '2px 7px', borderRadius: 100,
+          border: `1.5px solid ${streakColor(h.streak, h.frozen)}`,
+          background: h.frozen ? 'rgba(124,184,212,0.12)'
+            : h.streak > 0 ? 'var(--dl-accent-10, rgba(208,136,40,0.1))'
+            : 'transparent',
+          fontFamily: mono, fontSize: 12, fontWeight: 600, lineHeight: 1,
           color: streakColor(h.streak, h.frozen),
-          fontWeight: 700, lineHeight: 1, marginLeft: 2,
         }}>
+          <span style={{ fontSize: 12, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen)}</span>
           {h.streak}
         </span>
+        {/* Spacer pushes best to far right */}
+        <span style={{ flex: 1 }} />
         {h.bestStreak > 0 && (
           <span style={{
             fontFamily: mono, fontSize: 11,
-            color: 'var(--dl-middle)', lineHeight: 1,
+            color: 'var(--dl-middle)', lineHeight: 1, flexShrink: 0,
           }}>
             best {h.bestStreak}
           </span>
