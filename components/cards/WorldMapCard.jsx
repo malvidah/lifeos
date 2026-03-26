@@ -1612,12 +1612,12 @@ function MapInner({ token }) {
       {previewGeo && mode === 'places' && !addingPlace && !editingPlace && !selectedPlace && (
         <div style={{
           margin: '0 2px',
-          background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+          background: 'var(--dl-overlay)',
           backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
           borderRadius: 10,
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          border: '1px solid var(--dl-overlay-border)',
           padding: '10px 14px',
-          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.1)',
+          boxShadow: 'var(--dl-overlay-shadow)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'hidden', minWidth: 0 }}>
@@ -1695,12 +1695,12 @@ function MapInner({ token }) {
         return (
         <div style={{
           margin: '0 2px',
-          background: isDark ? 'rgba(20, 20, 22, 0.7)' : 'rgba(255, 255, 255, 0.7)',
+          background: 'var(--dl-overlay)',
           backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
           borderRadius: 10,
-          border: `1px solid ${isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)'}`,
+          border: '1px solid var(--dl-overlay-border)',
           padding: '10px 14px',
-          boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.4)' : '0 4px 24px rgba(0,0,0,0.1)',
+          boxShadow: 'var(--dl-overlay-shadow)',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

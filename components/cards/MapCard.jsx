@@ -579,15 +579,15 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: isSelected ? (isDark ? `${p.color}28` : `var(--dl-bg)`) : isHov ? `${p.color}28` : isDark ? 'rgba(20,18,14,0.65)' : 'rgba(240,235,220,0.65)',
+          background: isSelected ? (isDark ? `${p.color}28` : 'var(--dl-card)') : isHov ? `${p.color}28` : 'var(--dl-glass)',
           backdropFilter: 'blur(8px)',
           WebkitBackdropFilter: 'blur(8px)',
-          border: `1px solid ${(isSelected || isHov) ? p.color : isDark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.10)'}`,
+          border: `1px solid ${(isSelected || isHov) ? p.color : 'var(--dl-glass-border)'}`,
           borderRadius: 999, padding: '3px 12px',
           fontFamily: mono, fontSize: 11, fontWeight: isSelected ? 600 : 400,
           letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
-          color: (isSelected || isHov) ? p.color : isDark ? 'rgba(255,255,255,0.65)' : 'rgba(30,24,16,0.65)',
+          color: (isSelected || isHov) ? p.color : 'var(--dl-highlight)',
           cursor: 'pointer',
           opacity: dimmed ? 0.4 : 1,
           boxShadow: isSelected ? `0 0 10px ${p.color}44` : 'none',
