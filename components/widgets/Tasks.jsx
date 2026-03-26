@@ -37,8 +37,11 @@ function isSuggestionOpen() {
 
 // ── Single task row ──────────────────────────────────────────────────────────
 function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onEnterCreate, onFocusPrev, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, isFirst, placeholder }) {
+  const justCommitted = useRef(false);
+
   const handleCommit = useCallback((text) => {
     if (!text?.trim()) return;
+    if (justCommitted.current) { justCommitted.current = false; return; } // skip duplicate from blur after enter
     if (text !== task.text) {
       onEdit(task.id, { text });
     }
@@ -77,7 +80,14 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onEnterCreate,
           style={{ padding: 0 }}
           onBlur={text => handleCommit(text)}
           onEnterCommit={text => {
-            handleCommit(text);
+            // Save the text
+            if (text?.trim() && text !== task.text) {
+              onEdit(task.id, { text });
+            }
+            // Mark that we just committed so the blur handler doesn't double-save
+            justCommitted.current = true;
+            setTimeout(() => { justCommitted.current = false; }, 200);
+            // Create a new line below
             onEnterCreate?.();
           }}
           onBackspaceEmpty={onDelete ? () => {
@@ -289,11 +299,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
                   }
                 }}
                 onDelete={() => removeDraft(draft.id)}
-                onEnterCreate={() => {
-                  const draftId = `draft-${Date.now()}`;
-                  setDrafts(prev => [...prev, { id: draftId, afterIdx: idx }]);
-                  setTimeout(() => draftRefs.current[draftId]?.focus?.(), 50);
-                }}
+                onEnterCreate={null}
                 onFocusPrev={() => taskRefs.current[task.id]?.focus?.()}
                 editorRef={el => { draftRefs.current[draft.id] = el; }}
                 projectNames={projectNames} noteNames={noteNames} placeNames={placeNames}
