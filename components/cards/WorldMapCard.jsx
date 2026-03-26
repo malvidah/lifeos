@@ -269,50 +269,46 @@ function MapBottomStrip({ collapsed, onToggle, children }) {
   return (
     <div style={{
       position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 999,
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
       pointerEvents: 'none',
     }}>
-      {/* Vignette fade — rises with the strip */}
+      {/* Glass strip panel — chevron + content */}
       <div style={{
-        width: '100%', height: collapsed ? 0 : 60,
-        background: 'linear-gradient(to top, var(--dl-bg) 0%, transparent 100%)',
-        pointerEvents: 'none',
-        transition: 'height 0.25s ease, opacity 0.25s ease',
-        opacity: collapsed ? 0 : 1,
-      }} />
-      {/* Chevron toggle */}
-      <button onClick={onToggle} style={{
         pointerEvents: 'auto',
         background: 'var(--dl-glass)',
-        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-        border: '1px solid var(--dl-glass-border)',
-        borderRadius: '8px 8px 0 0',
-        padding: '2px 16px 0',
-        cursor: 'pointer',
-        color: 'var(--dl-middle)',
-        display: 'flex', alignItems: 'center',
-        opacity: 0.7,
-        transition: 'opacity 0.15s',
-      }}
-        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-        onMouseLeave={e => e.currentTarget.style.opacity = '0.7'}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-          style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-      </button>
-      {/* Content area */}
-      <div style={{
-        width: '100%',
-        padding: '0 10px 10px',
-        pointerEvents: 'auto',
-        maxHeight: collapsed ? 0 : 200,
-        overflow: 'hidden',
-        transition: 'max-height 0.25s ease',
-        boxSizing: 'border-box',
+        backdropFilter: 'blur(16px) saturate(1.4)',
+        WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
+        borderTop: '1px solid var(--dl-glass-border)',
       }}>
-        {children}
+        {/* Chevron toggle */}
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <button onClick={onToggle} style={{
+            background: 'none', border: 'none',
+            padding: '4px 20px 2px',
+            cursor: 'pointer',
+            color: 'var(--dl-middle)',
+            display: 'flex', alignItems: 'center',
+            opacity: 0.5,
+            transition: 'opacity 0.15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+            onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
+        {/* Content area */}
+        <div style={{
+          padding: '0 10px 10px',
+          maxHeight: collapsed ? 0 : 200,
+          overflow: 'hidden',
+          transition: 'max-height 0.25s ease',
+          boxSizing: 'border-box',
+        }}>
+          {children}
+        </div>
       </div>
     </div>
   );
