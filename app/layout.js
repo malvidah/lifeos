@@ -41,7 +41,7 @@ const THEME_SCRIPT = `(function(){
       var h = new Date().getHours();
       t = (h >= 6 && h < 19) ? "light" : "dark";
     }
-    var bg = t === "light" ? "#D4CCB8" : "#111110";
+    var bg = t === "light" ? "#FAFAF8" : "#131211";
     var el = document.documentElement;
     el.style.setProperty("background", bg, "important");
     el.style.setProperty("background-color", bg, "important");
@@ -64,9 +64,9 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-title" content="Day Lab" />
         <style dangerouslySetInnerHTML={{ __html: `
           html, body { margin: 0; padding: 0; }
-          html[data-theme="light"], html[data-theme="light"] body { background-color: #D4CCB8 !important; }
-          html[data-theme="dark"], html[data-theme="dark"] body { background-color: #111110 !important; }
-          html:not([data-theme]) body { background-color: #111110 !important; }
+          html[data-theme="light"], html[data-theme="light"] body { background-color: #FAFAF8 !important; }
+          html[data-theme="dark"], html[data-theme="dark"] body { background-color: #131211 !important; }
+          html:not([data-theme]) body { background-color: #131211 !important; }
         `}} />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>

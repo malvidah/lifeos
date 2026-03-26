@@ -1422,7 +1422,7 @@ function MapInner({ token }) {
                   onMouseEnter={() => setHoveredPlace(place)}
                   onMouseLeave={() => setHoveredPlace(null)}
                   style={{
-                    flexShrink: 0, width: 120, height: 120,
+                    flexShrink: 0, width: 110, height: 100,
                     backdropFilter: 'blur(20px) saturate(1.4)',
                     WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
                     background: 'var(--dl-glass)', borderRadius: 12, padding: 10,
@@ -1435,10 +1435,10 @@ function MapInner({ token }) {
                 >
                   {/* Name — primary */}
                   <div style={{
-                    fontFamily: mono, fontSize: F.sm, fontWeight: 600,
+                    fontFamily: mono, fontSize: 11, fontWeight: 600,
                     color: 'var(--dl-strong)', letterSpacing: '0.02em', lineHeight: 1.3,
                     overflow: 'hidden', display: '-webkit-box',
-                    WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
                   }}>
                     {place.name}
                   </div>
