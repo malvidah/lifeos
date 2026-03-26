@@ -38,20 +38,31 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .replace(/↻\s*[A-Za-z·\s]+/g, '')
     .trim();
 
-  // Check if a completion row already exists for this date + text
+  // Check if a completion row already exists for this date + text.
+  // Use wildcard match since text may have extra whitespace or tokens.
   const { data: existing } = await supabase
     .from('tasks')
-    .select('id')
+    .select('id, done')
     .eq('user_id', user.id)
     .eq('date', date)
-    .ilike('text', completionText)
-    .eq('done', true)
+    .ilike('text', `%${completionText}%`)
     .is('deleted_at', null)
-    .limit(1);
+    .limit(5);
 
-  if (existing?.length) {
-    // Already completed on this date — return the existing row
-    return Response.json({ task: existing[0], already_completed: true });
+  // If there's already a done completion, return it
+  const doneRow = existing?.find(r => r.done);
+  if (doneRow) {
+    return Response.json({ task: doneRow, already_completed: true });
+  }
+
+  // If there's an unchecked row (e.g., the virtual appearance was materialized), mark it done
+  const uncheckedRow = existing?.find(r => !r.done);
+  if (uncheckedRow) {
+    const { data: updated } = await supabase.from('tasks')
+      .update({ done: true, completed_at: TODAY() })
+      .eq('id', uncheckedRow.id)
+      .select().single();
+    return Response.json({ task: updated || uncheckedRow });
   }
 
   // Create completion row
