@@ -130,6 +130,8 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
           }
+          // Notify other components (e.g. HabitsCard) that tasks changed
+          window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
         }
       } catch (err) {
         console.warn('[tasks] diff save failed:', err);
