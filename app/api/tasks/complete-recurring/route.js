@@ -82,7 +82,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     completed_at: TODAY(),
     project_tags: template.project_tags || [],
     note_tags: template.note_tags || [],
-    position: 0,
+    position: template.position ?? 0,
   }).select().single();
 
   if (insertErr) throw insertErr;
