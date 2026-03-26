@@ -164,7 +164,11 @@ export default function Tasks({date, token, userId, taskFilter="all", project}) 
   useEffect(() => injectTaskListStyles(accentHex, date), [accentHex, date]);
 
   const htmlValue = useMemo(() => migrateTasksToHtml(value) || '', [value]);
-  const isEmpty = useMemo(() => clientParseTasks(htmlValue).length === 0, [htmlValue]);
+  const allTasks = useMemo(() => clientParseTasks(htmlValue), [htmlValue]);
+  const isEmpty = allTasks.length === 0;
+  const allFilteredOut = !isEmpty && project && project !== '__everything__' &&
+    !allTasks.some(t => (t.project_tags || []).some(tag => tag.toLowerCase() === project.toLowerCase()) ||
+      (t.text || '').toLowerCase().includes(`{${project.toLowerCase()}}`));
 
   // When filtering by project, inject CSS to hide non-matching tasks.
   // All hooks must be called before any early return.
@@ -207,15 +211,16 @@ export default function Tasks({date, token, userId, taskFilter="all", project}) 
           onNoteClick={name => navigateToNote(name)}
           style={{padding:0}}
         />
-        {isEmpty && !project && (
+        {(isEmpty || allFilteredOut) && (
           <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+            position: allFilteredOut ? 'relative' : 'absolute',
+            top: 0, left: 0, right: 0, bottom: allFilteredOut ? undefined : 0,
             display: 'flex', alignItems: 'flex-start',
-            paddingTop: 3, paddingLeft: 25,
+            paddingTop: 3, paddingLeft: allFilteredOut ? 0 : 25,
             color: 'var(--dl-middle)', pointerEvents: 'none',
             fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
           }}>
-            Add a task.
+            {project ? `Add a task for ${project}.` : 'Add a task.'}
           </div>
         )}
       </div>

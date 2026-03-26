@@ -353,16 +353,20 @@ function RecentEntries({ token, userId, date, project }) {
     return e.blocks?.some(b => (b.project_tags || []).some(t => t.toLowerCase() === project.toLowerCase()));
   });
 
+  const isToday = todayStr === new Date().toISOString().slice(0, 10);
+
   return (
     <div style={{display:'flex',flexDirection:'column',gap:8,overflowY:'auto'}}>
-      {/* Selected day — editable */}
+      {/* Selected day — editable, highlighted */}
       <div>
         <div style={{
           fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
-          textTransform:'uppercase', color:'var(--dl-middle)',
-          marginBottom:4, opacity:0.7,
+          textTransform:'uppercase',
+          color: isToday ? 'var(--dl-accent)' : 'var(--dl-strong)',
+          marginBottom:4, opacity: isToday ? 1 : 0.8,
+          fontWeight: 600,
         }}>
-          {todayStr === new Date().toISOString().slice(0, 10) ? 'today' : formatLabel(todayStr)}
+          {isToday ? 'today' : formatLabel(todayStr)}
         </div>
         <JournalEditor date={todayStr} userId={userId} token={token} />
       </div>
@@ -381,7 +385,7 @@ function RecentEntries({ token, userId, date, project }) {
           <div style={{
             fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
             textTransform:'uppercase', color:'var(--dl-middle)',
-            marginBottom:4, opacity:0.7,
+            marginBottom:4, opacity:0.5,
           }}>
             {formatLabel(entry.date)}
           </div>
