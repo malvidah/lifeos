@@ -39,7 +39,7 @@ export default function NavBar(props) {
   const {
     searchOpen, setSearchOpen, searchQuery, setSearchQuery, searchInputRef, srLoading,
     dockItems,
-    toolsOpen, setToolsOpen, activeProjectName,
+    toolsOpen, setToolsOpen, activeProjectName, onBack,
   } = props;
 
   const openSearch  = () => { setSearchOpen(true); setTimeout(() => searchInputRef.current?.focus(), 60); };
@@ -117,13 +117,27 @@ export default function NavBar(props) {
             ))}
           </div>
         ) : (
-          <span style={{
-            fontFamily: mono, fontSize: 11, letterSpacing: '0.1em',
-            textTransform: 'uppercase', color: 'var(--dl-highlight)',
-            pointerEvents: 'auto', cursor: 'default',
-          }}>
-            {activeProjectName || 'All Projects'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
+            {activeProjectName && onBack && (
+              <button onClick={onBack} title="Back to All Projects"
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: 'var(--dl-highlight)', display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-highlight)'}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </button>
+            )}
+            <span style={{
+              fontFamily: mono, fontSize: 11, letterSpacing: '0.1em',
+              textTransform: 'uppercase', color: 'var(--dl-highlight)',
+              cursor: activeProjectName ? 'pointer' : 'default',
+            }}
+              onClick={activeProjectName && onBack ? onBack : undefined}
+            >
+              {activeProjectName || 'All Projects'}
+            </span>
+          </div>
         )}
       </div>
 

@@ -593,6 +593,7 @@ function DashboardInner() {
             searchInputRef={searchInputRef} srLoading={srLoading}
             toolsOpen={toolsOpen} setToolsOpen={setToolsOpen}
             activeProjectName={activeProjectName}
+            onBack={activeProject ? () => { selectProject(null); setSelected(todayKey()); } : null}
             dockItems={DOCK_ITEMS.map(item => ({
               ...item,
               isOpen: item.id === 'map' ? !mapCollapsed
