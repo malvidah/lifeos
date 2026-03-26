@@ -713,7 +713,7 @@ function SuggestionDropdown({ state, onSelect }) {
   const left = Math.max(8, Math.min(rect.left, window.innerWidth - MENU_W - 8));
 
   return createPortal(
-    <div style={{
+    <div className="dl-suggestion-dropdown" style={{
       position: 'fixed', top, left, zIndex: 9999,
       background: 'var(--dl-surface)', border: '1px solid var(--dl-border)', borderRadius: 10,
       boxShadow: 'var(--dl-shadow)',

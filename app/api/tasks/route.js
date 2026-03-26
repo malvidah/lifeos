@@ -475,6 +475,39 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     patch.completed_at = patch.done ? TODAY() : null;
   }
 
+  // When text changes, re-parse structured fields from tokens
+  if ('text' in patch) {
+    const text = patch.text || '';
+    // Re-extract due_date from @YYYY-MM-DD tokens
+    const dateMatch = text.match(/@(\d{4}-\d{2}-\d{2})/);
+    if (dateMatch && !('due_date' in patch)) {
+      patch.due_date = dateMatch[1];
+    }
+    // Re-extract project_tags from {project} tokens
+    if (!('project_tags' in patch)) {
+      const tags = [];
+      const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
+      let m;
+      while ((m = re.exec(text)) !== null) {
+        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:')) {
+          tags.push(m[1].toLowerCase());
+        }
+      }
+      if (tags.length) patch.project_tags = tags;
+    }
+    // Regenerate HTML from text tokens
+    if (!('html' in patch)) {
+      let inner = text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
+      inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
+      inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');
+      inner = inner.replace(/@(\d{4}-\d{2}-\d{2})/g, '<span data-date-tag="$1">⏳ $1</span>');
+      inner = inner.replace(/\[([^\]]+)\]/g, '<span data-note-link="$1">$1</span>');
+      const isDone = 'done' in patch ? patch.done : false;
+      patch.html = `<li data-type="taskItem" data-checked="${isDone ? 'true' : 'false'}"><label><input type="checkbox"${isDone ? ' checked="checked"' : ''}><span></span></label><div><p>${inner}</p></div></li>`;
+    }
+  }
+
   const { error } = await supabase
     .from('tasks').update(patch)
     .eq('id', id).eq('user_id', user.id);

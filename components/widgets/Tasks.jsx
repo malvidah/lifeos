@@ -42,6 +42,8 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
   return (
     <div
       onKeyDown={e => {
+        // Don't intercept arrow keys when suggestion dropdown is open
+        if (document.querySelector('.dl-suggestion-dropdown')) return;
         if (e.key === 'ArrowDown') { e.preventDefault(); onEnterDown?.(); }
         if (e.key === 'ArrowUp' && onFocusPrev) { e.preventDefault(); onFocusPrev(); }
       }}
