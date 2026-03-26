@@ -220,7 +220,8 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   useEffect(() => {
     if (!token || !userId) return;
     let cancelled = false;
-    setLoading(true);
+    // Only show loading shimmer on initial fetch — refreshes update silently
+    if (!habits) setLoading(true);
 
     // Fetch task-based habits and health scores in parallel
     Promise.all([
