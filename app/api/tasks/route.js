@@ -152,15 +152,44 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const maxPosition = regularTasks.reduce((max, t) => Math.max(max, t.position ?? 0), -1);
   const adjustedRecurring = recurringTasks.map((t, i) => ({ ...t, position: maxPosition + 1 + i }));
 
+  // Build structured task list with source metadata
+  const structuredTasks = [
+    ...(ownTasks ?? []).map(t => ({ ...t, _source: 'own', _editable: true })),
+    ...dedupedPersistent.map(t => ({ ...t, _source: 'persistent', _editable: true })),
+    ...adjustedRecurring.map(t => ({ ...t, _source: 'recurring', _editable: false })),
+  ];
+
   return Response.json({
     data: tasksToHtml([...regularTasks, ...adjustedRecurring]),
+    tasks: structuredTasks,
     dueTasks: dedupedPersistent,
   });
 });
 
 export const POST = withAuth(async (req, { supabase, user }) => {
-  const { date, data: html } = await req.json();
+  const body = await req.json();
+  const { date, data: html } = body;
   if (!date || !isValidDate(date)) return Response.json({ error: 'valid date (YYYY-MM-DD) required' }, { status: 400 });
+
+  // ── Single-task creation mode (new row-level CRUD) ─────────────────────
+  // Triggered when 'text' is present and 'data' is absent
+  if (body.text !== undefined && html === undefined) {
+    const { text, done, due_date, project_tags, note_tags, position, html: taskHtml } = body;
+    const { data: row, error } = await supabase.from('tasks').insert({
+      user_id: user.id,
+      date,
+      text: text || '',
+      html: taskHtml || `<li data-type="taskItem" data-checked="${done ? 'true' : 'false'}"><label><input type="checkbox"${done ? ' checked="checked"' : ''}><span></span></label><div><p>${(text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;')}</p></div></li>`,
+      done: !!done,
+      due_date: due_date || null,
+      completed_at: done ? TODAY() : null,
+      project_tags: project_tags || [],
+      note_tags: note_tags || [],
+      position: position ?? 0,
+    }).select().single();
+    if (error) throw error;
+    return Response.json({ task: row });
+  }
 
   const parsed = parseTaskBlocks(html || '');
   const today  = TODAY();
