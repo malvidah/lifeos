@@ -218,8 +218,8 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
     <div style={{ display: 'flex' }}>
       {/* Left: habit names table with COUNT and BEST columns */}
       <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {/* Header row */}
-        <div style={{ height: mode === 'calendar' ? 28 + rowH : rowH, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
+        {/* Header row — aligned with date header */}
+        <div style={{ height: mode === 'calendar' ? 30 : rowH, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
           <span style={{ flex: 1 }} />
           <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center' }}>
             count
@@ -270,16 +270,16 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
         <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW }}>
 
           {/* Header spacer + date header */}
-          <div style={{ height: mode === 'calendar' ? 28 + rowH : rowH }}>
+          <div style={{ height: mode === 'calendar' ? 30 : rowH }}>
             {mode === 'calendar' && (
-              <div style={{ display: 'flex', height: 28 + rowH, alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
                 {visibleDates.map((d, i) => {
                   const isToday = d === today;
                   const showMonth = i === 0 || dayNum(d) === 1;
                   return (
                     <div key={d} style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', position: 'relative', paddingBottom: 2 }}>
                       {showMonth && (
-                        <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', letterSpacing: '0.04em', textTransform: 'uppercase', position: 'absolute', top: rowH }}>
+                        <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', letterSpacing: '0.04em', textTransform: 'uppercase', position: 'absolute', top: 0 }}>
                           {monthLabel(d)}
                         </span>
                       )}

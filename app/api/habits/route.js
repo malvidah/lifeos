@@ -28,11 +28,13 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     const schedule = match ? match[1] : null;
     if (!schedule) return null;
 
-    // Clean text for display
+    // Clean text for display — strip all habit/recurrence tokens and rendered chip text
     const cleanText = (t.text || '')
       .replace(/\{h:[^}]+\}/g, '')
       .replace(/\{r:[^}]+\}/g, '')
       .replace(/\/[hr]\s+\S+/gi, '')
+      .replace(/🎯\s*[A-Za-z·\s]+/g, '')  // rendered habit chip: 🎯 T·R, 🎯 Daily, etc.
+      .replace(/↻\s*[A-Za-z·\s]+/g, '')   // rendered recurrence chip: ↻ M·W·F, etc.
       .trim();
 
     return {
@@ -89,33 +91,42 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       }
     }
 
-    // Calculate streak with freeze mechanic:
-    // - Consecutive completions from most recent backward = current streak
-    // - Every time you pass your best streak, earn a freeze (1 miss forgiven)
-    // - If frozen and miss, consume freeze (streak stays), tag → snowflake
-    // - If miss again, streak resets to 0, tag → horse
+    // Calculate streak with freeze mechanic (only consider dates up to today):
+    // - Walk forward through past/today scheduled dates
+    // - Track running streak and best streak
+    // - When you surpass your previous best, earn a streak freeze
+    // - If you miss while holding a freeze: consume it, streak stays (frozen)
+    // - If you miss without a freeze: streak resets to 0
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const pastDates = scheduledDates.filter(d => d <= todayStr);
+
     let streak = 0;
     let bestStreak = 0;
     let freezes = 0;
     let frozen = false;
-
-    // Walk forward through scheduled dates to track best/freezes properly
     let runningStreak = 0;
-    for (let i = 0; i < scheduledDates.length; i++) {
-      if (completionMap[scheduledDates[i]]) {
+    let prevBest = 0; // track when we last earned a freeze
+
+    for (let i = 0; i < pastDates.length; i++) {
+      if (completionMap[pastDates[i]]) {
         runningStreak++;
         frozen = false;
         if (runningStreak > bestStreak) {
           bestStreak = runningStreak;
-          freezes++; // earned a freeze by beating high score
+        }
+        // Earn a freeze when passing a previously established best
+        if (prevBest > 0 && runningStreak > prevBest && runningStreak === prevBest + 1) {
+          freezes++;
         }
       } else {
-        // Miss
-        if (freezes > 0 && !frozen) {
+        // Miss — use freeze or reset
+        if (freezes > 0) {
           freezes--;
           frozen = true;
-          // streak doesn't reset — it's frozen
+          // streak doesn't reset
         } else {
+          // Record best before resetting
+          if (runningStreak > 0) prevBest = Math.max(prevBest, bestStreak);
           runningStreak = 0;
           frozen = false;
         }
