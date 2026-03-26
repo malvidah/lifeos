@@ -682,7 +682,7 @@ function makeSlashSuggestionMatch() {
       if (!/\s/.test(prev) && i !== 0) continue; // require space-before or line start
       const after = nodeText.slice(i + 1);
       // Match bare / (show command menu), /p, /n, /l, /@, /d, /r...
-      if (after.length > 0 && !/^[pnl@dr]/i.test(after)) continue;
+      if (after.length > 0 && !/^[pnl@drhm]/i.test(after)) continue;
       return {
         range: { from: nodeStart + i, to: $position.pos },
         query: after,           // "" (bare /), "p", "p big think", "n", "n my note"
