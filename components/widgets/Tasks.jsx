@@ -211,12 +211,12 @@ export default function Tasks({date, token, userId, taskFilter="all", project}) 
           onNoteClick={name => navigateToNote(name)}
           style={{padding:0}}
         />
-        {(isEmpty || allFilteredOut) && (
+        {isEmpty && (
           <div style={{
             position: 'absolute',
             top: 0, left: 0, right: 0, bottom: 0,
             display: 'flex', alignItems: 'flex-start',
-            paddingTop: 3, paddingLeft: 25,
+            paddingTop: 7, paddingLeft: 28,
             color: 'var(--dl-middle)', pointerEvents: 'none',
             fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
           }}>
