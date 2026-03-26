@@ -328,7 +328,7 @@ export function DropZone({ uploading }) {
 // ─── Recent Entries View ─────────────────────────────────────────────────────
 // Read-only scrollable list of the N most recent journal dates.
 
-function RecentEntries({ token, userId, date, project, fullWidth }) {
+function RecentEntries({ token, userId, date, project }) {
   const todayStr = date || new Date().toISOString().slice(0, 10);
   const [entries, setEntries] = useState(null);
 
@@ -356,15 +356,9 @@ function RecentEntries({ token, userId, date, project, fullWidth }) {
   const isToday = todayStr === new Date().toISOString().slice(0, 10);
 
   return (
-    <div style={{
-      display: fullWidth ? 'grid' : 'flex',
-      gridTemplateColumns: fullWidth ? '1fr 1fr' : undefined,
-      gap: fullWidth ? '8px 24px' : 8,
-      flexDirection: fullWidth ? undefined : 'column',
-      overflowY:'auto',
-    }}>
+    <div style={{display:'flex',flexDirection:'column',gap:8,overflowY:'auto'}}>
       {/* Selected day — editable, highlighted */}
-      <div style={fullWidth ? { gridColumn: '1 / -1' } : undefined}>
+      <div>
         <div style={{
           fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
           textTransform:'uppercase',
@@ -486,8 +480,8 @@ function MemoriesView({ token, userId, date }) {
   );
 }
 
-export function JournalEditor({date,userId,token,project,journalMode,fullWidth}) {
-  if (journalMode === 'recent') return <RecentEntries token={token} userId={userId} date={date} project={project} fullWidth={fullWidth} />;
+export function JournalEditor({date,userId,token,project,journalMode}) {
+  if (journalMode === 'recent') return <RecentEntries token={token} userId={userId} date={date} project={project} />;
   if (journalMode === 'memories') return <MemoriesView token={token} userId={userId} date={date} />;
 
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
