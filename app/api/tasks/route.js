@@ -546,13 +546,51 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
 });
 
 export const DELETE = withAuth(async (req, { supabase, user }) => {
-  const id = new URL(req.url).searchParams.get('id');
+  const url = new URL(req.url);
+  const id = url.searchParams.get('id');
+  const isRecurring = url.searchParams.get('recurring') === '1';
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
 
+  const now = new Date().toISOString();
+
+  // Soft-delete the target task
   const { error } = await supabase
-    .from('tasks').update({ deleted_at: new Date().toISOString() })
+    .from('tasks').update({ deleted_at: now })
     .eq('id', id).eq('user_id', user.id);
   if (error) throw error;
+
+  // For recurring/habit templates: also delete all completion rows and duplicate
+  // templates with the same cleaned text. This ensures "delete everywhere" behavior.
+  if (isRecurring) {
+    // Fetch the task we just deleted to get its text for matching
+    const { data: deleted } = await supabase
+      .from('tasks').select('text, html')
+      .eq('id', id).eq('user_id', user.id).single();
+
+    if (deleted?.text) {
+      const cleanedText = cleanTaskText(deleted.text);
+      if (cleanedText) {
+        // Find all non-deleted tasks by this user, then filter by cleaned text match
+        const { data: allTasks } = await supabase
+          .from('tasks').select('id, text, html')
+          .eq('user_id', user.id)
+          .is('deleted_at', null);
+
+        const toDelete = (allTasks ?? []).filter(t => {
+          if (t.id === id) return false; // already deleted
+          return cleanTaskText(t.text) === cleanedText;
+        });
+
+        if (toDelete.length > 0) {
+          const ids = toDelete.map(t => t.id);
+          await supabase
+            .from('tasks').update({ deleted_at: now })
+            .eq('user_id', user.id)
+            .in('id', ids);
+        }
+      }
+    }
+  }
 
   return Response.json({ ok: true });
 });
