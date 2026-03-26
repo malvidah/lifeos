@@ -58,44 +58,6 @@ const WIDGETS = [
 const [leftWidget, ...rightWidgets] = WIDGETS;
 
 // Toggle between day / recent / memories journal modes
-function JournalModeToggle({ mode, setMode }) {
-  const btn = (id, title, icon) => (
-    <button
-      onClick={() => setMode(id)}
-      title={title}
-      style={{
-        background: 'none', border: 'none', padding: '2px 6px', cursor: 'pointer',
-        color: mode === id ? 'var(--dl-accent)' : 'var(--dl-middle)',
-        opacity: mode === id ? 1 : 0.5,
-        transition: 'opacity 0.15s',
-      }}
-    >{icon}</button>
-  );
-  return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-      {/* Day — calendar icon */}
-      {btn('day', 'Today', (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-        </svg>
-      ))}
-      {/* Recent — list icon */}
-      {btn('recent', 'Recent entries', (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
-          <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-        </svg>
-      ))}
-      {/* Memories — thought bubble icon */}
-      {btn('memories', 'On this day', (
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-          <circle cx="9" cy="10" r="0.5" fill="currentColor" stroke="none"/><circle cx="12" cy="10" r="0.5" fill="currentColor" stroke="none"/><circle cx="15" cy="10" r="0.5" fill="currentColor" stroke="none"/>
-        </svg>
-      ))}
-    </div>
-  );
-}
 
 function DashboardInner() {
   const { theme, preference, setTheme } = useTheme();
@@ -352,13 +314,6 @@ function DashboardInner() {
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
-  const [journalMode, setJournalMode_] = useState(() => {
-    try { return localStorage.getItem('daylab:journalMode') || 'day'; } catch { return 'day'; }
-  });
-  const setJournalMode = useCallback((m) => {
-    setJournalMode_(m);
-    try { localStorage.setItem('daylab:journalMode', m); } catch {}
-  }, []);
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   true);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
@@ -646,8 +601,8 @@ function DashboardInner() {
                     <ErrorBoundary label={leftWidget.label}>
                     <Card label={leftWidget.label} color={leftWidget.color()}
                       collapsed={false}
-                      headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>} autoHeight>
-                      <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
+                       autoHeight>
+                      <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode="recent"/>
                     </Card>
                     </ErrorBoundary>
                   )}
@@ -672,8 +627,8 @@ function DashboardInner() {
                         <ErrorBoundary label={leftWidget.label}>
                         <Card label={leftWidget.label} color={leftWidget.color()}
                           collapsed={false}
-                          headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}>
-                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
+                          >
+                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode="recent"/>
                         </Card>
                         </ErrorBoundary>
                       </div>
