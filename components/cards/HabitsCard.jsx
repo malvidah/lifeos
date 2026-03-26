@@ -76,6 +76,8 @@ function buildHealthHabits(scores, startDate, endDate, today) {
       const score = scoreByDate[d]?.[metric.field];
       if (d <= today) {
         completions[d] = score != null && score >= HEALTH_THRESHOLD;
+      } else {
+        completions[d] = false; // future: scheduled but not done (shows dimmed)
       }
       d = addDays(d, 1);
     }
@@ -403,7 +405,8 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
                     if (isPast && !h._isHealth) toggleCompletion(h, d);
                   }}
                   style={{
-                    width: cellSize, height: cellSize, borderRadius: 4,
+                    width: cellSize, height: cellSize,
+                    borderRadius: h._isHealth ? '50%' : 4,
                     background: done ? fillColor : 'transparent',
                     border: `1.5px solid ${done ? (tag ? projectColor(tag) : 'var(--dl-border2)') : isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
                     opacity: !isPast && !done ? 0.35 : 1,
