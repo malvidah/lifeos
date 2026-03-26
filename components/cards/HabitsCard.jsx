@@ -120,7 +120,53 @@ function buildHealthHabits(scores, startDate, endDate, today) {
 }
 
 // ── HabitsCard ───────────────────────────────────────────────────────────────
-export default function HabitsCard({ date, token, userId, project }) {
+// ── Habit filter toggle for card header ───────────────────────────────────────
+const TasksIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="12" height="12" rx="2.5"/>
+    <polyline points="5,8.5 7,10.5 11,6"/>
+  </svg>
+);
+const SyncIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 8a4 4 0 0 1 7.5-2"/><polyline points="12 3 12 6 9 6"/>
+    <path d="M12 8a4 4 0 0 1-7.5 2"/><polyline points="4 13 4 10 7 10"/>
+  </svg>
+);
+const AllIcon = () => (
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="2" width="12" height="12" rx="2.5"/>
+    <circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none"/>
+  </svg>
+);
+
+export function HabitFilterBtns({ filter, setFilter }) {
+  const btns = [
+    { key: 'tasks', icon: <TasksIcon /> },
+    { key: 'synced', icon: <SyncIcon /> },
+    { key: 'all', icon: <AllIcon /> },
+  ];
+  return (
+    <div style={{ display: 'flex', gap: 2, background: 'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius: 100, padding: 2 }}>
+      {btns.map(b => {
+        const active = filter === b.key;
+        return (
+          <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }} style={{
+            fontFamily: mono, fontSize: '10px', padding: '3px 6px',
+            borderRadius: 100, cursor: 'pointer', border: 'none',
+            background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
+            color: active ? 'var(--dl-strong)' : 'var(--dl-middle)',
+            display: 'flex', alignItems: 'center', gap: 3, transition: 'all 0.15s',
+          }}>
+            {b.icon}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function HabitsCard({ date, token, userId, project, habitFilter = 'all' }) {
   const [habits, setHabits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -159,9 +205,6 @@ export default function HabitsCard({ date, token, userId, project }) {
   const startDate = addDays(date || today, -365);
   const endDate = addDays(date || today, 14);
 
-  // Section collapse state
-  const [manualOpen, setManualOpen] = useState(true);
-  const [syncedOpen, setSyncedOpen] = useState(true);
 
   const dates = [];
   for (let d = startDate; d <= endDate; d = addDays(d, 1)) dates.push(d);
@@ -275,56 +318,30 @@ export default function HabitsCard({ date, token, userId, project }) {
   const colW = 28;
   const rowH = 24;
   const cellSize = 18;
-  const sectionH = 20; // section header row height
 
-  // Filter by project if one is selected
-  const filteredHabits = project
+  // Filter by project and habit type
+  let filteredHabits = project
     ? habits.filter(h => h.project_tags?.some(t => t.toLowerCase() === project.toLowerCase()))
     : habits;
 
-  const manualHabits = filteredHabits.filter(h => !h._isHealth);
-  const syncedHabits = filteredHabits.filter(h => h._isHealth);
+  if (habitFilter === 'tasks') filteredHabits = filteredHabits.filter(h => !h._isHealth);
+  else if (habitFilter === 'synced') filteredHabits = filteredHabits.filter(h => h._isHealth);
 
-  if (filteredHabits.length === 0 && project) {
+  if (filteredHabits.length === 0) {
     return (
       <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
-        No habits in this project
+        {project ? 'No habits in this project' : habitFilter === 'tasks' ? 'No task habits yet — use /h in tasks' : habitFilter === 'synced' ? 'No synced health data yet' : 'No habits yet'}
       </div>
     );
   }
 
   const visibleDates = dates;
 
-  // Precompute month boundary indices
   const monthBoundaries = new Set();
   for (let i = 1; i < visibleDates.length; i++) {
     if (dayNum(visibleDates[i]) === 1) monthBoundaries.add(i);
   }
   const dividerW = 28;
-
-  // All visible rows for month divider height calculation
-  const visibleManual = manualOpen ? manualHabits : [];
-  const visibleSynced = syncedOpen ? syncedHabits : [];
-  const allVisible = [...visibleManual, ...visibleSynced];
-
-  // Section header component
-  const SectionLabel = ({ label, open, toggle }) => (
-    <div
-      onClick={toggle}
-      style={{
-        height: sectionH, display: 'flex', alignItems: 'center', gap: 4,
-        cursor: 'pointer', paddingRight: 10,
-      }}
-    >
-      <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="var(--dl-middle)" strokeWidth="1.5" strokeLinecap="round"
-        style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
-        <polyline points="3,1 7,5 3,9" />
-      </svg>
-      <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-        {label}
-      </span>
-    </div>
-  );
 
   // Habit name row component
   const HabitNameRow = ({ h }) => (
@@ -413,21 +430,7 @@ export default function HabitsCard({ date, token, userId, project }) {
           <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center' }}>best</span>
         </div>
 
-        {/* Manual section */}
-        {manualHabits.length > 0 && (
-          <>
-            <SectionLabel label="Manual" open={manualOpen} toggle={() => setManualOpen(o => !o)} />
-            {manualOpen && manualHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
-          </>
-        )}
-
-        {/* Synced section */}
-        {syncedHabits.length > 0 && (
-          <>
-            <SectionLabel label="Synced" open={syncedOpen} toggle={() => setSyncedOpen(o => !o)} />
-            {syncedOpen && syncedHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
-          </>
-        )}
+        {filteredHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
       </div>
 
       {/* Right: scrollable grid */}
@@ -455,21 +458,7 @@ export default function HabitsCard({ date, token, userId, project }) {
             })}
           </div>
 
-          {/* Manual section grid */}
-          {manualHabits.length > 0 && (
-            <>
-              <div style={{ height: sectionH }} />
-              {manualOpen && manualHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={allVisible} />)}
-            </>
-          )}
-
-          {/* Synced section grid */}
-          {syncedHabits.length > 0 && (
-            <>
-              <div style={{ height: sectionH }} />
-              {syncedOpen && syncedHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={allVisible} />)}
-            </>
-          )}
+          {filteredHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
         </div>
       </div>
     </div>
