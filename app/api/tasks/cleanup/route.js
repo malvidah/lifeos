@@ -3,7 +3,16 @@ import { withAuth } from '../../_lib/auth.js';
 // POST /api/tasks/cleanup
 // Deduplicates ALL dates at once. Keeps newest row per unique text per date.
 
+// Support both GET and POST so it can be triggered from browser URL bar
+export const GET = withAuth(async (req, { supabase, user }) => {
+  return cleanup(supabase, user);
+});
+
 export const POST = withAuth(async (req, { supabase, user }) => {
+  return cleanup(supabase, user);
+});
+
+async function cleanup(supabase, user) {
   // Get all active tasks grouped by date
   const { data: all, error } = await supabase
     .from('tasks')
@@ -49,4 +58,4 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   }
 
   return Response.json({ ok: true, removed: toDelete.length, dates: Object.keys(byDate).length });
-});
+}
