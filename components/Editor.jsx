@@ -1026,9 +1026,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           addAttributes() {
             return {
               ...this.parent?.(),
-              // Preserve task tracking attributes through TipTap's parse/render cycle.
-              // Without these, data-task-id etc. are lost in getHTML() and the diff
-              // layer can't match edited tasks back to their server-side originals.
               taskId: {
                 default: null,
                 parseHTML: el => el.getAttribute('data-task-id'),
@@ -1050,6 +1047,97 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
                 renderHTML: attrs => attrs.completedDate ? { 'data-completed-date': attrs.completedDate } : {},
               },
             };
+          },
+          // Drag-to-reorder: HTML5 drag on the ::before grip handle
+          addProseMirrorPlugins() {
+            const parentPlugins = this.parent?.() || [];
+            const editor = this.editor;
+            return [...parentPlugins, new Plugin({
+              key: new PluginKey('taskDragReorder'),
+              props: {
+                handleDOMEvents: {
+                  mousedown(view, event) {
+                    // Only handle clicks on the ::before grip area (left of the li)
+                    const li = event.target.closest?.('[data-type="taskItem"]');
+                    if (!li) return false;
+                    const liRect = li.getBoundingClientRect();
+                    // Grip area is 20px to the left of the li
+                    if (event.clientX > liRect.left) return false;
+                    // Start drag
+                    event.preventDefault();
+                    li.setAttribute('draggable', 'true');
+                    li.classList.add('dl-dragging');
+                    const ul = li.closest('[data-type="taskList"]');
+                    if (!ul) return true;
+                    const items = [...ul.querySelectorAll(':scope > [data-type="taskItem"]')];
+
+                    const cleanup = () => {
+                      li.removeAttribute('draggable');
+                      li.classList.remove('dl-dragging');
+                      items.forEach(el => {
+                        el.classList.remove('dl-drag-over-top', 'dl-drag-over-bottom');
+                      });
+                      window.removeEventListener('mousemove', onMove);
+                      window.removeEventListener('mouseup', onUp);
+                    };
+
+                    let dropTarget = null;
+                    let dropBefore = true;
+
+                    const onMove = (e) => {
+                      items.forEach(el => {
+                        el.classList.remove('dl-drag-over-top', 'dl-drag-over-bottom');
+                      });
+                      for (const item of items) {
+                        if (item === li) continue;
+                        const r = item.getBoundingClientRect();
+                        if (e.clientY >= r.top && e.clientY <= r.bottom) {
+                          const mid = r.top + r.height / 2;
+                          dropBefore = e.clientY < mid;
+                          item.classList.add(dropBefore ? 'dl-drag-over-top' : 'dl-drag-over-bottom');
+                          dropTarget = item;
+                          break;
+                        }
+                      }
+                    };
+
+                    const onUp = () => {
+                      cleanup();
+                      if (!dropTarget || dropTarget === li) return;
+                      // Compute new order from DOM
+                      const fromIdx = items.indexOf(li);
+                      let toIdx = items.indexOf(dropTarget);
+                      if (!dropBefore) toIdx++;
+                      if (fromIdx < toIdx) toIdx--;
+                      if (fromIdx === toIdx) return;
+                      // Move the ProseMirror node
+                      const { state, dispatch } = view;
+                      const taskList = state.doc.child(0); // first child should be taskList
+                      if (taskList.type.name !== 'taskList') return;
+                      const fromNode = taskList.child(fromIdx);
+                      let tr = state.tr;
+                      // Calculate positions within the taskList node
+                      let fromStart = 1; // skip taskList open tag
+                      for (let i = 0; i < fromIdx; i++) fromStart += taskList.child(i).nodeSize;
+                      const fromEnd = fromStart + fromNode.nodeSize;
+                      // Delete from original position
+                      tr = tr.delete(fromStart, fromEnd);
+                      // Calculate insert position in the modified doc
+                      const newTaskList = tr.doc.child(0);
+                      let insertPos = 1;
+                      const insertIdx = fromIdx < toIdx ? toIdx : toIdx;
+                      for (let i = 0; i < insertIdx; i++) insertPos += newTaskList.child(i).nodeSize;
+                      tr = tr.insert(insertPos, fromNode);
+                      dispatch(tr);
+                    };
+
+                    window.addEventListener('mousemove', onMove);
+                    window.addEventListener('mouseup', onUp);
+                    return true;
+                  },
+                },
+              },
+            })];
           },
         }),
       ] : []),

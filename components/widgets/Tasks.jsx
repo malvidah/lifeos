@@ -40,7 +40,17 @@ export function injectTaskListStyles(accentHex, date) {
   const enc = encodeURIComponent(accentHex);
   s.textContent = `
     .dl-editor ul[data-type="taskList"] { list-style:none; padding:0; margin:0; }
-    .dl-editor ul[data-type="taskList"] > li { display:flex; align-items:flex-start; gap:10px; padding:3px 0; }
+    .dl-editor ul[data-type="taskList"] > li { display:flex; align-items:flex-start; gap:10px; padding:3px 0; position:relative; }
+    .dl-editor ul[data-type="taskList"] > li::before {
+      content:'⋮⋮'; position:absolute; left:-20px; top:0; bottom:0;
+      display:flex; align-items:center; font-size:10px; letter-spacing:-2px;
+      color:transparent; cursor:grab; user-select:none; transition:color 0.15s;
+      width:16px; justify-content:center;
+    }
+    .dl-editor ul[data-type="taskList"] > li:hover::before { color:var(--dl-border2); }
+    .dl-editor ul[data-type="taskList"] > li.dl-dragging { opacity:0.4; }
+    .dl-editor ul[data-type="taskList"] > li.dl-drag-over-top { box-shadow:0 -2px 0 0 var(--dl-accent); }
+    .dl-editor ul[data-type="taskList"] > li.dl-drag-over-bottom { box-shadow:0 2px 0 0 var(--dl-accent); }
     .dl-editor ul[data-type="taskList"] > li > label { display:flex; align-items:center; margin-top:4px; flex-shrink:0; cursor:pointer; }
     .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"] {
       -webkit-appearance:none; appearance:none;
@@ -196,7 +206,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         color={"var(--dl-accent)"}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
-        style={{ padding: 0 }}
+        style={{ padding: '0 0 0 20px' }}
       />
     </div>
   );
