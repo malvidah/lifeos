@@ -213,14 +213,14 @@ export default function Tasks({date, token, userId, taskFilter="all", project}) 
         />
         {(isEmpty || allFilteredOut) && (
           <div style={{
-            position: allFilteredOut ? 'relative' : 'absolute',
-            top: 0, left: 0, right: 0, bottom: allFilteredOut ? undefined : 0,
+            position: 'absolute',
+            top: 0, left: 0, right: 0, bottom: 0,
             display: 'flex', alignItems: 'flex-start',
-            paddingTop: 3, paddingLeft: allFilteredOut ? 0 : 25,
+            paddingTop: 3, paddingLeft: 25,
             color: 'var(--dl-middle)', pointerEvents: 'none',
             fontFamily: 'inherit', fontSize: 'inherit', lineHeight: '1.7',
           }}>
-            {project ? `Add a task for ${project}.` : 'Add a task.'}
+            {project ? `Add a task for ${project.replace(/\b\w/g, c => c.toUpperCase())}.` : 'Add a task.'}
           </div>
         )}
       </div>
