@@ -6,11 +6,11 @@
    strong    = body text and max emphasis (cream / dark brown)
    --dl-bg / --dl-card / --dl-surface retained as semantic aliases.           */
 :root,[data-theme="dark"]{
-  --dl-bg:#131211;
-  --dl-surface:#1A1816;--dl-card:#1A1816;
-  --dl-well:#0F0E0D;
-  --dl-border:#262320;--dl-border2:#322E28;
-  --dl-strong:#F0E4D0;--dl-highlight:#A09484;--dl-middle:#655C52;--dl-dim:#1A1816;--dl-muted:#131211;
+  --dl-bg:#0E0D0C;
+  --dl-surface:#1A1816;--dl-card:#1E1C19;
+  --dl-well:#0A0908;
+  --dl-border:#2A2620;--dl-border2:#363028;
+  --dl-strong:#F0E4D0;--dl-highlight:#A09484;--dl-middle:#655C52;--dl-dim:#1A1816;--dl-muted:#0E0D0C;
   --dl-accent:#D08828;--dl-orange:#D08828;--dl-yellow:#B88828;
   --dl-green:#4A9A68;--dl-blue:#4878A8;--dl-purple:#8860B8;--dl-red:#B04840;
   --dl-shadow:0 1px 3px rgba(0,0,0,0.55),0 2px 12px rgba(0,0,0,0.28);

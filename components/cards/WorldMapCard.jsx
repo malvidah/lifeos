@@ -1193,7 +1193,7 @@ function MapInner({ token }) {
   }, [mapBounds]); // eslint-disable-line
 
   // Background color to match tiles while loading
-  const bgColor = isDark ? 'var(--dl-bg)' : '#F2EDE5';
+  const bgColor = isDark ? 'var(--dl-bg)' : '#F6F4F0';
 
   return (
     <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 520, background: bgColor, userSelect: 'none', WebkitUserSelect: 'none' }}>
@@ -1221,8 +1221,8 @@ function MapInner({ token }) {
         }
         .leaflet-tile-pane {
           filter: ${isDark
-            ? 'saturate(0.2) sepia(0.15) brightness(0.7)'
-            : 'grayscale(1) sepia(0.55) saturate(0.6) brightness(0.92) contrast(1.05)'
+            ? 'saturate(0.15) sepia(0.1) brightness(0.65) contrast(1.1)'
+            : 'grayscale(1) sepia(0.2) saturate(0.4) brightness(1.02) contrast(1.15)'
           };
         }
         .leaflet-fade-anim .leaflet-tile { opacity: 0; transition: opacity 0.2s; }
