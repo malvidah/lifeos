@@ -244,7 +244,11 @@ export function TaskFilterBtns({ filter, setFilter }) {
   const btns = [
     { key: 'open', label: null,  icon: <OpenIcon/> },
     { key: 'done', label: null,  icon: <DoneIcon/> },
-    { key: 'all',  label: 'ALL', icon: null },
+    { key: 'all',  label: null,  icon: (
+      <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor" stroke="currentColor" strokeWidth="0.5" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="2" width="12" height="12" rx="2.5"/>
+      </svg>
+    )},
   ];
   return (
     <div style={{ display:'flex', gap:2, background:'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius:100, padding:2 }}>

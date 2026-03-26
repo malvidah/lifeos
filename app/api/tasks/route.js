@@ -239,15 +239,22 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 
   // Match by text content (not position) so reordering tasks doesn't
   // shuffle due_dates. Each matched row is consumed to handle duplicates.
+  // Normalize: strip /r tokens and @dates so "Run /r mwf" matches "Run"
+  const normalizeText = (t) => (t || '').replace(/\/r\s+\S+/gi, '').replace(/@\d{4}-\d{2}-\d{2}/g, '').trim();
   const existingByText = new Map();
+  const existingById = new Map();
   for (const r of (existing ?? [])) {
-    const key = r.text?.trim();
+    existingById.set(r.id, r);
+    const key = normalizeText(r.text);
     if (!key) continue;
     if (!existingByText.has(key)) existingByText.set(key, []);
     existingByText.get(key).push(r);
   }
-  function matchExisting(text) {
-    const key = text?.trim();
+  function matchExisting(text, taskId) {
+    // Try by ID first (most reliable)
+    if (taskId && existingById.has(taskId)) return existingById.get(taskId);
+    // Fall back to normalized text match
+    const key = normalizeText(text);
     const arr = key && existingByText.get(key);
     return arr?.length ? arr.shift() : null;
   }
@@ -257,13 +264,21 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   const foreignUpdates = [];    // edits to persistent tasks → UPDATE original
   const foreignTextsSeen = new Set(); // track which injected tasks are still present
 
+  // Also build ID-based lookup for injected tasks
+  const injectedIdSet = new Set([...injectedIds.values()]);
+
   for (const t of parsed) {
     const key = t.text?.trim().toLowerCase();
+    const normalizedKey = normalizeText(t.text).toLowerCase();
 
-    // Check if this task matches an injected persistent/recurring task by text
-    if (key && injectedTexts.has(key)) {
+    // Check by task_id first (most reliable), then by text, then normalized text
+    const matchedById = t.task_id && injectedIdSet.has(t.task_id);
+    const matchedByText = key && injectedTexts.has(key);
+    const matchedByNorm = !matchedByText && normalizedKey && [...injectedTexts].some(it => normalizeText(it).toLowerCase() === normalizedKey);
+    const origId = matchedById ? t.task_id : matchedByText ? injectedIds.get(key) : matchedByNorm ? [...injectedIds.entries()].find(([k]) => normalizeText(k).toLowerCase() === normalizedKey)?.[1] : null;
+
+    if (origId) {
       foreignTextsSeen.add(key);
-      const origId = injectedIds.get(key);
       if (origId) {
         if (injectedRecurringIds.has(origId)) {
           // Recurring template: never modify the original.
@@ -349,7 +364,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // Save own-date tasks (regular tasks created on this date).
   if (ownRows.length > 0) {
     const rows = ownRows.map(t => {
-      const prev = matchExisting(t.text);
+      const prev = matchExisting(t.text, t.task_id);
       // Preserve recurrence chip if the previous version had one but the new doesn't
       // (protects against editor accidentally stripping the recurrence span)
       let html = t.html;
