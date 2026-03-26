@@ -29,7 +29,7 @@
   --dl-green:#2E7A48;--dl-blue:#2E6098;--dl-purple:#5840A0;--dl-red:#A03028;
   --dl-shadow:0 1px 3px rgba(36,24,12,0.08),0 2px 10px rgba(36,24,12,0.05);
   --dl-shadow-sm:0 1px 2px rgba(36,24,12,0.06);
-  --dl-glass:rgba(255,255,255,0.7);--dl-glass-active:rgba(0,0,0,0.03);--dl-glass-border:rgba(0,0,0,0.08);--dl-glass-shadow:0 1px 8px rgba(36,24,12,0.06);
+  --dl-glass:rgba(255,255,255,0.78);--dl-glass-active:rgba(0,0,0,0.03);--dl-glass-border:rgba(0,0,0,0.08);--dl-glass-shadow:0 1px 8px rgba(36,24,12,0.06);
   --dl-overlay:rgba(255,255,255,0.85);--dl-overlay-border:rgba(0,0,0,0.1);--dl-overlay-shadow:0 4px 24px rgba(36,24,12,0.12);
   color-scheme:light
 }

@@ -260,59 +260,50 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
   );
 }
 
-// ─── Map Bottom Strip — collapsible container for carousel + info panels ─────
+// ─── Map Bottom Strip — collapsible floating carousel + info panels ───────────
 function MapBottomStrip({ collapsed, onToggle, children }) {
-  // Check if there's any visible content in children
   const hasContent = !!children;
   if (!hasContent) return null;
 
   return (
     <div style={{
       position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 999,
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
       pointerEvents: 'none',
     }}>
-      {/* Glass strip panel — chevron + content */}
-      <div style={{
+      {/* Chevron toggle */}
+      <button onClick={onToggle} style={{
         pointerEvents: 'auto',
         background: 'var(--dl-glass)',
-        backdropFilter: 'blur(16px) saturate(1.4)',
-        WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
-        borderTop: '1px solid var(--dl-glass-border)',
+        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+        border: '1px solid var(--dl-glass-border)',
+        borderRadius: '8px 8px 0 0',
+        padding: '2px 16px 0',
+        cursor: 'pointer',
+        color: 'var(--dl-middle)',
+        display: 'flex', alignItems: 'center',
+        opacity: 0.5,
+        transition: 'opacity 0.15s',
+      }}
+        onMouseEnter={e => e.currentTarget.style.opacity = '1'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+      {/* Content area — floating cards */}
+      <div style={{
+        width: '100%',
+        padding: '0 0 10px',
+        pointerEvents: 'auto',
+        maxHeight: collapsed ? 0 : 200,
+        overflow: 'hidden',
+        transition: 'max-height 0.25s ease',
+        boxSizing: 'border-box',
       }}>
-        {/* Chevron toggle */}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <button onClick={onToggle} style={{
-            background: 'none', border: 'none',
-            padding: '4px 20px 2px',
-            cursor: 'pointer',
-            color: 'var(--dl-middle)',
-            display: 'flex', alignItems: 'center',
-            opacity: 0.5,
-            transition: 'opacity 0.15s',
-          }}
-            onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-            onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-              style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-        </div>
-        {/* Content area */}
-        <div style={{
-          position: 'relative',
-          padding: '0 10px 10px',
-          maxHeight: collapsed ? 0 : 200,
-          overflow: 'hidden',
-          transition: 'max-height 0.25s ease',
-          boxSizing: 'border-box',
-        }}>
-          {/* Left/right fade vignettes */}
-          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 24, background: 'linear-gradient(to right, var(--dl-glass) 0%, transparent 100%)', zIndex: 1, pointerEvents: 'none' }} />
-          <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 24, background: 'linear-gradient(to left, var(--dl-glass) 0%, transparent 100%)', zIndex: 1, pointerEvents: 'none' }} />
-          {children}
-        </div>
+        {children}
       </div>
     </div>
   );
@@ -1431,8 +1422,10 @@ function MapInner({ token }) {
                   onMouseLeave={() => setHoveredPlace(null)}
                   style={{
                     flexShrink: 0, width: 110, height: 100,
-                    background: 'var(--dl-card)', borderRadius: 12, padding: 10,
-                    border: `1.5px solid ${isSelected ? color : 'var(--dl-border)'}`,
+                    backdropFilter: 'blur(20px) saturate(1.4)',
+                    WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                    background: 'var(--dl-glass)', borderRadius: 12, padding: 10,
+                    border: `1.5px solid ${isSelected ? color : color + '40'}`,
                     boxShadow: 'var(--dl-glass-shadow)',
                     cursor: 'pointer', transition: 'border-color 0.15s, opacity 0.15s',
                     opacity: isSelected ? 1 : isHovered ? 0.95 : 0.85,
@@ -1460,6 +1453,12 @@ function MapInner({ token }) {
                     </div>
                   )}
                   {!place.notes && <div style={{ flex: 1 }} />}
+                  {/* Category color dot */}
+                  {!isSelected && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 'auto', paddingTop: 4 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0, opacity: 0.7 }} />
+                    </div>
+                  )}
                   {/* Edit/Delete icons — bottom right, selected only */}
                   {isSelected && (
                     <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
