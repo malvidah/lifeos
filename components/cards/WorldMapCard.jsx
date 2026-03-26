@@ -301,12 +301,16 @@ function MapBottomStrip({ collapsed, onToggle, children }) {
         </div>
         {/* Content area */}
         <div style={{
+          position: 'relative',
           padding: '0 10px 10px',
           maxHeight: collapsed ? 0 : 200,
           overflow: 'hidden',
           transition: 'max-height 0.25s ease',
           boxSizing: 'border-box',
         }}>
+          {/* Left/right fade vignettes */}
+          <div style={{ position: 'absolute', top: 0, left: 0, bottom: 0, width: 24, background: 'linear-gradient(to right, var(--dl-glass) 0%, transparent 100%)', zIndex: 1, pointerEvents: 'none' }} />
+          <div style={{ position: 'absolute', top: 0, right: 0, bottom: 0, width: 24, background: 'linear-gradient(to left, var(--dl-glass) 0%, transparent 100%)', zIndex: 1, pointerEvents: 'none' }} />
           {children}
         </div>
       </div>
