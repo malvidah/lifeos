@@ -1,6 +1,6 @@
 import { withAuth } from '../_lib/auth.js';
 import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
-import { cleanTaskText } from '@/lib/cleanTaskText.js';
+import { cleanTaskText, displayTaskText } from '@/lib/cleanTaskText.js';
 
 // GET /api/habits?start=YYYY-MM-DD&end=YYYY-MM-DD
 // Returns habit definitions + completion status for a date range.
@@ -33,13 +33,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     const schedule = match ? match[1] : null;
     if (!schedule) return null;
 
-    // Clean text for display
-    const cleanText = cleanTaskText(t.text);
+    // Clean text for display (preserve case) and for matching (lowercase)
+    const display = displayTaskText(t.text);
+    const matchKey = cleanTaskText(t.text);
 
     return {
       id: t.id,
       date: t.date,
-      text: cleanText || t.text,
+      text: display || t.text,
+      matchKey,
       schedule,
       project_tags: t.project_tags || [],
     };
@@ -63,7 +65,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   for (const habit of habits) {
     const recurrence = keyToRecurrence(habit.schedule, habit.date);
     const completionMap = {};
-    const habitTextLower = habit.text; // already cleaned + lowercased by cleanTaskText
+    const habitTextLower = habit.matchKey; // lowercased clean text for comparison
 
     // Find scheduled dates in range
     const startDate = new Date(start + 'T12:00:00');

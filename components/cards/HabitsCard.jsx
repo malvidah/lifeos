@@ -162,19 +162,22 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
 
     try {
       if (wasDone) {
-        // Uncomplete: find the completion task for this date and mark done=false
-        // We need to find the task ID — fetch tasks for that date
+        // Uncomplete: find the completion task for this date and delete it
         const res = await api.get(`/api/tasks?date=${cellDate}`, token);
         const tasks = res?.tasks ?? [];
-        const cleanHabitText = habit.text.trim().toLowerCase();
+        const habitKey = (habit.matchKey || habit.text || '').toLowerCase();
         const match = tasks.find(t => {
+          // Use same centralized cleaning logic
           const cText = (t.text || '')
-            .replace(/\{[^}]+\}/g, '').replace(/\/[hr]\s+\S+/gi, '').replace(/@\d{4}-\d{2}-\d{2}/g, '')
+            .replace(/\{[^}]+\}/g, '').replace(/\/[hr]\s+\S+/gi, '')
+            .replace(/🎯\s*[A-Za-z·\s]+/g, '').replace(/↻\s*[A-Za-z·\s]+/g, '')
+            .replace(/@\d{4}-\d{2}-\d{2}/g, '').replace(/\s+/g, ' ')
             .trim().toLowerCase();
-          return cText === cleanHabitText && t.done;
+          return cText === habitKey && t.done;
         });
         if (match) {
-          await api.patch('/api/tasks', { id: match.id, done: false }, token);
+          // Soft-delete the completion row rather than patching done=false
+          await api.delete(`/api/tasks?id=${match.id}`, token);
         }
       } else {
         // Complete: create a completion row via complete-recurring
@@ -183,13 +186,13 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
           date: cellDate,
         }, token);
       }
-      // Refresh to get accurate streak counts
-      refresh();
-      // Notify tasks card to reload (separate event to avoid circular refresh)
+      // Notify tasks card to reload
       window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
+      // Delay refresh slightly to let the API settle
+      setTimeout(() => refresh(), 300);
     } catch (err) {
       console.warn('[habits] toggle failed:', err);
-      refresh(); // revert optimistic update
+      refresh();
     }
   }, [token, refresh]);
 
@@ -243,7 +246,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
         {/* Habit rows */}
         {habits.map(h => (
           <div key={h.id} style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
-            <span style={{ fontFamily: mono, fontSize: 13, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1 }}>
+            <span style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {h.text}
             </span>
             <div style={{ width: 44, display: 'flex', justifyContent: 'center' }}>
