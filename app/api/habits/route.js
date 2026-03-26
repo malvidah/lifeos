@@ -98,12 +98,18 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       }
     }
 
-    // Calculate streak with freeze mechanic (only consider dates up to today):
-    // - Walk forward through past/today scheduled dates
-    // - Track running streak and best streak
-    // - When you surpass your previous best, earn a streak freeze
-    // - If you miss while holding a freeze: consume it, streak stays (frozen)
-    // - If you miss without a freeze: streak resets to 0
+    // Streak calculation with Duolingo-style freeze mechanic:
+    //
+    // States:
+    //   🎯 target  = on a streak (count > 0, below personal best)
+    //   🔥 fire    = hot streak (count >= personal best)
+    //   ❄️ frozen  = missed once, freeze consumed, count preserved
+    //   🐴 horse   = reset (missed with no freezes, count = 0)
+    //
+    // Freeze earning: every 7 consecutive days → earn 1 freeze (max 2 banked)
+    // Freeze use: miss consumes 1 freeze, count stays, state → frozen
+    // Second miss without freeze: count resets to 0
+
     const todayStr = new Date().toISOString().slice(0, 10);
     const pastDates = scheduledDates.filter(d => d <= todayStr);
 
@@ -112,28 +118,27 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     let freezes = 0;
     let frozen = false;
     let runningStreak = 0;
-    let prevBest = 0; // track when we last earned a freeze
+    let consecutiveForFreeze = 0; // counts toward next freeze earn
 
     for (let i = 0; i < pastDates.length; i++) {
       if (completionMap[pastDates[i]]) {
         runningStreak++;
+        consecutiveForFreeze++;
         frozen = false;
-        if (runningStreak > bestStreak) {
-          bestStreak = runningStreak;
-        }
-        // Earn a freeze when passing a previously established best
-        if (prevBest > 0 && runningStreak > prevBest && runningStreak === prevBest + 1) {
-          freezes++;
+        if (runningStreak > bestStreak) bestStreak = runningStreak;
+        // Earn a freeze every 7 consecutive days (max 2 banked)
+        if (consecutiveForFreeze >= 7) {
+          consecutiveForFreeze = 0;
+          if (freezes < 2) freezes++;
         }
       } else {
-        // Miss — use freeze or reset
+        // Miss
+        consecutiveForFreeze = 0;
         if (freezes > 0) {
           freezes--;
           frozen = true;
-          // streak doesn't reset
+          // streak count preserved — don't reset runningStreak
         } else {
-          // Record best before resetting
-          if (runningStreak > 0) prevBest = Math.max(prevBest, bestStreak);
           runningStreak = 0;
           frozen = false;
         }

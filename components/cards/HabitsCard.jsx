@@ -6,22 +6,29 @@ import { todayKey } from "@/lib/dates";
 import { Shimmer } from "../ui/primitives.jsx";
 
 // ── Streak helpers ───────────────────────────────────────────────────────────
-function streakEmoji(streak, frozen) {
+// 🎯 target  = on a streak (count > 0, below best)
+// 🔥 fire    = hot streak (count >= best, new territory or matched)
+// ❄️ frozen  = missed once, freeze consumed, count preserved
+// 🐴 horse   = reset (count = 0)
+function streakEmoji(streak, frozen, bestStreak) {
   if (frozen) return '\u2744\uFE0F';
-  if (streak > 0) return '\uD83D\uDD25';
-  return '\uD83D\uDC0E';
+  if (streak === 0) return '\uD83D\uDC0E';
+  if (bestStreak > 0 && streak >= bestStreak) return '\uD83D\uDD25';
+  return '\uD83C\uDFAF';
 }
 
-function streakColor(streak, frozen) {
+function streakColor(streak, frozen, bestStreak) {
   if (frozen) return '#7CB8D4';
-  if (streak > 0) return 'var(--dl-accent)';
-  return 'var(--dl-middle)';
+  if (streak === 0) return 'var(--dl-middle)';
+  if (bestStreak > 0 && streak >= bestStreak) return 'var(--dl-accent)';
+  return 'var(--dl-green, #7A9E6E)';
 }
 
-function streakBg(streak, frozen) {
+function streakBg(streak, frozen, bestStreak) {
   if (frozen) return 'rgba(124,184,212,0.12)';
-  if (streak > 0) return 'var(--dl-accent-10, rgba(208,136,40,0.1))';
-  return 'transparent';
+  if (streak === 0) return 'transparent';
+  if (bestStreak > 0 && streak >= bestStreak) return 'var(--dl-accent-10, rgba(208,136,40,0.1))';
+  return 'rgba(122,158,110,0.12)';
 }
 
 // ── Date helpers ─────────────────────────────────────────────────────────────
@@ -73,17 +80,24 @@ function buildHealthHabits(scores, startDate, endDate, today) {
       d = addDays(d, 1);
     }
 
-    // Calculate streak (consecutive ≥85 days backward from today)
-    let streak = 0;
-    let bestStreak = 0;
-    let running = 0;
+    // Same Duolingo-style streak logic as task habits
+    let streak = 0, bestStreak = 0, freezes = 0, frozen = false;
+    let running = 0, consecutiveForFreeze = 0;
     let checkDate = startDate;
     while (checkDate <= today) {
       if (completions[checkDate]) {
         running++;
+        consecutiveForFreeze++;
+        frozen = false;
         if (running > bestStreak) bestStreak = running;
+        if (consecutiveForFreeze >= 7) {
+          consecutiveForFreeze = 0;
+          if (freezes < 2) freezes++;
+        }
       } else {
-        running = 0;
+        consecutiveForFreeze = 0;
+        if (freezes > 0) { freezes--; frozen = true; }
+        else { running = 0; frozen = false; }
       }
       checkDate = addDays(checkDate, 1);
     }
@@ -97,10 +111,10 @@ function buildHealthHabits(scores, startDate, endDate, today) {
       completions,
       streak,
       bestStreak,
-      frozen: false,
-      freezes: 0,
+      frozen,
+      freezes,
       project_tags: ['health'],
-      _isHealth: true, // marker: read-only, no click toggle
+      _isHealth: true,
     };
   });
 }
@@ -318,18 +332,26 @@ export default function HabitsCard({ date, token, userId, project }) {
       <span style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
         {h.text}
       </span>
-      <div style={{ width: 44, display: 'flex', justifyContent: 'center' }}>
+      <div style={{ width: 52, display: 'flex', justifyContent: 'center', gap: 2, alignItems: 'center' }}>
         <span style={{
           display: 'inline-flex', alignItems: 'center', gap: 2,
           padding: '1px 5px', borderRadius: 100,
-          border: `1.5px solid ${streakColor(h.streak, h.frozen)}`,
-          background: streakBg(h.streak, h.frozen),
+          border: `1.5px solid ${streakColor(h.streak, h.frozen, h.bestStreak)}`,
+          background: streakBg(h.streak, h.frozen, h.bestStreak),
           fontFamily: mono, fontSize: 11, fontWeight: 600, lineHeight: 1,
-          color: streakColor(h.streak, h.frozen), whiteSpace: 'nowrap',
+          color: streakColor(h.streak, h.frozen, h.bestStreak), whiteSpace: 'nowrap',
         }}>
-          <span style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen)}</span>
+          <span style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen, h.bestStreak)}</span>
           {h.streak}
         </span>
+        {/* Freeze dots — small frost indicators showing banked freezes */}
+        {h.freezes > 0 && (
+          <span style={{ display: 'flex', gap: 1 }}>
+            {Array.from({ length: h.freezes }, (_, i) => (
+              <span key={i} style={{ width: 4, height: 4, borderRadius: 2, background: '#7CB8D4', flexShrink: 0 }} />
+            ))}
+          </span>
+        )}
       </div>
       <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 36, textAlign: 'center' }}>
         {h.bestStreak || '\u2014'}
@@ -387,7 +409,7 @@ export default function HabitsCard({ date, token, userId, project }) {
         {/* Header row */}
         <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
           <span style={{ flex: 1 }} />
-          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center' }}>count</span>
+          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center' }}>count</span>
           <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center' }}>best</span>
         </div>
 
