@@ -31,10 +31,23 @@ export function TaskCheckbox({ done, onToggle }) {
 }
 
 // ── Single task row ──────────────────────────────────────────────────────────
+// Extract inner <p> content from a full <li> task HTML wrapper
+function extractInnerContent(taskHtml) {
+  if (!taskHtml) return '';
+  // Extract content inside <div><p>...</p></div> or just <p>...</p>
+  const divMatch = taskHtml.match(/<div><p>([\s\S]*?)<\/p><\/div>/);
+  if (divMatch) return `<p>${divMatch[1]}</p>`;
+  const pMatch = taskHtml.match(/<p>([\s\S]*?)<\/p>/);
+  if (pMatch) return `<p>${pMatch[1]}</p>`;
+  // Fallback: return the text content
+  return taskHtml.replace(/<[^>]+>/g, '');
+}
+
 function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick }) {
+  const innerHtml = useMemo(() => extractInnerContent(task.html), [task.html]);
+
   const handleCommit = useCallback((html, text) => {
     if (!text?.trim()) {
-      // Empty task — delete it
       if (task._source === 'own') onDelete(task.id);
       return;
     }
@@ -55,7 +68,7 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, editorRef, pro
         <DayLabEditor
           ref={editorRef}
           singleLine
-          value={task.html || ''}
+          value={innerHtml}
           editable={task._editable !== false}
           placeholder=""
           projectNames={projectNames}
