@@ -1,4 +1,5 @@
 import { withAuth } from '../../_lib/auth.js';
+import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
 // POST /api/tasks/cleanup
 // Deduplicates ALL dates at once. Keeps newest row per unique text per date.
@@ -35,7 +36,7 @@ async function cleanup(supabase, user) {
   for (const [date, tasks] of Object.entries(byDate)) {
     const seen = new Set();
     for (const t of tasks) {
-      const key = (t.text || '').trim().toLowerCase();
+      const key = cleanTaskText(t.text);
       if (seen.has(key)) {
         toDelete.push(t.id);
       } else {
