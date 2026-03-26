@@ -349,13 +349,13 @@ function RecentEntries({ token, userId, date }) {
   const pastEntries = (entries || []).filter(e => e.date !== todayStr);
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:16,overflowY:'auto'}}>
-      {/* Selected day — always editable */}
+    <div style={{display:'flex',flexDirection:'column',gap:8,overflowY:'auto'}}>
+      {/* Selected day — editable */}
       <div>
         <div style={{
           fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
           textTransform:'uppercase', color:'var(--dl-middle)',
-          marginBottom:6, opacity:0.7,
+          marginBottom:4, opacity:0.7,
         }}>
           {todayStr === new Date().toISOString().slice(0, 10) ? 'today' : formatLabel(todayStr)}
         </div>
@@ -370,35 +370,19 @@ function RecentEntries({ token, userId, date }) {
         </div>
       )}
 
-      {/* Past entries — read-only */}
-      {pastEntries.map(entry => {
-        const html = entry.blocks
-          .sort((a, b) => a.position - b.position)
-          .map(b => b.content)
-          .join('');
-        const images = extractImages(html);
-        return (
-          <div key={entry.date}>
-            <div style={{
-              fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
-              textTransform:'uppercase', color:'var(--dl-middle)',
-              marginBottom:6, opacity:0.7,
-            }}>
-              {formatLabel(entry.date)}
-            </div>
-            {images.length > 0 && (
-              <PhotoStrip images={images} onViewImage={() => {}} />
-            )}
-            <div
-              style={{
-                fontFamily:serif, fontSize:F.md, lineHeight:1.7,
-                color:'var(--dl-strong)', wordBreak:'break-word',
-              }}
-              dangerouslySetInnerHTML={{__html: stripImageChips(html)}}
-            />
+      {/* Past entries — editable */}
+      {pastEntries.map(entry => (
+        <div key={entry.date}>
+          <div style={{
+            fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
+            textTransform:'uppercase', color:'var(--dl-middle)',
+            marginBottom:4, opacity:0.7,
+          }}>
+            {formatLabel(entry.date)}
           </div>
-        );
-      })}
+          <JournalEditor date={entry.date} userId={userId} token={token} />
+        </div>
+      ))}
     </div>
   );
 }
