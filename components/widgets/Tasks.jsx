@@ -8,6 +8,7 @@ import { Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
 import { parseTaskBlocks, tasksToHtml } from "@/lib/parseBlocks";
 import { diffTasks, applyDiff } from "@/lib/taskDiff";
+import { markLocalSave } from "@/lib/useRealtimeSync";
 
 // ── Shared task checkbox — used in project view ──────────────────────────────
 export function TaskCheckbox({ done, onToggle }) {
@@ -105,11 +106,19 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     return () => { cancelled = true; };
   }, [date, token, userId, reloadKey]);
 
-  // Reload when habits card toggles a completion
+  // Reload when habits card toggles a completion or external device saves tasks
   useEffect(() => {
-    const handler = () => setReloadKey(k => k + 1);
+    const handler = () => {
+      // Don't reload if we're in the middle of a save — would cause conflicts
+      if (savingRef.current) return;
+      setReloadKey(k => k + 1);
+    };
     window.addEventListener('daylab:habits-changed', handler);
-    return () => window.removeEventListener('daylab:habits-changed', handler);
+    window.addEventListener('daylab:tasks-saved', handler);
+    return () => {
+      window.removeEventListener('daylab:habits-changed', handler);
+      window.removeEventListener('daylab:tasks-saved', handler);
+    };
   }, []);
 
   // Diff-based save — debounced 1 second after editor change
@@ -133,6 +142,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
         // Only save if there are actual changes
         if (diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length) {
+          markLocalSave("tasks", date);
           const { hadRecurringDone } = await applyDiff(date, diff, token);
 
           // Reload server state for diffing (don't remount editor — TipTap

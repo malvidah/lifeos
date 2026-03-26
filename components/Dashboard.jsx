@@ -29,6 +29,7 @@ import NotesCard from "./widgets/NotesCard.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
+import { useRealtimeSync } from "@/lib/useRealtimeSync";
 
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
@@ -184,6 +185,9 @@ function DashboardInner() {
 
   const token=session?.access_token;
   const userId=session?.user?.id ?? null;
+
+  // ── Real-time sync across devices (Supabase Realtime) ──────────────
+  useRealtimeSync(userId, token);
 
   // Project names — used by all editors for #tag autocomplete
   const [allProjectNames, setAllProjectNames] = useState([]);
