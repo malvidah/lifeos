@@ -568,6 +568,8 @@ function DashboardInner() {
         window.dispatchEvent(new CustomEvent('daylab:go-to-note', { detail: { name } }));
       },
       navigateToPlace: (name) => {
+        // Ensure map is visible before navigating
+        if (mapCollapsed) toggleMap_();
         window.dispatchEvent(new CustomEvent('daylab:go-to-place', { detail: { name } }));
       },
     }}>
