@@ -20,7 +20,7 @@ import HealthCard from "./cards/HealthCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
 import WorldMapCard from "./cards/WorldMapCard.jsx";
-import { JournalEditor, Meals } from "./widgets/JournalEditor.jsx";
+import { JournalEditor, JournalModeToggle, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
@@ -75,6 +75,7 @@ function DashboardInner() {
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
+  const [journalMode, setJournalMode] = useState('recent');
   const [activeProject, setActiveProject] = useState(() => {
     try {
       const v = localStorage.getItem('daylab:activeProject');
@@ -608,8 +609,9 @@ function DashboardInner() {
                     <ErrorBoundary label={leftWidget.label}>
                     <Card label={leftWidget.label} color={leftWidget.color()}
                       collapsed={false}
+                      headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}
                        autoHeight>
-                      <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode="recent"/>
+                      <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
                     </Card>
                     </ErrorBoundary>
                   )}
@@ -634,8 +636,9 @@ function DashboardInner() {
                         <ErrorBoundary label={leftWidget.label}>
                         <Card label={leftWidget.label} color={leftWidget.color()}
                           collapsed={false}
+                          headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}
                           >
-                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode="recent"/>
+                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
                         </Card>
                         </ErrorBoundary>
                       </div>

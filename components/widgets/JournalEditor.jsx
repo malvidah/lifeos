@@ -397,17 +397,47 @@ function RecentEntries({ token, userId, date, project }) {
 }
 
 // ─── Memories View ───────────────────────────────────────────────────────────
-// Shows today's editable entry + same day from previous years (read-only).
+// Shows today's entry + entries from 1 month, 6 months, 1 year, 3 years ago.
+// Falls back to nearest date if exact date has no entry.
 
 function MemoriesView({ token, userId, date }) {
-  const [pastEntries, setPastEntries] = useState(null);
+  const [memories, setMemories] = useState(null);
+
+  // Generate target dates: 1 month, 6 months, 1 year, 3 years ago
+  const targets = useMemo(() => {
+    const [y, m, d] = date.split('-').map(Number);
+    const make = (months) => {
+      const dt = new Date(y, m - 1 - months, d);
+      return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    };
+    return [
+      { key: '1mo', label: '1 month ago', date: make(1) },
+      { key: '6mo', label: '6 months ago', date: make(6) },
+      { key: '1yr', label: '1 year ago', date: make(12) },
+      { key: '3yr', label: '3 years ago', date: make(36) },
+    ];
+  }, [date]);
 
   useEffect(() => {
     if (!token || !date) return;
-    api.get(`/api/journal?memories=${date}`, token).then(d => {
-      setPastEntries(d?.entries ?? []);
-    }).catch(() => setPastEntries([]));
-  }, [token, date]);
+    // Fetch recent entries around each target date (±3 days window)
+    Promise.all(targets.map(async t => {
+      // Try exact date first
+      const d = await api.get(`/api/journal?date=${t.date}`, token);
+      if (d?.blocks?.length) return { ...t, entry: { date: t.date, blocks: d.blocks } };
+      // Fallback: check nearby dates (±3 days)
+      for (let offset = 1; offset <= 3; offset++) {
+        for (const dir of [-1, 1]) {
+          const dt = new Date(t.date + 'T12:00:00');
+          dt.setDate(dt.getDate() + offset * dir);
+          const nearby = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+          const nd = await api.get(`/api/journal?date=${nearby}`, token);
+          if (nd?.blocks?.length) return { ...t, entry: { date: nearby, blocks: nd.blocks } };
+        }
+      }
+      return { ...t, entry: null };
+    })).then(setMemories).catch(() => setMemories([]));
+  }, [token, date, targets]);
 
   const formatDate = (d) => {
     const [y, m, day] = d.split('-').map(Number);
@@ -415,67 +445,91 @@ function MemoriesView({ token, userId, date }) {
     return `${months[m - 1]} ${day}, ${y}`;
   };
 
-  const yearsAgo = (d) => {
-    const then = parseInt(d.split('-')[0], 10);
-    const now = parseInt(date.split('-')[0], 10);
-    const diff = now - then;
-    return diff === 1 ? '1 year ago' : `${diff} years ago`;
-  };
+  const isToday = date === todayKey();
 
   return (
-    <div style={{display:'flex',flexDirection:'column',gap:16,overflowY:'auto'}}>
-      {/* Selected day — editable */}
+    <div style={{display:'flex',flexDirection:'column',gap:10,overflowY:'auto'}}>
+      {/* Today — editable */}
       <div>
         <div style={{
           fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
-          textTransform:'uppercase', color:'var(--dl-middle)',
-          marginBottom:6, opacity:0.7,
+          textTransform:'uppercase',
+          color: isToday ? 'var(--dl-accent)' : 'var(--dl-highlight)',
+          marginBottom:4,
         }}>
-          {date === todayKey() ? 'today' : formatDate(date)}
+          {isToday ? 'today' : formatDate(date)}
         </div>
         <JournalEditor date={date} userId={userId} token={token} />
       </div>
 
-      {/* Past years */}
-      {pastEntries === null ? (
+      {/* Memory slots */}
+      {memories === null ? (
         <div style={{display:'flex',flexDirection:'column',gap:10,padding:'4px 0'}}>
           <Shimmer width="60%" height={14}/>
           <Shimmer width="80%" height={14}/>
         </div>
-      ) : pastEntries.length === 0 ? (
-        <div style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-middle)',padding:'8px 0',letterSpacing:'0.04em',opacity:0.6}}>
-          No memories for this day yet.
-        </div>
       ) : (
-        pastEntries.map(entry => {
-          const html = entry.blocks
-            .sort((a, b) => a.position - b.position)
-            .map(b => b.content)
-            .join('');
-          const images = extractImages(html);
-          return (
-            <div key={entry.date} style={{opacity:0.85}}>
-              <div style={{
-                fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
-                textTransform:'uppercase', color:'var(--dl-middle)',
-                marginBottom:6, opacity:0.7,
-              }}>
-                {formatDate(entry.date)} — {yearsAgo(entry.date)}
-              </div>
-              {images.length > 0 && (
-                <PhotoStrip images={images} onViewImage={() => {}} />
-              )}
-              <div
-                style={{
-                  fontFamily:serif, fontSize:F.md, lineHeight:1.7,
-                  color:'var(--dl-strong)', wordBreak:'break-word',
-                }}
-                dangerouslySetInnerHTML={{__html: stripImageChips(html)}}
-              />
+        memories.map(mem => (
+          <div key={mem.key}>
+            <div style={{
+              fontFamily:mono, fontSize:F.sm, letterSpacing:'0.06em',
+              textTransform:'uppercase', color:'var(--dl-middle)',
+              marginBottom:4, opacity:0.5,
+            }}>
+              {mem.label}{mem.entry ? ` — ${formatDate(mem.entry.date)}` : ''}
             </div>
-          );
-        })
+            {mem.entry ? (
+              <JournalEditor date={mem.entry.date} userId={userId} token={token} />
+            ) : (
+              <div style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-middle)',padding:'4px 0',opacity:0.4}}>
+                No entry
+              </div>
+            )}
+          </div>
+        ))
       )}
+    </div>
+  );
+}
+
+// ─── Journal Mode Toggle ─────────────────────────────────────────────────────
+export function JournalModeToggle({ mode, setMode }) {
+  const btns = [
+    { key: 'day', title: 'Today', icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+    )},
+    { key: 'recent', title: 'Recent entries', icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+        <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+    )},
+    { key: 'memories', title: 'Memories', icon: (
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+      </svg>
+    )},
+  ];
+  return (
+    <div style={{ display:'flex', gap:2, background:'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius:100, padding:2 }}>
+      {btns.map(b => {
+        const active = mode === b.key;
+        return (
+          <button key={b.key} onClick={e => { e.stopPropagation(); setMode(b.key); }} title={b.title}
+            style={{
+              padding: '3px 6px',
+              borderRadius: 100, cursor: 'pointer', border: 'none',
+              background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
+              color: active ? 'var(--dl-strong)' : 'var(--dl-middle)',
+              display: 'flex', alignItems: 'center',
+              transition: 'all 0.15s',
+            }}>
+            {b.icon}
+          </button>
+        );
+      })}
     </div>
   );
 }
