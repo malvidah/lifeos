@@ -288,7 +288,7 @@ export default function HabitsCard({ date, token, userId, project }) {
           {filteredHabits.map(h => {
             // Use project color for fill, default to a soft grey
             const tag = h.project_tags?.[0];
-            const fillColor = tag ? projectColor(tag) : 'var(--dl-border2)';
+            const fillColor = tag ? projectColor(tag) + '55' : 'var(--dl-border2)';
             return (
             <div key={h.id} style={{ display: 'flex', height: rowH }}>
               {visibleDates.map((d, i) => {
@@ -322,7 +322,7 @@ export default function HabitsCard({ date, token, userId, project }) {
                         style={{
                           width: cellSize, height: cellSize, borderRadius: 4,
                           background: done ? fillColor : 'transparent',
-                          border: done ? 'none' : `1.5px solid ${isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
+                          border: `1.5px solid ${done ? (tag ? projectColor(tag) : 'var(--dl-border2)') : isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
                           opacity: !isPast && !done ? 0.35 : 1,
                           transition: 'all 0.15s',
                           cursor: isPast ? 'pointer' : 'default',
