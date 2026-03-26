@@ -85,7 +85,7 @@ function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onFocusPrev, e
 }
 
 // ── New task input (always at the bottom) ─────────────────────────────────────
-function NewTaskInput({ onAdd, onFocusPrev, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, inputRef, project }) {
+function NewTaskInput({ onAdd, onFocusNext, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, inputRef, project }) {
   const handleAdd = useCallback((text) => {
     if (!text?.trim()) return;
     onAdd(text);
@@ -94,7 +94,7 @@ function NewTaskInput({ onAdd, onFocusPrev, projectNames, noteNames, placeNames,
   return (
     <div
       onKeyDown={e => {
-        if (e.key === 'ArrowUp') { e.preventDefault(); onFocusPrev?.(); }
+        if (e.key === 'ArrowDown') { e.preventDefault(); onFocusNext?.(); }
       }}
       style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0' }}
     >
@@ -115,7 +115,6 @@ function NewTaskInput({ onAdd, onFocusPrev, projectNames, noteNames, placeNames,
           color={"var(--dl-accent)"}
           style={{ padding: 0 }}
           onEnterCommit={text => handleAdd(text)}
-          onBackspaceEmpty={() => onFocusPrev?.()}
           onProjectClick={onProjectClick}
           onNoteClick={onNoteClick}
         />
@@ -167,12 +166,14 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     }
   }, [filteredTasks]);
 
-  // Handle backspace/arrow-up — focus previous task
+  // Handle backspace/arrow-up — focus previous task or the new task input
   const focusPrev = useCallback((currentId) => {
     const idx = filteredTasks.findIndex(t => t.id === currentId);
     if (idx > 0) {
       const prevTask = filteredTasks[idx - 1];
       taskRefs.current[prevTask.id]?.focus?.();
+    } else {
+      newTaskRef.current?.focus?.();
     }
   }, [filteredTasks]);
 
@@ -195,6 +196,20 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         .task-done .ProseMirror p { text-decoration: line-through; text-decoration-color: var(--dl-middle); }
         .task-done .ProseMirror p span { text-decoration: none !important; }
       `}</style>
+      <NewTaskInput
+        onAdd={handleAdd}
+        onFocusNext={() => {
+          const first = filteredTasks[0];
+          if (first) taskRefs.current[first.id]?.focus?.();
+        }}
+        inputRef={newTaskRef}
+        project={project}
+        projectNames={projectNames}
+        noteNames={noteNames}
+        placeNames={placeNames}
+        onProjectClick={name => navigateToProject(name)}
+        onNoteClick={name => navigateToNote(name)}
+      />
       {filteredTasks.map(task => (
         <TaskRow
           key={task.id}
@@ -212,20 +227,6 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           onNoteClick={name => navigateToNote(name)}
         />
       ))}
-      <NewTaskInput
-        onAdd={handleAdd}
-        onFocusPrev={() => {
-          const last = filteredTasks[filteredTasks.length - 1];
-          if (last) taskRefs.current[last.id]?.focus?.();
-        }}
-        inputRef={newTaskRef}
-        project={project}
-        projectNames={projectNames}
-        noteNames={noteNames}
-        placeNames={placeNames}
-        onProjectClick={name => navigateToProject(name)}
-        onNoteClick={name => navigateToNote(name)}
-      />
     </div>
   );
 }
