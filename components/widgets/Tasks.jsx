@@ -1,13 +1,15 @@
 "use client";
-import { useState, useEffect, useContext, useMemo, useRef, useCallback } from "react";
+import { useEffect, useContext, useMemo, useRef, useCallback, useState } from "react";
 import { useTheme } from "@/lib/theme";
 import { mono, F, projectColor } from "@/lib/tokens";
-import { useTaskStore } from "@/lib/useTaskStore";
+import { api } from "@/lib/api";
 import { NoteContext, ProjectNamesContext, PlaceNamesContext, NavigationContext } from "@/lib/contexts";
 import { Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
+import { parseTaskBlocks, tasksToHtml } from "@/lib/parseBlocks";
+import { diffTasks, applyDiff } from "@/lib/taskDiff";
 
-// ── Shared task checkbox ─────────────────────────────────────────────────────
+// ── Shared task checkbox — used in project view ──────────────────────────────
 export function TaskCheckbox({ done, onToggle }) {
   return (
     <button
@@ -30,193 +32,129 @@ export function TaskCheckbox({ done, onToggle }) {
   );
 }
 
-// Check if any TipTap suggestion dropdown is currently visible
-function isSuggestionOpen() {
-  return !!document.querySelector('.dl-suggestion-dropdown');
-}
-
-// ── Single task row ──────────────────────────────────────────────────────────
-function TaskRow({ task, onToggle, onEdit, onDelete, onEnterDown, onEnterCreate, onFocusPrev, editorRef, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, isFirst, placeholder }) {
-  const justCommitted = useRef(false);
-
-  const handleCommit = useCallback((text) => {
-    if (!text?.trim()) return;
-    if (justCommitted.current) { justCommitted.current = false; return; } // skip duplicate from blur after enter
-    if (text !== task.text) {
-      onEdit(task.id, { text });
+// Inject checkbox styles for the TipTap task list
+export function injectTaskListStyles(accentHex, date) {
+  if (typeof document === 'undefined') return;
+  let s = document.getElementById('dl-tasklist-styles');
+  if (!s) { s = document.createElement('style'); s.id = 'dl-tasklist-styles'; document.head.appendChild(s); }
+  const enc = encodeURIComponent(accentHex);
+  s.textContent = `
+    .dl-editor ul[data-type="taskList"] { list-style:none; padding:0; margin:0; }
+    .dl-editor ul[data-type="taskList"] > li { display:flex; align-items:flex-start; gap:10px; padding:3px 0; }
+    .dl-editor ul[data-type="taskList"] > li > label { display:flex; align-items:center; margin-top:4px; flex-shrink:0; cursor:pointer; }
+    .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"] {
+      -webkit-appearance:none; appearance:none;
+      width:15px; height:15px; min-width:15px; border-radius:4px; margin:0;
+      border:1.5px solid var(--task-border,var(--dl-border2)); background:transparent;
+      cursor:pointer; transition:all 0.15s;
     }
-  }, [task.id, task.text, onEdit]);
-
-  return (
-    <div
-      onKeyDown={e => {
-        // Don't intercept arrow keys when suggestion dropdown is open
-        if (isSuggestionOpen()) return;
-        // Only navigate if at very start (ArrowUp) or end (ArrowDown) of content
-        if (e.key === 'ArrowDown' && onEnterDown) { e.preventDefault(); onEnterDown(); }
-        if (e.key === 'ArrowUp' && onFocusPrev) { e.preventDefault(); onFocusPrev(); }
-      }}
-      style={{
-        display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0',
-        opacity: task.done ? 0.6 : 1,
-        transition: 'opacity 0.15s',
-      }}
-    >
-      <TaskCheckbox done={task.done} onToggle={() => onToggle(task.id)} />
-      <div className={task.done ? 'task-done' : ''} style={{ flex: 1, minWidth: 0 }}>
-        <DayLabEditor
-          ref={editorRef}
-          singleLine
-          clearOnEnter={false}
-          value={task.text || ''}
-          editable={task._editable !== false}
-          placeholder={placeholder || ''}
-          projectNames={projectNames}
-          noteNames={noteNames}
-          placeNames={placeNames}
-          textColor={task.done ? "var(--dl-middle)" : "var(--dl-strong)"}
-          mutedColor={"var(--dl-middle)"}
-          color={"var(--dl-accent)"}
-          style={{ padding: 0 }}
-          onBlur={text => handleCommit(text)}
-          onEnterCommit={text => {
-            // Save the text
-            if (text?.trim() && text !== task.text) {
-              onEdit(task.id, { text });
-            }
-            // Mark that we just committed so the blur handler doesn't double-save
-            justCommitted.current = true;
-            setTimeout(() => { justCommitted.current = false; }, 200);
-            // Create a new line below
-            onEnterCreate?.();
-          }}
-          onBackspaceEmpty={onDelete ? () => {
-            onDelete(task.id);
-            onFocusPrev?.();
-          } : undefined}
-          onProjectClick={onProjectClick}
-          onNoteClick={onNoteClick}
-        />
-      </div>
-    </div>
-  );
+    .dl-editor ul[data-type="taskList"] > li > label > input[type="checkbox"]:checked {
+      background-color:var(--task-fill); border-color:var(--task-color);
+      background-image:url("data:image/svg+xml,%3Csvg width='9' height='9' viewBox='0 0 10 10' fill='none' stroke='${enc}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round' xmlns='http://www.w3.org/2000/svg'%3E%3Cpolyline points='1.5%2C5 4%2C7.5 8.5%2C2'/%3E%3C/svg%3E");
+      background-repeat:no-repeat; background-position:center;
+    }
+    .dl-editor ul[data-type="taskList"] > li > div { flex:1; min-width:0; }
+    .dl-editor ul[data-type="taskList"] > li[data-checked="true"] > div { color:var(--dl-middle); text-decoration:line-through; }
+    .dl-editor ul[data-type="taskList"] > li[data-checked="true"] > div span { text-decoration:none; }
+    [data-filter="open"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"] { display:none; }
+    [data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="false"] { display:none; }
+    ${date ? `[data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"][data-completed-date]:not([data-completed-date="${date}"]) { display:none; }` : ''}
+  `;
 }
 
-// ── New task input (always at the bottom) ─────────────────────────────────────
-function NewTaskInput({ onAdd, onFocusNext, projectNames, noteNames, placeNames, onProjectClick, onNoteClick, inputRef, project }) {
-  const handleAdd = useCallback((text) => {
-    if (!text?.trim()) return;
-    onAdd(text);
-  }, [onAdd]);
-
-  return (
-    <div
-      onKeyDown={e => {
-        if (e.key === 'ArrowDown') { e.preventDefault(); onFocusNext?.(); }
-      }}
-      style={{ display: 'flex', alignItems: 'flex-start', gap: 10, padding: '3px 0' }}
-    >
-      <div style={{
-        width: 15, height: 15, flexShrink: 0, borderRadius: 4, marginTop: 4,
-        border: '1.5px solid var(--dl-border2)', background: 'transparent',
-      }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <DayLabEditor
-          ref={inputRef}
-          singleLine
-          placeholder={project ? `Add a task for ${project.replace(/\b\w/g, c => c.toUpperCase())}...` : 'Add a task...'}
-          projectNames={projectNames}
-          noteNames={noteNames}
-          placeNames={placeNames}
-          textColor={"var(--dl-strong)"}
-          mutedColor={"var(--dl-middle)"}
-          color={"var(--dl-accent)"}
-          style={{ padding: 0 }}
-          onEnterCommit={text => handleAdd(text)}
-          onProjectClick={onProjectClick}
-          onNoteClick={onNoteClick}
-        />
-      </div>
-    </div>
-  );
-}
-
-// ── Main Tasks component ─────────────────────────────────────────────────────
+// ── Main Tasks component — single TipTap editor with diff-based save ─────────
 export default function Tasks({ date, token, userId, taskFilter = "all", project }) {
-  const { tasks, loaded, addTask, updateTask, toggleTask, deleteTask } = useTaskStore(date, token, userId);
+  const { theme } = useTheme();
   const projectNames = useContext(ProjectNamesContext);
   const { notes: noteNames } = useContext(NoteContext);
   const placeNames = useContext(PlaceNamesContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
-  const newTaskRef = useRef(null);
-  const taskRefs = useRef({});
 
-  // Filter tasks by project (client-side) and by done status
-  const filteredTasks = useMemo(() => {
-    let filtered = tasks;
+  // State
+  const [loaded, setLoaded] = useState(false);
+  const [htmlValue, setHtmlValue] = useState('');
+  const serverTasksRef = useRef([]); // Last-known server state for diffing
+  const saveTimerRef = useRef(null);
+  const savingRef = useRef(false);
 
-    // Project filter
-    if (project && project !== '__everything__') {
-      filtered = filtered.filter(t =>
-        (t.project_tags || []).some(tag => tag.toLowerCase() === project.toLowerCase())
-      );
-    }
+  // Inject checkbox styles
+  const accentHex = theme === 'light' ? '#C07818' : '#D08828';
+  useEffect(() => injectTaskListStyles(accentHex, date), [accentHex, date]);
 
-    // Done/open filter
-    if (taskFilter === 'open') {
-      filtered = filtered.filter(t => !t.done);
-    } else if (taskFilter === 'done') {
-      filtered = filtered.filter(t => t.done);
-    }
+  // Load tasks from server
+  useEffect(() => {
+    if (!token || !userId || !date) return;
+    let cancelled = false;
 
-    // Sort by position
-    return filtered.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-  }, [tasks, project, taskFilter]);
+    api.get(`/api/tasks?date=${date}`, token).then(d => {
+      if (cancelled) return;
+      const tasks = d?.tasks ?? [];
+      serverTasksRef.current = tasks;
 
-  // Handle Enter in a task row — focus next task or new task input
-  const focusNext = useCallback((currentId) => {
-    const idx = filteredTasks.findIndex(t => t.id === currentId);
-    const nextTask = filteredTasks[idx + 1];
-    if (nextTask && taskRefs.current[nextTask.id]) {
-      taskRefs.current[nextTask.id]?.focus?.();
-    } else {
-      newTaskRef.current?.focus?.();
-    }
-  }, [filteredTasks]);
-
-  // Handle backspace/arrow-up — focus previous task or the new task input
-  const focusPrev = useCallback((currentId) => {
-    const idx = filteredTasks.findIndex(t => t.id === currentId);
-    if (idx > 0) {
-      const prevTask = filteredTasks[idx - 1];
-      taskRefs.current[prevTask.id]?.focus?.();
-    } else {
-      newTaskRef.current?.focus?.();
-    }
-  }, [filteredTasks]);
-
-  // Draft tasks — local-only empty rows for typing, saved on blur/enter with text
-  const [drafts, setDrafts] = useState([]);
-  const draftRefs = useRef({});
-
-  const addDraft = useCallback(() => {
-    const id = `draft-${Date.now()}`;
-    setDrafts(prev => [...prev, { id }]);
-    setTimeout(() => draftRefs.current[id]?.focus?.(), 50);
-    return id;
-  }, []);
-
-  const commitDraft = useCallback(async (draftId, text) => {
-    if (!text?.trim()) return;
-    setDrafts(prev => prev.filter(d => d.id !== draftId));
-    await addTask(text, {
-      project_tags: project ? [project.toLowerCase()] : [],
+      // Convert structured tasks to HTML for the editor
+      const html = d?.data || tasksToHtml(tasks);
+      setHtmlValue(html);
+      setLoaded(true);
+    }).catch(() => {
+      if (!cancelled) setLoaded(true);
     });
-  }, [addTask, project]);
 
-  const removeDraft = useCallback((draftId) => {
-    setDrafts(prev => prev.filter(d => d.id !== draftId));
-  }, []);
+    return () => { cancelled = true; };
+  }, [date, token, userId]);
+
+  // Diff-based save — debounced 1 second after editor change
+  const handleUpdate = useCallback((newHtml) => {
+    setHtmlValue(newHtml);
+
+    // Clear previous timer
+    clearTimeout(saveTimerRef.current);
+
+    // Debounce 1 second
+    saveTimerRef.current = setTimeout(async () => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+
+      try {
+        // Parse current editor HTML into task objects
+        const editorTasks = parseTaskBlocks(newHtml);
+
+        // Compute diff against last-known server state
+        const diff = diffTasks(serverTasksRef.current, editorTasks);
+
+        // Only save if there are actual changes
+        if (diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length) {
+          await applyDiff(date, diff, token);
+
+          // Reload from server to get fresh state with IDs
+          const fresh = await api.get(`/api/tasks?date=${date}`, token);
+          if (fresh?.tasks) {
+            serverTasksRef.current = fresh.tasks;
+          }
+        }
+      } catch (err) {
+        console.warn('[tasks] diff save failed:', err);
+      } finally {
+        savingRef.current = false;
+      }
+    }, 1000);
+  }, [date, token]);
+
+  // Flush on unmount / date change
+  useEffect(() => {
+    return () => clearTimeout(saveTimerRef.current);
+  }, [date]);
+
+  // Project filter — CSS injection to hide non-matching tasks
+  const filterId = useRef(`tasks-${Math.random().toString(36).slice(2, 8)}`).current;
+  useEffect(() => {
+    if (!project || project === '__everything__') return;
+    const style = document.createElement('style');
+    style.textContent = `
+      [data-tasks-id="${filterId}"] .dl-editor ul[data-type="taskList"] > li:not(:has(span[data-project-tag="${CSS.escape(project)}"])) { display: none; }
+    `;
+    document.head.appendChild(style);
+    return () => style.remove();
+  }, [project, filterId]);
 
   if (!loaded) return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '4px 0' }}>
@@ -225,97 +163,32 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   );
 
   return (
-    <div>
-      <style>{`
-        .task-done .ProseMirror p { text-decoration: line-through; text-decoration-color: var(--dl-middle); }
-        .task-done .ProseMirror p span { text-decoration: none !important; }
-      `}</style>
-      {/* Render tasks with draft rows interleaved at correct positions */}
-      {filteredTasks.length === 0 && drafts.length === 0 ? (
-        // Empty state — single editable row
-        <TaskRow
-          task={{ id: '__empty__', text: '', done: false, _source: 'own', _editable: true }}
-          onToggle={() => {}}
-          onEdit={(id, patch) => {
-            if (patch.text?.trim()) addTask(patch.text, { project_tags: project ? [project.toLowerCase()] : [] });
-          }}
-          onDelete={null}
-          onEnterCreate={() => {
-            const draftId = `draft-${Date.now()}`;
-            setDrafts(prev => [...prev, { id: draftId, afterIdx: -1 }]);
-            setTimeout(() => draftRefs.current[draftId]?.focus?.(), 50);
-          }}
-          onFocusPrev={null}
-          editorRef={el => { taskRefs.current['__empty__'] = el; }}
-          projectNames={projectNames} noteNames={noteNames} placeNames={placeNames}
-          onProjectClick={name => navigateToProject(name)}
-          onNoteClick={name => navigateToNote(name)}
-          isFirst={true}
-          placeholder="Add a task..."
-        />
-      ) : (
-        // Build interleaved list: task, drafts-after-task, task, drafts-after-task...
-        filteredTasks.flatMap((task, idx) => {
-          const draftsAfter = drafts.filter(d => d.afterIdx === idx);
-          return [
-            <TaskRow
-              key={task.id}
-              task={task}
-              onToggle={toggleTask}
-              onEdit={updateTask}
-              onDelete={deleteTask}
-              onEnterDown={() => {
-                // Check if there's a draft right after this task
-                const draftAfter = drafts.find(d => d.afterIdx === idx);
-                if (draftAfter) { draftRefs.current[draftAfter.id]?.focus?.(); return; }
-                const next = filteredTasks[idx + 1];
-                if (next) taskRefs.current[next.id]?.focus?.();
-              }}
-              onEnterCreate={() => {
-                const draftId = `draft-${Date.now()}`;
-                setDrafts(prev => [...prev, { id: draftId, afterIdx: idx }]);
-                setTimeout(() => draftRefs.current[draftId]?.focus?.(), 50);
-              }}
-              onFocusPrev={idx === 0 ? null : () => {
-                const prev = filteredTasks[idx - 1];
-                if (prev) taskRefs.current[prev.id]?.focus?.();
-              }}
-              editorRef={el => { taskRefs.current[task.id] = el; }}
-              projectNames={projectNames} noteNames={noteNames} placeNames={placeNames}
-              onProjectClick={name => navigateToProject(name)}
-              onNoteClick={name => navigateToNote(name)}
-              isFirst={idx === 0}
-              placeholder=""
-            />,
-            ...draftsAfter.map(draft => (
-              <TaskRow
-                key={draft.id}
-                task={{ id: draft.id, text: '', done: false, _source: 'own', _editable: true }}
-                onToggle={() => {}}
-                onEdit={(id, patch) => {
-                  if (patch.text?.trim()) {
-                    removeDraft(id);
-                    addTask(patch.text, { project_tags: project ? [project.toLowerCase()] : [] });
-                  }
-                }}
-                onDelete={() => removeDraft(draft.id)}
-                onEnterCreate={null}
-                onFocusPrev={() => taskRefs.current[task.id]?.focus?.()}
-                editorRef={el => { draftRefs.current[draft.id] = el; }}
-                projectNames={projectNames} noteNames={noteNames} placeNames={placeNames}
-                onProjectClick={name => navigateToProject(name)}
-                onNoteClick={name => navigateToNote(name)}
-                placeholder=""
-              />
-            )),
-          ];
-        })
-      )}
+    <div data-filter={taskFilter} data-tasks-id={filterId} style={{
+      '--task-border': "var(--dl-border2)",
+      '--task-color': "var(--dl-accent)",
+      '--task-fill': theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
+    }}>
+      <DayLabEditor
+        key={date}
+        taskList
+        value={htmlValue}
+        onUpdate={handleUpdate}
+        placeholder=""
+        projectNames={projectNames}
+        noteNames={noteNames}
+        placeNames={placeNames}
+        textColor={"var(--dl-strong)"}
+        mutedColor={"var(--dl-middle)"}
+        color={"var(--dl-accent)"}
+        onProjectClick={name => navigateToProject(name)}
+        onNoteClick={name => navigateToNote(name)}
+        style={{ padding: 0 }}
+      />
     </div>
   );
 }
 
-// ── Task filter buttons (unchanged) ──────────────────────────────────────────
+// ── Task filter buttons ──────────────────────────────────────────────────────
 export function TaskFilterBtns({ filter, setFilter }) {
   const OpenIcon = () => (
     <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -329,8 +202,8 @@ export function TaskFilterBtns({ filter, setFilter }) {
     </svg>
   );
   const btns = [
-    { key: 'open', label: null, icon: <OpenIcon/> },
-    { key: 'done', label: null, icon: <DoneIcon/> },
+    { key: 'open', label: null, icon: <OpenIcon /> },
+    { key: 'done', label: null, icon: <DoneIcon /> },
     { key: 'all', label: null, icon: (
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="2" width="12" height="12" rx="2.5"/>
@@ -346,7 +219,7 @@ export function TaskFilterBtns({ filter, setFilter }) {
           <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }}
             style={{
               fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em',
-              padding: b.label ? '3px 8px' : '3px 6px',
+              padding: '3px 6px',
               borderRadius: 100, cursor: 'pointer', border: 'none',
               background: active ? "var(--dl-glass-active, var(--dl-accent-13))" : 'transparent',
               color: active ? "var(--dl-strong)" : "var(--dl-middle)",
@@ -363,7 +236,3 @@ export function TaskFilterBtns({ filter, setFilter }) {
     </div>
   );
 }
-
-// Keep old exports for backward compat during migration
-export { TaskCheckbox as TaskCheckboxLegacy };
-export function injectTaskListStyles() {} // no-op now
