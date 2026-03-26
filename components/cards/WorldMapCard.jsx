@@ -477,7 +477,7 @@ function MapInner({ token }) {
       attributionControl: false,
     });
 
-    L.control.zoom({ position: 'topright' }).addTo(map);
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     tileLayerRef.current = L.tileLayer(isDark ? TILES_DARK : TILES_LIGHT, {
       attribution: TILE_ATTR,
@@ -1343,7 +1343,7 @@ function MapInner({ token }) {
         .leaflet-control-zoom {
           border: none !important;
           box-shadow: none !important;
-          margin-top: 50px !important;
+          margin-bottom: 120px !important;
         }
         .leaflet-control-zoom a {
           background: var(--dl-glass) !important;
@@ -1360,7 +1360,7 @@ function MapInner({ token }) {
       {/* Locate me button — above zoom controls, bottom right */}
       <button onClick={locateMe} title="Find my location"
         style={{
-          position: 'absolute', top: 50, right: 10, zIndex: 1000,
+          position: 'absolute', bottom: 180, right: 10, zIndex: 1000,
           width: 30, height: 30,
           background: 'var(--dl-glass)',
           backdropFilter: 'blur(20px) saturate(1.4)',
