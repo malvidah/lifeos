@@ -601,7 +601,7 @@ function DashboardInner() {
               <ErrorBoundary label="Habits">
                 <Card label="Habits" color="var(--dl-accent)" collapsed={false} autoHeight
                   headerRight={<HabitModeBtns mode={habitMode} setMode={setHabitModeAndSave}/>}>
-                  <HabitsCard date={selected} token={token} userId={userId} habitMode={habitMode}/>
+                  <HabitsCard date={selected} token={token} userId={userId} habitMode={habitMode} project={projectFilter}/>
                 </Card>
               </ErrorBoundary>
             </div>

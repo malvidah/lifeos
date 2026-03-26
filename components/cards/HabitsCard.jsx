@@ -77,7 +77,7 @@ export function HabitModeBtns({ mode, setMode }) {
 }
 
 // ── HabitsCard ───────────────────────────────────────────────────────────────
-export default function HabitsCard({ date, token, userId, habitMode = 'calendar' }) {
+export default function HabitsCard({ date, token, userId, habitMode = 'calendar', project }) {
   const [habits, setHabits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -217,9 +217,22 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
   const rowH = mode === 'count' ? 18 : 24;
   const cellSize = mode === 'count' ? 14 : 18;
 
-  // In count mode, only show dates where ANY habit is scheduled
+  // Filter by project if one is selected
+  const filteredHabits = project
+    ? habits.filter(h => h.project_tags?.some(t => t.toLowerCase() === project.toLowerCase()))
+    : habits;
+
+  if (filteredHabits.length === 0 && project) {
+    return (
+      <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
+        No habits in this project
+      </div>
+    );
+  }
+
+  // In count mode, only show dates where ANY filtered habit is scheduled
   const visibleDates = mode === 'count'
-    ? dates.filter(d => habits.some(h => h.completions?.hasOwnProperty(d)))
+    ? dates.filter(d => filteredHabits.some(h => h.completions?.hasOwnProperty(d)))
     : dates;
 
   // Precompute month boundary indices (where dayNum === 1, excluding first column)
@@ -244,7 +257,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
           </span>
         </div>
         {/* Habit rows */}
-        {habits.map(h => (
+        {filteredHabits.map(h => (
           <div key={h.id} style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
             <span style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               {h.text}
@@ -308,7 +321,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
           </div>
 
           {/* Habit grid rows */}
-          {habits.map(h => (
+          {filteredHabits.map(h => (
             <div key={h.id} style={{ display: 'flex', height: rowH }}>
               {visibleDates.map((d, i) => {
                 const scheduled = h.completions?.hasOwnProperty(d);
@@ -318,7 +331,7 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
 
                 // Month divider column
                 const divider = isBoundary ? (
-                  <MonthDivider key={`div-${d}`} label={monthLabel(d)} height={rowH * habits.length} rowIndex={habits.indexOf(h)} rowH={rowH} />
+                  <MonthDivider key={`div-${d}`} label={monthLabel(d)} height={rowH * filteredHabits.length} rowIndex={filteredHabits.indexOf(h)} rowH={rowH} />
                 ) : null;
 
                 if (!scheduled) {
