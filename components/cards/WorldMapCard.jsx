@@ -1485,7 +1485,7 @@ function MapInner({ token }) {
       <MapBottomStrip collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed(c => !c)}>
 
       {/* Place carousel */}
-      {visiblePlaces.length > 0 && !addingPlace && !editingPlace && !previewGeo && !selectedDiscovered && (
+      {visiblePlaces.length > 0 && !addingPlace && !previewGeo && !selectedDiscovered && (
         <div style={{ pointerEvents: 'none' }}>
           <div ref={carouselRef}
             onMouseDown={e => {
@@ -1534,58 +1534,119 @@ function MapInner({ token }) {
                   onMouseEnter={() => setHoveredPlace(place)}
                   onMouseLeave={() => setHoveredPlace(null)}
                   style={{
-                    flexShrink: 0, width: 110, height: 100,
+                    flexShrink: 0, width: editingPlace?.id === place.id ? 240 : 200, height: 100,
                     backdropFilter: 'blur(20px) saturate(1.4)',
                     WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
                     background: `${color}0D`, borderRadius: 12, padding: 10,
-                    border: `1.5px solid ${isSelected ? color : color + '40'}`,
+                    border: `1.5px solid ${isSelected || editingPlace?.id === place.id ? color : color + '40'}`,
                     boxShadow: 'var(--dl-glass-shadow)',
-                    cursor: 'pointer', transition: 'border-color 0.15s, opacity 0.15s',
-                    opacity: isSelected ? 1 : isHovered ? 0.95 : 0.85,
+                    cursor: 'pointer', transition: 'all 0.2s ease',
+                    opacity: isSelected || editingPlace?.id === place.id ? 1 : isHovered ? 0.95 : 0.85,
                     display: 'flex', flexDirection: 'column',
                   }}
                 >
-                  {/* Name — primary */}
-                  <div style={{
-                    fontFamily: mono, fontSize: 11, fontWeight: 600,
-                    color: 'var(--dl-strong)', letterSpacing: '0.02em', lineHeight: 1.3,
-                    overflow: 'hidden', display: '-webkit-box',
-                    WebkitLineClamp: 3, WebkitBoxOrient: 'vertical',
-                  }}>
-                    {place.name}
-                  </div>
-                  {/* Description */}
-                  {place.notes && (
-                    <div style={{
-                      fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', marginTop: 4,
-                      overflow: 'hidden', display: '-webkit-box',
-                      WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.3,
-                      flex: 1,
-                    }}>
-                      {place.notes}
-                    </div>
-                  )}
-                  {!place.notes && <div style={{ flex: 1 }} />}
-                  {/* Category color dot + edit/delete when selected */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 4 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0, opacity: 0.7 }} />
-                    {isSelected && (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={e => { e.stopPropagation(); startEdit(place); }} title="Edit"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-highlight)', display: 'flex' }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                          </svg>
-                        </button>
-                        <button onClick={e => { e.stopPropagation(); deletePlace(place.id); }} title="Delete"
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-red)', display: 'flex' }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                          </svg>
+                  {editingPlace?.id === place.id ? (
+                    <>
+                      {/* Inline edit mode */}
+                      <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        onKeyDown={e => { if (e.key === 'Escape') { saveEdit(); setEditingPlace(null); } }}
+                        placeholder="Name"
+                        style={{ width: '100%', background: 'transparent', border: 'none', padding: 0, fontFamily: mono, fontSize: 12, fontWeight: 600, color: 'var(--dl-strong)', outline: 'none', letterSpacing: '0.02em', lineHeight: 1.3 }}
+                      />
+                      <input value={editNotes} onChange={e => setEditNotes(e.target.value)}
+                        onClick={e => e.stopPropagation()}
+                        onKeyDown={e => { if (e.key === 'Escape') { saveEdit(); setEditingPlace(null); } }}
+                        placeholder="Description..."
+                        style={{ width: '100%', background: 'transparent', border: 'none', padding: 0, marginTop: 3, fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', outline: 'none', letterSpacing: '0.02em', flex: 1 }}
+                      />
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 4 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, position: 'relative' }}>
+                          <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0 }} />
+                          <input value={tagQuery}
+                            onClick={e => { e.stopPropagation(); setShowTagSugg(true); }}
+                            onChange={e => { setTagQuery(e.target.value); setShowTagSugg(true); }}
+                            onFocus={() => setShowTagSugg(true)}
+                            onBlur={() => setTimeout(() => setShowTagSugg(false), 150)}
+                            onKeyDown={e => {
+                              e.stopPropagation();
+                              if (e.key === 'Enter' && tagQuery.trim()) {
+                                const match = placeTypes.find(t => t.name.toLowerCase() === tagQuery.trim().toLowerCase());
+                                if (match) setEditType(match.name); else createType(tagQuery.trim());
+                                setTagQuery(''); setShowTagSugg(false);
+                              }
+                              if (e.key === 'Escape') { saveEdit(); setEditingPlace(null); setTagQuery(''); }
+                            }}
+                            placeholder={editType || 'Add tag...'}
+                            style={{ width: '100%', background: 'transparent', border: 'none', padding: 0, fontFamily: mono, fontSize: 10, color: 'var(--dl-highlight)', outline: 'none' }}
+                          />
+                          {showTagSugg && (() => {
+                            const filtered = tagQuery.trim() ? placeTypes.filter(t => t.name.toLowerCase().includes(tagQuery.toLowerCase())) : placeTypes;
+                            const exact = placeTypes.some(t => t.name.toLowerCase() === tagQuery.trim().toLowerCase());
+                            if (!filtered.length && !tagQuery.trim()) return null;
+                            return (
+                              <div style={{ position: 'absolute', bottom: '100%', left: 0, marginBottom: 4, background: 'var(--dl-card)', border: '1px solid var(--dl-border)', borderRadius: 8, boxShadow: 'var(--dl-shadow)', padding: 4, maxHeight: 140, overflowY: 'auto', minWidth: 140, zIndex: 10 }}>
+                                {filtered.map(t => (
+                                  <button key={t.name} onMouseDown={e => { e.preventDefault(); setEditType(t.name); setTagQuery(''); setShowTagSugg(false); }}
+                                    style={{ display: 'flex', alignItems: 'center', gap: 5, width: '100%', background: 'none', border: 'none', padding: '4px 8px', cursor: 'pointer', fontFamily: mono, fontSize: 10, color: 'var(--dl-strong)', borderRadius: 4, textAlign: 'left' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-well)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                                    <span style={{ width: 5, height: 5, borderRadius: '50%', background: t.color }} />{t.name}
+                                  </button>
+                                ))}
+                                {tagQuery.trim() && !exact && (
+                                  <button onMouseDown={e => { e.preventDefault(); createType(tagQuery.trim()); setTagQuery(''); setShowTagSugg(false); }}
+                                    style={{ display: 'flex', width: '100%', background: 'none', border: 'none', padding: '4px 8px', cursor: 'pointer', fontFamily: mono, fontSize: 10, color: 'var(--dl-accent)', borderRadius: 4, textAlign: 'left' }}
+                                    onMouseEnter={e => e.currentTarget.style.background = 'var(--dl-well)'}
+                                    onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                                    Create "{tagQuery.trim()}"
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
+                        <button onClick={e => { e.stopPropagation(); saveEdit(); setEditingPlace(null); setTagQuery(''); }} title="Done"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: 'var(--dl-middle)', fontSize: 14, lineHeight: 1, flexShrink: 0 }}>
+                          &times;
                         </button>
                       </div>
-                    )}
-                  </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Display mode */}
+                      <div style={{
+                        fontFamily: mono, fontSize: 12, fontWeight: 600,
+                        color: 'var(--dl-strong)', letterSpacing: '0.02em', lineHeight: 1.3,
+                        overflow: 'hidden', display: '-webkit-box',
+                        WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                      }}>
+                        {place.name}
+                      </div>
+                      {place.notes && (
+                        <div style={{
+                          fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', marginTop: 3,
+                          overflow: 'hidden', display: '-webkit-box',
+                          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: 1.3,
+                          flex: 1,
+                        }}>
+                          {place.notes}
+                        </div>
+                      )}
+                      {!place.notes && <div style={{ flex: 1 }} />}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', paddingTop: 4 }}>
+                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: color, flexShrink: 0, opacity: 0.7 }} />
+                        {isSelected && (
+                          <button onClick={e => { e.stopPropagation(); deletePlace(place.id); }} title="Delete"
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 3, color: 'var(--dl-red)', display: 'flex', opacity: 0.6 }}>
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -1620,19 +1681,7 @@ function MapInner({ token }) {
         />
       )}
 
-      {/* Edit place panel */}
-      {editingPlace && (
-        <PlaceEditorPanel
-          name={editName} setName={setEditName}
-          notes={editNotes} setNotes={setEditNotes}
-          type={editType} setType={setEditType}
-          tagQuery={tagQuery} setTagQuery={setTagQuery}
-          showTagSugg={showTagSugg} setShowTagSugg={setShowTagSugg}
-          placeTypes={placeTypes} createType={createType}
-          placeholder="Place name"
-          onClose={() => { saveEdit(); setEditingPlace(null); setTagQuery(''); }}
-        />
-      )}
+      {/* Edit mode is now inline in cards — no separate panel */}
 
       {/* Search result preview card */}
       {previewGeo && mode === 'places' && !addingPlace && !editingPlace && !selectedPlace && (
