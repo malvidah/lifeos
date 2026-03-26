@@ -181,32 +181,44 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
 
   return (
     <div style={{ display: 'flex' }}>
-      {/* Left: habit names + streak chips */}
-      <div style={{ flexShrink: 0, paddingTop: mode === 'calendar' ? 28 : 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+      {/* Left: habit names table with COUNT and BEST columns */}
+      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+        {/* Header row — aligns with date header in calendar mode or top of grid in count mode */}
+        <div style={{ height: mode === 'calendar' ? 28 + rowH : rowH, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
+          <span style={{ flex: 1 }} />
+          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center' }}>
+            count
+          </span>
+          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center' }}>
+            best
+          </span>
+        </div>
+        {/* Habit rows */}
         {habits.map(h => (
           <div key={h.id} style={{
-            height: rowH, display: 'flex', alignItems: 'center', gap: 6, paddingRight: 10,
+            height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10,
           }}>
-            <span style={{ fontFamily: mono, fontSize: 13, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap' }}>
+            <span style={{ fontFamily: mono, fontSize: 13, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1 }}>
               {h.text}
             </span>
-            {/* Streak chip */}
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              padding: '1px 6px', borderRadius: 100,
-              border: `1.5px solid ${streakColor(h.streak, h.frozen)}`,
-              background: streakBg(h.streak, h.frozen),
-              fontFamily: mono, fontSize: 11, fontWeight: 600, lineHeight: 1,
-              color: streakColor(h.streak, h.frozen), whiteSpace: 'nowrap',
-            }}>
-              <span style={{ fontSize: 11, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen)}</span>
-              {h.streak}
-            </span>
-            {h.bestStreak > 0 && (
-              <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', lineHeight: 1, whiteSpace: 'nowrap' }}>
-                best {h.bestStreak}
+            {/* Count chip */}
+            <div style={{ width: 44, display: 'flex', justifyContent: 'center' }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', gap: 2,
+                padding: '1px 5px', borderRadius: 100,
+                border: `1.5px solid ${streakColor(h.streak, h.frozen)}`,
+                background: streakBg(h.streak, h.frozen),
+                fontFamily: mono, fontSize: 11, fontWeight: 600, lineHeight: 1,
+                color: streakColor(h.streak, h.frozen), whiteSpace: 'nowrap',
+              }}>
+                <span style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen)}</span>
+                {h.streak}
               </span>
-            )}
+            </div>
+            {/* Best */}
+            <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 36, textAlign: 'center' }}>
+              {h.bestStreak || '—'}
+            </span>
           </div>
         ))}
       </div>
@@ -219,30 +231,32 @@ export default function HabitsCard({ date, token, userId, habitMode = 'calendar'
       }}>
         <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW }}>
 
-          {/* Date header — calendar mode only */}
-          {mode === 'calendar' && (
-            <div style={{ display: 'flex', height: 28 }}>
-              {visibleDates.map((d, i) => {
-                const isToday = d === today;
-                const showMonth = i === 0 || dayNum(d) === 1;
-                return (
-                  <div key={d} style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', position: 'relative' }}>
-                    {showMonth && (
-                      <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', letterSpacing: '0.04em', textTransform: 'uppercase', position: 'absolute', top: 0 }}>
-                        {monthLabel(d)}
+          {/* Header spacer + date header — aligns with left column */}
+          <div style={{ height: mode === 'calendar' ? 28 + rowH : rowH }}>
+            {mode === 'calendar' && (
+              <div style={{ display: 'flex', height: 28 + rowH, alignItems: 'flex-end' }}>
+                {visibleDates.map((d, i) => {
+                  const isToday = d === today;
+                  const showMonth = i === 0 || dayNum(d) === 1;
+                  return (
+                    <div key={d} style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', position: 'relative', paddingBottom: 2 }}>
+                      {showMonth && (
+                        <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', letterSpacing: '0.04em', textTransform: 'uppercase', position: 'absolute', top: rowH }}>
+                          {monthLabel(d)}
+                        </span>
+                      )}
+                      <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
+                        {dayLabel(d)}
                       </span>
-                    )}
-                    <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
-                      {dayLabel(d)}
-                    </span>
-                    <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
-                      {dayNum(d)}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                      <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>
+                        {dayNum(d)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           {/* Habit grid rows */}
           {habits.map(h => (
