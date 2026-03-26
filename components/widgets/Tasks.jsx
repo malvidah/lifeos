@@ -135,19 +135,11 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         if (diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length) {
           const { hadRecurringDone } = await applyDiff(date, diff, token);
 
-          // Reload from server to get fresh state with IDs
+          // Reload server state for diffing (don't remount editor — TipTap
+          // already shows the correct visual state and remounting causes reorder)
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
-          }
-
-          // If a recurring checkbox was toggled, the editor HTML is now stale
-          // (TipTap toggled the checkbox locally, but the server created a
-          // separate completion row with different text). Force full reload.
-          if (hadRecurringDone && fresh?.tasks) {
-            const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
-            setHtmlValue(freshHtml);
-            setEditorKey(k => k + 1);
           }
 
           // Notify other components (e.g. HabitsCard) that tasks changed
