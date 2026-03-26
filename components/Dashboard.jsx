@@ -628,7 +628,7 @@ function DashboardInner() {
                         <Card label={leftWidget.label} color={leftWidget.color()}
                           collapsed={false}
                           >
-                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode="recent"/>
+                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode="recent" fullWidth={!rightWidgets.some(w => !collapseMap[w.id])}/>
                         </Card>
                         </ErrorBoundary>
                       </div>
