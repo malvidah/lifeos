@@ -1,4 +1,5 @@
 import { withAuth } from '../_lib/auth.js';
+import { isValidDate } from '@/lib/validate.js';
 import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
 import { cleanTaskText, displayTaskText } from '@/lib/cleanTaskText.js';
 
@@ -14,6 +15,11 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const today = searchParams.get('today');
 
   if (!start || !end) return Response.json({ error: 'start and end required' }, { status: 400 });
+  if (!isValidDate(start) || !isValidDate(end)) return Response.json({ error: 'invalid date format' }, { status: 400 });
+  if (today && !isValidDate(today)) return Response.json({ error: 'invalid today date' }, { status: 400 });
+  // Guard: cap range to ~2 years to prevent memory exhaustion
+  const rangeDays = (new Date(end) - new Date(start)) / 86400000;
+  if (rangeDays < 0 || rangeDays > 800) return Response.json({ error: 'date range too large (max ~2 years)' }, { status: 400 });
 
   // Fetch habit templates — tasks with data-habit attribute in HTML.
   const { data: allHabitRows, error: tErr } = await supabase

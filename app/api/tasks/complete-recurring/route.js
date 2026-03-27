@@ -1,4 +1,5 @@
 import { withAuth } from '../../_lib/auth.js';
+import { isValidDate, isValidUuid } from '@/lib/validate.js';
 
 // POST /api/tasks/complete-recurring { template_id, date }
 // Marks a recurring/habit task as completed for a specific date.
@@ -13,6 +14,12 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   if (!template_id || !date) {
     return Response.json({ error: 'template_id and date required' }, { status: 400 });
   }
+  if (!isValidUuid(template_id)) {
+    return Response.json({ error: 'invalid template_id' }, { status: 400 });
+  }
+  if (!isValidDate(date)) {
+    return Response.json({ error: 'invalid date' }, { status: 400 });
+  }
 
   // Verify the template exists and belongs to this user
   const { data: template, error: fetchErr } = await supabase
@@ -20,6 +27,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .select('id')
     .eq('id', template_id)
     .eq('user_id', user.id)
+    .is('deleted_at', null)
     .single();
 
   if (fetchErr || !template) {
@@ -47,6 +55,12 @@ export const DELETE = withAuth(async (req, { supabase, user }) => {
 
   if (!habit_id || !date) {
     return Response.json({ error: 'habit_id and date required' }, { status: 400 });
+  }
+  if (!isValidUuid(habit_id)) {
+    return Response.json({ error: 'invalid habit_id' }, { status: 400 });
+  }
+  if (!isValidDate(date)) {
+    return Response.json({ error: 'invalid date' }, { status: 400 });
   }
 
   const { error } = await supabase

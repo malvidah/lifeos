@@ -1,6 +1,6 @@
 import { withAuth } from '../_lib/auth.js';
 import { tasksToHtml } from '@/lib/parseBlocks.js';
-import { isValidDate } from '@/lib/validate.js';
+import { isValidDate, isValidUuid, MAX_TASK_TEXT } from '@/lib/validate.js';
 import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
 import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
@@ -180,6 +180,11 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   if (body.text !== undefined && html === undefined) {
     const { text, done, due_date, project_tags, note_tags, position, html: taskHtml } = body;
 
+    // Guard: reject oversized text
+    if (typeof text === 'string' && text.length > MAX_TASK_TEXT) {
+      return Response.json({ error: `text exceeds ${MAX_TASK_TEXT} characters` }, { status: 400 });
+    }
+
     // Generate proper HTML with data attributes from text tokens
     function textToTaskHtml(rawText) {
       let inner = (rawText || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -245,6 +250,12 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 export const PATCH = withAuth(async (req, { supabase, user }) => {
   const { id, ...updates } = await req.json();
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
+  if (!isValidUuid(id)) return Response.json({ error: 'invalid id' }, { status: 400 });
+
+  // Guard: reject oversized text
+  if (typeof updates.text === 'string' && updates.text.length > MAX_TASK_TEXT) {
+    return Response.json({ error: `text exceeds ${MAX_TASK_TEXT} characters` }, { status: 400 });
+  }
 
   // Guard: don't allow marking a recurring/habit template as done via PATCH.
   let taskDate = null;
@@ -320,6 +331,7 @@ export const DELETE = withAuth(async (req, { supabase, user }) => {
   const id = url.searchParams.get('id');
   const isRecurring = url.searchParams.get('recurring') === '1';
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
+  if (!isValidUuid(id)) return Response.json({ error: 'invalid id' }, { status: 400 });
 
   const now = new Date().toISOString();
 
