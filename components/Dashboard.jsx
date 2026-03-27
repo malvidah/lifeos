@@ -29,6 +29,7 @@ import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import NotesCard from "./widgets/NotesCard.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
+import WelcomeOverlay from "./ui/WelcomeOverlay.jsx";
 import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
 
@@ -539,6 +540,7 @@ function DashboardInner() {
       window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name } }));
     }}}>
     <ToastContainer/>
+    <WelcomeOverlay/>
     <NavigationContext.Provider value={{
       navigateToProject: (name) => selectProject(name),
       navigateToNote: (name) => {
