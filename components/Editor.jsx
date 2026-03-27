@@ -39,9 +39,9 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror p { margin: 0; padding: 0; }
     .dl-editor .ProseMirror > p:only-child.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-weight: 400; }
-    .dl-tasklist .ProseMirror p.is-empty::before { content: none !important; }
+    .dl-tasklist .ProseMirror ul[data-type="taskList"] li > div > p.is-empty::before { content: none !important; }
     .dl-tasklist .ProseMirror ul[data-type="taskList"] > li:only-child > div > p.is-empty::before { content: attr(data-placeholder) !important; pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-style: normal; opacity: 0.6; }
-    .dl-tasklist .ProseMirror > p:last-child { display: none; }
+    .dl-tasklist .ProseMirror ul + p:last-child { display: none; }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror a[href] { color: var(--dl-accent) !important; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
     .dl-editor .ProseMirror a[href]:visited { color: var(--dl-accent) !important; }
@@ -1207,7 +1207,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             // Habit suggestions — same schedule options as /r but inserts habitTag
             // "/h mwf 10"      → count-limited: MWF until 10 completions  → {h:mwf:M·W·F:10}
             // "/h mwf 10 days" → time-limited:  MWF for 10 days          → {h:mwf:M·W·F:10d}
-            // "/h 10"          → daily + 10 completions                   → {h:daily:10×:10}
+            // "/h 10"          → daily + 10 completions                   → {h:daily:Daily:10}
             // "/h 10 days"     → daily for 10 days                        → {h:daily:10 days:10d}
             const hWords = search.trim().split(/\s+/);
             const hasDays = hWords.length >= 2 && /^days?$/i.test(hWords[hWords.length - 1]);
@@ -1218,7 +1218,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             const limitSuffix = num ? (hasDays ? `:${num}d` : `:${num}`) : '';
 
             if (num && !schedSearch) {
-              const chipLabel = hasDays ? `${num} days` : `${num}×`;
+              const chipLabel = hasDays ? `${num} days` : 'Daily';
               return [`__habit__:daily:${chipLabel}${limitSuffix}`];
             }
             const base = getRecurrenceSuggestions(schedSearch).map(s => s.replace('__recurrence__:', '__habit__:'));
