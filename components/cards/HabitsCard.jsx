@@ -901,7 +901,9 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     <div style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
       <span
         onClick={() => { if (!h._isHealth) setSelectedHabitId(h.id); }}
-        style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: h._isHealth ? 'default' : 'pointer' }}>
+        onMouseEnter={e => { if (!h._isHealth) e.currentTarget.style.opacity = '0.7'; }}
+        onMouseLeave={e => { if (!h._isHealth) e.currentTarget.style.opacity = '1'; }}
+        style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: h._isHealth ? 'default' : 'pointer', transition: 'opacity 0.15s' }}>
         {h.text}
       </span>
       <div style={{ width: 52, display: 'flex', justifyContent: 'center', gap: 2, alignItems: 'center' }}>
