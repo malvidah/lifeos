@@ -2,9 +2,10 @@ import { withAuth } from '../../_lib/auth.js';
 import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
 // POST /api/tasks/complete-recurring { template_id, date }
-// Creates a completion row for a recurring task on a specific date.
-// The original template is NEVER modified — this creates a new row with
-// the recurrence chip stripped, marked as done.
+// Marks a recurring/habit task as completed for a specific date.
+// - Same-date (template's own date): marks the template itself done
+// - Other dates: creates a separate completion row with habit/recurrence chips stripped
+// Completion rows have data-habit stripped so they don't appear as templates.
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -26,11 +27,19 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'template not found' }, { status: 404 });
   }
 
-  // Keep the original HTML and text with chips intact — the completion should
-  // look identical to the template. Just mark it as checked.
+  // Strip data-habit and data-recurrence spans from the completion HTML so it
+  // doesn't appear as a template in the habits API if done ever flips to false.
+  // Keep project/note/date chips — those are useful metadata on the completion.
   const completionHtml = (template.html || '')
-    .replace(/data-checked="false"/, 'data-checked="true"');
-  const completionText = template.text;
+    .replace(/data-checked="false"/, 'data-checked="true"')
+    .replace(/<span\b[^>]*\bdata-habit="[^"]*"[^>]*>[^<]*<\/span>/g, '')
+    .replace(/<span\b[^>]*\bdata-recurrence="[^"]*"[^>]*>[^<]*<\/span>/g, '');
+  const completionText = (template.text || '')
+    .replace(/\{h:[^}]+\}/g, '')
+    .replace(/\{r:[^}]+\}/g, '')
+    .replace(/\/[hr]\s+\S+/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   // For matching existing completions
   const completionTextLower = cleanTaskText(template.text);
@@ -39,12 +48,14 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // Fetch all tasks for this date and compare using centralized cleaning.
   const { data: dateRows } = await supabase
     .from('tasks')
-    .select('id, text, done')
+    .select('id, text, done, html')
     .eq('user_id', user.id)
     .eq('date', date)
     .is('deleted_at', null);
 
-  const matchingRows = (dateRows ?? []).filter(r => cleanTaskText(r.text) === completionTextLower);
+  const matchingRows = (dateRows ?? []).filter(r =>
+    cleanTaskText(r.text) === completionTextLower
+  );
 
   // If there's already a done completion, return it
   const doneRow = matchingRows.find(r => r.done);
@@ -52,7 +63,9 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ task: doneRow, already_completed: true });
   }
 
-  // If there's an unchecked row with matching text, mark it done
+  // If there's an unchecked row with matching text on this date, mark it done.
+  // This handles: (a) same-date toggle on the template itself, (b) a user-created
+  // task with matching text that should be treated as the completion.
   const uncheckedRow = matchingRows.find(r => !r.done);
   if (uncheckedRow) {
     const { data: updated } = await supabase.from('tasks')

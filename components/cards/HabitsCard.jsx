@@ -266,7 +266,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
     try {
       if (wasDone) {
-        // Uncomplete: find the completion task for this date and delete it
+        // Uncomplete: find the completion task for this date and undo it
         const res = await api.get(`/api/tasks?date=${cellDate}`, token);
         const tasks = res?.tasks ?? [];
         const habitKey = (habit.matchKey || habit.text || '').toLowerCase();
@@ -280,8 +280,13 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
           return cText === habitKey && t.done;
         });
         if (match) {
-          // Soft-delete the completion row rather than patching done=false
-          await api.delete(`/api/tasks?id=${match.id}`, token);
+          if (match.id === habit.id) {
+            // Same-date: this is the template itself — patch done=false, don't delete
+            await api.patch('/api/tasks', { id: match.id, done: false }, token);
+          } else {
+            // Separate completion row — soft-delete it
+            await api.delete(`/api/tasks?id=${match.id}`, token);
+          }
         }
       } else {
         // Complete: create a completion row via complete-recurring

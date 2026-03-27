@@ -14,15 +14,14 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (!start || !end) return Response.json({ error: 'start and end required' }, { status: 400 });
 
   // Fetch habit templates — tasks with data-habit attribute in HTML.
-  // Now that completion rows keep their chips, we distinguish templates
-  // from completions by done=false. The PATCH guard prevents templates
-  // from being accidentally marked done.
+  // Completion rows created by complete-recurring have data-habit stripped,
+  // so only actual templates are matched here. No done filter needed —
+  // templates may be temporarily done (same-date toggle) but are still templates.
   const { data: templates, error: tErr } = await supabase
     .from('tasks')
     .select('id, date, text, html, done, project_tags, position')
     .eq('user_id', user.id)
     .is('deleted_at', null)
-    .eq('done', false)
     .ilike('html', '%data-habit=%');
 
   if (tErr) throw tErr;
