@@ -45,7 +45,7 @@ export function Ring({score,color,size=48}) {
 
 // CardHeader — standalone header row for cards that need flush content below
 // (bare Card + CardHeader lets the body be edge-to-edge with no content padding).
-export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft, headerRight }) {
+export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft, headerRight, expandHref }) {
   return (
     <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
       minHeight:44,boxSizing:"border-box",
@@ -54,14 +54,35 @@ export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft,
       <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
         textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}>{label}</span>
       {!collapsed && headerRight}
+      <ExpandArrow href={expandHref}/>
     </div>
+  );
+}
+
+// ExpandArrow — subtle link icon for card headers
+function ExpandArrow({ href }) {
+  if (!href) return null;
+  return (
+    <a href={href} title="Open full page"
+      style={{
+        color:"var(--dl-middle)",fontFamily:mono,fontSize:11,lineHeight:1,
+        textDecoration:"none",padding:"2px 4px",borderRadius:3,
+        display:"flex",alignItems:"center",justifyContent:"center",
+        transition:"color 0.15s",flexShrink:0,
+      }}
+      onMouseEnter={e=>e.currentTarget.style.color="var(--dl-highlight)"}
+      onMouseLeave={e=>e.currentTarget.style.color="var(--dl-middle)"}>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 17L17 7"/><path d="M7 7h10v10"/>
+      </svg>
+    </a>
   );
 }
 
 // Card — bare box when no label, full panel with header when label is provided
 export function Card({
   children, style={}, fitContent=false,
-  label, labelColor, slim, collapsed, onToggle, headerRight, headerLeft, autoHeight,
+  label, labelColor, slim, collapsed, onToggle, headerRight, headerLeft, autoHeight, expandHref,
 }) {
 
   // Bare box mode (no label)
@@ -91,6 +112,7 @@ export function Card({
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
             textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}>{label}</span>
           {!collapsed && headerRight}
+          <ExpandArrow href={expandHref}/>
         </div>
         {!collapsed&&(
           <div style={slim ? {padding:"14px 16px"} : {flex:1,overflow:"auto",padding:16,minHeight:0}}>{children}</div>

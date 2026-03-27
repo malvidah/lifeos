@@ -23,7 +23,7 @@ import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
 import WorldMapCard from "./cards/WorldMapCard.jsx";
 import { JournalEditor, JournalModeToggle, Meals } from "./widgets/JournalEditor.jsx";
-import Tasks, { TaskFilterBtns } from "./widgets/Tasks.jsx";
+import Tasks, { TaskFilterBtns, TaskSaveIndicator } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import NotesCard from "./widgets/NotesCard.jsx";
@@ -54,8 +54,8 @@ const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
-  {id:"journal",  label:"Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor},
-  {id:"tasks",    label:"Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks},
+  {id:"journal",  label:"Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor, expandHref:"/journal"},
+  {id:"tasks",    label:"Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks,         expandHref:"/tasks"},
   {id:"meals",    label:"Meals",    color:()=>"var(--dl-red)",    Comp:Meals,    headerRight:()=>MEALS_HDR},
   {id:"workouts", label:"Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
 ];
@@ -626,7 +626,7 @@ function DashboardInner() {
               <CalendarCard selected={selected} onSelect={setSelected}
                 events={events} setEvents={setEvents} healthDots={healthDots}
                 token={token} collapsed={false}
-                calView={calView} onCalViewChange={v=>{setCalView(v);}}/>
+                calView={calView} onCalViewChange={v=>{setCalView(v);}} expandHref="/calendar"/>
               </ErrorBoundary>
             </div>
           )}
@@ -637,7 +637,7 @@ function DashboardInner() {
               <ErrorBoundary label="Health">
               <HealthCard date={selected} token={token} userId={userId}
                 onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-                collapsed={false}/>
+                collapsed={false} expandHref="/health"/>
               </ErrorBoundary>
             </div>
           )}
@@ -647,6 +647,7 @@ function DashboardInner() {
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Habits">
                 <Card label="Habits" color="var(--dl-accent)" collapsed={false} autoHeight
+                  expandHref="/habits"
                   headerRight={<HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/>}>
                   <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected}/>
                 </Card>
@@ -669,7 +670,7 @@ function DashboardInner() {
               {/* 5. Notes — hidden when toggled off in dock */}
               {!notesCollapsed && (
                 <ErrorBoundary label="Notes">
-                  <NotesCard project={projectFilter} token={token} userId={userId} onNoteNamesChange={setAllNoteNames} collapsed={false} />
+                  <NotesCard project={projectFilter} token={token} userId={userId} onNoteNamesChange={setAllNoteNames} collapsed={false} expandHref="/notes" />
                 </ErrorBoundary>
               )}
 
@@ -680,6 +681,7 @@ function DashboardInner() {
                     <ErrorBoundary label={leftWidget.label}>
                     <Card label={leftWidget.label} color={leftWidget.color()}
                       collapsed={false}
+                      expandHref={leftWidget.expandHref}
                       headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}
                        autoHeight>
                       <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
@@ -690,7 +692,8 @@ function DashboardInner() {
                     <ErrorBoundary key={w.id} label={w.label}>
                     <Card label={w.label} color={w.color()}
                       collapsed={false} onToggle={toggleMap[w.id]}
-                      headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()} autoHeight>
+                      expandHref={w.expandHref}
+                      headerRight={w.id==='tasks' ? <><TaskSaveIndicator /><TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/></> : w.headerRight?.()} autoHeight>
                       <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
                         taskFilter={w.id==='tasks'?taskFilter:undefined}
                         project={w.id==='tasks'&&projectFilter?projectFilter:undefined}/>
@@ -707,6 +710,7 @@ function DashboardInner() {
                         <ErrorBoundary label={leftWidget.label}>
                         <Card label={leftWidget.label} color={leftWidget.color()}
                           collapsed={false}
+                          expandHref={leftWidget.expandHref}
                           headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}
                           >
                           <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
@@ -726,7 +730,8 @@ function DashboardInner() {
                           <ErrorBoundary label={w.label}>
                           <Card label={w.label} color={w.color()}
                             collapsed={false}
-                            headerRight={w.id==='tasks' ? <TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/> : w.headerRight?.()}>
+                            expandHref={w.expandHref}
+                            headerRight={w.id==='tasks' ? <><TaskSaveIndicator /><TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/></> : w.headerRight?.()}>
                             <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
                               taskFilter={w.id==='tasks'?taskFilter:undefined}
                               project={w.id==='tasks'&&projectFilter?projectFilter:undefined}/>
