@@ -945,7 +945,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
                   style={{
                     width: cellSize, height: cellSize,
                     borderRadius: h._isHealth ? '50%' : 4,
-                    background: done ? fillColor : 'transparent',
+                    background: done ? fillColor : (h._isHealth && healthColor ? healthColor + '15' : 'transparent'),
                     border: `1.5px solid ${done ? (baseColor || 'var(--dl-accent)') : isPast ? (baseColor ? baseColor + '33' : 'var(--dl-border2)') : 'var(--dl-border)'}`,
                     opacity: !isPast && !done ? 0.35 : 1,
                     transition: 'all 0.15s',
