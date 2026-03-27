@@ -98,20 +98,8 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   const [htmlValue, setHtmlValue] = useState('');
   const [editorKey, setEditorKey] = useState(0); // increment to force editor remount
   const serverTasksRef = useRef([]); // Last-known server state for diffing
-  const taskIdMapRef = useRef(new Map()); // position → server task metadata (survives TipTap DOM rebuilds)
   const saveTimerRef = useRef(null);
   const savingRef = useRef(false);
-
-  // Build position → task_id map from server tasks.
-  // This is the authoritative source of task_ids — TipTap may drop data-task-id
-  // from the DOM during edits, but the position map survives.
-  const rebuildIdMap = useCallback((tasks) => {
-    const map = new Map();
-    for (const t of tasks) {
-      if (t.id) map.set(t.position, { id: t.id, recurring: t._source === 'recurring', _source: t._source });
-    }
-    taskIdMapRef.current = map;
-  }, []);
 
   // Inject checkbox styles
   const accentHex = theme === 'light' ? '#C07818' : '#D08828';
@@ -128,7 +116,6 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       if (cancelled) return;
       const tasks = d?.tasks ?? [];
       serverTasksRef.current = tasks;
-      rebuildIdMap(tasks);
 
       // Convert structured tasks to HTML for the editor
       const html = d?.data || tasksToHtml(tasks);
@@ -155,16 +142,12 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     };
   }, []);
 
-  // Helper: overlay task_ids from position map onto parsed editor tasks
+  // TipTap preserves data-task-id via the TaskItem addAttributes() extension
+  // in Editor.jsx (taskId attr with parseHTML/renderHTML). Position-based matching
+  // was the root cause of task corruption (DB positions have gaps; editor uses
+  // sequential counters — they never reliably aligned, causing wrong IDs to be
+  // assigned and tasks to be overwritten or deleted). Removed entirely.
   const overlayTaskIds = useCallback((editorTasks) => {
-    for (const et of editorTasks) {
-      if (et.task_id) continue;
-      const mapped = taskIdMapRef.current.get(et.position);
-      if (mapped) {
-        et.task_id = mapped.id;
-        if (mapped.recurring) et.recurring = true;
-      }
-    }
     return editorTasks;
   }, []);
 
@@ -273,11 +256,16 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         }
 
         // Only re-fetch from server when structure changed (creates/deletes need new IDs).
+        // After re-fetch, the editor reloads with correct data-task-id attrs injected by GET.
         if (diff.toCreate.length || diff.toDelete.length) {
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
-            rebuildIdMap(fresh.tasks);
+            // Reload editor so new tasks get their data-task-id from the fresh GET response
+            const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
+            setHtmlValue(freshHtml);
+            lastHtmlRef.current = freshHtml;
+            setEditorKey(k => k + 1);
           }
         }
 
