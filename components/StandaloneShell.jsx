@@ -66,6 +66,19 @@ function ShellInner({ label, children }) {
         onGoToToday={() => setSelected(todayKey())}
         onGoHome={() => setSelected(todayKey())}
         stravaConnected={stravaConnected} onStravaChange={setStravaConnected}
+        leftContent={
+          <a href="/" style={{
+            display: 'flex', alignItems: 'center', gap: 3,
+            textDecoration: 'none', color: 'var(--dl-middle)',
+            transition: 'color 0.15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+          >
+            <span style={{ fontSize: 16, lineHeight: 1 }}>&lsaquo;</span>
+            <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</span>
+          </a>
+        }
       />
       {/* Spacer for fixed header */}
       <div style={{ height: 'calc(env(safe-area-inset-top, 0px) + 84px)', flexShrink: 0 }} />

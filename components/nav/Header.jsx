@@ -61,7 +61,7 @@ function stepDateKey(dateKey, dir) {
   return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
 }
 
-export default function Header({session,token,userId,syncStatus,theme,themePreference,onThemeChange,selected,onSelectDate,onGoToToday,onGoHome,stravaConnected,onStravaChange}) {
+export default function Header({session,token,userId,syncStatus,theme,themePreference,onThemeChange,selected,onSelectDate,onGoToToday,onGoHome,stravaConnected,onStravaChange,leftContent}) {
   const isElectron = typeof window !== "undefined" && (!!window.daylabNative || !!window.dayloopNative);
   const today = todayKey();
   const relLabel = fmtRelative(selected, today);
@@ -138,7 +138,7 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
         WebkitAppRegion: "drag",
       }}>
         <div style={{WebkitAppRegion:"no-drag", position:"relative", zIndex:101, padding: '8px 0'}}>
-          <OfflineIndicator/>
+          {leftContent || <OfflineIndicator/>}
         </div>
         <div style={{WebkitAppRegion:"no-drag", position:"relative", zIndex:101}}>
           <UserMenu session={session} token={token} userId={userId} theme={theme} themePreference={themePreference} onThemeChange={onThemeChange} stravaConnected={stravaConnected} onStravaChange={onStravaChange}/>
