@@ -114,12 +114,14 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .order('date', { ascending: true });
   if (e2) throw e2;
 
-  // C) RECURRING tasks: have /r or /h chip, schedule matches this day
+  // C) RECURRING tasks: have /r or /h chip, schedule matches this day.
+  //    Exclude completion rows (they also have data-habit in HTML but are not templates).
   const { data: recurringCandidates } = await supabase
     .from('tasks').select(cols)
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .neq('date', date)
+    .not('html', 'ilike', '%data-completion="true"%')
     .or('html.ilike.%data-recurrence=%,html.ilike.%data-habit=%');
 
   // Dedup persistent against ownTasks
@@ -294,13 +296,14 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .not('html', 'ilike', '%data-habit=%');
 
   // Fetch recurring candidates from other dates (both /r and /h tasks), then
-  // filter to only those that match this day's schedule.
+  // filter to only those that match this day's schedule. Exclude completions.
   const { data: recurringCandidatesPost } = await supabase
     .from('tasks')
     .select('id, text, html, date')
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .neq('date', date)
+    .not('html', 'ilike', '%data-completion="true"%')
     .or('html.ilike.%data-recurrence=%,html.ilike.%data-habit=%');
 
   const injectedRecurring = (recurringCandidatesPost ?? []).filter(t => {
