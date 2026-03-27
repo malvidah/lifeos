@@ -31,6 +31,29 @@ function streakBg(streak, frozen, bestStreak) {
   return 'rgba(122,158,110,0.12)';
 }
 
+// Recalculate streak from completions map (client-side, for optimistic updates)
+function recalcStreak(completions, todayStr) {
+  // Get all scheduled dates up to today, sorted
+  const pastDates = Object.keys(completions).filter(d => d <= todayStr).sort();
+  let streak = 0, bestStreak = 0, freezes = 0, frozen = false;
+  let running = 0, consecutiveForFreeze = 0;
+  for (const d of pastDates) {
+    if (completions[d]) {
+      running++;
+      consecutiveForFreeze++;
+      frozen = false;
+      if (running > bestStreak) bestStreak = running;
+      if (consecutiveForFreeze >= 7) { consecutiveForFreeze = 0; if (freezes < 2) freezes++; }
+    } else {
+      consecutiveForFreeze = 0;
+      if (freezes > 0) { freezes--; frozen = true; }
+      else { running = 0; frozen = false; }
+    }
+  }
+  streak = running;
+  return { streak, bestStreak, frozen, freezes };
+}
+
 // ── Date helpers ─────────────────────────────────────────────────────────────
 function addDays(dateStr, n) {
   const d = new Date(dateStr + 'T12:00:00');
@@ -265,11 +288,12 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     if (!token) return;
     const wasDone = habit.completions?.[cellDate] === true;
 
-    // Optimistic update
+    // Optimistic update — recalculate streak client-side
     setHabits(prev => prev?.map(h => {
       if (h.id !== habit.id) return h;
       const newCompletions = { ...h.completions, [cellDate]: !wasDone };
-      return { ...h, completions: newCompletions };
+      const streakData = h._isHealth ? {} : recalcStreak(newCompletions, today);
+      return { ...h, completions: newCompletions, ...streakData };
     }));
 
     try {
@@ -305,8 +329,6 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
       }
       // Notify tasks card to reload
       window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
-      // Delay refresh slightly to let the API settle
-      setTimeout(() => refresh(), 300);
     } catch (err) {
       console.warn('[habits] toggle failed:', err);
       refresh();
