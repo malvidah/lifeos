@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { mono, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
@@ -20,9 +21,19 @@ import CalendarCard from "./cards/CalendarCard.jsx";
 import HealthCard from "./cards/HealthCard.jsx";
 import HabitsCard, { HabitFilterBtns } from "./cards/HabitsCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
-import { MapCard } from "./cards/MapCard.jsx";
+// MapCard and WorldMapCard use Three.js + postprocessing which have circular
+// dependencies that cause TDZ errors with Turbopack when statically imported.
+// Dynamic imports with ssr:false isolate these in a separate chunk loaded
+// only in the browser after the main bundle is fully initialized.
+const MapCard = dynamic(
+  () => import("./cards/MapCard.jsx").then(m => ({ default: m.MapCard })),
+  { ssr: false }
+);
+const WorldMapCard = dynamic(
+  () => import("./cards/WorldMapCard.jsx"),
+  { ssr: false }
+);
 import GoalsCard from "./cards/GoalsCard.jsx";
-import WorldMapCard from "./cards/WorldMapCard.jsx";
 import { JournalEditor, JournalModeToggle, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns, TaskSaveIndicator } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
