@@ -7,7 +7,7 @@ import { NoteContext, ProjectNamesContext, PlaceNamesContext, NavigationContext 
 import { Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
 import { parseTaskBlocks, tasksToHtml } from "@/lib/parseBlocks";
-import { diffTasks, applyDiff } from "@/lib/taskDiff";
+import { diffTasks, applyDiff, isHabitOrRecurring } from "@/lib/taskDiff";
 import { markLocalSave } from "@/lib/useRealtimeSync";
 
 // ── Shared task checkbox — used in project view ──────────────────────────────
@@ -137,16 +137,44 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         // Parse current editor HTML into task objects
         const editorTasks = parseTaskBlocks(newHtml);
 
-        // Compute diff against last-known server state.
-        // Habit/recurring tasks are excluded from the diff — they have their
-        // own CRUD paths (complete-recurring, HabitsCard toggle).
+        // Handle habit/recurring checkbox toggles BEFORE the regular diff.
+        // The diff excludes habits from update/delete, so we handle done
+        // changes here by calling complete-recurring or DELETE directly.
+        let habitChanged = false;
+        const serverHabits = serverTasksRef.current.filter(t => isHabitOrRecurring(t));
+        const serverHabitById = new Map(serverHabits.filter(t => t.id).map(t => [t.id, t]));
+
+        for (const editorTask of editorTasks) {
+          if (!isHabitOrRecurring(editorTask) || !editorTask.task_id) continue;
+          const serverTask = serverHabitById.get(editorTask.task_id);
+          if (!serverTask) continue;
+          if (editorTask.done === serverTask.done) continue;
+
+          // Done state changed on a habit/recurring task
+          habitChanged = true;
+          if (editorTask.done && !serverTask.done) {
+            // Checking → create completion row
+            await api.post('/api/tasks/complete-recurring', {
+              template_id: serverTask.id,
+              date,
+              position: editorTask.position,
+            }, token);
+          } else if (!editorTask.done && serverTask.done) {
+            // Unchecking → delete the completion row
+            await api.delete(`/api/tasks?id=${serverTask.id}`, token);
+          }
+        }
+
+        // Compute diff for regular (non-habit) tasks only
         const diff = diffTasks(serverTasksRef.current, editorTasks);
 
         // Only save if there are actual changes
         if (diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length) {
           markLocalSave("tasks", date);
           await applyDiff(date, diff, token);
+        }
 
+        if (diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length || habitChanged) {
           // Reload server state for diffing
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
