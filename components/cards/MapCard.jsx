@@ -175,9 +175,10 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
       color: projectColor(tag),
       label: tagDisplayName(tag),
       score: Math.max(entryScore, connScore, 0.3),
+      // Dormant: no activity in 7+ days. Active: activity in last 7 days.
       isActive: daysSinceActive < 7,
-      // Volcanic: active within 2 weeks AND in the top tier of activity
-      isHot: daysSinceActive < 14 && entryScore > 0.3,
+      // Volcano: sustained high engagement — top 20% entries AND active in last 3 days
+      isHot: daysSinceActive < 3 && entryScore > 0.8,
       recencyScore: rScore,
       completedTasks: completedTasks?.[tag] || 0,
       habits: habits?.[tag] || [], // [{text, flagCount, topScore, streak}]
