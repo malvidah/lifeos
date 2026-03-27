@@ -36,11 +36,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     !t.html?.includes('data-completion="true"')
   );
 
-  // Parse schedule from each template
+  // Parse schedule and optional count from each template
   const habits = templates.map(t => {
     const match = t.html?.match(/data-habit="([^"]+)"/);
     const schedule = match ? match[1] : null;
     if (!schedule) return null;
+
+    // Parse optional count limit from data-habit-count attribute
+    const countMatch = t.html?.match(/data-habit-count="(\d+)"/);
+    const countLimit = countMatch ? parseInt(countMatch[1], 10) : null;
 
     const display = displayTaskText(t.text);
     const matchKey = cleanTaskText(t.text);
@@ -51,6 +55,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       text: display || t.text,
       matchKey,
       schedule,
+      countLimit,
       project_tags: t.project_tags || [],
     };
   }).filter(Boolean);
@@ -155,6 +160,33 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     habit.bestStreak = bestStreak;
     habit.frozen = frozen;
     habit.freezes = freezes;
+
+    // Count-limited habits: total completions across ALL time (not just range)
+    // We'll fill this in below after a separate query
+    if (habit.countLimit) {
+      habit.countDone = 0;
+      habit.countComplete = false;
+    }
+  }
+
+  // For count-limited habits, fetch total completions across ALL time
+  const countLimitedHabits = dedupedHabits.filter(h => h.countLimit);
+  if (countLimitedHabits.length > 0) {
+    const countIds = countLimitedHabits.map(h => h.id);
+    const { data: allTimeCompletions } = await supabase
+      .from('habit_completions')
+      .select('habit_id, date')
+      .eq('user_id', user.id)
+      .in('habit_id', countIds);
+
+    const allTimeCounts = new Map();
+    for (const c of (allTimeCompletions ?? [])) {
+      allTimeCounts.set(c.habit_id, (allTimeCounts.get(c.habit_id) || 0) + 1);
+    }
+    for (const h of countLimitedHabits) {
+      h.countDone = allTimeCounts.get(h.id) || 0;
+      h.countComplete = h.countDone >= h.countLimit;
+    }
   }
 
   return Response.json({ habits: dedupedHabits });

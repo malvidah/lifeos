@@ -189,7 +189,17 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     function textToTaskHtml(rawText) {
       let inner = (rawText || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
       inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
-      inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, '<span data-habit="$1" data-habit-label="$2">🎯 $2</span>');
+      inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, (match, key, rest) => {
+        // rest may be "label" or "label:count"
+        const segs = rest.split(':');
+        const lastSeg = segs[segs.length - 1];
+        const hasCount = segs.length > 1 && /^\d+$/.test(lastSeg);
+        const count = hasCount ? lastSeg : null;
+        const label = hasCount ? segs.slice(0, -1).join(':') : rest;
+        const displayLabel = count ? `${label} ×${count}` : label;
+        const countAttr = count ? ` data-habit-count="${count}"` : '';
+        return `<span data-habit="${key}" data-habit-label="${label}"${countAttr}>🎯 ${displayLabel}</span>`;
+      });
       inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
       inner = inner.replace(/\{g:([^}]+)\}/g, '<span data-goal="$1">🏁 $1</span>');
       inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');
@@ -373,7 +383,16 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     if (!('html' in patch)) {
       let inner = text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
       inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
-      inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, '<span data-habit="$1" data-habit-label="$2">🎯 $2</span>');
+      inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, (match, key, rest) => {
+        const segs = rest.split(':');
+        const lastSeg = segs[segs.length - 1];
+        const hasCount = segs.length > 1 && /^\d+$/.test(lastSeg);
+        const count = hasCount ? lastSeg : null;
+        const label = hasCount ? segs.slice(0, -1).join(':') : rest;
+        const displayLabel = count ? `${label} ×${count}` : label;
+        const countAttr = count ? ` data-habit-count="${count}"` : '';
+        return `<span data-habit="${key}" data-habit-label="${label}"${countAttr}>🎯 ${displayLabel}</span>`;
+      });
       inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
       inner = inner.replace(/\{g:([^}]+)\}/g, '<span data-goal="$1">🏁 $1</span>');
       inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');

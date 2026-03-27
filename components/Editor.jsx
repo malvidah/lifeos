@@ -254,8 +254,9 @@ const RecurrenceTagNode = Node.create({
   },
 });
 
-// HabitTag: stored as {h:key:label}, rendered as 🎯 M·W·F chip.
+// HabitTag: stored as {h:key:label} or {h:key:label:count}, rendered as 🎯 M·W·F chip.
 // Similar to RecurrenceTag but implies the task shows in the Habits card.
+// Optional count attribute for count-limited habits (e.g. "do this 10 times").
 const HabitTagNode = Node.create({
   name: 'habitTag', group: 'inline', inline: true,
   atom: true, selectable: true, draggable: false,
@@ -263,24 +264,30 @@ const HabitTagNode = Node.create({
     return {
       key: { default: '' },
       label: { default: '' },
+      count: { default: null },
     };
   },
   parseHTML() {
     return [{ tag: 'span[data-habit]', getAttrs: el => ({
       key: el.getAttribute('data-habit') || '',
       label: el.getAttribute('data-habit-label') || el.textContent || '',
+      count: el.getAttribute('data-habit-count') ? parseInt(el.getAttribute('data-habit-count'), 10) : null,
     }) }];
   },
   renderHTML({ node }) {
     const label = node.attrs.label || node.attrs.key || '';
+    const count = node.attrs.count;
+    const displayLabel = count ? `${label} ×${count}` : label;
     const col = 'var(--dl-accent, #D08828)';
-    return ['span', {
+    const attrs = {
       'data-habit': node.attrs.key,
       'data-habit-label': label,
       style: Object.entries({ ...CHIP_TOKENS.date(col), userSelect: 'none' })
         .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
         .join(';'),
-    }, '\u{1F3AF} ' + label];
+    };
+    if (count) attrs['data-habit-count'] = String(count);
+    return ['span', attrs, '\u{1F3AF} ' + displayLabel];
   },
 });
 
@@ -628,7 +635,10 @@ export function docToText(docJson) {
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
       if (c.type === 'recurrenceTag') return `{r:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       if (c.type === 'dateTag')    return `@${c.attrs?.date ?? ''}`;
-      if (c.type === 'habitTag')   return `{h:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
+      if (c.type === 'habitTag') {
+        const base = `{h:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
+        return c.attrs?.count ? base.slice(0, -1) + `:${c.attrs.count}}` : base;
+      }
       if (c.type === 'goalTag')    return `{g:${c.attrs?.name ?? ''}}`;
       return '';
     }).join('');
@@ -649,7 +659,14 @@ function parseLineContent(line) {
   let last = 0, m;
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
-    if (m[1] != null)      content.push({ type: 'habitTag',      attrs: { key: m[1], label: m[2] } });
+    if (m[1] != null) {
+      // m[2] may be "label" or "label:count" — split to extract optional count
+      const hParts = m[2].split(':');
+      const hLabel = hParts[0];
+      const hCount = hParts.length > 1 && /^\d+$/.test(hParts[hParts.length - 1]) ? parseInt(hParts[hParts.length - 1], 10) : null;
+      const hLabelClean = hCount ? hParts.slice(0, -1).join(':') : m[2];
+      content.push({ type: 'habitTag', attrs: { key: m[1], label: hLabelClean, count: hCount } });
+    }
     else if (m[3] != null) content.push({ type: 'recurrenceTag', attrs: { key: m[3], label: m[4] } });
     else if (m[5] != null) content.push({ type: 'placeTag',  attrs: { name: m[5] } });
     else if (m[6] != null) content.push({ type: 'goalTag',   attrs: { name: m[6] } });
@@ -1179,7 +1196,22 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           }
           if (cmd === 'h') {
             // Habit suggestions — same schedule options as /r but inserts habitTag
-            return getRecurrenceSuggestions(search).map(s => s.replace('__recurrence__:', '__habit__:'));
+            // Support count-limited: "/h mwf 10" or "/h 10" (just a number = daily ×N)
+            const hWords = search.trim().split(/\s+/);
+            const lastWord = hWords[hWords.length - 1];
+            const countNum = /^\d+$/.test(lastWord) ? parseInt(lastWord, 10) : null;
+            const schedSearch = countNum && hWords.length > 1 ? hWords.slice(0, -1).join(' ') : (countNum ? '' : search);
+
+            if (countNum && !schedSearch) {
+              // Just a number: "/h 10" → daily habit with count limit
+              return [`__habit__:daily:${countNum}×:${countNum}`];
+            }
+            const base = getRecurrenceSuggestions(schedSearch).map(s => s.replace('__recurrence__:', '__habit__:'));
+            if (countNum) {
+              // Append count to each suggestion: __habit__:key:label → __habit__:key:label:count
+              return base.map(s => `${s}:${countNum}`);
+            }
+            return base;
           }
           if (cmd === 'g') {
             const q = search.toLowerCase().replace(/\s/g, '');
@@ -1204,11 +1236,16 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           setTimeout(() => { justInsertedRef.current = false; }, 150);
 
           if (name.startsWith('__habit__:')) {
+            // Format: __habit__:key:label or __habit__:key:label:count
             const parts = name.split(':');
             const key = parts[1];
-            const label = parts.slice(2).join(':');
+            // Check if last segment is a number (count)
+            const lastPart = parts[parts.length - 1];
+            const hasCount = parts.length > 3 && /^\d+$/.test(lastPart);
+            const count = hasCount ? parseInt(lastPart, 10) : null;
+            const label = hasCount ? parts.slice(2, -1).join(':') : parts.slice(2).join(':');
             editor.chain().focus().deleteRange(range).insertContent([
-              { type: 'habitTag', attrs: { key, label } },
+              { type: 'habitTag', attrs: { key, label, count } },
               { type: 'text', text: ' ' },
             ]).run();
             return;

@@ -8,6 +8,8 @@ import { keyToRecurrence } from "@/lib/recurrence";
 import { Shimmer } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 import { useTip } from "@/lib/useTip";
+
+const GOAL_COLOR_HABIT = '#5BA89D';
 import Tip from "../ui/Tip.jsx";
 
 // ── Streak helpers ───────────────────────────────────────────────────────────
@@ -597,6 +599,16 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated, isNew, onC
         <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)' }}>
           {monthRate}% this month
         </span>
+        {/* Count-limited progress */}
+        {habit.countLimit && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontFamily: mono, fontSize: 11, color: habit.countComplete ? GOAL_COLOR_HABIT : 'var(--dl-middle)',
+            fontWeight: habit.countComplete ? 600 : 400,
+          }}>
+            {habit.countComplete ? '✓ ' : ''}{habit.countDone || 0}/{habit.countLimit}
+          </span>
+        )}
       </div>
 
       {/* GitHub-style activity grid */}
@@ -924,7 +936,10 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
         )}
       </div>
       <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 36, textAlign: 'center' }}>
-        {h.bestStreak || '\u2014'}
+        {h.countLimit
+          ? <span style={{ color: h.countComplete ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.countComplete ? 600 : 400 }}>{h.countDone || 0}/{h.countLimit}</span>
+          : (h.bestStreak || '\u2014')
+        }
       </span>
     </div>
   );
