@@ -56,7 +56,10 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       seen.set(key, h);
     }
   }
-  const dedupedHabits = [...seen.values()];
+  // Stable sort: by template creation date (earliest first), then alphabetical
+  const dedupedHabits = [...seen.values()].sort((a, b) =>
+    a.date.localeCompare(b.date) || a.text.localeCompare(b.text)
+  );
 
   if (!dedupedHabits.length) return Response.json({ habits: [] });
 

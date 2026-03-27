@@ -44,7 +44,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // Fetch all tasks for this date and compare using centralized cleaning.
   const { data: dateRows } = await supabase
     .from('tasks')
-    .select('id, text, done, html')
+    .select('id, text, done, html, position')
     .eq('user_id', user.id)
     .eq('date', date)
     .is('deleted_at', null);
@@ -82,8 +82,13 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   }
 
   // Use the position from the request (the position the task had in the editor)
-  // if provided. Otherwise fall back to template position or max+1.
-  let completionPosition = requestedPosition ?? template.position ?? 0;
+  // if provided. Otherwise place after the last task on this date so completion
+  // rows don't collide with existing tasks and cause reordering.
+  let completionPosition = requestedPosition;
+  if (completionPosition == null) {
+    const maxPos = (dateRows ?? []).reduce((max, r) => Math.max(max, r.position ?? 0), -1);
+    completionPosition = maxPos + 1;
+  }
 
   // Create completion row
   const { data: row, error: insertErr } = await supabase.from('tasks').insert({

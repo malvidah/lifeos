@@ -75,18 +75,20 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (e1) throw e1;
 
   // Suppress same-date habit/recurrence templates when a completion row exists.
-  // Completion rows are marked with data-completion="true" and keep their habit
-  // chips for visual consistency. Templates lack that marker.
+  // A template has data-habit or data-recurrence but NOT data-completion="true".
+  // A completion is either marked with data-completion="true" or is a done row
+  // without habit/recurrence chips (legacy completion rows had chips stripped).
   const isCompletionRow = (t) => t.html?.includes('data-completion="true"');
-  const isHabitOrRecurrence = (t) =>
-    t.html && (t.html.includes('data-habit=') || t.html.includes('data-recurrence='));
+  const isTemplateRow = (t) =>
+    !isCompletionRow(t) && t.html &&
+    (t.html.includes('data-habit=') || t.html.includes('data-recurrence='));
+  // Build set of cleaned texts from all done non-template rows (completions)
   const completionTexts = new Set(
-    (ownTasks ?? []).filter(t => t.done && isCompletionRow(t)).map(t => cleanTaskText(t.text)).filter(Boolean)
+    (ownTasks ?? []).filter(t => t.done && !isTemplateRow(t)).map(t => cleanTaskText(t.text)).filter(Boolean)
   );
   const filteredOwnTasks = (ownTasks ?? []).filter(t => {
-    // Keep non-habit/recurrence rows and completion rows
-    if (!isHabitOrRecurrence(t) || isCompletionRow(t)) return true;
-    // Suppress template if a completion row with matching text exists
+    if (!isTemplateRow(t)) return true;
+    // Suppress template if any done non-template row with matching text exists
     const cleaned = cleanTaskText(t.text);
     return !(cleaned && completionTexts.has(cleaned));
   });
