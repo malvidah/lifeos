@@ -28,7 +28,7 @@ export const viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#141412",
+  themeColor: "#0E0D0C",
   viewportFit: "cover",
 };
 

@@ -4,8 +4,8 @@
   "description": "Your personal health and life dashboard.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#141412",
-  "theme_color": "#141412",
+  "background_color": "#0E0D0C",
+  "theme_color": "#0E0D0C",
   "orientation": "portrait",
   "icons": [
     {

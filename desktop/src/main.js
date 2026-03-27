@@ -50,7 +50,10 @@ app.on('open-url', (event, url) => {
   }
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Clear cached CSS/JS so color and style updates are always fresh
+  await session.defaultSession.clearCache();
+
   session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
     callback({ requestHeaders: { ...details.requestHeaders, 'User-Agent': 'DayLab/1.0 Electron' } });
   });

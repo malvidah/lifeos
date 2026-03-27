@@ -69,8 +69,41 @@
   --dl-border-15:color-mix(in srgb,var(--dl-border) 15%,transparent);
   --dl-surface-93:color-mix(in srgb,var(--dl-surface) 93%,transparent);
 }
-/* Theme transitions — only on root, not everything */
-html,body{transition:background-color 0.4s ease}
+/* Theme transitions — enabled only after mount via .theme-ready to prevent
+   flash-of-wrong-theme on initial load.  We transition the root background
+   and color so that inheritance carries the smooth text-color change to all
+   children.  A thin transition-duration on color is injected via a custom
+   property so elements that read --dl-* vars for background get a gentle
+   crossfade without clobbering component-level transition declarations.  */
+html.theme-ready,
+html.theme-ready body{transition:background-color 1.5s ease,color 1s ease}
+@property --dl-bg{syntax:"<color>";inherits:true;initial-value:#0E0D0C}
+@property --dl-surface{syntax:"<color>";inherits:true;initial-value:#1A1816}
+@property --dl-card{syntax:"<color>";inherits:true;initial-value:#1E1C19}
+@property --dl-well{syntax:"<color>";inherits:true;initial-value:#0A0908}
+@property --dl-border{syntax:"<color>";inherits:true;initial-value:#2A2620}
+@property --dl-border2{syntax:"<color>";inherits:true;initial-value:#363028}
+@property --dl-strong{syntax:"<color>";inherits:true;initial-value:#F0E4D0}
+@property --dl-highlight{syntax:"<color>";inherits:true;initial-value:#A09484}
+@property --dl-middle{syntax:"<color>";inherits:true;initial-value:#655C52}
+@property --dl-dim{syntax:"<color>";inherits:true;initial-value:#1A1816}
+@property --dl-muted{syntax:"<color>";inherits:true;initial-value:#0E0D0C}
+@property --dl-accent{syntax:"<color>";inherits:true;initial-value:#D08828}
+@property --dl-orange{syntax:"<color>";inherits:true;initial-value:#D08828}
+@property --dl-yellow{syntax:"<color>";inherits:true;initial-value:#B88828}
+@property --dl-green{syntax:"<color>";inherits:true;initial-value:#4A9A68}
+@property --dl-blue{syntax:"<color>";inherits:true;initial-value:#4878A8}
+@property --dl-purple{syntax:"<color>";inherits:true;initial-value:#8860B8}
+@property --dl-red{syntax:"<color>";inherits:true;initial-value:#B04840}
+html.theme-ready{transition:
+  background-color 1.5s ease,color 1s ease,
+  --dl-bg 1.5s ease,--dl-surface 1.5s ease,--dl-card 1.5s ease,
+  --dl-well 1.5s ease,--dl-border 1.2s ease,--dl-border2 1.2s ease,
+  --dl-strong 1s ease,--dl-highlight 1s ease,--dl-middle 1s ease,
+  --dl-dim 1.5s ease,--dl-muted 1.5s ease,
+  --dl-accent 1s ease,--dl-orange 1s ease,--dl-yellow 1s ease,
+  --dl-green 1s ease,--dl-blue 1s ease,--dl-purple 1s ease,--dl-red 1s ease}
+html.theme-ready body{transition:background-color 1.5s ease,color 1s ease}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 ::-webkit-scrollbar{display:none}*{scrollbar-width:none}
 button{border-radius:0}a{text-decoration:none}
