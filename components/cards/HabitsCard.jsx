@@ -966,22 +966,19 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
         {/* Left column: names + stats */}
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
           {/* Header row */}
-          <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
-            <span style={{ flex: 1 }} />
-            <span title="Current streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center', cursor: 'default' }}>count</span>
-            <span title="Personal best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>best</span>
-          </div>
-
-          {/* + New Habit button */}
-          <div style={{ height: rowH, display: 'flex', alignItems: 'center' }}>
+          <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2, position: 'relative' }}>
             <button onClick={() => setCreatingNew(true)} style={{
               fontFamily: mono, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase',
               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
               padding: 0, lineHeight: 1, transition: 'color 0.15s', whiteSpace: 'nowrap',
+              position: 'absolute', left: 0, bottom: 2,
             }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
             >+ New Habit</button>
+            <span style={{ flex: 1 }} />
+            <span title="Current streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center', cursor: 'default' }}>count</span>
+            <span title="Personal best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>best</span>
           </div>
 
           {filteredHabits.filter(h => !h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
@@ -1020,9 +1017,6 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
                 );
               })}
             </div>
-
-            {/* Spacer row to align with + New Habit button */}
-            <div style={{ height: rowH }} />
 
             {filteredHabits.filter(h => !h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
             {filteredHabits.some(h => h._isHealth) && filteredHabits.some(h => !h._isHealth) && (
