@@ -191,6 +191,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
       inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, '<span data-habit="$1" data-habit-label="$2">🎯 $2</span>');
       inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
+      inner = inner.replace(/\{g:([^}]+)\}/g, '<span data-goal="$1">🏔️ $1</span>');
       inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');
       inner = inner.replace(/@(\d{4}-\d{2}-\d{2})/g, '<span data-date-tag="$1">⏳ $1</span>');
       inner = inner.replace(/\[([^\]]+)\]/g, '<span data-note-link="$1">$1</span>');
@@ -209,7 +210,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
       let m;
       while ((m = re.exec(text || '')) !== null) {
-        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:')) {
+        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:') && !m[0].startsWith('{g:')) {
           tags.push(m[1].toLowerCase());
         }
       }
@@ -298,7 +299,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
       const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
       let m;
       while ((m = re.exec(text)) !== null) {
-        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:')) {
+        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:') && !m[0].startsWith('{g:')) {
           tags.push(m[1].toLowerCase());
         }
       }
@@ -309,6 +310,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
       inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
       inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, '<span data-habit="$1" data-habit-label="$2">🎯 $2</span>');
       inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
+      inner = inner.replace(/\{g:([^}]+)\}/g, '<span data-goal="$1">🏔️ $1</span>');
       inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');
       inner = inner.replace(/@(\d{4}-\d{2}-\d{2})/g, '<span data-date-tag="$1">⏳ $1</span>');
       inner = inner.replace(/\[([^\]]+)\]/g, '<span data-note-link="$1">$1</span>');
