@@ -60,10 +60,10 @@ const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
-  {id:"journal",  label:"Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor, expandHref:"/journal"},
-  {id:"tasks",    label:"Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks,         expandHref:"/tasks"},
-  {id:"meals",    label:"Meals",    color:()=>"var(--dl-red)",    Comp:Meals,    headerRight:()=>MEALS_HDR},
-  {id:"workouts", label:"Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
+  {id:"journal",  label:"✏️ Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor, expandHref:"/journal"},
+  {id:"tasks",    label:"☑️ Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks,         expandHref:"/tasks"},
+  {id:"meals",    label:"🍽️ Meals",    color:()=>"var(--dl-red)",    Comp:Meals,    headerRight:()=>MEALS_HDR},
+  {id:"workouts", label:"💪 Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
 ];
 const [leftWidget, ...rightWidgets] = WIDGETS;
 
@@ -628,7 +628,7 @@ function DashboardInner() {
           {!searchOpen && !goalsCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Goals">
-                <Card label="Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/projects">
+                <Card label="🏁 Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/projects">
                   <ProjectsCard token={token} date={selected} onSelectDate={setSelected} />
                 </Card>
               </ErrorBoundary>
@@ -667,7 +667,7 @@ function DashboardInner() {
           {!searchOpen && !habitsCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Habits">
-                <Card label="Habits" color="var(--dl-accent)" collapsed={false} autoHeight
+                <Card label="🎯 Habits" color="var(--dl-accent)" collapsed={false} autoHeight
                   expandHref="/habits"
                   headerRight={<HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/>}>
                   <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected}/>

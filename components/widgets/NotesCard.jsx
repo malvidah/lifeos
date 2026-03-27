@@ -412,7 +412,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
 
       {/* Notes card */}
       <Card
-        label="Notes"
+        label="📝 Notes"
         color={"var(--dl-highlight)"}
         collapsed={notesCollapsed}
         onToggle={toggleNotes}
