@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
+import { cleanTaskText } from "@/lib/cleanTaskText";
 import { Shimmer } from "../ui/primitives.jsx";
 
 // ── Streak helpers ───────────────────────────────────────────────────────────
@@ -303,13 +304,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
         const tasks = res?.tasks ?? [];
         const habitKey = (habit.matchKey || habit.text || '').toLowerCase();
         const match = tasks.find(t => {
-          // Use same centralized cleaning logic
-          const cText = (t.text || '')
-            .replace(/\{[^}]+\}/g, '').replace(/\/[hr]\s+\S+/gi, '')
-            .replace(/🎯\s*[A-Za-z·\s]+/g, '').replace(/↻\s*[A-Za-z·\s]+/g, '')
-            .replace(/@\d{4}-\d{2}-\d{2}/g, '').replace(/\s+/g, ' ')
-            .trim().toLowerCase();
-          return cText === habitKey && t.done;
+          return cleanTaskText(t.text) === habitKey && t.done;
         });
         if (match) {
           if (match.id === habit.id) {

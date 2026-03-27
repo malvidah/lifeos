@@ -114,10 +114,8 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       setReloadKey(k => k + 1);
     };
     window.addEventListener('daylab:habits-changed', handler);
-    window.addEventListener('daylab:tasks-saved', handler);
     return () => {
       window.removeEventListener('daylab:habits-changed', handler);
-      window.removeEventListener('daylab:tasks-saved', handler);
     };
   }, []);
 
