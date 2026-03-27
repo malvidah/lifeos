@@ -624,7 +624,18 @@ function DashboardInner() {
             />
           )}
 
-          {/* 2b. WorldMapCard — location timeline */}
+          {/* 2b. Goals kanban — right below the Projects mountain map */}
+          {!searchOpen && !goalsCollapsed && (
+            <div style={{flexShrink:0}}>
+              <ErrorBoundary label="Goals">
+                <Card label="Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/projects">
+                  <ProjectsCard token={token} date={selected} onSelectDate={setSelected} />
+                </Card>
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {/* 2c. WorldMapCard — location timeline */}
           {!searchOpen && !timelineCollapsed && (
             <WorldMapCard token={token} />
           )}
@@ -660,17 +671,6 @@ function DashboardInner() {
                   expandHref="/habits"
                   headerRight={<HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/>}>
                   <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected}/>
-                </Card>
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* 4c. ProjectsCard (Goals kanban) — below habits */}
-          {!searchOpen && !goalsCollapsed && (
-            <div style={{flexShrink:0}}>
-              <ErrorBoundary label="Goals">
-                <Card label="Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/projects">
-                  <ProjectsCard token={token} date={selected} onSelectDate={setSelected} />
                 </Card>
               </ErrorBoundary>
             </div>
