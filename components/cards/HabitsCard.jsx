@@ -225,7 +225,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
     // Fetch task-based habits and health scores in parallel
     Promise.all([
-      api.get(`/api/habits?start=${startDate}&end=${endDate}`, token),
+      api.get(`/api/habits?start=${startDate}&end=${endDate}&today=${today}`, token),
       api.get(`/api/health/scores?start=${startDate}&end=${endDate}`, token).catch(() => null),
     ]).then(([habitsData, healthData]) => {
       if (cancelled) return;

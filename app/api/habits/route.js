@@ -11,6 +11,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const start = searchParams.get('start');
   const end = searchParams.get('end');
 
+  const today = searchParams.get('today');
+
   if (!start || !end) return Response.json({ error: 'start and end required' }, { status: 400 });
 
   // Fetch habit templates — tasks with data-habit attribute in HTML.
@@ -114,7 +116,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     // Freeze use: miss consumes 1 freeze, count stays, state → frozen
     // Second miss without freeze: count resets to 0
 
-    const todayStr = new Date().toISOString().slice(0, 10);
+    // Use client-provided today to avoid UTC/local timezone mismatch
+    const todayStr = today || new Date().toISOString().slice(0, 10);
     const pastDates = scheduledDates.filter(d => d <= todayStr);
 
     let streak = 0;
