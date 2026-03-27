@@ -59,7 +59,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (e1) throw e1;
 
   // Completions are now in habit_completions table, not task rows.
-  // No template suppression needed.
+  // No template suppression needed. But we need to reflect completion state
+  // on own-date habit templates (applied below after fetching completions).
   const filteredOwnTasks = ownTasks ?? [];
   const ownIds = new Set(filteredOwnTasks.map(t => t.id));
 
@@ -92,6 +93,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .eq('user_id', user.id)
     .eq('date', date);
   const completedHabitIds = new Set((dateCompletions ?? []).map(c => c.habit_id));
+
+  // Reflect completion state on own-date habit templates
+  for (const t of filteredOwnTasks) {
+    if (!t.html || !completedHabitIds.has(t.id)) continue;
+    if (!t.html.includes('data-habit=') && !t.html.includes('data-recurrence=')) continue;
+    t.done = true;
+    t.completed_at = date;
+    t.html = t.html.replace(/data-checked="(true|false)"/, 'data-checked="true"');
+  }
 
   // Dedup persistent against ownTasks
   const dedupedPersistent = (persistentTasks ?? []).filter(t => !ownIds.has(t.id));

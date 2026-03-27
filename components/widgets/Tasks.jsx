@@ -156,10 +156,12 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
         const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
 
-        // Habit done-toggles use the habit_completions join table
+        // Habit done-toggles use the habit_completions join table.
+        // Both own-date and recurring habits participate — recurring tasks
+        // are the most common case (habit on a non-origin date).
         let habitChanged = false;
         for (const et of editorTasks) {
-          if (!et.task_id || et.recurring) continue;
+          if (!et.task_id) continue;
           const st = serverById.get(et.task_id);
           if (!st || !isHabitOrRecurring(st) || et.done === st.done) continue;
           habitChanged = true;
