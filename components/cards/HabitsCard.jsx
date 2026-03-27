@@ -585,7 +585,7 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated, isNew, onC
               {/* Month label */}
               <div style={{ height: cellSz, display: 'flex', alignItems: 'flex-end' }}>
                 {weekMonthLabels[wi] && (
-                  <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', whiteSpace: 'nowrap', lineHeight: 1 }}>{weekMonthLabels[wi]}</span>
+                  <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', fontWeight: 400, whiteSpace: 'nowrap', lineHeight: 1 }}>{weekMonthLabels[wi]}</span>
                 )}
               </div>
               {visibleRows.map(ri => {
