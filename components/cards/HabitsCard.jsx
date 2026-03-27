@@ -1054,9 +1054,8 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
           {activeHabits.filter(h => !h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
           {activeHabits.some(h => h._isHealth) && activeHabits.some(h => !h._isHealth) && (
-            <div style={{ height: 18, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div style={{ height: 18, display: 'flex', alignItems: 'center', paddingRight: 10 }}>
               <span style={{ fontFamily: mono, fontSize: 8, letterSpacing: '0.1em', color: 'var(--dl-border2)', textTransform: 'uppercase' }}>synced</span>
-              <div style={{ flex: 1, height: 1, background: 'var(--dl-border)' }} />
             </div>
           )}
           {activeHabits.filter(h => h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
@@ -1105,7 +1104,14 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
             {activeHabits.filter(h => !h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={activeHabits} />)}
             {activeHabits.some(h => h._isHealth) && activeHabits.some(h => !h._isHealth) && (
-              <div style={{ height: 18 }} />
+              <div style={{ display: 'flex', height: 18 }}>
+                {visibleDates.map((d, i) => (
+                  <React.Fragment key={d}>
+                    {monthBoundaries.has(i) && <div style={{ width: dividerW }} />}
+                    <div style={{ width: colW, background: d === date ? 'var(--dl-accent-10, rgba(208,136,40,0.1))' : 'transparent' }} />
+                  </React.Fragment>
+                ))}
+              </div>
             )}
             {activeHabits.filter(h => h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={activeHabits} />)}
             {/* Archived grid rows — spacer + rows when toggled */}
