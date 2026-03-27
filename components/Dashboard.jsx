@@ -360,6 +360,7 @@ function DashboardInner() {
     setHabitFilter_(f);
     try { localStorage.setItem('daylab:habitFilter', f); } catch {}
   }, []);
+  const [habitCreating, setHabitCreating] = useState(false);
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
@@ -648,8 +649,8 @@ function DashboardInner() {
               <ErrorBoundary label="Habits">
                 <Card label="Habits" color="var(--dl-accent)" collapsed={false} autoHeight
                   expandHref="/habits"
-                  headerRight={<HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/>}>
-                  <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected}/>
+                  headerRight={<div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><AddHabitBtn onClick={() => setHabitCreating(true)} /><HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/></div>}>
+                  <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected} showCreateForm={habitCreating} onCreateDone={() => setHabitCreating(false)}/>
                 </Card>
               </ErrorBoundary>
             </div>
