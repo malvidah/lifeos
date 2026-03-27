@@ -12,6 +12,12 @@ function fmtNavDate(dateKey) {
 }
 
 const DAYS_FULL = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+// Get the Sunday that starts the Sun-Sat week containing a date
+function weekStart(date) {
+  const s = new Date(date);
+  s.setDate(s.getDate() - s.getDay());
+  return s;
+}
 function fmtRelative(dateKey, today) {
   if (!dateKey || !today) return null;
   if (dateKey === today) return 'TODAY';
@@ -22,8 +28,13 @@ function fmtRelative(dateKey, today) {
   if (diffDays === -1) return 'TOMORROW';
   const absDays = Math.abs(diffDays);
   const dayName = DAYS_FULL[d.getDay()];
+  // Sun-Sat week comparison
+  const todayWeekStart = weekStart(t).getTime();
+  const dateWeekStart = weekStart(d).getTime();
+  const sameWeek = todayWeekStart === dateWeekStart;
   if (diffDays > 0) {
-    if (absDays <= 6) return `LAST ${dayName}`;
+    if (sameWeek) return dayName;
+    if (absDays <= 13) return `LAST ${dayName}`;
     if (absDays < 30) { const half = Math.round(absDays / 7 * 2) / 2; return `${half} WEEK${half === 1 ? '' : 'S'} AGO`; }
     const totalMonths = (t.getFullYear() - d.getFullYear()) * 12 + (t.getMonth() - d.getMonth());
     if (totalMonths < 2) return 'LAST MONTH';
@@ -32,7 +43,8 @@ function fmtRelative(dateKey, today) {
     if (mos === 0) return yrs === 1 ? 'LAST YEAR' : `${yrs} YEARS AGO`;
     return `${yrs} YEAR${yrs > 1 ? 'S' : ''} ${mos} MONTH${mos > 1 ? 'S' : ''} AGO`;
   }
-  if (absDays <= 6) return `THIS ${dayName}`;
+  if (sameWeek) return dayName;
+  if (absDays <= 13) return `NEXT ${dayName}`;
   if (absDays < 30) { const half = Math.round(absDays / 7 * 2) / 2; return `IN ${half} WEEK${half === 1 ? '' : 'S'}`; }
   const totalMonths = (d.getFullYear() - t.getFullYear()) * 12 + (d.getMonth() - t.getMonth());
   if (totalMonths < 2) return 'NEXT MONTH';
