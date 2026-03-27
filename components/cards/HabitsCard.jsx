@@ -103,12 +103,12 @@ const HEALTH_COLORS = {
   activity: 'var(--dl-accent)',
   recovery: 'var(--dl-purple)',
 };
-// Pastel fills for health cells — can't append opacity to CSS vars, so use rgba
+// Pastel fills for health cells — uses theme CSS vars (primary/secondary/tertiary)
 const HEALTH_FILLS = {
-  sleep:     { fill: 'rgba(107,174,214,0.3)', bg: 'rgba(107,174,214,0.1)' },
-  readiness: { fill: 'rgba(122,158,110,0.3)', bg: 'rgba(122,158,110,0.1)' },
-  activity:  { fill: 'rgba(208,136,40,0.3)',  bg: 'rgba(208,136,40,0.1)' },
-  recovery:  { fill: 'rgba(168,120,200,0.3)', bg: 'rgba(168,120,200,0.1)' },
+  sleep:     { fill: 'var(--dl-blue-secondary)',    bg: 'var(--dl-blue-tertiary)' },
+  readiness: { fill: 'var(--dl-green-secondary)',   bg: 'var(--dl-green-tertiary)' },
+  activity:  { fill: 'var(--dl-accent-secondary)',  bg: 'var(--dl-accent-tertiary)' },
+  recovery:  { fill: 'var(--dl-purple-secondary)',  bg: 'var(--dl-purple-tertiary)' },
 };
 
 function buildHealthHabits(scores, startDate, endDate, today) {

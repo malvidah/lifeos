@@ -54,6 +54,31 @@
   --dl-purple-detail: color-mix(in srgb,var(--dl-purple)  12%,transparent);
   --dl-red-strong:    color-mix(in srgb,var(--dl-red)     70%,var(--dl-strong));
   --dl-red-detail:    color-mix(in srgb,var(--dl-red)     12%,transparent);
+  /* ── Primary / Secondary / Tertiary per color ───────────────────────────
+     primary   = full color (same as base)
+     secondary = pastel fill — 30% mix, good for filled cells/chips
+     tertiary  = subtle bg tint — 12% mix, good for hover/empty states      */
+  --dl-blue-primary:    var(--dl-blue);
+  --dl-blue-secondary:  color-mix(in srgb,var(--dl-blue)    30%,transparent);
+  --dl-blue-tertiary:   color-mix(in srgb,var(--dl-blue)    12%,transparent);
+  --dl-green-primary:   var(--dl-green);
+  --dl-green-secondary: color-mix(in srgb,var(--dl-green)   30%,transparent);
+  --dl-green-tertiary:  color-mix(in srgb,var(--dl-green)   12%,transparent);
+  --dl-accent-primary:  var(--dl-accent);
+  --dl-accent-secondary:color-mix(in srgb,var(--dl-accent)  30%,transparent);
+  --dl-accent-tertiary: color-mix(in srgb,var(--dl-accent)  12%,transparent);
+  --dl-purple-primary:  var(--dl-purple);
+  --dl-purple-secondary:color-mix(in srgb,var(--dl-purple)  30%,transparent);
+  --dl-purple-tertiary: color-mix(in srgb,var(--dl-purple)  12%,transparent);
+  --dl-red-primary:     var(--dl-red);
+  --dl-red-secondary:   color-mix(in srgb,var(--dl-red)     30%,transparent);
+  --dl-red-tertiary:    color-mix(in srgb,var(--dl-red)     12%,transparent);
+  --dl-orange-primary:  var(--dl-orange);
+  --dl-orange-secondary:color-mix(in srgb,var(--dl-orange)  30%,transparent);
+  --dl-orange-tertiary: color-mix(in srgb,var(--dl-orange)  12%,transparent);
+  --dl-yellow-primary:  var(--dl-yellow);
+  --dl-yellow-secondary:color-mix(in srgb,var(--dl-yellow)  30%,transparent);
+  --dl-yellow-tertiary: color-mix(in srgb,var(--dl-yellow)  12%,transparent);
   /* Legacy numeric alpha variants — kept for backward compat */
   --dl-accent-03:color-mix(in srgb,var(--dl-accent)  3%,transparent);
   --dl-accent-05:color-mix(in srgb,var(--dl-accent)  5%,transparent);
