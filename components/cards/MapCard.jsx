@@ -1254,7 +1254,7 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
             color: 'rgba(255,255,255,0.6)', textAlign: 'center',
             textTransform: 'lowercase', lineHeight: 1.6,
           }}>
-            welcome to day lab.<br/>use / commands to create your first project.
+            mountains grow as you tag tasks and<br/>journal entries with /p or #
           </span>
         </div>
       )}

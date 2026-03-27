@@ -7,6 +7,8 @@ import { useProjectNames } from "@/lib/contexts";
 import { keyToRecurrence } from "@/lib/recurrence";
 import { Shimmer } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
+import { useTip } from "@/lib/useTip";
+import Tip from "../ui/Tip.jsx";
 
 // ── Streak helpers ───────────────────────────────────────────────────────────
 // 🎯 target  = on a streak (count > 0, below best)
@@ -664,6 +666,11 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   const [selectedHabitId, setSelectedHabitId] = useState(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const scrollRef = useRef(null);
+  const gridRef = useRef(null);
+
+  // Contextual tips
+  const habitCreatedTip = useTip('tip-habit-created');
+  const habitStreakTip = useTip('tip-habit-streak');
 
   // Drag-to-scroll via window mouse events (no pointer capture — allows cell clicks)
   const dragState = useRef({ dragging: false, startX: 0, scrollStart: 0, moved: false });
@@ -767,6 +774,9 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     if (!token) return;
     const wasDone = habit.completions?.[cellDate] === true;
 
+    // Show streak tip on first check (not uncheck)
+    if (!wasDone) habitStreakTip.show();
+
     // Optimistic update — recalculate streak client-side (instant)
     setHabits(prev => prev?.map(h => {
       if (h.id !== habit.id) return h;
@@ -808,7 +818,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
         onBack={() => setCreatingNew(false)}
         onToggle={() => {}}
         onUpdated={refresh}
-        onCreated={(newId) => { setCreatingNew(false); refresh(); if (newId) setSelectedHabitId(newId); }}
+        onCreated={(newId) => { setCreatingNew(false); refresh(); if (newId) setSelectedHabitId(newId); habitCreatedTip.show(); }}
       />
     );
   }
@@ -816,7 +826,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   if (habits.length === 0) {
     return (
       <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
-        <div style={{ marginBottom: 8 }}>No habits yet — use /h in tasks to tag one</div>
+        <div style={{ marginBottom: 8 }}>No habits yet. Create one with + above, or type /h in tasks.</div>
         <button onClick={() => setCreatingNew(true)} style={{
           fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
           background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
@@ -969,7 +979,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   };
 
   return (
-    <div>
+    <div ref={gridRef}>
       <div style={{ display: 'flex', userSelect: 'none', WebkitUserSelect: 'none' }}>
         {/* Left column: names + stats */}
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>

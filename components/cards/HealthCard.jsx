@@ -546,6 +546,12 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
           <polyline points="9 18 15 12 9 6"/>
         </svg>
       </div>
+      {/* Hint when no health data source is connected */}
+      {!dataSource && loaded && !scores?.sleep?.score && !scores?.readiness?.score && !scores?.activity?.score && (
+        <div style={{ padding: '10px 14px 6px', fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', letterSpacing: '0.04em', textAlign: 'center', opacity: 0.7 }}>
+          Connect Oura or Apple Health to see your scores
+        </div>
+      )}
       </div>}
 
 

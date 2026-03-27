@@ -1315,6 +1315,23 @@ function MapInner({ token }) {
     <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 520, background: bgColor, userSelect: 'none', WebkitUserSelect: 'none' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
+      {/* Empty state hint when no places exist */}
+      {places.length === 0 && discoveredPlaces.length === 0 && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10, pointerEvents: 'none',
+        }}>
+          <span style={{
+            fontFamily: mono, fontSize: 13, letterSpacing: '0.06em',
+            color: 'rgba(255,255,255,0.6)', textAlign: 'center',
+            textTransform: 'lowercase', lineHeight: 1.6,
+          }}>
+            your world map fills in as you<br/>tag locations with /l in journal
+          </span>
+        </div>
+      )}
+
       <style>{`
         .daylab-tooltip {
           background: var(--dl-bg) !important;
