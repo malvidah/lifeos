@@ -2,7 +2,7 @@ import { withAuth } from '../_lib/auth.js';
 import { tasksToHtml } from '@/lib/parseBlocks.js';
 import { isValidDate } from '@/lib/validate.js';
 import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
-import { cleanTaskText } from '@/lib/cleanTaskText.js';
+import { cleanTaskText, displayTaskText } from '@/lib/cleanTaskText.js';
 
 // Local-date helper: prefer the client-supplied date; fall back to UTC only as
 // a last resort. Using toISOString() gives UTC which is wrong after ~4pm PT.
@@ -334,10 +334,57 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     }
   }
 
+  // Fetch old task before updating — needed for completion row propagation
+  let oldTask = null;
+  if ('text' in patch) {
+    const { data } = await supabase
+      .from('tasks').select('text, html')
+      .eq('id', id).eq('user_id', user.id).single();
+    oldTask = data;
+  }
+
   const { error } = await supabase
     .from('tasks').update(patch)
     .eq('id', id).eq('user_id', user.id);
   if (error) throw error;
+
+  // Propagate rename to completion rows when a habit/recurring template is renamed.
+  // Without this, all checked days disappear because the habits API matches by cleanTaskText.
+  if (oldTask && 'text' in patch) {
+    const isTemplate = oldTask.html && (
+      oldTask.html.includes('data-habit=') || oldTask.html.includes('data-recurrence=')
+    );
+    if (isTemplate) {
+      const oldClean = cleanTaskText(oldTask.text);
+      const newClean = cleanTaskText(patch.text);
+      if (oldClean && newClean && oldClean !== newClean) {
+        // Find all completion rows matching the old name
+        const { data: allCompletions } = await supabase
+          .from('tasks').select('id, text, html')
+          .eq('user_id', user.id)
+          .is('deleted_at', null)
+          .ilike('html', '%data-completion="true"%');
+
+        const toUpdate = (allCompletions ?? []).filter(t =>
+          cleanTaskText(t.text) === oldClean
+        );
+
+        // Build the new display name (tokens stripped, case preserved)
+        const oldDisplay = displayTaskText(oldTask.text);
+        const newDisplay = displayTaskText(patch.text);
+
+        for (const comp of toUpdate) {
+          // Replace old display name in text (case-insensitive)
+          const oldRe = new RegExp(oldDisplay.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+          const updatedText = comp.text.replace(oldRe, newDisplay);
+          // Replace in HTML <p> content too
+          const updatedHtml = comp.html ? comp.html.replace(oldRe, newDisplay) : comp.html;
+          await supabase.from('tasks').update({ text: updatedText, html: updatedHtml })
+            .eq('id', comp.id).eq('user_id', user.id);
+        }
+      }
+    }
+  }
 
   return Response.json({ ok: true });
 });
