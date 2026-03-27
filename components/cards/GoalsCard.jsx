@@ -1,8 +1,9 @@
 "use client";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useContext } from "react";
 import { mono, F, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { displayTaskText } from "@/lib/cleanTaskText";
+import { ProjectNamesContext } from "@/lib/contexts";
 
 const GOAL_COLOR = "#5BA89D";
 const BACK_STYLE = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', fontFamily: mono, fontSize: 18, padding: 0, lineHeight: 1, flexShrink: 0 };
@@ -201,6 +202,10 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
     return () => { window.removeEventListener('daylab:goals-changed', h); window.removeEventListener('daylab:tasks-saved', h); };
   }, [refresh]);
 
+  // Merge global project names (from tasks/habits context) so the picker shows
+  // all known projects, not just ones that already have goals.
+  const ctxProjectNames = useContext(ProjectNamesContext);
+
   // Group goals by project
   const grouped = goals.reduce((acc, g) => {
     const p = g.project || 'unassigned';
@@ -209,7 +214,10 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
     return acc;
   }, {});
   const projectNames = Object.keys(grouped).sort((a, b) => a === 'unassigned' ? 1 : b === 'unassigned' ? -1 : a.localeCompare(b));
-  const allProjectOptions = [...new Set(goals.map(g => g.project).filter(Boolean))].sort();
+  const allProjectOptions = [...new Set([
+    ...goals.map(g => g.project).filter(Boolean),
+    ...ctxProjectNames,
+  ])].sort();
 
   // Quick-create goal in a project column
   const createGoalInProject = async (name, project) => {
