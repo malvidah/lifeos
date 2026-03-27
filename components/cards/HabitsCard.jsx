@@ -1,6 +1,6 @@
 "use client";
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { mono, F, projectColor } from "@/lib/tokens";
+import { mono, F, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
 import { useProjectNames } from "@/lib/contexts";
@@ -484,12 +484,36 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
   // Build GitHub-style grid data: weeks as columns, days as rows (M T W R F S U)
   const completions = habit.completions || {};
   const allDates = Object.keys(completions).sort();
+  // Shared back chevron style
+  const backBtnStyle = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', fontFamily: mono, fontSize: 18, padding: 0, lineHeight: 1, flexShrink: 0 };
+
+  // Chip rendering helpers
+  const projChipColor = (selectedProject?.key || tag) ? projectColor(selectedProject?.key || tag) : null;
+  const renderProjectChip = () => {
+    const p = selectedProject?.key || tag;
+    if (!p) return (
+      <button onClick={() => { setEditingProject(true); setProjectText(''); }} style={{ ...CHIP_TOKENS.project('var(--dl-middle)'), cursor: 'pointer', border: 'none', opacity: 0.5 }}>+ project</button>
+    );
+    const col = projectColor(p);
+    return (
+      <button onClick={() => { setEditingProject(true); setProjectText(p); }} style={{ ...CHIP_TOKENS.project(col), cursor: 'pointer', border: 'none' }}>&#x26F0;&#xFE0F; {p}</button>
+    );
+  };
+  const renderScheduleChip = () => {
+    const sched = selectedSchedule || currentScheduleOpt || SCHEDULE_OPTIONS[0];
+    return (
+      <button onClick={() => { setEditingSchedule(true); setScheduleText(''); }} style={{ ...CHIP_TOKENS.date('var(--dl-accent)'), cursor: 'pointer', border: 'none', borderRadius: '999px' }}>&#x1F3AF; {sched.chip || sched.label}</button>
+    );
+  };
+
   if (allDates.length === 0) {
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', fontFamily: mono, fontSize: 14, padding: 0 }}>&larr;</button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          <button onClick={onBack} style={backBtnStyle}>&lsaquo;</button>
           <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600, color: 'var(--dl-strong)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{habit.text}</span>
+          {renderProjectChip()}
+          {renderScheduleChip()}
         </div>
         <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center' }}>No data yet</div>
       </div>
@@ -551,22 +575,23 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
 
   return (
     <div>
-      {/* Header: back + editable name + tags */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', fontFamily: mono, fontSize: 16, padding: '0 4px 0 0', lineHeight: 1 }}>&larr;</button>
+      {/* Header: back chevron + editable name + inline chips */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+        <button onClick={onBack} style={backBtnStyle}>&lsaquo;</button>
         <input
           ref={nameRef}
           value={editName}
           onChange={e => onNameChange(e.target.value)}
           style={{
             fontFamily: mono, fontSize: 14, fontWeight: 600, color: 'var(--dl-strong)',
-            textTransform: 'uppercase', letterSpacing: '0.04em', flex: 1,
+            textTransform: 'uppercase', letterSpacing: '0.04em',
             background: 'transparent', border: 'none', outline: 'none', padding: 0,
+            minWidth: 60, width: `${Math.max(4, editName.length)}ch`,
           }}
         />
         {/* Project chip */}
         {editingProject ? (
-          <div style={{ width: 120 }}>
+          <div style={{ position: 'relative', width: 140 }}>
             <AutocompleteField
               value={projectText}
               onChange={v => { setProjectText(v); setSelectedProject(null); }}
@@ -577,17 +602,10 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
               autoFocus
             />
           </div>
-        ) : (
-          <button onClick={() => { setEditingProject(true); setProjectText(tag || ''); }} style={{
-            fontFamily: mono, fontSize: 10, padding: '2px 8px', borderRadius: 100,
-            border: '1px solid var(--dl-border2)', background: 'transparent',
-            color: tag ? (baseColor || 'var(--dl-strong)') : 'var(--dl-middle)',
-            cursor: 'pointer', letterSpacing: '0.04em',
-          }}>{tag || 'add project'}</button>
-        )}
+        ) : renderProjectChip()}
         {/* Schedule chip */}
         {editingSchedule ? (
-          <div style={{ width: 140 }}>
+          <div style={{ position: 'relative', width: 160 }}>
             <AutocompleteField
               value={scheduleText}
               onChange={v => { setScheduleText(v); setSelectedSchedule(null); }}
@@ -598,13 +616,7 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
               autoFocus
             />
           </div>
-        ) : (
-          <button onClick={() => { setEditingSchedule(true); setScheduleText(''); }} style={{
-            fontFamily: mono, fontSize: 10, padding: '2px 8px', borderRadius: 100,
-            border: '1px solid var(--dl-border2)', background: 'transparent',
-            color: 'var(--dl-middle)', cursor: 'pointer', letterSpacing: '0.04em',
-          }}>{currentScheduleOpt?.chip || habit.schedule}</button>
-        )}
+        ) : renderScheduleChip()}
       </div>
 
       {/* Stats row */}
