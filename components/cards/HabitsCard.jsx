@@ -298,9 +298,9 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
     try {
       if (wasDone) {
-        await api.delete(`/api/habit-completions?habit_id=${habit.id}&date=${cellDate}`, token);
+        await api.delete(`/api/tasks/complete-recurring?habit_id=${habit.id}&date=${cellDate}`, token);
       } else {
-        await api.post('/api/habit-completions', { habit_id: habit.id, date: cellDate }, token);
+        await api.post('/api/tasks/complete-recurring', { template_id: habit.id, date: cellDate }, token);
       }
       // Notify tasks card to reload
       window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
