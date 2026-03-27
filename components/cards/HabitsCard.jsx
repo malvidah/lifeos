@@ -241,14 +241,21 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     return () => { cancelled = true; };
   }, [token, userId, startDate, endDate, refreshKey]);
 
-  // Auto-scroll to center today
+  // Auto-scroll to center today (accounting for month dividers before today)
   useEffect(() => {
     if (!scrollRef.current || loading) return;
     const todayIdx = dates.indexOf(today);
     if (todayIdx >= 0) {
       const colW = 28;
+      const divW = 28;
+      // Count month boundaries before today's index
+      let dividers = 0;
+      for (let i = 1; i <= todayIdx; i++) {
+        if (dayNum(dates[i]) === 1) dividers++;
+      }
+      const todayOffset = todayIdx * colW + dividers * divW;
       const containerW = scrollRef.current.clientWidth;
-      scrollRef.current.scrollLeft = Math.max(0, todayIdx * colW - containerW / 2);
+      scrollRef.current.scrollLeft = Math.max(0, todayOffset - containerW / 2);
     }
   }, [loading, today]);
 
@@ -448,10 +455,10 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
       <div ref={scrollRef} onMouseDown={onMouseDown} style={{
         flex: 1, overflowX: 'auto', overflowY: 'hidden', cursor: 'grab',
         scrollbarWidth: 'none', msOverflowStyle: 'none',
-        margin: '0 -14px 0 0', paddingRight: 14,
+        margin: '0 -14px 0 0',
         userSelect: 'none', WebkitUserSelect: 'none',
       }}>
-        <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW + monthBoundaries.size * dividerW }}>
+        <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW + monthBoundaries.size * dividerW + 14, paddingRight: 14 }}>
           {/* Date header */}
           <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
             {visibleDates.map((d, i) => {
