@@ -410,10 +410,304 @@ function HabitCreationForm({ token, onCreated, onCancel }) {
   );
 }
 
+// ── Habit Detail View (GitHub-style activity grid) ───────────────────────────
+function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
+  const projectNames = useProjectNames();
+  const today = todayKey();
+  const tag = habit.project_tags?.[0];
+  const baseColor = tag ? projectColor(tag) : null;
+  const fillColor = baseColor ? baseColor + '55' : 'var(--dl-accent-30, rgba(208,136,40,0.3))';
+  const borderColor = baseColor || 'var(--dl-accent)';
+
+  // Editable fields
+  const [editName, setEditName] = useState(habit.text);
+  const [editingProject, setEditingProject] = useState(false);
+  const [projectText, setProjectText] = useState(tag || '');
+  const [selectedProject, setSelectedProject] = useState(tag ? { key: tag, label: tag } : null);
+  const [editingSchedule, setEditingSchedule] = useState(false);
+  const [scheduleText, setScheduleText] = useState('');
+  const [selectedSchedule, setSelectedSchedule] = useState(null);
+
+  const nameRef = useRef(null);
+  const nameTimer = useRef(null);
+
+  const projectOptions = (projectNames || []).map(p => ({ key: p, label: p, search: p.toLowerCase() }));
+  const currentScheduleOpt = SCHEDULE_OPTIONS.find(o => o.key === habit.schedule);
+
+  // Recompose text with tokens
+  function composeText(name, proj, schedKey, schedChip) {
+    const parts = [name.trim()];
+    if (proj) parts.push(`{${proj}}`);
+    parts.push(`{h:${schedKey}:${schedChip}}`);
+    return parts.join(' ');
+  }
+
+  // PATCH helper
+  const patchHabit = async (text, extraPatch = {}) => {
+    try {
+      await api.patch('/api/tasks', { id: habit.id, text, ...extraPatch }, token);
+      window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+      onUpdated?.();
+    } catch { showToast('Failed to update habit', 'error'); }
+  };
+
+  // Name change — debounced
+  const onNameChange = (val) => {
+    setEditName(val);
+    clearTimeout(nameTimer.current);
+    nameTimer.current = setTimeout(() => {
+      if (!val.trim()) return;
+      const proj = selectedProject?.key || tag;
+      const sched = currentScheduleOpt || SCHEDULE_OPTIONS[0];
+      patchHabit(composeText(val, proj, sched.key, sched.chip));
+    }, 800);
+  };
+
+  // Project change
+  const onProjectPick = (opt) => {
+    setSelectedProject(opt);
+    setProjectText(opt.label);
+    setEditingProject(false);
+    const sched = currentScheduleOpt || SCHEDULE_OPTIONS[0];
+    patchHabit(composeText(editName, opt.key, sched.key, sched.chip), { project_tags: [opt.key.toLowerCase()] });
+  };
+
+  // Schedule change
+  const onSchedulePick = (opt) => {
+    setSelectedSchedule(opt);
+    setScheduleText(opt.label);
+    setEditingSchedule(false);
+    const proj = selectedProject?.key || tag;
+    patchHabit(composeText(editName, proj, opt.key, opt.chip));
+  };
+
+  // Build GitHub-style grid data: weeks as columns, days as rows (M T W R F S U)
+  const completions = habit.completions || {};
+  const allDates = Object.keys(completions).sort();
+  if (allDates.length === 0) {
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', fontFamily: mono, fontSize: 14, padding: 0 }}>&larr;</button>
+          <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600, color: 'var(--dl-strong)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{habit.text}</span>
+        </div>
+        <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center' }}>No data yet</div>
+      </div>
+    );
+  }
+
+  const firstDate = allDates[0];
+  const lastDate = allDates[allDates.length - 1] > today ? allDates[allDates.length - 1] : today;
+
+  // Build week columns: start from Monday of the first week
+  const firstD = new Date(firstDate + 'T12:00:00');
+  const startDow = firstD.getDay(); // 0=Sun
+  const mondayOffset = startDow === 0 ? -6 : 1 - startDow;
+  const gridStart = addDays(firstDate, mondayOffset);
+
+  const weeks = [];
+  let weekStart = gridStart;
+  while (weekStart <= lastDate) {
+    const week = [];
+    for (let dow = 0; dow < 7; dow++) {
+      const d = addDays(weekStart, dow);
+      const scheduled = completions.hasOwnProperty(d);
+      const done = completions[d] === true;
+      const isPast = d <= today;
+      week.push({ date: d, scheduled, done, isPast });
+    }
+    weeks.push(week);
+    weekStart = addDays(weekStart, 7);
+  }
+
+  const cellSz = 14;
+  const cellGap = 2;
+  const dayLabels = ['M', 'T', 'W', 'R', 'F', 'S', 'U'];
+
+  // Completion rate this month
+  const monthStr = today.slice(0, 7);
+  const monthDates = allDates.filter(d => d.startsWith(monthStr) && d <= today);
+  const monthDone = monthDates.filter(d => completions[d] === true).length;
+  const monthRate = monthDates.length > 0 ? Math.round((monthDone / monthDates.length) * 100) : 0;
+
+  // Monthly breakdown
+  const months = {};
+  for (const d of allDates) {
+    if (d > today) continue;
+    const m = d.slice(0, 7);
+    if (!months[m]) months[m] = { total: 0, done: 0 };
+    months[m].total++;
+    if (completions[d]) months[m].done++;
+  }
+  const sortedMonths = Object.entries(months).sort((a, b) => b[0].localeCompare(a[0]));
+
+  // Month labels for grid columns
+  const weekMonthLabels = weeks.map((w, i) => {
+    const d = w[0].date; // Monday of this week
+    if (i === 0) return monthLabel(d);
+    const prevD = weeks[i - 1][0].date;
+    return d.slice(5, 7) !== prevD.slice(5, 7) ? monthLabel(d) : null;
+  });
+
+  return (
+    <div>
+      {/* Header: back + editable name + tags */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <button onClick={onBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', fontFamily: mono, fontSize: 16, padding: '0 4px 0 0', lineHeight: 1 }}>&larr;</button>
+        <input
+          ref={nameRef}
+          value={editName}
+          onChange={e => onNameChange(e.target.value)}
+          style={{
+            fontFamily: mono, fontSize: 14, fontWeight: 600, color: 'var(--dl-strong)',
+            textTransform: 'uppercase', letterSpacing: '0.04em', flex: 1,
+            background: 'transparent', border: 'none', outline: 'none', padding: 0,
+          }}
+        />
+        {/* Project chip */}
+        {editingProject ? (
+          <div style={{ width: 120 }}>
+            <AutocompleteField
+              value={projectText}
+              onChange={v => { setProjectText(v); setSelectedProject(null); }}
+              onSelect={onProjectPick}
+              options={projectOptions}
+              placeholder="Project..."
+              label=""
+              autoFocus
+            />
+          </div>
+        ) : (
+          <button onClick={() => { setEditingProject(true); setProjectText(tag || ''); }} style={{
+            fontFamily: mono, fontSize: 10, padding: '2px 8px', borderRadius: 100,
+            border: '1px solid var(--dl-border2)', background: 'transparent',
+            color: tag ? (baseColor || 'var(--dl-strong)') : 'var(--dl-middle)',
+            cursor: 'pointer', letterSpacing: '0.04em',
+          }}>{tag || 'add project'}</button>
+        )}
+        {/* Schedule chip */}
+        {editingSchedule ? (
+          <div style={{ width: 140 }}>
+            <AutocompleteField
+              value={scheduleText}
+              onChange={v => { setScheduleText(v); setSelectedSchedule(null); }}
+              onSelect={onSchedulePick}
+              options={SCHEDULE_OPTIONS}
+              placeholder="Schedule..."
+              label=""
+              autoFocus
+            />
+          </div>
+        ) : (
+          <button onClick={() => { setEditingSchedule(true); setScheduleText(''); }} style={{
+            fontFamily: mono, fontSize: 10, padding: '2px 8px', borderRadius: 100,
+            border: '1px solid var(--dl-border2)', background: 'transparent',
+            color: 'var(--dl-middle)', cursor: 'pointer', letterSpacing: '0.04em',
+          }}>{currentScheduleOpt?.chip || habit.schedule}</button>
+        )}
+      </div>
+
+      {/* Stats row */}
+      <div style={{ display: 'flex', gap: 16, marginBottom: 12, alignItems: 'center' }}>
+        <span title={streakTooltip(habit.streak, habit.frozen, habit.bestStreak)} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 3,
+          padding: '2px 8px', borderRadius: 100,
+          border: `1.5px solid ${streakColor(habit.streak, habit.frozen, habit.bestStreak)}`,
+          background: streakBg(habit.streak, habit.frozen, habit.bestStreak),
+          fontFamily: mono, fontSize: 12, fontWeight: 600,
+          color: streakColor(habit.streak, habit.frozen, habit.bestStreak),
+        }}>
+          <span style={{ fontSize: 11 }}>{streakEmoji(habit.streak, habit.frozen, habit.bestStreak)}</span>
+          {habit.streak} streak
+        </span>
+        <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)' }}>
+          Best: {habit.bestStreak || 0}
+        </span>
+        {habit.freezes > 0 && (
+          <span style={{ fontFamily: mono, fontSize: 11, color: '#7CB8D4' }}>
+            {habit.freezes} freeze{habit.freezes > 1 ? 's' : ''}
+          </span>
+        )}
+        <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)' }}>
+          {monthRate}% this month
+        </span>
+      </div>
+
+      {/* GitHub-style activity grid */}
+      <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
+        <div style={{ display: 'inline-flex', gap: 0 }}>
+          {/* Day-of-week labels */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: cellGap, marginRight: 4, paddingTop: cellSz + cellGap }}>
+            {dayLabels.map((lbl, i) => (
+              <div key={lbl} style={{ height: cellSz, display: 'flex', alignItems: 'center', fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', width: 10 }}>{i % 2 === 0 ? lbl : ''}</div>
+            ))}
+          </div>
+          {/* Week columns */}
+          {weeks.map((week, wi) => (
+            <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: cellGap }}>
+              {/* Month label */}
+              <div style={{ height: cellSz, display: 'flex', alignItems: 'flex-end' }}>
+                {weekMonthLabels[wi] && (
+                  <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', whiteSpace: 'nowrap', lineHeight: 1 }}>{weekMonthLabels[wi]}</span>
+                )}
+              </div>
+              {week.map((cell, di) => {
+                if (!cell.scheduled) {
+                  return <div key={di} style={{ width: cellSz, height: cellSz }} />;
+                }
+                return (
+                  <div
+                    key={di}
+                    role={cell.isPast && !habit._isHealth ? 'button' : undefined}
+                    tabIndex={cell.isPast && !habit._isHealth ? 0 : undefined}
+                    title={`${cell.date} ${cell.done ? 'done' : 'missed'}`}
+                    onClick={() => { if (cell.isPast && !habit._isHealth) onToggle(habit, cell.date); }}
+                    onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && cell.isPast && !habit._isHealth) { e.preventDefault(); onToggle(habit, cell.date); } }}
+                    style={{
+                      width: cellSz, height: cellSz,
+                      borderRadius: 3,
+                      background: cell.done ? fillColor : 'transparent',
+                      border: `1px solid ${cell.done ? borderColor : cell.isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
+                      opacity: !cell.isPast && !cell.done ? 0.25 : 1,
+                      cursor: cell.isPast && !habit._isHealth ? 'pointer' : 'default',
+                      transition: 'all 0.15s',
+                    }}
+                  />
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Monthly breakdown */}
+      {sortedMonths.length > 0 && (
+        <div style={{ marginTop: 8, borderTop: '1px solid var(--dl-border)', paddingTop: 8 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+            {sortedMonths.slice(0, 12).map(([m, data]) => {
+              const pct = Math.round((data.done / data.total) * 100);
+              const [y, mo] = m.split('-');
+              const mName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo) - 1];
+              return (
+                <div key={m} style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', display: 'flex', gap: 4, alignItems: 'baseline' }}>
+                  <span style={{ color: 'var(--dl-strong)', fontWeight: 500 }}>{mName} {y}</span>
+                  <span>{pct}%</span>
+                  <span style={{ fontSize: 9 }}>({data.done}/{data.total})</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HabitsCard({ date, token, userId, project, habitFilter = 'all', onSelectDate, showCreateForm, onCreateDone }) {
   const [habits, setHabits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedHabitId, setSelectedHabitId] = useState(null);
   const scrollRef = useRef(null);
 
   // Drag-to-scroll via window mouse events (no pointer capture — allows cell clicks)
@@ -580,6 +874,20 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     );
   }
 
+  // Detail view when a habit is selected
+  const selectedHabit = selectedHabitId ? habits.find(h => h.id === selectedHabitId) : null;
+  if (selectedHabit) {
+    return (
+      <HabitDetailView
+        habit={selectedHabit}
+        token={token}
+        onBack={() => setSelectedHabitId(null)}
+        onToggle={toggleCompletion}
+        onUpdated={refresh}
+      />
+    );
+  }
+
   const visibleDates = dates;
 
   const monthBoundaries = new Set();
@@ -591,7 +899,9 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   // Habit name row component
   const HabitNameRow = ({ h }) => (
     <div style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
-      <span style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+      <span
+        onClick={() => { if (!h._isHealth) setSelectedHabitId(h.id); }}
+        style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: h._isHealth ? 'default' : 'pointer' }}>
         {h.text}
       </span>
       <div style={{ width: 52, display: 'flex', justifyContent: 'center', gap: 2, alignItems: 'center' }}>
