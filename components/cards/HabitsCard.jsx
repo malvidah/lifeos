@@ -808,6 +808,12 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     if (!token) return;
     const wasDone = habit.completions?.[cellDate] === true;
 
+    // Enforce count limit: block new completions once limit is reached
+    if (!wasDone && habit.countLimit && habit.countDone >= habit.countLimit) {
+      showToast(`Limit reached (${habit.countLimit} completions)`, 'info');
+      return;
+    }
+
     // Show streak tip on first check (not uncheck)
     if (!wasDone) habitStreakTip.show();
 
@@ -1043,7 +1049,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
             >+ New Habit</button>
             <span style={{ flex: 1 }} />
             <span title="Current streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center', cursor: 'default' }}>count</span>
-            <span title="Personal best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>best</span>
+            <span title="Count / best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>count</span>
           </div>
 
           {activeHabits.filter(h => !h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}

@@ -129,5 +129,35 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   });
   if (rpcErr) throw rpcErr;
 
+  // Auto-create goals from data-goal attributes in journal block HTML.
+  // Journal content is TipTap HTML — goal tags render as <span data-goal="name">
+  // not as {g:name} text tokens. Project tags are already extracted as project_tags[].
+  // Wrapped in try-catch so goal errors never block journal saving.
+  try {
+    for (const block of blocks) {
+      const htmlContent = block.content || '';
+      const goalRe = /data-goal="([^"]+)"/g;
+      let gm;
+      const goalNames = [];
+      while ((gm = goalRe.exec(htmlContent)) !== null) goalNames.push(gm[1].toLowerCase().trim());
+      if (goalNames.length) {
+        // project_tags[] is already extracted from the HTML by the client
+        const projectName = (block.project_tags ?? [])[0] ?? null;
+        for (const gName of goalNames) {
+          const { data: existing, error: goalErr } = await supabase
+            .from('goals').select('id, project')
+            .eq('user_id', user.id).eq('name', gName).maybeSingle();
+          if (goalErr) continue;
+          if (!existing) {
+            await supabase.from('goals').insert({ user_id: user.id, name: gName, project: projectName });
+          } else if (projectName && !existing.project) {
+            await supabase.from('goals').update({ project: projectName, updated_at: new Date().toISOString() })
+              .eq('id', existing.id).eq('user_id', user.id);
+          }
+        }
+      }
+    }
+  } catch (e) { /* goals table may not exist */ }
+
   return Response.json({ ok: true, blocks: blocks.length });
 });

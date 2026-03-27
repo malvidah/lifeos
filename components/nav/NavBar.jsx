@@ -93,8 +93,8 @@ export default function NavBar(props) {
   return (
     <div style={glassBar}>
 
-      {/* ── Left: tools toggle ────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', zIndex: 2, flexShrink: 0 }}>
+      {/* ── Left: tools toggle ── */}
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <NavIconBtn onClick={() => setToolsOpen(!toolsOpen)} active={toolsOpen} title="Toggle cards">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>
@@ -102,14 +102,10 @@ export default function NavBar(props) {
         </NavIconBtn>
       </div>
 
-      {/* ── Center: project name OR dock icons ─────────────────────────── */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        pointerEvents: 'none',
-      }}>
+      {/* ── Center: project name OR scrollable dock ── */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
         {toolsOpen ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 2, pointerEvents: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', padding: '0 4px', justifyContent: 'center' }}>
             {dockItems?.map(item => (
               <NavIconBtn key={item.id} onClick={item.onToggle} active={item.isOpen} title={item.label}>
                 {item.icon}
@@ -117,7 +113,7 @@ export default function NavBar(props) {
             ))}
           </div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'auto' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {activeProjectName && onBack && (
               <button onClick={onBack} title="Back to All Projects"
                 style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: 'var(--dl-highlight)', display: 'flex', alignItems: 'center', transition: 'color 0.15s' }}
@@ -141,8 +137,8 @@ export default function NavBar(props) {
         )}
       </div>
 
-      {/* ── Right: search ──────────────────────────────────────────────── */}
-      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', zIndex: 2, flexShrink: 0 }}>
+      {/* ── Right: search ── */}
+      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
         <NavIconBtn onClick={openSearch} title="Search">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
