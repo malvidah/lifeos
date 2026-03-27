@@ -108,8 +108,9 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }
 
     // Streak calculation with Duolingo-style freeze mechanic
+    // Exclude today — the day isn't over yet, so don't count it as a miss
     const todayStr = today || new Date().toISOString().slice(0, 10);
-    const pastDates = scheduledDates.filter(d => d <= todayStr);
+    const pastDates = scheduledDates.filter(d => d < todayStr);
 
     let streak = 0;
     let bestStreak = 0;
