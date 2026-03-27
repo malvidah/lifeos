@@ -73,7 +73,24 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     .is('deleted_at', null)
     .order('position', { ascending: true });
   if (e1) throw e1;
-  const ownIds = new Set((ownTasks ?? []).map(t => t.id));
+
+  // Suppress same-date habit/recurrence templates when a completion row exists.
+  // When a habit is completed on its origin date, complete-recurring creates a
+  // separate completion row (stripped of data-habit/data-recurrence). Both the
+  // template and completion appear in ownTasks. Filter out the template so only
+  // the completion row shows.
+  const isTemplateRow = (t) =>
+    t.html && (t.html.includes('data-habit=') || t.html.includes('data-recurrence='));
+  const completionTexts = new Set(
+    (ownTasks ?? []).filter(t => t.done && !isTemplateRow(t)).map(t => cleanTaskText(t.text)).filter(Boolean)
+  );
+  const filteredOwnTasks = (ownTasks ?? []).filter(t => {
+    if (!isTemplateRow(t)) return true;
+    const cleaned = cleanTaskText(t.text);
+    return !(cleaned && completionTexts.has(cleaned));
+  });
+
+  const ownIds = new Set(filteredOwnTasks.map(t => t.id));
 
   // B) PERSISTENT tasks: have due_date, not done, created on or before this date.
   //    Show every day from creation until completed or deleted — even past due_date.
@@ -105,7 +122,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   // Build a set of normalized texts already covered by own/persistent tasks,
   // so a recurring template is suppressed when there's already a completion row for today.
   const ownTexts = new Set(
-    [...(ownTasks ?? []), ...dedupedPersistent]
+    [...filteredOwnTasks, ...dedupedPersistent]
       .map(t => cleanTaskText(t.text))
       .filter(Boolean)
   );
@@ -135,7 +152,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   }));
 
   // Inject data attributes for client-side tracking
-  const regularTasks = [...(ownTasks ?? []), ...dedupedPersistent];
+  const regularTasks = [...filteredOwnTasks, ...dedupedPersistent];
   for (const t of regularTasks) {
     if (t.html) {
       let attrs = ` data-task-id="${t.id}" data-origin-date="${t.date}"`;
@@ -157,7 +174,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   // Build structured task list with source metadata
   const structuredTasks = [
-    ...(ownTasks ?? []).map(t => ({ ...t, _source: 'own', _editable: true })),
+    ...filteredOwnTasks.map(t => ({ ...t, _source: 'own', _editable: true })),
     ...dedupedPersistent.map(t => ({ ...t, _source: 'persistent', _editable: true })),
     ...adjustedRecurring.map(t => ({ ...t, _source: 'recurring', _editable: false })),
   ];
