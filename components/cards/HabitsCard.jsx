@@ -396,13 +396,17 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
           const divider = isBoundary ? (
             <MonthDivider key={`div-${d}`} label={monthLabel(d)} year={yearLabel(d)} height={rowH * allVisibleHabits.length} rowIndex={allVisibleHabits.indexOf(h)} rowH={rowH} />
           ) : null;
+          const isSelected = d === date;
+          const selectedBg = isSelected ? 'var(--dl-accent-10, rgba(208,136,40,0.1))' : 'transparent';
+          const isLastHabit = allVisibleHabits.indexOf(h) === allVisibleHabits.length - 1;
+          const selectedRadius = isLastHabit ? '0 0 6px 6px' : '0';
           if (!scheduled) {
-            return <React.Fragment key={d}>{divider}<div style={{ width: colW }} /></React.Fragment>;
+            return <React.Fragment key={d}>{divider}<div style={{ width: colW, background: selectedBg, borderRadius: selectedRadius }} /></React.Fragment>;
           }
           return (
             <React.Fragment key={d}>
               {divider}
-              <div style={{ width: colW, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: colW, display: 'flex', alignItems: 'center', justifyContent: 'center', background: selectedBg, borderRadius: selectedRadius }}>
                 <div
                   onClick={e => {
                     if (dragState.current.moved) return;
@@ -456,7 +460,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
               return (
                 <React.Fragment key={d}>
                   {isBoundary && <div style={{ width: dividerW }} />}
-                  <div style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2 }}>
+                  <div style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2, borderRadius: '6px 6px 0 0', background: d === date ? 'var(--dl-accent-10, rgba(208,136,40,0.1))' : 'transparent' }}>
                     <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayLabel(d)}</span>
                     <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayNum(d)}</span>
                   </div>
