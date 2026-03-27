@@ -145,11 +145,19 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           markLocalSave("tasks", date);
           const { hadRecurringDone } = await applyDiff(date, diff, token);
 
-          // Reload server state for diffing (don't remount editor — TipTap
-          // already shows the correct visual state and remounting causes reorder)
+          // Reload server state for diffing
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
+          }
+
+          // When a recurring/habit task was checked, the completion row has a new ID
+          // and stripped chips. Force the editor to remount with fresh server HTML so
+          // the next diff doesn't see a stale template ID and create duplicates.
+          if (hadRecurringDone && fresh?.tasks) {
+            const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
+            setHtmlValue(freshHtml);
+            setEditorKey(k => k + 1);
           }
 
           // Notify other components (e.g. HabitsCard) that tasks changed
