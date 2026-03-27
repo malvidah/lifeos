@@ -284,7 +284,7 @@ const HabitTagNode = Node.create({
   },
 });
 
-// GoalTag: stored as {g:name}, rendered as 🏔️ NAME chip.
+// GoalTag: stored as {g:name}, rendered as 🏁 NAME chip.
 const GoalTagNode = Node.create({
   name: 'goalTag', group: 'inline', inline: true,
   atom: true, selectable: true, draggable: false,
@@ -300,7 +300,7 @@ const GoalTagNode = Node.create({
       style: Object.entries({ ...CHIP_TOKENS.project(col), cursor: 'pointer', userSelect: 'none' })
         .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
         .join(';'),
-    }, '\u{1F3D4}\uFE0F ' + name.toUpperCase()];
+    }, '\u{1F3C1} ' + name.toUpperCase()];
   },
 });
 
@@ -807,7 +807,7 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : isHabit ? `🎯 ${rawLabel}`
                                  : isRecurrence ? `↻ ${rawLabel}`
                                  : isDate ? rawLabel
-                                 : isGoal && !isCreate ? `🏔️ ${rawLabel.toUpperCase()}`
+                                 : isGoal && !isCreate ? `🏁 ${rawLabel.toUpperCase()}`
                                  : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : isPlace ? `📍 ${rawLabel.toUpperCase()}` : rawLabel;
         const col                = isProject ? projectColor(rawLabel) : isPlace ? 'var(--dl-blue)' : isGoal ? 'var(--dl-teal, #5BA89D)' : isDate ? dateChipColor(dateStr) : isHabit ? 'var(--dl-accent)' : isRecurrence ? 'var(--dl-green)' : null;
         const selected  = i === state.selectedIndex;

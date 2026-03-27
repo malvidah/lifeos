@@ -133,7 +133,8 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     for (const task of (linkedTasks || [])) {
       const updatedHtml = task.html
         .replace(new RegExp(`data-goal="${oldName}"`, 'g'), `data-goal="${newName}"`)
-        .replace(new RegExp(`>🏔️ ${oldName}<`, 'g'), `>🏔️ ${newName}<`);
+        .replace(new RegExp(`>🏁 ${oldName}<`, 'g'), `>🏁 ${newName}<`)
+        .replace(new RegExp(`>🏔️ ${oldName}<`, 'g'), `>🏁 ${newName}<`);
       const updatedText = task.text
         .replace(new RegExp(`\\{g:${oldName}\\}`, 'g'), `{g:${newName}}`);
       await supabase.from('tasks').update({ html: updatedHtml, text: updatedText })
