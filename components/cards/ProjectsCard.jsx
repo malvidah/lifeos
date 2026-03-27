@@ -81,10 +81,58 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
   if (view === "kanban") {
     return (
       <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        {/* Quick-add goal input — always visible */}
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <input
+            placeholder="+ New goal..."
+            value={newGoalText}
+            onChange={(e) => setNewGoalText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && newGoalText.trim()) {
+                createGoal(newGoalText, newGoalProject);
+              }
+            }}
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "1px solid var(--dl-border)",
+              borderRadius: "8px",
+              outline: "none",
+              fontFamily: mono,
+              fontSize: "12px",
+              letterSpacing: "0.06em",
+              color: "var(--dl-strong)",
+              padding: "8px 10px",
+            }}
+          />
+          <select
+            value={newGoalProject || ""}
+            onChange={(e) => setNewGoalProject(e.target.value || null)}
+            style={{
+              background: "var(--dl-surface)",
+              border: "1px solid var(--dl-border)",
+              borderRadius: "8px",
+              fontFamily: mono,
+              fontSize: "11px",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              color: "var(--dl-middle)",
+              padding: "8px 6px",
+              cursor: "pointer",
+              outline: "none",
+            }}
+          >
+            <option value="">No project</option>
+            {projectNames.filter(p => p !== "Unassigned").map(p => (
+              <option key={p} value={p}>{p}</option>
+            ))}
+          </select>
+        </div>
+
         {/* Empty state */}
         {goals.length === 0 && !loading && (
-          <div style={{ padding: "16px 0", color: "var(--dl-middle)", fontFamily: mono, fontSize: "12px", letterSpacing: "0.04em" }}>
-            No goals yet. Tag a task or habit with <span style={{ color: GOAL_COLOR }}>/g</span> to create one.
+          <div style={{ padding: "8px 0", color: "var(--dl-middle)", fontFamily: mono, fontSize: "12px", letterSpacing: "0.04em" }}>
+            No goals yet. Type above or tag a task with <span style={{ color: GOAL_COLOR }}>/g</span> to create one.
           </div>
         )}
 
