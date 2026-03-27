@@ -228,6 +228,30 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       }
     }
 
+    // Auto-create goals from {g:name} tokens and associate with project
+    const goalRe = /\{g:([^}]+)\}/g;
+    let gm;
+    const goalNames = [];
+    while ((gm = goalRe.exec(text || '')) !== null) goalNames.push(gm[1].toLowerCase());
+    if (goalNames.length) {
+      const projectName = parsedTags[0] || null; // first project tag on the same task
+      for (const gName of goalNames) {
+        // Upsert goal — create if new, update project if both /g and /p present
+        const { data: existing } = await supabase
+          .from('goals').select('id, project')
+          .eq('user_id', user.id).eq('name', gName).single();
+        if (!existing) {
+          await supabase.from('goals').insert({
+            user_id: user.id, name: gName, project: projectName,
+          }).select().single().catch(() => {}); // ignore conflict
+        } else if (projectName && !existing.project) {
+          // Auto-associate with project if goal has no project yet
+          await supabase.from('goals').update({ project: projectName, updated_at: new Date().toISOString() })
+            .eq('id', existing.id).eq('user_id', user.id);
+        }
+      }
+    }
+
     const { data: row, error } = await supabase.from('tasks').insert({
       user_id: user.id,
       date,
@@ -305,6 +329,39 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
       }
       if (tags.length) patch.project_tags = tags;
     }
+    // Auto-create goals from {g:name} tokens when text is updated
+    const goalRe = /\{g:([^}]+)\}/g;
+    let gm;
+    const goalNames = [];
+    while ((gm = goalRe.exec(text)) !== null) goalNames.push(gm[1].toLowerCase());
+    if (goalNames.length) {
+      const pTags = ('project_tags' in patch) ? patch.project_tags : (() => {
+        const tags = [];
+        const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
+        let m;
+        while ((m = re.exec(text)) !== null) {
+          if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:') && !m[0].startsWith('{g:')) {
+            tags.push(m[1].toLowerCase());
+          }
+        }
+        return tags;
+      })();
+      const projectName = pTags[0] || null;
+      for (const gName of goalNames) {
+        const { data: existing } = await supabase
+          .from('goals').select('id, project')
+          .eq('user_id', user.id).eq('name', gName).single();
+        if (!existing) {
+          await supabase.from('goals').insert({
+            user_id: user.id, name: gName, project: projectName,
+          }).select().single().catch(() => {});
+        } else if (projectName && !existing.project) {
+          await supabase.from('goals').update({ project: projectName, updated_at: new Date().toISOString() })
+            .eq('id', existing.id).eq('user_id', user.id);
+        }
+      }
+    }
+
     if (!('html' in patch)) {
       let inner = text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
       inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');

@@ -96,6 +96,11 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'invalid id' }, { status: 400 });
   }
 
+  // Fetch current goal for rename cascade
+  const { data: current } = await supabase
+    .from('goals').select('name').eq('id', id).eq('user_id', user.id).single();
+  const oldName = current?.name;
+
   // Whitelist allowed fields
   const updates = {};
   if (name !== undefined) updates.name = name.trim().toLowerCase();
@@ -113,6 +118,28 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     .single();
 
   if (error) throw error;
+
+  // Rename cascade: update data-goal in all linked tasks/habits
+  const newName = updates.name;
+  if (newName && oldName && newName !== oldName) {
+    // Find all tasks that reference the old goal name
+    const { data: linkedTasks } = await supabase
+      .from('tasks')
+      .select('id, text, html')
+      .eq('user_id', user.id)
+      .is('deleted_at', null)
+      .ilike('html', `%data-goal="${oldName}"%`);
+
+    for (const task of (linkedTasks || [])) {
+      const updatedHtml = task.html
+        .replace(new RegExp(`data-goal="${oldName}"`, 'g'), `data-goal="${newName}"`)
+        .replace(new RegExp(`>🏔️ ${oldName}<`, 'g'), `>🏔️ ${newName}<`);
+      const updatedText = task.text
+        .replace(new RegExp(`\\{g:${oldName}\\}`, 'g'), `{g:${newName}}`);
+      await supabase.from('tasks').update({ html: updatedHtml, text: updatedText })
+        .eq('id', task.id).eq('user_id', user.id);
+    }
+  }
 
   return Response.json({ goal: data });
 });
