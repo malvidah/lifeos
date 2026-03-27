@@ -234,10 +234,19 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
 
-  // Re-fetch when tasks are saved
+  // Re-fetch when tasks are saved — debounced to avoid overwriting optimistic state.
+  // The 2s delay lets the optimistic update remain visible while the API settles.
+  const refreshTimerRef = useRef(null);
   useEffect(() => {
-    window.addEventListener('daylab:tasks-saved', refresh);
-    return () => window.removeEventListener('daylab:tasks-saved', refresh);
+    const handler = () => {
+      clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = setTimeout(refresh, 2000);
+    };
+    window.addEventListener('daylab:tasks-saved', handler);
+    return () => {
+      window.removeEventListener('daylab:tasks-saved', handler);
+      clearTimeout(refreshTimerRef.current);
+    };
   }, [refresh]);
 
   useEffect(() => {
@@ -284,11 +293,11 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   }, [loading, date, today]);
 
   // Toggle a habit completion for a specific date
-  const toggleCompletion = useCallback(async (habit, cellDate) => {
+  const toggleCompletion = useCallback((habit, cellDate) => {
     if (!token) return;
     const wasDone = habit.completions?.[cellDate] === true;
 
-    // Optimistic update — recalculate streak client-side
+    // Optimistic update — recalculate streak client-side (instant)
     setHabits(prev => prev?.map(h => {
       if (h.id !== habit.id) return h;
       const newCompletions = { ...h.completions, [cellDate]: !wasDone };
@@ -296,18 +305,17 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
       return { ...h, completions: newCompletions, ...streakData };
     }));
 
-    try {
-      if (wasDone) {
-        await api.delete(`/api/tasks/complete-recurring?habit_id=${habit.id}&date=${cellDate}`, token);
-      } else {
-        await api.post('/api/tasks/complete-recurring', { template_id: habit.id, date: cellDate }, token);
-      }
-      // Notify tasks card to reload
+    // Fire-and-forget API call — don't block UI
+    const apiCall = wasDone
+      ? api.delete(`/api/tasks/complete-recurring?habit_id=${habit.id}&date=${cellDate}`, token)
+      : api.post('/api/tasks/complete-recurring', { template_id: habit.id, date: cellDate }, token);
+
+    apiCall.then(() => {
       window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
-    } catch (err) {
+    }).catch(err => {
       console.warn('[habits] toggle failed:', err);
-      refresh();
-    }
+      refresh(); // revert optimistic update on error
+    });
   }, [token, refresh]);
 
   if (loading || !habits) {

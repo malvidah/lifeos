@@ -10,6 +10,19 @@ import { parseTaskBlocks, tasksToHtml } from "@/lib/parseBlocks";
 import { diffTasks, applyDiff, isHabitOrRecurring } from "@/lib/taskDiff";
 import { markLocalSave } from "@/lib/useRealtimeSync";
 
+// Detect which tasks changed done state between two parsed task arrays.
+// Returns array of { task_id, done, serverTask } for habits whose done state flipped.
+function detectHabitToggles(editorTasks, serverById) {
+  const toggles = [];
+  for (const et of editorTasks) {
+    if (!et.task_id) continue;
+    const st = serverById.get(et.task_id);
+    if (!st || !isHabitOrRecurring(st) || et.done === st.done) continue;
+    toggles.push({ task_id: et.task_id, done: et.done, serverTask: st });
+  }
+  return toggles;
+}
+
 // ── Shared task checkbox — used in project view ──────────────────────────────
 export function TaskCheckbox({ done, onToggle }) {
   return (
@@ -111,6 +124,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       // Convert structured tasks to HTML for the editor
       const html = d?.data || tasksToHtml(tasks);
       setHtmlValue(html);
+      lastHtmlRef.current = html;
       setLoaded(true);
     }).catch(() => {
       if (!cancelled) setLoaded(true);
@@ -132,86 +146,119 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     };
   }, []);
 
-  // Diff-based save — debounced 1 second after editor change
+  // Helper: overlay task_ids from position map onto parsed editor tasks
+  const overlayTaskIds = useCallback((editorTasks) => {
+    for (const et of editorTasks) {
+      if (et.task_id) continue;
+      const mapped = taskIdMapRef.current.get(et.position);
+      if (mapped) {
+        et.task_id = mapped.id;
+        if (mapped.recurring) et.recurring = true;
+      }
+    }
+    return editorTasks;
+  }, []);
+
+  // Fire habit toggle API calls and update local server state (no re-fetch needed).
+  // Returns true if any habits were toggled.
+  const fireHabitToggles = useCallback(async (toggles) => {
+    if (!toggles.length) return false;
+    markLocalSave("tasks", date);
+    const promises = toggles.map(({ task_id, done, serverTask }) => {
+      if (done) {
+        return api.post('/api/tasks/complete-recurring', { template_id: serverTask.id, date }, token);
+      } else {
+        return api.delete(`/api/tasks/complete-recurring?habit_id=${serverTask.id}&date=${date}`, token);
+      }
+    });
+    await Promise.all(promises);
+
+    // Update local server state to reflect the toggles — avoids a full re-fetch
+    for (const { task_id, done } of toggles) {
+      const idx = serverTasksRef.current.findIndex(t => t.id === task_id);
+      if (idx >= 0) {
+        serverTasksRef.current[idx] = { ...serverTasksRef.current[idx], done, completed_at: done ? date : null };
+      }
+    }
+    return true;
+  }, [date, token]);
+
+  // Fast path: detect habit checkbox toggles immediately (no debounce).
+  // The HTML is compared against server state to find done-state flips on habits.
+  const lastHtmlRef = useRef('');
+  const habitToggleInFlightRef = useRef(false);
+
   const handleUpdate = useCallback((newHtml) => {
     setHtmlValue(newHtml);
-    clearTimeout(saveTimerRef.current);
+    const prevHtml = lastHtmlRef.current;
+    lastHtmlRef.current = newHtml;
 
+    // Fast path: immediately fire habit toggles without waiting for debounce.
+    // Parse both old and new to detect checkbox-only changes.
+    if (!habitToggleInFlightRef.current && prevHtml) {
+      const editorTasks = overlayTaskIds(parseTaskBlocks(newHtml));
+      const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
+      const toggles = detectHabitToggles(editorTasks, serverById);
+      if (toggles.length > 0) {
+        habitToggleInFlightRef.current = true;
+        fireHabitToggles(toggles).then(changed => {
+          if (changed) window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+        }).catch(err => {
+          console.warn('[habit-toggle] fast path failed:', err);
+        }).finally(() => {
+          habitToggleInFlightRef.current = false;
+        });
+      }
+    }
+
+    // Debounced path: handle text edits, creates, deletes, regular task done toggles
+    clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       if (savingRef.current) return;
       savingRef.current = true;
 
       try {
-        const editorTasks = parseTaskBlocks(newHtml);
-        console.log('[tasks-save] editorTasks:', editorTasks.map(t => ({ pos: t.position, id: t.task_id, done: t.done, text: t.text?.slice(0, 30), recurring: t.recurring })));
-        console.log('[tasks-save] posMap size:', taskIdMapRef.current.size, 'serverTasks:', serverTasksRef.current.length);
-
-        // Overlay task_ids from position map — TipTap may drop data-task-id during edits
-        let overlaid = 0;
-        for (const et of editorTasks) {
-          if (et.task_id) continue; // already has id from DOM
-          const mapped = taskIdMapRef.current.get(et.position);
-          if (mapped) {
-            et.task_id = mapped.id;
-            if (mapped.recurring) et.recurring = true;
-            overlaid++;
-          }
-        }
-        if (overlaid) console.log('[tasks-save] overlaid', overlaid, 'task_ids from position map');
-
+        const editorTasks = overlayTaskIds(parseTaskBlocks(newHtml));
         const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
 
-        // Habit done-toggles use the habit_completions join table.
-        // Both own-date and recurring habits participate — recurring tasks
-        // are the most common case (habit on a non-origin date).
+        // Check for habit toggles that the fast path may have missed
+        // (e.g. if fast path was in-flight when another toggle happened)
+        const toggles = detectHabitToggles(editorTasks, serverById);
         let habitChanged = false;
-        for (const et of editorTasks) {
-          if (!et.task_id) {
-            console.log('[habit-toggle] skip: no task_id', { pos: et.position, text: et.text?.slice(0, 40) });
-            continue;
-          }
-          const st = serverById.get(et.task_id);
-          if (!st) {
-            console.log('[habit-toggle] skip: no server match for', et.task_id);
-            continue;
-          }
-          if (!isHabitOrRecurring(st)) {
-            continue; // regular task, handled by diff
-          }
-          if (et.done === st.done) {
-            continue; // no change
-          }
-          console.log('[habit-toggle] DETECTED change:', { id: st.id, text: st.text?.slice(0, 40), editorDone: et.done, serverDone: st.done, source: st._source });
-          habitChanged = true;
-          markLocalSave("tasks", date);
+        if (toggles.length > 0 && !habitToggleInFlightRef.current) {
           try {
-            if (et.done) {
-              const res = await api.post('/api/tasks/complete-recurring', { template_id: st.id, date }, token);
-              console.log('[habit-toggle] POST result:', res);
-            } else {
-              const res = await api.delete(`/api/tasks/complete-recurring?habit_id=${st.id}&date=${date}`, token);
-              console.log('[habit-toggle] DELETE result:', res);
-            }
-          } catch (toggleErr) {
-            console.error('[habit-toggle] API FAILED:', toggleErr);
+            habitChanged = await fireHabitToggles(toggles);
+          } catch (err) {
+            console.warn('[habit-toggle] debounced path failed:', err);
           }
         }
 
-        // Diff everything else (habits text edits, regular tasks, deletes)
+        // Diff everything else (text edits, regular tasks, creates, deletes)
         const diff = diffTasks(serverTasksRef.current, editorTasks);
         const hasChanges = diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length;
 
         if (hasChanges) {
           markLocalSave("tasks", date);
           await applyDiff(date, diff, token);
+          // Reflect updates locally so subsequent diffs see the new state
+          for (const u of diff.toUpdate) {
+            const idx = serverTasksRef.current.findIndex(t => t.id === u.id);
+            if (idx >= 0) {
+              serverTasksRef.current[idx] = { ...serverTasksRef.current[idx], text: u.text, html: u.html, done: u.done, position: u.position };
+            }
+          }
         }
 
-        if (hasChanges || habitChanged) {
+        // Only re-fetch from server when structure changed (creates/deletes need new IDs).
+        if (diff.toCreate.length || diff.toDelete.length) {
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
             rebuildIdMap(fresh.tasks);
           }
+        }
+
+        if (hasChanges || habitChanged) {
           window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
         }
       } catch (err) {
@@ -220,7 +267,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         savingRef.current = false;
       }
     }, 1000);
-  }, [date, token]);
+  }, [date, token, overlayTaskIds, fireHabitToggles]);
 
   // Flush on unmount / date change
   useEffect(() => {
