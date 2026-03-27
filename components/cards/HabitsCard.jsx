@@ -651,7 +651,7 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
           {/* Day-of-week labels */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: cellGap, marginRight: 4, paddingTop: cellSz + cellGap }}>
             {dayLabels.map((lbl, i) => (
-              <div key={lbl} style={{ height: cellSz, display: 'flex', alignItems: 'center', fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', width: 10 }}>{i % 2 === 0 ? lbl : ''}</div>
+              <div key={lbl} style={{ height: cellSz, display: 'flex', alignItems: 'center', fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', width: 10 }}>{lbl}</div>
             ))}
           </div>
           {/* Week columns */}
@@ -692,19 +692,19 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
         </div>
       </div>
 
-      {/* Monthly breakdown */}
+      {/* Monthly breakdown — footnote style */}
       {sortedMonths.length > 0 && (
         <div style={{ marginTop: 8, borderTop: '1px solid var(--dl-border)', paddingTop: 8 }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 16px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px 12px' }}>
             {sortedMonths.slice(0, 12).map(([m, data]) => {
               const pct = Math.round((data.done / data.total) * 100);
               const [y, mo] = m.split('-');
               const mName = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(mo) - 1];
               return (
-                <div key={m} style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', display: 'flex', gap: 4, alignItems: 'baseline' }}>
-                  <span style={{ color: 'var(--dl-strong)', fontWeight: 500 }}>{mName} {y}</span>
+                <div key={m} style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-border2)', display: 'flex', gap: 3, alignItems: 'baseline' }}>
+                  <span>{mName} {y}</span>
                   <span>{pct}%</span>
-                  <span style={{ fontSize: 9 }}>({data.done}/{data.total})</span>
+                  <span>({data.done}/{data.total})</span>
                 </div>
               );
             })}
