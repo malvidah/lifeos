@@ -206,6 +206,9 @@ const AllIcon = () => (
 // ── Schedule options for habit creation ───────────────────────────────────────
 const SCHEDULE_OPTIONS = [
   { key: 'daily', label: 'Daily', chip: 'Daily', search: 'daily everyday' },
+  { key: '1pw', label: '1×week', chip: '1×week', search: '1x per week once weekly 1 per week' },
+  { key: '2pw', label: '2×week', chip: '2×week', search: '2x per week twice weekly 2 per week' },
+  { key: '3pw', label: '3×week', chip: '3×week', search: '3x per week three times weekly 3 per week' },
   { key: 'weekdays', label: 'Weekdays (M·T·W·R·F)', chip: 'M·T·W·R·F', search: 'weekdays weekday mtwrf' },
   { key: 'mwf', label: 'M·W·F', chip: 'M·W·F', search: 'mwf monday wednesday friday' },
   { key: 'tr', label: 'T·R', chip: 'T·R', search: 'tr tuesday thursday' },

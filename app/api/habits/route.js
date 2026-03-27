@@ -98,6 +98,14 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     completionsByHabit.get(c.habit_id).add(c.date);
   }
 
+  // Helper: ISO week key (Mon-based) for a date string
+  function isoWeekKey(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    const day = d.getDay(); // 0=Sun
+    const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7));
+    return `${mon.getFullYear()}-${String(mon.getMonth()+1).padStart(2,'0')}-${String(mon.getDate()).padStart(2,'0')}`;
+  }
+
   // Build completion map + streaks per habit
   for (const habit of dedupedHabits) {
     const recurrence = keyToRecurrence(habit.schedule, habit.date);
@@ -117,48 +125,68 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       }
     }
 
-    // Streak calculation with Duolingo-style freeze mechanic
-    // Walk all past dates (before today). Then check today separately:
-    // - If today is completed → add to streak
-    // - If today is NOT completed → keep streak as-is (day isn't over)
     const todayStr = today || new Date().toISOString().slice(0, 10);
-    const pastDates = scheduledDates.filter(d => d < todayStr);
-    const todayScheduled = scheduledDates.includes(todayStr);
+    let streak = 0, bestStreak = 0, frozen = false, freezes = 0, runningStreak = 0;
 
-    let streak = 0;
-    let bestStreak = 0;
-    let freezes = 0;
-    let frozen = false;
-    let runningStreak = 0;
-    let consecutiveForFreeze = 0;
+    // ── xperweek: streak is counted in WEEKS, not days ───────────────────────
+    if (recurrence?.rule === 'xperweek') {
+      const target = recurrence.target ?? 1;
+      // Group completions by ISO week
+      const weekCounts = {};
+      for (const dateStr of habitCompletions) {
+        const wk = isoWeekKey(dateStr);
+        weekCounts[wk] = (weekCounts[wk] ?? 0) + 1;
+      }
+      // Collect all weeks in the range (Mon-based)
+      const weeksInRange = new Set();
+      for (const dateStr of scheduledDates) weeksInRange.add(isoWeekKey(dateStr));
+      const todayWeek = isoWeekKey(todayStr);
+      const pastWeeks = [...weeksInRange].filter(w => w < todayWeek).sort();
 
-    for (let i = 0; i < pastDates.length; i++) {
-      if (completionMap[pastDates[i]]) {
-        runningStreak++;
-        consecutiveForFreeze++;
-        frozen = false;
-        if (runningStreak > bestStreak) bestStreak = runningStreak;
-        if (consecutiveForFreeze >= 7) {
-          consecutiveForFreeze = 0;
-          if (freezes < 2) freezes++;
-        }
-      } else {
-        consecutiveForFreeze = 0;
-        if (freezes > 0) {
-          freezes--;
-          frozen = true;
-        } else {
-          runningStreak = 0;
+      let consecutiveForFreeze = 0;
+      for (const wk of pastWeeks) {
+        const done = (weekCounts[wk] ?? 0) >= target;
+        if (done) {
+          runningStreak++; consecutiveForFreeze++;
           frozen = false;
+          if (runningStreak > bestStreak) bestStreak = runningStreak;
+          if (consecutiveForFreeze >= 4) { consecutiveForFreeze = 0; if (freezes < 2) freezes++; }
+        } else {
+          consecutiveForFreeze = 0;
+          if (freezes > 0) { freezes--; frozen = true; }
+          else { runningStreak = 0; frozen = false; }
         }
       }
+      // Current week: count it if target already met (don't penalise if still in progress)
+      if ((weekCounts[todayWeek] ?? 0) >= target) {
+        runningStreak++;
+        if (runningStreak > bestStreak) bestStreak = runningStreak;
+      }
+      streak = runningStreak;
+    } else {
+      // ── Standard per-day streak (existing logic) ────────────────────────────
+      const pastDates = scheduledDates.filter(d => d < todayStr);
+      const todayScheduled = scheduledDates.includes(todayStr);
+      let consecutiveForFreeze = 0;
+
+      for (let i = 0; i < pastDates.length; i++) {
+        if (completionMap[pastDates[i]]) {
+          runningStreak++; consecutiveForFreeze++;
+          frozen = false;
+          if (runningStreak > bestStreak) bestStreak = runningStreak;
+          if (consecutiveForFreeze >= 7) { consecutiveForFreeze = 0; if (freezes < 2) freezes++; }
+        } else {
+          consecutiveForFreeze = 0;
+          if (freezes > 0) { freezes--; frozen = true; }
+          else { runningStreak = 0; frozen = false; }
+        }
+      }
+      if (todayScheduled && completionMap[todayStr]) {
+        runningStreak++;
+        if (runningStreak > bestStreak) bestStreak = runningStreak;
+      }
+      streak = runningStreak;
     }
-    // If today is scheduled and completed, count it toward the streak
-    if (todayScheduled && completionMap[todayStr]) {
-      runningStreak++;
-      if (runningStreak > bestStreak) bestStreak = runningStreak;
-    }
-    streak = runningStreak;
 
     habit.completions = completionMap;
     habit.streak = streak;

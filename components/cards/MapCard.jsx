@@ -1094,167 +1094,171 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, sele
   );
 }
 
-// ── Ambient sound engine (Tone.js) ───────────────────────────────────────────
-// Dynamically imports Tone.js so it only loads when the user enables sounds.
-// Weather + bird data drive gain/filter params; Tone's reverb/AutoFilter
-// give everything a natural, spacious quality without external audio files.
+// ── Ambient sound engine (Web Audio API) ─────────────────────────────────────
+// Pure Web Audio API — no external deps. Synthetic velvet-noise convolution
+// reverb gives the sounds spatial depth without requiring Tone.js.
 
-const WIND_GAIN = {
-  clear: -28, cloudy: -22, overcast: -18,
-  drizzle: -15, rain: -12, fog: -32,
-  thunderstorm: -8, snow: -20,
-};
-const RAIN_GAIN  = { drizzle: -24, rain: -18, thunderstorm: -14 };
-const RUSTLEGAIN = {
-  clear: -38, cloudy: -30, overcast: -26,
-  drizzle: -22, rain: -20, fog: -40,
-  thunderstorm: -16, snow: -28,
-};
+const WIND_VOL   = { clear:0.04, cloudy:0.10, overcast:0.15, drizzle:0.22, rain:0.32, fog:0.03, thunderstorm:0.46, snow:0.13 };
+const RAIN_VOL   = { drizzle:0.10, rain:0.20, thunderstorm:0.28 };
+const RUSTLE_VOL = { clear:0.012, cloudy:0.026, overcast:0.035, drizzle:0.05, rain:0.07, fog:0.008, thunderstorm:0.09, snow:0.03 };
 
 function useAmbientSound(weather, birdCount, soundsEnabled) {
-  const toneRef       = useRef(null); // Tone module
-  const nodesRef      = useRef([]);   // all nodes for cleanup
-  const birdTimerRef  = useRef(null);
+  const birdTimerRef    = useRef(null);
   const thunderTimerRef = useRef(null);
+  const ctxRef          = useRef(null);
 
   useEffect(() => {
     if (!soundsEnabled || typeof window === 'undefined') return;
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
 
-    let cancelled = false;
+    const ctx = new AudioCtx();
+    ctxRef.current = ctx;
 
-    import('tone').then(Tone => {
-      if (cancelled) return;
-      toneRef.current = Tone;
-      Tone.start(); // resume AudioContext after user gesture
-
-      const nodes = [];
-      const track = n => { nodes.push(n); return n; };
-
-      // ── Shared reverb (makes everything sound spatially natural) ────────────
-      const verb = track(new Tone.Reverb({ decay: 3.5, wet: 0.55 }));
-      verb.generate(); // async but near-instant for short decays
-
-      // ── Water (constant, very quiet — stream beneath the island) ────────────
-      const waterNoise = track(new Tone.Noise('pink').start());
-      const waterFilter = track(new Tone.Filter({ frequency: 420, type: 'lowpass', rolloff: -24 }));
-      const waterGain = track(new Tone.Gain(-42, 'decibels'));
-      waterNoise.connect(waterFilter);
-      waterFilter.connect(waterGain);
-      waterGain.connect(verb);
-      verb.toDestination();
-
-      // ── Wind (pink noise + slow AutoFilter for gusts) ────────────────────────
-      const windNoise = track(new Tone.Noise('pink').start());
-      const windFilter = track(new Tone.AutoFilter({
-        frequency: 0.1 + Math.random() * 0.08, // subtle variation
-        baseFrequency: 200,
-        octaves: 2.5,
-      }).start());
-      const windGain = track(new Tone.Gain(WIND_GAIN[weather] ?? -26, 'decibels'));
-      windNoise.connect(windFilter);
-      windFilter.connect(windGain);
-      windGain.connect(verb);
-
-      // ── Leaves rustling (high-passed noise that tracks wind level) ───────────
-      const rustleNoise = track(new Tone.Noise('white').start());
-      const rustleHP = track(new Tone.Filter({ frequency: 2000, type: 'highpass' }));
-      const rustleLP = track(new Tone.Filter({ frequency: 8000, type: 'lowpass' }));
-      const rustleGain = track(new Tone.Gain(RUSTLEGAIN[weather] ?? -36, 'decibels'));
-      rustleNoise.chain(rustleHP, rustleLP, rustleGain, verb);
-
-      // ── Rain (white noise bandpass — only when weather calls for it) ─────────
-      const rainDb = RAIN_GAIN[weather];
-      if (rainDb != null) {
-        const rainNoise = track(new Tone.Noise('white').start());
-        const rainHP = track(new Tone.Filter({ frequency: 1600, type: 'highpass' }));
-        const rainLP = track(new Tone.Filter({ frequency: 10000, type: 'lowpass' }));
-        const rainGain = track(new Tone.Gain(rainDb, 'decibels'));
-        // Lighter reverb for rain so it sounds close/immediate
-        const rainVerb = track(new Tone.Reverb({ decay: 1.2, wet: 0.3 }));
-        rainVerb.generate();
-        rainNoise.chain(rainHP, rainLP, rainGain, rainVerb);
-        rainVerb.toDestination();
+    // ── Velvet-noise convolution reverb (gives sounds outdoor spatial depth) ──
+    function makeReverb(decay = 2.5, wet = 0.4) {
+      const sr = ctx.sampleRate;
+      const len = Math.ceil(sr * decay);
+      const ir = ctx.createBuffer(2, len, sr);
+      for (let ch = 0; ch < 2; ch++) {
+        const d = ir.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          d[i] = (Math.random() < 0.003 ? (Math.random() * 2 - 1) : 0)
+               * Math.pow(1 - i / len, 2.5);
+        }
       }
+      const conv = ctx.createConvolver(); conv.buffer = ir;
+      const dryG = ctx.createGain(); dryG.gain.value = 1 - wet;
+      const wetG = ctx.createGain(); wetG.gain.value = wet;
+      const inp  = ctx.createGain();
+      const out  = ctx.createGain();
+      inp.connect(dryG); dryG.connect(out);
+      inp.connect(conv); conv.connect(wetG); wetG.connect(out);
+      return { input: inp, output: out };
+    }
 
-      // ── Thunder (MembraneSynth rumbles — thunderstorm only) ──────────────────
-      let thunderSynth = null;
-      if (weather === 'thunderstorm') {
-        thunderSynth = track(new Tone.MembraneSynth({
-          pitchDecay: 0.4,
-          octaves: 5,
-          envelope: { attack: 0.02, decay: 1.8, sustain: 0, release: 0.5 },
-        }));
-        const thunderVerb = track(new Tone.Reverb({ decay: 5, wet: 0.8 }));
-        const thunderGain = track(new Tone.Gain(-6, 'decibels'));
-        thunderVerb.generate();
-        thunderSynth.chain(thunderVerb, thunderGain);
-        thunderGain.toDestination();
-
-        const rumble = () => {
-          if (cancelled || !thunderSynth) return;
-          thunderSynth.triggerAttackRelease(
-            `C${Math.floor(Math.random() * 2) + 1}`, // C1 or C2 — deep rumble
-            '4n'
-          );
-          thunderTimerRef.current = setTimeout(rumble, 18000 + Math.random() * 42000);
-        };
-        thunderTimerRef.current = setTimeout(rumble, 5000 + Math.random() * 15000);
+    // ── Looping pink noise (Paul Kellet's approximation) ─────────────────────
+    function makePinkNoise(seconds = 3) {
+      const len = Math.ceil(ctx.sampleRate * seconds);
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0;
+      for (let i = 0; i < len; i++) {
+        const w = Math.random() * 2 - 1;
+        b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759;
+        b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856;
+        b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
+        d[i] = (b0+b1+b2+b3+b4+b5+w*0.5362) / 7;
       }
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      return src;
+    }
+    function makeWhiteNoise(seconds = 2) {
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate*seconds), ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random()*2-1;
+      const src = ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      return src;
+    }
 
-      // ── Birds (AMSynth chirps — triggered by project bird count) ─────────────
-      // AMSynth gives a bright, bell-like chirp with natural harmonics.
-      // A light reverb places them convincingly in the distance.
-      let birdSynth = null;
-      const birdVerb = track(new Tone.Reverb({ decay: 2.2, wet: 0.5 }));
-      birdVerb.generate();
-      const birdGain = track(new Tone.Gain(-14, 'decibels'));
-      birdGain.connect(birdVerb);
-      birdVerb.toDestination();
+    const master = ctx.createGain(); master.gain.value = 0.9;
+    master.connect(ctx.destination);
+    const verb = makeReverb(3, 0.42); verb.output.connect(master);
 
-      if (birdCount > 0) {
-        birdSynth = track(new Tone.AMSynth({
-          harmonicity: 5.1,
-          oscillator: { type: 'sine' },
-          envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.12 },
-          modulation: { type: 'square' },
-          modulationEnvelope: { attack: 0.01, decay: 0.06, sustain: 0, release: 0.08 },
-        }));
-        birdSynth.connect(birdGain);
+    // ── Water ────────────────────────────────────────────────────────────────
+    const water = makePinkNoise(4);
+    const waterLP = ctx.createBiquadFilter(); waterLP.type='lowpass'; waterLP.frequency.value=450;
+    const waterG  = ctx.createGain(); waterG.gain.value=0.016;
+    water.connect(waterLP); waterLP.connect(waterG); waterG.connect(verb.input);
+    water.start();
 
-        // Bird call patterns — mix of common pitches to feel organic
-        const CHIRP_NOTES = ['E5','F#5','G5','A5','B5','C6','D6','E6'];
+    // ── Wind (pink noise + slow amplitude LFO for gusting) ───────────────────
+    const wind = makePinkNoise(5);
+    const windBP = ctx.createBiquadFilter(); windBP.type='bandpass'; windBP.frequency.value=620; windBP.Q.value=1.1;
+    const windG  = ctx.createGain(); windG.gain.value=WIND_VOL[weather]??0.07;
+    const windLFO = ctx.createOscillator(); windLFO.type='sine'; windLFO.frequency.value=0.10+Math.random()*0.07;
+    const windLFOG = ctx.createGain(); windLFOG.gain.value=0.028;
+    windLFO.connect(windLFOG); windLFOG.connect(windG.gain);
+    wind.connect(windBP); windBP.connect(windG); windG.connect(verb.input);
+    wind.start(); windLFO.start();
 
-        const chirp = () => {
-          if (cancelled || !birdSynth || birdCount === 0) return;
-          // Occasionally do a 2-note call (more natural)
-          const note = CHIRP_NOTES[Math.floor(Math.random() * CHIRP_NOTES.length)];
-          birdSynth.triggerAttackRelease(note, '32n');
-          if (Math.random() < 0.4) {
-            // second note ~120ms later, slightly different pitch
-            const note2 = CHIRP_NOTES[Math.floor(Math.random() * CHIRP_NOTES.length)];
-            birdTimerRef.current = setTimeout(() => {
-              if (!cancelled && birdSynth) birdSynth.triggerAttackRelease(note2, '32n');
-            }, 120 + Math.random() * 80);
-          }
-          // More birds → more frequent calls; rain/thunder → quieter intervals
-          const weatherMult = (weather === 'rain' || weather === 'thunderstorm') ? 2.0 : 1.0;
-          const gap = (2000 + Math.random() * (6000 / Math.max(1, birdCount))) * weatherMult;
-          birdTimerRef.current = setTimeout(chirp, gap);
-        };
-        birdTimerRef.current = setTimeout(chirp, 1200 + Math.random() * 3000);
+    // ── Leaves (white noise, narrow high band) ────────────────────────────────
+    const rustle   = makeWhiteNoise(2);
+    const rustleHP = ctx.createBiquadFilter(); rustleHP.type='highpass'; rustleHP.frequency.value=1900;
+    const rustleLP = ctx.createBiquadFilter(); rustleLP.type='lowpass';  rustleLP.frequency.value=8500;
+    const rustleG  = ctx.createGain(); rustleG.gain.value=RUSTLE_VOL[weather]??0.02;
+    rustle.connect(rustleHP); rustleHP.connect(rustleLP); rustleLP.connect(rustleG); rustleG.connect(verb.input);
+    rustle.start();
+
+    // ── Rain ─────────────────────────────────────────────────────────────────
+    const rainVol = RAIN_VOL[weather];
+    if (rainVol) {
+      const rainSrc = makeWhiteNoise(3);
+      const rainHP  = ctx.createBiquadFilter(); rainHP.type='highpass'; rainHP.frequency.value=1800;
+      const rainLP  = ctx.createBiquadFilter(); rainLP.type='lowpass';  rainLP.frequency.value=11000;
+      const rainG   = ctx.createGain(); rainG.gain.value=rainVol;
+      const rainVerb= makeReverb(1.2, 0.28); rainVerb.output.connect(master);
+      rainSrc.connect(rainHP); rainHP.connect(rainLP); rainLP.connect(rainG); rainG.connect(rainVerb.input);
+      rainSrc.start();
+    }
+
+    // ── Thunder ───────────────────────────────────────────────────────────────
+    if (weather === 'thunderstorm') {
+      const rumble = () => {
+        if (!ctxRef.current) return;
+        const now = ctx.currentTime;
+        const dur = 1.8 + Math.random() * 2.4;
+        const osc = ctx.createOscillator(); osc.type='sawtooth'; osc.frequency.value=32+Math.random()*20;
+        const lp  = ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=100;
+        const tG  = ctx.createGain();
+        tG.gain.setValueAtTime(0, now);
+        tG.gain.linearRampToValueAtTime(0.22, now+0.25);
+        tG.gain.exponentialRampToValueAtTime(0.001, now+dur);
+        const tVerb = makeReverb(5, 0.75); tVerb.output.connect(master);
+        osc.connect(lp); lp.connect(tG); tG.connect(tVerb.input);
+        osc.start(now); osc.stop(now+dur+0.1);
+        thunderTimerRef.current = setTimeout(rumble, 20000+Math.random()*40000);
+      };
+      thunderTimerRef.current = setTimeout(rumble, 5000+Math.random()*12000);
+    }
+
+    // ── Birds (FM oscillator sweep + amplitude modulation) ────────────────────
+    const birdVerb = makeReverb(1.8, 0.45); birdVerb.output.connect(master);
+    const chirp = () => {
+      if (!ctxRef.current || birdCount === 0) return;
+      const now = ctx.currentTime;
+      const f0 = 1900 + Math.random() * 1000;
+      const osc = ctx.createOscillator(); osc.type='sine';
+      osc.frequency.setValueAtTime(f0, now);
+      osc.frequency.exponentialRampToValueAtTime(f0*(1.5+Math.random()*0.7), now+0.12);
+      // Amplitude modulator gives wavering chirp quality
+      const modOsc = ctx.createOscillator(); modOsc.type='sine'; modOsc.frequency.value=55+Math.random()*30;
+      const modG = ctx.createGain(); modG.gain.value=0.4;
+      modOsc.connect(modG); modG.connect(osc.frequency);
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, now); env.gain.linearRampToValueAtTime(0.06, now+0.018); env.gain.exponentialRampToValueAtTime(0.001, now+0.18);
+      osc.connect(env); env.connect(birdVerb.input);
+      osc.start(now); osc.stop(now+0.22); modOsc.start(now); modOsc.stop(now+0.22);
+      // 40% chance of a second note — two-note calls sound more natural
+      if (Math.random() < 0.4) {
+        const t2 = now + 0.14 + Math.random()*0.08;
+        const o2 = ctx.createOscillator(); o2.type='sine';
+        const f2 = f0*(0.9+Math.random()*0.4);
+        o2.frequency.setValueAtTime(f2, t2); o2.frequency.exponentialRampToValueAtTime(f2*1.3, t2+0.1);
+        const e2 = ctx.createGain();
+        e2.gain.setValueAtTime(0,t2); e2.gain.linearRampToValueAtTime(0.05,t2+0.015); e2.gain.exponentialRampToValueAtTime(0.001,t2+0.15);
+        o2.connect(e2); e2.connect(birdVerb.input); o2.start(t2); o2.stop(t2+0.18);
       }
-
-      nodesRef.current = nodes;
-    }).catch(() => {}); // if Tone fails to load, silently no-op
+      const wMult = (weather==='rain'||weather==='thunderstorm') ? 2.2 : 1;
+      birdTimerRef.current = setTimeout(chirp, (1800+Math.random()*(6000/Math.max(1,birdCount)))*wMult);
+    };
+    if (birdCount > 0) birdTimerRef.current = setTimeout(chirp, 900+Math.random()*2500);
 
     return () => {
-      cancelled = true;
       clearTimeout(birdTimerRef.current);
       clearTimeout(thunderTimerRef.current);
-      nodesRef.current.forEach(n => {
-        try { n.stop?.(); n.dispose?.(); } catch {}
-      });
-      nodesRef.current = [];
+      ctx.close().catch(()=>{});
+      ctxRef.current = null;
     };
   }, [weather, birdCount, soundsEnabled]);
 }
