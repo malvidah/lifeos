@@ -21,7 +21,7 @@ import HealthCard from "./cards/HealthCard.jsx";
 import HabitsCard, { HabitFilterBtns } from "./cards/HabitsCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
-import ProjectsCard from "./cards/ProjectsCard.jsx";
+import GoalsCard from "./cards/GoalsCard.jsx";
 import WorldMapCard from "./cards/WorldMapCard.jsx";
 import { JournalEditor, JournalModeToggle, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns, TaskSaveIndicator } from "./widgets/Tasks.jsx";
@@ -628,8 +628,8 @@ function DashboardInner() {
           {!searchOpen && !goalsCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Goals">
-                <Card label="🏁 Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/projects">
-                  <ProjectsCard token={token} date={selected} onSelectDate={setSelected} />
+                <Card label="🏁 Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/goals">
+                  <GoalsCard token={token} date={selected} onSelectDate={setSelected} />
                 </Card>
               </ErrorBoundary>
             </div>

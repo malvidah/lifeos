@@ -283,10 +283,15 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
         if (hasChanges || habitChanged) {
           window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+        } else {
+          // No changes — still clear the "saving..." indicator
+          window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
         }
       } catch (err) {
         console.warn('[tasks] diff save failed:', err);
         showToast('Failed to save tasks', 'error');
+        // Clear indicator on error too
+        window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
       } finally {
         savingRef.current = false;
       }
@@ -354,6 +359,8 @@ export function TaskSaveIndicator() {
     const onUpdate = () => {
       clearTimeout(timerRef.current);
       setStatus('saving');
+      // Safety: auto-clear after 5s in case saved event is never fired
+      timerRef.current = setTimeout(() => setStatus(null), 5000);
     };
     // Show "saved" when save completes
     const onSaved = () => {
