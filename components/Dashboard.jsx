@@ -30,6 +30,7 @@ import NotesCard from "./widgets/NotesCard.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 import WelcomeOverlay from "./ui/WelcomeOverlay.jsx";
+import ShortcutCheatsheet from "./ui/ShortcutCheatsheet.jsx";
 import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
 
@@ -765,6 +766,9 @@ function DashboardInner() {
         <ChatFloat date={selected} token={token} userId={userId} theme={theme}
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
       )}
+
+      {/* Keyboard shortcut cheatsheet — ? button + overlay */}
+      <ShortcutCheatsheet/>
     </div>
     </NavigationContext.Provider>
     </NoteContext.Provider>
