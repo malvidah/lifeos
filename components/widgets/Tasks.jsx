@@ -76,8 +76,20 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   const [htmlValue, setHtmlValue] = useState('');
   const [editorKey, setEditorKey] = useState(0); // increment to force editor remount
   const serverTasksRef = useRef([]); // Last-known server state for diffing
+  const taskIdMapRef = useRef(new Map()); // position → server task metadata (survives TipTap DOM rebuilds)
   const saveTimerRef = useRef(null);
   const savingRef = useRef(false);
+
+  // Build position → task_id map from server tasks.
+  // This is the authoritative source of task_ids — TipTap may drop data-task-id
+  // from the DOM during edits, but the position map survives.
+  const rebuildIdMap = useCallback((tasks) => {
+    const map = new Map();
+    for (const t of tasks) {
+      if (t.id) map.set(t.position, { id: t.id, recurring: t._source === 'recurring', _source: t._source });
+    }
+    taskIdMapRef.current = map;
+  }, []);
 
   // Inject checkbox styles
   const accentHex = theme === 'light' ? '#C07818' : '#D08828';
@@ -94,6 +106,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       if (cancelled) return;
       const tasks = d?.tasks ?? [];
       serverTasksRef.current = tasks;
+      rebuildIdMap(tasks);
 
       // Convert structured tasks to HTML for the editor
       const html = d?.data || tasksToHtml(tasks);
@@ -130,6 +143,17 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
       try {
         const editorTasks = parseTaskBlocks(newHtml);
+
+        // Overlay task_ids from position map — TipTap may drop data-task-id during edits
+        for (const et of editorTasks) {
+          if (et.task_id) continue; // already has id from DOM
+          const mapped = taskIdMapRef.current.get(et.position);
+          if (mapped) {
+            et.task_id = mapped.id;
+            if (mapped.recurring) et.recurring = true;
+          }
+        }
+
         const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
 
         // Habit done-toggles need complete-recurring (not PATCH), handle first
@@ -158,7 +182,10 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
         if (hasChanges || habitChanged) {
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
-          if (fresh?.tasks) serverTasksRef.current = fresh.tasks;
+          if (fresh?.tasks) {
+            serverTasksRef.current = fresh.tasks;
+            rebuildIdMap(fresh.tasks);
+          }
           window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
         }
       } catch (err) {
