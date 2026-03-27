@@ -21,6 +21,7 @@ import HealthCard from "./cards/HealthCard.jsx";
 import HabitsCard, { HabitFilterBtns } from "./cards/HabitsCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
+import ProjectsCard from "./cards/ProjectsCard.jsx";
 import WorldMapCard from "./cards/WorldMapCard.jsx";
 import { JournalEditor, JournalModeToggle, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns, TaskSaveIndicator } from "./widgets/Tasks.jsx";
@@ -37,6 +38,7 @@ import { useRealtimeSync } from "@/lib/useRealtimeSync";
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
   { id: 'project-graph', label: 'Projects', icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span> },
+  { id: 'goals', label: 'Goals', icon: <span style={{fontSize:14,lineHeight:1}}>🏔️</span> },
   { id: 'world-map',     label: 'Map',      icon: <span style={{fontSize:14,lineHeight:1}}>📍</span> },
   { id: 'cal',      label: 'Calendar', icon: <span style={{fontSize:14,lineHeight:1}}>📅</span> },
   { id: 'health',   label: 'Health',   icon: <span style={{fontSize:14,lineHeight:1}}>💚</span> },
@@ -368,6 +370,7 @@ function DashboardInner() {
   const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   true);
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
+  const [goalsCollapsed,  toggleGoals]    = useCollapse("goals",   true);
   // Migrate old localStorage keys for renamed dock IDs
   if (typeof window !== "undefined") {
     for (const [oldKey, newKey] of [["collapse:map","collapse:project-graph"],["collapse:timeline","collapse:world-map"]]) {
@@ -589,6 +592,7 @@ function DashboardInner() {
                 : item.id === 'health' ? !healthCollapsed
                 : item.id === 'habits' ? !habitsCollapsed
                 : item.id === 'notes' ? !notesCollapsed
+                : item.id === 'goals' ? !goalsCollapsed
                 : !collapseMap[item.id],
               onToggle: item.id === 'project-graph' ? toggleMap_
                 : item.id === 'world-map' ? toggleTimeline
@@ -596,6 +600,7 @@ function DashboardInner() {
                 : item.id === 'health' ? toggleHealth
                 : item.id === 'habits' ? toggleHabits
                 : item.id === 'notes' ? toggleNotes
+                : item.id === 'goals' ? toggleGoals
                 : toggleMap[item.id],
             }))}
           />
@@ -654,6 +659,15 @@ function DashboardInner() {
                   headerRight={<HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/>}>
                   <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected}/>
                 </Card>
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {/* 4c. ProjectsCard (Goals kanban) — below habits */}
+          {!searchOpen && !goalsCollapsed && (
+            <div style={{flexShrink:0}}>
+              <ErrorBoundary label="Goals">
+                <ProjectsCard token={token} date={selected} onSelectDate={setSelected} />
               </ErrorBoundary>
             </div>
           )}

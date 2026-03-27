@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { useState, useEffect } from "react";
 const StandaloneShell = dynamic(() => import("@/components/StandaloneShell"), { ssr: false });
 const MapCard = dynamic(() => import("@/components/cards/MapCard").then(m => ({ default: m.MapCard })), { ssr: false });
+const ProjectsCard = dynamic(() => import("@/components/cards/ProjectsCard"), { ssr: false });
 
 export default function ProjectsPage() {
   return (
@@ -33,22 +34,25 @@ function ProjectsInner({ token, date }) {
     });
   }, [token]);
 
-  if (!graphData) return null;
-
   return (
-    <div style={{ margin: '-16px', height: 'calc(100vh - 52px)' }}>
-      <MapCard
-        allTags={graphData.allTags}
-        connections={graphData.connections}
-        recency={graphData.recency}
-        entryCounts={graphData.entryCounts}
-        completedTasks={graphData.completedTasks}
-        habits={graphData.habits}
-        healthDots={{}}
-        onSelectProject={() => {}}
-        date={date}
-        token={token}
-      />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <ProjectsCard token={token} date={date} />
+      {graphData && (
+        <div style={{ height: 'calc(100vh - 400px)', minHeight: 300, borderRadius: 12, overflow: 'hidden' }}>
+          <MapCard
+            allTags={graphData.allTags}
+            connections={graphData.connections}
+            recency={graphData.recency}
+            entryCounts={graphData.entryCounts}
+            completedTasks={graphData.completedTasks}
+            habits={graphData.habits}
+            healthDots={{}}
+            onSelectProject={() => {}}
+            date={date}
+            token={token}
+          />
+        </div>
+      )}
     </div>
   );
 }
