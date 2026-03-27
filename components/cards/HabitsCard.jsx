@@ -103,6 +103,13 @@ const HEALTH_COLORS = {
   activity: 'var(--dl-accent)',
   recovery: 'var(--dl-purple)',
 };
+// Pastel fills for health cells — can't append opacity to CSS vars, so use rgba
+const HEALTH_FILLS = {
+  sleep:     { fill: 'rgba(107,174,214,0.3)', bg: 'rgba(107,174,214,0.1)' },
+  readiness: { fill: 'rgba(122,158,110,0.3)', bg: 'rgba(122,158,110,0.1)' },
+  activity:  { fill: 'rgba(208,136,40,0.3)',  bg: 'rgba(208,136,40,0.1)' },
+  recovery:  { fill: 'rgba(168,120,200,0.3)', bg: 'rgba(168,120,200,0.1)' },
+};
 
 function buildHealthHabits(scores, startDate, endDate, today) {
   // scores: [{ date, sleep_score, readiness_score, activity_score, recovery_score }]
@@ -906,7 +913,8 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     const healthColor = h._isHealth && h.matchKey ? HEALTH_COLORS[h.matchKey] : null;
     const tag = h.project_tags?.[0];
     const baseColor = healthColor || (tag ? projectColor(tag) : null);
-    const fillColor = healthColor ? healthColor + '55' : (baseColor ? baseColor + '55' : 'var(--dl-accent-30, rgba(208,136,40,0.3))');
+    const hf = h._isHealth && h.matchKey ? HEALTH_FILLS[h.matchKey] : null;
+    const fillColor = hf ? hf.fill : (baseColor ? baseColor + '55' : 'var(--dl-accent-30, rgba(208,136,40,0.3))');
     return (
       <div style={{ display: 'flex', height: rowH }}>
         {visibleDates.map((d, i) => {
@@ -945,7 +953,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
                   style={{
                     width: cellSize, height: cellSize,
                     borderRadius: h._isHealth ? '50%' : 4,
-                    background: done ? fillColor : (h._isHealth && healthColor ? healthColor + '15' : 'transparent'),
+                    background: done ? fillColor : (hf ? hf.bg : 'transparent'),
                     border: `1.5px solid ${done ? (baseColor || 'var(--dl-accent)') : isPast ? (baseColor ? baseColor + '33' : 'var(--dl-border2)') : 'var(--dl-border)'}`,
                     opacity: !isPast && !done ? 0.35 : 1,
                     transition: 'all 0.15s',
