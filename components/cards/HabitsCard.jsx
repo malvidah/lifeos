@@ -1044,6 +1044,8 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
           </div>
         </div>
       </div>
+      <Tip visible={habitCreatedTip.visible} message="Your habit is in the grid! Click the bubbles to track it daily." anchorRef={gridRef} position="below" onDismiss={habitCreatedTip.dismiss} />
+      <Tip visible={habitStreakTip.visible} message="Keep it going — streaks earn freezes that protect your count." anchorRef={gridRef} position="below" onDismiss={habitStreakTip.dismiss} />
     </div>
   );
 }

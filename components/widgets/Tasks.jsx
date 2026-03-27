@@ -10,6 +10,8 @@ import { parseTaskBlocks, tasksToHtml } from "@/lib/parseBlocks";
 import { diffTasks, applyDiff, isHabitOrRecurring } from "@/lib/taskDiff";
 import { markLocalSave } from "@/lib/useRealtimeSync";
 import { showToast } from "../ui/Toast.jsx";
+import { useTip } from "@/lib/useTip";
+import Tip from "../ui/Tip.jsx";
 
 // Detect which tasks changed done state between two parsed task arrays.
 // Returns array of { task_id, done, serverTask } for habits whose done state flipped.
@@ -84,6 +86,12 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   const { notes: noteNames } = useContext(NoteContext);
   const placeNames = useContext(PlaceNamesContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+
+  // Contextual tips
+  const slashTip = useTip('tip-slash-commands');
+  const projectTagTip = useTip('tip-project-tag');
+  const editorWrapRef = useRef(null);
+  const firstUpdateRef = useRef(true); // track first handleUpdate call
 
   // State
   const [loaded, setLoaded] = useState(false);
@@ -194,6 +202,17 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     const prevHtml = lastHtmlRef.current;
     lastHtmlRef.current = newHtml;
 
+    // Tip: show slash-command hint on first real edit
+    if (firstUpdateRef.current && prevHtml) {
+      firstUpdateRef.current = false;
+      slashTip.show();
+    }
+
+    // Tip: detect first project tag creation (show() is a no-op if already shown)
+    if (newHtml.includes('data-project-tag') && (!prevHtml || !prevHtml.includes('data-project-tag'))) {
+      projectTagTip.show();
+    }
+
     // Fast path: immediately fire habit toggles without waiting for debounce.
     // Parse both old and new to detect checkbox-only changes.
     if (!habitToggleInFlightRef.current && prevHtml) {
@@ -298,7 +317,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   );
 
   return (
-    <div data-filter={taskFilter} data-tasks-id={filterId} style={{
+    <div ref={editorWrapRef} data-filter={taskFilter} data-tasks-id={filterId} style={{
       '--task-border': "var(--dl-border2)",
       '--task-color': "var(--dl-accent)",
       '--task-fill': theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
@@ -319,6 +338,8 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         onNoteClick={name => navigateToNote(name)}
         style={{ padding: 0 }}
       />
+      <Tip visible={slashTip.visible} message="Tip: type / to see all commands — habits, projects, dates, and more" anchorRef={editorWrapRef} position="below" onDismiss={slashTip.dismiss} />
+      <Tip visible={projectTagTip.visible} message="This project now appears on your mountain range!" anchorRef={editorWrapRef} position="below" onDismiss={projectTagTip.dismiss} />
     </div>
   );
 }

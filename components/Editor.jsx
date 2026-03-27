@@ -22,6 +22,8 @@ import { Suggestion } from '@tiptap/suggestion';
 import { serif, mono, F, projectColor, CHIP_TOKENS } from '@/lib/tokens';
 import { generateDateSuggestions, dateChipColor, MONTHS_SHORT } from '@/lib/dates';
 import { getRecurrenceSuggestions } from '@/lib/recurrence';
+import { useTip } from '@/lib/useTip';
+import Tip from './ui/Tip.jsx';
 
 const ACCENT = '#D08828'; // must match --dl-accent; used for CSS alpha concatenation only
 const WARM   = 'var(--dl-accent)';
@@ -910,6 +912,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     },
   }), []); // eslint-disable-line
 
+  // Tip: first slash command usage
+  const firstSlashTip = useTip('tip-first-slash');
+  const editorContainerRef = useRef(null);
+
   // Suggestion state — suggRef kept in sync synchronously so handleKeyDown
   // can read the current state in the same event tick (useState is async).
   const [sugg, setSugg] = useState(null);
@@ -988,7 +994,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             event.preventDefault();
             return true;
           }
-          s.command(item); setSugg(null); event.preventDefault();
+          s.command(item); setSugg(null); firstSlashTip.show(); event.preventDefault();
         }
         return true;
       }
@@ -1565,7 +1571,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
   return (
     <>
-      <div className={`dl-editor${taskList ? ' dl-tasklist' : ''}${hideInlineImages ? ' dl-hide-images' : ''}`} style={{
+      <div ref={editorContainerRef} className={`dl-editor${taskList ? ' dl-tasklist' : ''}${hideInlineImages ? ' dl-hide-images' : ''}`} style={{
         fontFamily: serif, fontSize: F.md, lineHeight: '1.7',
         color: textColor, caretColor: color,
         '--dl-muted': mutedColor,
@@ -1614,9 +1620,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             editorRef.current?.commands.insertContent(cmd + ' ');
             return;
           }
-          sugg?.command(item); setSugg(null);
+          sugg?.command(item); setSugg(null); firstSlashTip.show();
         }}
       />
+      <Tip visible={firstSlashTip.visible} message="All commands: /h habit, /r repeat, /p project, /l location, /d date" anchorRef={editorContainerRef} position="below" onDismiss={firstSlashTip.dismiss} />
     </>
   );
 });
