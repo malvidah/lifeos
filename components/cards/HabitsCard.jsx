@@ -215,20 +215,6 @@ export function HabitFilterBtns({ filter, setFilter }) {
   );
 }
 
-// ── Add Habit button for card header ──────────────────────────────────────────
-export function AddHabitBtn({ onClick }) {
-  return (
-    <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label="Add habit" style={{
-      fontFamily: mono, fontSize: 14, lineHeight: 1,
-      width: 22, height: 22, borderRadius: 100,
-      border: '1.5px solid var(--dl-border2)',
-      background: 'transparent', color: 'var(--dl-middle)',
-      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      transition: 'all 0.15s',
-    }}>+</button>
-  );
-}
-
 // ── Autocomplete dropdown field ───────────────────────────────────────────────
 function AutocompleteField({ value, onChange, onSelect, options, placeholder, label, autoFocus }) {
   const [open, setOpen] = useState(false);
@@ -316,124 +302,38 @@ function AutocompleteField({ value, onChange, onSelect, options, placeholder, la
   );
 }
 
-// ── Inline habit creation form ────────────────────────────────────────────────
-function HabitCreationForm({ token, onCreated, onCancel }) {
-  const [name, setName] = useState('');
-  const [projectText, setProjectText] = useState('');
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [scheduleText, setScheduleText] = useState('');
-  const [selectedSchedule, setSelectedSchedule] = useState(null);
-  const [submitting, setSubmitting] = useState(false);
-  const projectNames = useProjectNames();
-
-  const projectOptions = (projectNames || []).map(p => ({ key: p, label: p, search: p.toLowerCase() }));
-
-  useEffect(() => {
-    const onKey = e => { if (e.key === 'Escape') onCancel(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onCancel]);
-
-  const canSubmit = name.trim() && selectedSchedule && !submitting;
-
-  const submit = async () => {
-    if (!canSubmit) return;
-    setSubmitting(true);
-    const parts = [name.trim()];
-    if (selectedProject) parts.push(`{${selectedProject.key}}`);
-    parts.push(`{h:${selectedSchedule.key}:${selectedSchedule.chip}}`);
-    const text = parts.join(' ');
-    const today = todayKey();
-    try {
-      await api.post('/api/tasks', { date: today, text, done: false }, token);
-      window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
-      onCreated();
-    } catch (err) {
-      showToast('Failed to create habit', 'error');
-      setSubmitting(false);
-    }
-  };
-
-  return (
-    <div style={{ padding: '8px 0 4px', borderTop: '1px solid var(--dl-border)' }}>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-        {/* Habit name — plain text */}
-        <div style={{ flex: 2, minWidth: 0 }}>
-          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>HABIT</span>
-          <input
-            autoFocus
-            value={name}
-            onChange={e => setName(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submit(); }}
-            placeholder="Habit name..."
-            style={{
-              fontFamily: mono, fontSize: 12, width: '100%', boxSizing: 'border-box',
-              background: 'transparent', border: '1.5px solid var(--dl-border2)',
-              borderRadius: 6, padding: '4px 8px', color: 'var(--dl-strong)',
-              outline: 'none', letterSpacing: '0.02em',
-            }}
-          />
-        </div>
-
-        {/* Project — autocomplete */}
-        <AutocompleteField
-          value={projectText}
-          onChange={v => { setProjectText(v); setSelectedProject(null); }}
-          onSelect={opt => { setProjectText(opt.label); setSelectedProject(opt); }}
-          options={projectOptions}
-          placeholder="Optional..."
-          label="PROJECT"
-        />
-
-        {/* Repeats — autocomplete */}
-        <AutocompleteField
-          value={scheduleText}
-          onChange={v => { setScheduleText(v); setSelectedSchedule(null); }}
-          onSelect={opt => { setScheduleText(opt.label); setSelectedSchedule(opt); }}
-          options={SCHEDULE_OPTIONS}
-          placeholder="Daily, M·W·F..."
-          label="REPEATS"
-        />
-
-        {/* Submit */}
-        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
-          <span style={{ fontFamily: mono, fontSize: 9, color: 'transparent', letterSpacing: '0.06em', display: 'block', marginBottom: 2 }}>&nbsp;</span>
-          <button onClick={submit} disabled={!canSubmit} style={{
-            fontFamily: mono, fontSize: 10, padding: '5px 12px',
-            borderRadius: 6, border: 'none', cursor: canSubmit ? 'pointer' : 'default',
-            background: 'var(--dl-accent)', color: 'var(--dl-bg)',
-            opacity: canSubmit ? 1 : 0.4,
-            fontWeight: 600, letterSpacing: '0.04em', transition: 'all 0.15s',
-          }}>ADD</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Habit Detail View (GitHub-style activity grid) ───────────────────────────
-function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
+// ── Habit Detail View (GitHub-style activity grid + new habit creation) ───────
+function HabitDetailView({ habit, token, onBack, onToggle, onUpdated, isNew, onCreated }) {
   const projectNames = useProjectNames();
   const today = todayKey();
-  const tag = habit.project_tags?.[0];
+  const tag = habit?.project_tags?.[0];
   const baseColor = tag ? projectColor(tag) : null;
   const fillColor = baseColor ? baseColor + '55' : 'var(--dl-accent-30, rgba(208,136,40,0.3))';
   const borderColor = baseColor || 'var(--dl-accent)';
 
   // Editable fields
-  const [editName, setEditName] = useState(habit.text);
+  const [editName, setEditName] = useState(habit?.text || '');
   const [editingProject, setEditingProject] = useState(false);
   const [projectText, setProjectText] = useState(tag || '');
   const [selectedProject, setSelectedProject] = useState(tag ? { key: tag, label: tag } : null);
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [scheduleText, setScheduleText] = useState('');
   const [selectedSchedule, setSelectedSchedule] = useState(null);
+  const [saved, setSaved] = useState(!isNew);
 
   const nameRef = useRef(null);
   const nameTimer = useRef(null);
 
   const projectOptions = (projectNames || []).map(p => ({ key: p, label: p, search: p.toLowerCase() }));
-  const currentScheduleOpt = SCHEDULE_OPTIONS.find(o => o.key === habit.schedule);
+  const currentScheduleOpt = SCHEDULE_OPTIONS.find(o => o.key === (habit?.schedule || selectedSchedule?.key));
+
+  // Escape to cancel in new mode
+  useEffect(() => {
+    if (!isNew || saved) return;
+    const onKey = e => { if (e.key === 'Escape') onBack(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isNew, saved, onBack]);
 
   // Recompose text with tokens
   function composeText(name, proj, schedKey, schedChip) {
@@ -443,8 +343,20 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
     return parts.join(' ');
   }
 
-  // PATCH helper
+  // POST for new habit creation
+  const createHabit = async (name, proj, sched) => {
+    const text = composeText(name, proj?.key, sched.key, sched.chip);
+    try {
+      const res = await api.post('/api/tasks', { date: today, text, done: false }, token);
+      window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
+      setSaved(true);
+      onCreated?.(res?.task?.id);
+    } catch { showToast('Failed to create habit', 'error'); }
+  };
+
+  // PATCH helper (existing habits only)
   const patchHabit = async (text, extraPatch = {}) => {
+    if (!habit?.id) return;
     try {
       await api.patch('/api/tasks', { id: habit.id, text, ...extraPatch }, token);
       window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
@@ -452,9 +364,10 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
     } catch { showToast('Failed to update habit', 'error'); }
   };
 
-  // Name change — debounced
+  // Name change — debounced (only for existing habits)
   const onNameChange = (val) => {
     setEditName(val);
+    if (isNew && !saved) return; // don't auto-save new habits on name change alone
     clearTimeout(nameTimer.current);
     nameTimer.current = setTimeout(() => {
       if (!val.trim()) return;
@@ -469,15 +382,22 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
     setSelectedProject(opt);
     setProjectText(opt.label);
     setEditingProject(false);
+    if (isNew && !saved) return; // wait for schedule to create
     const sched = currentScheduleOpt || SCHEDULE_OPTIONS[0];
     patchHabit(composeText(editName, opt.key, sched.key, sched.chip), { project_tags: [opt.key.toLowerCase()] });
   };
 
-  // Schedule change
+  // Schedule change — for new habits, this triggers creation
   const onSchedulePick = (opt) => {
     setSelectedSchedule(opt);
     setScheduleText(opt.label);
     setEditingSchedule(false);
+    if (isNew && !saved) {
+      if (editName.trim()) {
+        createHabit(editName, selectedProject, opt);
+      }
+      return;
+    }
     const proj = selectedProject?.key || tag;
     patchHabit(composeText(editName, proj, opt.key, opt.chip));
   };
@@ -501,22 +421,60 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
     );
   };
   const renderScheduleChip = () => {
-    const sched = selectedSchedule || currentScheduleOpt || SCHEDULE_OPTIONS[0];
+    const sched = selectedSchedule || currentScheduleOpt;
+    if (!sched) return (
+      <button onClick={() => { setEditingSchedule(true); setScheduleText(''); }} style={{ ...CHIP_TOKENS.date('var(--dl-middle)'), cursor: 'pointer', border: 'none', borderRadius: '999px', opacity: 0.5 }}>+ schedule</button>
+    );
     return (
       <button onClick={() => { setEditingSchedule(true); setScheduleText(''); }} style={{ ...CHIP_TOKENS.date('var(--dl-accent)'), cursor: 'pointer', border: 'none', borderRadius: '999px' }}>&#x1F3AF; {sched.chip || sched.label}</button>
     );
   };
 
+  // Render the header row (shared between empty and full states)
+  const renderHeader = () => (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+      <button onClick={onBack} style={backBtnStyle}>&lsaquo;</button>
+      <input
+        ref={nameRef}
+        autoFocus={isNew}
+        value={editName}
+        onChange={e => onNameChange(e.target.value)}
+        placeholder={isNew ? 'Habit name...' : ''}
+        size={Math.max(1, editName.length || 12)}
+        style={{
+          fontFamily: mono, fontSize: 14, fontWeight: 600, color: 'var(--dl-strong)',
+          textTransform: 'uppercase', letterSpacing: '0.04em',
+          background: 'transparent', border: 'none', outline: 'none', padding: 0,
+        }}
+      />
+      {editingProject ? (
+        <div style={{ position: 'relative', width: 140 }}>
+          <AutocompleteField value={projectText} onChange={v => { setProjectText(v); setSelectedProject(null); }} onSelect={onProjectPick} options={projectOptions} placeholder="Project..." label="" autoFocus />
+        </div>
+      ) : renderProjectChip()}
+      {editingSchedule ? (
+        <div style={{ position: 'relative', width: 160 }}>
+          <AutocompleteField value={scheduleText} onChange={v => { setScheduleText(v); setSelectedSchedule(null); }} onSelect={onSchedulePick} options={SCHEDULE_OPTIONS} placeholder="Schedule..." label="" autoFocus />
+        </div>
+      ) : renderScheduleChip()}
+    </div>
+  );
+
   if (allDates.length === 0) {
     return (
       <div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-          <button onClick={onBack} style={backBtnStyle}>&lsaquo;</button>
-          <span style={{ fontFamily: mono, fontSize: 14, fontWeight: 600, color: 'var(--dl-strong)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{habit.text}</span>
-          {renderProjectChip()}
-          {renderScheduleChip()}
+        {renderHeader()}
+        {/* Stats row — zeros for new/empty habits */}
+        <div style={{ display: 'flex', gap: 16, marginBottom: 12, alignItems: 'center' }}>
+          <span style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-middle)' }}>
+            {streakEmoji(0, false, 0)} 0 streak
+          </span>
+          <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)' }}>Best: 0</span>
+          <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)' }}>0% this month</span>
         </div>
-        <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center' }}>No data yet</div>
+        <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center' }}>
+          {isNew && !saved ? 'Pick a name and schedule to create this habit' : 'No data yet'}
+        </div>
       </div>
     );
   }
@@ -584,49 +542,7 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
 
   return (
     <div>
-      {/* Header: back chevron + editable name + inline chips */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-        <button onClick={onBack} style={backBtnStyle}>&lsaquo;</button>
-        <input
-          ref={nameRef}
-          value={editName}
-          onChange={e => onNameChange(e.target.value)}
-          size={Math.max(1, editName.length)}
-          style={{
-            fontFamily: mono, fontSize: 14, fontWeight: 600, color: 'var(--dl-strong)',
-            textTransform: 'uppercase', letterSpacing: '0.04em',
-            background: 'transparent', border: 'none', outline: 'none', padding: 0,
-          }}
-        />
-        {/* Project chip */}
-        {editingProject ? (
-          <div style={{ position: 'relative', width: 140 }}>
-            <AutocompleteField
-              value={projectText}
-              onChange={v => { setProjectText(v); setSelectedProject(null); }}
-              onSelect={onProjectPick}
-              options={projectOptions}
-              placeholder="Project..."
-              label=""
-              autoFocus
-            />
-          </div>
-        ) : renderProjectChip()}
-        {/* Schedule chip */}
-        {editingSchedule ? (
-          <div style={{ position: 'relative', width: 160 }}>
-            <AutocompleteField
-              value={scheduleText}
-              onChange={v => { setScheduleText(v); setSelectedSchedule(null); }}
-              onSelect={onSchedulePick}
-              options={SCHEDULE_OPTIONS}
-              placeholder="Schedule..."
-              label=""
-              autoFocus
-            />
-          </div>
-        ) : renderScheduleChip()}
-      </div>
+      {renderHeader()}
 
       {/* Stats row */}
       <div style={{ display: 'flex', gap: 16, marginBottom: 12, alignItems: 'center' }}>
@@ -725,14 +641,12 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
   );
 }
 
-export default function HabitsCard({ date, token, userId, project, habitFilter = 'all', onSelectDate, showCreateForm: externalCreateForm, onCreateDone }) {
-  const [internalCreating, setInternalCreating] = useState(false);
-  const showCreateForm = externalCreateForm || internalCreating;
-  const handleCreateDone = () => { setInternalCreating(false); onCreateDone?.(); };
+export default function HabitsCard({ date, token, userId, project, habitFilter = 'all', onSelectDate }) {
   const [habits, setHabits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedHabitId, setSelectedHabitId] = useState(null);
+  const [creatingNew, setCreatingNew] = useState(false);
   const scrollRef = useRef(null);
 
   // Drag-to-scroll via window mouse events (no pointer capture — allows cell clicks)
@@ -867,24 +781,34 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     );
   }
 
+  // Show detail view for new habit creation
+  if (creatingNew) {
+    const stubHabit = { text: '', schedule: null, completions: {}, project_tags: [], streak: 0, bestStreak: 0, frozen: false, freezes: 0 };
+    return (
+      <HabitDetailView
+        habit={stubHabit}
+        token={token}
+        isNew
+        onBack={() => setCreatingNew(false)}
+        onToggle={() => {}}
+        onUpdated={refresh}
+        onCreated={(newId) => { setCreatingNew(false); refresh(); if (newId) setSelectedHabitId(newId); }}
+      />
+    );
+  }
+
   if (habits.length === 0) {
     return (
       <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
-        {showCreateForm ? (
-          <HabitCreationForm token={token} onCreated={() => { handleCreateDone(); refresh(); }} onCancel={handleCreateDone} />
-        ) : (
-          <div>
-            <div style={{ marginBottom: 8 }}>No habits yet — use /h in tasks to tag one</div>
-            <button onClick={() => setInternalCreating(true)} style={{
-              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
-              background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
-              transition: 'color 0.15s',
-            }}
-              onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
-            >+ New Habit</button>
-          </div>
-        )}
+        <div style={{ marginBottom: 8 }}>No habits yet — use /h in tasks to tag one</div>
+        <button onClick={() => setCreatingNew(true)} style={{
+          fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+          background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
+          transition: 'color 0.15s',
+        }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+        >+ New Habit</button>
       </div>
     );
   }
@@ -1039,18 +963,16 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
           </div>
 
           {/* + New Habit button */}
-          {!showCreateForm && (
-            <div style={{ height: rowH, display: 'flex', alignItems: 'center' }}>
-              <button onClick={() => setInternalCreating(true)} style={{
-                fontFamily: mono, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase',
-                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
-                padding: 0, lineHeight: 1, transition: 'color 0.15s', whiteSpace: 'nowrap',
-              }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
-              >+ New Habit</button>
-            </div>
-          )}
+          <div style={{ height: rowH, display: 'flex', alignItems: 'center' }}>
+            <button onClick={() => setCreatingNew(true)} style={{
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase',
+              background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
+              padding: 0, lineHeight: 1, transition: 'color 0.15s', whiteSpace: 'nowrap',
+            }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+            >+ New Habit</button>
+          </div>
 
           {filteredHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
         </div>
@@ -1083,15 +1005,12 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
             </div>
 
             {/* Spacer row to align with + New Habit button */}
-            {!showCreateForm && <div style={{ height: rowH }} />}
+            <div style={{ height: rowH }} />
 
             {filteredHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
           </div>
         </div>
       </div>
-      {showCreateForm && (
-        <HabitCreationForm token={token} onCreated={() => { handleCreateDone(); refresh(); }} onCancel={handleCreateDone} />
-      )}
     </div>
   );
 }
