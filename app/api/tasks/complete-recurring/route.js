@@ -3,9 +3,10 @@ import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
 // POST /api/tasks/complete-recurring { template_id, date }
 // Marks a recurring/habit task as completed for a specific date.
-// Always creates a separate completion row with habit/recurrence chips stripped.
+// Always creates a separate completion row marked with data-completion="true".
 // Templates (rows with data-habit/data-recurrence) are NEVER marked done.
-// Completion rows have data-habit stripped so they don't appear as templates.
+// Completion rows keep all chips for visual consistency; the habits API
+// distinguishes them from templates via the data-completion marker.
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
 
@@ -27,19 +28,14 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'template not found' }, { status: 404 });
   }
 
-  // Strip data-habit and data-recurrence spans from the completion HTML so it
-  // doesn't appear as a template in the habits API if done ever flips to false.
-  // Keep project/note/date chips — those are useful metadata on the completion.
+  // Keep all chips (including habit/recurrence) in completion HTML for visual
+  // consistency. Mark with data-completion="true" so the habits API can
+  // distinguish completions from templates.
   const completionHtml = (template.html || '')
     .replace(/data-checked="false"/, 'data-checked="true"')
-    .replace(/<span\b[^>]*\bdata-habit="[^"]*"[^>]*>[^<]*<\/span>/g, '')
-    .replace(/<span\b[^>]*\bdata-recurrence="[^"]*"[^>]*>[^<]*<\/span>/g, '');
-  const completionText = (template.text || '')
-    .replace(/\{h:[^}]+\}/g, '')
-    .replace(/\{r:[^}]+\}/g, '')
-    .replace(/\/[hr]\s+\S+/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/^<li\b/, '<li data-completion="true"');
+  // Keep original text including tokens — matches template for suppression
+  const completionText = template.text || '';
 
   // For matching existing completions
   const completionTextLower = cleanTaskText(template.text);
@@ -53,11 +49,14 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .eq('date', date)
     .is('deleted_at', null);
 
-  // Helper: check if a row is a habit/recurrence template (has data-habit or data-recurrence chips)
+  // Helper: check if a row is a habit/recurrence template (not a completion row)
+  const isCompletion = (r) => /data-completion="true"/.test(r.html || '');
   const isTemplate = (r) =>
-    r.id === template_id ||
-    /data-habit=/.test(r.html || '') ||
-    /data-recurrence=/.test(r.html || '');
+    !isCompletion(r) && (
+      r.id === template_id ||
+      /data-habit=/.test(r.html || '') ||
+      /data-recurrence=/.test(r.html || '')
+    );
 
   const matchingRows = (dateRows ?? []).filter(r =>
     cleanTaskText(r.text) === completionTextLower

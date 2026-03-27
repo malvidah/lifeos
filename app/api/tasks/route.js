@@ -75,17 +75,18 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (e1) throw e1;
 
   // Suppress same-date habit/recurrence templates when a completion row exists.
-  // When a habit is completed on its origin date, complete-recurring creates a
-  // separate completion row (stripped of data-habit/data-recurrence). Both the
-  // template and completion appear in ownTasks. Filter out the template so only
-  // the completion row shows.
-  const isTemplateRow = (t) =>
+  // Completion rows are marked with data-completion="true" and keep their habit
+  // chips for visual consistency. Templates lack that marker.
+  const isCompletionRow = (t) => t.html?.includes('data-completion="true"');
+  const isHabitOrRecurrence = (t) =>
     t.html && (t.html.includes('data-habit=') || t.html.includes('data-recurrence='));
   const completionTexts = new Set(
-    (ownTasks ?? []).filter(t => t.done && !isTemplateRow(t)).map(t => cleanTaskText(t.text)).filter(Boolean)
+    (ownTasks ?? []).filter(t => t.done && isCompletionRow(t)).map(t => cleanTaskText(t.text)).filter(Boolean)
   );
   const filteredOwnTasks = (ownTasks ?? []).filter(t => {
-    if (!isTemplateRow(t)) return true;
+    // Keep non-habit/recurrence rows and completion rows
+    if (!isHabitOrRecurrence(t) || isCompletionRow(t)) return true;
+    // Suppress template if a completion row with matching text exists
     const cleaned = cleanTaskText(t.text);
     return !(cleaned && completionTexts.has(cleaned));
   });
@@ -503,14 +504,16 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
   if (updates.done === true) {
     const { data: existing } = await supabase
       .from('tasks').select('html').eq('id', id).eq('user_id', user.id).single();
-    if (existing?.html && (existing.html.includes('data-recurrence=') || existing.html.includes('data-habit='))) {
+    const hasChips = existing?.html && (existing.html.includes('data-recurrence=') || existing.html.includes('data-habit='));
+    const isCompletion = existing?.html?.includes('data-completion="true"');
+    if (hasChips && !isCompletion) {
       // Silently ignore — the template must stay undone
       return Response.json({ ok: true, guarded: 'recurring_template' });
     }
   }
 
   // Whitelist updatable fields
-  const allowed = ['done', 'completed_at', 'due_date', 'text', 'html', 'project_tags'];
+  const allowed = ['done', 'completed_at', 'due_date', 'text', 'html', 'project_tags', 'position'];
   const patch = Object.fromEntries(
     Object.entries(updates).filter(([k]) => allowed.includes(k))
   );
