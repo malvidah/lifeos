@@ -224,7 +224,7 @@ export function HabitFilterBtns({ filter, setFilter }) {
 }
 
 // ── Autocomplete dropdown field ───────────────────────────────────────────────
-function AutocompleteField({ value, onChange, onSelect, options, placeholder, label, autoFocus }) {
+function AutocompleteField({ value, onChange, onSelect, options, placeholder, label, autoFocus, inputStyle }) {
   const [open, setOpen] = useState(false);
   const [hlIdx, setHlIdx] = useState(0);
   const ref = useRef(null);
@@ -282,6 +282,7 @@ function AutocompleteField({ value, onChange, onSelect, options, placeholder, la
           background: 'transparent', border: '1.5px solid var(--dl-border2)',
           borderRadius: 6, padding: '4px 8px', color: 'var(--dl-strong)',
           outline: 'none', letterSpacing: '0.02em',
+          ...inputStyle,
         }}
       />
       {open && filtered.length > 0 && (
@@ -457,12 +458,12 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated, isNew, onC
       />
       {editingProject ? (
         <div style={{ position: 'relative', width: 140 }}>
-          <AutocompleteField value={projectText} onChange={v => { setProjectText(v); setSelectedProject(null); }} onSelect={onProjectPick} options={projectOptions} placeholder="Project..." label="" autoFocus />
+          <AutocompleteField value={projectText} onChange={v => { setProjectText(v); setSelectedProject(null); }} onSelect={onProjectPick} options={projectOptions} placeholder="Project..." label="" autoFocus inputStyle={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: mono }} />
         </div>
       ) : renderProjectChip()}
       {editingSchedule ? (
         <div style={{ position: 'relative', width: 160 }}>
-          <AutocompleteField value={scheduleText} onChange={v => { setScheduleText(v); setSelectedSchedule(null); }} onSelect={onSchedulePick} options={SCHEDULE_OPTIONS} placeholder="Schedule..." label="" autoFocus />
+          <AutocompleteField value={scheduleText} onChange={v => { setScheduleText(v); setSelectedSchedule(null); }} onSelect={onSchedulePick} options={SCHEDULE_OPTIONS} placeholder="When?" label="" autoFocus inputStyle={{ border: 'none', outline: 'none', background: 'transparent', fontFamily: mono }} />
         </div>
       ) : renderScheduleChip()}
     </div>
