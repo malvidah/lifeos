@@ -43,7 +43,8 @@ export const GET = async (req) => {
   });
 };
 
-// POST: restore a soft-deleted task by clearing its deleted_at
+// POST: restore soft-deleted tasks and/or patch HTML on live tasks
+// Body: { restoreIds?: string[], htmlFixes?: [{id, html}] }
 export const POST = async (req) => {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get('token');
@@ -57,17 +58,33 @@ export const POST = async (req) => {
     { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
-  const { ids } = await req.json();
-  if (!Array.isArray(ids) || !ids.length) {
-    return Response.json({ error: 'ids array required' }, { status: 400 });
+  const body = await req.json();
+  const results = {};
+
+  // Restore soft-deleted tasks
+  if (Array.isArray(body.restoreIds) && body.restoreIds.length) {
+    const { data, error } = await supabase
+      .from('tasks')
+      .update({ deleted_at: null })
+      .in('id', body.restoreIds)
+      .select('id, date, text');
+    if (error) return Response.json({ error: error.message }, { status: 500 });
+    results.restored = data;
   }
 
-  const { data, error } = await supabase
-    .from('tasks')
-    .update({ deleted_at: null })
-    .in('id', ids)
-    .select('id, date, text');
+  // Fix corrupted HTML on live tasks (e.g. stale data-task-id, wrong data-recurring)
+  if (Array.isArray(body.htmlFixes) && body.htmlFixes.length) {
+    const fixed = [];
+    for (const { id, html } of body.htmlFixes) {
+      const { data, error } = await supabase
+        .from('tasks')
+        .update({ html })
+        .eq('id', id)
+        .select('id, text');
+      if (!error) fixed.push(...(data || []));
+    }
+    results.htmlFixed = fixed;
+  }
 
-  if (error) return Response.json({ error: error.message }, { status: 500 });
-  return Response.json({ restored: data });
+  return Response.json(results);
 };
