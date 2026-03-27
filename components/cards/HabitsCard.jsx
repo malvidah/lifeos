@@ -971,7 +971,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
               fontFamily: mono, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase',
               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
               padding: 0, lineHeight: 1, transition: 'color 0.15s', whiteSpace: 'nowrap',
-              position: 'absolute', left: 0, bottom: 2,
+              position: 'absolute', left: 0, bottom: 2, zIndex: 1,
             }}
               onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
               onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
@@ -1060,7 +1060,7 @@ function MonthDivider({ label, year, height, rowIndex, rowH }) {
         </span>
         <span style={{
           fontFamily: mono, fontSize: 7,
-          color: 'var(--dl-border2)', letterSpacing: '0.02em',
+          color: 'var(--dl-middle)', letterSpacing: '0.02em',
           whiteSpace: 'nowrap', lineHeight: 1,
           background: 'var(--dl-card, var(--dl-bg))', padding: '0 1px',
         }}>
