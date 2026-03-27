@@ -156,7 +156,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
         const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
 
-        // Habit done-toggles need complete-recurring (not PATCH), handle first
+        // Habit done-toggles use the habit-completions join table
         let habitChanged = false;
         for (const et of editorTasks) {
           if (!et.task_id || et.recurring) continue;
@@ -165,9 +165,9 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           habitChanged = true;
           markLocalSave("tasks", date);
           if (et.done) {
-            await api.post('/api/tasks/complete-recurring', { template_id: st.id, date, position: et.position }, token);
+            await api.post('/api/habit-completions', { habit_id: st.id, date }, token);
           } else {
-            await api.delete(`/api/tasks?id=${st.id}`, token);
+            await api.delete(`/api/habit-completions?habit_id=${st.id}&date=${date}`, token);
           }
         }
 

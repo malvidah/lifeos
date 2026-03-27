@@ -3,7 +3,6 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
-import { cleanTaskText } from "@/lib/cleanTaskText";
 import { Shimmer } from "../ui/primitives.jsx";
 
 // ── Streak helpers ───────────────────────────────────────────────────────────
@@ -299,28 +298,9 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
     try {
       if (wasDone) {
-        // Uncomplete: find the completion task for this date and undo it
-        const res = await api.get(`/api/tasks?date=${cellDate}`, token);
-        const tasks = res?.tasks ?? [];
-        const habitKey = (habit.matchKey || habit.text || '').toLowerCase();
-        const match = tasks.find(t => {
-          return cleanTaskText(t.text) === habitKey && t.done;
-        });
-        if (match) {
-          if (match.id === habit.id) {
-            // Same-date: this is the template itself — patch done=false, don't delete
-            await api.patch('/api/tasks', { id: match.id, done: false }, token);
-          } else {
-            // Separate completion row — soft-delete it
-            await api.delete(`/api/tasks?id=${match.id}`, token);
-          }
-        }
+        await api.delete(`/api/habit-completions?habit_id=${habit.id}&date=${cellDate}`, token);
       } else {
-        // Complete: create a completion row via complete-recurring
-        await api.post('/api/tasks/complete-recurring', {
-          template_id: habit.id,
-          date: cellDate,
-        }, token);
+        await api.post('/api/habit-completions', { habit_id: habit.id, date: cellDate }, token);
       }
       // Notify tasks card to reload
       window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
