@@ -1094,6 +1094,171 @@ function Scene({ projects, radius, vitality, onSelect, hovered, setHovered, sele
   );
 }
 
+// ── Ambient sound engine (Tone.js) ───────────────────────────────────────────
+// Dynamically imports Tone.js so it only loads when the user enables sounds.
+// Weather + bird data drive gain/filter params; Tone's reverb/AutoFilter
+// give everything a natural, spacious quality without external audio files.
+
+const WIND_GAIN = {
+  clear: -28, cloudy: -22, overcast: -18,
+  drizzle: -15, rain: -12, fog: -32,
+  thunderstorm: -8, snow: -20,
+};
+const RAIN_GAIN  = { drizzle: -24, rain: -18, thunderstorm: -14 };
+const RUSTLEGAIN = {
+  clear: -38, cloudy: -30, overcast: -26,
+  drizzle: -22, rain: -20, fog: -40,
+  thunderstorm: -16, snow: -28,
+};
+
+function useAmbientSound(weather, birdCount, soundsEnabled) {
+  const toneRef       = useRef(null); // Tone module
+  const nodesRef      = useRef([]);   // all nodes for cleanup
+  const birdTimerRef  = useRef(null);
+  const thunderTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (!soundsEnabled || typeof window === 'undefined') return;
+
+    let cancelled = false;
+
+    import('tone').then(Tone => {
+      if (cancelled) return;
+      toneRef.current = Tone;
+      Tone.start(); // resume AudioContext after user gesture
+
+      const nodes = [];
+      const track = n => { nodes.push(n); return n; };
+
+      // ── Shared reverb (makes everything sound spatially natural) ────────────
+      const verb = track(new Tone.Reverb({ decay: 3.5, wet: 0.55 }));
+      verb.generate(); // async but near-instant for short decays
+
+      // ── Water (constant, very quiet — stream beneath the island) ────────────
+      const waterNoise = track(new Tone.Noise('pink').start());
+      const waterFilter = track(new Tone.Filter({ frequency: 420, type: 'lowpass', rolloff: -24 }));
+      const waterGain = track(new Tone.Gain(-42, 'decibels'));
+      waterNoise.connect(waterFilter);
+      waterFilter.connect(waterGain);
+      waterGain.connect(verb);
+      verb.toDestination();
+
+      // ── Wind (pink noise + slow AutoFilter for gusts) ────────────────────────
+      const windNoise = track(new Tone.Noise('pink').start());
+      const windFilter = track(new Tone.AutoFilter({
+        frequency: 0.1 + Math.random() * 0.08, // subtle variation
+        baseFrequency: 200,
+        octaves: 2.5,
+      }).start());
+      const windGain = track(new Tone.Gain(WIND_GAIN[weather] ?? -26, 'decibels'));
+      windNoise.connect(windFilter);
+      windFilter.connect(windGain);
+      windGain.connect(verb);
+
+      // ── Leaves rustling (high-passed noise that tracks wind level) ───────────
+      const rustleNoise = track(new Tone.Noise('white').start());
+      const rustleHP = track(new Tone.Filter({ frequency: 2000, type: 'highpass' }));
+      const rustleLP = track(new Tone.Filter({ frequency: 8000, type: 'lowpass' }));
+      const rustleGain = track(new Tone.Gain(RUSTLEGAIN[weather] ?? -36, 'decibels'));
+      rustleNoise.chain(rustleHP, rustleLP, rustleGain, verb);
+
+      // ── Rain (white noise bandpass — only when weather calls for it) ─────────
+      const rainDb = RAIN_GAIN[weather];
+      if (rainDb != null) {
+        const rainNoise = track(new Tone.Noise('white').start());
+        const rainHP = track(new Tone.Filter({ frequency: 1600, type: 'highpass' }));
+        const rainLP = track(new Tone.Filter({ frequency: 10000, type: 'lowpass' }));
+        const rainGain = track(new Tone.Gain(rainDb, 'decibels'));
+        // Lighter reverb for rain so it sounds close/immediate
+        const rainVerb = track(new Tone.Reverb({ decay: 1.2, wet: 0.3 }));
+        rainVerb.generate();
+        rainNoise.chain(rainHP, rainLP, rainGain, rainVerb);
+        rainVerb.toDestination();
+      }
+
+      // ── Thunder (MembraneSynth rumbles — thunderstorm only) ──────────────────
+      let thunderSynth = null;
+      if (weather === 'thunderstorm') {
+        thunderSynth = track(new Tone.MembraneSynth({
+          pitchDecay: 0.4,
+          octaves: 5,
+          envelope: { attack: 0.02, decay: 1.8, sustain: 0, release: 0.5 },
+        }));
+        const thunderVerb = track(new Tone.Reverb({ decay: 5, wet: 0.8 }));
+        const thunderGain = track(new Tone.Gain(-6, 'decibels'));
+        thunderVerb.generate();
+        thunderSynth.chain(thunderVerb, thunderGain);
+        thunderGain.toDestination();
+
+        const rumble = () => {
+          if (cancelled || !thunderSynth) return;
+          thunderSynth.triggerAttackRelease(
+            `C${Math.floor(Math.random() * 2) + 1}`, // C1 or C2 — deep rumble
+            '4n'
+          );
+          thunderTimerRef.current = setTimeout(rumble, 18000 + Math.random() * 42000);
+        };
+        thunderTimerRef.current = setTimeout(rumble, 5000 + Math.random() * 15000);
+      }
+
+      // ── Birds (AMSynth chirps — triggered by project bird count) ─────────────
+      // AMSynth gives a bright, bell-like chirp with natural harmonics.
+      // A light reverb places them convincingly in the distance.
+      let birdSynth = null;
+      const birdVerb = track(new Tone.Reverb({ decay: 2.2, wet: 0.5 }));
+      birdVerb.generate();
+      const birdGain = track(new Tone.Gain(-14, 'decibels'));
+      birdGain.connect(birdVerb);
+      birdVerb.toDestination();
+
+      if (birdCount > 0) {
+        birdSynth = track(new Tone.AMSynth({
+          harmonicity: 5.1,
+          oscillator: { type: 'sine' },
+          envelope: { attack: 0.005, decay: 0.08, sustain: 0, release: 0.12 },
+          modulation: { type: 'square' },
+          modulationEnvelope: { attack: 0.01, decay: 0.06, sustain: 0, release: 0.08 },
+        }));
+        birdSynth.connect(birdGain);
+
+        // Bird call patterns — mix of common pitches to feel organic
+        const CHIRP_NOTES = ['E5','F#5','G5','A5','B5','C6','D6','E6'];
+
+        const chirp = () => {
+          if (cancelled || !birdSynth || birdCount === 0) return;
+          // Occasionally do a 2-note call (more natural)
+          const note = CHIRP_NOTES[Math.floor(Math.random() * CHIRP_NOTES.length)];
+          birdSynth.triggerAttackRelease(note, '32n');
+          if (Math.random() < 0.4) {
+            // second note ~120ms later, slightly different pitch
+            const note2 = CHIRP_NOTES[Math.floor(Math.random() * CHIRP_NOTES.length)];
+            birdTimerRef.current = setTimeout(() => {
+              if (!cancelled && birdSynth) birdSynth.triggerAttackRelease(note2, '32n');
+            }, 120 + Math.random() * 80);
+          }
+          // More birds → more frequent calls; rain/thunder → quieter intervals
+          const weatherMult = (weather === 'rain' || weather === 'thunderstorm') ? 2.0 : 1.0;
+          const gap = (2000 + Math.random() * (6000 / Math.max(1, birdCount))) * weatherMult;
+          birdTimerRef.current = setTimeout(chirp, gap);
+        };
+        birdTimerRef.current = setTimeout(chirp, 1200 + Math.random() * 3000);
+      }
+
+      nodesRef.current = nodes;
+    }).catch(() => {}); // if Tone fails to load, silently no-op
+
+    return () => {
+      cancelled = true;
+      clearTimeout(birdTimerRef.current);
+      clearTimeout(thunderTimerRef.current);
+      nodesRef.current.forEach(n => {
+        try { n.stop?.(); n.dispose?.(); } catch {}
+      });
+      nodesRef.current = [];
+    };
+  }, [weather, birdCount, soundsEnabled]);
+}
+
 // ── Exports ──────────────────────────────────────────────────────────────────
 export function MapCard({ allTags, connections, recency, entryCounts, completedTasks, habits, healthDots, selectedProject, onSelectProject, date, token }) {
   const { theme } = useTheme();
@@ -1116,6 +1281,15 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
       .map(([, v]) => ((v.sleep||0) + (v.readiness||0) + (v.activity||0) + (v.recovery||0)) / 4);
     return scores.length ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 50;
   }, [healthDots]);
+
+  // Ambient soundscape — off by default (browser autoplay policy requires user gesture)
+  const [soundsEnabled, setSoundsEnabled] = useState(false);
+  // Mirror the Birds component's filter so audio matches visuals
+  const birdCount = useMemo(() =>
+    projects.filter(p => p.isActive && p.completedTasks >= 5)
+      .reduce((sum, p) => sum + Math.min(3, Math.floor(p.completedTasks / 10) + 1), 0),
+  [projects]);
+  useAmbientSound(weather, birdCount, soundsEnabled);
 
   // Weather condition for island atmosphere + temperature
   const [weather, setWeather] = useState('clear');
@@ -1210,6 +1384,37 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
       onPointerDown={handlePointerDown}
       onClick={handleClick}
     >
+      {/* Sound toggle — top-left, same muted style as temperature/city overlays */}
+      <div
+        onClick={e => { e.stopPropagation(); setSoundsEnabled(v => !v); }}
+        title={soundsEnabled ? 'Mute ambient sounds' : 'Enable ambient sounds'}
+        style={{
+          position: 'absolute', top: 16, left: 18, zIndex: 10,
+          cursor: 'pointer', userSelect: 'none',
+          color: 'rgba(255,255,255,0.35)',
+          fontSize: 13, lineHeight: 1,
+          transition: 'color 0.2s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.65)'}
+        onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.35)'}
+      >
+        {soundsEnabled ? (
+          // Speaker with waves
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6H1v4h2l4 3V3L3 6z"/>
+            <path d="M11.5 5.5a3.5 3.5 0 010 5"/>
+            <path d="M13.5 3.5a6 6 0 010 9"/>
+          </svg>
+        ) : (
+          // Speaker muted (no waves, with X)
+          <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 6H1v4h2l4 3V3L3 6z"/>
+            <line x1="13" y1="6" x2="10" y2="9"/>
+            <line x1="10" y1="6" x2="13" y2="9"/>
+          </svg>
+        )}
+      </div>
+
       {temperature != null && (
         <div
           onClick={(e) => {
