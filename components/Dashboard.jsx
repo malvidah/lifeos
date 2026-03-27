@@ -35,6 +35,8 @@ import ShortcutCheatsheet from "./ui/ShortcutCheatsheet.jsx";
 import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
 
+const GOAL_COLOR = "#5BA89D"; // teal — matches goal chips
+
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
   { id: 'project-graph', label: 'Projects', icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span> },
@@ -667,7 +669,9 @@ function DashboardInner() {
           {!searchOpen && !goalsCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Goals">
-                <ProjectsCard token={token} date={selected} onSelectDate={setSelected} />
+                <Card label="Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/projects">
+                  <ProjectsCard token={token} date={selected} onSelectDate={setSelected} />
+                </Card>
               </ErrorBoundary>
             </div>
           )}

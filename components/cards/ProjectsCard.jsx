@@ -81,11 +81,6 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
   if (view === "kanban") {
     return (
       <div style={{ padding: "12px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        {/* Title */}
-        <div style={{ fontSize: "12px", fontFamily: mono, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--dl-strong)" }}>
-          GOALS
-        </div>
-
         {/* Empty state */}
         {goals.length === 0 && !loading && (
           <div style={{ padding: "16px 0", color: "var(--dl-middle)", fontFamily: mono, fontSize: "12px", letterSpacing: "0.04em" }}>
