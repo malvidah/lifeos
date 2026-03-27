@@ -202,8 +202,8 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   }, []);
 
   const today = todayKey();
-  const startDate = addDays(date || today, -365);
-  const endDate = addDays(date || today, 14);
+  const startDate = addDays(today, -365);
+  const endDate = addDays(today, 14);
 
 
   const dates = [];
@@ -244,20 +244,21 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   // Auto-scroll to center today (accounting for month dividers before today)
   useEffect(() => {
     if (!scrollRef.current || loading) return;
-    const todayIdx = dates.indexOf(today);
-    if (todayIdx >= 0) {
+    const scrollTarget = date || today;
+    const targetIdx = dates.indexOf(scrollTarget);
+    if (targetIdx >= 0) {
       const colW = 28;
       const divW = 28;
-      // Count month boundaries before today's index
+      // Count month boundaries before target index
       let dividers = 0;
-      for (let i = 1; i <= todayIdx; i++) {
+      for (let i = 1; i <= targetIdx; i++) {
         if (dayNum(dates[i]) === 1) dividers++;
       }
-      const todayOffset = todayIdx * colW + dividers * divW;
+      const targetOffset = targetIdx * colW + dividers * divW;
       const containerW = scrollRef.current.clientWidth;
-      scrollRef.current.scrollLeft = Math.max(0, todayOffset - containerW / 2);
+      scrollRef.current.scrollLeft = Math.max(0, targetOffset - containerW / 2);
     }
-  }, [loading, today]);
+  }, [loading, date, today]);
 
   // Toggle a habit completion for a specific date
   const toggleCompletion = useCallback(async (habit, cellDate) => {
