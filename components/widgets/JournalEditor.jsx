@@ -713,7 +713,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
           onPlaceClick={name => navigateToPlace(name)}
-          placeholder="What's on your mind?"
+          placeholder="What's on your mind? Type / for tags"
           textColor={"var(--dl-strong)"}
           mutedColor={"var(--dl-middle)"}
           color={"var(--dl-accent)"}
