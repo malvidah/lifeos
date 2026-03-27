@@ -152,6 +152,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
           // Done state changed on a habit/recurring task
           habitChanged = true;
+          markLocalSave("tasks", date);
           if (editorTask.done && !serverTask.done) {
             // Checking → create completion row
             await api.post('/api/tasks/complete-recurring', {
