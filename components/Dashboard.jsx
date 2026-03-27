@@ -18,7 +18,7 @@ import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
 import HealthCard from "./cards/HealthCard.jsx";
-import HabitsCard, { HabitFilterBtns, AddHabitBtn } from "./cards/HabitsCard.jsx";
+import HabitsCard, { HabitFilterBtns } from "./cards/HabitsCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
 import WorldMapCard from "./cards/WorldMapCard.jsx";
@@ -360,7 +360,6 @@ function DashboardInner() {
     setHabitFilter_(f);
     try { localStorage.setItem('daylab:habitFilter', f); } catch {}
   }, []);
-  const [habitCreating, setHabitCreating] = useState(false);
   const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
   const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
@@ -649,8 +648,8 @@ function DashboardInner() {
               <ErrorBoundary label="Habits">
                 <Card label="Habits" color="var(--dl-accent)" collapsed={false} autoHeight
                   expandHref="/habits"
-                  headerRight={<div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><AddHabitBtn onClick={() => setHabitCreating(true)} /><HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/></div>}>
-                  <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected} showCreateForm={habitCreating} onCreateDone={() => setHabitCreating(false)}/>
+                  headerRight={<HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/>}>
+                  <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected}/>
                 </Card>
               </ErrorBoundary>
             </div>

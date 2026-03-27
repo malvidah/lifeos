@@ -715,7 +715,10 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
   );
 }
 
-export default function HabitsCard({ date, token, userId, project, habitFilter = 'all', onSelectDate, showCreateForm, onCreateDone }) {
+export default function HabitsCard({ date, token, userId, project, habitFilter = 'all', onSelectDate, showCreateForm: externalCreateForm, onCreateDone }) {
+  const [internalCreating, setInternalCreating] = useState(false);
+  const showCreateForm = externalCreateForm || internalCreating;
+  const handleCreateDone = () => { setInternalCreating(false); onCreateDone?.(); };
   const [habits, setHabits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -858,9 +861,19 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     return (
       <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
         {showCreateForm ? (
-          <HabitCreationForm token={token} onCreated={() => { onCreateDone?.(); refresh(); }} onCancel={() => onCreateDone?.()} />
+          <HabitCreationForm token={token} onCreated={() => { handleCreateDone(); refresh(); }} onCancel={handleCreateDone} />
         ) : (
-          'No habits yet — use /h in tasks to tag one'
+          <div>
+            <div style={{ marginBottom: 8 }}>No habits yet — use /h in tasks to tag one</div>
+            <button onClick={() => setInternalCreating(true)} style={{
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+              background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
+              transition: 'color 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+            >+ New Habit</button>
+          </div>
         )}
       </div>
     );
@@ -1015,6 +1028,20 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
             <span title="Personal best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>best</span>
           </div>
 
+          {/* + New Habit button */}
+          {!showCreateForm && (
+            <div style={{ height: rowH, display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => setInternalCreating(true)} style={{
+                fontFamily: mono, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase',
+                background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
+                padding: 0, lineHeight: 1, transition: 'color 0.15s', whiteSpace: 'nowrap',
+              }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+              >+ New Habit</button>
+            </div>
+          )}
+
           {filteredHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
         </div>
 
@@ -1045,12 +1072,15 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
               })}
             </div>
 
+            {/* Spacer row to align with + New Habit button */}
+            {!showCreateForm && <div style={{ height: rowH }} />}
+
             {filteredHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
           </div>
         </div>
       </div>
       {showCreateForm && (
-        <HabitCreationForm token={token} onCreated={() => { onCreateDone?.(); refresh(); }} onCancel={() => onCreateDone?.()} />
+        <HabitCreationForm token={token} onCreated={() => { handleCreateDone(); refresh(); }} onCancel={handleCreateDone} />
       )}
     </div>
   );
