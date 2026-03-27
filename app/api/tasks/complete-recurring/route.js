@@ -3,8 +3,8 @@ import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
 // POST /api/tasks/complete-recurring { template_id, date }
 // Marks a recurring/habit task as completed for a specific date.
-// - Same-date (template's own date): marks the template itself done
-// - Other dates: creates a separate completion row with habit/recurrence chips stripped
+// Always creates a separate completion row with habit/recurrence chips stripped.
+// Templates (rows with data-habit/data-recurrence) are NEVER marked done.
 // Completion rows have data-habit stripped so they don't appear as templates.
 
 const TODAY = () => new Date().toISOString().slice(0, 10);
@@ -53,20 +53,27 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .eq('date', date)
     .is('deleted_at', null);
 
+  // Helper: check if a row is a habit/recurrence template (has data-habit or data-recurrence chips)
+  const isTemplate = (r) =>
+    r.id === template_id ||
+    /data-habit=/.test(r.html || '') ||
+    /data-recurrence=/.test(r.html || '');
+
   const matchingRows = (dateRows ?? []).filter(r =>
     cleanTaskText(r.text) === completionTextLower
   );
 
-  // If there's already a done completion, return it
-  const doneRow = matchingRows.find(r => r.done);
+  // If there's already a done completion (non-template), return it
+  const doneRow = matchingRows.find(r => r.done && !isTemplate(r));
   if (doneRow) {
     return Response.json({ task: doneRow, already_completed: true });
   }
 
-  // If there's an unchecked row with matching text on this date, mark it done.
-  // This handles: (a) same-date toggle on the template itself, (b) a user-created
-  // task with matching text that should be treated as the completion.
-  const uncheckedRow = matchingRows.find(r => !r.done);
+  // If there's an unchecked non-template row with matching text on this date, mark it done.
+  // This handles a user-created task with matching text that should be treated as the completion.
+  // Templates (rows with data-habit/data-recurrence) are NEVER marked done — they are the
+  // recurring source and must remain undone for the habits API to find them.
+  const uncheckedRow = matchingRows.find(r => !r.done && !isTemplate(r));
   if (uncheckedRow) {
     const { data: updated } = await supabase.from('tasks')
       .update({ done: true, completed_at: TODAY() })
