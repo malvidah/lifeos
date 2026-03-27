@@ -78,7 +78,6 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   const serverTasksRef = useRef([]); // Last-known server state for diffing
   const saveTimerRef = useRef(null);
   const savingRef = useRef(false);
-  const skipNextDiffRef = useRef(false); // Skip diff after recurring done toggle
 
   // Inject checkbox styles
   const accentHex = theme === 'light' ? '#C07818' : '#D08828';
@@ -132,40 +131,21 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     // Debounce 1 second
     saveTimerRef.current = setTimeout(async () => {
       if (savingRef.current) return;
-
-      // After a recurring done toggle, the editor HTML diverges from server state
-      // (template suppressed, completion row has new ID). Skip the diff entirely
-      // and resync by reloading fresh server state into the editor.
-      if (skipNextDiffRef.current) {
-        skipNextDiffRef.current = false;
-        savingRef.current = true;
-        try {
-          const fresh = await api.get(`/api/tasks?date=${date}`, token);
-          if (fresh?.tasks) {
-            serverTasksRef.current = fresh.tasks;
-            const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
-            setHtmlValue(freshHtml);
-            setEditorKey(k => k + 1);
-          }
-        } finally {
-          savingRef.current = false;
-        }
-        return;
-      }
-
       savingRef.current = true;
 
       try {
         // Parse current editor HTML into task objects
         const editorTasks = parseTaskBlocks(newHtml);
 
-        // Compute diff against last-known server state
+        // Compute diff against last-known server state.
+        // Habit/recurring tasks are excluded from the diff — they have their
+        // own CRUD paths (complete-recurring, HabitsCard toggle).
         const diff = diffTasks(serverTasksRef.current, editorTasks);
 
         // Only save if there are actual changes
         if (diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length) {
           markLocalSave("tasks", date);
-          const { hadRecurringDone } = await applyDiff(date, diff, token);
+          await applyDiff(date, diff, token);
 
           // Reload server state for diffing
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
@@ -175,12 +155,6 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
           // Notify other components (e.g. HabitsCard) that tasks changed
           window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
-
-          // After a recurring/habit toggle, the editor has stale template HTML.
-          // Flag the next diff to skip and resync instead.
-          if (hadRecurringDone) {
-            skipNextDiffRef.current = true;
-          }
         }
       } catch (err) {
         console.warn('[tasks] diff save failed:', err);
