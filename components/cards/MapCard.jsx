@@ -169,9 +169,11 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
     for (let c = 0; c < tag.length; c++) hash = (hash * 31 + tag.charCodeAt(c)) >>> 0;
     const variation = (hash % 100) / 100; // 0–1
     // Shape variation seeds (deterministic per project)
-    const widthSeed = ((hash >>> 4) % 100) / 100;   // 0–1: peak width
-    const slopeSeed = ((hash >>> 8) % 100) / 100;   // 0–1: slope steepness
-    const asymSeed  = ((hash >>> 12) % 100) / 100;  // 0–1: ridge asymmetry
+    const widthSeed  = ((hash >>> 4) % 100) / 100;   // 0–1: peak width
+    const slopeSeed  = ((hash >>> 8) % 100) / 100;   // 0–1: slope steepness
+    const asymSeed   = ((hash >>> 12) % 100) / 100;  // 0–1: ridge asymmetry
+    const subSeed    = ((hash >>> 16) % 100) / 100;   // 0–1: sub-peak count/style
+    const leanSeed   = ((hash >>> 20) % 100) / 100;   // 0–1: peak lean direction
     const h = Math.max(entryScore, connScore, 0.15) * 2.0 + 0.8 + variation * 1.5;
     const rawEntries = entryCounts?.[tag] || 0;
     return {
@@ -182,8 +184,10 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
       score: Math.max(entryScore, connScore, 0.3),
       // Shape variation — seeded from project name hash
       widthFactor: 0.7 + widthSeed * 0.6,     // 0.7–1.3: narrower or wider peaks
-      slopePower: 2.0 + slopeSeed * 1.5,       // 2.0–3.5: gentler or steeper slopes
-      asymmetry: asymSeed * 0.3,               // 0–0.3: ridge offset
+      slopePower: 2.5 + slopeSeed * 2.0,       // 2.5–4.5: angular steepness
+      asymmetry: asymSeed * 0.4,               // 0–0.4: ridge lean offset
+      subPeaks: Math.floor(subSeed * 4),        // 0–3: number of angular sub-peaks
+      leanAngle: leanSeed * Math.PI * 2,         // lean direction
       // Dormant: no activity in 7+ days. Active: activity in last 7 days.
       isActive: daysSinceActive < 7,
       // Volcano: consistent recent engagement — active in last 3 days with 5+ entries
@@ -251,12 +255,13 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
 
     for (const p of projects) {
       const dx = x - p.x, dz = z - p.z;
-      // Asymmetric ridge: offset center based on angle
       const angle = Math.atan2(dz, dx);
-      const asym = p.asymmetry || 0;
-      const ax = dx - Math.cos(angle * 2) * asym;
-      const az = dz - Math.sin(angle * 2) * asym;
-      const d = Math.sqrt(ax * ax + az * az);
+      // Lean the peak center in one direction for asymmetric profile
+      const lean = p.asymmetry || 0;
+      const la = p.leanAngle || 0;
+      const cx = dx - Math.cos(la) * lean;
+      const cz = dz - Math.sin(la) * lean;
+      const d = Math.sqrt(cx * cx + cz * cz);
       const wf = p.widthFactor || 1.0;
       const r = (0.6 + p.score * 0.3) * wf * (p.isHot ? 1.5 : 1.0);
       if (d < r * 2.0) {
@@ -266,11 +271,21 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
           const volcano = f < 0.7 ? f * f : 0.49 - (f - 0.7) * 0.5;
           h += p.height * 1.4 * volcano;
         } else {
-          // Rounded peak: smoothstep-like curve instead of sharp cubic
+          // Jagged angular peak with sub-peaks for unique silhouettes
           const sp = p.slopePower || 3.0;
-          const smooth = f * f * (3 - 2 * f); // hermite smoothstep
-          const shaped = Math.pow(smooth, sp / 3.0); // adjust steepness
-          h += p.height * shaped;
+          let peak = Math.pow(f, sp / 2.5); // sharp angular falloff
+          // Sub-peaks: angular ridges radiating from center
+          const nSub = p.subPeaks || 0;
+          if (nSub > 0 && f > 0.1) {
+            const ridgeN = nSub + 1;
+            // Angular modulation creates jagged ridgeline
+            const ridgeAngle = angle + la; // offset by lean for variety
+            const ridge = Math.abs(Math.sin(ridgeAngle * ridgeN));
+            // Sub-peaks are smaller spikes along the ridgeline
+            const spike = ridge * (1 - f) * 0.5; // taller at edges, not center
+            peak += spike * f;
+          }
+          h += p.height * peak;
         }
       }
     }
