@@ -145,8 +145,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           markLocalSave("tasks", date);
           const { hadRecurringDone } = await applyDiff(date, diff, token);
 
-          // Reload server state for diffing (don't remount editor — TipTap
-          // already shows the correct visual state and remounting causes reorder)
+          // Reload server state for diffing
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
@@ -154,6 +153,16 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
           // Notify other components (e.g. HabitsCard) that tasks changed
           window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+
+          // When a recurring/habit task was toggled, the server state diverges
+          // from the editor (template suppressed, completion row created/deleted).
+          // Schedule a full editor reload so the next diff cycle starts clean.
+          if (hadRecurringDone) {
+            setTimeout(() => {
+              setReloadKey(k => k + 1);
+              setEditorKey(k => k + 1);
+            }, 100);
+          }
         }
       } catch (err) {
         console.warn('[tasks] diff save failed:', err);
