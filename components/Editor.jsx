@@ -265,6 +265,7 @@ const HabitTagNode = Node.create({
       key: { default: '' },
       label: { default: '' },
       count: { default: null },
+      days: { default: null },
     };
   },
   parseHTML() {
@@ -272,12 +273,14 @@ const HabitTagNode = Node.create({
       key: el.getAttribute('data-habit') || '',
       label: el.getAttribute('data-habit-label') || el.textContent || '',
       count: el.getAttribute('data-habit-count') ? parseInt(el.getAttribute('data-habit-count'), 10) : null,
+      days: el.getAttribute('data-habit-days') ? parseInt(el.getAttribute('data-habit-days'), 10) : null,
     }) }];
   },
   renderHTML({ node }) {
     const label = node.attrs.label || node.attrs.key || '';
     const count = node.attrs.count;
-    const displayLabel = count ? `${label} ×${count}` : label;
+    const days = node.attrs.days;
+    const displayLabel = count ? `${label} ×${count}` : days ? `${label} ${days}d` : label;
     const col = 'var(--dl-accent, #D08828)';
     const attrs = {
       'data-habit': node.attrs.key,
@@ -287,6 +290,7 @@ const HabitTagNode = Node.create({
         .join(';'),
     };
     if (count) attrs['data-habit-count'] = String(count);
+    if (days) attrs['data-habit-days'] = String(days);
     return ['span', attrs, '\u{1F3AF} ' + displayLabel];
   },
 });
@@ -637,7 +641,9 @@ export function docToText(docJson) {
       if (c.type === 'dateTag')    return `@${c.attrs?.date ?? ''}`;
       if (c.type === 'habitTag') {
         const base = `{h:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
-        return c.attrs?.count ? base.slice(0, -1) + `:${c.attrs.count}}` : base;
+        if (c.attrs?.days) return base.slice(0, -1) + `:${c.attrs.days}d}`;
+        if (c.attrs?.count) return base.slice(0, -1) + `:${c.attrs.count}}`;
+        return base;
       }
       if (c.type === 'goalTag')    return `{g:${c.attrs?.name ?? ''}}`;
       return '';
@@ -660,12 +666,15 @@ function parseLineContent(line) {
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
     if (m[1] != null) {
-      // m[2] may be "label" or "label:count" — split to extract optional count
+      // m[2] may be "label", "label:count", or "label:Nd" — split to extract optional count/days
       const hParts = m[2].split(':');
-      const hLabel = hParts[0];
-      const hCount = hParts.length > 1 && /^\d+$/.test(hParts[hParts.length - 1]) ? parseInt(hParts[hParts.length - 1], 10) : null;
-      const hLabelClean = hCount ? hParts.slice(0, -1).join(':') : m[2];
-      content.push({ type: 'habitTag', attrs: { key: m[1], label: hLabelClean, count: hCount } });
+      const lastPart = hParts[hParts.length - 1];
+      const isDays = hParts.length > 1 && /^\d+d$/i.test(lastPart);
+      const isCount = hParts.length > 1 && /^\d+$/.test(lastPart);
+      const hDays = isDays ? parseInt(lastPart, 10) : null;
+      const hCount = isCount ? parseInt(lastPart, 10) : null;
+      const hLabelClean = (isDays || isCount) ? hParts.slice(0, -1).join(':') : m[2];
+      content.push({ type: 'habitTag', attrs: { key: m[1], label: hLabelClean, count: hCount, days: hDays } });
     }
     else if (m[3] != null) content.push({ type: 'recurrenceTag', attrs: { key: m[3], label: m[4] } });
     else if (m[5] != null) content.push({ type: 'placeTag',  attrs: { name: m[5] } });
@@ -1196,20 +1205,25 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           }
           if (cmd === 'h') {
             // Habit suggestions — same schedule options as /r but inserts habitTag
-            // Support count-limited: "/h mwf 10" or "/h 10" (just a number = daily ×N)
+            // "/h mwf 10"      → count-limited: MWF until 10 completions  → {h:mwf:M·W·F:10}
+            // "/h mwf 10 days" → time-limited:  MWF for 10 days          → {h:mwf:M·W·F:10d}
+            // "/h 10"          → daily + 10 completions                   → {h:daily:10×:10}
+            // "/h 10 days"     → daily for 10 days                        → {h:daily:10 days:10d}
             const hWords = search.trim().split(/\s+/);
-            const lastWord = hWords[hWords.length - 1];
-            const countNum = /^\d+$/.test(lastWord) ? parseInt(lastWord, 10) : null;
-            const schedSearch = countNum && hWords.length > 1 ? hWords.slice(0, -1).join(' ') : (countNum ? '' : search);
+            const hasDays = hWords.length >= 2 && /^days?$/i.test(hWords[hWords.length - 1]);
+            const numWords = hasDays ? hWords.slice(0, -1) : hWords;
+            const lastNumWord = numWords[numWords.length - 1];
+            const num = /^\d+$/.test(lastNumWord) ? parseInt(lastNumWord, 10) : null;
+            const schedSearch = num && numWords.length > 1 ? numWords.slice(0, -1).join(' ') : (num ? '' : search);
+            const limitSuffix = num ? (hasDays ? `:${num}d` : `:${num}`) : '';
 
-            if (countNum && !schedSearch) {
-              // Just a number: "/h 10" → daily habit with count limit
-              return [`__habit__:daily:${countNum}×:${countNum}`];
+            if (num && !schedSearch) {
+              const chipLabel = hasDays ? `${num} days` : `${num}×`;
+              return [`__habit__:daily:${chipLabel}${limitSuffix}`];
             }
             const base = getRecurrenceSuggestions(schedSearch).map(s => s.replace('__recurrence__:', '__habit__:'));
-            if (countNum) {
-              // Append count to each suggestion: __habit__:key:label → __habit__:key:label:count
-              return base.map(s => `${s}:${countNum}`);
+            if (num) {
+              return base.map(s => `${s}${limitSuffix}`);
             }
             return base;
           }
@@ -1236,16 +1250,18 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           setTimeout(() => { justInsertedRef.current = false; }, 150);
 
           if (name.startsWith('__habit__:')) {
-            // Format: __habit__:key:label or __habit__:key:label:count
+            // Format: __habit__:key:label or __habit__:key:label:N or __habit__:key:label:Nd
             const parts = name.split(':');
             const key = parts[1];
-            // Check if last segment is a number (count)
             const lastPart = parts[parts.length - 1];
-            const hasCount = parts.length > 3 && /^\d+$/.test(lastPart);
-            const count = hasCount ? parseInt(lastPart, 10) : null;
-            const label = hasCount ? parts.slice(2, -1).join(':') : parts.slice(2).join(':');
+            // Detect count (e.g. "10") or days (e.g. "10d")
+            const isDays = parts.length > 3 && /^\d+d$/.test(lastPart);
+            const isCount = parts.length > 3 && /^\d+$/.test(lastPart);
+            const count = isCount ? parseInt(lastPart, 10) : null;
+            const days = isDays ? parseInt(lastPart, 10) : null;
+            const label = (isCount || isDays) ? parts.slice(2, -1).join(':') : parts.slice(2).join(':');
             editor.chain().focus().deleteRange(range).insertContent([
-              { type: 'habitTag', attrs: { key, label, count } },
+              { type: 'habitTag', attrs: { key, label, count, days } },
               { type: 'text', text: ' ' },
             ]).run();
             return;

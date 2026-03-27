@@ -190,15 +190,18 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       let inner = (rawText || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
       inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
       inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, (match, key, rest) => {
-        // rest may be "label" or "label:count"
+        // rest may be "label", "label:count", or "label:Nd" (days)
         const segs = rest.split(':');
         const lastSeg = segs[segs.length - 1];
-        const hasCount = segs.length > 1 && /^\d+$/.test(lastSeg);
+        const hasDays = segs.length > 1 && /^\d+d$/i.test(lastSeg);
+        const hasCount = !hasDays && segs.length > 1 && /^\d+$/.test(lastSeg);
+        const days = hasDays ? parseInt(lastSeg, 10) : null;
         const count = hasCount ? lastSeg : null;
-        const label = hasCount ? segs.slice(0, -1).join(':') : rest;
-        const displayLabel = count ? `${label} ×${count}` : label;
+        const label = (hasDays || hasCount) ? segs.slice(0, -1).join(':') : rest;
+        const displayLabel = count ? `${label} ×${count}` : days ? `${label} ${days}d` : label;
         const countAttr = count ? ` data-habit-count="${count}"` : '';
-        return `<span data-habit="${key}" data-habit-label="${label}"${countAttr}>🎯 ${displayLabel}</span>`;
+        const daysAttr = days ? ` data-habit-days="${days}"` : '';
+        return `<span data-habit="${key}" data-habit-label="${label}"${countAttr}${daysAttr}>🎯 ${displayLabel}</span>`;
       });
       inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
       inner = inner.replace(/\{g:([^}]+)\}/g, '<span data-goal="$1">🏁 $1</span>');
@@ -386,12 +389,15 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
       inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, (match, key, rest) => {
         const segs = rest.split(':');
         const lastSeg = segs[segs.length - 1];
-        const hasCount = segs.length > 1 && /^\d+$/.test(lastSeg);
+        const hasDays = segs.length > 1 && /^\d+d$/i.test(lastSeg);
+        const hasCount = !hasDays && segs.length > 1 && /^\d+$/.test(lastSeg);
+        const days = hasDays ? parseInt(lastSeg, 10) : null;
         const count = hasCount ? lastSeg : null;
-        const label = hasCount ? segs.slice(0, -1).join(':') : rest;
-        const displayLabel = count ? `${label} ×${count}` : label;
+        const label = (hasDays || hasCount) ? segs.slice(0, -1).join(':') : rest;
+        const displayLabel = count ? `${label} ×${count}` : days ? `${label} ${days}d` : label;
         const countAttr = count ? ` data-habit-count="${count}"` : '';
-        return `<span data-habit="${key}" data-habit-label="${label}"${countAttr}>🎯 ${displayLabel}</span>`;
+        const daysAttr = days ? ` data-habit-days="${days}"` : '';
+        return `<span data-habit="${key}" data-habit-label="${label}"${countAttr}${daysAttr}>🎯 ${displayLabel}</span>`;
       });
       inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
       inner = inner.replace(/\{g:([^}]+)\}/g, '<span data-goal="$1">🏁 $1</span>');

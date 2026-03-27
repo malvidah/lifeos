@@ -46,6 +46,10 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     const countMatch = t.html?.match(/data-habit-count="(\d+)"/);
     const countLimit = countMatch ? parseInt(countMatch[1], 10) : null;
 
+    // Parse optional days limit from data-habit-days attribute
+    const daysMatch = t.html?.match(/data-habit-days="(\d+)"/);
+    const daysLimit = daysMatch ? parseInt(daysMatch[1], 10) : null;
+
     const display = displayTaskText(t.text);
     const matchKey = cleanTaskText(t.text);
 
@@ -56,6 +60,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       matchKey,
       schedule,
       countLimit,
+      daysLimit,
       project_tags: t.project_tags || [],
     };
   }).filter(Boolean);
@@ -187,6 +192,19 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       h.countDone = allTimeCounts.get(h.id) || 0;
       h.countComplete = h.countDone >= h.countLimit;
     }
+  }
+
+  // Days-limited habits: calculate expiry date (creation date + N days)
+  for (const h of dedupedHabits) {
+    if (h.daysLimit) {
+      const created = new Date(h.date + 'T12:00:00');
+      created.setDate(created.getDate() + h.daysLimit);
+      h.expiryDate = `${created.getFullYear()}-${String(created.getMonth()+1).padStart(2,'0')}-${String(created.getDate()).padStart(2,'0')}`;
+      const todayStr = today || new Date().toISOString().slice(0, 10);
+      h.daysExpired = todayStr > h.expiryDate;
+    }
+    // Mark archived: count-complete OR days-expired
+    h.archived = !!(h.countComplete || h.daysExpired);
   }
 
   return Response.json({ habits: dedupedHabits });

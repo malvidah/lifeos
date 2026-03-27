@@ -609,6 +609,16 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated, isNew, onC
             {habit.countComplete ? '✓ ' : ''}{habit.countDone || 0}/{habit.countLimit}
           </span>
         )}
+        {/* Days-limited progress */}
+        {habit.daysLimit && (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontFamily: mono, fontSize: 11, color: habit.daysExpired ? GOAL_COLOR_HABIT : 'var(--dl-middle)',
+            fontWeight: habit.daysExpired ? 600 : 400,
+          }}>
+            {habit.daysExpired ? '✓ ' : ''}{habit.daysLimit}d {habit.expiryDate ? `→ ${habit.expiryDate}` : ''}
+          </span>
+        )}
       </div>
 
       {/* GitHub-style activity grid */}
@@ -688,6 +698,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedHabitId, setSelectedHabitId] = useState(null);
   const [creatingNew, setCreatingNew] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const scrollRef = useRef(null);
   const gridRef = useRef(null);
 
@@ -874,7 +885,11 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   if (habitFilter === 'tasks') filteredHabits = filteredHabits.filter(h => !h._isHealth);
   else if (habitFilter === 'synced') filteredHabits = filteredHabits.filter(h => h._isHealth);
 
-  if (filteredHabits.length === 0) {
+  // Separate active vs archived habits
+  const activeHabits = filteredHabits.filter(h => !h.archived);
+  const archivedHabits = filteredHabits.filter(h => h.archived);
+
+  if (activeHabits.length === 0 && archivedHabits.length === 0) {
     return (
       <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
         {project ? 'No habits in this project' : habitFilter === 'tasks' ? 'No task habits yet — use /h in tasks' : habitFilter === 'synced' ? 'No synced health data yet' : 'No habits yet'}
@@ -938,7 +953,9 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
       <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 36, textAlign: 'center' }}>
         {h.countLimit
           ? <span style={{ color: h.countComplete ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.countComplete ? 600 : 400 }}>{h.countDone || 0}/{h.countLimit}</span>
-          : (h.bestStreak || '\u2014')
+          : h.daysLimit
+            ? <span style={{ color: h.daysExpired ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.daysExpired ? 600 : 400 }}>{h.daysLimit}d</span>
+            : (h.bestStreak || '\u2014')
         }
       </span>
     </div>
@@ -988,12 +1005,16 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
                   }}
                   style={{
                     width: cellSize, height: cellSize,
-                    borderRadius: h._isHealth ? '50%' : 4,
+                    borderRadius: h._isHealth ? '50%' : h.archived ? 0 : 4,
                     background: done ? fillColor : (hf ? hf.bg : 'transparent'),
-                    border: `1.5px solid ${done ? (baseColor || 'var(--dl-accent)') : isPast ? (baseColor ? baseColor + '33' : 'var(--dl-border2)') : 'var(--dl-border)'}`,
+                    border: h.archived ? 'none' : `1.5px solid ${done ? (baseColor || 'var(--dl-accent)') : isPast ? (baseColor ? baseColor + '33' : 'var(--dl-border2)') : 'var(--dl-border)'}`,
                     opacity: !isPast && !done ? 0.35 : 1,
                     transition: 'all 0.15s',
                     cursor: isPast && !h._isHealth ? 'pointer' : 'default',
+                    ...(h.archived ? {
+                      clipPath: 'polygon(50% 0%, 0% 100%, 100% 100%)',
+                      width: cellSize - 2, height: cellSize - 2,
+                    } : {}),
                   }}
                 />
               </div>
@@ -1025,14 +1046,28 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
             <span title="Personal best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>best</span>
           </div>
 
-          {filteredHabits.filter(h => !h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
-          {filteredHabits.some(h => h._isHealth) && filteredHabits.some(h => !h._isHealth) && (
+          {activeHabits.filter(h => !h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
+          {activeHabits.some(h => h._isHealth) && activeHabits.some(h => !h._isHealth) && (
             <div style={{ height: 18, display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontFamily: mono, fontSize: 8, letterSpacing: '0.1em', color: 'var(--dl-border2)', textTransform: 'uppercase' }}>synced</span>
               <div style={{ flex: 1, height: 1, background: 'var(--dl-border)' }} />
             </div>
           )}
-          {filteredHabits.filter(h => h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
+          {activeHabits.filter(h => h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
+          {/* Archived habits toggle */}
+          {archivedHabits.length > 0 && (
+            <>
+              <div
+                onClick={() => setShowArchived(v => !v)}
+                style={{ height: 20, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', marginTop: 2 }}>
+                <span style={{ fontFamily: mono, fontSize: 8, letterSpacing: '0.1em', color: 'var(--dl-middle)', textTransform: 'uppercase', whiteSpace: 'nowrap', transition: 'color 0.15s' }}>
+                  {showArchived ? '▼' : '▲'} {archivedHabits.length} archived
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--dl-border)' }} />
+              </div>
+              {showArchived && archivedHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
+            </>
+          )}
         </div>
 
         {/* Right: scrollable grid */}
@@ -1062,11 +1097,14 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
               })}
             </div>
 
-            {filteredHabits.filter(h => !h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
-            {filteredHabits.some(h => h._isHealth) && filteredHabits.some(h => !h._isHealth) && (
+            {activeHabits.filter(h => !h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={activeHabits} />)}
+            {activeHabits.some(h => h._isHealth) && activeHabits.some(h => !h._isHealth) && (
               <div style={{ height: 18 }} />
             )}
-            {filteredHabits.filter(h => h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
+            {activeHabits.filter(h => h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={activeHabits} />)}
+            {/* Archived grid rows — spacer + rows when toggled */}
+            {archivedHabits.length > 0 && <div style={{ height: 20 }} />}
+            {showArchived && archivedHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={archivedHabits} />)}
           </div>
         </div>
       </div>

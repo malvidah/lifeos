@@ -656,9 +656,9 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          // Active state: use same chip styling as project pills elsewhere —
-          // saturated color text, faded pastel bg, fully opaque, no glass blur
-          background: (isSelected || isHov) ? `${p.color}22` : 'var(--dl-glass)',
+          // Active state: solid pastel bg — mix project color into theme bg
+          // so labels are readable over the 3D terrain with no transparency
+          background: (isSelected || isHov) ? `color-mix(in srgb, ${p.color} 15%, var(--dl-bg))` : 'var(--dl-glass)',
           backdropFilter: (isSelected || isHov) ? 'none' : 'blur(8px)',
           WebkitBackdropFilter: (isSelected || isHov) ? 'none' : 'blur(8px)',
           border: `1.5px solid ${(isSelected || isHov) ? p.color : 'var(--dl-glass-border)'}`,
