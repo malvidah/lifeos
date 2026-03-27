@@ -87,6 +87,7 @@ html.theme-ready body{transition:background-color 1.5s ease,color 1s ease,--dl-b
 ::-webkit-scrollbar{display:none}*{scrollbar-width:none}
 button{border-radius:0}a{text-decoration:none}
 ::placeholder{color:var(--dl-middle);opacity:1}
+.dl-chat-input::placeholder{color:var(--dl-highlight)}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
 @keyframes spin{to{transform:rotate(360deg)}}

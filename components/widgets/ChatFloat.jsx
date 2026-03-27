@@ -657,6 +657,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                 onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
                 onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
                 onFocus={() => { if (!expanded) setExpanded(true); }}
+                className="dl-chat-input"
                 placeholder={busy ? "…" : "Ask AI anything…"}
                 disabled={busy || (expanded && chatLimitReached && !isPremiumUser)}
                 rows={1}
