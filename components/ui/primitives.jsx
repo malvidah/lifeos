@@ -5,7 +5,7 @@ import { useNavigation } from "@/lib/contexts";
 
 export function ChevronBtn({collapsed, onToggle, style={}}) {
   return (
-    <button onClick={onToggle} style={{
+    <button onClick={onToggle} aria-label={collapsed ? "Expand" : "Collapse"} style={{
       background:"none",border:"none",cursor:"pointer",padding:"2px 4px",
       color:"var(--dl-middle)",display:"flex",alignItems:"center",justifyContent:"center",
       flexShrink:0,transition:"color 0.15s",...style,
@@ -63,7 +63,7 @@ export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft,
 function ExpandArrow({ href }) {
   if (!href) return null;
   return (
-    <a href={href} title="Open full page"
+    <a href={href} title="Open full page" aria-label="Open full page"
       style={{
         color:"var(--dl-middle)",fontFamily:mono,fontSize:11,lineHeight:1,
         textDecoration:"none",padding:"2px 4px",borderRadius:3,
@@ -189,7 +189,7 @@ export function Shimmer({width="100%", height=14, style={}}) {
 
 export function NavBtn({onClick,title,children}) {
   return (
-    <button onClick={onClick} title={title} style={{
+    <button onClick={onClick} title={title} aria-label={title} style={{
       background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",
       fontFamily:mono,fontSize:F.md,lineHeight:1,padding:'3px 5px',borderRadius:4,transition:'color 0.1s'}}
       onMouseEnter={e=>e.currentTarget.style.color="var(--dl-strong)"}

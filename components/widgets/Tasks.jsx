@@ -9,6 +9,7 @@ import { DayLabEditor } from "../Editor.jsx";
 import { parseTaskBlocks, tasksToHtml } from "@/lib/parseBlocks";
 import { diffTasks, applyDiff, isHabitOrRecurring } from "@/lib/taskDiff";
 import { markLocalSave } from "@/lib/useRealtimeSync";
+import { showToast } from "../ui/Toast.jsx";
 
 // Detect which tasks changed done state between two parsed task arrays.
 // Returns array of { task_id, done, serverTask } for habits whose done state flipped.
@@ -127,7 +128,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       lastHtmlRef.current = html;
       setLoaded(true);
     }).catch(() => {
-      if (!cancelled) setLoaded(true);
+      if (!cancelled) { setLoaded(true); showToast('Failed to load tasks', 'error'); }
     });
 
     return () => { cancelled = true; };
@@ -205,6 +206,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           if (changed) window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
         }).catch(err => {
           console.warn('[habit-toggle] fast path failed:', err);
+          showToast('Failed to save habit', 'error');
         }).finally(() => {
           habitToggleInFlightRef.current = false;
         });
@@ -213,6 +215,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
     // Debounced path: handle text edits, creates, deletes, regular task done toggles
     clearTimeout(saveTimerRef.current);
+    window.dispatchEvent(new CustomEvent('daylab:tasks-saving'));
     saveTimerRef.current = setTimeout(async () => {
       if (savingRef.current) return;
       savingRef.current = true;
@@ -230,6 +233,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
             habitChanged = await fireHabitToggles(toggles);
           } catch (err) {
             console.warn('[habit-toggle] debounced path failed:', err);
+            showToast('Failed to save habit', 'error');
           }
         }
 
@@ -263,6 +267,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         }
       } catch (err) {
         console.warn('[tasks] diff save failed:', err);
+        showToast('Failed to save tasks', 'error');
       } finally {
         savingRef.current = false;
       }
@@ -303,7 +308,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         taskList
         value={htmlValue}
         onUpdate={handleUpdate}
-        placeholder=""
+        placeholder="Type a task, use / for commands"
         projectNames={projectNames}
         noteNames={noteNames}
         placeNames={placeNames}
@@ -315,6 +320,43 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         style={{ padding: 0 }}
       />
     </div>
+  );
+}
+
+// ── Save indicator ───────────────────────────────────────────────────────────
+export function TaskSaveIndicator() {
+  const [status, setStatus] = useState(null); // 'saving' | 'saved' | null
+  const timerRef = useRef(null);
+
+  useEffect(() => {
+    // Show "saving..." when tasks start debounced save (content changes)
+    const onUpdate = () => {
+      clearTimeout(timerRef.current);
+      setStatus('saving');
+    };
+    // Show "saved" when save completes
+    const onSaved = () => {
+      setStatus('saved');
+      timerRef.current = setTimeout(() => setStatus(null), 2000);
+    };
+    window.addEventListener('daylab:tasks-saving', onUpdate);
+    window.addEventListener('daylab:tasks-saved', onSaved);
+    return () => {
+      window.removeEventListener('daylab:tasks-saving', onUpdate);
+      window.removeEventListener('daylab:tasks-saved', onSaved);
+      clearTimeout(timerRef.current);
+    };
+  }, []);
+
+  if (!status) return null;
+  return (
+    <span style={{
+      fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)',
+      letterSpacing: '0.04em', opacity: status === 'saved' ? 0.6 : 0.8,
+      transition: 'opacity 0.3s',
+    }}>
+      {status === 'saving' ? 'saving...' : 'saved'}
+    </span>
   );
 }
 
@@ -332,14 +374,14 @@ export function TaskFilterBtns({ filter, setFilter }) {
     </svg>
   );
   const btns = [
-    { key: 'open', label: null, icon: <OpenIcon /> },
-    { key: 'done', label: null, icon: <DoneIcon /> },
+    { key: 'open', label: null, icon: <OpenIcon />, ariaLabel: 'Show open tasks' },
+    { key: 'done', label: null, icon: <DoneIcon />, ariaLabel: 'Show done tasks' },
     { key: 'all', label: null, icon: (
       <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2" y="2" width="12" height="12" rx="2.5"/>
         <circle cx="8" cy="8" r="2.5" fill="currentColor" stroke="none"/>
       </svg>
-    )},
+    ), ariaLabel: 'Show all tasks' },
   ];
   return (
     <div style={{ display: 'flex', gap: 2, background: 'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius: 100, padding: 2 }}>
@@ -347,6 +389,7 @@ export function TaskFilterBtns({ filter, setFilter }) {
         const active = filter === b.key;
         return (
           <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }}
+            aria-label={b.ariaLabel} aria-pressed={active}
             style={{
               fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em',
               padding: '3px 6px',

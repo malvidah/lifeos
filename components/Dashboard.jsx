@@ -18,7 +18,7 @@ import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
 import CalendarCard from "./cards/CalendarCard.jsx";
 import HealthCard from "./cards/HealthCard.jsx";
-import HabitsCard, { HabitFilterBtns } from "./cards/HabitsCard.jsx";
+import HabitsCard, { HabitFilterBtns, AddHabitBtn } from "./cards/HabitsCard.jsx";
 import WorkoutsCard from "./cards/WorkoutsCard.jsx";
 import { MapCard } from "./cards/MapCard.jsx";
 import WorldMapCard from "./cards/WorldMapCard.jsx";

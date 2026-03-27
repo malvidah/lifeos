@@ -87,6 +87,8 @@ html.theme-ready body{transition:background-color 1.5s ease,color 1s ease,--dl-b
 ::-webkit-scrollbar{display:none}*{scrollbar-width:none}
 button{border-radius:0}a{text-decoration:none}
 ::placeholder{color:var(--dl-middle);opacity:1}
+/* Focus-visible ring for keyboard navigation */
+button:focus-visible,a:focus-visible,[role="button"]:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--dl-accent);outline-offset:2px;border-radius:4px}
 .dl-chat-input::placeholder{color:var(--dl-highlight)}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}

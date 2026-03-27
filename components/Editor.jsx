@@ -38,6 +38,7 @@ function injectEditorStyles() {
     .dl-editor .ProseMirror > p:only-child.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); }
     .dl-editor .ProseMirror h1.is-empty::before { content: attr(data-placeholder); pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-weight: 400; }
     .dl-tasklist .ProseMirror p.is-empty::before { content: none !important; }
+    .dl-tasklist .ProseMirror ul[data-type="taskList"] > li:only-child > div > p.is-empty::before { content: attr(data-placeholder) !important; pointer-events: none; float: left; height: 0; color: var(--dl-middle); font-style: normal; opacity: 0.6; }
     .dl-tasklist .ProseMirror > p:last-child { display: none; }
     .dl-editor .ProseMirror h1 { font-family: ${mono}; font-size: 0.8em; font-weight: 400; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 4px; padding: 0; }
     .dl-editor .ProseMirror a[href] { color: var(--dl-accent) !important; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
@@ -1054,7 +1055,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       Placeholder.configure({
         placeholder: noteTitle
           ? ({ node }) => node.type.name === 'heading' ? 'Untitled' : 'Write something...'
-          : taskList ? '' : placeholder || '',
+          : taskList ? (placeholder || '') : placeholder || '',
         emptyNodeClass: 'is-empty',
         showOnlyCurrent: !noteTitle,
       }),
@@ -1214,6 +1215,40 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               onCreateNoteRef.current?.(noteName, { silent: true });
               window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name: noteName } }));
             }
+          }
+        },
+      }),
+
+      // # trigger for project tags — alias for /p
+      createSuggestion({
+        char: '#',
+        suggKey: 'hashProject',
+        renderRef,
+        itemsFn: (query) => {
+          const q      = query.toLowerCase().replace(/\s/g, '');
+          const qTrim  = query.trim();
+          const names  = projectNamesRef.current || [];
+          const matches = names
+            .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
+            .map(n => `__project__:${n}`);
+          if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+            matches.push(`__create_project__:${qTrim}`);
+          }
+          return matches.length ? matches : ['__create_project__:' + (qTrim || 'project')];
+        },
+        commandFn: ({ editor, range, name }) => {
+          if (!name.startsWith('__project__:') && !name.startsWith('__create_project__:')) return;
+          justInsertedRef.current = true;
+          setTimeout(() => { justInsertedRef.current = false; }, 150);
+          const isNew = name.startsWith('__create_project__:');
+          const pName = (isNew ? name.slice(19) : name.slice(12)).toLowerCase();
+          editor.chain().focus().deleteRange(range).insertContent([
+            { type: 'projectTag', attrs: { name: pName } },
+            { type: 'text', text: ' ' },
+          ]).run();
+          if (isNew) {
+            window.dispatchEvent(new CustomEvent('daylab:create-project', { detail: { name: pName } }));
+            onCreateProjectRef.current?.(pName);
           }
         },
       }),

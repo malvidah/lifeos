@@ -4,6 +4,7 @@ import { mono, F, projectColor } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
 import { Shimmer } from "../ui/primitives.jsx";
+import { showToast } from "../ui/Toast.jsx";
 
 // ── Streak helpers ───────────────────────────────────────────────────────────
 // 🎯 target  = on a streak (count > 0, below best)
@@ -170,18 +171,27 @@ const AllIcon = () => (
   </svg>
 );
 
+// ── Schedule options for habit creation ───────────────────────────────────────
+const SCHEDULE_OPTIONS = [
+  { key: 'daily', label: 'Daily' },
+  { key: 'weekdays', label: 'M·T·W·R·F' },
+  { key: 'mwf', label: 'M·W·F' },
+  { key: 'tr', label: 'T·R' },
+  { key: 'weekends', label: 'S·U' },
+];
+
 export function HabitFilterBtns({ filter, setFilter }) {
   const btns = [
-    { key: 'tasks', icon: <TasksIcon /> },
-    { key: 'synced', icon: <SyncIcon /> },
-    { key: 'all', icon: <AllIcon /> },
+    { key: 'tasks', icon: <TasksIcon />, ariaLabel: 'Show task habits' },
+    { key: 'synced', icon: <SyncIcon />, ariaLabel: 'Show synced habits' },
+    { key: 'all', icon: <AllIcon />, ariaLabel: 'Show all habits' },
   ];
   return (
     <div style={{ display: 'flex', gap: 2, background: 'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius: 100, padding: 2 }}>
       {btns.map(b => {
         const active = filter === b.key;
         return (
-          <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }} style={{
+          <button key={b.key} onClick={e => { e.stopPropagation(); setFilter(b.key); }} aria-label={b.ariaLabel} aria-pressed={active} style={{
             fontFamily: mono, fontSize: '10px', padding: '3px 6px',
             borderRadius: 100, cursor: 'pointer', border: 'none',
             background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
@@ -196,7 +206,90 @@ export function HabitFilterBtns({ filter, setFilter }) {
   );
 }
 
-export default function HabitsCard({ date, token, userId, project, habitFilter = 'all', onSelectDate }) {
+// ── Add Habit button for card header ──────────────────────────────────────────
+export function AddHabitBtn({ onClick }) {
+  return (
+    <button onClick={e => { e.stopPropagation(); onClick(); }} aria-label="Add habit" style={{
+      fontFamily: mono, fontSize: 14, lineHeight: 1,
+      width: 22, height: 22, borderRadius: 100,
+      border: '1.5px solid var(--dl-border2)',
+      background: 'transparent', color: 'var(--dl-middle)',
+      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      transition: 'all 0.15s',
+    }}>+</button>
+  );
+}
+
+// ── Inline habit creation form ────────────────────────────────────────────────
+function HabitCreationForm({ token, onCreated, onCancel }) {
+  const [name, setName] = useState('');
+  const [schedule, setSchedule] = useState('daily');
+  const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  useEffect(() => {
+    const onKey = e => { if (e.key === 'Escape') onCancel(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onCancel]);
+
+  const submit = async () => {
+    const trimmed = name.trim();
+    if (!trimmed || submitting) return;
+    setSubmitting(true);
+    const opt = SCHEDULE_OPTIONS.find(o => o.key === schedule) || SCHEDULE_OPTIONS[0];
+    const text = `${trimmed} {h:${opt.key}:${opt.label}}`;
+    const today = todayKey();
+    try {
+      await api.post('/api/tasks', { date: today, text, done: false }, token);
+      window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
+      onCreated();
+    } catch (err) {
+      showToast('Failed to create habit', 'error');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0' }}>
+      <input
+        ref={inputRef}
+        value={name}
+        onChange={e => setName(e.target.value)}
+        onKeyDown={e => { if (e.key === 'Enter') submit(); }}
+        placeholder="Habit name..."
+        style={{
+          fontFamily: mono, fontSize: 12, flex: 1,
+          background: 'transparent', border: '1.5px solid var(--dl-border2)',
+          borderRadius: 6, padding: '4px 8px', color: 'var(--dl-strong)',
+          outline: 'none', letterSpacing: '0.02em',
+        }}
+      />
+      <div style={{ display: 'flex', gap: 2, background: 'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius: 100, padding: 2 }}>
+        {SCHEDULE_OPTIONS.map(opt => (
+          <button key={opt.key} onClick={() => setSchedule(opt.key)} style={{
+            fontFamily: mono, fontSize: 10, padding: '3px 6px',
+            borderRadius: 100, cursor: 'pointer', border: 'none',
+            background: schedule === opt.key ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
+            color: schedule === opt.key ? 'var(--dl-strong)' : 'var(--dl-middle)',
+            transition: 'all 0.15s', whiteSpace: 'nowrap',
+          }}>{opt.label}</button>
+        ))}
+      </div>
+      <button onClick={submit} disabled={!name.trim() || submitting} style={{
+        fontFamily: mono, fontSize: 10, padding: '4px 10px',
+        borderRadius: 100, border: 'none', cursor: name.trim() && !submitting ? 'pointer' : 'default',
+        background: 'var(--dl-accent)', color: 'var(--dl-bg)',
+        opacity: name.trim() && !submitting ? 1 : 0.4,
+        fontWeight: 600, letterSpacing: '0.04em', transition: 'all 0.15s',
+      }}>ADD</button>
+    </div>
+  );
+}
+
+export default function HabitsCard({ date, token, userId, project, habitFilter = 'all', onSelectDate, showCreateForm, onCreateDone }) {
   const [habits, setHabits] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -275,7 +368,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
       setHabits([...taskHabits, ...healthHabits]);
       setLoading(false);
-    }).catch(() => { if (!cancelled) setLoading(false); });
+    }).catch(() => { if (!cancelled) { setLoading(false); showToast('Failed to load habits', 'error'); } });
 
     return () => { cancelled = true; };
   }, [token, userId, startDate, endDate, refreshKey]);
@@ -321,6 +414,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
       window.dispatchEvent(new CustomEvent('daylab:habits-changed'));
     }).catch(err => {
       console.warn('[habits] toggle failed:', err);
+      showToast('Failed to save habit', 'error');
       refresh(); // revert optimistic update on error
     });
   }, [token, refresh]);
@@ -336,7 +430,11 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   if (habits.length === 0) {
     return (
       <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
-        No habits yet — use /h in tasks to tag one
+        {showCreateForm ? (
+          <HabitCreationForm token={token} onCreated={() => { onCreateDone?.(); refresh(); }} onCancel={() => onCreateDone?.()} />
+        ) : (
+          'No habits yet — use /h in tasks to tag one'
+        )}
       </div>
     );
   }
@@ -384,7 +482,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
           fontFamily: mono, fontSize: 11, fontWeight: 600, lineHeight: 1,
           color: streakColor(h.streak, h.frozen, h.bestStreak), whiteSpace: 'nowrap',
         }}>
-          <span style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen, h.bestStreak)}</span>
+          <span role="img" aria-label={streakTooltip(h.streak, h.frozen, h.bestStreak)} style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen, h.bestStreak)}</span>
           {h.streak}
         </span>
         {/* Freeze dots — small frost indicators showing banked freezes */}
@@ -429,9 +527,18 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
               {divider}
               <div style={{ width: colW, display: 'flex', alignItems: 'center', justifyContent: 'center', background: selectedBg, borderRadius: selectedRadius }}>
                 <div
+                  role={isPast && !h._isHealth ? 'button' : undefined}
+                  tabIndex={isPast && !h._isHealth ? 0 : undefined}
+                  aria-label={`${h.text} ${d} ${done ? 'completed' : 'not completed'}`}
                   onClick={e => {
                     if (dragState.current.moved) return;
                     if (isPast && !h._isHealth) toggleCompletion(h, d);
+                  }}
+                  onKeyDown={e => {
+                    if ((e.key === 'Enter' || e.key === ' ') && isPast && !h._isHealth) {
+                      e.preventDefault();
+                      toggleCompletion(h, d);
+                    }
                   }}
                   style={{
                     width: cellSize, height: cellSize,
@@ -452,49 +559,54 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   };
 
   return (
-    <div style={{ display: 'flex', userSelect: 'none', WebkitUserSelect: 'none' }}>
-      {/* Left column: names + stats */}
-      <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
-        {/* Header row */}
-        <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
-          <span style={{ flex: 1 }} />
-          <span title="Current streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center', cursor: 'default' }}>count</span>
-          <span title="Personal best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>best</span>
-        </div>
-
-        {filteredHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
-      </div>
-
-      {/* Right: scrollable grid */}
-      <div ref={scrollRef} onMouseDown={onMouseDown} style={{
-        flex: 1, overflowX: 'auto', overflowY: 'hidden', cursor: 'grab',
-        scrollbarWidth: 'none', msOverflowStyle: 'none',
-        margin: '0 -14px 0 0',
-        userSelect: 'none', WebkitUserSelect: 'none',
-      }}>
-        <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW + monthBoundaries.size * dividerW + 14, paddingRight: 14 }}>
-          {/* Date header */}
-          <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
-            {visibleDates.map((d, i) => {
-              const isToday = d === today;
-              const isBoundary = monthBoundaries.has(i);
-              return (
-                <React.Fragment key={d}>
-                  {isBoundary && <div style={{ width: dividerW }} />}
-                  <div
-                    onClick={e => { if (dragState.current.moved) return; onSelectDate?.(d); }}
-                    style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2, borderRadius: '6px 6px 0 0', background: d === date ? 'var(--dl-accent-10, rgba(208,136,40,0.1))' : 'transparent', cursor: 'pointer' }}>
-                    <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayLabel(d)}</span>
-                    <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayNum(d)}</span>
-                  </div>
-                </React.Fragment>
-              );
-            })}
+    <div>
+      <div style={{ display: 'flex', userSelect: 'none', WebkitUserSelect: 'none' }}>
+        {/* Left column: names + stats */}
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
+          {/* Header row */}
+          <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
+            <span style={{ flex: 1 }} />
+            <span title="Current streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center', cursor: 'default' }}>count</span>
+            <span title="Personal best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>best</span>
           </div>
 
-          {filteredHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
+          {filteredHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
+        </div>
+
+        {/* Right: scrollable grid */}
+        <div ref={scrollRef} onMouseDown={onMouseDown} style={{
+          flex: 1, overflowX: 'auto', overflowY: 'hidden', cursor: 'grab',
+          scrollbarWidth: 'none', msOverflowStyle: 'none',
+          margin: '0 -14px 0 0',
+          userSelect: 'none', WebkitUserSelect: 'none',
+        }}>
+          <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW + monthBoundaries.size * dividerW + 14, paddingRight: 14 }}>
+            {/* Date header */}
+            <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
+              {visibleDates.map((d, i) => {
+                const isToday = d === today;
+                const isBoundary = monthBoundaries.has(i);
+                return (
+                  <React.Fragment key={d}>
+                    {isBoundary && <div style={{ width: dividerW }} />}
+                    <div
+                      onClick={e => { if (dragState.current.moved) return; onSelectDate?.(d); }}
+                      style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2, borderRadius: '6px 6px 0 0', background: d === date ? 'var(--dl-accent-10, rgba(208,136,40,0.1))' : 'transparent', cursor: 'pointer' }}>
+                      <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayLabel(d)}</span>
+                      <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayNum(d)}</span>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            {filteredHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
+          </div>
         </div>
       </div>
+      {showCreateForm && (
+        <HabitCreationForm token={token} onCreated={() => { onCreateDone?.(); refresh(); }} onCancel={() => onCreateDone?.()} />
+      )}
     </div>
   );
 }
