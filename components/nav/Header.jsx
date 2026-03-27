@@ -102,11 +102,24 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
           >‹</button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
             {relLabel && (
-              <span style={{
-                fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
-                color: isToday ? "var(--dl-orange)" : "var(--dl-middle)",
-                lineHeight: 1, marginBottom: -1,
-              }}>{relLabel}</span>
+              isToday ? (
+                <span style={{
+                  fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
+                  color: "var(--dl-orange)",
+                  lineHeight: 1, marginBottom: -1,
+                }}>{relLabel}</span>
+              ) : (
+                <button onClick={onGoToToday} style={{
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                  fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
+                  color: "var(--dl-middle)",
+                  lineHeight: 1, marginBottom: -1,
+                  transition: 'color 0.15s',
+                }}
+                  onMouseEnter={e => e.currentTarget.style.color = "var(--dl-orange)"}
+                  onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
+                >{relLabel} · TODAY</button>
+              )
             )}
             <button onClick={onGoHome} style={{
               background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',
@@ -126,20 +139,6 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
             onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
             onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
           >›</button>
-          {!isToday && (
-            <button onClick={onGoToToday} style={{
-              fontFamily: mono, fontSize: 9, letterSpacing: '0.08em',
-              background: 'var(--dl-accent-10, rgba(208,136,40,0.1))',
-              color: 'var(--dl-accent)',
-              border: '1px solid var(--dl-accent-30, rgba(208,136,40,0.25))',
-              borderRadius: 100, padding: '3px 8px', cursor: 'pointer',
-              lineHeight: 1, userSelect: 'none', transition: 'all 0.15s',
-              marginLeft: 4,
-            }}
-              onMouseEnter={e => { e.currentTarget.style.background = 'var(--dl-accent-20, rgba(208,136,40,0.2))'; }}
-              onMouseLeave={e => { e.currentTarget.style.background = 'var(--dl-accent-10, rgba(208,136,40,0.1))'; }}
-            >TODAY</button>
-          )}
         </div>
       </div>
 
