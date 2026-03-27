@@ -158,7 +158,7 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
   }
   const maxConn = Math.max(1, ...Object.values(connWeight));
   const maxEntries = Math.max(1, ...Object.values(entryCounts || {}));
-  return tags.map(tag => {
+  const result = tags.map(tag => {
     const pos = placed.get(tag) || { x: 0, z: 0 };
     const entryScore = (entryCounts?.[tag] || 0) / maxEntries;
     const connScore = (connWeight[tag] || 0) / maxConn;
@@ -198,6 +198,12 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
       habits: habits?.[tag] || [], // [{text, flagCount, topScore, streak}]
     };
   });
+
+  // Cap volcanos to max 2 — sort by raw entries, demote the rest to active
+  const hot = result.filter(p => p.isHot).sort((a, b) => b.score - a.score);
+  for (let i = 2; i < hot.length; i++) hot[i].isHot = false;
+
+  return result;
 }
 
 function islandRadius(projectCount) {
