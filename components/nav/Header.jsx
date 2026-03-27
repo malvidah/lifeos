@@ -126,6 +126,20 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
             onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
             onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
           >›</button>
+          {!isToday && (
+            <button onClick={onGoToToday} style={{
+              fontFamily: mono, fontSize: 9, letterSpacing: '0.08em',
+              background: 'var(--dl-accent-10, rgba(208,136,40,0.1))',
+              color: 'var(--dl-accent)',
+              border: '1px solid var(--dl-accent-30, rgba(208,136,40,0.25))',
+              borderRadius: 100, padding: '3px 8px', cursor: 'pointer',
+              lineHeight: 1, userSelect: 'none', transition: 'all 0.15s',
+              marginLeft: 4,
+            }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--dl-accent-20, rgba(208,136,40,0.2))'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--dl-accent-10, rgba(208,136,40,0.1))'; }}
+            >TODAY</button>
+          )}
         </div>
       </div>
 
