@@ -15,8 +15,6 @@
   --dl-green:#4A9A68;--dl-blue:#4878A8;--dl-purple:#8860B8;--dl-red:#B04840;
   --dl-shadow:0 1px 3px rgba(0,0,0,0.55),0 2px 12px rgba(0,0,0,0.28);
   --dl-shadow-sm:0 1px 2px rgba(0,0,0,0.40);
-  --dl-glass:rgba(19,18,17,0.6);--dl-glass-active:rgba(255,255,255,0.08);--dl-glass-border:rgba(255,255,255,0.07);--dl-glass-shadow:0 1px 8px rgba(0,0,0,0.2);
-  --dl-overlay:rgba(19,18,17,0.75);--dl-overlay-border:rgba(255,255,255,0.08);--dl-overlay-shadow:0 4px 24px rgba(0,0,0,0.4);
   color-scheme:dark
 }
 [data-theme="light"]{
@@ -29,13 +27,18 @@
   --dl-green:#2E7A48;--dl-blue:#2E6098;--dl-purple:#5840A0;--dl-red:#A03028;
   --dl-shadow:0 1px 3px rgba(36,24,12,0.08),0 2px 10px rgba(36,24,12,0.05);
   --dl-shadow-sm:0 1px 2px rgba(36,24,12,0.06);
-  --dl-glass:rgba(255,255,255,0.78);--dl-glass-active:rgba(0,0,0,0.03);--dl-glass-border:rgba(0,0,0,0.08);--dl-glass-shadow:0 1px 8px rgba(36,24,12,0.06);
-  --dl-overlay:rgba(255,255,255,0.85);--dl-overlay-border:rgba(0,0,0,0.1);--dl-overlay-shadow:0 4px 24px rgba(36,24,12,0.12);
   color-scheme:light
 }
 /* ── Derived accent variants ─────────────────────────────────────────────────
    -strong  = mixed 70% toward --dl-strong → readable on dark, rich on light
    -detail  = 12% tint → soft background fills, subtle borders               */
+/* ── Theme-independent glass & overlay ──────────────────────────────────────
+   These use backdrop-blur for the actual glass effect; the background just
+   needs subtle translucency that works on any base colour.                    */
+:root{
+  --dl-glass:rgba(128,120,112,0.12);--dl-glass-active:rgba(128,120,112,0.08);--dl-glass-border:rgba(128,120,112,0.12);--dl-glass-shadow:0 1px 8px rgba(0,0,0,0.12);
+  --dl-overlay:rgba(0,0,0,0.45);--dl-overlay-border:rgba(128,120,112,0.12);--dl-overlay-shadow:0 4px 24px rgba(0,0,0,0.25);
+}
 :root,[data-theme="dark"],[data-theme="light"]{
   --dl-accent-strong: color-mix(in srgb,var(--dl-accent)  70%,var(--dl-strong));
   --dl-accent-detail: color-mix(in srgb,var(--dl-accent)  12%,transparent);
@@ -70,40 +73,16 @@
   --dl-surface-93:color-mix(in srgb,var(--dl-surface) 93%,transparent);
 }
 /* Theme transitions — enabled only after mount via .theme-ready to prevent
-   flash-of-wrong-theme on initial load.  We transition the root background
-   and color so that inheritance carries the smooth text-color change to all
-   children.  A thin transition-duration on color is injected via a custom
-   property so elements that read --dl-* vars for background get a gentle
-   crossfade without clobbering component-level transition declarations.  */
-html.theme-ready,
-html.theme-ready body{transition:background-color 1.5s ease,color 1s ease}
+   flash-of-wrong-theme on initial load.  Only the core surface + text
+   properties are registered for animation to keep the compositor fast.
+   Secondary vars (accent, border, etc.) snap instantly — imperceptible
+   because the surface/text transition dominates perception.               */
 @property --dl-bg{syntax:"<color>";inherits:true;initial-value:#0E0D0C}
 @property --dl-surface{syntax:"<color>";inherits:true;initial-value:#1A1816}
 @property --dl-card{syntax:"<color>";inherits:true;initial-value:#1E1C19}
-@property --dl-well{syntax:"<color>";inherits:true;initial-value:#0A0908}
-@property --dl-border{syntax:"<color>";inherits:true;initial-value:#2A2620}
-@property --dl-border2{syntax:"<color>";inherits:true;initial-value:#363028}
 @property --dl-strong{syntax:"<color>";inherits:true;initial-value:#F0E4D0}
-@property --dl-highlight{syntax:"<color>";inherits:true;initial-value:#A09484}
-@property --dl-middle{syntax:"<color>";inherits:true;initial-value:#655C52}
-@property --dl-dim{syntax:"<color>";inherits:true;initial-value:#1A1816}
-@property --dl-muted{syntax:"<color>";inherits:true;initial-value:#0E0D0C}
-@property --dl-accent{syntax:"<color>";inherits:true;initial-value:#D08828}
-@property --dl-orange{syntax:"<color>";inherits:true;initial-value:#D08828}
-@property --dl-yellow{syntax:"<color>";inherits:true;initial-value:#B88828}
-@property --dl-green{syntax:"<color>";inherits:true;initial-value:#4A9A68}
-@property --dl-blue{syntax:"<color>";inherits:true;initial-value:#4878A8}
-@property --dl-purple{syntax:"<color>";inherits:true;initial-value:#8860B8}
-@property --dl-red{syntax:"<color>";inherits:true;initial-value:#B04840}
-html.theme-ready{transition:
-  background-color 1.5s ease,color 1s ease,
-  --dl-bg 1.5s ease,--dl-surface 1.5s ease,--dl-card 1.5s ease,
-  --dl-well 1.5s ease,--dl-border 1.2s ease,--dl-border2 1.2s ease,
-  --dl-strong 1s ease,--dl-highlight 1s ease,--dl-middle 1s ease,
-  --dl-dim 1.5s ease,--dl-muted 1.5s ease,
-  --dl-accent 1s ease,--dl-orange 1s ease,--dl-yellow 1s ease,
-  --dl-green 1s ease,--dl-blue 1s ease,--dl-purple 1s ease,--dl-red 1s ease}
-html.theme-ready body{transition:background-color 1.5s ease,color 1s ease}
+html.theme-ready,
+html.theme-ready body{transition:background-color 1.5s ease,color 1s ease,--dl-bg 1.5s ease,--dl-surface 1.5s ease,--dl-card 1.5s ease,--dl-strong 1s ease}
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 ::-webkit-scrollbar{display:none}*{scrollbar-width:none}
 button{border-radius:0}a{text-decoration:none}
