@@ -4,7 +4,7 @@ import { mono, F, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
 import { useProjectNames } from "@/lib/contexts";
-import { keyToRecurrence } from "@/lib/recurrence";
+import { keyToRecurrence, xperweekTarget } from "@/lib/recurrence";
 import { Shimmer } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 import { useTip } from "@/lib/useTip";
@@ -959,12 +959,15 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
           </span>
         )}
       </div>
-      <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 36, textAlign: 'center' }}>
+      <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 44, textAlign: 'center' }}>
         {h.countLimit
-          ? <span style={{ color: h.countComplete ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.countComplete ? 600 : 400 }}>{h.countDone || 0}/{h.countLimit}</span>
-          : h.daysLimit
-            ? <span style={{ color: h.daysExpired ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.daysExpired ? 600 : 400 }}>{h.daysLimit}d</span>
-            : (h.bestStreak || '\u2014')
+          ? <span style={{ color: h.countComplete ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.countComplete ? 600 : 400 }}>{h.countLimit}×</span>
+          : (() => {
+              const pw = xperweekTarget(h.schedule);
+              if (pw) return <span>{pw}×/w</span>;
+              if (h.daysLimit) return <span style={{ color: h.daysExpired ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.daysExpired ? 600 : 400 }}>{h.daysLimit}d</span>;
+              return (h.bestStreak || '\u2014');
+            })()
         }
       </span>
     </div>
@@ -1052,7 +1055,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
             >+ New Habit</button>
             <span style={{ flex: 1 }} />
             <span title="Current streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center', cursor: 'default' }}>count</span>
-            <span title="Max completions / best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>max</span>
+            <span title="Target or best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center', cursor: 'default' }}>out of</span>
           </div>
 
           {activeHabits.filter(h => !h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
