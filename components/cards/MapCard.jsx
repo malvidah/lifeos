@@ -164,21 +164,30 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
     const connScore = (connWeight[tag] || 0) / maxConn;
     const rScore = recencyScore(tag);
     const daysSinceActive = recency?.[tag] ? (now - new Date(recency[tag]).getTime()) / 86400000 : 999;
-    // Height: entries + connections + large deterministic variation per project
+    // Deterministic hash from project name — used for height variation + shape seed
     let hash = 0;
     for (let c = 0; c < tag.length; c++) hash = (hash * 31 + tag.charCodeAt(c)) >>> 0;
     const variation = (hash % 100) / 100; // 0–1
+    // Shape variation seeds (deterministic per project)
+    const widthSeed = ((hash >>> 4) % 100) / 100;   // 0–1: peak width
+    const slopeSeed = ((hash >>> 8) % 100) / 100;   // 0–1: slope steepness
+    const asymSeed  = ((hash >>> 12) % 100) / 100;  // 0–1: ridge asymmetry
     const h = Math.max(entryScore, connScore, 0.15) * 2.0 + 0.8 + variation * 1.5;
+    const rawEntries = entryCounts?.[tag] || 0;
     return {
       tag, x: pos.x, z: pos.z,
       height: h,
       color: projectColor(tag),
       label: tagDisplayName(tag),
       score: Math.max(entryScore, connScore, 0.3),
+      // Shape variation — seeded from project name hash
+      widthFactor: 0.7 + widthSeed * 0.6,     // 0.7–1.3: narrower or wider peaks
+      slopePower: 2.0 + slopeSeed * 1.5,       // 2.0–3.5: gentler or steeper slopes
+      asymmetry: asymSeed * 0.3,               // 0–0.3: ridge offset
       // Dormant: no activity in 7+ days. Active: activity in last 7 days.
       isActive: daysSinceActive < 7,
-      // Volcano: sustained high engagement — top 20% entries AND active in last 3 days
-      isHot: daysSinceActive < 3 && entryScore > 0.8,
+      // Volcano: consistent recent engagement — active in last 3 days with 5+ entries
+      isHot: daysSinceActive < 3 && rawEntries >= 5,
       recencyScore: rScore,
       completedTasks: completedTasks?.[tag] || 0,
       habits: habits?.[tag] || [], // [{text, flagCount, topScore, streak}]
@@ -242,8 +251,14 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
 
     for (const p of projects) {
       const dx = x - p.x, dz = z - p.z;
-      const d = Math.sqrt(dx * dx + dz * dz);
-      const r = (0.6 + p.score * 0.3) * (p.isHot ? 1.5 : 1.0);
+      // Asymmetric ridge: offset center based on angle
+      const angle = Math.atan2(dz, dx);
+      const asym = p.asymmetry || 0;
+      const ax = dx - Math.cos(angle * 2) * asym;
+      const az = dz - Math.sin(angle * 2) * asym;
+      const d = Math.sqrt(ax * ax + az * az);
+      const wf = p.widthFactor || 1.0;
+      const r = (0.6 + p.score * 0.3) * wf * (p.isHot ? 1.5 : 1.0);
       if (d < r * 2.0) {
         const f = Math.max(0, 1 - d / (r * 2.0));
         if (p.isHot) {
@@ -251,7 +266,11 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
           const volcano = f < 0.7 ? f * f : 0.49 - (f - 0.7) * 0.5;
           h += p.height * 1.4 * volcano;
         } else {
-          h += p.height * f * f * f;
+          // Rounded peak: smoothstep-like curve instead of sharp cubic
+          const sp = p.slopePower || 3.0;
+          const smooth = f * f * (3 - 2 * f); // hermite smoothstep
+          const shaped = Math.pow(smooth, sp / 3.0); // adjust steepness
+          h += p.height * shaped;
         }
       }
     }
@@ -291,14 +310,30 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
     const ao = Math.max(0, Math.min(1, (h + 0.1) / 0.6)); // 0 at valleys, 1 at hills
     const aoFactor = 0.7 + ao * 0.3; // darken valleys by up to 30%
     const band = ht < 0.1 ? 0 : ht < 0.25 ? 1 : ht < 0.4 ? 2 : ht < 0.6 ? 3 : ht < 0.8 ? 4 : 5;
-    const base = lush[band].map((l, i) => (l * v + drought[band][i] * (1 - v) + n) * aoFactor);
+    let base = lush[band].map((l, i) => (l * v + drought[band][i] * (1 - v) + n) * aoFactor);
+
+    // Project color gradient near peaks — dark rock at base, project pastel near summit
+    for (const p of projects) {
+      const dx = x - p.x, dz = z - p.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const peakR = (0.6 + p.score * 0.3) * (p.widthFactor || 1.0);
+      if (dist < peakR * 1.8 && h > p.height * 0.35) {
+        const heightBlend = Math.min(1, (h - p.height * 0.35) / (p.height * 0.65));
+        const distBlend = 1 - dist / (peakR * 1.8);
+        const blend = heightBlend * distBlend * 0.35; // subtle — 35% max tint
+        const cr = parseInt(p.color.slice(1, 3), 16) / 255;
+        const cg = parseInt(p.color.slice(3, 5), 16) / 255;
+        const cb = parseInt(p.color.slice(5, 7), 16) / 255;
+        base = base.map((c, i) => c + ([cr, cg, cb][i] - c) * blend);
+      }
+    }
 
     // Volcanic magma: hot projects get bright lava at crater + flow streaks down sides
     for (const p of projects) {
       if (!p.isHot) continue;
       const dx = x - p.x, dz = z - p.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
-      const peakR = (0.6 + p.score * 0.3) * 1.5; // match volcano radius
+      const peakR = (0.6 + p.score * 0.3) * (p.widthFactor || 1.0) * 1.5; // match volcano radius
 
       // Crater glow — bright orange-red inside the caldera
       if (dist < peakR * 0.4 && h > p.height * 0.5) {
