@@ -38,7 +38,7 @@ import { useRealtimeSync } from "@/lib/useRealtimeSync";
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
   { id: 'project-graph', label: 'Projects', icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span> },
-  { id: 'goals', label: 'Goals', icon: <span style={{fontSize:14,lineHeight:1}}>🏔️</span> },
+  { id: 'goals', label: 'Goals', icon: <span style={{fontSize:14,lineHeight:1}}>🏁</span> },
   { id: 'world-map',     label: 'Map',      icon: <span style={{fontSize:14,lineHeight:1}}>📍</span> },
   { id: 'cal',      label: 'Calendar', icon: <span style={{fontSize:14,lineHeight:1}}>📅</span> },
   { id: 'health',   label: 'Health',   icon: <span style={{fontSize:14,lineHeight:1}}>💚</span> },
