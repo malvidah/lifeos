@@ -64,8 +64,8 @@ export default function RootLayout({ children }) {
         <meta name="apple-mobile-web-app-title" content="Day Lab" />
         <style dangerouslySetInnerHTML={{ __html: `
           html, body { margin: 0; padding: 0; }
-          html[data-theme="light"], html[data-theme="light"] body { background-color: #EFEBE4 !important; }
-          html[data-theme="dark"], html[data-theme="dark"] body { background-color: #0E0D0C !important; }
+          html:not(.theme-ready)[data-theme="light"], html:not(.theme-ready)[data-theme="light"] body { background-color: #EFEBE4 !important; }
+          html:not(.theme-ready)[data-theme="dark"], html:not(.theme-ready)[data-theme="dark"] body { background-color: #0E0D0C !important; }
           html:not([data-theme]) body { background-color: #0E0D0C !important; }
         `}} />
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
