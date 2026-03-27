@@ -244,7 +244,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
             value={rowsToHtml(safe)}
             onBlur={handleBlur}
             onUpdate={handleUpdate}
-            placeholder={mergedSynced.length===0?"What did you do?":""}
+            placeholder="Add a workout..."
             textColor={"var(--dl-strong)"}
             mutedColor={"var(--dl-middle)"}
             color={"var(--dl-accent)"}
