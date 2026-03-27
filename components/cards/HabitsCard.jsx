@@ -398,7 +398,8 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   // Grid row for a single habit
   const HabitGridRow = ({ h, allVisibleHabits }) => {
     const tag = h.project_tags?.[0];
-    const fillColor = tag ? projectColor(tag) + '55' : 'var(--dl-border2)';
+    const baseColor = tag ? projectColor(tag) : null;
+    const fillColor = baseColor ? baseColor + '55' : 'var(--dl-accent-30, rgba(208,136,40,0.3))';
     return (
       <div style={{ display: 'flex', height: rowH }}>
         {visibleDates.map((d, i) => {
@@ -429,7 +430,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
                     width: cellSize, height: cellSize,
                     borderRadius: h._isHealth ? '50%' : 4,
                     background: done ? fillColor : 'transparent',
-                    border: `1.5px solid ${done ? (tag ? projectColor(tag) : 'var(--dl-border2)') : isPast ? 'var(--dl-border2)' : 'var(--dl-border)'}`,
+                    border: `1.5px solid ${done ? (baseColor || 'var(--dl-accent)') : isPast ? (baseColor ? baseColor + '33' : 'var(--dl-border2)') : 'var(--dl-border)'}`,
                     opacity: !isPast && !done ? 0.35 : 1,
                     transition: 'all 0.15s',
                     cursor: isPast && !h._isHealth ? 'pointer' : 'default',
