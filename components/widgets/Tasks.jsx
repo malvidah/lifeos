@@ -143,16 +143,21 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
       try {
         const editorTasks = parseTaskBlocks(newHtml);
+        console.log('[tasks-save] editorTasks:', editorTasks.map(t => ({ pos: t.position, id: t.task_id, done: t.done, text: t.text?.slice(0, 30), recurring: t.recurring })));
+        console.log('[tasks-save] posMap size:', taskIdMapRef.current.size, 'serverTasks:', serverTasksRef.current.length);
 
         // Overlay task_ids from position map — TipTap may drop data-task-id during edits
+        let overlaid = 0;
         for (const et of editorTasks) {
           if (et.task_id) continue; // already has id from DOM
           const mapped = taskIdMapRef.current.get(et.position);
           if (mapped) {
             et.task_id = mapped.id;
             if (mapped.recurring) et.recurring = true;
+            overlaid++;
           }
         }
+        if (overlaid) console.log('[tasks-save] overlaid', overlaid, 'task_ids from position map');
 
         const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
 
@@ -161,15 +166,34 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         // are the most common case (habit on a non-origin date).
         let habitChanged = false;
         for (const et of editorTasks) {
-          if (!et.task_id) continue;
+          if (!et.task_id) {
+            console.log('[habit-toggle] skip: no task_id', { pos: et.position, text: et.text?.slice(0, 40) });
+            continue;
+          }
           const st = serverById.get(et.task_id);
-          if (!st || !isHabitOrRecurring(st) || et.done === st.done) continue;
+          if (!st) {
+            console.log('[habit-toggle] skip: no server match for', et.task_id);
+            continue;
+          }
+          if (!isHabitOrRecurring(st)) {
+            continue; // regular task, handled by diff
+          }
+          if (et.done === st.done) {
+            continue; // no change
+          }
+          console.log('[habit-toggle] DETECTED change:', { id: st.id, text: st.text?.slice(0, 40), editorDone: et.done, serverDone: st.done, source: st._source });
           habitChanged = true;
           markLocalSave("tasks", date);
-          if (et.done) {
-            await api.post('/api/tasks/complete-recurring', { template_id: st.id, date }, token);
-          } else {
-            await api.delete(`/api/tasks/complete-recurring?habit_id=${st.id}&date=${date}`, token);
+          try {
+            if (et.done) {
+              const res = await api.post('/api/tasks/complete-recurring', { template_id: st.id, date }, token);
+              console.log('[habit-toggle] POST result:', res);
+            } else {
+              const res = await api.delete(`/api/tasks/complete-recurring?habit_id=${st.id}&date=${date}`, token);
+              console.log('[habit-toggle] DELETE result:', res);
+            }
+          } catch (toggleErr) {
+            console.error('[habit-toggle] API FAILED:', toggleErr);
           }
         }
 
