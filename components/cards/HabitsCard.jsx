@@ -206,9 +206,9 @@ const AllIcon = () => (
 // ── Schedule options for habit creation ───────────────────────────────────────
 const SCHEDULE_OPTIONS = [
   { key: 'daily', label: 'Daily', chip: 'Daily', search: 'daily everyday' },
-  { key: '1pw', label: '1×week', chip: '1×week', search: '1x per week once weekly 1 per week' },
-  { key: '2pw', label: '2×week', chip: '2×week', search: '2x per week twice weekly 2 per week' },
-  { key: '3pw', label: '3×week', chip: '3×week', search: '3x per week three times weekly 3 per week' },
+  { key: '1pw', label: '1/week', chip: '1/week', search: '1x per week once weekly 1 per week' },
+  { key: '2pw', label: '2/week', chip: '2/week', search: '2x per week twice weekly 2 per week' },
+  { key: '3pw', label: '3/week', chip: '3/week', search: '3x per week three times weekly 3 per week' },
   { key: 'weekdays', label: 'Weekdays (M·T·W·R·F)', chip: 'M·T·W·R·F', search: 'weekdays weekday mtwrf' },
   { key: 'mwf', label: 'M·W·F', chip: 'M·W·F', search: 'mwf monday wednesday friday' },
   { key: 'tr', label: 'T·R', chip: 'T·R', search: 'tr tuesday thursday' },
@@ -929,49 +929,62 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   const dividerW = 28;
 
   // Habit name row component
-  const HabitNameRow = ({ h }) => (
-    <div style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
-      <span
-        onClick={() => { if (!h._isHealth) setSelectedHabitId(h.id); }}
-        onMouseEnter={e => { if (!h._isHealth) e.currentTarget.style.opacity = '0.7'; }}
-        onMouseLeave={e => { if (!h._isHealth) e.currentTarget.style.opacity = '1'; }}
-        style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: h._isHealth ? 'default' : 'pointer', transition: 'opacity 0.15s' }}>
-        {h.text}
-      </span>
-      <div style={{ width: 52, display: 'flex', justifyContent: 'center', gap: 2, alignItems: 'center' }}>
-        <span title={streakTooltip(h.streak, h.frozen, h.bestStreak)} style={{
-          display: 'inline-flex', alignItems: 'center', gap: 2,
-          padding: '1px 5px', borderRadius: 100,
-          border: `1.5px solid ${streakColor(h.streak, h.frozen, h.bestStreak)}`,
-          background: streakBg(h.streak, h.frozen, h.bestStreak),
-          fontFamily: mono, fontSize: 11, fontWeight: 600, lineHeight: 1,
-          color: streakColor(h.streak, h.frozen, h.bestStreak), whiteSpace: 'nowrap',
-        }}>
-          <span role="img" aria-label={streakTooltip(h.streak, h.frozen, h.bestStreak)} style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen, h.bestStreak)}</span>
-          {h.streak}
+  const HabitNameRow = ({ h }) => {
+    // Inline frequency/limit tag shown after the habit title
+    const pw = xperweekTarget(h.schedule);
+    const freqTag = pw
+      ? `${pw}/week`
+      : h.countLimit
+        ? `${h.countDone || 0}/${h.countLimit}`
+        : h.daysLimit
+          ? `${h.daysLimit}d`
+          : null;
+    const freqColor = h.countComplete
+      ? GOAL_COLOR_HABIT
+      : h.daysExpired
+        ? GOAL_COLOR_HABIT
+        : 'var(--dl-middle)';
+
+    return (
+      <div style={{ height: rowH, display: 'flex', alignItems: 'center', gap: 0, paddingRight: 10 }}>
+        {/* Title + inline frequency tag */}
+        <span
+          onClick={() => { if (!h._isHealth) setSelectedHabitId(h.id); }}
+          onMouseEnter={e => { if (!h._isHealth) e.currentTarget.style.opacity = '0.7'; }}
+          onMouseLeave={e => { if (!h._isHealth) e.currentTarget.style.opacity = '1'; }}
+          style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-strong)', fontWeight: 500, lineHeight: 1, whiteSpace: 'nowrap', flex: 1, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: h._isHealth ? 'default' : 'pointer', transition: 'opacity 0.15s', display: 'flex', alignItems: 'baseline', gap: 5, minWidth: 0, overflow: 'hidden' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.text}</span>
+          {freqTag && (
+            <span style={{ fontFamily: mono, fontSize: 9, fontWeight: 400, color: freqColor, letterSpacing: '0.05em', flexShrink: 0, textTransform: 'none' }}>
+              {freqTag}
+            </span>
+          )}
         </span>
-        {/* Freeze dots — small frost indicators showing banked freezes */}
-        {h.freezes > 0 && (
-          <span style={{ display: 'flex', gap: 1 }}>
-            {Array.from({ length: h.freezes }, (_, i) => (
-              <span key={i} style={{ width: 4, height: 4, borderRadius: 2, background: '#7CB8D4', flexShrink: 0 }} />
-            ))}
+        {/* Streak badge */}
+        <div style={{ width: 52, display: 'flex', justifyContent: 'center', gap: 2, alignItems: 'center' }}>
+          <span title={streakTooltip(h.streak, h.frozen, h.bestStreak)} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 2,
+            padding: '1px 5px', borderRadius: 100,
+            border: `1.5px solid ${streakColor(h.streak, h.frozen, h.bestStreak)}`,
+            background: streakBg(h.streak, h.frozen, h.bestStreak),
+            fontFamily: mono, fontSize: 11, fontWeight: 600, lineHeight: 1,
+            color: streakColor(h.streak, h.frozen, h.bestStreak), whiteSpace: 'nowrap',
+          }}>
+            <span role="img" aria-label={streakTooltip(h.streak, h.frozen, h.bestStreak)} style={{ fontSize: 10, lineHeight: 1 }}>{streakEmoji(h.streak, h.frozen, h.bestStreak)}</span>
+            {h.streak}
           </span>
-        )}
+          {/* Freeze dot — indicates a grace week in progress (xperweek) or banked freeze (daily) */}
+          {h.frozen && (
+            <span style={{ width: 4, height: 4, borderRadius: 2, background: '#7CB8D4', flexShrink: 0 }} />
+          )}
+        </div>
+        {/* TOP: highest unbroken streak */}
+        <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 44, textAlign: 'center' }}>
+          {h.bestStreak || '\u2014'}
+        </span>
       </div>
-      <span style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: 1, width: 44, textAlign: 'center' }}>
-        {h.countLimit
-          ? <span style={{ color: h.countComplete ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.countComplete ? 600 : 400 }}>{h.countLimit}×</span>
-          : (() => {
-              const pw = xperweekTarget(h.schedule);
-              if (pw) return <span>{pw}×/w</span>;
-              if (h.daysLimit) return <span style={{ color: h.daysExpired ? GOAL_COLOR_HABIT : 'var(--dl-middle)', fontWeight: h.daysExpired ? 600 : 400 }}>{h.daysLimit}d</span>;
-              return (h.bestStreak || '\u2014');
-            })()
-        }
-      </span>
-    </div>
-  );
+    );
+  };
 
   // Grid row for a single habit
   const HabitGridRow = ({ h, allVisibleHabits }) => {
@@ -1055,7 +1068,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
             >+ New Habit</button>
             <span style={{ flex: 1 }} />
             <span title="Current streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center', cursor: 'default' }}>count</span>
-            <span title="Target or best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center', cursor: 'default' }}>out of</span>
+            <span title="Top (best) streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 44, textAlign: 'center', cursor: 'default' }}>top</span>
           </div>
 
           {activeHabits.filter(h => !h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}

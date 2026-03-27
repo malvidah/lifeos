@@ -143,23 +143,34 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       const todayWeek = isoWeekKey(todayStr);
       const pastWeeks = [...weeksInRange].filter(w => w < todayWeek).sort();
 
-      let consecutiveForFreeze = 0;
+      // Grace-week rule: one missed week is forgiven — only 2 consecutive
+      // missed weeks actually break the streak (matches user's "don't reset
+      // until you start the 2nd week in a row without completing it").
+      let missedConsecutive = 0;
       for (const wk of pastWeeks) {
         const done = (weekCounts[wk] ?? 0) >= target;
         if (done) {
-          runningStreak++; consecutiveForFreeze++;
+          runningStreak++;
+          missedConsecutive = 0;
           frozen = false;
           if (runningStreak > bestStreak) bestStreak = runningStreak;
-          if (consecutiveForFreeze >= 4) { consecutiveForFreeze = 0; if (freezes < 2) freezes++; }
         } else {
-          consecutiveForFreeze = 0;
-          if (freezes > 0) { freezes--; frozen = true; }
-          else { runningStreak = 0; frozen = false; }
+          missedConsecutive++;
+          if (missedConsecutive >= 2) {
+            // Two weeks in a row with insufficient completions → reset
+            runningStreak = 0;
+            frozen = false;
+          } else {
+            // First miss: grace week — streak preserved, mark as frozen
+            frozen = true;
+          }
         }
       }
-      // Current week: count it if target already met (don't penalise if still in progress)
+      // Current week: add to streak only if target already met this week;
+      // never penalise for an in-progress week.
       if ((weekCounts[todayWeek] ?? 0) >= target) {
         runningStreak++;
+        frozen = false;
         if (runningStreak > bestStreak) bestStreak = runningStreak;
       }
       streak = runningStreak;
