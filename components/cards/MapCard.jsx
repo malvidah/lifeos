@@ -656,7 +656,9 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
         onMouseEnter={() => setHovered(p.tag)}
         onMouseLeave={() => setHovered(null)}
         style={{
-          background: (isSelected || isHov) ? `${p.color}30` : 'var(--dl-glass)',
+          // Active state: use same chip styling as project pills elsewhere —
+          // saturated color text, faded pastel bg, fully opaque, no glass blur
+          background: (isSelected || isHov) ? `${p.color}22` : 'var(--dl-glass)',
           backdropFilter: (isSelected || isHov) ? 'none' : 'blur(8px)',
           WebkitBackdropFilter: (isSelected || isHov) ? 'none' : 'blur(8px)',
           border: `1.5px solid ${(isSelected || isHov) ? p.color : 'var(--dl-glass-border)'}`,
@@ -664,10 +666,10 @@ function DepthLabel({ p, onSelect, isHov, setHovered, isDark, isSelected, hasSel
           fontFamily: mono, fontSize: 11, fontWeight: (isSelected || isHov) ? 600 : 400,
           letterSpacing: '0.08em',
           textTransform: 'uppercase', whiteSpace: 'nowrap',
-          color: (isSelected || isHov) ? (isDark ? '#fff' : 'var(--dl-strong)') : 'var(--dl-highlight)',
+          color: (isSelected || isHov) ? p.color : 'var(--dl-highlight)',
           cursor: 'pointer',
-          opacity: dimmed ? 0.4 : 1,
-          boxShadow: isSelected ? `0 0 12px ${p.color}66, inset 0 0 8px ${p.color}22` : isHov ? `0 0 8px ${p.color}44` : 'none',
+          opacity: dimmed ? 0.35 : 1,
+          boxShadow: (isSelected || isHov) ? 'none' : 'none',
           transition: 'all 0.15s ease-out',
           userSelect: 'none',
         }}>
