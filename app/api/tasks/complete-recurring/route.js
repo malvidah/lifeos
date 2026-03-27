@@ -8,7 +8,10 @@ import { cleanTaskText } from '@/lib/cleanTaskText.js';
 // Completion rows keep all chips for visual consistency; the habits API
 // distinguishes them from templates via the data-completion marker.
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
+// Use the client-supplied date instead of UTC to avoid timezone mismatch
+function localToday(clientDate) {
+  return clientDate || new Date().toISOString().slice(0, 10);
+}
 
 export const POST = withAuth(async (req, { supabase, user }) => {
   const { template_id, date, position: requestedPosition } = await req.json();
@@ -75,7 +78,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   const uncheckedRow = matchingRows.find(r => !r.done && !isTemplate(r));
   if (uncheckedRow) {
     const { data: updated } = await supabase.from('tasks')
-      .update({ done: true, completed_at: TODAY() })
+      .update({ done: true, completed_at: date })
       .eq('id', uncheckedRow.id)
       .select().single();
     return Response.json({ task: updated || uncheckedRow });
@@ -98,7 +101,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     html: completionHtml,
     done: true,
     due_date: null,
-    completed_at: TODAY(),
+    completed_at: date,
     project_tags: template.project_tags || [],
     note_tags: template.note_tags || [],
     position: completionPosition,

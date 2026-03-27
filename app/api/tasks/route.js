@@ -4,7 +4,11 @@ import { isValidDate } from '@/lib/validate.js';
 import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
 import { cleanTaskText } from '@/lib/cleanTaskText.js';
 
-const TODAY = () => new Date().toISOString().slice(0, 10);
+// Local-date helper: prefer the client-supplied date; fall back to UTC only as
+// a last resort. Using toISOString() gives UTC which is wrong after ~4pm PT.
+function localToday(clientDate) {
+  return clientDate || new Date().toISOString().slice(0, 10);
+}
 
 // GET /api/tasks?date=YYYY-MM-DD
 //   → { data: '<ul data-type="taskList">...</ul>' }
@@ -243,7 +247,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       html: taskHtml || textToTaskHtml(text),
       done: !!done,
       due_date: parsedDueDate,
-      completed_at: done ? TODAY() : null,
+      completed_at: done ? date : null,
       project_tags: parsedTags,
       note_tags: note_tags || [],
       position: position ?? 0,
@@ -253,7 +257,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   }
 
   const parsed = parseTaskBlocks(html || '');
-  const today  = TODAY();
+  const today  = localToday(date);
 
   // Guard: if the HTML is empty/blank, don't wipe existing tasks.
   // This prevents stale localStorage cache or offline glitches from deleting real data.
@@ -503,15 +507,17 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
   // The diff save layer can accidentally PATCH the template when a virtual
   // recurring checkbox is toggled. Templates should never be marked done —
   // completions go through /api/tasks/complete-recurring instead.
+  let taskDate = null;
   if (updates.done === true) {
     const { data: existing } = await supabase
-      .from('tasks').select('html').eq('id', id).eq('user_id', user.id).single();
+      .from('tasks').select('html, date').eq('id', id).eq('user_id', user.id).single();
     const hasChips = existing?.html && (existing.html.includes('data-recurrence=') || existing.html.includes('data-habit='));
     const isCompletion = existing?.html?.includes('data-completion="true"');
     if (hasChips && !isCompletion) {
       // Silently ignore — the template must stay undone
       return Response.json({ ok: true, guarded: 'recurring_template' });
     }
+    taskDate = existing?.date;
   }
 
   // Whitelist updatable fields
@@ -520,9 +526,15 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     Object.entries(updates).filter(([k]) => allowed.includes(k))
   );
 
-  // Auto-set completed_at when toggling done
+  // Auto-set completed_at when toggling done — use the task's own date to
+  // avoid UTC/local timezone mismatch from new Date().toISOString()
   if ('done' in patch && !('completed_at' in patch)) {
-    patch.completed_at = patch.done ? TODAY() : null;
+    if (!taskDate) {
+      const { data: row } = await supabase
+        .from('tasks').select('date').eq('id', id).eq('user_id', user.id).single();
+      taskDate = row?.date;
+    }
+    patch.completed_at = patch.done ? localToday(taskDate) : null;
   }
 
   // When text changes, re-parse structured fields from tokens

@@ -79,7 +79,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       .not('google_task_id', 'is', null);
     const existingIds = new Set((existing || []).map(r => r.google_task_id));
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = body.today || new Date().toISOString().slice(0, 10);
     let imported = 0;
     let skipped = 0;
 

@@ -155,7 +155,8 @@ const TOOLS = [
 // ── Tool execution ─────────────────────────────────────────────────────────────
 async function executeTool(name, input, userId) {
   const svc = SERVICE();
-  const today = new Date().toISOString().split('T')[0];
+  // NOTE: falls back to UTC when no date provided — MCP clients should pass date
+  const today = input.today || new Date().toISOString().split('T')[0];
   const date = input.date || today;
 
   if (name === 'get_today') {
