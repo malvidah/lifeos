@@ -138,10 +138,11 @@ function buildHealthHabits(scores, startDate, endDate, today) {
     }
 
     // Same Duolingo-style streak logic as task habits
+    // Walk past dates (before today). Today: count if completed, ignore if not.
     let streak = 0, bestStreak = 0, freezes = 0, frozen = false;
     let running = 0, consecutiveForFreeze = 0;
     let checkDate = startDate;
-    while (checkDate <= today) {
+    while (checkDate < today) {
       if (completions[checkDate]) {
         running++;
         consecutiveForFreeze++;
@@ -157,6 +158,11 @@ function buildHealthHabits(scores, startDate, endDate, today) {
         else { running = 0; frozen = false; }
       }
       checkDate = addDays(checkDate, 1);
+    }
+    // Today: count if completed, don't penalize if not
+    if (completions[today]) {
+      running++;
+      if (running > bestStreak) bestStreak = running;
     }
     streak = running;
 
