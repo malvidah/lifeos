@@ -1096,21 +1096,25 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               ...this.parent?.(),
               taskId: {
                 default: null,
+                keepOnSplit: false, // new task items must NOT inherit the parent's DB id
                 parseHTML: el => el.getAttribute('data-task-id'),
                 renderHTML: attrs => attrs.taskId ? { 'data-task-id': attrs.taskId } : {},
               },
               originDate: {
                 default: null,
+                keepOnSplit: false,
                 parseHTML: el => el.getAttribute('data-origin-date'),
                 renderHTML: attrs => attrs.originDate ? { 'data-origin-date': attrs.originDate } : {},
               },
               recurring: {
                 default: false,
+                keepOnSplit: false, // new items are never recurring by default
                 parseHTML: el => el.getAttribute('data-recurring') === 'true',
                 renderHTML: attrs => attrs.recurring ? { 'data-recurring': 'true' } : {},
               },
               completedDate: {
                 default: null,
+                keepOnSplit: false,
                 parseHTML: el => el.getAttribute('data-completed-date'),
                 renderHTML: attrs => attrs.completedDate ? { 'data-completed-date': attrs.completedDate } : {},
               },
