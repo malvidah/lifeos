@@ -108,9 +108,12 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }
 
     // Streak calculation with Duolingo-style freeze mechanic
-    // Exclude today — the day isn't over yet, so don't count it as a miss
+    // Walk all past dates (before today). Then check today separately:
+    // - If today is completed → add to streak
+    // - If today is NOT completed → keep streak as-is (day isn't over)
     const todayStr = today || new Date().toISOString().slice(0, 10);
     const pastDates = scheduledDates.filter(d => d < todayStr);
+    const todayScheduled = scheduledDates.includes(todayStr);
 
     let streak = 0;
     let bestStreak = 0;
@@ -139,6 +142,11 @@ export const GET = withAuth(async (req, { supabase, user }) => {
           frozen = false;
         }
       }
+    }
+    // If today is scheduled and completed, count it toward the streak
+    if (todayScheduled && completionMap[todayStr]) {
+      runningStreak++;
+      if (runningStreak > bestStreak) bestStreak = runningStreak;
     }
     streak = runningStreak;
 

@@ -45,7 +45,7 @@ function streakBg(streak, frozen, bestStreak) {
 
 // Recalculate streak from completions map (client-side, for optimistic updates)
 function recalcStreak(completions, todayStr) {
-  // Get all scheduled dates BEFORE today, sorted — today isn't over yet
+  // Walk past dates (before today). Today: count if completed, ignore if not.
   const pastDates = Object.keys(completions).filter(d => d < todayStr).sort();
   let streak = 0, bestStreak = 0, freezes = 0, frozen = false;
   let running = 0, consecutiveForFreeze = 0;
@@ -61,6 +61,11 @@ function recalcStreak(completions, todayStr) {
       if (freezes > 0) { freezes--; frozen = true; }
       else { running = 0; frozen = false; }
     }
+  }
+  // If today is completed, count it; if not, don't penalize
+  if (completions[todayStr]) {
+    running++;
+    if (running > bestStreak) bestStreak = running;
   }
   streak = running;
   return { streak, bestStreak, frozen, freezes };
