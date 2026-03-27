@@ -184,10 +184,11 @@ function layoutProjects(tags, connections, recency, entryCounts, completedTasks,
       score: Math.max(entryScore, connScore, 0.3),
       // Shape variation — seeded from project name hash
       widthFactor: 0.7 + widthSeed * 0.6,     // 0.7–1.3: narrower or wider peaks
-      slopePower: 2.5 + slopeSeed * 2.0,       // 2.5–4.5: angular steepness
       asymmetry: asymSeed * 0.4,               // 0–0.4: ridge lean offset
-      subPeaks: Math.floor(subSeed * 4),        // 0–3: number of angular sub-peaks
-      leanAngle: leanSeed * Math.PI * 2,         // lean direction
+      leanAngle: leanSeed * Math.PI * 2,        // lean direction
+      // Multi-peak: single (0), double (1), or triple (2) jagged spikes
+      peakStyle: subSeed < 0.4 ? 0 : subSeed < 0.75 ? 1 : 2,
+      peakSpread: 0.25 + slopeSeed * 0.25,      // how far apart sub-peaks sit
       // Dormant: no activity in 7+ days. Active: activity in last 7 days.
       isActive: daysSinceActive < 7,
       // Volcano: consistent recent engagement — active in last 3 days with 5+ entries
@@ -254,38 +255,50 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
           + noise2D(x * 1.5, z * 1.5) * 0.08;
 
     for (const p of projects) {
-      const dx = x - p.x, dz = z - p.z;
-      const angle = Math.atan2(dz, dx);
-      // Lean the peak center in one direction for asymmetric profile
+      const wf = p.widthFactor || 1.0;
       const lean = p.asymmetry || 0;
       const la = p.leanAngle || 0;
-      const cx = dx - Math.cos(la) * lean;
-      const cz = dz - Math.sin(la) * lean;
-      const d = Math.sqrt(cx * cx + cz * cz);
-      const wf = p.widthFactor || 1.0;
-      const r = (0.6 + p.score * 0.3) * wf * (p.isHot ? 1.5 : 1.0);
-      if (d < r * 2.0) {
-        const f = Math.max(0, 1 - d / (r * 2.0));
-        if (p.isHot) {
-          // Volcano: sides rise then dip into caldera at center, scaled 1.4x taller
+      const baseR = (0.6 + p.score * 0.3) * wf;
+
+      if (p.isHot) {
+        // Volcano: single wide peak with caldera
+        const dx = x - p.x, dz = z - p.z;
+        const d = Math.sqrt(dx * dx + dz * dz);
+        const r = baseR * 1.5;
+        if (d < r * 2.0) {
+          const f = Math.max(0, 1 - d / (r * 2.0));
           const volcano = f < 0.7 ? f * f : 0.49 - (f - 0.7) * 0.5;
           h += p.height * 1.4 * volcano;
-        } else {
-          // Jagged angular peak with sub-peaks for unique silhouettes
-          const sp = p.slopePower || 3.0;
-          let peak = Math.pow(f, sp / 2.5); // sharp angular falloff
-          // Sub-peaks: angular ridges radiating from center
-          const nSub = p.subPeaks || 0;
-          if (nSub > 0 && f > 0.1) {
-            const ridgeN = nSub + 1;
-            // Angular modulation creates jagged ridgeline
-            const ridgeAngle = angle + la; // offset by lean for variety
-            const ridge = Math.abs(Math.sin(ridgeAngle * ridgeN));
-            // Sub-peaks are smaller spikes along the ridgeline
-            const spike = ridge * (1 - f) * 0.5; // taller at edges, not center
-            peak += spike * f;
+        }
+      } else {
+        // Build spike list: single, double, or triple jagged peaks
+        const style = p.peakStyle || 0;
+        const spread = p.peakSpread || 0.35;
+        const spikes = [{ ox: 0, oz: 0, ht: 1.0, rMul: 1.0 }]; // main peak always present
+
+        if (style >= 1) {
+          // Second spike: offset along lean direction, shorter
+          spikes.push({ ox: Math.cos(la) * spread, oz: Math.sin(la) * spread, ht: 0.6 + lean, rMul: 0.7 });
+        }
+        if (style >= 2) {
+          // Third spike: offset opposite + perpendicular, even shorter
+          const la2 = la + 2.2; // ~126 degrees offset
+          spikes.push({ ox: Math.cos(la2) * spread * 0.8, oz: Math.sin(la2) * spread * 0.8, ht: 0.45, rMul: 0.6 });
+        }
+
+        // Lean the main peak center
+        spikes[0].ox += Math.cos(la) * lean * 0.5;
+        spikes[0].oz += Math.sin(la) * lean * 0.5;
+
+        // Sum all spikes — sharp cubic falloff (f^3) for angular low-poly feel
+        for (const spike of spikes) {
+          const sx = x - (p.x + spike.ox), sz = z - (p.z + spike.oz);
+          const d = Math.sqrt(sx * sx + sz * sz);
+          const r = baseR * spike.rMul;
+          if (d < r * 2.0) {
+            const f = Math.max(0, 1 - d / (r * 2.0));
+            h += p.height * spike.ht * f * f * f;
           }
-          h += p.height * peak;
         }
       }
     }
