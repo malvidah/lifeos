@@ -4,6 +4,7 @@ import { mono, F, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
 import { useProjectNames } from "@/lib/contexts";
+import { keyToRecurrence } from "@/lib/recurrence";
 import { Shimmer } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 
@@ -546,7 +547,15 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
 
   const cellSz = 14;
   const cellGap = 2;
-  const dayLabels = ['M', 'T', 'W', 'R', 'F', 'S', 'U'];
+  const allDayLabels = ['M', 'T', 'W', 'R', 'F', 'S', 'U'];
+
+  // Determine which grid rows to show based on schedule
+  // Grid rows: 0=Mon,1=Tue,2=Wed,3=Thu,4=Fri,5=Sat,6=Sun
+  // keyToRecurrence returns JS days: 0=Sun,1=Mon,...,6=Sat
+  const recurrence = keyToRecurrence(habit.schedule, habit.date);
+  const jsDays = recurrence?.rule === 'daily' ? [0,1,2,3,4,5,6] : (recurrence?.days || [0,1,2,3,4,5,6]);
+  const visibleRows = jsDays.map(d => d === 0 ? 6 : d - 1).sort((a, b) => a - b);
+  const dayLabels = visibleRows.map(r => allDayLabels[r]);
 
   // Completion rate this month
   const monthStr = today.slice(0, 7);
@@ -576,17 +585,17 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
   return (
     <div>
       {/* Header: back chevron + editable name + inline chips */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
         <button onClick={onBack} style={backBtnStyle}>&lsaquo;</button>
         <input
           ref={nameRef}
           value={editName}
           onChange={e => onNameChange(e.target.value)}
+          size={Math.max(1, editName.length)}
           style={{
             fontFamily: mono, fontSize: 14, fontWeight: 600, color: 'var(--dl-strong)',
             textTransform: 'uppercase', letterSpacing: '0.04em',
             background: 'transparent', border: 'none', outline: 'none', padding: 0,
-            minWidth: 60, width: `${Math.max(4, editName.length)}ch`,
           }}
         />
         {/* Project chip */}
@@ -648,13 +657,13 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
       {/* GitHub-style activity grid */}
       <div style={{ overflowX: 'auto', paddingBottom: 8 }}>
         <div style={{ display: 'inline-flex', gap: 0 }}>
-          {/* Day-of-week labels */}
+          {/* Day-of-week labels — only scheduled days */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: cellGap, marginRight: 4, paddingTop: cellSz + cellGap }}>
-            {dayLabels.map((lbl, i) => (
+            {dayLabels.map(lbl => (
               <div key={lbl} style={{ height: cellSz, display: 'flex', alignItems: 'center', fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', width: 10 }}>{lbl}</div>
             ))}
           </div>
-          {/* Week columns */}
+          {/* Week columns — only scheduled day rows */}
           {weeks.map((week, wi) => (
             <div key={wi} style={{ display: 'flex', flexDirection: 'column', gap: cellGap }}>
               {/* Month label */}
@@ -663,13 +672,14 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated }) {
                   <span style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-middle)', whiteSpace: 'nowrap', lineHeight: 1 }}>{weekMonthLabels[wi]}</span>
                 )}
               </div>
-              {week.map((cell, di) => {
+              {visibleRows.map(ri => {
+                const cell = week[ri];
                 if (!cell.scheduled) {
-                  return <div key={di} style={{ width: cellSz, height: cellSz }} />;
+                  return <div key={ri} style={{ width: cellSz, height: cellSz, borderRadius: 3, border: '1px solid transparent' }} />;
                 }
                 return (
                   <div
-                    key={di}
+                    key={ri}
                     role={cell.isPast && !habit._isHealth ? 'button' : undefined}
                     tabIndex={cell.isPast && !habit._isHealth ? 0 : undefined}
                     title={`${cell.date} ${cell.done ? 'done' : 'missed'}`}
