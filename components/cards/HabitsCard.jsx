@@ -96,6 +96,14 @@ const HEALTH_METRICS = [
 ];
 const HEALTH_THRESHOLD = 85;
 
+// Health metric colors — matches HealthCard score bubble colors
+const HEALTH_COLORS = {
+  sleep: 'var(--dl-blue)',
+  readiness: 'var(--dl-green)',
+  activity: 'var(--dl-accent)',
+  recovery: 'var(--dl-purple)',
+};
+
 function buildHealthHabits(scores, startDate, endDate, today) {
   // scores: [{ date, sleep_score, readiness_score, activity_score, recovery_score }]
   const scoreByDate = {};
@@ -894,9 +902,10 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
   // Grid row for a single habit
   const HabitGridRow = ({ h, allVisibleHabits }) => {
+    const healthColor = h._isHealth && h.matchKey ? HEALTH_COLORS[h.matchKey] : null;
     const tag = h.project_tags?.[0];
-    const baseColor = tag ? projectColor(tag) : null;
-    const fillColor = baseColor ? baseColor + '55' : 'var(--dl-accent-30, rgba(208,136,40,0.3))';
+    const baseColor = healthColor || (tag ? projectColor(tag) : null);
+    const fillColor = healthColor ? healthColor + '55' : (baseColor ? baseColor + '55' : 'var(--dl-accent-30, rgba(208,136,40,0.3))');
     return (
       <div style={{ display: 'flex', height: rowH }}>
         {visibleDates.map((d, i) => {
@@ -974,7 +983,14 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
             >+ New Habit</button>
           </div>
 
-          {filteredHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
+          {filteredHabits.filter(h => !h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
+          {filteredHabits.some(h => h._isHealth) && filteredHabits.some(h => !h._isHealth) && (
+            <div style={{ height: 18, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontFamily: mono, fontSize: 8, letterSpacing: '0.1em', color: 'var(--dl-border2)', textTransform: 'uppercase' }}>synced</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--dl-border)' }} />
+            </div>
+          )}
+          {filteredHabits.filter(h => h._isHealth).map(h => <HabitNameRow key={h.id} h={h} />)}
         </div>
 
         {/* Right: scrollable grid */}
@@ -1007,7 +1023,11 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
             {/* Spacer row to align with + New Habit button */}
             <div style={{ height: rowH }} />
 
-            {filteredHabits.map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
+            {filteredHabits.filter(h => !h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
+            {filteredHabits.some(h => h._isHealth) && filteredHabits.some(h => !h._isHealth) && (
+              <div style={{ height: 18 }} />
+            )}
+            {filteredHabits.filter(h => h._isHealth).map(h => <HabitGridRow key={h.id} h={h} allVisibleHabits={filteredHabits} />)}
           </div>
         </div>
       </div>
