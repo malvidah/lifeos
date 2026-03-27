@@ -17,6 +17,13 @@ function streakEmoji(streak, frozen, bestStreak) {
   return '\uD83C\uDFAF';
 }
 
+function streakTooltip(streak, frozen, bestStreak) {
+  if (frozen) return 'Freeze used \u2014 streak preserved';
+  if (streak === 0) return 'Streak reset';
+  if (bestStreak > 0 && streak >= bestStreak) return 'At your best!';
+  return 'On a streak';
+}
+
 function streakColor(streak, frozen, bestStreak) {
   if (frozen) return '#7CB8D4';
   if (streak === 0) return 'var(--dl-middle)';
@@ -369,7 +376,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
         {h.text}
       </span>
       <div style={{ width: 52, display: 'flex', justifyContent: 'center', gap: 2, alignItems: 'center' }}>
-        <span style={{
+        <span title={streakTooltip(h.streak, h.frozen, h.bestStreak)} style={{
           display: 'inline-flex', alignItems: 'center', gap: 2,
           padding: '1px 5px', borderRadius: 100,
           border: `1.5px solid ${streakColor(h.streak, h.frozen, h.bestStreak)}`,
@@ -451,8 +458,8 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
         {/* Header row */}
         <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2 }}>
           <span style={{ flex: 1 }} />
-          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center' }}>count</span>
-          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center' }}>best</span>
+          <span title="Current streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 52, textAlign: 'center', cursor: 'default' }}>count</span>
+          <span title="Personal best streak" style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', width: 36, textAlign: 'center', cursor: 'default' }}>best</span>
         </div>
 
         {filteredHabits.map(h => <HabitNameRow key={h.id} h={h} />)}
