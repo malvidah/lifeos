@@ -78,6 +78,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   const serverTasksRef = useRef([]); // Last-known server state for diffing
   const saveTimerRef = useRef(null);
   const savingRef = useRef(false);
+  const skipNextDiffRef = useRef(false); // Skip diff after recurring done toggle
 
   // Inject checkbox styles
   const accentHex = theme === 'light' ? '#C07818' : '#D08828';
@@ -131,6 +132,27 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     // Debounce 1 second
     saveTimerRef.current = setTimeout(async () => {
       if (savingRef.current) return;
+
+      // After a recurring done toggle, the editor HTML diverges from server state
+      // (template suppressed, completion row has new ID). Skip the diff entirely
+      // and resync by reloading fresh server state into the editor.
+      if (skipNextDiffRef.current) {
+        skipNextDiffRef.current = false;
+        savingRef.current = true;
+        try {
+          const fresh = await api.get(`/api/tasks?date=${date}`, token);
+          if (fresh?.tasks) {
+            serverTasksRef.current = fresh.tasks;
+            const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
+            setHtmlValue(freshHtml);
+            setEditorKey(k => k + 1);
+          }
+        } finally {
+          savingRef.current = false;
+        }
+        return;
+      }
+
       savingRef.current = true;
 
       try {
@@ -154,14 +176,10 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           // Notify other components (e.g. HabitsCard) that tasks changed
           window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
 
-          // When a recurring/habit task was toggled, the server state diverges
-          // from the editor (template suppressed, completion row created/deleted).
-          // Schedule a full editor reload so the next diff cycle starts clean.
+          // After a recurring/habit toggle, the editor has stale template HTML.
+          // Flag the next diff to skip and resync instead.
           if (hadRecurringDone) {
-            setTimeout(() => {
-              setReloadKey(k => k + 1);
-              setEditorKey(k => k + 1);
-            }, 100);
+            skipNextDiffRef.current = true;
           }
         }
       } catch (err) {
