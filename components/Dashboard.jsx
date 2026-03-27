@@ -5,6 +5,7 @@ import { mono, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
 import { api } from "@/lib/api";
 import { todayKey, toKey, shift } from "@/lib/dates";
+import { isValidDate } from "@/lib/validate";
 import { tagDisplayName } from "@/lib/tags";
 import { bustOuraCache } from "@/lib/ouraCache";
 import { saveLocationIfNeeded } from "@/lib/weather";
@@ -60,14 +61,47 @@ const WIDGETS = [
 ];
 const [leftWidget, ...rightWidgets] = WIDGETS;
 
-// Toggle between day / recent / memories journal modes
+// ── URL-based date state ─────────────────────────────────────────────────────
+// Reads ?date=YYYY-MM-DD from URL; defaults to today if absent or invalid.
+// setSelected updates the URL via pushState so browser back/forward works.
+function readDateFromUrl() {
+  const p = new URLSearchParams(window.location.search).get('date');
+  return (p && isValidDate(p)) ? p : todayKey();
+}
+function useUrlDate() {
+  const [selected, _setSelected] = useState(readDateFromUrl);
+
+  // Sync state when browser back/forward fires popstate
+  useEffect(() => {
+    const onPop = () => _setSelected(readDateFromUrl());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  const setSelected = useCallback(valOrFn => {
+    _setSelected(prev => {
+      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+      if (next === prev) return prev;
+      const url = new URL(window.location.href);
+      if (next === todayKey()) {
+        url.searchParams.delete('date');
+      } else {
+        url.searchParams.set('date', next);
+      }
+      window.history.pushState({}, '', url);
+      return next;
+    });
+  }, []);
+
+  return [selected, setSelected];
+}
 
 function DashboardInner() {
   const { theme, preference, setTheme } = useTheme();
 
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);
-  const [selected,  setSelected]  = useState(() => todayKey());
+  const [selected,  setSelected]  = useUrlDate();
   const [calView,   setCalView]   = useState(() => localStorage.getItem('calView') || 'day');
   const [events,    setEvents]    = useState({});
   const [healthDots,setHealthDots]= useState(()=>{
