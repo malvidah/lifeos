@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
+import { useProjectNames } from "@/lib/contexts";
 import { Shimmer } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 
@@ -173,11 +174,18 @@ const AllIcon = () => (
 
 // ── Schedule options for habit creation ───────────────────────────────────────
 const SCHEDULE_OPTIONS = [
-  { key: 'daily', label: 'Daily' },
-  { key: 'weekdays', label: 'M·T·W·R·F' },
-  { key: 'mwf', label: 'M·W·F' },
-  { key: 'tr', label: 'T·R' },
-  { key: 'weekends', label: 'S·U' },
+  { key: 'daily', label: 'Daily', chip: 'Daily', search: 'daily everyday' },
+  { key: 'weekdays', label: 'Weekdays (M·T·W·R·F)', chip: 'M·T·W·R·F', search: 'weekdays weekday mtwrf' },
+  { key: 'mwf', label: 'M·W·F', chip: 'M·W·F', search: 'mwf monday wednesday friday' },
+  { key: 'tr', label: 'T·R', chip: 'T·R', search: 'tr tuesday thursday' },
+  { key: 'weekends', label: 'Weekends (S·U)', chip: 'S·U', search: 'weekends weekend saturday sunday' },
+  { key: 'mon', label: 'Monday', chip: 'M', search: 'monday mon' },
+  { key: 'tue', label: 'Tuesday', chip: 'T', search: 'tuesday tue' },
+  { key: 'wed', label: 'Wednesday', chip: 'W', search: 'wednesday wed' },
+  { key: 'thu', label: 'Thursday', chip: 'R', search: 'thursday thu' },
+  { key: 'fri', label: 'Friday', chip: 'F', search: 'friday fri' },
+  { key: 'sat', label: 'Saturday', chip: 'S', search: 'saturday sat' },
+  { key: 'sun', label: 'Sunday', chip: 'U', search: 'sunday sun' },
 ];
 
 export function HabitFilterBtns({ filter, setFilter }) {
@@ -220,14 +228,104 @@ export function AddHabitBtn({ onClick }) {
   );
 }
 
+// ── Autocomplete dropdown field ───────────────────────────────────────────────
+function AutocompleteField({ value, onChange, onSelect, options, placeholder, label, autoFocus }) {
+  const [open, setOpen] = useState(false);
+  const [hlIdx, setHlIdx] = useState(0);
+  const ref = useRef(null);
+  const listRef = useRef(null);
+
+  const q = value.toLowerCase().trim();
+  const filtered = q
+    ? options.filter(o => o.label.toLowerCase().includes(q) || (o.search || '').includes(q))
+    : options;
+
+  useEffect(() => { setHlIdx(0); }, [value]);
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const pick = (opt) => {
+    onSelect(opt);
+    setOpen(false);
+  };
+
+  const onKeyDown = e => {
+    if (!open || filtered.length === 0) {
+      if (e.key === 'ArrowDown' && filtered.length > 0) { setOpen(true); e.preventDefault(); }
+      return;
+    }
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHlIdx(i => Math.min(i + 1, filtered.length - 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHlIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === 'Enter' && filtered[hlIdx]) { e.preventDefault(); pick(filtered[hlIdx]); }
+    else if (e.key === 'Escape') { setOpen(false); }
+  };
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (!listRef.current) return;
+    const el = listRef.current.children[hlIdx];
+    if (el) el.scrollIntoView({ block: 'nearest' });
+  }, [hlIdx]);
+
+  return (
+    <div ref={ref} style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+      <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>{label}</span>
+      <input
+        autoFocus={autoFocus}
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={onKeyDown}
+        placeholder={placeholder}
+        style={{
+          fontFamily: mono, fontSize: 12, width: '100%', boxSizing: 'border-box',
+          background: 'transparent', border: '1.5px solid var(--dl-border2)',
+          borderRadius: 6, padding: '4px 8px', color: 'var(--dl-strong)',
+          outline: 'none', letterSpacing: '0.02em',
+        }}
+      />
+      {open && filtered.length > 0 && (
+        <div ref={listRef} style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+          marginTop: 2, maxHeight: 160, overflowY: 'auto',
+          background: 'var(--dl-card, var(--dl-bg))', border: '1px solid var(--dl-border)',
+          borderRadius: 6, boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}>
+          {filtered.map((opt, i) => (
+            <div
+              key={opt.key}
+              onMouseDown={e => { e.preventDefault(); pick(opt); }}
+              onMouseEnter={() => setHlIdx(i)}
+              style={{
+                fontFamily: mono, fontSize: 11, padding: '5px 8px',
+                cursor: 'pointer', letterSpacing: '0.02em',
+                background: i === hlIdx ? 'var(--dl-accent-10, rgba(208,136,40,0.1))' : 'transparent',
+                color: i === hlIdx ? 'var(--dl-strong)' : 'var(--dl-middle)',
+              }}
+            >{opt.label}</div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Inline habit creation form ────────────────────────────────────────────────
 function HabitCreationForm({ token, onCreated, onCancel }) {
   const [name, setName] = useState('');
-  const [schedule, setSchedule] = useState('daily');
+  const [projectText, setProjectText] = useState('');
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [scheduleText, setScheduleText] = useState('');
+  const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const inputRef = useRef(null);
+  const projectNames = useProjectNames();
 
-  useEffect(() => { inputRef.current?.focus(); }, []);
+  const projectOptions = (projectNames || []).map(p => ({ key: p, label: p, search: p.toLowerCase() }));
 
   useEffect(() => {
     const onKey = e => { if (e.key === 'Escape') onCancel(); };
@@ -235,12 +333,15 @@ function HabitCreationForm({ token, onCreated, onCancel }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onCancel]);
 
+  const canSubmit = name.trim() && selectedSchedule && !submitting;
+
   const submit = async () => {
-    const trimmed = name.trim();
-    if (!trimmed || submitting) return;
+    if (!canSubmit) return;
     setSubmitting(true);
-    const opt = SCHEDULE_OPTIONS.find(o => o.key === schedule) || SCHEDULE_OPTIONS[0];
-    const text = `${trimmed} {h:${opt.key}:${opt.label}}`;
+    const parts = [name.trim()];
+    if (selectedProject) parts.push(`{${selectedProject.key}}`);
+    parts.push(`{h:${selectedSchedule.key}:${selectedSchedule.chip}}`);
+    const text = parts.join(' ');
     const today = todayKey();
     try {
       await api.post('/api/tasks', { date: today, text, done: false }, token);
@@ -253,38 +354,58 @@ function HabitCreationForm({ token, onCreated, onCancel }) {
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 0' }}>
-      <input
-        ref={inputRef}
-        value={name}
-        onChange={e => setName(e.target.value)}
-        onKeyDown={e => { if (e.key === 'Enter') submit(); }}
-        placeholder="Habit name..."
-        style={{
-          fontFamily: mono, fontSize: 12, flex: 1,
-          background: 'transparent', border: '1.5px solid var(--dl-border2)',
-          borderRadius: 6, padding: '4px 8px', color: 'var(--dl-strong)',
-          outline: 'none', letterSpacing: '0.02em',
-        }}
-      />
-      <div style={{ display: 'flex', gap: 2, background: 'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius: 100, padding: 2 }}>
-        {SCHEDULE_OPTIONS.map(opt => (
-          <button key={opt.key} onClick={() => setSchedule(opt.key)} style={{
-            fontFamily: mono, fontSize: 10, padding: '3px 6px',
-            borderRadius: 100, cursor: 'pointer', border: 'none',
-            background: schedule === opt.key ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
-            color: schedule === opt.key ? 'var(--dl-strong)' : 'var(--dl-middle)',
-            transition: 'all 0.15s', whiteSpace: 'nowrap',
-          }}>{opt.label}</button>
-        ))}
+    <div style={{ padding: '8px 0 4px', borderTop: '1px solid var(--dl-border)' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+        {/* Habit name — plain text */}
+        <div style={{ flex: 2, minWidth: 0 }}>
+          <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', letterSpacing: '0.06em', textTransform: 'uppercase', display: 'block', marginBottom: 2 }}>HABIT</span>
+          <input
+            autoFocus
+            value={name}
+            onChange={e => setName(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && canSubmit) submit(); }}
+            placeholder="Habit name..."
+            style={{
+              fontFamily: mono, fontSize: 12, width: '100%', boxSizing: 'border-box',
+              background: 'transparent', border: '1.5px solid var(--dl-border2)',
+              borderRadius: 6, padding: '4px 8px', color: 'var(--dl-strong)',
+              outline: 'none', letterSpacing: '0.02em',
+            }}
+          />
+        </div>
+
+        {/* Project — autocomplete */}
+        <AutocompleteField
+          value={projectText}
+          onChange={v => { setProjectText(v); setSelectedProject(null); }}
+          onSelect={opt => { setProjectText(opt.label); setSelectedProject(opt); }}
+          options={projectOptions}
+          placeholder="Optional..."
+          label="PROJECT"
+        />
+
+        {/* Repeats — autocomplete */}
+        <AutocompleteField
+          value={scheduleText}
+          onChange={v => { setScheduleText(v); setSelectedSchedule(null); }}
+          onSelect={opt => { setScheduleText(opt.label); setSelectedSchedule(opt); }}
+          options={SCHEDULE_OPTIONS}
+          placeholder="Daily, M·W·F..."
+          label="REPEATS"
+        />
+
+        {/* Submit */}
+        <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+          <span style={{ fontFamily: mono, fontSize: 9, color: 'transparent', letterSpacing: '0.06em', display: 'block', marginBottom: 2 }}>&nbsp;</span>
+          <button onClick={submit} disabled={!canSubmit} style={{
+            fontFamily: mono, fontSize: 10, padding: '5px 12px',
+            borderRadius: 6, border: 'none', cursor: canSubmit ? 'pointer' : 'default',
+            background: 'var(--dl-accent)', color: 'var(--dl-bg)',
+            opacity: canSubmit ? 1 : 0.4,
+            fontWeight: 600, letterSpacing: '0.04em', transition: 'all 0.15s',
+          }}>ADD</button>
+        </div>
       </div>
-      <button onClick={submit} disabled={!name.trim() || submitting} style={{
-        fontFamily: mono, fontSize: 10, padding: '4px 10px',
-        borderRadius: 100, border: 'none', cursor: name.trim() && !submitting ? 'pointer' : 'default',
-        background: 'var(--dl-accent)', color: 'var(--dl-bg)',
-        opacity: name.trim() && !submitting ? 1 : 0.4,
-        fontWeight: 600, letterSpacing: '0.04em', transition: 'all 0.15s',
-      }}>ADD</button>
     </div>
   );
 }
