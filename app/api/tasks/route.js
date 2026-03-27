@@ -370,7 +370,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
           const { data: existing, error: goalErr } = await supabase
             .from('goals').select('id, project')
             .eq('user_id', user.id).eq('name', gName).maybeSingle();
-          if (goalErr) break; // goals table may not exist yet
+          if (goalErr) continue; // skip this goal, try the next
           if (!existing) {
             await supabase.from('goals').insert({
               user_id: user.id, name: gName, project: projectName,
