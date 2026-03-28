@@ -119,6 +119,7 @@ function DashboardInner() {
   const [session,   setSession]   = useState(null);
   const [authReady, setAuthReady] = useState(false);
   const [selected,  setSelected]  = useUrlDate();
+  const [chatExpanded, setChatExpanded] = useState(false);
   const [calView,   setCalView]   = useState(() => localStorage.getItem('calView') || 'day');
   const [events,    setEvents]    = useState({});
   const [healthDots,setHealthDots]= useState(()=>{
@@ -580,7 +581,7 @@ function DashboardInner() {
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onSelectDate={setSelected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{selectProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── Main scroll area ─── */}
-      <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
+      <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1, transition:"margin-left 0.2s ease", marginLeft: chatExpanded && !mobile ? 380 : 0}}>
 
         {/* ── Single unified scroll container ── */}
         <div ref={scrollContainerRef} style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0, overflowAnchor:'none'}}>
@@ -794,15 +795,17 @@ function DashboardInner() {
 
       {/* Bottom vignette — fades content up into the AI bar */}
       <div style={{
-        position:"fixed", bottom:0, left:0, right:0,
+        position:"fixed", bottom:0, left: chatExpanded && !mobile ? 380 : 0, right:0,
         height:120, pointerEvents:"none", zIndex:96,
         background:"linear-gradient(to top, var(--dl-bg) 0%, var(--dl-bg)99 35%, transparent 100%)",
+        transition:"left 0.2s ease",
       }}/>
 
       {/* Floating chat pill — hidden during search */}
       {!searchOpen && (
         <ChatFloat date={selected} token={token} userId={userId} theme={theme}
-          healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}/>
+          healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
+          expanded={chatExpanded} onExpandedChange={setChatExpanded}/>
       )}
 
       {/* Keyboard shortcut cheatsheet — ? button + overlay */}

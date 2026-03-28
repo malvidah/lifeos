@@ -142,10 +142,9 @@ function DLSparkle({ size = 14, color = "var(--dl-accent)" }) {
   );
 }
 
-export default function ChatFloat({date, token, userId, healthKey, theme}) {
+export default function ChatFloat({date, token, userId, healthKey, theme, expanded, onExpandedChange}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [expanded, setExpanded] = useState(false);
 
   // ── Pill phase state machine ─────────────────────────────────────────────
   // idle → input → busy → result-change | result-info → idle
@@ -213,7 +212,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
   // Close panel on Escape
   useEffect(() => {
     if (!expanded) return;
-    const handler = (e) => { if (e.key === "Escape") setExpanded(false); };
+    const handler = (e) => { if (e.key === "Escape") onExpandedChange(false); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [expanded]);
@@ -547,18 +546,18 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
           background: "var(--dl-bg)",
           display: "flex", flexDirection: "column",
           animation: "fadeIn 0.15s ease",
-          // Desktop: right sidebar; Mobile: fullscreen
+          // Desktop: left sidebar; Mobile: fullscreen
           ...(mobile ? {
             top: 0, left: 0, right: 0, bottom: 0,
           } : {
-            top: 0, right: 0, bottom: 0,
+            top: "calc(env(safe-area-inset-top, 0px) + 84px)", left: 0, bottom: 0,
             width: 380,
-            borderLeft: "1px solid var(--dl-border)",
-            boxShadow: "-4px 0 24px color-mix(in srgb, var(--dl-strong) 8%, transparent)",
+            borderRight: "1px solid var(--dl-border)",
+            boxShadow: "4px 0 24px color-mix(in srgb, var(--dl-strong) 8%, transparent)",
           }),
         }}>
-          {/* Spacer: on mobile clears TopBar; on desktop clears safe-area */}
-          <div style={{ flexShrink: 0, height: mobile ? "calc(env(safe-area-inset-top, 0px) + 64px)" : "env(safe-area-inset-top, 16px)" }}/>
+          {/* Spacer: on mobile clears TopBar */}
+          {mobile && <div style={{ flexShrink: 0, height: "calc(env(safe-area-inset-top, 0px) + 64px)" }}/>}
 
           {/* Header */}
           <div style={{
@@ -571,7 +570,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
             {mobile ? (
               /* Mobile: centered layout with chevron-down */
               <>
-                <button onClick={() => setExpanded(false)} style={{
+                <button onClick={() => onExpandedChange(false)} style={{
                   background: "none", border: "none", cursor: "pointer",
                   color: "var(--dl-middle)", display: "flex", alignItems: "center", justifyContent: "center",
                   width: 36, height: 36, borderRadius: 8,
@@ -598,7 +597,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                   <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--dl-middle)" }}>Day Lab AI</span>
                   {isPremiumUser && <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--dl-accent)", background: "var(--dl-accent)18", border: "1px solid var(--dl-accent)40", borderRadius: 4, padding: "2px 6px" }}>Premium</span>}
                 </div>
-                <button onClick={() => setExpanded(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dl-middle)", display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 6, transition: "color 0.15s, background 0.15s" }}
+                <button onClick={() => onExpandedChange(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dl-middle)", display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 6, transition: "color 0.15s, background 0.15s" }}
                   onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = "var(--dl-strong)0e"; }}
                   onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.background = "transparent"; }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -805,11 +804,12 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
           if (pillPhase === 'idle') {
             return (
               <div
-                onClick={() => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); }}
+                onClick={mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); } : undefined}
+                onMouseEnter={!mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); } : undefined}
                 style={{ pointerEvents: "auto", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 100, cursor: "pointer", animation: "fadeIn 0.15s ease", ...glass }}
               >
                 <DLSparkle size={13} />
-                <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI…</span>
+                <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI</span>
               </div>
             );
           }
@@ -818,7 +818,19 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
           if (pillPhase === 'input') {
             return (
               <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", animation: "fadeIn 0.12s ease", ...glass }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 8px 12px 16px" : "12px 8px 12px 18px", boxSizing: "border-box" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
+                  {/* History / open full chat — left side */}
+                  <button
+                    onClick={() => { onExpandedChange(true); setPillPhase('idle'); }}
+                    title="Open chat history"
+                    style={{ background: "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)", transition: "color 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                  </button>
                   <textarea
                     ref={inputRef}
                     value={input}
@@ -840,18 +852,6 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                       {transcribing ? <div style={{ width: 9, height: 9, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/> : listening ? <div style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>}
                     </button>
                   ) : null}
-                  {/* History / open full chat */}
-                  <button
-                    onClick={() => { setExpanded(true); setPillPhase('idle'); }}
-                    title="Open chat history"
-                    style={{ background: "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)", transition: "color 0.15s" }}
-                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                  </button>
                 </div>
               </div>
             );
@@ -874,7 +874,12 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
 
           // ── Shared follow-up input row (used in result states) ────────────────
           const followUpRow = (
-            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 12px 12px 16px", boxSizing: "border-box" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px 12px 12px", boxSizing: "border-box" }}>
+              <button onClick={() => { onExpandedChange(true); setPillPhase('idle'); }} title="Open full chat" style={{ background: "transparent", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
               <input
                 value={followUpText}
                 onChange={e => setFollowUpText(e.target.value)}
@@ -887,11 +892,6 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                 </button>
               )}
-              <button onClick={() => { setExpanded(true); setPillPhase('idle'); }} title="Open full chat" style={{ background: "transparent", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)" }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-              </button>
             </div>
           );
 
