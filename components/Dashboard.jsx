@@ -51,14 +51,14 @@ const GOAL_COLOR = "#5BA89D"; // teal — matches goal chips
 // ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
 const DOCK_ITEMS = [
   { id: 'project-graph', label: 'Projects', icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span> },
-  { id: 'goals', label: 'Goals', icon: <span style={{fontSize:14,lineHeight:1}}>🏁</span> },
   { id: 'world-map',     label: 'Map',      icon: <span style={{fontSize:14,lineHeight:1}}>📍</span> },
   { id: 'cal',      label: 'Calendar', icon: <span style={{fontSize:14,lineHeight:1}}>📅</span> },
+  { id: 'goals',    label: 'Goals',    icon: <span style={{fontSize:14,lineHeight:1}}>🏁</span> },
   { id: 'health',   label: 'Health',   icon: <span style={{fontSize:14,lineHeight:1}}>💚</span> },
   { id: 'habits',   label: 'Habits',   icon: <span style={{fontSize:14,lineHeight:1}}>🎯</span> },
   { id: 'notes',    label: 'Notes',    icon: <span style={{fontSize:14,lineHeight:1}}>📄</span> },
-  { id: 'journal',  label: 'Journal',  icon: <span style={{fontSize:14,lineHeight:1}}>✏️</span> },
-  { id: 'tasks',    label: 'Tasks',    icon: <span style={{fontSize:14,lineHeight:1}}>☑️</span> },
+  { id: 'tasks',    label: 'Tasks',    icon: <span style={{fontSize:14,lineHeight:1}}>✅</span> },
+  { id: 'journal',  label: 'Journal',  icon: <span style={{fontSize:14,lineHeight:1}}>📓</span> },
   { id: 'meals',    label: 'Meals',    icon: <span style={{fontSize:14,lineHeight:1}}>🍽️</span> },
   { id: 'workouts', label: 'Workouts', icon: <span style={{fontSize:14,lineHeight:1}}>💪</span> },
 ];
@@ -71,8 +71,8 @@ const ACT_HDR = <span style={{display:"flex",gap:0}}>
   <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span>
 </span>;
 const WIDGETS = [
-  {id:"journal",  label:"✏️ Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor, expandHref:"/journal"},
-  {id:"tasks",    label:"☑️ Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks,         expandHref:"/tasks"},
+  {id:"journal",  label:"📓 Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor, expandHref:"/journal"},
+  {id:"tasks",    label:"✅ Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks,         expandHref:"/tasks"},
   {id:"meals",    label:"🍽️ Meals",    color:()=>"var(--dl-red)",    Comp:Meals,    headerRight:()=>MEALS_HDR},
   {id:"workouts", label:"💪 Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
 ];
