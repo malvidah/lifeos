@@ -751,8 +751,9 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   const {value:savedEstimates, setValue:setSavedEstimates, loaded:estimatesLoaded} = useDbSave(date, type+"_kcal", {}, token, userId);
   const estimating = useRef(new Set());
   const failed = useRef(new Set());
-  const [tick, setTick] = useState(0);
-  const [estimateFlag, setEstimateFlag] = useState(0);
+  // Track which texts have already been sent for estimation so we never
+  // re-request for the same unchanged text, even across re-renders.
+  const estimated = useRef(new Set());
 
   const safe = Array.isArray(rows) ? rows : [];
   const estMap = (estimatesLoaded && savedEstimates && typeof savedEstimates === "object") ? savedEstimates : {};
@@ -775,56 +776,68 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   const totalKcal = [...safe, ...merged].reduce((s,r) => s + (r.kcal||0), 0);
   const totalProtein = showProtein ? [...safe, ...merged].reduce((s,r) => s + (r.protein||0), 0) : 0;
 
-  // Estimate for manual rows with no kcal
-  useEffect(() => {
+  // ── Run estimation as a direct call, not via effects ──
+  // This avoids cascading re-renders from effect dep changes.
+  const runEstimates = useCallback(() => {
     if (!token || !loaded) return;
+
+    // 1. Manual rows missing kcal
     safe
-      .filter(r => r.text?.trim() && !r.kcal && !estimating.current.has(r.text) && !failed.current.has(r.text))
+      .filter(r => r.text?.trim() && !r.kcal && !estimating.current.has(r.text)
+        && !failed.current.has(r.text) && !estimated.current.has(r.text))
       .forEach(row => {
         estimating.current.add(row.text);
+        estimated.current.add(row.text);
         estimateNutrition(promptFn(row.text), token).then(result => {
           estimating.current.delete(row.text);
           if (result) setRows(prev => (Array.isArray(prev)?prev:[]).map(r =>
             r.text===row.text ? {...r, kcal:result.kcal||null, protein:result.protein||null} : r));
           else failed.current.add(row.text);
-          setTick(t => t + 1);
         });
       });
-  }, [estimateFlag, loaded, token]); // eslint-disable-line
 
-  // Estimate for synced rows with no native calories
+    // 2. Manual rows with kcal but missing protein
+    if (showProtein) {
+      safe
+        .filter(r => r.text?.trim() && r.kcal && !r.protein
+          && !estimating.current.has(r.text+"_p") && !failed.current.has(r.text+"_p")
+          && !estimated.current.has(r.text+"_p"))
+        .forEach(row => {
+          estimating.current.add(row.text+"_p");
+          estimated.current.add(row.text+"_p");
+          estimateNutrition(promptFn(row.text), token).then(result => {
+            estimating.current.delete(row.text+"_p");
+            if (result?.protein) {
+              setRows(prev => (Array.isArray(prev)?prev:[]).map(r =>
+                r.text===row.text ? {...r, protein:result.protein, kcal:result.kcal||r.kcal} : r));
+            } else failed.current.add(row.text+"_p");
+          });
+        });
+    }
+  }, [token, loaded, showProtein, promptFn]); // eslint-disable-line
+
+  // Estimate synced rows (from API) — runs once when syncedRows arrive
+  const syncedEstimatedRef = useRef(new Set());
   useEffect(() => {
     if (!token || !loaded || !estimatesLoaded) return;
     merged
-      .filter(r => !r.kcal && r.text && !estimating.current.has(r.id) && !failed.current.has(r.id))
+      .filter(r => !r.kcal && r.text && !estimating.current.has(r.id)
+        && !failed.current.has(r.id) && !syncedEstimatedRef.current.has(r.id))
       .forEach(row => {
         estimating.current.add(row.id);
+        syncedEstimatedRef.current.add(row.id);
         estimateNutrition(promptFn(row.text), token).then(result => {
           estimating.current.delete(row.id);
           if (result) setSavedEstimates(prev => ({...(typeof prev==="object"&&prev?prev:{}), [row.id]:result}));
           else failed.current.add(row.id);
-          setTick(t => t + 1);
         });
       });
   }, [syncedRows, loaded, estimatesLoaded, token]); // eslint-disable-line
 
-  // Auto-fill missing protein
+  // Run estimates once on initial load
   useEffect(() => {
-    if (!showProtein || !token || !loaded) return;
-    safe
-      .filter(r => r.text?.trim() && r.kcal && !r.protein && !estimating.current.has(r.text+"_p") && !failed.current.has(r.text+"_p"))
-      .forEach(row => {
-        estimating.current.add(row.text+"_p");
-        estimateNutrition(promptFn(row.text), token).then(result => {
-          estimating.current.delete(row.text+"_p");
-          if (result?.protein) {
-            setRows(prev => (Array.isArray(prev)?prev:[]).map(r =>
-              r.text===row.text ? {...r, protein:result.protein, kcal:result.kcal||r.kcal} : r));
-          } else failed.current.add(row.text+"_p");
-          setTick(t => t + 1);
-        });
-      });
-  }, [loaded, token, showProtein]); // eslint-disable-line
+    if (loaded && token) runEstimates();
+  }, [loaded, token]); // eslint-disable-line
 
   // Convert editor HTML → rows array, preserving kcal for unchanged lines
   function parseEditorHtml(html) {
@@ -842,9 +855,14 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
   // State is only committed on blur or Enter, not mid-keystroke.
   // This prevents the value→re-render→setContent loop that kicks mobile users
   // out of the editor while they're still typing.
-  function handleBlur(html) { setRows(parseEditorHtml(html)); setEstimateFlag(f => f + 1); }
+  // Estimation runs once after rows are committed — not on every re-render.
+  function handleBlur(html) {
+    setRows(parseEditorHtml(html));
+    // Run estimates after a microtask so setRows has flushed
+    Promise.resolve().then(runEstimates);
+  }
   function handleKeyDown(e) {
-    if (e.key === 'Enter') setEstimateFlag(f => f + 1);
+    if (e.key === 'Enter') Promise.resolve().then(runEstimates);
   }
 
   if (!loaded) return (

@@ -47,28 +47,7 @@ export default function ShortcutCheatsheet() {
 
   return (
     <>
-      {/* Floating ? button — bottom-right, above the chat bar */}
-      <button
-        onClick={toggle}
-        aria-label="Keyboard shortcuts"
-        style={{
-          position: "fixed", bottom: 80, right: 16, zIndex: 97,
-          width: 32, height: 32, borderRadius: "50%",
-          background: "var(--dl-surface, rgba(30,28,24,0.7))",
-          border: "1px solid var(--dl-border, rgba(128,120,100,0.15))",
-          backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-          color: "var(--dl-middle)", fontFamily: mono, fontSize: 14,
-          fontWeight: 600, cursor: "pointer",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "opacity 0.15s, transform 0.15s",
-          opacity: open ? 0 : 0.6,
-          pointerEvents: open ? "none" : "auto",
-        }}
-        onMouseOver={e => { e.currentTarget.style.opacity = "1"; e.currentTarget.style.transform = "scale(1.1)"; }}
-        onMouseOut={e => { e.currentTarget.style.opacity = open ? "0" : "0.6"; e.currentTarget.style.transform = "scale(1)"; }}
-      >
-        ?
-      </button>
+      {/* Floating ? button removed — shortcuts accessible via ? key */}
 
       {/* Overlay */}
       {open && (

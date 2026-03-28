@@ -59,9 +59,9 @@ export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft,
   );
 }
 
-// ExpandArrow — subtle link icon for card headers
+// ExpandArrow — disabled (full-page views still accessible via URL)
 function ExpandArrow({ href }) {
-  if (!href) return null;
+  return null;
   return (
     <a href={href} title="Open full page" aria-label="Open full page"
       style={{
