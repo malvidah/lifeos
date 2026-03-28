@@ -312,10 +312,9 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
   }
 
   // Helper: terrain color — blends between lush (high vitality) and autumn (low)
-  // Snow caps on the tallest peaks
+  // Snow caps — stale projects get snow; taller mountains get more
   const v = Math.max(0, Math.min(100, vitality)) / 100; // 0-1
   const maxHeight = projects.length ? Math.max(...projects.map(p => p.height)) : 1;
-  const snowThreshold = maxHeight * 0.75; // only tallest peaks get snow
 
   // Two palettes: saturated tropical vs warm drought
   // More contrast: deep shadows at low, vivid greens at mid-low, warm earth at mid, cool rock at high
@@ -403,18 +402,30 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
       }
     }
 
-    // Snow cap: only on tall INACTIVE peaks (not active or hot — those have magma)
-    if (h > snowThreshold && maxHeight > 1.2) {
-      // Check if this point is near any active project — skip snow if so
-      let nearActive = false;
-      for (const p of projects) {
-        if (!p.isActive) continue;
-        const dx = x - p.x, dz = z - p.z;
-        if (Math.sqrt(dx * dx + dz * dz) < 1.5) { nearActive = true; break; }
-      }
-      if (!nearActive) {
-        const snowBlend = Math.min(1, (h - snowThreshold) / 0.4);
-        return base.map(c => c + (0.92 - c) * snowBlend + noise2D(x * 4, z * 4) * 0.02);
+    // Snow cap: per-mountain, based on height + staleness (days since activity)
+    // Hot/active volcanoes get no snow; stale projects get pronounced snow caps
+    for (const p of projects) {
+      if (p.isHot) continue; // volcanoes never get snow
+      const dx = x - p.x, dz = z - p.z;
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      const peakR = (0.6 + p.score * 0.3) * (p.widthFactor || 1.0);
+      if (dist > peakR * 1.5) continue; // too far from this mountain
+      // Snow starts at 60% of each mountain's own height
+      const localSnowLine = p.height * 0.6;
+      if (h <= localSnowLine) continue;
+      // Staleness: more days inactive = more snow. 3+ days starts showing snow.
+      const daysSince = p.recencyScore != null
+        ? (p.recencyScore >= 0.7 ? 1 : p.recencyScore >= 0.4 ? 14 : p.recencyScore >= 0.1 ? 60 : 120)
+        : 120;
+      if (daysSince < 3 && p.isActive) continue; // recently active — no snow yet
+      // Snow intensity: ramps up from 3 days to 30+ days inactive
+      const stalenessFactor = Math.min(1, Math.max(0, (daysSince - 2) / 28));
+      const heightBlend = Math.min(1, (h - localSnowLine) / (p.height * 0.35));
+      const distFade = 1 - dist / (peakR * 1.5);
+      const snowStrength = heightBlend * distFade * (0.3 + stalenessFactor * 0.7);
+      if (snowStrength > 0.05) {
+        const noiseVal = noise2D(x * 4, z * 4) * 0.03;
+        return base.map(c => c + (0.95 - c) * snowStrength + noiseVal);
       }
     }
 
