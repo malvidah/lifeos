@@ -198,7 +198,7 @@ const ImageChip = Node.create({
         'background:var(--dl-border)', 'border-radius:4px',
         'padding:1px 7px', 'font-family:var(--dl-mono,' + mono + ')',
         'font-size:11px', 'letter-spacing:0.04em', 'line-height:1.65',
-        'color:var(--dl-highlight)', 'white-space:nowrap', 'cursor:default',
+        'color:var(--dl-highlight)', 'white-space:nowrap', 'cursor:pointer',
         'user-select:none', 'flex-shrink:0',
         'counter-increment:imgchip',
       ].join(';'),

@@ -641,6 +641,17 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     }
   }, [token, addImage]);
 
+  // Click delegation: image chip → open slideshow at that photo
+  const handleChipClick = useCallback((e) => {
+    const chip = e.target.closest?.('[data-image-chip]');
+    if (!chip) return;
+    const url = chip.dataset.imageChip;
+    if (!url) return;
+    const idx = images.indexOf(url);
+    if (idx === -1) return;
+    setLightboxIdx(idx);
+  }, [images]);
+
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
     dragCounter.current++;
@@ -686,6 +697,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   return (
     <div
+      onClickCapture={handleChipClick}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
