@@ -660,7 +660,7 @@ function DashboardInner() {
               <ErrorBoundary label="Goals">
                 <Card label="🏁 Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/goals"
                   headerRight={<GoalsViewToggle mode={goalsViewMode} setMode={setGoalsViewMode} />}>
-                  <GoalsCard token={token} date={selected} onSelectDate={setSelected} viewMode={goalsViewMode} />
+                  <GoalsCard token={token} date={selected} onSelectDate={setSelected} viewMode={goalsViewMode} project={projectFilter} />
                 </Card>
               </ErrorBoundary>
             </div>

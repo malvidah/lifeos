@@ -270,7 +270,7 @@ function GoalDetailView({ goal, token, isNew, onBack, onCreated, onUpdated, allP
 const COL_MIN_W = 180;
 const CARD_RADIUS = 10;
 
-export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
+export default function ProjectsCard({ token, date, onSelectDate, viewMode, project }) {
   // 'detail' is internal-only; all other modes come from viewMode prop
   const [internalView, setInternalView] = useState(null); // 'detail' | null
   const [prevMode, setPrevMode] = useState('kanban');
@@ -309,8 +309,11 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
 
   const ctxProjectNames = useContext(ProjectNamesContext);
 
+  // Filter by global project selection
+  const visibleGoals = project ? goals.filter(g => g.project === project) : goals;
+
   // Group goals by project
-  const grouped = goals.reduce((acc, g) => {
+  const grouped = visibleGoals.reduce((acc, g) => {
     const p = g.project || 'unassigned';
     if (!acc[p]) acc[p] = [];
     acc[p].push(g);
@@ -324,7 +327,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
 
   // Group goals by status
   const groupedByStatus = STATUS_COLS.reduce((acc, col) => {
-    acc[col.key] = goals.filter(g => (g.status || 'new') === col.key);
+    acc[col.key] = visibleGoals.filter(g => (g.status || 'new') === col.key);
     return acc;
   }, {});
 
@@ -559,18 +562,18 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {/* Empty state */}
-      {goals.length === 0 && !loading && (
+      {visibleGoals.length === 0 && !loading && (
         <div style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
           No goals yet. Tap <span onClick={() => setCreatingNew(true)} style={{ color: GOAL_COLOR, cursor: 'pointer' }}>+ new</span> or tag a task with <span style={{ color: GOAL_COLOR }}>/g</span>
         </div>
       )}
 
       {/* ── Manual sort — kanban with unnamed columns ───────────────── */}
-      {mode === 'list' && goals.length > 0 && (() => {
+      {mode === 'list' && visibleGoals.length > 0 && (() => {
         const NUM_COLS = 4;
         const cols = {};
         for (let c = 0; c < NUM_COLS; c++) cols[String(c)] = [];
-        goals.forEach(g => {
+        visibleGoals.forEach(g => {
           const col = String(Math.min(Math.floor((g.position ?? 0) / 100), NUM_COLS - 1));
           cols[col].push(g);
         });
@@ -589,7 +592,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
       })()}
 
       {/* ── Kanban by project ──────────────────────────────────────────── */}
-      {mode === 'kanban' && goals.length > 0 && (
+      {mode === 'kanban' && visibleGoals.length > 0 && (
         <div style={{
           display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6,
           scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch',
@@ -617,7 +620,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
       )}
 
       {/* ── Kanban by status ───────────────────────────────────────────── */}
-      {mode === 'status' && goals.length > 0 && (
+      {mode === 'status' && visibleGoals.length > 0 && (
         <div style={{
           display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6,
           scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch',
