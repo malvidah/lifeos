@@ -18,25 +18,29 @@ const STATUS_COLS = [
 /* ────────────────────────────────────────────────────────────────────────────
    View mode toggle — exported for Card headerRight
    ──────────────────────────────────────────────────────────────────────────── */
-const ListIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-    <line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>
+// Grid: 4 even columns, manual sort
+const GridIcon = () => (
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+    <rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/>
+    <rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>
   </svg>
 );
+// Kanban: uneven columns = grouped by project
 const KanbanIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <rect x="3" y="3" width="5" height="18" rx="1.5"/><rect x="10" y="3" width="5" height="12" rx="1.5"/><rect x="17" y="3" width="5" height="15" rx="1.5"/>
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+    <rect x="1" y="1" width="4" height="14" rx="1.2"/><rect x="6" y="1" width="4" height="9" rx="1.2"/><rect x="11" y="1" width="4" height="11" rx="1.2"/>
   </svg>
 );
+// Status: columns with checkmark = progress stages
 const StatusIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="9"/><polyline points="9 12 11.5 14.5 15.5 9.5"/>
+  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+    <rect x="1" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="6.25" y="2" width="3.5" height="12" rx="1" fill="currentColor" opacity="0.6"/><rect x="11.5" y="2" width="3.5" height="12" rx="1" fill="currentColor" opacity="0.3"/>
   </svg>
 );
 
 export function GoalsViewToggle({ mode, setMode }) {
   const modes = [
-    { key: 'list', icon: <ListIcon />, label: 'List view' },
+    { key: 'list', icon: <GridIcon />, label: 'Grid view' },
     { key: 'kanban', icon: <KanbanIcon />, label: 'Kanban by project' },
     { key: 'status', icon: <StatusIcon />, label: 'Kanban by status' },
   ];
@@ -429,17 +433,16 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
           boxShadow: dragId === goal.id ? '0 4px 12px rgba(0,0,0,0.12)' : 'none',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{
-            flex: 1, fontFamily: mono, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase',
-            color: GOAL_COLOR, fontWeight: 500,
-            textDecoration: goal.done ? 'line-through' : 'none',
-          }}>
-            {goal.name}
-          </div>
-          {showProject && <ProjectPill project={goal.project} />}
+        <div style={{
+          fontFamily: mono, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase',
+          color: GOAL_COLOR, fontWeight: 500,
+          textDecoration: goal.done ? 'line-through' : 'none',
+          marginBottom: showProject && goal.project ? 5 : 0,
+        }}>
+          {goal.name}
         </div>
-        {((goal.habit_count || 0) + (goal.task_count || 0) > 0) && (
+        {showProject && goal.project && <ProjectPill project={goal.project} />}
+        {false && ((goal.habit_count || 0) + (goal.task_count || 0) > 0) && (
           <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
             {goal.habit_count > 0 && (
               <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)' }}>
@@ -538,10 +541,12 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         </div>
       )}
 
-      {/* ── List view — single column ──────────────────────────────────── */}
+      {/* ── Grid view — 4 columns, no headers, manual sort ────────────── */}
       {mode === 'list' && goals.length > 0 && (
-        <div style={{ maxHeight: 250, overflowY: 'auto' }}>
-          {renderColumn('all', 'All Goals', GOAL_COLOR, goals, true, true)}
+        <div style={{ maxHeight: 280, overflowY: 'auto' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            {goals.map(goal => renderGoalCard(goal, true))}
+          </div>
         </div>
       )}
 
