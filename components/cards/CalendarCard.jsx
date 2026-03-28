@@ -639,7 +639,7 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
         {/* CALENDAR label — left */}
         <div style={{display:'flex',alignItems:'center',gap:8,flexShrink:0}}>
           {onToggle&&<ChevronBtn collapsed={collapsed} onToggle={e=>{e.stopPropagation();onToggle();}}/>}
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-highlight)"}}>Calendar</span>
+          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.06em',textTransform:'uppercase',color:"var(--dl-highlight)"}}>📅 Calendar</span>
         </div>
 
 

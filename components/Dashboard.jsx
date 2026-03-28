@@ -586,7 +586,7 @@ function DashboardInner() {
 
         {/* ── Single unified scroll container ── */}
         <div ref={scrollContainerRef} style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0, overflowAnchor:'none'}}>
-        <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, paddingLeft: chatExpanded && !mobile ? 390 : 10, transition:"padding-left 0.2s ease", display:"flex", flexDirection:"column", gap:8}}>
+        <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Spacer for fixed header */}
           <div style={{height:"calc(env(safe-area-inset-top, 0px) + 100px)",flexShrink:0}}/>

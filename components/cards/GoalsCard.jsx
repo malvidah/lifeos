@@ -79,9 +79,9 @@ function GoalCardWrap({ children, onClick, draggable, onDragStart, onDragEnd, st
       onMouseLeave={() => setHovered(false)}
       style={{
         ...style,
-        transform: hovered ? 'translateY(-1px)' : 'none',
+        transform: hovered ? 'translateY(-0.5px)' : 'none',
         boxShadow: hovered
-          ? '0 4px 14px rgba(0,0,0,0.10)'
+          ? '0 1px 4px rgba(0,0,0,0.06)'
           : (style?.boxShadow || 'none'),
       }}
     >
@@ -430,7 +430,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
           cursor: dragId ? 'grabbing' : 'pointer',
           transition: 'opacity 0.15s, box-shadow 0.15s, transform 0.1s',
           opacity: goal.done ? 0.45 : (dragId === goal.id ? 0.5 : 1),
-          boxShadow: dragId === goal.id ? '0 4px 12px rgba(0,0,0,0.12)' : 'none',
+          boxShadow: dragId === goal.id ? '0 2px 6px rgba(0,0,0,0.08)' : 'none',
         }}
       >
         <div style={{
@@ -470,7 +470,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         onDragLeave={e => onColDragLeave(e, colKey)}
         onDrop={onColDrop}
         style={{
-          minWidth: COL_MIN_W, maxWidth: mode === 'list' ? 'none' : 260, flex: mode === 'list' ? '1 1 auto' : '0 0 auto',
+          minWidth: COL_MIN_W, flex: '1 1 0',
           display: 'flex', flexDirection: 'column', gap: 6,
           scrollSnapAlign: 'start',
           background: isDropTarget ? `${typeof colColor === 'string' && colColor.startsWith('#') ? colColor : GOAL_COLOR}08` : 'transparent',
@@ -481,13 +481,14 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           paddingBottom: 4, borderBottom: `2px solid ${typeof colColor === 'string' && colColor.startsWith('#') ? colColor + '44' : 'var(--dl-border)'}`,
+          minHeight: colLabel ? 'auto' : 0,
         }}>
-          <span style={{
+          {colLabel ? <span style={{
             fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
             color: colColor, fontWeight: 600,
           }}>
             {colLabel} <span style={{ fontWeight: 400, opacity: 0.6 }}>({items.length})</span>
-          </span>
+          </span> : <span />}
           {allowCreate && (
             <button
               onClick={() => { setCreatingInProject(colKey); setNewGoalText(''); }}
@@ -543,30 +544,11 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
 
       {/* ── Manual sort — 4 kanban columns, drag reorders only ─────────── */}
       {mode === 'list' && goals.length > 0 && (() => {
-        // Distribute goals evenly across 4 columns
         const cols = [[], [], [], []];
         goals.forEach((g, i) => cols[i % 4].push(g));
         return (
           <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch' }}>
-            {cols.map((items, ci) => (
-              <div
-                key={ci}
-                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverCol(`col-${ci}`); }}
-                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) { if (dragOverCol === `col-${ci}`) setDragOverCol(null); } }}
-                onDrop={e => e.preventDefault()}
-                style={{
-                  flex: '1 1 0', minWidth: COL_MIN_W,
-                  display: 'flex', flexDirection: 'column', gap: 6,
-                  background: dragId && dragOverCol === `col-${ci}` ? `${GOAL_COLOR}08` : 'transparent',
-                  borderRadius: CARD_RADIUS, padding: dragId && dragOverCol === `col-${ci}` ? 4 : 0,
-                  transition: 'background 0.15s, padding 0.15s',
-                }}
-              >
-                {/* Column header line */}
-                <div style={{ paddingBottom: 4, borderBottom: `2px solid ${GOAL_COLOR}44` }} />
-                {items.map(goal => renderGoalCard(goal, true))}
-              </div>
-            ))}
+            {cols.map((items, ci) => renderColumn(`col-${ci}`, '', GOAL_COLOR, items, true, false))}
           </div>
         );
       })()}
