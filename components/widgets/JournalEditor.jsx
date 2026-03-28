@@ -839,13 +839,10 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
       return { id: Date.now() + Math.random(), text, kcal: null, protein: null };
     });
   }
-  // estimateFlag increments only on Enter or blur — the estimation effects depend on it
+  // State is only committed on blur or Enter, not mid-keystroke.
+  // This prevents the value→re-render→setContent loop that kicks mobile users
+  // out of the editor while they're still typing.
   function handleBlur(html) { setRows(parseEditorHtml(html)); setEstimateFlag(f => f + 1); }
-  const updateTimer = useRef(null);
-  function handleUpdate(html) {
-    clearTimeout(updateTimer.current);
-    updateTimer.current = setTimeout(() => setRows(parseEditorHtml(html)), 400);
-  }
   function handleKeyDown(e) {
     if (e.key === 'Enter') setEstimateFlag(f => f + 1);
   }
@@ -894,7 +891,6 @@ export function RowList({date,type,placeholder,promptFn,prefix,color,token,userI
           <DayLabEditor
             value={rowsToHtml(safe)}
             onBlur={handleBlur}
-            onUpdate={handleUpdate}
             placeholder={merged.length === 0 ? placeholder : ""}
             textColor={"var(--dl-strong)"}
             mutedColor={"var(--dl-middle)"}
