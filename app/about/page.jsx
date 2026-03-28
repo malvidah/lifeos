@@ -112,13 +112,14 @@ function FlipCard({ front, back, style }) {
         borderRadius: 14,
         boxShadow: hovered ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
         transition: 'box-shadow 0.2s ease',
+        display: 'flex', flexDirection: 'column',
         ...style,
       }}
     >
-      <div style={{ height: '100%', visibility: flipped ? 'hidden' : 'visible', opacity: flipped ? 0 : 1, transition: 'opacity 0.2s ease' }}>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', visibility: flipped ? 'hidden' : 'visible', opacity: flipped ? 0 : 1, transition: 'opacity 0.2s ease' }}>
         {front}
       </div>
-      <div style={{ position: 'absolute', inset: 0, visibility: flipped ? 'visible' : 'hidden', opacity: flipped ? 1 : 0, transition: 'opacity 0.2s ease' }}>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', visibility: flipped ? 'visible' : 'hidden', opacity: flipped ? 1 : 0, transition: 'opacity 0.2s ease' }}>
         {back}
       </div>
     </div>
@@ -129,7 +130,7 @@ function FlipCard({ front, back, style }) {
 function ServiceFlipCard({ svc, isOwner }) {
   const cardBase = {
     ...LAYER_CARD,
-    padding: '14px 16px', height: '100%',
+    padding: '14px 16px', flex: 1,
     display: 'flex', flexDirection: 'column', gap: 6,
     boxSizing: 'border-box',
   };
@@ -179,7 +180,7 @@ function ServiceFlipCard({ svc, isOwner }) {
 function FeatureFlipCard({ feat }) {
   const cardBase = {
     ...LAYER_CARD,
-    padding: '14px 16px', height: '100%',
+    padding: '14px 16px', flex: 1,
     display: 'flex', flexDirection: 'column', gap: 6,
     boxSizing: 'border-box',
   };
@@ -213,7 +214,7 @@ function FeatureFlipCard({ feat }) {
 function LayerFlipCard({ emoji, title, color, frontText, backText, archRouteCount }) {
   const cardBase = {
     ...LAYER_CARD,
-    height: '100%', display: 'flex', flexDirection: 'column',
+    flex: 1, display: 'flex', flexDirection: 'column',
     boxSizing: 'border-box',
   };
   const front = (
