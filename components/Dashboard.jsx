@@ -586,9 +586,12 @@ function DashboardInner() {
               ...item,
               isOpen: currentPageCards.includes(item.id),
               onToggle: () => {
-                // Scroll to the card if it's on the current page
-                const el = document.getElementById(`card-${item.id}`);
-                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                const pageIdx = layout.currentPageIdx;
+                if (currentPageCards.includes(item.id)) {
+                  layout.removeCard(pageIdx, item.id);
+                } else {
+                  layout.addCard(pageIdx, item.id);
+                }
               },
             }))}
           />
