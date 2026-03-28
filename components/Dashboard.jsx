@@ -743,23 +743,8 @@ function DashboardInner() {
                 </div>
               ) : (
                 <div style={{display:"flex", gap:10, flexDirection:"row", alignItems:"stretch"}}>
-                  {/* Left column: Journal */}
-                  {!collapseMap[leftWidget.id] && (
-                    <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                      <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
-                        <ErrorBoundary label={leftWidget.label}>
-                        <Card label={leftWidget.label} color={leftWidget.color()}
-                          collapsed={false}
-                          expandHref={leftWidget.expandHref}
-                          headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}
-                          >
-                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
-                        </Card>
-                        </ErrorBoundary>
-                      </div>
-                    </div>
-                  )}
-                  {/* Right widgets — Tasks, Meals, Workouts (only visible ones) */}
+                  {/* Desktop: Tasks/Meals/Workouts LEFT, Journal RIGHT — keeps Habits→Tasks→Journal reading order */}
+                  {/* Left column: Tasks, Meals, Workouts */}
                   {rightWidgets.some(w => !collapseMap[w.id]) && (
                     <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
                       {rightWidgets.filter(w => !collapseMap[w.id]).map((w, i, arr)=>(
@@ -779,6 +764,22 @@ function DashboardInner() {
                           </ErrorBoundary>
                         </div>
                       ))}
+                    </div>
+                  )}
+                  {/* Right column: Journal */}
+                  {!collapseMap[leftWidget.id] && (
+                    <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
+                      <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
+                        <ErrorBoundary label={leftWidget.label}>
+                        <Card label={leftWidget.label} color={leftWidget.color()}
+                          collapsed={false}
+                          expandHref={leftWidget.expandHref}
+                          headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}
+                          >
+                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
+                        </Card>
+                        </ErrorBoundary>
+                      </div>
                     </div>
                   )}
                 </div>
