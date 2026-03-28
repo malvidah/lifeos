@@ -462,7 +462,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
   return (
     <Card fitContent={!onToggle} style={collapsed?{height:"auto"}:{}}>
       <CardHeader
-        label="💚 Health"
+        label="❤️ Health"
         labelColor={backAction ? "var(--dl-green)" : undefined}
         collapsed={collapsed}
         onToggle={backAction ? undefined : onToggle}
