@@ -18,23 +18,23 @@ const STATUS_COLS = [
 /* ────────────────────────────────────────────────────────────────────────────
    View mode toggle — exported for Card headerRight
    ──────────────────────────────────────────────────────────────────────────── */
-// Grid: 4 even columns, manual sort
+// Grid: 4 even squares — manual sort
 const GridIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-    <rect x="1" y="1" width="6" height="6" rx="1.5"/><rect x="9" y="1" width="6" height="6" rx="1.5"/>
-    <rect x="1" y="9" width="6" height="6" rx="1.5"/><rect x="9" y="9" width="6" height="6" rx="1.5"/>
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+    <rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/>
+    <rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/>
   </svg>
 );
-// Kanban: uneven columns = grouped by project
+// Kanban: uneven columns — grouped by project
 const KanbanIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-    <rect x="1" y="1" width="4" height="14" rx="1.2"/><rect x="6" y="1" width="4" height="9" rx="1.2"/><rect x="11" y="1" width="4" height="11" rx="1.2"/>
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+    <rect x="1" y="1.5" width="3.5" height="13" rx="1"/><rect x="6.25" y="1.5" width="3.5" height="8.5" rx="1"/><rect x="11.5" y="1.5" width="3.5" height="10.5" rx="1"/>
   </svg>
 );
-// Status: columns with checkmark = progress stages
+// Status: even columns — progress stages
 const StatusIcon = () => (
-  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-    <rect x="1" y="2" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="6.25" y="2" width="3.5" height="12" rx="1" fill="currentColor" opacity="0.6"/><rect x="11.5" y="2" width="3.5" height="12" rx="1" fill="currentColor" opacity="0.3"/>
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
+    <rect x="1" y="1.5" width="3.5" height="13" rx="1"/><rect x="6.25" y="1.5" width="3.5" height="13" rx="1"/><rect x="11.5" y="1.5" width="3.5" height="13" rx="1"/>
   </svg>
 );
 
@@ -339,7 +339,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
 
   // ── Drag handlers ──────────────────────────────────────────────────────────
   const onDragStart = (e, goalId) => {
-    if (mode === 'list') return; // no drag in list mode
+    // List mode allows drag but doesn't change any field
     setDragId(goalId);
     e.dataTransfer.effectAllowed = 'move';
     if (e.target) e.target.style.opacity = '0.5';
@@ -418,7 +418,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
     return (
       <GoalCardWrap
         key={goal.id}
-        draggable={mode !== 'list'}
+        draggable
         onDragStart={e => onDragStart(e, goal.id)}
         onDragEnd={onDragEnd}
         onClick={() => openDetail(goal)}
@@ -541,14 +541,35 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         </div>
       )}
 
-      {/* ── Grid view — 4 columns, no headers, manual sort ────────────── */}
-      {mode === 'list' && goals.length > 0 && (
-        <div style={{ maxHeight: 280, overflowY: 'auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-            {goals.map(goal => renderGoalCard(goal, true))}
+      {/* ── Manual sort — 4 kanban columns, drag reorders only ─────────── */}
+      {mode === 'list' && goals.length > 0 && (() => {
+        // Distribute goals evenly across 4 columns
+        const cols = [[], [], [], []];
+        goals.forEach((g, i) => cols[i % 4].push(g));
+        return (
+          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch' }}>
+            {cols.map((items, ci) => (
+              <div
+                key={ci}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverCol(`col-${ci}`); }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) { if (dragOverCol === `col-${ci}`) setDragOverCol(null); } }}
+                onDrop={e => e.preventDefault()}
+                style={{
+                  flex: '1 1 0', minWidth: COL_MIN_W,
+                  display: 'flex', flexDirection: 'column', gap: 6,
+                  background: dragId && dragOverCol === `col-${ci}` ? `${GOAL_COLOR}08` : 'transparent',
+                  borderRadius: CARD_RADIUS, padding: dragId && dragOverCol === `col-${ci}` ? 4 : 0,
+                  transition: 'background 0.15s, padding 0.15s',
+                }}
+              >
+                {/* Column header line */}
+                <div style={{ paddingBottom: 4, borderBottom: `2px solid ${GOAL_COLOR}44` }} />
+                {items.map(goal => renderGoalCard(goal, true))}
+              </div>
+            ))}
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Kanban by project ──────────────────────────────────────────── */}
       {mode === 'kanban' && goals.length > 0 && (
