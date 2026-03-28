@@ -666,7 +666,7 @@ function DashboardInner() {
             </div>
           )}
 
-          {/* 4. HealthCard — hidden when toggled off in dock */}
+          {/* 3. HealthCard */}
           {!searchOpen && !healthCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Health">
