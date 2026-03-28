@@ -31,10 +31,10 @@ const KanbanIcon = () => (
     <rect x="1" y="1.5" width="3.5" height="13" rx="1"/><rect x="6.25" y="1.5" width="3.5" height="8.5" rx="1"/><rect x="11.5" y="1.5" width="3.5" height="10.5" rx="1"/>
   </svg>
 );
-// Status: even columns — progress stages
+// Status: circle with checkmark — progress/completion
 const StatusIcon = () => (
-  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.2">
-    <rect x="1" y="1.5" width="3.5" height="13" rx="1"/><rect x="6.25" y="1.5" width="3.5" height="13" rx="1"/><rect x="11.5" y="1.5" width="3.5" height="13" rx="1"/>
+  <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="8" cy="8" r="6.5"/><polyline points="5.5 8 7.2 9.8 10.5 6.2"/>
   </svg>
 );
 
