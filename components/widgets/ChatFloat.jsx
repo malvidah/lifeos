@@ -90,16 +90,18 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
     return () => window.removeEventListener("keydown", handler);
   }, [expanded]);
 
-  // Close input pill on click outside
+  // Close input pill on click outside (not hover — keeps pill stable for button clicks)
   useEffect(() => {
     if (pillPhase !== 'input') return;
     function handleOutside(e) {
       if (pillRef.current && !pillRef.current.contains(e.target)) {
-        setPillPhase('idle');
+        setPillPhase('closing');
+        setTimeout(() => setPillPhase('idle'), 120);
       }
     }
-    document.addEventListener('mousedown', handleOutside);
-    return () => document.removeEventListener('mousedown', handleOutside);
+    // Use setTimeout so the click that opened the pill doesn't immediately close it
+    const t = setTimeout(() => document.addEventListener('mousedown', handleOutside), 10);
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', handleOutside); };
   }, [pillPhase]);
 
   // Reset messages on date change
@@ -626,8 +628,8 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
           if (pillPhase === 'idle') {
             return (
               <div
-                onMouseEnter={!mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 50); } : undefined}
-                onClick={mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); } : undefined}
+                onMouseEnter={!mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 120); } : undefined}
+                onClick={mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 120); } : undefined}
                 style={{ pointerEvents: "auto", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 100, cursor: "pointer", ...glass }}
               >
                 <DLSparkle size={13} />
@@ -636,12 +638,36 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
             );
           }
 
-          // ── INPUT: expanded pill with textarea ──────────────────────────────
+          // ── CLOSING: shrinking back to pill ─────────────────────────────────
+          if (pillPhase === 'closing') {
+            return (
+              <div style={{
+                pointerEvents: "none",
+                display: "flex", alignItems: "center",
+                borderRadius: 100, overflow: "hidden",
+                width: "40%", maxWidth: 280, minHeight: 44,
+                opacity: 0.7,
+                ...glass,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", width: "100%" }}>
+                  <DLSparkle size={13} />
+                  <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em", opacity: 0.6 }}>Ask AI</span>
+                </div>
+              </div>
+            );
+          }
+
+          // ── INPUT: expanded pill with textarea (stays open until click outside) ──
           if (pillPhase === 'input') {
             return (
-              <div
-                onMouseLeave={!mobile && !input.trim() && document.activeElement !== inputRef.current ? () => setPillPhase('idle') : undefined}
-                style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", ...glass }}>
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", animation: "pillExpand 0.12s ease-out", ...glass }}>
+                <style>{`
+                  @keyframes pillExpand {
+                    0%   { max-width: 140px; min-height: 40px; opacity: 0.85; }
+                    40%  { max-width: 340px; min-height: 46px; opacity: 0.92; }
+                    100% { max-width: 560px; min-height: 52px; opacity: 1; }
+                  }
+                `}</style>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
                   {/* Open full chat — left side */}
                   <button
@@ -660,7 +686,6 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
                     value={input}
                     onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
                     onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuick(); } }}
-                    onBlur={!mobile ? () => { if (!input.trim()) setPillPhase('idle'); } : undefined}
                     className="dl-chat-input"
                     placeholder="Ask AI anything…"
                     autoFocus
