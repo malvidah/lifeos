@@ -2,13 +2,14 @@ import { withAuth } from '../_lib/auth.js';
 import { isValidUuid } from '@/lib/validate.js';
 
 // GET /api/goals
-//   → { goals: [{id, user_id, name, project, done, position, created_at, updated_at, task_count, habit_count}] }
+//   → { goals: [{id, user_id, name, project, status, done, position, created_at, updated_at, task_count, habit_count}] }
 //   Returns all goals for user with linked task/habit counts.
+//   status: 'active' | 'planned' | 'completed' | 'archived' (default 'active')
 //
-// POST /api/goals  { name, project? }
+// POST /api/goals  { name, project?, status? }
 //   Create a new goal.
 //
-// PATCH /api/goals  { id, name?, project?, done?, position? }
+// PATCH /api/goals  { id, name?, project?, done?, position?, status? }
 //   Update a goal.
 //
 // DELETE /api/goals?id=UUID
@@ -58,19 +59,23 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 });
 
 export const POST = withAuth(async (req, { supabase, user }) => {
-  const { name, project } = await req.json();
+  const { name, project, status } = await req.json();
 
   if (!name || typeof name !== 'string' || !name.trim()) {
     return Response.json({ error: 'name is required' }, { status: 400 });
   }
 
+  const VALID_STATUSES = ['active', 'planned', 'completed', 'archived'];
+  const insert = {
+    user_id: user.id,
+    name: name.trim().toLowerCase(),
+    project: project ? project.trim().toLowerCase() : null,
+  };
+  if (status && VALID_STATUSES.includes(status)) insert.status = status;
+
   const { data, error } = await supabase
     .from('goals')
-    .insert({
-      user_id: user.id,
-      name: name.trim().toLowerCase(),
-      project: project ? project.trim().toLowerCase() : null,
-    })
+    .insert(insert)
     .select()
     .single();
 
@@ -87,7 +92,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 });
 
 export const PATCH = withAuth(async (req, { supabase, user }) => {
-  const { id, name, project, done, position } = await req.json();
+  const { id, name, project, done, position, status } = await req.json();
 
   if (!id) {
     return Response.json({ error: 'id is required' }, { status: 400 });
@@ -108,6 +113,8 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
   if (project !== undefined) updates.project = project ? project.trim().toLowerCase() : null;
   if (done !== undefined) updates.done = !!done;
   if (position !== undefined) updates.position = position;
+  const VALID_STATUSES = ['active', 'planned', 'completed', 'archived'];
+  if (status !== undefined && VALID_STATUSES.includes(status)) updates.status = status;
   updates.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase

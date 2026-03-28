@@ -186,15 +186,19 @@ export function SearchResults({ results, loading, query, onSelectDate }) {
                   marginBottom: 8, borderRadius: 10, cursor: 'pointer',
                   border: "1px solid var(--dl-border)",
                   overflow: 'hidden',
-                  transition: 'border-color 0.15s, background 0.15s',
+                  transition: 'border-color 0.15s, background 0.15s, transform 0.15s ease, box-shadow 0.15s ease',
                 }}
                 onMouseEnter={e => {
                   e.currentTarget.style.background = "var(--dl-surface)";
                   e.currentTarget.style.borderColor = "var(--dl-border2)";
+                  e.currentTarget.style.transform = "translateY(-1px)";
+                  e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)";
                 }}
                 onMouseLeave={e => {
                   e.currentTarget.style.background = 'transparent';
                   e.currentTarget.style.borderColor = "var(--dl-border)";
+                  e.currentTarget.style.transform = "translateY(0)";
+                  e.currentTarget.style.boxShadow = "none";
                 }}
               >
                 {/* Card header — type label */}

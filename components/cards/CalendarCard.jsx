@@ -761,11 +761,11 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
                         padding:"2px 5px", borderRadius:4, flexShrink:0,
                         background:`${ev.color||"var(--dl-accent)"}22`,
                         cursor: isCtr && onEventClick ? 'pointer' : 'default',
-                        transition:'background 0.1s',
+                        transition:'background 0.1s, transform 0.15s ease, box-shadow 0.15s ease',
                         opacity: isCtr ? 1 : 0.85,
                       }}
-                      onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||"var(--dl-accent)"}38`;}:undefined}
-                      onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||"var(--dl-accent)"}22`;}:undefined}
+                      onMouseEnter={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||"var(--dl-accent)"}38`;e.currentTarget.style.transform="translateY(-1px)";e.currentTarget.style.boxShadow="0 2px 8px rgba(0,0,0,0.08)";}:undefined}
+                      onMouseLeave={isCtr&&onEventClick?e=>{e.currentTarget.style.background=`${ev.color||"var(--dl-accent)"}22`;e.currentTarget.style.transform="translateY(0)";e.currentTarget.style.boxShadow="none";}:undefined}
                     >
                       <div style={{fontFamily:mono, fontSize:F.sm, color:`${ev.color||"var(--dl-accent)"}`, lineHeight:1.3, opacity: isCtr ? 0.7 : 0.85}}>
                         {ev.time !== "all day" ? ev.time : ""}

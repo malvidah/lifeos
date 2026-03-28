@@ -488,11 +488,11 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                       textTransform: 'uppercase', whiteSpace: 'nowrap',
                       color: active ? "var(--dl-strong)" : "var(--dl-middle)",
                       opacity: isDragged ? 0.4 : 1,
-                      transition: 'color 0.15s, opacity 0.15s, background 0.15s',
+                      transition: 'color 0.15s, opacity 0.15s, background 0.15s, transform 0.15s ease, box-shadow 0.15s ease',
                       maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
                     }}
-                    onMouseEnter={e => { if (!active && !tabDragging) e.currentTarget.style.color = "var(--dl-strong)"; }}
-                    onMouseLeave={e => { if (!active && !tabDragging) e.currentTarget.style.color = "var(--dl-middle)"; }}
+                    onMouseEnter={e => { if (!active && !tabDragging) { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"; } }}
+                    onMouseLeave={e => { if (!active && !tabDragging) { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; } }}
                   >{noteName(note)}</button>
                 );
               })}
