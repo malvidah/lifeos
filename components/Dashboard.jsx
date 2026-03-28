@@ -33,7 +33,7 @@ const WorldMapCard = dynamic(
   () => import("./cards/WorldMapCard.jsx"),
   { ssr: false }
 );
-import GoalsCard from "./cards/GoalsCard.jsx";
+import GoalsCard, { GoalsViewToggle } from "./cards/GoalsCard.jsx";
 import { JournalEditor, JournalModeToggle, Meals } from "./widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns, TaskSaveIndicator } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
@@ -385,6 +385,7 @@ function DashboardInner() {
   const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
   const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
   const [goalsCollapsed,  toggleGoals]    = useCollapse("goals",   true);
+  const [goalsViewMode, setGoalsViewMode] = useState('kanban');
   // Migrate old localStorage keys for renamed dock IDs
   if (typeof window !== "undefined") {
     for (const [oldKey, newKey] of [["collapse:map","collapse:project-graph"],["collapse:timeline","collapse:world-map"]]) {
@@ -652,8 +653,9 @@ function DashboardInner() {
           {!searchOpen && !goalsCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Goals">
-                <Card label="🏁 Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/goals">
-                  <GoalsCard token={token} date={selected} onSelectDate={setSelected} />
+                <Card label="🏁 Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/goals"
+                  headerRight={<GoalsViewToggle mode={goalsViewMode} setMode={setGoalsViewMode} />}>
+                  <GoalsCard token={token} date={selected} onSelectDate={setSelected} viewMode={goalsViewMode} />
                 </Card>
               </ErrorBoundary>
             </div>

@@ -16,7 +16,7 @@ const STATUS_COLS = [
 ];
 
 /* ────────────────────────────────────────────────────────────────────────────
-   View mode toggle icons
+   View mode toggle — exported for Card headerRight
    ──────────────────────────────────────────────────────────────────────────── */
 const ListIcon = () => (
   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -34,7 +34,7 @@ const StatusIcon = () => (
   </svg>
 );
 
-function ViewToggle({ view, setView }) {
+export function GoalsViewToggle({ mode, setMode }) {
   const modes = [
     { key: 'list', icon: <ListIcon />, label: 'List view' },
     { key: 'kanban', icon: <KanbanIcon />, label: 'Kanban by project' },
@@ -43,9 +43,9 @@ function ViewToggle({ view, setView }) {
   return (
     <div style={{ display: 'flex', gap: 2, background: 'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius: 100, padding: 2 }}>
       {modes.map(m => {
-        const active = view === m.key;
+        const active = mode === m.key;
         return (
-          <button key={m.key} onClick={e => { e.stopPropagation(); setView(m.key); }} aria-label={m.label} aria-pressed={active} style={{
+          <button key={m.key} onClick={e => { e.stopPropagation(); setMode(m.key); }} aria-label={m.label} aria-pressed={active} style={{
             fontFamily: mono, fontSize: '10px', padding: '3px 6px',
             borderRadius: 100, cursor: 'pointer', border: 'none',
             background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
@@ -261,20 +261,24 @@ function GoalDetailView({ goal, token, isNew, onBack, onCreated, onUpdated, allP
 }
 
 /* ────────────────────────────────────────────────────────────────────────────
-   Kanban — project columns with draggable goal cards
+   Main GoalsCard
    ──────────────────────────────────────────────────────────────────────────── */
 const COL_MIN_W = 180;
 const CARD_RADIUS = 10;
 
-export default function ProjectsCard({ token, date, onSelectDate }) {
-  const [view, setView] = useState('kanban');
-  const [prevView, setPrevView] = useState('kanban');
+export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
+  // 'detail' is internal-only; all other modes come from viewMode prop
+  const [internalView, setInternalView] = useState(null); // 'detail' | null
+  const [prevMode, setPrevMode] = useState('kanban');
   const [goals, setGoals] = useState([]);
   const [selectedGoal, setSelectedGoal] = useState(null);
   const [creatingNew, setCreatingNew] = useState(false);
   const [creatingInProject, setCreatingInProject] = useState(null);
   const [newGoalText, setNewGoalText] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Fallback viewMode for standalone pages that don't pass it
+  const mode = viewMode || 'kanban';
 
   // Drag state
   const [dragId, setDragId] = useState(null);
@@ -298,8 +302,6 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
     return () => { window.removeEventListener('daylab:goals-changed', h); window.removeEventListener('daylab:tasks-saved', h); };
   }, [refresh]);
 
-  // Merge global project names (from tasks/habits context) so the picker shows
-  // all known projects, not just ones that already have goals.
   const ctxProjectNames = useContext(ProjectNamesContext);
 
   // Group goals by project
@@ -321,7 +323,7 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
     return acc;
   }, {});
 
-  // Quick-create goal in a project column
+  // Quick-create goal in a column
   const createGoalInProject = async (name, project) => {
     if (!name.trim()) return;
     await api.post('/api/goals', { name: name.trim(), project: project === 'unassigned' ? null : project }, token);
@@ -333,6 +335,7 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
 
   // ── Drag handlers ──────────────────────────────────────────────────────────
   const onDragStart = (e, goalId) => {
+    if (mode === 'list') return; // no drag in list mode
     setDragId(goalId);
     e.dataTransfer.effectAllowed = 'move';
     if (e.target) e.target.style.opacity = '0.5';
@@ -342,8 +345,7 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
     if (dragId && dragOverCol !== null) {
       const goal = goals.find(g => g.id === dragId);
       if (goal) {
-        if (view === 'status') {
-          // Status kanban: update status
+        if (mode === 'status') {
           const currentStatus = goal.status || 'active';
           if (currentStatus !== dragOverCol) {
             api.patch('/api/goals', { id: dragId, status: dragOverCol }, token).then(() => {
@@ -351,8 +353,7 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
               window.dispatchEvent(new Event('daylab:goals-changed'));
             });
           }
-        } else {
-          // Project kanban: update project
+        } else if (mode === 'kanban') {
           const newProject = dragOverCol === 'unassigned' ? null : dragOverCol;
           if ((goal.project || null) !== newProject) {
             api.patch('/api/goals', { id: dragId, project: newProject }, token).then(() => {
@@ -377,15 +378,14 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
       if (dragOverCol === colName) setDragOverCol(null);
     }
   };
-  const onColDrop = (e, colName) => {
+  const onColDrop = (e) => {
     e.preventDefault();
   };
 
-  // Track previous view for returning from detail
   const openDetail = (goal) => {
-    setPrevView(view);
+    setPrevMode(mode);
     setSelectedGoal(goal);
-    setView('detail');
+    setInternalView('detail');
   };
 
   // ─── Detail views ──────────────────────────────────────────────────────────
@@ -399,72 +399,75 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
     );
   }
 
-  if (view === 'detail' && selectedGoal) {
+  if (internalView === 'detail' && selectedGoal) {
     const live = goals.find(g => g.id === selectedGoal.id) || selectedGoal;
     return (
       <GoalDetailView goal={live} token={token}
-        onBack={() => { setView(prevView); setSelectedGoal(null); }}
+        onBack={() => { setInternalView(null); setSelectedGoal(null); }}
         onUpdated={refresh} allProjects={allProjectOptions} />
     );
   }
 
-  // ─── Goal card renderer (shared between views) ─────────────────────────────
-  const renderGoalCard = (goal, col, showProject) => (
-    <GoalCardWrap
-      key={goal.id}
-      draggable
-      onDragStart={e => onDragStart(e, goal.id)}
-      onDragEnd={onDragEnd}
-      onClick={() => openDetail(goal)}
-      style={{
-        background: 'var(--dl-card)',
-        border: `1px solid ${goal.done ? 'var(--dl-border)' : (typeof col === 'string' && col.startsWith('#') ? col + '33' : 'var(--dl-border)')}`,
-        borderRadius: CARD_RADIUS,
-        padding: '10px 12px',
-        cursor: dragId ? 'grabbing' : 'pointer',
-        transition: 'opacity 0.15s, box-shadow 0.15s, transform 0.1s',
-        opacity: goal.done ? 0.45 : (dragId === goal.id ? 0.5 : 1),
-        boxShadow: dragId === goal.id ? '0 4px 12px rgba(0,0,0,0.12)' : 'none',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div style={{
-          flex: 1, fontFamily: mono, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase',
-          color: GOAL_COLOR, fontWeight: 500,
-          textDecoration: goal.done ? 'line-through' : 'none',
-        }}>
-          {goal.name}
+  // ─── Shared goal card renderer ─────────────────────────────────────────────
+  const renderGoalCard = (goal, showProject) => {
+    const cardBorderCol = showProject ? GOAL_COLOR : (goal.project ? projectColor(goal.project) : GOAL_COLOR);
+    return (
+      <GoalCardWrap
+        key={goal.id}
+        draggable={mode !== 'list'}
+        onDragStart={e => onDragStart(e, goal.id)}
+        onDragEnd={onDragEnd}
+        onClick={() => openDetail(goal)}
+        style={{
+          background: 'var(--dl-card)',
+          border: `1px solid ${goal.done ? 'var(--dl-border)' : (typeof cardBorderCol === 'string' && cardBorderCol.startsWith('#') ? cardBorderCol + '33' : 'var(--dl-border)')}`,
+          borderRadius: CARD_RADIUS,
+          padding: '10px 12px',
+          cursor: dragId ? 'grabbing' : 'pointer',
+          transition: 'opacity 0.15s, box-shadow 0.15s, transform 0.1s',
+          opacity: goal.done ? 0.45 : (dragId === goal.id ? 0.5 : 1),
+          boxShadow: dragId === goal.id ? '0 4px 12px rgba(0,0,0,0.12)' : 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{
+            flex: 1, fontFamily: mono, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase',
+            color: GOAL_COLOR, fontWeight: 500,
+            textDecoration: goal.done ? 'line-through' : 'none',
+          }}>
+            {goal.name}
+          </div>
+          {showProject && <ProjectPill project={goal.project} />}
         </div>
-        {showProject && <ProjectPill project={goal.project} />}
-      </div>
-      {((goal.habit_count || 0) + (goal.task_count || 0) > 0) && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
-          {goal.habit_count > 0 && (
-            <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)' }}>
-              🎯 {goal.habit_count}
-            </span>
-          )}
-          {goal.task_count > 0 && (
-            <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)' }}>
-              ☑️ {goal.task_count}
-            </span>
-          )}
-        </div>
-      )}
-    </GoalCardWrap>
-  );
+        {((goal.habit_count || 0) + (goal.task_count || 0) > 0) && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
+            {goal.habit_count > 0 && (
+              <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)' }}>
+                🎯 {goal.habit_count}
+              </span>
+            )}
+            {goal.task_count > 0 && (
+              <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)' }}>
+                ☑️ {goal.task_count}
+              </span>
+            )}
+          </div>
+        )}
+      </GoalCardWrap>
+    );
+  };
 
-  // ─── Kanban column renderer (shared between project & status views) ────────
-  const renderKanbanColumn = (colKey, colLabel, colColor, items, allowCreate) => {
+  // ─── Shared column renderer ────────────────────────────────────────────────
+  const renderColumn = (colKey, colLabel, colColor, items, showProject, allowCreate) => {
     const isDropTarget = dragId && dragOverCol === colKey;
     return (
       <div
         key={colKey}
         onDragOver={e => onColDragOver(e, colKey)}
         onDragLeave={e => onColDragLeave(e, colKey)}
-        onDrop={e => onColDrop(e, colKey)}
+        onDrop={onColDrop}
         style={{
-          minWidth: COL_MIN_W, maxWidth: 260, flex: '0 0 auto',
+          minWidth: COL_MIN_W, maxWidth: mode === 'list' ? 'none' : 260, flex: mode === 'list' ? '1 1 auto' : '0 0 auto',
           display: 'flex', flexDirection: 'column', gap: 6,
           scrollSnapAlign: 'start',
           background: isDropTarget ? `${typeof colColor === 'string' && colColor.startsWith('#') ? colColor : GOAL_COLOR}08` : 'transparent',
@@ -493,7 +496,7 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
           )}
         </div>
 
-        {items.map(goal => renderGoalCard(goal, colColor, view === 'status'))}
+        {items.map(goal => renderGoalCard(goal, showProject))}
 
         {allowCreate && creatingInProject === colKey ? (
           <div style={{
@@ -528,20 +531,6 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
   // ─── Main render ───────────────────────────────────────────────────────────
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {/* Header row: toggle + new */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <ViewToggle view={view} setView={setView} />
-        <span
-          onClick={() => setCreatingNew(true)}
-          style={{
-            fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
-            color: 'var(--dl-middle)', cursor: 'pointer', transition: 'color 0.15s',
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = GOAL_COLOR}
-          onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
-        >+ new</span>
-      </div>
-
       {/* Empty state */}
       {goals.length === 0 && !loading && (
         <div style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
@@ -549,33 +538,48 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
         </div>
       )}
 
-      {/* ── List view ──────────────────────────────────────────────────────── */}
-      {view === 'list' && goals.length > 0 && (
-        <div style={{ maxHeight: 250, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {goals.map(goal => renderGoalCard(goal, GOAL_COLOR, true))}
+      {/* ── List view — single column ──────────────────────────────────── */}
+      {mode === 'list' && goals.length > 0 && (
+        <div style={{ maxHeight: 250, overflowY: 'auto' }}>
+          {renderColumn('all', 'All Goals', GOAL_COLOR, goals, true, true)}
         </div>
       )}
 
-      {/* ── Kanban by project ──────────────────────────────────────────────── */}
-      {view === 'kanban' && goals.length > 0 && (
+      {/* ── Kanban by project ──────────────────────────────────────────── */}
+      {mode === 'kanban' && goals.length > 0 && (
         <div style={{
           display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6,
           scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch',
         }}>
           {projectNames.map(project => {
             const col = project === 'unassigned' ? 'var(--dl-middle)' : projectColor(project);
-            return renderKanbanColumn(project, project, col, grouped[project], true);
+            return renderColumn(project, project, col, grouped[project], false, true);
           })}
+          <div
+            onClick={() => setCreatingNew(true)}
+            style={{
+              minWidth: 60, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+              paddingTop: 2, cursor: 'pointer', flexShrink: 0,
+            }}
+          >
+            <span style={{
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: 'var(--dl-middle)', transition: 'color 0.15s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.color = GOAL_COLOR}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+            >+ new</span>
+          </div>
         </div>
       )}
 
-      {/* ── Kanban by status ───────────────────────────────────────────────── */}
-      {view === 'status' && goals.length > 0 && (
+      {/* ── Kanban by status ───────────────────────────────────────────── */}
+      {mode === 'status' && goals.length > 0 && (
         <div style={{
           display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6,
           scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch',
         }}>
-          {STATUS_COLS.map(sc => renderKanbanColumn(sc.key, sc.label, sc.color, groupedByStatus[sc.key], false))}
+          {STATUS_COLS.map(sc => renderColumn(sc.key, sc.label, sc.color, groupedByStatus[sc.key], true, false))}
         </div>
       )}
     </div>
