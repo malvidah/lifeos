@@ -581,11 +581,11 @@ function DashboardInner() {
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onSelectDate={setSelected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{selectProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
       {/* ── Main scroll area ─── */}
-      <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1, transition:"margin-left 0.2s ease", marginLeft: chatExpanded && !mobile ? 380 : 0}}>
+      <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
 
         {/* ── Single unified scroll container ── */}
         <div ref={scrollContainerRef} style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0, overflowAnchor:'none'}}>
-        <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
+        <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, paddingLeft: chatExpanded && !mobile ? 390 : 10, transition:"padding-left 0.2s ease", display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Spacer for fixed header */}
           <div style={{height:"calc(env(safe-area-inset-top, 0px) + 100px)",flexShrink:0}}/>
@@ -795,10 +795,9 @@ function DashboardInner() {
 
       {/* Bottom vignette — fades content up into the AI bar */}
       <div style={{
-        position:"fixed", bottom:0, left: chatExpanded && !mobile ? 380 : 0, right:0,
+        position:"fixed", bottom:0, left:0, right:0,
         height:120, pointerEvents:"none", zIndex:96,
         background:"linear-gradient(to top, var(--dl-bg) 0%, var(--dl-bg)99 35%, transparent 100%)",
-        transition:"left 0.2s ease",
       }}/>
 
       {/* Floating chat pill — hidden during search */}
