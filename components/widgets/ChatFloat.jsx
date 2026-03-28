@@ -638,20 +638,27 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
             );
           }
 
-          // ── CLOSING: shrinking back to pill ─────────────────────────────────
+          // ── CLOSING: reverse of expand animation ──────────────────────────
           if (pillPhase === 'closing') {
             return (
               <div style={{
                 pointerEvents: "none",
                 display: "flex", alignItems: "center",
                 borderRadius: 100, overflow: "hidden",
-                width: "40%", maxWidth: 280, minHeight: 44,
-                opacity: 0.7,
+                width: "100%", maxWidth: 560, minHeight: 52,
+                animation: "pillCollapse 0.12s ease-in forwards",
                 ...glass,
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", width: "100%" }}>
+                <style>{`
+                  @keyframes pillCollapse {
+                    0%   { max-width: 560px; min-height: 52px; opacity: 1; }
+                    60%  { max-width: 340px; min-height: 46px; opacity: 0.92; }
+                    100% { max-width: 140px; min-height: 40px; opacity: 0.85; }
+                  }
+                `}</style>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 18px", width: "100%" }}>
                   <DLSparkle size={13} />
-                  <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em", opacity: 0.6 }}>Ask AI</span>
+                  <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI</span>
                 </div>
               </div>
             );

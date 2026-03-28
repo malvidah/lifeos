@@ -277,8 +277,43 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     return () => clearTimeout(saveTimerRef.current);
   }, [date]);
 
-  // Project filter — CSS injection to hide non-matching tasks
+  // Stable ID for CSS selectors (used by project filter + AI highlight)
   const filterId = useRef(`tasks-${Math.random().toString(36).slice(2, 8)}`).current;
+
+  // AI highlight — pulse new/changed tasks while accept/reject is pending
+  const aiStyleRef = useRef(null);
+  useEffect(() => {
+    const onPending = (e) => {
+      const types = e.detail?.types || [];
+      if (!types.includes('tasks')) return;
+      if (aiStyleRef.current) aiStyleRef.current.remove();
+      const s = document.createElement('style');
+      s.textContent = `
+        @keyframes dl-ai-pulse {
+          0%, 100% { border-left-color: var(--dl-accent); }
+          50% { border-left-color: transparent; }
+        }
+        [data-tasks-id="${filterId}"] .dl-editor ul[data-type="taskList"] > li {
+          border-left: 2.5px solid var(--dl-accent);
+          padding-left: 8px;
+          animation: dl-ai-pulse 2s ease-in-out infinite;
+          transition: border-left-color 0.3s, padding-left 0.3s;
+        }
+      `;
+      document.head.appendChild(s);
+      aiStyleRef.current = s;
+    };
+    const onResolved = () => {
+      if (aiStyleRef.current) { aiStyleRef.current.remove(); aiStyleRef.current = null; }
+    };
+    window.addEventListener('daylab:ai-pending', onPending);
+    window.addEventListener('daylab:ai-resolved', onResolved);
+    return () => {
+      window.removeEventListener('daylab:ai-pending', onPending);
+      window.removeEventListener('daylab:ai-resolved', onResolved);
+      if (aiStyleRef.current) aiStyleRef.current.remove();
+    };
+  }, [filterId]);
   useEffect(() => {
     if (!project || project === '__everything__') return;
     const style = document.createElement('style');
