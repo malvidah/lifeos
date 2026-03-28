@@ -490,13 +490,6 @@ function DashboardInner() {
     }
   }, [layout.loaded]); // eslint-disable-line
 
-  if(!authReady) return (
-    <div style={{background:"var(--dl-bg)",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
-      <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)",letterSpacing:"0.2em"}}>loading…</span>
-    </div>
-  );
-  if(!session) return <LoginScreen/>;
-
   const syncStatus={syncing:syncing.size>0,lastSync};
 
   // __graph__ is treated as no project filter (shows all notes/entries).
@@ -533,6 +526,14 @@ function DashboardInner() {
       </div>
     );
   }, [cardProps]);
+
+  // Early returns AFTER all hooks
+  if(!authReady) return (
+    <div style={{background:"var(--dl-bg)",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
+      <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)",letterSpacing:"0.2em"}}>loading…</span>
+    </div>
+  );
+  if(!session) return <LoginScreen/>;
 
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
