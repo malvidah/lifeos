@@ -102,24 +102,34 @@ export default function Header({session,token,userId,syncStatus,theme,themePrefe
           >‹</button>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0 }}>
             {relLabel && (
-              isToday ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 2 }}>
+                {/* Relative date pill — orange on today, cream on other days */}
                 <span style={{
-                  fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
-                  color: "var(--dl-orange)",
-                  lineHeight: 1, marginBottom: -1,
+                  fontFamily: mono, fontSize: 9, letterSpacing: '0.13em',
+                  padding: '2px 7px', borderRadius: 100, lineHeight: 1,
+                  ...(isToday ? {
+                    color: 'var(--dl-orange)',
+                    background: 'var(--dl-orange-13)',
+                    border: '1px solid color-mix(in srgb, var(--dl-orange) 22%, transparent)',
+                  } : {
+                    color: 'var(--dl-middle)',
+                    background: 'color-mix(in srgb, var(--dl-strong) 7%, transparent)',
+                    border: '1px solid color-mix(in srgb, var(--dl-strong) 12%, transparent)',
+                  }),
                 }}>{relLabel}</span>
-              ) : (
-                <button onClick={onGoToToday} style={{
-                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                  fontFamily: mono, fontSize: 9, letterSpacing: '0.16em',
-                  color: "var(--dl-middle)",
-                  lineHeight: 1, marginBottom: -1,
-                  transition: 'color 0.15s',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.color = "var(--dl-orange)"}
-                  onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
-                >{relLabel} · TODAY</button>
-              )
+                {/* Go-to-today button — only shown when not on today */}
+                {!isToday && (
+                  <button onClick={onGoToToday} style={{
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                    fontFamily: mono, fontSize: 9, letterSpacing: '0.10em',
+                    color: 'var(--dl-highlight)', lineHeight: 1,
+                    transition: 'color 0.15s',
+                  }}
+                    onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-orange)'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-highlight)'}
+                  >↩ today</button>
+                )}
+              </div>
             )}
             <button onClick={onGoHome} style={{
               background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px',

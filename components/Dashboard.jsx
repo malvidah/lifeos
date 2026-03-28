@@ -708,27 +708,35 @@ function DashboardInner() {
 
               {/* 6–9. Journal, Tasks, Meals, Workouts */}
               {mobile ? (
+                // Mobile: Tasks → Journal → Meals → Workouts
                 <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
+                  {/* Tasks first */}
+                  {!collapseMap['tasks'] && (() => { const w = rightWidgets.find(x => x.id === 'tasks'); return w ? (
+                    <ErrorBoundary key="tasks" label={w.label}>
+                    <Card label={w.label} color={w.color()} collapsed={false} onToggle={toggleMap[w.id]}
+                      expandHref={w.expandHref}
+                      headerRight={<><TaskSaveIndicator /><TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/></>} autoHeight>
+                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
+                        taskFilter={taskFilter} project={projectFilter||undefined}/>
+                    </Card>
+                    </ErrorBoundary>
+                  ) : null; })()}
+                  {/* Journal second */}
                   {!collapseMap[leftWidget.id] && (
                     <ErrorBoundary label={leftWidget.label}>
                     <Card label={leftWidget.label} color={leftWidget.color()}
-                      collapsed={false}
-                      expandHref={leftWidget.expandHref}
-                      headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}
-                       autoHeight>
+                      collapsed={false} expandHref={leftWidget.expandHref}
+                      headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>} autoHeight>
                       <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
                     </Card>
                     </ErrorBoundary>
                   )}
-                  {rightWidgets.map(w=> !collapseMap[w.id] && (
+                  {/* Meals + Workouts after */}
+                  {rightWidgets.filter(w => w.id !== 'tasks').map(w => !collapseMap[w.id] && (
                     <ErrorBoundary key={w.id} label={w.label}>
-                    <Card label={w.label} color={w.color()}
-                      collapsed={false} onToggle={toggleMap[w.id]}
-                      expandHref={w.expandHref}
-                      headerRight={w.id==='tasks' ? <><TaskSaveIndicator /><TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/></> : w.headerRight?.()} autoHeight>
-                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
-                        taskFilter={w.id==='tasks'?taskFilter:undefined}
-                        project={w.id==='tasks'&&projectFilter?projectFilter:undefined}/>
+                    <Card label={w.label} color={w.color()} collapsed={false} onToggle={toggleMap[w.id]}
+                      expandHref={w.expandHref} headerRight={w.headerRight?.()} autoHeight>
+                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
                     </Card>
                     </ErrorBoundary>
                   ))}
