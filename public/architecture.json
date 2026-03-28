@@ -1,0 +1,1062 @@
+{
+  "generatedAt": "2026-03-28T18:55:57.298Z",
+  "client": {
+    "framework": "Next.js 16.1.6 (App Router)",
+    "libraries": [
+      "@dnd-kit/core",
+      "@dnd-kit/sortable",
+      "@dnd-kit/utilities",
+      "@react-three/drei",
+      "@react-three/fiber",
+      "@react-three/postprocessing",
+      "@stripe/stripe-js",
+      "@supabase/ssr",
+      "@supabase/supabase-js",
+      "@tiptap/extension-image",
+      "@tiptap/extension-placeholder",
+      "@tiptap/extension-table",
+      "@tiptap/extension-table-cell",
+      "@tiptap/extension-table-header",
+      "@tiptap/extension-table-row",
+      "@tiptap/extension-task-item",
+      "@tiptap/extension-task-list",
+      "@tiptap/pm",
+      "@tiptap/react",
+      "@tiptap/starter-kit",
+      "@tiptap/suggestion",
+      "garmin-connect",
+      "immer",
+      "leaflet",
+      "next",
+      "postprocessing",
+      "react",
+      "react-dom",
+      "react-leaflet",
+      "simplex-noise",
+      "stripe",
+      "three",
+      "topojson-client",
+      "zustand"
+    ],
+    "libraryCategories": {
+      "editor": [
+        "@tiptap/extension-image",
+        "@tiptap/extension-placeholder",
+        "@tiptap/extension-table",
+        "@tiptap/extension-table-cell",
+        "@tiptap/extension-table-header",
+        "@tiptap/extension-table-row",
+        "@tiptap/extension-task-item",
+        "@tiptap/extension-task-list",
+        "@tiptap/pm",
+        "@tiptap/react",
+        "@tiptap/starter-kit",
+        "@tiptap/suggestion"
+      ],
+      "3d": [
+        "@react-three/drei",
+        "@react-three/fiber",
+        "@react-three/postprocessing",
+        "postprocessing",
+        "three"
+      ],
+      "auth_db": [
+        "@supabase/ssr",
+        "@supabase/supabase-js"
+      ],
+      "ui": [
+        "next",
+        "react",
+        "react-dom"
+      ],
+      "maps": [
+        "leaflet",
+        "react-leaflet",
+        "topojson-client"
+      ],
+      "state": [
+        "immer",
+        "zustand"
+      ],
+      "dnd": [
+        "@dnd-kit/core",
+        "@dnd-kit/sortable",
+        "@dnd-kit/utilities"
+      ],
+      "payments": [
+        "@stripe/stripe-js",
+        "stripe"
+      ]
+    },
+    "features": [
+      "Leaflet Maps",
+      "MediaRecorder",
+      "Three.js / R3F",
+      "Tiptap Editor",
+      "Web Speech API"
+    ]
+  },
+  "apiRoutes": [
+    {
+      "path": "/api/admin/feedback",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "feedback"
+      ]
+    },
+    {
+      "path": "/api/admin/status",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase",
+        "anthropic",
+        "groq"
+      ],
+      "tables": [
+        "entries",
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/agent",
+      "methods": [],
+      "services": [
+        "supabase",
+        "google"
+      ],
+      "tables": [
+        "health_metrics",
+        "journal_blocks",
+        "meal_items",
+        "tasks",
+        "user_settings",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/ai",
+      "methods": [],
+      "services": [
+        "supabase",
+        "anthropic"
+      ],
+      "tables": []
+    },
+    {
+      "path": "/api/all-tags",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "journal_blocks",
+        "meal_items",
+        "notes",
+        "projects",
+        "tasks",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/calendar",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase",
+        "google"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/chat",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase",
+        "anthropic",
+        "google"
+      ],
+      "tables": [
+        "health_metrics",
+        "health_scores",
+        "journal_blocks",
+        "meal_items",
+        "tasks",
+        "user_settings",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/cron/oura-sync",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "health_metrics",
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/discovered",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_discovered"
+      ]
+    },
+    {
+      "path": "/api/entries",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "entries"
+      ]
+    },
+    {
+      "path": "/api/events",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase",
+        "google"
+      ],
+      "tables": [
+        "events"
+      ]
+    },
+    {
+      "path": "/api/export",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": []
+    },
+    {
+      "path": "/api/feedback",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "feedback"
+      ]
+    },
+    {
+      "path": "/api/garmin",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "health_metrics",
+        "user_settings",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/garmin-auth",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/goals",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "goals",
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/goals/linked",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/google-refresh",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/google-tasks",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/google-token",
+      "methods": [
+        "POST",
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/habits",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "habit_completions",
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/health-sync",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "health_metrics"
+      ]
+    },
+    {
+      "path": "/api/health/metrics",
+      "methods": [
+        "GET",
+        "POST",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "health_metrics",
+        "health_scores"
+      ]
+    },
+    {
+      "path": "/api/health/scores",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "health_metrics",
+        "health_scores"
+      ]
+    },
+    {
+      "path": "/api/insights",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase",
+        "anthropic"
+      ],
+      "tables": [
+        "health_metrics",
+        "health_scores",
+        "journal_blocks",
+        "meal_items",
+        "tasks",
+        "user_settings",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/journal",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "goals",
+        "journal_blocks"
+      ]
+    },
+    {
+      "path": "/api/location",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_locations"
+      ]
+    },
+    {
+      "path": "/api/meals",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "meal_items"
+      ]
+    },
+    {
+      "path": "/api/month-summaries",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase",
+        "anthropic"
+      ],
+      "tables": [
+        "day_recaps",
+        "journal_blocks"
+      ]
+    },
+    {
+      "path": "/api/notes",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "notes"
+      ]
+    },
+    {
+      "path": "/api/oura",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "health_metrics",
+        "user_settings",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/oura-backfill",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "health_metrics",
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/place-types",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_place_types"
+      ]
+    },
+    {
+      "path": "/api/places",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_places"
+      ]
+    },
+    {
+      "path": "/api/project-entries",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "journal_blocks",
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/project-stats",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "journal_blocks",
+        "meal_items",
+        "tasks",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/projects",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "journal_blocks",
+        "meal_items",
+        "notes",
+        "projects",
+        "tasks",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/projects/rename",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "journal_blocks",
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/public/project/[token]",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "journal_blocks",
+        "notes",
+        "projects",
+        "tasks",
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/scores-backfill",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "health_metrics",
+        "health_scores"
+      ]
+    },
+    {
+      "path": "/api/settings",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/strava",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/strava-backfill",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/strava-connect",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": []
+    },
+    {
+      "path": "/api/strava-token",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/stripe/checkout",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": []
+    },
+    {
+      "path": "/api/stripe/grant",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/stripe/portal",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/stripe/webhook",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
+      "path": "/api/tag-connections",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "journal_blocks",
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/tasks",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "habit_completions",
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/tasks/cleanup",
+      "methods": [
+        "GET",
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/tasks/complete-recurring",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "habit_completions",
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/tasks/debug",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/tasks/dedup",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/tasks/recover",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/tasks/reorder",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "tasks"
+      ]
+    },
+    {
+      "path": "/api/transcribe",
+      "methods": [],
+      "services": [
+        "supabase",
+        "groq",
+        "openai"
+      ],
+      "tables": []
+    },
+    {
+      "path": "/api/tts",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase",
+        "openai"
+      ],
+      "tables": []
+    },
+    {
+      "path": "/api/upload-image",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": []
+    },
+    {
+      "path": "/api/voice-action",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase",
+        "anthropic",
+        "google"
+      ],
+      "tables": [
+        "goals",
+        "journal_blocks",
+        "meal_items",
+        "tasks",
+        "user_settings",
+        "workouts"
+      ]
+    },
+    {
+      "path": "/api/voice-action/undo",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": []
+    },
+    {
+      "path": "/api/workouts",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "workouts"
+      ]
+    }
+  ],
+  "services": {
+    "supabase": {
+      "tables": [
+        "day_recaps",
+        "entries",
+        "events",
+        "feedback",
+        "goals",
+        "habit_completions",
+        "health_metrics",
+        "health_scores",
+        "journal_blocks",
+        "meal_items",
+        "notes",
+        "projects",
+        "tasks",
+        "user_discovered",
+        "user_locations",
+        "user_place_types",
+        "user_places",
+        "user_settings",
+        "workouts"
+      ],
+      "features": [
+        "auth",
+        "rls",
+        "realtime"
+      ],
+      "usedBy": [
+        "/api/admin/feedback",
+        "/api/admin/status",
+        "/api/agent",
+        "/api/ai",
+        "/api/all-tags",
+        "/api/calendar",
+        "/api/chat",
+        "/api/cron/oura-sync",
+        "/api/discovered",
+        "/api/entries",
+        "/api/events",
+        "/api/export",
+        "/api/feedback",
+        "/api/garmin",
+        "/api/garmin-auth",
+        "/api/goals",
+        "/api/goals/linked",
+        "/api/google-refresh",
+        "/api/google-tasks",
+        "/api/google-token",
+        "/api/habits",
+        "/api/health-sync",
+        "/api/health/metrics",
+        "/api/health/scores",
+        "/api/insights",
+        "/api/journal",
+        "/api/location",
+        "/api/meals",
+        "/api/month-summaries",
+        "/api/notes",
+        "/api/oura",
+        "/api/oura-backfill",
+        "/api/place-types",
+        "/api/places",
+        "/api/project-entries",
+        "/api/project-stats",
+        "/api/projects",
+        "/api/projects/rename",
+        "/api/public/project/[token]",
+        "/api/scores-backfill",
+        "/api/settings",
+        "/api/strava",
+        "/api/strava-backfill",
+        "/api/strava-connect",
+        "/api/strava-token",
+        "/api/stripe/checkout",
+        "/api/stripe/grant",
+        "/api/stripe/portal",
+        "/api/stripe/webhook",
+        "/api/tag-connections",
+        "/api/tasks",
+        "/api/tasks/cleanup",
+        "/api/tasks/complete-recurring",
+        "/api/tasks/debug",
+        "/api/tasks/dedup",
+        "/api/tasks/recover",
+        "/api/tasks/reorder",
+        "/api/transcribe",
+        "/api/tts",
+        "/api/upload-image",
+        "/api/voice-action",
+        "/api/voice-action/undo",
+        "/api/workouts"
+      ]
+    },
+    "anthropic": {
+      "model": "claude-haiku-4-5",
+      "usedBy": [
+        "/api/admin/status",
+        "/api/ai",
+        "/api/chat",
+        "/api/insights",
+        "/api/month-summaries",
+        "/api/voice-action"
+      ]
+    },
+    "groq": {
+      "model": "whisper-large-v3",
+      "usedBy": [
+        "/api/admin/status",
+        "/api/transcribe"
+      ]
+    },
+    "openai": {
+      "model": "tts-1",
+      "usedBy": [
+        "/api/transcribe",
+        "/api/tts"
+      ]
+    },
+    "google": {
+      "usedBy": [
+        "/api/agent",
+        "/api/calendar",
+        "/api/chat",
+        "/api/events",
+        "/api/voice-action"
+      ]
+    }
+  },
+  "dataCollected": [
+    "journal entries",
+    "tasks",
+    "meals",
+    "workouts",
+    "health metrics",
+    "goals",
+    "notes",
+    "voice audio"
+  ]
+}
