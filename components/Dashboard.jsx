@@ -588,7 +588,7 @@ function DashboardInner() {
         <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
 
           {/* Spacer for fixed header */}
-          <div style={{height:"calc(env(safe-area-inset-top, 0px) + 84px)",flexShrink:0}}/>
+          <div style={{height:"calc(env(safe-area-inset-top, 0px) + 100px)",flexShrink:0}}/>
 
           {/* NavBar — dock icons centered between settings and search */}
           <NavBar
