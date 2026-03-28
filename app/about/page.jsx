@@ -115,7 +115,7 @@ function FlipCard({ front, back, style }) {
         ...style,
       }}
     >
-      <div style={{ visibility: flipped ? 'hidden' : 'visible', opacity: flipped ? 0 : 1, transition: 'opacity 0.2s ease' }}>
+      <div style={{ height: '100%', visibility: flipped ? 'hidden' : 'visible', opacity: flipped ? 0 : 1, transition: 'opacity 0.2s ease' }}>
         {front}
       </div>
       <div style={{ position: 'absolute', inset: 0, visibility: flipped ? 'visible' : 'hidden', opacity: flipped ? 1 : 0, transition: 'opacity 0.2s ease' }}>
