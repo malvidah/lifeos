@@ -3,6 +3,15 @@ import { Component, useState, useRef, Fragment } from "react";
 import { mono, F, R, projectColor, CHIP_TOKENS } from "@/lib/tokens";
 import { useNavigation } from "@/lib/contexts";
 
+// Split leading emoji from label text so emoji renders in emoji font, not mono
+const EMOJI_RE = /^(\p{Emoji_Presentation}|\p{Emoji}\uFE0F)\s*/u;
+function LabelText({ children: label }) {
+  if (typeof label !== 'string') return label;
+  const m = label.match(EMOJI_RE);
+  if (!m) return label;
+  return <>{<span style={{fontFamily:"'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif",letterSpacing:0,textTransform:'none'}}>{m[0].trimEnd()}</span>}{' '}{label.slice(m[0].length)}</>;
+}
+
 export function ChevronBtn({collapsed, onToggle, style={}}) {
   return (
     <button onClick={onToggle} aria-label={collapsed ? "Expand" : "Collapse"} style={{
@@ -52,7 +61,7 @@ export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft,
       borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0}}>
       {headerLeft}
       <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-        textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}>{label}</span>
+        textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}><LabelText>{label}</LabelText></span>
       {!collapsed && headerRight}
       <ExpandArrow href={expandHref}/>
     </div>
@@ -110,7 +119,7 @@ export function Card({
           borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0}}>
           {headerLeft}
           <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
-            textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}>{label}</span>
+            textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}><LabelText>{label}</LabelText></span>
           {!collapsed && headerRight}
           <ExpandArrow href={expandHref}/>
         </div>
