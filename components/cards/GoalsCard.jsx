@@ -37,7 +37,7 @@ function GoalDetailView({ goal, token, isNew, onBack, onCreated, onUpdated, allP
     try {
       const res = await api.get(`/api/goals/linked?name=${encodeURIComponent(goal.name)}`, token);
       if (res) { setLinkedTasks(res.tasks || []); setLinkedHabits(res.habits || []); }
-    } catch {}
+    } catch (e) { console.error('[goals] fetch linked failed:', e); }
     setLoadingLinks(false);
   }, [goal?.name, isNew, token]);
 
@@ -50,7 +50,7 @@ function GoalDetailView({ goal, token, isNew, onBack, onCreated, onUpdated, allP
       setSaved(true);
       window.dispatchEvent(new Event('daylab:goals-changed'));
       onCreated?.(res?.goal);
-    } catch {}
+    } catch (e) { console.error('[goals] create failed:', e); }
   };
 
   const patchGoal = async (updates) => {
@@ -59,7 +59,7 @@ function GoalDetailView({ goal, token, isNew, onBack, onCreated, onUpdated, allP
       await api.patch('/api/goals', { id: goal.id, ...updates }, token);
       window.dispatchEvent(new Event('daylab:goals-changed'));
       onUpdated?.();
-    } catch {}
+    } catch (e) { console.error('[goals] patch failed:', e); }
   };
 
   const onNameChange = (val) => {
@@ -373,13 +373,13 @@ export default function ProjectsCard({ token, date, onSelectDate }) {
                       fontFamily: mono, fontSize: 12, letterSpacing: '0.04em', textTransform: 'uppercase',
                       color: GOAL_COLOR, fontWeight: 500,
                       textDecoration: goal.done ? 'line-through' : 'none',
-                      marginBottom: (goal.habit_count + goal.task_count > 0) ? 6 : 0,
+                      marginBottom: ((goal.habit_count || 0) + (goal.task_count || 0) > 0) ? 6 : 0,
                     }}>
                       {goal.name}
                     </div>
 
                     {/* Linked counts */}
-                    {(goal.habit_count + goal.task_count > 0) && (
+                    {((goal.habit_count || 0) + (goal.task_count || 0) > 0) && (
                       <div style={{ display: 'flex', gap: 8 }}>
                         {goal.habit_count > 0 && (
                           <span style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)' }}>

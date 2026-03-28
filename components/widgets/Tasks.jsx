@@ -142,15 +142,6 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     };
   }, []);
 
-  // TipTap preserves data-task-id via the TaskItem addAttributes() extension
-  // in Editor.jsx (taskId attr with parseHTML/renderHTML). Position-based matching
-  // was the root cause of task corruption (DB positions have gaps; editor uses
-  // sequential counters — they never reliably aligned, causing wrong IDs to be
-  // assigned and tasks to be overwritten or deleted). Removed entirely.
-  const overlayTaskIds = useCallback((editorTasks) => {
-    return editorTasks;
-  }, []);
-
   // Fire habit toggle API calls and update local server state (no re-fetch needed).
   // Returns true if any habits were toggled.
   const fireHabitToggles = useCallback(async (toggles) => {
@@ -199,7 +190,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     // Fast path: immediately fire habit toggles without waiting for debounce.
     // Parse both old and new to detect checkbox-only changes.
     if (!habitToggleInFlightRef.current && prevHtml) {
-      const editorTasks = overlayTaskIds(parseTaskBlocks(newHtml));
+      const editorTasks = parseTaskBlocks(newHtml);
       const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
       const toggles = detectHabitToggles(editorTasks, serverById);
       if (toggles.length > 0) {
@@ -223,7 +214,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       savingRef.current = true;
 
       try {
-        const editorTasks = overlayTaskIds(parseTaskBlocks(newHtml));
+        const editorTasks = parseTaskBlocks(newHtml);
         const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
 
         // Check for habit toggles that the fast path may have missed
@@ -269,12 +260,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
           }
         }
 
-        if (hasChanges || habitChanged) {
-          window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
-        } else {
-          // No changes — still clear the "saving..." indicator
-          window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
-        }
+        window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
       } catch (err) {
         console.warn('[tasks] diff save failed:', err);
         showToast('Failed to save tasks', 'error');
@@ -284,7 +270,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         savingRef.current = false;
       }
     }, 1000);
-  }, [date, token, overlayTaskIds, fireHabitToggles]);
+  }, [date, token, fireHabitToggles]);
 
   // Flush on unmount / date change
   useEffect(() => {

@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase";
 import { useDbSave, MEM } from "@/lib/db";
 import { ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card } from "../ui/primitives.jsx";
+import { showToast } from "../ui/Toast.jsx";
 import { DayLabEditor } from "../Editor.jsx";
 import { extractImages, stripImageChips, PhotoStrip, Slideshow, DropZone } from "./JournalEditor.jsx";
 import { uploadImageFile, deleteImageFile } from "@/lib/images";
@@ -50,7 +51,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
         setNotesList(notes);
         setActiveNoteId(prev => notes.find(n => n.id === prev) ? prev : notes[0]?.id ?? null);
       })
-      .catch(() => {});
+      .catch(() => { showToast('Failed to load notes', 'error'); });
     return () => { stale = true; };
   }, [effectiveProject, token]); // eslint-disable-line
 

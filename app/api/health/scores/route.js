@@ -223,13 +223,11 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     const { error: insErr } = await supabase.from('health_scores').insert(scoreRow);
     if (insErr) {
       console.error('[scores] insert also failed:', insErr.message);
-      result._persistError = insErr.message;
     } else {
       upsertErr = null; // succeeded via fallback
     }
   }
 
-  result._persisted = !upsertErr;
   return Response.json(result);
 });
 
