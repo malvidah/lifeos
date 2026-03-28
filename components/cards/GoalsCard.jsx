@@ -9,8 +9,8 @@ const GOAL_COLOR = "#5BA89D";
 const BACK_STYLE = { background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', fontFamily: mono, fontSize: 18, padding: 0, lineHeight: 1, flexShrink: 0 };
 
 const STATUS_COLS = [
+  { key: 'new', label: 'New', color: '#6BAED6' },
   { key: 'active', label: 'Active', color: '#5BA89D' },
-  { key: 'planned', label: 'Planned', color: '#6BAED6' },
   { key: 'completed', label: 'Completed', color: '#8DB86B' },
   { key: 'archived', label: 'Archived', color: 'var(--dl-middle)' },
 ];
@@ -288,7 +288,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
   const [dragId, setDragId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
-  const listContainerRef = useRef(null);
+
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -324,7 +324,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
 
   // Group goals by status
   const groupedByStatus = STATUS_COLS.reduce((acc, col) => {
-    acc[col.key] = goals.filter(g => (g.status || 'active') === col.key);
+    acc[col.key] = goals.filter(g => (g.status || 'new') === col.key);
     return acc;
   }, {});
 
@@ -344,51 +344,13 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
     e.dataTransfer.effectAllowed = 'move';
     if (e.target) e.target.style.opacity = '0.5';
   };
-  const onListDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (!listContainerRef.current) return;
-    const cards = Array.from(listContainerRef.current.querySelectorAll('[data-goal-idx]'));
-    let closest = null;
-    let closestDist = Infinity;
-    for (const card of cards) {
-      const rect = card.getBoundingClientRect();
-      const midY = rect.top + rect.height / 2;
-      const dist = Math.abs(e.clientY - midY);
-      if (dist < closestDist) { closestDist = dist; closest = card; }
-    }
-    if (closest) {
-      const rect = closest.getBoundingClientRect();
-      const idx = parseInt(closest.dataset.goalIdx, 10);
-      // If cursor is below midpoint, insert after this item
-      setDragOverIdx(e.clientY > rect.top + rect.height / 2 ? idx + 1 : idx);
-    }
-  };
   const onDragEnd = (e) => {
     if (e.target) e.target.style.opacity = '1';
-    if (dragId && mode === 'list' && dragOverIdx !== null) {
-      const fromIdx = goals.findIndex(g => g.id === dragId);
-      if (fromIdx !== -1 && fromIdx !== dragOverIdx && fromIdx !== dragOverIdx - 1) {
-        const reordered = [...goals];
-        const [moved] = reordered.splice(fromIdx, 1);
-        const toIdx = dragOverIdx > fromIdx ? dragOverIdx - 1 : dragOverIdx;
-        reordered.splice(toIdx, 0, moved);
-        // Optimistic update with new positions
-        const updated = reordered.map((g, i) => ({ ...g, position: i }));
-        setGoals(updated);
-        // Persist all positions
-        Promise.all(updated.map(g => api.patch('/api/goals', { id: g.id, position: g.position }, token)))
-          .then(() => {
-            refresh();
-            window.dispatchEvent(new Event('daylab:goals-changed'));
-          })
-          .catch(() => refresh());
-      }
-    } else if (dragId && dragOverCol !== null) {
+    if (dragId && dragOverCol !== null) {
       const goal = goals.find(g => g.id === dragId);
       if (goal) {
         if (mode === 'status') {
-          const currentStatus = goal.status || 'active';
+          const currentStatus = goal.status || 'new';
           if (currentStatus !== dragOverCol) {
             setGoals(prev => prev.map(g => g.id === dragId ? { ...g, status: dragOverCol } : g));
             api.patch('/api/goals', { id: dragId, status: dragOverCol }, token).then(() => {
@@ -401,6 +363,21 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
           if ((goal.project || null) !== newProject) {
             setGoals(prev => prev.map(g => g.id === dragId ? { ...g, project: newProject } : g));
             api.patch('/api/goals', { id: dragId, project: newProject }, token).then(() => {
+              refresh();
+              window.dispatchEvent(new Event('daylab:goals-changed'));
+            }).catch(() => refresh());
+          }
+        } else if (mode === 'list') {
+          // Column = floor(position / 100), index = position % 100
+          const targetCol = parseInt(dragOverCol, 10);
+          const currentCol = Math.floor((goal.position ?? 0) / 100);
+          if (targetCol !== currentCol) {
+            // Find goals already in the target column to get next index
+            const colGoals = goals.filter(g => g.id !== dragId && Math.floor((g.position ?? 0) / 100) === targetCol);
+            const nextIdx = colGoals.length;
+            const newPosition = targetCol * 100 + nextIdx;
+            setGoals(prev => prev.map(g => g.id === dragId ? { ...g, position: newPosition } : g));
+            api.patch('/api/goals', { id: dragId, position: newPosition }, token).then(() => {
               refresh();
               window.dispatchEvent(new Event('daylab:goals-changed'));
             }).catch(() => refresh());
@@ -518,27 +495,33 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
           transition: 'background 0.15s, padding 0.15s',
         }}
       >
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          paddingBottom: 4, borderBottom: `2px solid ${typeof colColor === 'string' && colColor.startsWith('#') ? colColor + '44' : 'var(--dl-border)'}`,
-          minHeight: colLabel ? 'auto' : 0,
-        }}>
-          {colLabel ? <span style={{
-            fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
-            color: colColor, fontWeight: 600,
+        {colLabel ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            paddingBottom: 4, borderBottom: `2px solid ${typeof colColor === 'string' && colColor.startsWith('#') ? colColor + '44' : 'var(--dl-border)'}`,
           }}>
-            {colLabel} <span style={{ fontWeight: 400, opacity: 0.6 }}>({items.length})</span>
-          </span> : <span />}
-          {allowCreate && (
-            <button
-              onClick={() => { setCreatingInProject(colKey); setNewGoalText(''); }}
-              style={{
-                fontFamily: mono, fontSize: 12, color: 'var(--dl-middle)', background: 'none',
-                border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1,
-              }}
-            >+</button>
-          )}
-        </div>
+            <span style={{
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: colColor, fontWeight: 600,
+            }}>
+              {colLabel} <span style={{ fontWeight: 400, opacity: 0.6 }}>({items.length})</span>
+            </span>
+            {allowCreate && (
+              <button
+                onClick={() => { setCreatingInProject(colKey); setNewGoalText(''); }}
+                style={{
+                  fontFamily: mono, fontSize: 12, color: 'var(--dl-middle)', background: 'none',
+                  border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1,
+                }}
+              >+</button>
+            )}
+          </div>
+        ) : (
+          <div style={{
+            borderTop: `1px solid ${typeof colColor === 'string' && colColor.startsWith('#') ? colColor + '22' : 'var(--dl-border)'}`,
+            marginBottom: 2,
+          }} />
+        )}
 
         {items.map(goal => renderGoalCard(goal, showProject))}
 
@@ -582,33 +565,28 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         </div>
       )}
 
-      {/* ── Manual sort — flat grid, drag reorders ─────────────────────── */}
-      {mode === 'list' && goals.length > 0 && (
-        <div
-          ref={listContainerRef}
-          onDragOver={onListDragOver}
-          onDrop={e => e.preventDefault()}
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-            gap: 6, paddingBottom: 6,
-          }}
-        >
-          {goals.map((goal, idx) => (
-            <React.Fragment key={goal.id}>
-              {dragId && dragOverIdx === idx && (
-                <div style={{ gridColumn: '1 / -1', height: 2, background: GOAL_COLOR, borderRadius: 1, margin: '0 0 -2px 0' }} />
-              )}
-              <div data-goal-idx={idx}>
-                {renderGoalCard(goal, true)}
-              </div>
-            </React.Fragment>
-          ))}
-          {dragId && dragOverIdx === goals.length && (
-            <div style={{ gridColumn: '1 / -1', height: 2, background: GOAL_COLOR, borderRadius: 1 }} />
-          )}
-        </div>
-      )}
+      {/* ── Manual sort — kanban with unnamed columns ───────────────── */}
+      {mode === 'list' && goals.length > 0 && (() => {
+        const NUM_COLS = 4;
+        const cols = {};
+        for (let c = 0; c < NUM_COLS; c++) cols[String(c)] = [];
+        goals.forEach(g => {
+          const col = String(Math.min(Math.floor((g.position ?? 0) / 100), NUM_COLS - 1));
+          cols[col].push(g);
+        });
+        Object.values(cols).forEach(arr => arr.sort((a, b) => ((a.position ?? 0) % 100) - ((b.position ?? 0) % 100)));
+
+        return (
+          <div style={{
+            display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6,
+            scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch',
+          }}>
+            {Object.keys(cols).map(colKey =>
+              renderColumn(colKey, '', GOAL_COLOR, cols[colKey], true, false)
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Kanban by project ──────────────────────────────────────────── */}
       {mode === 'kanban' && goals.length > 0 && (

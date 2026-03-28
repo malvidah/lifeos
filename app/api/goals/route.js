@@ -4,7 +4,7 @@ import { isValidUuid } from '@/lib/validate.js';
 // GET /api/goals
 //   → { goals: [{id, user_id, name, project, status, done, position, created_at, updated_at, task_count, habit_count}] }
 //   Returns all goals for user with linked task/habit counts.
-//   status: 'active' | 'planned' | 'completed' | 'archived' (default 'active')
+//   status: 'new' | 'active' | 'completed' | 'archived' (default 'new')
 //
 // POST /api/goals  { name, project?, status? }
 //   Create a new goal.
@@ -65,13 +65,14 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'name is required' }, { status: 400 });
   }
 
-  const VALID_STATUSES = ['active', 'planned', 'completed', 'archived'];
+  const VALID_STATUSES = ['new', 'active', 'completed', 'archived'];
   const insert = {
     user_id: user.id,
     name: name.trim().toLowerCase(),
     project: project ? project.trim().toLowerCase() : null,
   };
   if (status && VALID_STATUSES.includes(status)) insert.status = status;
+  if (!insert.status) insert.status = 'new';
 
   const { data, error } = await supabase
     .from('goals')
@@ -113,7 +114,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
   if (project !== undefined) updates.project = project ? project.trim().toLowerCase() : null;
   if (done !== undefined) updates.done = !!done;
   if (position !== undefined) updates.position = position;
-  const VALID_STATUSES = ['active', 'planned', 'completed', 'archived'];
+  const VALID_STATUSES = ['new', 'active', 'completed', 'archived'];
   if (status !== undefined && VALID_STATUSES.includes(status)) updates.status = status;
   updates.updated_at = new Date().toISOString();
 
