@@ -1,6 +1,5 @@
 "use client";
-import { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
-import dynamic from "next/dynamic";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { mono, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
@@ -14,69 +13,26 @@ import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
 import { useProjects } from "@/lib/useProjects";
 import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext } from "@/lib/contexts";
-import { Card, ErrorBoundary } from "./ui/primitives.jsx";
 import Header from "./nav/Header.jsx";
 import NavBar from "./nav/NavBar.jsx";
-import CalendarCard from "./cards/CalendarCard.jsx";
-import HealthCard from "./cards/HealthCard.jsx";
-import HabitsCard, { HabitFilterBtns } from "./cards/HabitsCard.jsx";
-import WorkoutsCard from "./cards/WorkoutsCard.jsx";
-// MapCard and WorldMapCard use Three.js + postprocessing which have circular
-// dependencies that cause TDZ errors with Turbopack when statically imported.
-// Dynamic imports with ssr:false isolate these in a separate chunk loaded
-// only in the browser after the main bundle is fully initialized.
-const MapCard = dynamic(
-  () => import("./cards/MapCard.jsx").then(m => ({ default: m.MapCard })),
-  { ssr: false }
-);
-const WorldMapCard = dynamic(
-  () => import("./cards/WorldMapCard.jsx"),
-  { ssr: false }
-);
-import GoalsCard, { GoalsViewToggle } from "./cards/GoalsCard.jsx";
-import { JournalEditor, JournalModeToggle, Meals } from "./widgets/JournalEditor.jsx";
-import Tasks, { TaskFilterBtns, TaskSaveIndicator } from "./widgets/Tasks.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
-import NotesCard from "./widgets/NotesCard.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
 import { ToastContainer } from "./ui/Toast.jsx";
 import WelcomeOverlay from "./ui/WelcomeOverlay.jsx";
 import ShortcutCheatsheet from "./ui/ShortcutCheatsheet.jsx";
 import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
+import { CARD_REGISTRY } from "./dashboard/cardRegistry";
 
-const GOAL_COLOR = "#5BA89D"; // teal — matches goal chips
+// ── Dock items derived from card registry ─────────────────────────────────────
+const DOCK_ORDER = ['project-graph','world-map','cal','goals','health','habits','notes','tasks','journal','meals','workouts'];
+const DOCK_ITEMS = DOCK_ORDER.map(id => { const c = CARD_REGISTRY.find(r => r.id === id); return { id, label: c.label.replace(/^.*?\s/, ''), icon: c.icon }; });
 
-// ── Dock icons (inline SVG, matching codebase style) ──────────────────────────
-const DOCK_ITEMS = [
-  { id: 'project-graph', label: 'Projects', icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span> },
-  { id: 'world-map',     label: 'Map',      icon: <span style={{fontSize:14,lineHeight:1}}>🗺️</span> },
-  { id: 'cal',      label: 'Calendar', icon: <span style={{fontSize:14,lineHeight:1}}>📅</span> },
-  { id: 'goals',    label: 'Goals',    icon: <span style={{fontSize:14,lineHeight:1}}>🏁</span> },
-  { id: 'health',   label: 'Health',   icon: <span style={{fontSize:14,lineHeight:1}}>❤️</span> },
-  { id: 'habits',   label: 'Habits',   icon: <span style={{fontSize:14,lineHeight:1}}>🎯</span> },
-  { id: 'notes',    label: 'Notes',    icon: <span style={{fontSize:14,lineHeight:1}}>📄</span> },
-  { id: 'tasks',    label: 'Tasks',    icon: <span style={{fontSize:14,lineHeight:1}}>☑️</span> },
-  { id: 'journal',  label: 'Journal',  icon: <span style={{fontSize:14,lineHeight:1}}>📓</span> },
-  { id: 'meals',    label: 'Meals',    icon: <span style={{fontSize:14,lineHeight:1}}>🍽️</span> },
-  { id: 'workouts', label: 'Workouts', icon: <span style={{fontSize:14,lineHeight:1}}>💪</span> },
-];
-
-// Static widget definitions — outside component so they're not recreated each render
-const MEALS_HDR = <span style={{display:"flex",gap:0}}><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:50,textAlign:"center"}}>prot</span><span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span></span>;
-const ACT_HDR = <span style={{display:"flex",gap:0}}>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:60,textAlign:"center"}}>dist</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:100,textAlign:"center"}}>pace</span>
-  <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",textTransform:"uppercase",color:"var(--dl-middle)",width:72,textAlign:"center"}}>energy</span>
-</span>;
-const WIDGETS = [
-  {id:"journal",  label:"📓 Journal",  color:()=>"var(--dl-accent)", Comp:JournalEditor, expandHref:"/journal"},
-  {id:"tasks",    label:"☑️ Tasks",    color:()=>"var(--dl-blue)",   Comp:Tasks,         expandHref:"/tasks"},
-  {id:"meals",    label:"🍽️ Meals",    color:()=>"var(--dl-red)",    Comp:Meals,    headerRight:()=>MEALS_HDR},
-  {id:"workouts", label:"💪 Workouts", color:()=>"var(--dl-green)",  Comp:WorkoutsCard, headerRight:()=>ACT_HDR},
-];
-const [leftWidget, ...rightWidgets] = WIDGETS;
+// Card IDs rendered in the top section (single-column, before search/widget split)
+const TOP_CARDS = ['project-graph', 'cal', 'world-map', 'goals', 'health', 'habits'];
+// Card IDs rendered after search toggle (notes + widgets)
+const WIDGET_IDS = { left: 'journal', right: ['tasks', 'meals', 'workouts'] };
 
 // ── URL-based date state ─────────────────────────────────────────────────────
 // Reads ?date=YYYY-MM-DD from URL; defaults to today if absent or invalid.
@@ -552,6 +508,21 @@ function DashboardInner() {
     ? (tagDisplayName ? tagDisplayName(projectFilter) : projectFilter)
     : 'All Projects';
 
+  // Props bag passed to every card's render function from the registry
+  const cardProps = {
+    date: selected, setSelected, token, userId, projectFilter, selectProject,
+    graphData, healthDots, events, setEvents, calView, setCalView,
+    stravaConnected, journalMode, setJournalMode,
+    goalsViewMode, setGoalsViewMode, habitFilter, setHabitFilter,
+    taskFilter, setTaskFilter, startSync, endSync, onHealthChange, onScoresReady,
+    searchOpen, allNoteNames, setAllNoteNames,
+    // Collapse states — each card checks its own
+    mapCollapsed, calCollapsed, timelineCollapsed, goalsCollapsed,
+    healthCollapsed, habitsCollapsed, notesCollapsed,
+    tasksCollapsed: collapseMap.tasks, journalCollapsed: collapseMap.journal,
+    mealsCollapsed: collapseMap.meals, actCollapsed: collapseMap.workouts,
+  };
+
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
     <PlaceNamesContext.Provider value={allPlaceNames}>
@@ -620,77 +591,14 @@ function DashboardInner() {
             }))}
           />
 
-          {/* 2. MapCard — hidden when toggled off in dock */}
-          {graphData && !searchOpen && !mapCollapsed && (
-            <MapCard
-              allTags={graphData.allTags}
-              connections={graphData.connections}
-              recency={graphData.recency}
-              entryCounts={graphData.entryCounts}
-              completedTasks={graphData.completedTasks}
-              habits={graphData.habits}
-              healthDots={healthDots}
-              selectedProject={projectFilter}
-              onSelectProject={selectProject}
-              date={selected}
-              token={token}
-            />
-          )}
+          {/* ── Top cards (single-column, from registry) ── */}
+          {TOP_CARDS.map(id => {
+            const entry = CARD_REGISTRY.find(c => c.id === id);
+            if (!entry) return null;
+            return <React.Fragment key={id}>{entry.render(cardProps)}</React.Fragment>;
+          })}
 
-          {/* 2b. CalendarCard */}
-          {!searchOpen && !calCollapsed && (
-            <div style={{flexShrink:0}}>
-              <ErrorBoundary label="Calendar">
-              <CalendarCard selected={selected} onSelect={setSelected}
-                events={events} setEvents={setEvents} healthDots={healthDots}
-                token={token} collapsed={false}
-                calView={calView} onCalViewChange={v=>{setCalView(v);}} expandHref="/calendar"/>
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* 2c. WorldMapCard — location timeline */}
-          {!searchOpen && !timelineCollapsed && (
-            <WorldMapCard token={token} />
-          )}
-
-          {/* 2d. Goals kanban */}
-          {!searchOpen && !goalsCollapsed && (
-            <div style={{flexShrink:0}}>
-              <ErrorBoundary label="Goals">
-                <Card label="🏁 Goals" color={GOAL_COLOR} collapsed={false} autoHeight expandHref="/goals"
-                  headerRight={<GoalsViewToggle mode={goalsViewMode} setMode={setGoalsViewMode} />}>
-                  <GoalsCard token={token} date={selected} onSelectDate={setSelected} viewMode={goalsViewMode} project={projectFilter} />
-                </Card>
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* 3. HealthCard */}
-          {!searchOpen && !healthCollapsed && (
-            <div style={{flexShrink:0}}>
-              <ErrorBoundary label="Health">
-              <HealthCard date={selected} token={token} userId={userId}
-                onHealthChange={onHealthChange} onScoresReady={onScoresReady} onSyncStart={startSync} onSyncEnd={endSync}
-                collapsed={false} expandHref="/health"/>
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* 4b. HabitsCard — below health, toggle-able */}
-          {!searchOpen && !habitsCollapsed && (
-            <div style={{flexShrink:0}}>
-              <ErrorBoundary label="Habits">
-                <Card label="🎯 Habits" color="var(--dl-accent)" collapsed={false} autoHeight
-                  expandHref="/habits"
-                  headerRight={<HabitFilterBtns filter={habitFilter} setFilter={setHabitFilter}/>}>
-                  <HabitsCard date={selected} token={token} userId={userId} project={projectFilter} habitFilter={habitFilter} onSelectDate={setSelected}/>
-                </Card>
-              </ErrorBoundary>
-            </div>
-          )}
-
-          {/* Search results replace cards 5-9 when open */}
+          {/* Search results replace notes + widgets when open */}
           {searchOpen ? (
             <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease' }}>
               <SearchResults
@@ -702,89 +610,54 @@ function DashboardInner() {
             </div>
           ) : (
             <>
-              {/* 5. Notes — hidden when toggled off in dock */}
-              {!notesCollapsed && (
-                <ErrorBoundary label="Notes">
-                  <NotesCard project={projectFilter} token={token} userId={userId} onNoteNamesChange={setAllNoteNames} collapsed={false} expandHref="/notes" />
-                </ErrorBoundary>
-              )}
+              {/* Notes */}
+              {(() => { const e = CARD_REGISTRY.find(c => c.id === 'notes'); return e ? <React.Fragment key="notes">{e.render(cardProps)}</React.Fragment> : null; })()}
 
-              {/* 6–9. Journal, Tasks, Meals, Workouts */}
+              {/* Widgets: Journal, Tasks, Meals, Workouts — 2-column on desktop */}
               {mobile ? (
-                // Mobile: Tasks → Journal → Meals → Workouts
+                // Mobile: Tasks → Journal → Meals → Workouts (stacked)
                 <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
-                  {/* Tasks first */}
-                  {!collapseMap['tasks'] && (() => { const w = rightWidgets.find(x => x.id === 'tasks'); return w ? (
-                    <ErrorBoundary key="tasks" label={w.label}>
-                    <Card label={w.label} color={w.color()} collapsed={false} onToggle={toggleMap[w.id]}
-                      expandHref={w.expandHref}
-                      headerRight={<><TaskSaveIndicator /><TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/></>} autoHeight>
-                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
-                        taskFilter={taskFilter} project={projectFilter||undefined}/>
-                    </Card>
-                    </ErrorBoundary>
-                  ) : null; })()}
-                  {/* Journal second */}
-                  {!collapseMap[leftWidget.id] && (
-                    <ErrorBoundary label={leftWidget.label}>
-                    <Card label={leftWidget.label} color={leftWidget.color()}
-                      collapsed={false} expandHref={leftWidget.expandHref}
-                      headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>} autoHeight>
-                      <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
-                    </Card>
-                    </ErrorBoundary>
-                  )}
-                  {/* Meals + Workouts after */}
-                  {rightWidgets.filter(w => w.id !== 'tasks').map(w => !collapseMap[w.id] && (
-                    <ErrorBoundary key={w.id} label={w.label}>
-                    <Card label={w.label} color={w.color()} collapsed={false} onToggle={toggleMap[w.id]}
-                      expandHref={w.expandHref} headerRight={w.headerRight?.()} autoHeight>
-                      <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}/>
-                    </Card>
-                    </ErrorBoundary>
-                  ))}
+                  {['tasks','journal','meals','workouts'].map(id => {
+                    const entry = CARD_REGISTRY.find(c => c.id === id);
+                    if (!entry) return null;
+                    return <React.Fragment key={id}>{entry.render(cardProps)}</React.Fragment>;
+                  })}
                 </div>
               ) : (
                 <div style={{display:"flex", gap:10, flexDirection:"row", alignItems:"stretch"}}>
-                  {/* Desktop: Tasks/Meals/Workouts LEFT, Journal RIGHT — keeps Habits→Tasks→Journal reading order */}
                   {/* Left column: Tasks, Meals, Workouts */}
-                  {rightWidgets.some(w => !collapseMap[w.id]) && (
-                    <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                      {rightWidgets.filter(w => !collapseMap[w.id]).map((w, i, arr)=>(
-                        <div key={w.id} style={{
-                          display:"flex", flexDirection:"column",
-                          flex: i === arr.length - 1 ? 1 : "0 0 auto",
-                          minHeight: 200}}>
-                          <ErrorBoundary label={w.label}>
-                          <Card label={w.label} color={w.color()}
-                            collapsed={false}
-                            expandHref={w.expandHref}
-                            headerRight={w.id==='tasks' ? <><TaskSaveIndicator /><TaskFilterBtns filter={taskFilter} setFilter={setTaskFilter}/></> : w.headerRight?.()}>
-                            <w.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected}
-                              taskFilter={w.id==='tasks'?taskFilter:undefined}
-                              project={w.id==='tasks'&&projectFilter?projectFilter:undefined}/>
-                          </Card>
-                          </ErrorBoundary>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Right column: Journal */}
-                  {!collapseMap[leftWidget.id] && (
-                    <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                      <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
-                        <ErrorBoundary label={leftWidget.label}>
-                        <Card label={leftWidget.label} color={leftWidget.color()}
-                          collapsed={false}
-                          expandHref={leftWidget.expandHref}
-                          headerRight={<JournalModeToggle mode={journalMode} setMode={setJournalMode}/>}
-                          >
-                          <leftWidget.Comp date={selected} token={token} userId={userId} stravaConnected={stravaConnected} project={projectFilter||undefined} journalMode={journalMode}/>
-                        </Card>
-                        </ErrorBoundary>
+                  {(() => {
+                    const visible = WIDGET_IDS.right
+                      .map(id => { const e = CARD_REGISTRY.find(c => c.id === id); return { id, rendered: e ? e.render(cardProps) : null }; })
+                      .filter(({ rendered }) => rendered !== null);
+                    if (!visible.length) return null;
+                    return (
+                      <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
+                        {visible.map(({ id, rendered }, i) => (
+                          <div key={id} style={{
+                            display:"flex", flexDirection:"column",
+                            flex: i === visible.length - 1 ? 1 : "0 0 auto",
+                            minHeight: 200}}>
+                            {rendered}
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
+                  {/* Right column: Journal */}
+                  {(() => {
+                    const entry = CARD_REGISTRY.find(c => c.id === WIDGET_IDS.left);
+                    if (!entry) return null;
+                    const rendered = entry.render(cardProps);
+                    if (!rendered) return null;
+                    return (
+                      <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
+                        <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
+                          {rendered}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
             </>
