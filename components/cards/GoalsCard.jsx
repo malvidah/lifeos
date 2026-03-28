@@ -584,7 +584,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode, proj
             display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6,
             scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch',
           }}>
-            {Object.keys(cols).map(colKey =>
+            {Object.keys(cols).filter(k => !project || cols[k].length > 0).map(colKey =>
               renderColumn(colKey, '', GOAL_COLOR, cols[colKey], true, false)
             )}
           </div>
@@ -625,7 +625,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode, proj
           display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6,
           scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch',
         }}>
-          {STATUS_COLS.map(sc => renderColumn(sc.key, sc.label, sc.color, groupedByStatus[sc.key], true, false))}
+          {STATUS_COLS.filter(sc => !project || groupedByStatus[sc.key].length > 0).map(sc => renderColumn(sc.key, sc.label, sc.color, groupedByStatus[sc.key], true, false))}
         </div>
       )}
     </div>
