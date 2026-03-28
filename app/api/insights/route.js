@@ -204,7 +204,14 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   });
 
   const aiData = await res.json();
-  if (aiData.error) return Response.json({ error: `AI error: ${aiData.error.message}` }, { status: 500 });
+  if (aiData.error) {
+    const msg = aiData.error.message || 'Unknown error';
+    const isRateLimit = res.status === 429 || msg.includes('rate limit');
+    return Response.json(
+      { error: isRateLimit ? 'Insights are busy — try again in a minute.' : `AI error: ${msg}` },
+      { status: isRateLimit ? 429 : 500 }
+    );
+  }
 
   const insight = (aiData.content?.find(b => b.type === 'text')?.text || '')
     .replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1').replace(/^#{1,3}\s+/gm, '').trim();

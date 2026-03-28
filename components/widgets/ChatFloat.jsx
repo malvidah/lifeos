@@ -1,137 +1,12 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, Fragment } from "react";
+import { useState, useEffect, useRef, Fragment } from "react";
 import { serif, mono, F, R, blurweb } from "@/lib/tokens";
-import { toKey, todayKey, fmtDate } from "@/lib/dates";
 import { api } from "@/lib/api";
 import { dbLoad, dbSave, MEM, DIRTY, pushHistory } from "@/lib/db";
-import { useIsMobile } from "@/lib/hooks";
-import { DayLabLoader, Card, Shimmer } from "../ui/primitives.jsx";
-
-export function InsightsCard({date, token, userId, healthKey, collapsed, onToggle}) {
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [isFree, setIsFree] = useState(false);
-  const [freeUsage, setFreeUsage] = useState(null); // { count, limit }
-  const prevDate = useRef(date);
-  const generatedWithKey = useRef(null); // healthKey used for last generation, null = not yet
-  const waitTimer = useRef(null);
-
-  const BAD_VALUES = ["No data available", "No insights generated", "AI error"];
-
-  function cleanInsight(t) {
-    return t
-      .replace(/\*\*(.+?)\*\*/g, '$1')
-      .replace(/\*(.+?)\*/g, '$1')
-      .replace(/^#{1,3}\s+/gm, '')
-      .replace(/^[A-Za-z]+,\s+\w+ \d+\n+/, '')
-      .trim();
-  }
-
-  function isBadCache(t, cached, currentHealthKey) {
-    if (!t) return true;
-    if (BAD_VALUES.some(b => t.includes(b))) return true;
-    if (cached?.isWelcome && currentHealthKey) return true;
-    if (cached?.v !== 8) return true;
-    // If the insight was generated with different health data than what we have now, it's stale.
-    // e.g. generated with yesterday's bleeding data, or generated before Oura loaded.
-    if (cached?.healthKey !== undefined && cached.healthKey !== currentHealthKey) return true;
-    return false;
-  }
-
-  async function generate(currentHealthKey) {
-    if (!token || !userId) return;
-    if (generatedWithKey.current === currentHealthKey) return; // already generated for this exact state
-    generatedWithKey.current = currentHealthKey;
-    clearTimeout(waitTimer.current);
-    setBusy(true); setError(""); setIsFree(false);
-    try {
-      const cached = await dbLoad(date, "insights", token);
-      const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
-      if (cached?.text && !isBadCache(cached.text, cached, currentHealthKey) && age < 12 * 60 * 60 * 1000) {
-        setText(cleanInsight(cached.text)); setBusy(false); return;
-      }
-      const data = await api.post("/api/insights", { date, healthKey: currentHealthKey }, token);
-      if (data?.tier === "free") { setIsFree(true); setFreeUsage({ count: data.usageCount, limit: data.limit }); }
-      else if (data?.insight) setText(cleanInsight(data.insight));
-      else if (data?.error) setError(data.error);
-    } catch (e) { setError(e.message); }
-    setBusy(false);
-  }
-
-  // Reset on date change
-  useEffect(() => {
-    if (prevDate.current === date) return;
-    prevDate.current = date;
-    generatedWithKey.current = null;
-    clearTimeout(waitTimer.current);
-    setText(""); setError(""); setIsFree(false); setFreeUsage(null);
-  }, [date]); // eslint-disable-line
-
-  // Trigger generation:
-  // - If real health data is present: generate immediately with that key
-  // - If no health data after 3s: generate with the empty key (no-ring day / future date)
-  // - If health arrives AFTER the empty-key fallback fired: regenerate with real data
-  useEffect(() => {
-    if (!token || !userId) return;
-    const [, sleep, readiness] = (healthKey || "::").split(":");
-    const hasRealData = (+sleep > 0) || (+readiness > 0);
-    if (hasRealData) {
-      clearTimeout(waitTimer.current);
-      generate(healthKey);
-    } else {
-      // Only start the timer if we haven't generated yet
-      if (generatedWithKey.current !== null) return;
-      clearTimeout(waitTimer.current);
-      waitTimer.current = setTimeout(() => generate(healthKey), 3000);
-    }
-    return () => clearTimeout(waitTimer.current);
-  }, [date, token, userId, healthKey]); // eslint-disable-line
-
-  return (
-    <Card label="Insights" color={"var(--dl-highlight)"} slim collapsed={collapsed} onToggle={onToggle}>
-      {/* Fixed responsive height — content scrolls inside, no scrollbar visible */}
-      <div style={{ height: "clamp(80px, 10vh, 120px)", overflowY: "auto", scrollbarWidth: "none" }}>
-        <div style={{ opacity: busy && !text ? 0 : 1, transition: "opacity 0.3s ease" }}>
-          {error && (
-            <div style={{ fontFamily: mono, fontSize:F.md, color: "var(--dl-red)", lineHeight: 1.6 }}>{error}</div>
-          )}
-          {isFree ? (
-            <div>
-              <div style={{ fontFamily: mono, fontSize: 13, color: "var(--dl-highlight)", lineHeight: 1.6, marginBottom: 12 }}>
-                You've used {freeUsage?.count ?? 10} of {freeUsage?.limit ?? 10} free AI insights.
-              </div>
-              <div style={{ fontFamily: mono, fontSize: 12, color: "var(--dl-middle)", lineHeight: 1.7, marginBottom: 14 }}>
-                Upgrade to Premium for unlimited insights, voice entry, and chat with your health data.
-              </div>
-              <button onClick={() => window.location.href = "/upgrade"} style={{
-                background: "var(--dl-accent)", border: "none", borderRadius: 6, padding: "8px 18px",
-                cursor: "pointer", fontFamily: mono, fontSize: F.sm, color: "var(--dl-bg)",
-                letterSpacing: "0.08em", textTransform: "uppercase",
-              }}>Upgrade to Premium →</button>
-            </div>
-          ) : text ? (
-            <div style={{ fontFamily: mono, fontSize:13, color: "var(--dl-middle)", lineHeight: 1.75, whiteSpace: "pre-line" }}>
-              {text}
-            </div>
-          ) : busy ? (
-            <div>
-              <Shimmer width="90%" height={13} />
-              <div style={{ height: 10 }} />
-              <Shimmer width="72%" height={13} />
-              <div style={{ height: 10 }} />
-              <Shimmer width="50%" height={13} />
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </Card>
-  );
-}
+import { DayLabLoader } from "../ui/primitives.jsx";
 
 // ─── Chat / QuickAdd ──────────────────────────────────────────────────────────
-// Collapsed: floating entry bar (quick commands, no history).
-// Expanded: full-height panel with conversation history, Q&A + entry actions.
+// Floating entry bar (quick commands) + expandable sidebar with conversation history.
 
 // ─── DL Sparkle icon (4-pointed star) ────────────────────────────────────────
 function DLSparkle({ size = 14, color = "var(--dl-accent)" }) {
@@ -159,8 +34,6 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
 
 
   const [messages, setMessages] = useState([]); // [{role, content, actions, summary, isInsight}]
-  const [insightLoading, setInsightLoading] = useState(false);
-  const generatedInsightKey = useRef(null); // "date:healthKey" — prevents double-generation
   const prevDate = useRef(date);
 
   const [chatQueryCount, setChatQueryCount] = useState(0);
@@ -229,59 +102,13 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
     return () => document.removeEventListener('mousedown', handleOutside);
   }, [pillPhase]);
 
-  // ── Insight generation — seeded as messages[0] ──────────────────────────
+  // Reset messages on date change
   useEffect(() => {
-    if (!token || !userId) return;
-    // Reset on date change
     if (prevDate.current !== date) {
       prevDate.current = date;
-      generatedInsightKey.current = null;
       setMessages([]);
     }
-    const [, sleep, readiness] = (healthKey || "::").split(":");
-    const hasRealData = (+sleep > 0) || (+readiness > 0);
-    const key = `${date}:${healthKey}`;
-    if (generatedInsightKey.current === key) return;
-
-    // Wait for real data; if none after 3s, proceed with whatever we have
-    const run = async () => {
-      if (generatedInsightKey.current === key) return;
-      generatedInsightKey.current = key;
-      setInsightLoading(true);
-      try {
-        // Check cache first
-        const cached = await dbLoad(date, "insights", token);
-        const age = cached?.generatedAt ? Date.now() - new Date(cached.generatedAt).getTime() : Infinity;
-        const stale = !cached?.text || cached?.v !== 8 || age > 12 * 60 * 60 * 1000 ||
-          (cached?.healthKey !== undefined && cached.healthKey !== healthKey);
-        let text = null;
-        if (!stale) {
-          text = cached.text;
-        } else {
-          const data = await api.post("/api/insights", { date, healthKey }, token);
-          if (data?.insight) text = data.insight;
-          else if (data?.tier === "free") text = "Upgrade to Premium to unlock daily AI insights, voice entry, and chat.";
-        }
-        if (text) {
-          const clean = text.replace(/\*\*(.+?)\*\*/g, '$1').replace(/\*(.+?)\*/g, '$1')
-            .replace(/^#{1,3}\s+/gm, '').replace(/^[A-Za-z]+,\s+\w+ \d+\n+/, '').trim();
-          setMessages(prev => {
-            // Replace existing insight (first message if isInsight) or prepend
-            const withoutInsight = prev.filter(m => !m.isInsight);
-            return [{ role: "assistant", content: clean, isInsight: true }, ...withoutInsight];
-          });
-        }
-      } catch (_) {}
-      setInsightLoading(false);
-    };
-
-    if (hasRealData) {
-      run();
-    } else {
-      const t = setTimeout(run, 3000);
-      return () => clearTimeout(t);
-    }
-  }, [date, token, userId, healthKey]); // eslint-disable-line
+  }, [date]);
 
   function logMicError(text) {
     setMessages(prev => [...prev, { role: "assistant", content: text }]);
@@ -700,11 +527,6 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
                 </Fragment>
               ))}
 
-              {insightLoading && messages.length === 0 && (
-                <div style={{ padding: "8px 2px" }}>
-                  <DayLabLoader size={32} color={"var(--dl-middle)"}/>
-                </div>
-              )}
               <div ref={messagesEndRef} />
             </div>
           </div>
@@ -800,59 +622,69 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
             );
           }
 
-          // ── IDLE: compact glass bubble ───────────────────────────────────────
-          if (pillPhase === 'idle') {
+          // ── IDLE / INPUT: animated bubble that expands on hover ─────────────
+          if (pillPhase === 'idle' || pillPhase === 'input') {
+            const isInput = pillPhase === 'input';
             return (
               <div
-                onClick={mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); } : undefined}
-                onMouseEnter={!mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); } : undefined}
-                style={{ pointerEvents: "auto", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 100, cursor: "pointer", animation: "fadeIn 0.15s ease", ...glass }}
+                onMouseEnter={!mobile && !isInput ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 60); } : undefined}
+                onClick={mobile && !isInput ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); } : undefined}
+                style={{
+                  pointerEvents: "auto",
+                  display: "flex", alignItems: "center",
+                  borderRadius: 100, cursor: isInput ? "text" : "pointer",
+                  overflow: "hidden",
+                  width: isInput ? "100%" : "auto",
+                  maxWidth: isInput ? 560 : "none",
+                  minHeight: isInput ? 52 : "auto",
+                  padding: isInput ? 0 : "11px 18px",
+                  gap: isInput ? 0 : 8,
+                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, backdrop-filter 0s",
+                  ...glass,
+                }}
               >
-                <DLSparkle size={13} />
-                <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI</span>
-              </div>
-            );
-          }
-
-          // ── INPUT: full pill with textarea ────────────────────────────────────
-          if (pillPhase === 'input') {
-            return (
-              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", animation: "fadeIn 0.12s ease", ...glass }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
-                  {/* History / open full chat — left side */}
-                  <button
-                    onClick={() => { onExpandedChange(true); setPillPhase('idle'); }}
-                    title="Open chat history"
-                    style={{ background: "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)", transition: "color 0.15s" }}
-                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                  </button>
-                  <textarea
-                    ref={inputRef}
-                    value={input}
-                    onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
-                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuick(); } }}
-                    className="dl-chat-input"
-                    placeholder="Ask AI anything…"
-                    autoFocus
-                    rows={1}
-                    style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", padding: "0", margin: "0", lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px", display: "block" }}
-                  />
-                  {/* Send or mic */}
-                  {input.trim() ? (
-                    <button onClick={() => sendQuick()} style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                {isInput ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
+                    {/* Open full chat — left side */}
+                    <button
+                      onClick={() => { onExpandedChange(true); setPillPhase('idle'); }}
+                      title="Open chat history"
+                      style={{ background: "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)", transition: "color 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                      onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
                     </button>
-                  ) : hasMic ? (
-                    <button onClick={transcribing ? undefined : toggleMic} style={{ background: transcribing ? "var(--dl-accent)22" : listening ? "var(--dl-red)22" : "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: transcribing ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      {transcribing ? <div style={{ width: 9, height: 9, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/> : listening ? <div style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>}
-                    </button>
-                  ) : null}
-                </div>
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuick(); } }}
+                      className="dl-chat-input"
+                      placeholder="Ask AI anything…"
+                      autoFocus
+                      rows={1}
+                      style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", padding: "0", margin: "0", lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px", display: "block" }}
+                    />
+                    {/* Send or mic */}
+                    {input.trim() ? (
+                      <button onClick={() => sendQuick()} style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                      </button>
+                    ) : hasMic ? (
+                      <button onClick={transcribing ? undefined : toggleMic} style={{ background: transcribing ? "var(--dl-accent)22" : listening ? "var(--dl-red)22" : "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: transcribing ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {transcribing ? <div style={{ width: 9, height: 9, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/> : listening ? <div style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <>
+                    <DLSparkle size={13} />
+                    <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI</span>
+                  </>
+                )}
               </div>
             );
           }
