@@ -622,69 +622,62 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
             );
           }
 
-          // ── IDLE / INPUT: animated bubble that expands on hover ─────────────
-          if (pillPhase === 'idle' || pillPhase === 'input') {
-            const isInput = pillPhase === 'input';
+          // ── IDLE: compact glass bubble ───────────────────────────────────────
+          if (pillPhase === 'idle') {
             return (
               <div
-                onMouseEnter={!mobile && !isInput ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 60); } : undefined}
-                onClick={mobile && !isInput ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); } : undefined}
-                style={{
-                  pointerEvents: "auto",
-                  display: "flex", alignItems: "center",
-                  borderRadius: 100, cursor: isInput ? "text" : "pointer",
-                  overflow: "hidden",
-                  width: isInput ? "100%" : "auto",
-                  maxWidth: isInput ? 560 : "none",
-                  minHeight: isInput ? 52 : "auto",
-                  padding: isInput ? 0 : "11px 18px",
-                  gap: isInput ? 0 : 8,
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, backdrop-filter 0s",
-                  ...glass,
-                }}
+                onMouseEnter={!mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 50); } : undefined}
+                onClick={mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); } : undefined}
+                style={{ pointerEvents: "auto", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 100, cursor: "pointer", ...glass }}
               >
-                {isInput ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
-                    {/* Open full chat — left side */}
-                    <button
-                      onClick={() => { onExpandedChange(true); setPillPhase('idle'); }}
-                      title="Open chat history"
-                      style={{ background: "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)", transition: "color 0.15s" }}
-                      onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                      onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                      </svg>
+                <DLSparkle size={13} />
+                <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI</span>
+              </div>
+            );
+          }
+
+          // ── INPUT: expanded pill with textarea ──────────────────────────────
+          if (pillPhase === 'input') {
+            return (
+              <div
+                onMouseLeave={!mobile && !input.trim() && document.activeElement !== inputRef.current ? () => setPillPhase('idle') : undefined}
+                style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", ...glass }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
+                  {/* Open full chat — left side */}
+                  <button
+                    onClick={() => { onExpandedChange(true); setPillPhase('idle'); }}
+                    title="Open chat history"
+                    style={{ background: "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)", transition: "color 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                  </button>
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuick(); } }}
+                    onBlur={!mobile ? () => { if (!input.trim()) setPillPhase('idle'); } : undefined}
+                    className="dl-chat-input"
+                    placeholder="Ask AI anything…"
+                    autoFocus
+                    rows={1}
+                    style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", padding: "0", margin: "0", lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px", display: "block" }}
+                  />
+                  {/* Send or mic */}
+                  {input.trim() ? (
+                    <button onClick={() => sendQuick()} style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                     </button>
-                    <textarea
-                      ref={inputRef}
-                      value={input}
-                      onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
-                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuick(); } }}
-                      className="dl-chat-input"
-                      placeholder="Ask AI anything…"
-                      autoFocus
-                      rows={1}
-                      style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", padding: "0", margin: "0", lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px", display: "block" }}
-                    />
-                    {/* Send or mic */}
-                    {input.trim() ? (
-                      <button onClick={() => sendQuick()} style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-                      </button>
-                    ) : hasMic ? (
-                      <button onClick={transcribing ? undefined : toggleMic} style={{ background: transcribing ? "var(--dl-accent)22" : listening ? "var(--dl-red)22" : "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: transcribing ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                        {transcribing ? <div style={{ width: 9, height: 9, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/> : listening ? <div style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>}
-                      </button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <>
-                    <DLSparkle size={13} />
-                    <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI</span>
-                  </>
-                )}
+                  ) : hasMic ? (
+                    <button onClick={transcribing ? undefined : toggleMic} style={{ background: transcribing ? "var(--dl-accent)22" : listening ? "var(--dl-red)22" : "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: transcribing ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {transcribing ? <div style={{ width: 9, height: 9, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/> : listening ? <div style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>}
+                    </button>
+                  ) : null}
+                </div>
               </div>
             );
           }
