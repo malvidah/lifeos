@@ -98,39 +98,27 @@ const APP_FEATURES = [
     back: 'Hover over "Ask AI" to open the quick bar, or click the chat icon for full sidebar. Say "add a goal: run a marathon" or "log oatmeal for breakfast" \u2014 accept or reject with one tap.' },
 ];
 
-// ── Hover style helpers ─────────────────────────────────────────────────────
-const FLIP_HOVER = {
-  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-};
-function addHover(e) {
-  e.currentTarget.style.transform = 'scale(1.02)';
-  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)';
-}
-function removeHover(e) {
-  e.currentTarget.style.transform = 'scale(1)';
-  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)';
-}
-
-// ── FlipCard component — simple show/hide, no 3D transform issues ────────────
+// ── FlipCard component — front/back overlap, subtle hover ───────────────────
 function FlipCard({ front, back, style }) {
   const [flipped, setFlipped] = useState(false);
+  const [hovered, setHovered] = useState(false);
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      onMouseEnter={addHover}
-      onMouseLeave={removeHover}
-      style={{ cursor: 'pointer', ...FLIP_HOVER, ...style }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      style={{
+        cursor: 'pointer', position: 'relative',
+        borderRadius: 14,
+        boxShadow: hovered ? '0 2px 8px rgba(0,0,0,0.08)' : 'none',
+        transition: 'box-shadow 0.2s ease',
+        ...style,
+      }}
     >
-      <div style={{
-        transition: 'opacity 0.25s ease',
-        display: flipped ? 'none' : 'block',
-      }}>
+      <div style={{ visibility: flipped ? 'hidden' : 'visible', opacity: flipped ? 0 : 1, transition: 'opacity 0.2s ease' }}>
         {front}
       </div>
-      <div style={{
-        transition: 'opacity 0.25s ease',
-        display: flipped ? 'block' : 'none',
-      }}>
+      <div style={{ position: 'absolute', inset: 0, visibility: flipped ? 'visible' : 'hidden', opacity: flipped ? 1 : 0, transition: 'opacity 0.2s ease' }}>
         {back}
       </div>
     </div>
