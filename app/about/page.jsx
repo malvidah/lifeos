@@ -72,66 +72,50 @@ const USER_SERVICES = [
 // ── App feature explainers ───────────────────────────────────────────────────
 const APP_FEATURES = [
   { emoji: '\u26F0\uFE0F', name: 'Projects', color: '#E8917A',
-    desc: 'The mountain map at the top. Each project is a mountain \u2014 the more you work on it, the taller it grows. Active projects glow red, stale ones get snow.',
-    back: 'Tag any task or journal entry with {project-name} to link it.' },
+    desc: 'Each project becomes a 3D mountain. The more you work on it, the taller it grows. Active projects glow, stale ones get snow.',
+    back: 'Projects are created automatically when you tag anything. Type /p day lab in a task or journal entry and the project appears on the map.' },
   { emoji: '\uD83C\uDFC1', name: 'Goals', color: '#6BAED6',
-    desc: 'Set concrete goals and organize them by project or status. Track progress with linked tasks and habits.',
-    back: 'Create goals in the Goals card or type /g goal-name in a task.' },
+    desc: 'Concrete milestones you want to hit. Organize by project or track by status \u2014 active, planned, completed.',
+    back: 'Create goals in the Goals card, or type /g goal name in any task to auto-create and link. Goals show how many tasks and habits are connected.' },
   { emoji: '\uD83C\uDFAF', name: 'Habits', color: '#5BA89D',
-    desc: 'Daily, weekly, or custom schedules. Check them off each day and watch your streaks grow.',
-    back: 'Add habits in the Habits card. Use /h daily, /h mwf, etc. for scheduling.' },
+    desc: 'Recurring tasks with streaks. Set any schedule \u2014 daily, M\u00b7W\u00b7F, 3x per week, or any custom combo.',
+    back: 'Create in the Habits card, or add /h mwf (or /h daily, /h 2pw, etc.) to any task. Habits auto-cascade \u2014 add /p and /g to link them to projects and goals in one line.' },
   { emoji: '\u2611\uFE0F', name: 'Tasks', color: '#D4A574',
-    desc: 'Your daily to-do list with rich formatting. Link tasks to projects, goals, and dates.',
-    back: 'Use {project} for project tags, /g goal for goals, @date for due dates.' },
+    desc: 'Your daily to-do list. The fastest way to create anything \u2014 type a task with inline tags to build your whole system.',
+    back: 'Power syntax: "Run 5k /h mwf /g half marathon /p health" creates a habit linked to a goal on a project, all in one line. Tags: /p project, /g goal, /h schedule, @date.' },
   { emoji: '\u270F\uFE0F', name: 'Journal', color: '#9B8EC4',
-    desc: 'Free-form writing space for each day. Use tags to connect entries to projects.',
-    back: 'Supports rich text, inline tags, and links to notes.' },
+    desc: 'Free-form writing for each day. Your thoughts, reflections, and notes in one place.',
+    back: 'Rich text editor with inline project tags. Tag entries with /p to connect them to projects. Notes are separate from daily journal \u2014 persistent documents you can link to.' },
   { emoji: '\uD83C\uDF7D\uFE0F', name: 'Meals', color: '#8DB86B',
-    desc: 'Log what you eat. AI estimates calories and protein automatically.',
-    back: 'Just type the meal \u2014 AI analyzes nutrition in the background.' },
+    desc: 'Log what you eat. AI estimates calories and protein in the background.',
+    back: 'Just type the food \u2014 "salmon and rice" \u2014 and AI fills in nutrition. You can also use voice: "add oatmeal for breakfast."' },
   { emoji: '\uD83D\uDC9A', name: 'Health', color: '#5BA89D',
-    desc: 'Daily health scores from your wearables. Sleep, activity, recovery, resilience.',
-    back: 'Sleep: Oura score + duration. Activity: Steps + workouts. Recovery: HRV + readiness. Resilience: Composite of all three.' },
+    desc: 'Daily scores from your wearables \u2014 sleep, activity, recovery, and resilience.',
+    back: 'Sleep: Oura score + hours slept. Activity: steps + workout intensity. Recovery: HRV + readiness. Resilience: how all three combine. Scores update when your ring syncs.' },
   { emoji: '\uD83E\uDD16', name: 'AI Assistant', color: '#D4A574',
-    desc: 'Ask questions, add entries by voice, get daily insights. Works in the floating pill or the sidebar.',
-    back: 'Powered by Claude AI. Voice uses Groq Whisper. Accepts/rejects let you review changes.' },
+    desc: 'Add anything by voice or text. Ask questions about your data. Review changes before they\u2019re saved.',
+    back: 'Hover over "Ask AI" to open the quick bar, or click the chat icon for full sidebar. Say "add a goal: run a marathon" or "log oatmeal for breakfast" \u2014 accept or reject with one tap.' },
 ];
 
-// ── FlipCard component ───────────────────────────────────────────────────────
+// ── FlipCard component — simple show/hide, no 3D transform issues ────────────
 function FlipCard({ front, back, style }) {
   const [flipped, setFlipped] = useState(false);
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      style={{
-        perspective: 1000,
-        cursor: 'pointer',
-        ...style,
-      }}
+      style={{ cursor: 'pointer', ...style }}
     >
       <div style={{
-        position: 'relative',
-        width: '100%',
-        height: '100%',
-        transformStyle: 'preserve-3d',
-        transition: 'transform 0.4s ease',
-        transform: flipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+        transition: 'opacity 0.25s ease',
+        display: flipped ? 'none' : 'block',
       }}>
-        <div style={{
-          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-          backfaceVisibility: 'hidden',
-          WebkitBackfaceVisibility: 'hidden',
-        }}>
-          {front}
-        </div>
-        <div style={{
-          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
-          backfaceVisibility: 'hidden',
-          WebkitBackfaceVisibility: 'hidden',
-          transform: 'rotateY(180deg)',
-        }}>
-          {back}
-        </div>
+        {front}
+      </div>
+      <div style={{
+        transition: 'opacity 0.25s ease',
+        display: flipped ? 'block' : 'none',
+      }}>
+        {back}
       </div>
     </div>
   );
