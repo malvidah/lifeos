@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, Fragment } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { serif, mono, F, R, blurweb } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { dbLoad, dbSave, MEM, DIRTY, pushHistory } from "@/lib/db";
@@ -14,6 +14,63 @@ function DLSparkle({ size = 14, color = "var(--dl-accent)" }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0 }}>
       <path d="M12 2L13.9 10.1L22 12L13.9 13.9L12 22L10.1 13.9L2 12L10.1 10.1Z"/>
     </svg>
+  );
+}
+
+// ─── TTS speaker button for assistant messages ──────────────────────────────
+function TTSButton({ text, token }) {
+  const [state, setState] = useState('idle'); // idle | loading | playing
+  const audioRef = useRef(null);
+
+  const handleClick = useCallback(async () => {
+    if (state === 'playing') {
+      audioRef.current?.pause();
+      audioRef.current = null;
+      setState('idle');
+      return;
+    }
+    if (state === 'loading') return;
+    setState('loading');
+    try {
+      const res = await fetch('/api/tts', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) { setState('idle'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audioRef.current = audio;
+      audio.onended = () => { setState('idle'); audioRef.current = null; URL.revokeObjectURL(url); };
+      audio.onerror = () => { setState('idle'); audioRef.current = null; URL.revokeObjectURL(url); };
+      await audio.play();
+      setState('playing');
+    } catch {
+      setState('idle');
+    }
+  }, [state, text, token]);
+
+  return (
+    <button onClick={handleClick} title={state === 'playing' ? 'Stop' : 'Listen'} style={{
+      background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px',
+      color: 'var(--dl-middle)', display: 'flex', alignItems: 'center',
+      transition: 'color 0.15s', alignSelf: 'flex-start',
+    }}
+    onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+    onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}>
+      {state === 'loading' ? (
+        <div style={{ width: 12, height: 12, borderRadius: '50%', border: '1.5px solid var(--dl-accent)', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+      ) : state === 'playing' ? (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+      ) : (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+          <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+          <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+        </svg>
+      )}
+    </button>
   );
 }
 
@@ -538,6 +595,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
                         borderRadius: 12, padding: "3px 10px", letterSpacing: "0.04em",
                       }}>✓ {msg.summary}</div>
                     )}
+                    {msg.role === "assistant" && msg.content && <TTSButton text={msg.content} token={token} />}
                   </div>
 
                   {/* Chips inline after insight, before any user msg */}

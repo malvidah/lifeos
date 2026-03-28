@@ -16,8 +16,8 @@ export async function POST(request) {
     const { audio, mimeType } = await request.json();
     if (!audio) return Response.json({ error: 'no audio' }, { status: 400 });
 
-    const apiKey = process.env.OPENAI_API_KEY;
-    if (!apiKey) return Response.json({ error: 'Transcription not configured' }, { status: 503 });
+    const apiKey = process.env.GROQ_API_KEY;
+    if (!apiKey) return Response.json({ error: 'Groq transcription not configured' }, { status: 503 });
 
     // Convert base64 back to binary and build a File for Whisper
     const binary = Buffer.from(audio, 'base64');
@@ -26,10 +26,10 @@ export async function POST(request) {
 
     const form = new FormData();
     form.append('file', file);
-    form.append('model', 'whisper-1');
+    form.append('model', 'whisper-large-v3');
     form.append('language', 'en');
 
-    const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    const res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}` },
       body: form,
