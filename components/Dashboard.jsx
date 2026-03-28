@@ -11,6 +11,7 @@ import { bustOuraCache } from "@/lib/ouraCache";
 import { saveLocationIfNeeded } from "@/lib/weather";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse } from "@/lib/hooks";
+import { useDashboardLayout } from "@/lib/useDashboardLayout";
 import { useProjects } from "@/lib/useProjects";
 import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext } from "@/lib/contexts";
 import Header from "./nav/Header.jsx";
@@ -24,15 +25,13 @@ import ShortcutCheatsheet from "./ui/ShortcutCheatsheet.jsx";
 import { OfflineIndicator } from "./ui/OfflineBanner.jsx";
 import { useRealtimeSync } from "@/lib/useRealtimeSync";
 import { CARD_REGISTRY } from "./dashboard/cardRegistry";
+import PageContainer from "./dashboard/PageContainer";
+import PageDots from "./dashboard/PageDots";
 
 // ── Dock items derived from card registry ─────────────────────────────────────
 const DOCK_ORDER = ['project-graph','world-map','cal','goals','health','habits','notes','tasks','journal','meals','workouts'];
 const DOCK_ITEMS = DOCK_ORDER.map(id => { const c = CARD_REGISTRY.find(r => r.id === id); return { id, label: c.label.replace(/^.*?\s/, ''), icon: c.icon }; });
 
-// Card IDs rendered in the top section (single-column, before search/widget split)
-const TOP_CARDS = ['project-graph', 'cal', 'world-map', 'goals', 'health', 'habits'];
-// Card IDs rendered after search toggle (notes + widgets)
-const WIDGET_IDS = { left: 'journal', right: ['tasks', 'meals', 'workouts'] };
 
 // ── URL-based date state ─────────────────────────────────────────────────────
 // Reads ?date=YYYY-MM-DD from URL; defaults to today if absent or invalid.
@@ -323,10 +322,7 @@ function DashboardInner() {
     return () => window.removeEventListener('daylabRefresh', handler);
   }, []);
 
-  // ── Collapse state ─────────────────────────────────────────────────────
-  const [calCollapsed,    toggleCal]      = useCollapse("cal",     true);
-  const [healthCollapsed, toggleHealth]   = useCollapse("health",  true);
-  const [habitsCollapsed, toggleHabits]   = useCollapse("habits",  true);
+  // ── Filter/view state (kept — used by card internals) ──────────────────
   const [habitFilter, setHabitFilter_] = useState(() => {
     try { return localStorage.getItem('daylab:habitFilter') || 'all'; } catch { return 'all'; }
   });
@@ -334,27 +330,10 @@ function DashboardInner() {
     setHabitFilter_(f);
     try { localStorage.setItem('daylab:habitFilter', f); } catch {}
   }, []);
-  const [journalCollapsed,toggleJournal]  = useCollapse("journal", false);
-  const [tasksCollapsed,  toggleTasks]    = useCollapse("tasks",   false);
   const [taskFilter, setTaskFilter] = useState('all');
-  const [mealsCollapsed,  toggleMeals]    = useCollapse("meals",   true);
-  const [actCollapsed,    toggleAct]      = useCollapse("workouts",true);
-  const [notesCollapsed,  toggleNotes]    = useCollapse("notes",   true);
-  const [goalsCollapsed,  toggleGoals]    = useCollapse("goals",   true);
   const [goalsViewMode, setGoalsViewMode] = useState('kanban');
-  // Migrate old localStorage keys for renamed dock IDs
-  if (typeof window !== "undefined") {
-    for (const [oldKey, newKey] of [["collapse:map","collapse:project-graph"],["collapse:timeline","collapse:world-map"]]) {
-      if (localStorage.getItem(oldKey) !== null && localStorage.getItem(newKey) === null) {
-        localStorage.setItem(newKey, localStorage.getItem(oldKey));
-        localStorage.removeItem(oldKey);
-      }
-    }
-  }
-  const [mapCollapsed,    toggleMap_]     = useCollapse("project-graph", false);
+  // World-map collapse kept for navigateToPlace behavior
   const [timelineCollapsed, toggleTimeline] = useCollapse("world-map", true);
-  const collapseMap = {journal:journalCollapsed,tasks:tasksCollapsed,meals:mealsCollapsed,workouts:actCollapsed};
-  const toggleMap   = {journal:toggleJournal,   tasks:toggleTasks,  meals:toggleMeals,  workouts:toggleAct};
 
   // ── Note names for NoteContext — shared across Journal + Notes editors ──────
   const [allNoteNames, setAllNoteNames] = useState([]);
@@ -491,6 +470,26 @@ function DashboardInner() {
   },[loadDots]);
 
   const mobile = useIsMobile();
+  const layout = useDashboardLayout(token, mobile);
+
+  // Persist currentPageIdx to localStorage so it survives refresh
+  useEffect(() => {
+    if (layout.loaded) {
+      try { localStorage.setItem('daylab:pageIdx', String(layout.currentPageIdx)); } catch {}
+    }
+  }, [layout.currentPageIdx, layout.loaded]);
+  // Restore on load
+  useEffect(() => {
+    if (layout.loaded) {
+      try {
+        const saved = parseInt(localStorage.getItem('daylab:pageIdx'), 10);
+        if (!isNaN(saved) && saved > 0 && saved < layout.pages.length) {
+          layout.setCurrentPageIdx(saved);
+        }
+      } catch {}
+    }
+  }, [layout.loaded]); // eslint-disable-line
+
   if(!authReady) return (
     <div style={{background:"var(--dl-bg)",height:"100vh",display:"flex",alignItems:"center",justifyContent:"center"}}>
       <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-highlight)",letterSpacing:"0.2em"}}>loading…</span>
@@ -516,12 +515,24 @@ function DashboardInner() {
     goalsViewMode, setGoalsViewMode, habitFilter, setHabitFilter,
     taskFilter, setTaskFilter, startSync, endSync, onHealthChange, onScoresReady,
     searchOpen, allNoteNames, setAllNoteNames,
-    // Collapse states — each card checks its own
-    mapCollapsed, calCollapsed, timelineCollapsed, goalsCollapsed,
-    healthCollapsed, habitsCollapsed, notesCollapsed,
-    tasksCollapsed: collapseMap.tasks, journalCollapsed: collapseMap.journal,
-    mealsCollapsed: collapseMap.meals, actCollapsed: collapseMap.workouts,
   };
+
+  // Current page's card IDs — used for dock active state
+  const currentPageCards = layout.pages[layout.currentPageIdx]?.cards || [];
+
+  // renderPage: renders all cards for a given page config
+  const renderPage = useCallback((page, pageIdx) => {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, paddingTop: 0, maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+        {page.cards.map(cardId => {
+          const entry = CARD_REGISTRY.find(c => c.id === cardId);
+          if (!entry) return null;
+          return <React.Fragment key={cardId}>{entry.render(cardProps)}</React.Fragment>;
+        })}
+        <div style={{ paddingBottom: 200 }} />
+      </div>
+    );
+  }, [cardProps]);
 
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
@@ -555,9 +566,9 @@ function DashboardInner() {
       {/* ── Main scroll area ─── */}
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
 
-        {/* ── Single unified scroll container ── */}
-        <div ref={scrollContainerRef} style={{flex:1, minHeight:0, overflowY:"auto", paddingBottom:mobile?200:0, overflowAnchor:'none'}}>
-        <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8}}>
+        {/* ── Fixed nav + header spacer ── */}
+        <div ref={scrollContainerRef} style={{flex:1, minHeight:0, display:"flex", flexDirection:"column", overflowY: searchOpen ? 'auto' : 'hidden'}}>
+        <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8, flexShrink:0}}>
 
           {/* Spacer for fixed header */}
           <div style={{height:"calc(env(safe-area-inset-top, 0px) + 100px)",flexShrink:0}}/>
@@ -572,35 +583,19 @@ function DashboardInner() {
             onBack={activeProject ? () => { selectProject(null); setSelected(todayKey()); } : null}
             dockItems={DOCK_ITEMS.map(item => ({
               ...item,
-              isOpen: item.id === 'project-graph' ? !mapCollapsed
-                : item.id === 'world-map' ? !timelineCollapsed
-                : item.id === 'cal' ? !calCollapsed
-                : item.id === 'health' ? !healthCollapsed
-                : item.id === 'habits' ? !habitsCollapsed
-                : item.id === 'notes' ? !notesCollapsed
-                : item.id === 'goals' ? !goalsCollapsed
-                : !collapseMap[item.id],
-              onToggle: item.id === 'project-graph' ? toggleMap_
-                : item.id === 'world-map' ? toggleTimeline
-                : item.id === 'cal' ? toggleCal
-                : item.id === 'health' ? toggleHealth
-                : item.id === 'habits' ? toggleHabits
-                : item.id === 'notes' ? toggleNotes
-                : item.id === 'goals' ? toggleGoals
-                : toggleMap[item.id],
+              isOpen: currentPageCards.includes(item.id),
+              onToggle: () => {
+                // Scroll to the card if it's on the current page
+                const el = document.getElementById(`card-${item.id}`);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+              },
             }))}
           />
+        </div>
 
-          {/* ── Top cards (single-column, from registry) ── */}
-          {TOP_CARDS.map(id => {
-            const entry = CARD_REGISTRY.find(c => c.id === id);
-            if (!entry) return null;
-            return <React.Fragment key={id}>{entry.render(cardProps)}</React.Fragment>;
-          })}
-
-          {/* Search results replace notes + widgets when open */}
+          {/* Search results replace page content when open */}
           {searchOpen ? (
-            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease' }}>
+            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease', padding: '0 10px', maxWidth: 1200, width: '100%', margin: '0 auto' }}>
               <SearchResults
                 results={srResults}
                 loading={srLoading}
@@ -608,62 +603,22 @@ function DashboardInner() {
                 onSelectDate={d => { setSearchOpen(false); setSearchQuery(''); setSelected(d); }}
               />
             </div>
-          ) : (
+          ) : layout.loaded ? (
             <>
-              {/* Notes */}
-              {(() => { const e = CARD_REGISTRY.find(c => c.id === 'notes'); return e ? <React.Fragment key="notes">{e.render(cardProps)}</React.Fragment> : null; })()}
-
-              {/* Widgets: Journal, Tasks, Meals, Workouts — 2-column on desktop */}
-              {mobile ? (
-                // Mobile: Tasks → Journal → Meals → Workouts (stacked)
-                <div style={{display:"flex", flexDirection:"column", gap:10, paddingBottom:200}}>
-                  {['tasks','journal','meals','workouts'].map(id => {
-                    const entry = CARD_REGISTRY.find(c => c.id === id);
-                    if (!entry) return null;
-                    return <React.Fragment key={id}>{entry.render(cardProps)}</React.Fragment>;
-                  })}
-                </div>
-              ) : (
-                <div style={{display:"flex", gap:10, flexDirection:"row", alignItems:"stretch"}}>
-                  {/* Left column: Tasks, Meals, Workouts */}
-                  {(() => {
-                    const visible = WIDGET_IDS.right
-                      .map(id => { const e = CARD_REGISTRY.find(c => c.id === id); return { id, rendered: e ? e.render(cardProps) : null }; })
-                      .filter(({ rendered }) => rendered !== null);
-                    if (!visible.length) return null;
-                    return (
-                      <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                        {visible.map(({ id, rendered }, i) => (
-                          <div key={id} style={{
-                            display:"flex", flexDirection:"column",
-                            flex: i === visible.length - 1 ? 1 : "0 0 auto",
-                            minHeight: 200}}>
-                            {rendered}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                  {/* Right column: Journal */}
-                  {(() => {
-                    const entry = CARD_REGISTRY.find(c => c.id === WIDGET_IDS.left);
-                    if (!entry) return null;
-                    const rendered = entry.render(cardProps);
-                    if (!rendered) return null;
-                    return (
-                      <div style={{flex:"1 1 0", minWidth:0, display:"flex", flexDirection:"column", gap:10, paddingBottom:180}}>
-                        <div style={{flex:1, minHeight:320, display:"flex", flexDirection:"column"}}>
-                          {rendered}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
+              <PageContainer
+                pages={layout.pages}
+                renderPage={renderPage}
+                currentPageIdx={layout.currentPageIdx}
+                onPageChange={layout.setCurrentPageIdx}
+              />
+              <PageDots
+                count={layout.pages.length}
+                active={layout.currentPageIdx}
+                onDotClick={(i) => layout.setCurrentPageIdx(i)}
+              />
             </>
-          )}
+          ) : null}
 
-        </div>{/* close max-width inner */}
         </div>{/* close scroll outer */}
 
       </div>

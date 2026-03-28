@@ -35,7 +35,7 @@ export const CARD_REGISTRY = [
     label: '⛰️ Projects',
     icon: <span style={{fontSize:14,lineHeight:1}}>⛰️</span>,
     render: (props) => {
-      if (!props.graphData || props.searchOpen || props.mapCollapsed) return null;
+      if (!props.graphData) return null;
       return (
         <MapCard
           allTags={props.graphData.allTags}
@@ -58,7 +58,6 @@ export const CARD_REGISTRY = [
     label: '📅 Calendar',
     icon: <span style={{fontSize:14,lineHeight:1}}>📅</span>,
     render: (props) => {
-      if (props.searchOpen || props.calCollapsed) return null;
       return (
         <div style={{flexShrink:0}}>
           <ErrorBoundary label="Calendar">
@@ -76,7 +75,6 @@ export const CARD_REGISTRY = [
     label: '🗺️ Map',
     icon: <span style={{fontSize:14,lineHeight:1}}>🗺️</span>,
     render: (props) => {
-      if (props.searchOpen || props.timelineCollapsed) return null;
       return (
         <WorldMapCard token={props.token} />
       );
@@ -87,7 +85,6 @@ export const CARD_REGISTRY = [
     label: '🏁 Goals',
     icon: <span style={{fontSize:14,lineHeight:1}}>🏁</span>,
     render: (props) => {
-      if (props.searchOpen || props.goalsCollapsed) return null;
       return (
         <div style={{flexShrink:0}}>
           <ErrorBoundary label="Goals">
@@ -105,7 +102,6 @@ export const CARD_REGISTRY = [
     label: '❤️ Health',
     icon: <span style={{fontSize:14,lineHeight:1}}>❤️</span>,
     render: (props) => {
-      if (props.searchOpen || props.healthCollapsed) return null;
       return (
         <div style={{flexShrink:0}}>
           <ErrorBoundary label="Health">
@@ -122,7 +118,6 @@ export const CARD_REGISTRY = [
     label: '🎯 Habits',
     icon: <span style={{fontSize:14,lineHeight:1}}>🎯</span>,
     render: (props) => {
-      if (props.searchOpen || props.habitsCollapsed) return null;
       return (
         <div style={{flexShrink:0}}>
           <ErrorBoundary label="Habits">
@@ -141,7 +136,6 @@ export const CARD_REGISTRY = [
     label: '📄 Notes',
     icon: <span style={{fontSize:14,lineHeight:1}}>📄</span>,
     render: (props) => {
-      if (props.searchOpen || props.notesCollapsed) return null;
       return (
         <ErrorBoundary label="Notes">
           <NotesCard project={props.projectFilter} token={props.token} userId={props.userId} onNoteNamesChange={props.setAllNoteNames} collapsed={false} expandHref="/notes" />
@@ -154,7 +148,6 @@ export const CARD_REGISTRY = [
     label: '☑️ Tasks',
     icon: <span style={{fontSize:14,lineHeight:1}}>☑️</span>,
     render: (props) => {
-      if (props.searchOpen || props.tasksCollapsed) return null;
       return (
         <ErrorBoundary label="☑️ Tasks">
         <Card label="☑️ Tasks" color="var(--dl-blue)"
@@ -174,7 +167,6 @@ export const CARD_REGISTRY = [
     label: '📓 Journal',
     icon: <span style={{fontSize:14,lineHeight:1}}>📓</span>,
     render: (props) => {
-      if (props.searchOpen || props.journalCollapsed) return null;
       return (
         <ErrorBoundary label="📓 Journal">
         <Card label="📓 Journal" color="var(--dl-accent)"
@@ -192,7 +184,6 @@ export const CARD_REGISTRY = [
     label: '🍽️ Meals',
     icon: <span style={{fontSize:14,lineHeight:1}}>🍽️</span>,
     render: (props) => {
-      if (props.searchOpen || props.mealsCollapsed) return null;
       return (
         <ErrorBoundary label="🍽️ Meals">
         <Card label="🍽️ Meals" color="var(--dl-red)"
@@ -210,7 +201,6 @@ export const CARD_REGISTRY = [
     label: '💪 Workouts',
     icon: <span style={{fontSize:14,lineHeight:1}}>💪</span>,
     render: (props) => {
-      if (props.searchOpen || props.actCollapsed) return null;
       return (
         <ErrorBoundary label="💪 Workouts">
         <Card label="💪 Workouts" color="var(--dl-green)"
