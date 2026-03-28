@@ -359,6 +359,8 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
 
   function handleAccept() {
     window.dispatchEvent(new CustomEvent("daylab:ai-resolved"));
+    // Log acceptance in chat history
+    setMessages(prev => [...prev, { role: "assistant", content: `✓ ${resultText || "Accepted"}`, isStatus: true }]);
     undoFnRef.current = null;
     aiResultsRef.current = null;
     setPillPhase('idle');
@@ -366,6 +368,8 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
 
   async function handleReject() {
     window.dispatchEvent(new CustomEvent("daylab:ai-resolved"));
+    // Log rejection in chat history
+    setMessages(prev => [...prev, { role: "assistant", content: `✕ Undone: ${resultText || "Rejected"}`, isStatus: true }]);
     // Server-side undo: delete/revert records via the undo API
     const results = aiResultsRef.current;
     if (results?.length) {
@@ -866,13 +870,17 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
                       )}
                     </div>
                   </div>
-                  {/* Accept / Reject */}
+                  {/* Accept / Reject — icon buttons */}
                   <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                    <button onClick={handleReject} style={{ fontFamily: mono, fontSize: 10, letterSpacing: "0.08em", color: "var(--dl-middle)", background: "color-mix(in srgb, var(--dl-strong) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--dl-strong) 12%, transparent)", borderRadius: 20, padding: "5px 14px", cursor: "pointer" }}>
-                      Reject
+                    <button onClick={handleReject} title="Undo" style={{ background: "color-mix(in srgb, var(--dl-strong) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--dl-strong) 12%, transparent)", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--dl-middle)", transition: "color 0.15s, background 0.15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-red, #c44)"; e.currentTarget.style.background = "color-mix(in srgb, var(--dl-red, #c44) 10%, transparent)"; }}
+                      onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.background = "color-mix(in srgb, var(--dl-strong) 8%, transparent)"; }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                     </button>
-                    <button onClick={handleAccept} style={{ fontFamily: mono, fontSize: 10, letterSpacing: "0.08em", color: "#fff", background: "var(--dl-accent)", border: "none", borderRadius: 20, padding: "5px 14px", cursor: "pointer" }}>
-                      Accept
+                    <button onClick={handleAccept} title="Accept" style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "opacity 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.85"}
+                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                     </button>
                   </div>
                 </div>
