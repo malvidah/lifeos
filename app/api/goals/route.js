@@ -25,7 +25,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   // For each goal, count linked tasks and habits
   const goalsWithCounts = await Promise.all((data || []).map(async (goal) => {
-    // Count tasks with data-goal="goalname" in html — exclude habits (counted separately)
+    // Count tasks with data-goal="goalname" in html (exclude habits)
     const { count: taskCount, error: taskError } = await supabase
       .from('tasks')
       .select('id', { count: 'exact' })

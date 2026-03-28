@@ -206,9 +206,9 @@ const AllIcon = () => (
 // ── Schedule options for habit creation ───────────────────────────────────────
 const SCHEDULE_OPTIONS = [
   { key: 'daily', label: 'Daily', chip: 'Daily', search: 'daily everyday' },
-  { key: '1pw', label: '1/week', chip: '1/week', search: '1x per week once weekly 1 per week' },
-  { key: '2pw', label: '2/week', chip: '2/week', search: '2x per week twice weekly 2 per week' },
-  { key: '3pw', label: '3/week', chip: '3/week', search: '3x per week three times weekly 3 per week' },
+  { key: '1pw', label: '1/week', chip: '1/week', search: '1x per week once weekly 1 per week 1pw' },
+  { key: '2pw', label: '2/week', chip: '2/week', search: '2x per week twice weekly 2 per week 2pw' },
+  { key: '3pw', label: '3/week', chip: '3/week', search: '3x per week three times weekly 3 per week 3pw' },
   { key: 'weekdays', label: 'Weekdays (M·T·W·R·F)', chip: 'M·T·W·R·F', search: 'weekdays weekday mtwrf' },
   { key: 'mwf', label: 'M·W·F', chip: 'M·W·F', search: 'mwf monday wednesday friday' },
   { key: 'tr', label: 'T·R', chip: 'T·R', search: 'tr tuesday thursday' },
@@ -221,6 +221,18 @@ const SCHEDULE_OPTIONS = [
   { key: 'sat', label: 'Saturday', chip: 'S', search: 'saturday sat' },
   { key: 'sun', label: 'Sunday', chip: 'U', search: 'sunday sun' },
 ];
+
+// Compact frequency label for inline display after habit name
+const FREQ_LABELS = {
+  daily: 'daily', weekdays: 'mtwrf', mwf: 'mwf', tr: 'tr', weekends: 'su',
+  mon: 'm', tue: 't', wed: 'w', thu: 'r', fri: 'f', sat: 's', sun: 'u',
+};
+function scheduleFreqTag(schedule) {
+  if (!schedule) return null;
+  const pw = xperweekTarget(schedule);
+  if (pw !== null) return `${pw}/w`;
+  return FREQ_LABELS[schedule] || null;
+}
 
 export function HabitFilterBtns({ filter, setFilter }) {
   const btns = [

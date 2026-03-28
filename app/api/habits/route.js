@@ -1,6 +1,15 @@
 import { withAuth } from '../_lib/auth.js';
 import { isValidDate } from '@/lib/validate.js';
-import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
+import { keyToRecurrence, matchesSchedule, xperweekTarget } from '@/lib/recurrence.js';
+
+// Returns the Monday of the ISO week for a given YYYY-MM-DD string
+function isoWeekKey(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = d.getDay(); // 0=sun, 6=sat
+  const mondayOffset = (day === 0) ? -6 : 1 - day;
+  d.setDate(d.getDate() + mondayOffset);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 import { cleanTaskText, displayTaskText } from '@/lib/cleanTaskText.js';
 
 // GET /api/habits?start=YYYY-MM-DD&end=YYYY-MM-DD
