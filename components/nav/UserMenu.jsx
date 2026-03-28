@@ -41,19 +41,13 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
         if(settings.ouraToken){setOuraKey(settings.ouraToken);setOuraConnected(true);}
         if(settings.garminTokens?.oauth1){setGarminConnected(true);}
         if(settings.stravaToken?.access_token){setStravaConnected(true);}
+        // Read premium status from user_settings (same source as server-side isPremium)
+        setPlanInfo({
+          isPremium: settings.premium?.active === true,
+          insightCount: settings.insightUsage?.count || 0,
+          plan: settings.premium?.plan || null,
+        });
       }).catch(()=>{});
-    // Fetch plan status
-    const _sbPlan = createClient();
-    Promise.all([
-      _sbPlan.from('entries').select('data').eq('type','premium').eq('date','global').eq('user_id',userId).maybeSingle(),
-      _sbPlan.from('entries').select('data').eq('type','insight_usage').eq('date','global').eq('user_id',userId).maybeSingle(),
-    ]).then(([premRow, usageRow]) => {
-      setPlanInfo({
-        isPremium: premRow.data?.data?.active === true,
-        insightCount: usageRow.data?.data?.count || 0,
-        plan: premRow.data?.data?.plan || null,
-      });
-    }).catch(()=>{});
     // Check Apple Health data + Claude MCP connection (use singleton — no new GoTrueClient)
     const _sb = createClient();
     _sb.from("health_metrics").select("id").eq("source","apple").limit(5)

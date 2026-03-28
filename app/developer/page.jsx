@@ -7,10 +7,6 @@ const StandaloneShell = dynamic(() => import("@/components/StandaloneShell"), { 
 
 const SECTION_LABEL = { fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dl-middle)', marginBottom: 8 };
 const STATUS_COLORS = { new: '#E8917A', read: '#6BAED6', resolved: '#5BA89D' };
-const SVC_COLORS = {
-  supabase: '#3ECF8E', anthropic: '#D4A574', groq: '#F55036',
-  openai: '#74AA9C', google: '#4285F4',
-};
 
 // ── Service card ──────────────────────────────────────────────────────────────
 function ServiceCard({ name, configured, detail, model, notes, dashboard }) {
@@ -65,150 +61,177 @@ function ServiceCard({ name, configured, detail, model, notes, dashboard }) {
   );
 }
 
-// ── Architecture diagram (driven by architecture.json) ───────────────────────
-function ArchDiagram({ arch }) {
-  if (!arch) return (
-    <div style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-border2)', padding: '8px 0' }}>
-      Architecture manifest not found. Run <code>npm run build</code> to generate.
-    </div>
-  );
+// ── Architecture section (visual, plain-language) ────────────────────────────
 
-  const box = (color) => ({
-    border: `1px solid ${color}44`,
-    borderRadius: 10, padding: '12px 16px',
-    background: color + '08',
-  });
-  const headingStyle = (color) => ({
-    fontFamily: mono, fontSize: 10, fontWeight: 600, letterSpacing: '0.06em',
-    textTransform: 'uppercase', color, marginBottom: 8,
-  });
-  const itemStyle = {
-    fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', lineHeight: '1.8',
-  };
-  const connectorStyle = {
-    fontFamily: mono, fontSize: 11, color: 'var(--dl-border2)',
-    textAlign: 'center', padding: '4px 0', letterSpacing: '0.1em',
-    lineHeight: '1.4',
-  };
+const LAYER_CARD = {
+  background: 'var(--dl-card)',
+  border: '1px solid var(--dl-border)',
+  borderRadius: 14, padding: '16px 18px',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+};
+const LAYER_TITLE = (color) => ({
+  fontFamily: mono, fontSize: 12, fontWeight: 600, letterSpacing: '0.06em',
+  textTransform: 'uppercase', color, marginBottom: 6,
+});
+const LAYER_DESC = {
+  fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', lineHeight: '1.7',
+};
+const ARROW_STYLE = {
+  fontFamily: mono, fontSize: 18, color: 'var(--dl-border2)',
+  textAlign: 'center', padding: '2px 0', lineHeight: 1,
+};
 
-  const cat = arch.client.libraryCategories || {};
-  const features = arch.client.features || [];
+const CONNECTED_SERVICES = [
+  { emoji: '\uD83D\uDDC4\uFE0F', name: 'Database', provider: 'Supabase', color: '#3ECF8E',
+    desc: 'Stores all your data \u2014 journal, tasks, meals, health, goals, habits' },
+  { emoji: '\uD83E\uDDE0', name: 'AI', provider: 'Anthropic Claude', color: '#D4A574',
+    desc: 'Powers the chat assistant, daily insights, and voice commands' },
+  { emoji: '\uD83C\uDF99\uFE0F', name: 'Voice', provider: 'Groq', color: '#F55036',
+    desc: 'Converts your voice recordings into text' },
+  { emoji: '\uD83D\uDD0A', name: 'Speech', provider: 'OpenAI', color: '#74AA9C',
+    desc: 'Reads AI responses back to you' },
+  { emoji: '\uD83D\uDCC5', name: 'Calendar', provider: 'Google', color: '#4285F4',
+    desc: 'Syncs events with your Google Calendar' },
+];
 
-  // Group routes by base path for concise display
-  const routeGroups = {};
-  for (const r of arch.apiRoutes) {
-    const base = r.path.split('/').slice(0, 3).join('/');
-    if (!routeGroups[base]) routeGroups[base] = { methods: new Set(), services: new Set() };
-    r.methods.forEach(m => routeGroups[base].methods.add(m));
-    r.services.forEach(s => routeGroups[base].services.add(s));
+const DATA_CATEGORIES = [
+  { emoji: '\u270D\uFE0F', label: 'Your Writing', desc: 'Journal entries, notes' },
+  { emoji: '\u2705', label: 'Your Tasks & Goals', desc: 'Tasks, goals, habits, completions' },
+  { emoji: '\uD83D\uDCAA', label: 'Your Health', desc: 'Sleep, HRV, steps, scores, workouts' },
+  { emoji: '\uD83C\uDF7D\uFE0F', label: 'Your Food', desc: 'Meals with nutrition estimates' },
+  { emoji: '\uD83D\uDCCD', label: 'Your Places', desc: 'Locations and places visited' },
+  { emoji: '\uD83D\uDCC6', label: 'Your Calendar', desc: 'Events synced from Google' },
+  { emoji: '\u2699\uFE0F', label: 'Your Settings', desc: 'Theme, preferences, premium status' },
+];
+
+function HowItWorks({ arch }) {
+  // Derive tech pills from architecture.json
+  const techPills = [];
+  if (arch) {
+    const cat = arch.client.libraryCategories || {};
+    if (cat.ui) techPills.push({ label: 'React', color: '#61DAFB' }, { label: 'Next.js', color: 'var(--dl-strong)' });
+    if (cat.editor?.length) techPills.push({ label: 'Tiptap', color: 'var(--dl-accent)' });
+    if (cat['3d']?.length) techPills.push({ label: 'Three.js', color: '#049EF4' });
+    if (cat.maps?.length) techPills.push({ label: 'Leaflet', color: '#199900' });
+    if (cat.dnd?.length) techPills.push({ label: 'Drag & Drop', color: 'var(--dl-middle)' });
+    techPills.push({ label: 'Vercel', color: 'var(--dl-strong)' });
+    techPills.push({ label: 'Supabase', color: '#3ECF8E' });
+    techPills.push({ label: 'Claude AI', color: '#D4A574' });
+    techPills.push({ label: 'Whisper', color: '#F55036' });
+    techPills.push({ label: 'TTS', color: '#74AA9C' });
+    if (cat.payments?.length) techPills.push({ label: 'Stripe', color: '#635BFF' });
   }
-  const topRoutes = Object.entries(routeGroups)
-    .sort((a, b) => b[1].services.size - a[1].services.size)
-    .slice(0, 10);
-
-  const svcEntries = Object.entries(arch.services || {});
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-      <div style={SECTION_LABEL}>Architecture (auto-generated)</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={SECTION_LABEL}>How Day Lab Works</div>
 
-      {/* Client layer */}
-      <div style={box('var(--dl-accent)')}>
-        <div style={headingStyle('var(--dl-accent)')}>Client (Browser / Electron)</div>
-        <div style={itemStyle}>
-          {arch.client.framework}<br/>
-          {(cat.editor || []).length > 0 && <>Tiptap Editor ({cat.editor.length} extensions)<br/></>}
-          {(cat['3d'] || []).length > 0 && <>Three.js + R3F + postprocessing<br/></>}
-          {(cat.auth_db || []).length > 0 && <>Supabase JS client (auth, realtime)<br/></>}
-          {(cat.maps || []).length > 0 && <>Leaflet + react-leaflet (2D maps)<br/></>}
-          {(cat.dnd || []).length > 0 && <>@dnd-kit (drag and drop)<br/></>}
-          {(cat.state || []).length > 0 && <>State: {cat.state.join(', ')}<br/></>}
-          {(cat.payments || []).length > 0 && <>Payments: Stripe<br/></>}
-          {features.length > 0 && <>Browser APIs: {features.join(', ')}</>}
+      {/* Layer 1: Your Device */}
+      <div style={{ ...LAYER_CARD, borderLeft: '3px solid var(--dl-accent)' }}>
+        <div style={LAYER_TITLE('var(--dl-accent)')}>
+          {'\uD83D\uDCBB'} Your Device
+        </div>
+        <div style={LAYER_DESC}>
+          You interact with Day Lab through your browser or desktop app. Everything you see — the journal, tasks, habits, maps — runs right here on your device.
         </div>
       </div>
 
-      <div style={connectorStyle}>{'│'}<br/>{'API Routes (' + arch.apiRoutes.length + ')'}<br/>{'▼'}</div>
+      <div style={ARROW_STYLE}>{'\u2193'}</div>
 
-      {/* Server layer */}
-      <div style={box('#6BAED6')}>
-        <div style={headingStyle('#6BAED6')}>Server (Vercel Edge / Serverless)</div>
-        <div style={itemStyle}>
-          {topRoutes.map(([base, info]) => (
-            <span key={base}>
-              {base} [{[...info.methods].join(',')}]
-              {info.services.size > 0 && <span style={{ color: 'var(--dl-border2)' }}> → {[...info.services].join(', ')}</span>}
-              <br/>
+      {/* Layer 2: The Brain */}
+      <div style={{ ...LAYER_CARD, borderLeft: '3px solid #6BAED6' }}>
+        <div style={LAYER_TITLE('#6BAED6')}>
+          {'\u2699\uFE0F'} The Brain
+        </div>
+        <div style={LAYER_DESC}>
+          When you save an entry, add a meal, or ask the AI something, your device sends it to our server. The server decides what to do — store your data, ask AI for help, or sync with your calendar.
+          {arch && (
+            <span style={{ color: 'var(--dl-border2)' }}>
+              {' '}({arch.apiRoutes.length} different actions available)
             </span>
-          ))}
-          {Object.keys(routeGroups).length > 10 && (
-            <span style={{ color: 'var(--dl-border2)' }}>...and {Object.keys(routeGroups).length - 10} more route groups</span>
           )}
         </div>
       </div>
 
-      <div style={connectorStyle}>
-        {'│'}<br/>
-        {'┌' + svcEntries.map(() => '──────').join('┬') + '┐'}<br/>
-        {svcEntries.map(() => '▼     ').join(' ')}
-      </div>
+      <div style={ARROW_STYLE}>{'\u2193'}</div>
 
-      {/* External services */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {svcEntries.map(([key, svc]) => {
-          const color = SVC_COLORS[key] || 'var(--dl-middle)';
-          return (
-            <div key={key} style={{
-              border: `1px solid ${color}44`, borderRadius: 8, padding: '8px 12px',
-              background: color + '08', flex: '1 1 0', minWidth: 100,
+      {/* Layer 3: Connected Services */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ ...SECTION_LABEL, marginBottom: 0 }}>Connected Services</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 8 }}>
+          {CONNECTED_SERVICES.map(svc => (
+            <div key={svc.name} style={{
+              ...LAYER_CARD, borderLeft: `3px solid ${svc.color}`,
+              padding: '12px 14px',
             }}>
-              <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 600, color, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                {key}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <span style={{ fontSize: 16 }}>{svc.emoji}</span>
+                <div>
+                  <div style={{ fontFamily: mono, fontSize: 11, fontWeight: 600, color: svc.color, letterSpacing: '0.04em' }}>
+                    {svc.name}
+                  </div>
+                  <div style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-border2)' }}>
+                    {svc.provider}
+                  </div>
+                </div>
               </div>
-              {svc.model && (
-                <div style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-accent)', marginTop: 2 }}>{svc.model}</div>
-              )}
-              {svc.tables && (
-                <div style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-border2)', marginTop: 2 }}>
-                  {svc.tables.length} tables
-                </div>
-              )}
-              {svc.usedBy && (
-                <div style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-border2)', marginTop: 2 }}>
-                  {svc.usedBy.length} routes
-                </div>
-              )}
+              <div style={{ fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)', lineHeight: '1.6' }}>
+                {svc.desc}
+              </div>
             </div>
-          );
-        })}
+          ))}
+        </div>
       </div>
 
-      {/* Supabase tables detail */}
-      {arch.services?.supabase?.tables?.length > 0 && (
-        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: '#3ECF8E08', border: '1px solid #3ECF8E22' }}>
-          <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#3ECF8E', marginBottom: 6 }}>
-            Supabase Tables ({arch.services.supabase.tables.length})
-          </div>
-          <div style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', lineHeight: '1.8', columnCount: 2, columnGap: 16 }}>
-            {arch.services.supabase.tables.map(t => <span key={t}>{t}<br/></span>)}
+      {/* What We Store */}
+      <div style={{ marginTop: 8 }}>
+        <div style={SECTION_LABEL}>What We Store</div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 6 }}>
+          {DATA_CATEGORIES.map(cat => (
+            <div key={cat.label} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              background: 'var(--dl-card)', border: '1px solid var(--dl-border)',
+              borderRadius: 10, padding: '10px 12px',
+            }}>
+              <span style={{ fontSize: 16, flexShrink: 0 }}>{cat.emoji}</span>
+              <div>
+                <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 600, color: 'var(--dl-strong)', letterSpacing: '0.04em' }}>
+                  {cat.label}
+                </div>
+                <div style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)', lineHeight: '1.5' }}>
+                  {cat.desc}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Built With */}
+      {techPills.length > 0 && (
+        <div style={{ marginTop: 8 }}>
+          <div style={SECTION_LABEL}>Built With</div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {techPills.map(t => (
+              <span key={t.label} style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: '0.06em',
+                color: t.color, background: (t.color.startsWith('#') ? t.color : '') + '14',
+                border: `1px solid ${t.color.startsWith('#') ? t.color + '33' : 'var(--dl-border)'}`,
+                borderRadius: 100, padding: '3px 10px',
+              }}>
+                {t.label}
+              </span>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Data collected */}
-      {arch.dataCollected?.length > 0 && (
-        <div style={{ marginTop: 10, padding: '10px 14px', borderRadius: 8, background: 'var(--dl-border-15, rgba(128,120,100,0.06))' }}>
-          <div style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dl-middle)', marginBottom: 6 }}>Data Collected</div>
-          <div style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-border2)', lineHeight: '1.8' }}>
-            {arch.dataCollected.join(' · ')}
-          </div>
+      {/* Timestamp */}
+      {arch && (
+        <div style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-border2)', textAlign: 'right' }}>
+          Auto-generated {new Date(arch.generatedAt).toLocaleDateString()}
         </div>
       )}
-
-      {/* Generated timestamp */}
-      <div style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-border2)', marginTop: 8, textAlign: 'right' }}>
-        Auto-generated {new Date(arch.generatedAt).toLocaleDateString()} {new Date(arch.generatedAt).toLocaleTimeString()}
-      </div>
     </div>
   );
 }
@@ -364,13 +387,8 @@ function DeveloperInner({ token }) {
         </div>
       </div>
 
-      {/* Architecture */}
-      <div style={{
-        background: 'var(--dl-card)', border: '1px solid var(--dl-border)',
-        borderRadius: 12, padding: 16,
-      }}>
-        <ArchDiagram arch={arch} />
-      </div>
+      {/* How It Works */}
+      <HowItWorks arch={arch} />
 
       {/* Feedback */}
       <div>

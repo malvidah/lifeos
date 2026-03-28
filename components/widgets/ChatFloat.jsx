@@ -99,18 +99,20 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
   const [isPremiumUser, setIsPremiumUser] = useState(false);
   const FREE_CHAT_LIMIT = 3;
 
-  // Load chat query count + premium status from DB
+  // Load chat query count + premium status from user_settings
   useEffect(() => {
     if (!token || !userId) return;
-    Promise.all([
-      dbLoad("global", "chat_usage", token),
-      dbLoad("global", "premium", token),
-    ]).then(([usage, prem]) => {
-      const count = usage?.count || 0;
-      setChatQueryCount(count);
-      if (count >= FREE_CHAT_LIMIT) setChatLimitReached(true);
-      setIsPremiumUser(prem?.active === true);
-    });
+    // Read premium from user_settings (same source as server-side isPremium)
+    fetch("/api/settings", { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => {
+        const settings = d?.data ?? {};
+        setIsPremiumUser(settings.premium?.active === true);
+        const count = settings.insightUsage?.count || 0;
+        setChatQueryCount(count);
+        if (count >= FREE_CHAT_LIMIT && !settings.premium?.active) setChatLimitReached(true);
+      })
+      .catch(() => {});
   }, [token, userId]); // eslint-disable-line
 
   const [listening, setListening] = useState(false);
