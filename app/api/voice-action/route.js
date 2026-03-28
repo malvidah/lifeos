@@ -2,6 +2,7 @@ import { withAuth } from '../_lib/auth.js';
 import { refreshGoogleToken } from '../_lib/google.js';
 import { isPremium } from '../_lib/tier.js';
 import { rateLimit } from '../_lib/rateLimit.js';
+import { textToTaskHtml, expandSlashCommands, parseProjectTags } from '@/lib/textToTaskHtml.js';
 
 export const POST = withAuth(async (req, { supabase, user }) => {
   const { text, date, tz } = await req.json();
@@ -69,6 +70,13 @@ Action formats:
 {"type":"calendar","events":[{"title":"Lunch with Sarah","startTime":"12:00","endTime":"13:00","allDay":false}]}
 {"type":"calendar","events":[{"title":"Team offsite","allDay":true}]}
 
+IMPORTANT for tasks: preserve ALL user formatting tokens in the text field exactly as typed.
+- Project tags like {personal}, {work}, {fitness} — keep the curly braces
+- Habit markers like /h daily, /h mwf — keep the slash command
+- Repeat markers like /r weekdays — keep the slash command
+- Date tags like @2026-03-28 — keep the @ prefix
+Do NOT strip or reformat these tokens. Pass them through verbatim in the "text" field.
+
 For calendar events:
 - Parse natural language times: "noon" → "12:00", "3pm" → "15:00", "9:30" → "09:30"
 - If no end time given, default to 1 hour after start
@@ -125,11 +133,11 @@ ${contextSnippet}`;
       const { data: last } = await supabase.from('journal_blocks').select('position')
         .eq('user_id', user.id).eq('date', date).order('position', { ascending: false }).limit(1);
       const nextPos = (last?.[0]?.position ?? -1) + 1;
-      await supabase.from('journal_blocks').insert({
+      const { data: jRows } = await supabase.from('journal_blocks').insert({
         user_id: user.id, date, position: nextPos,
         content: `<p>${action.append}</p>`, project_tags: [], note_tags: [],
-      });
-      results.push({ type: 'journal', count: 1 });
+      }).select('id');
+      results.push({ type: 'journal', count: 1, created: jRows?.map(r => r.id) || [] });
     }
 
     // ── MEALS ────────────────────────────────────────────────────────────────
@@ -138,26 +146,34 @@ ${contextSnippet}`;
         const { data: last } = await supabase.from('meal_items').select('position')
           .eq('user_id', user.id).eq('date', date).order('position', { ascending: false }).limit(1);
         let nextPos = (last?.[0]?.position ?? -1) + 1;
-        await supabase.from('meal_items').insert(
+        const { data: mRows } = await supabase.from('meal_items').insert(
           action.entries.map(text => ({ user_id: user.id, date, position: nextPos++, content: text }))
-        );
-        results.push({ type: 'meals', count: action.entries.length });
+        ).select('id');
+        results.push({ type: 'meals', count: action.entries.length, created: mRows?.map(r => r.id) || [] });
       }
       if (action.edit) {
         const { data: items } = await supabase.from('meal_items').select('id, content')
           .eq('user_id', user.id).eq('date', date);
         const match = items?.find(r => r.content?.toLowerCase().includes(action.edit.find.toLowerCase()));
-        if (match) await supabase.from('meal_items')
-          .update({ content: action.edit.replace, ai_calories: null, ai_protein: null })
-          .eq('id', match.id).eq('user_id', user.id);
-        results.push({ type: 'meals', count: 1 });
+        if (match) {
+          await supabase.from('meal_items')
+            .update({ content: action.edit.replace, ai_calories: null, ai_protein: null })
+            .eq('id', match.id).eq('user_id', user.id);
+          results.push({ type: 'meals', count: 1, edited: [{ id: match.id, prev: { content: match.content } }] });
+        } else {
+          results.push({ type: 'meals', count: 1 });
+        }
       }
       if (action.delete) {
-        const { data: items } = await supabase.from('meal_items').select('id, content')
+        const { data: items } = await supabase.from('meal_items').select('id, content, position')
           .eq('user_id', user.id).eq('date', date);
         const match = items?.find(r => r.content?.toLowerCase().includes(action.delete.toLowerCase()));
-        if (match) await supabase.from('meal_items').delete().eq('id', match.id).eq('user_id', user.id);
-        results.push({ type: 'meals', count: 1 });
+        if (match) {
+          await supabase.from('meal_items').delete().eq('id', match.id).eq('user_id', user.id);
+          results.push({ type: 'meals', count: 1, deleted: [{ id: match.id, prev: match }] });
+        } else {
+          results.push({ type: 'meals', count: 1 });
+        }
       }
     }
 
@@ -167,56 +183,76 @@ ${contextSnippet}`;
         const { data: last } = await supabase.from('tasks').select('position')
           .eq('user_id', user.id).eq('date', date).order('position', { ascending: false }).limit(1);
         let nextPos = (last?.[0]?.position ?? -1) + 1;
-        await supabase.from('tasks').insert(action.entries.map(e => {
-          const taskText = typeof e === 'string' ? e : e.text;
+        const { data: tRows } = await supabase.from('tasks').insert(action.entries.map(e => {
+          const rawText = typeof e === 'string' ? e : e.text;
+          const taskText = expandSlashCommands(rawText);
           return {
             user_id: user.id, date, position: nextPos++, text: taskText, done: false,
-            html: `<li data-type="taskItem" data-checked="false"><p>${taskText}</p></li>`,
+            html: textToTaskHtml(taskText, false),
+            project_tags: parseProjectTags(taskText),
           };
-        }));
-        results.push({ type: 'tasks', count: action.entries.length });
+        })).select('id');
+        results.push({ type: 'tasks', count: action.entries.length, created: tRows?.map(r => r.id) || [] });
       }
       if (action.edit) {
-        const { data: rows } = await supabase.from('tasks').select('id, text, done')
+        const { data: rows } = await supabase.from('tasks').select('id, text, done, html, project_tags')
           .eq('user_id', user.id).eq('date', date);
         const match = rows?.find(r => r.text?.toLowerCase().includes(action.edit.find.toLowerCase()));
-        if (match) await supabase.from('tasks').update({
-          text: action.edit.replace,
-          html: `<li data-type="taskItem" data-checked="${match.done}"><p>${action.edit.replace}</p></li>`,
-        }).eq('id', match.id).eq('user_id', user.id);
-        results.push({ type: 'tasks', count: 1 });
+        if (match) {
+          const editText = expandSlashCommands(action.edit.replace);
+          await supabase.from('tasks').update({
+            text: editText,
+            html: textToTaskHtml(editText, match.done),
+            project_tags: parseProjectTags(editText),
+          }).eq('id', match.id).eq('user_id', user.id);
+          results.push({ type: 'tasks', count: 1, edited: [{ id: match.id, prev: { text: match.text, html: match.html, project_tags: match.project_tags } }] });
+        } else {
+          results.push({ type: 'tasks', count: 1 });
+        }
       }
       if (action.delete) {
-        const { data: rows } = await supabase.from('tasks').select('id, text')
+        const { data: rows } = await supabase.from('tasks').select('id, text, html, done, position, project_tags')
           .eq('user_id', user.id).eq('date', date);
         const match = rows?.find(r => r.text?.toLowerCase().includes(action.delete.toLowerCase()));
-        if (match) await supabase.from('tasks').delete().eq('id', match.id).eq('user_id', user.id);
-        results.push({ type: 'tasks', count: 1 });
+        if (match) {
+          await supabase.from('tasks').delete().eq('id', match.id).eq('user_id', user.id);
+          results.push({ type: 'tasks', count: 1, deleted: [{ id: match.id, prev: match }] });
+        } else {
+          results.push({ type: 'tasks', count: 1 });
+        }
       }
     }
 
     // ── WORKOUTS ─────────────────────────────────────────────────────────────
     if (type === 'activity' || type === 'workouts') {
       if (action.entries?.length) {
-        await supabase.from('workouts').insert(
+        const { data: wRows } = await supabase.from('workouts').insert(
           action.entries.map(text => ({ user_id: user.id, date, name: text, source: 'manual' }))
-        );
-        results.push({ type: 'workouts', count: action.entries.length });
+        ).select('id');
+        results.push({ type: 'workouts', count: action.entries.length, created: wRows?.map(r => r.id) || [] });
       }
       if (action.edit) {
         const { data: rows } = await supabase.from('workouts').select('id, name')
           .eq('user_id', user.id).eq('date', date);
         const match = rows?.find(r => r.name?.toLowerCase().includes(action.edit.find.toLowerCase()));
-        if (match) await supabase.from('workouts').update({ name: action.edit.replace })
-          .eq('id', match.id).eq('user_id', user.id);
-        results.push({ type: 'workouts', count: 1 });
+        if (match) {
+          await supabase.from('workouts').update({ name: action.edit.replace })
+            .eq('id', match.id).eq('user_id', user.id);
+          results.push({ type: 'workouts', count: 1, edited: [{ id: match.id, prev: { name: match.name } }] });
+        } else {
+          results.push({ type: 'workouts', count: 1 });
+        }
       }
       if (action.delete) {
-        const { data: rows } = await supabase.from('workouts').select('id, name')
+        const { data: rows } = await supabase.from('workouts').select('id, name, source, date')
           .eq('user_id', user.id).eq('date', date);
         const match = rows?.find(r => r.name?.toLowerCase().includes(action.delete.toLowerCase()));
-        if (match) await supabase.from('workouts').delete().eq('id', match.id).eq('user_id', user.id);
-        results.push({ type: 'workouts', count: 1 });
+        if (match) {
+          await supabase.from('workouts').delete().eq('id', match.id).eq('user_id', user.id);
+          results.push({ type: 'workouts', count: 1, deleted: [{ id: match.id, prev: match }] });
+        } else {
+          results.push({ type: 'workouts', count: 1 });
+        }
       }
     }
 

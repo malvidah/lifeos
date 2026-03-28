@@ -29,6 +29,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
   const [busyText, setBusyText] = useState('Thinking\u2026');
   const [followUpText, setFollowUpText] = useState('');
   const undoFnRef = useRef(null);
+  const aiResultsRef = useRef(null); // voice-action results with IDs for server-side undo
   const abortedRef = useRef(false);
   const pillRef = useRef(null);
 
@@ -260,6 +261,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
         // AI made data changes → show accept/reject + highlight
         const undoFn = dispatchRefresh(data.results.map(r => r.type), data.summary);
         undoFnRef.current = undoFn;
+        aiResultsRef.current = data.results;
         logToChat(userText, data.summary || "Done");
         setResultText(data.summary || "Done");
         window.dispatchEvent(new CustomEvent("daylab:ai-pending", { detail: { types: data.results.map(r => r.type) } }));
@@ -301,11 +303,24 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
   function handleAccept() {
     window.dispatchEvent(new CustomEvent("daylab:ai-resolved"));
     undoFnRef.current = null;
+    aiResultsRef.current = null;
     setPillPhase('idle');
   }
 
-  function handleReject() {
+  async function handleReject() {
     window.dispatchEvent(new CustomEvent("daylab:ai-resolved"));
+    // Server-side undo: delete/revert records via the undo API
+    const results = aiResultsRef.current;
+    if (results?.length) {
+      aiResultsRef.current = null;
+      try {
+        await api.post("/api/voice-action/undo", { results }, token);
+      } catch (_) {}
+      // Refresh UI so components reload from server
+      const types = [...new Set(results.map(r => r.type))];
+      window.dispatchEvent(new CustomEvent("daylab:refresh", { detail: { types } }));
+    }
+    // Also run client-side MEM undo as fallback
     if (undoFnRef.current) {
       undoFnRef.current();
       undoFnRef.current = null;
@@ -318,11 +333,10 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
     setResultText('');
   }
 
-  // ── Expanded mode: conversational chat ───────────────────────────────────
+  // ── Expanded mode: uses voice-action for data entry, same accept/reject flow ──
   async function sendChat(override) {
     const userText = (override ?? input).trim();
     if (!userText || busy) return;
-    // Free tier gate — check isPremium via response or local count
     if (chatLimitReached) return;
     setInput("");
     if (inputRef.current) inputRef.current.style.height = "auto";
@@ -335,24 +349,46 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
 
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      const data = await api.post("/api/chat", {
-        messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
-        date,
-        tz,
-      }, token);
-      if (data?.error) {
-        setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: `Error: ${data.error}` }));
+      // Try voice-action first — handles data entry commands with accept/reject
+      const vaData = await api.post("/api/voice-action", { text: userText, date, tz }, token);
+
+      if (vaData?.ok && vaData.results?.length > 0) {
+        // Data change — show summary with accept/reject
+        const undoFn = dispatchRefresh(vaData.results.map(r => r.type), vaData.summary);
+        undoFnRef.current = undoFn;
+        aiResultsRef.current = vaData.results;
+        const summary = vaData.summary || "Done";
+        setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: summary, actions: vaData.results, summary }));
+        window.dispatchEvent(new CustomEvent("daylab:ai-pending", { detail: { types: vaData.results.map(r => r.type) } }));
+        // Show accept/reject in pill too
+        setResultText(summary);
+        setPillPhase('result-change');
+      } else if (vaData?.message) {
+        // Voice-action returned informational/error — show as chat message
+        setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: vaData.message }));
+      } else if (vaData?.tier === "free") {
+        setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: "Voice entry requires a Premium account." }));
       } else {
-        const assistantMsg = { role: "assistant", content: data.reply, actions: data.actions, summary: data.summary };
-        setMessages(prev => prev.slice(0, -1).concat(assistantMsg));
-        if (data.refreshTypes?.length) dispatchRefresh(data.refreshTypes, data.summary);
-        // Track usage for free accounts
-        if (!data.isPremium && !isPremiumUser) {
-          const newCount = chatQueryCount + 1;
-          setChatQueryCount(newCount);
-          if (newCount >= FREE_CHAT_LIMIT) setChatLimitReached(true);
-          dbSave("global", "chat_usage", { count: newCount }, token);
+        // Voice-action couldn't handle it — fall back to chat API for questions
+        const data = await api.post("/api/chat", {
+          messages: nextMessages.map(m => ({ role: m.role, content: m.content })),
+          date, tz,
+        }, token);
+        if (data?.error) {
+          setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: `Error: ${data.error}` }));
+        } else {
+          const assistantMsg = { role: "assistant", content: data.reply, actions: data.actions, summary: data.summary };
+          setMessages(prev => prev.slice(0, -1).concat(assistantMsg));
+          if (data.refreshTypes?.length) dispatchRefresh(data.refreshTypes, data.summary);
         }
+      }
+
+      // Track usage for free accounts
+      if (!isPremiumUser) {
+        const newCount = chatQueryCount + 1;
+        setChatQueryCount(newCount);
+        if (newCount >= FREE_CHAT_LIMIT) setChatLimitReached(true);
+        dbSave("global", "chat_usage", { count: newCount }, token);
       }
     } catch (e) {
       setMessages(prev => prev.slice(0, -1).concat({ role: "assistant", content: "Something went wrong. Try again." }));

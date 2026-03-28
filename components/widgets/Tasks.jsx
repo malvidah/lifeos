@@ -129,16 +129,23 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     return () => { cancelled = true; };
   }, [date, token, userId, reloadKey]);
 
-  // Reload when habits card toggles a completion or external device saves tasks
+  // Reload when habits card toggles a completion, AI adds tasks, or external device saves
   useEffect(() => {
     const handler = () => {
-      // Don't reload if we're in the middle of a save — would cause conflicts
       if (savingRef.current) return;
       setReloadKey(k => k + 1);
     };
+    const refreshHandler = (e) => {
+      const types = e.detail?.types || [];
+      if (types.includes('tasks')) handler();
+    };
     window.addEventListener('daylab:habits-changed', handler);
+    window.addEventListener('daylab:refresh', refreshHandler);
+    window.addEventListener('daylab:snapshot-restore', refreshHandler);
     return () => {
       window.removeEventListener('daylab:habits-changed', handler);
+      window.removeEventListener('daylab:refresh', refreshHandler);
+      window.removeEventListener('daylab:snapshot-restore', refreshHandler);
     };
   }, []);
 

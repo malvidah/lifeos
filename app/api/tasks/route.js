@@ -3,6 +3,7 @@ import { tasksToHtml } from '@/lib/parseBlocks.js';
 import { isValidDate, isValidUuid, MAX_TASK_TEXT } from '@/lib/validate.js';
 import { keyToRecurrence, matchesSchedule } from '@/lib/recurrence.js';
 import { cleanTaskText } from '@/lib/cleanTaskText.js';
+import { textToTaskHtml, parseProjectTags, parseDueDate } from '@/lib/textToTaskHtml.js';
 
 // Local-date helper: prefer the client-supplied date; fall back to UTC only as
 // a last resort. Using toISOString() gives UTC which is wrong after ~4pm PT.
@@ -185,50 +186,11 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       return Response.json({ error: `text exceeds ${MAX_TASK_TEXT} characters` }, { status: 400 });
     }
 
-    // Generate proper HTML with data attributes from text tokens
-    function textToTaskHtml(rawText) {
-      let inner = (rawText || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
-      inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
-      inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, (match, key, rest) => {
-        // rest may be "label", "label:count", or "label:Nd" (days)
-        const segs = rest.split(':');
-        const lastSeg = segs[segs.length - 1];
-        const hasDays = segs.length > 1 && /^\d+d$/i.test(lastSeg);
-        const hasCount = !hasDays && segs.length > 1 && /^\d+$/.test(lastSeg);
-        const days = hasDays ? parseInt(lastSeg, 10) : null;
-        const count = hasCount ? lastSeg : null;
-        const label = (hasDays || hasCount) ? segs.slice(0, -1).join(':') : rest;
-        const displayLabel = count ? `${label} ×${count}` : days ? `${label} ${days}d` : label;
-        const countAttr = count ? ` data-habit-count="${count}"` : '';
-        const daysAttr = days ? ` data-habit-days="${days}"` : '';
-        return `<span data-habit="${key}" data-habit-label="${label}"${countAttr}${daysAttr}>🎯 ${displayLabel}</span>`;
-      });
-      inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
-      inner = inner.replace(/\{g:([^}]+)\}/g, '<span data-goal="$1">🏁 $1</span>');
-      inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');
-      inner = inner.replace(/@(\d{4}-\d{2}-\d{2})/g, '<span data-date-tag="$1">⏳ $1</span>');
-      inner = inner.replace(/\[([^\]]+)\]/g, '<span data-note-link="$1">$1</span>');
-      return `<li data-type="taskItem" data-checked="${done ? 'true' : 'false'}"><label><input type="checkbox"${done ? ' checked="checked"' : ''}><span></span></label><div><p>${inner}</p></div></li>`;
-    }
-
     // Parse due_date from text if not provided
-    const parsedDueDate = due_date || (() => {
-      const m = (text || '').match(/@(\d{4}-\d{2}-\d{2})/);
-      return m ? m[1] : null;
-    })();
+    const parsedDueDate = due_date || parseDueDate(text);
 
     // Parse project tags from text if not provided
-    const parsedTags = (project_tags && project_tags.length) ? project_tags : (() => {
-      const tags = [];
-      const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
-      let m;
-      while ((m = re.exec(text || '')) !== null) {
-        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:') && !m[0].startsWith('{g:')) {
-          tags.push(m[1].toLowerCase());
-        }
-      }
-      return tags;
-    })();
+    const parsedTags = (project_tags && project_tags.length) ? project_tags : parseProjectTags(text);
 
     // Dedup guard: skip insert if a task with the same cleaned text already exists on this date
     const newClean = cleanTaskText(text);
@@ -245,7 +207,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
       user_id: user.id,
       date,
       text: text || '',
-      html: taskHtml || textToTaskHtml(text),
+      html: taskHtml || textToTaskHtml(text, !!done),
       done: !!done,
       due_date: parsedDueDate,
       completed_at: done ? date : null,
@@ -319,28 +281,8 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
       if (tags.length) patch.project_tags = tags;
     }
     if (!('html' in patch)) {
-      let inner = text.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-      inner = inner.replace(/\{r:([^:}]+):([^}]*)\}/g, '<span data-recurrence="$1" data-recurrence-label="$2">↻ $2</span>');
-      inner = inner.replace(/\{h:([^:}]+):([^}]*)\}/g, (match, key, rest) => {
-        const segs = rest.split(':');
-        const lastSeg = segs[segs.length - 1];
-        const hasDays = segs.length > 1 && /^\d+d$/i.test(lastSeg);
-        const hasCount = !hasDays && segs.length > 1 && /^\d+$/.test(lastSeg);
-        const days = hasDays ? parseInt(lastSeg, 10) : null;
-        const count = hasCount ? lastSeg : null;
-        const label = (hasDays || hasCount) ? segs.slice(0, -1).join(':') : rest;
-        const displayLabel = count ? `${label} ×${count}` : days ? `${label} ${days}d` : label;
-        const countAttr = count ? ` data-habit-count="${count}"` : '';
-        const daysAttr = days ? ` data-habit-days="${days}"` : '';
-        return `<span data-habit="${key}" data-habit-label="${label}"${countAttr}${daysAttr}>🎯 ${displayLabel}</span>`;
-      });
-      inner = inner.replace(/\{l:([^}]+)\}/g, '<span data-place-tag="$1">📍 $1</span>');
-      inner = inner.replace(/\{g:([^}]+)\}/g, '<span data-goal="$1">🏁 $1</span>');
-      inner = inner.replace(/\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi, '<span data-project-tag="$1">⛰️ $1</span>');
-      inner = inner.replace(/@(\d{4}-\d{2}-\d{2})/g, '<span data-date-tag="$1">⏳ $1</span>');
-      inner = inner.replace(/\[([^\]]+)\]/g, '<span data-note-link="$1">$1</span>');
       const isDone = 'done' in patch ? patch.done : false;
-      patch.html = `<li data-type="taskItem" data-checked="${isDone ? 'true' : 'false'}"><label><input type="checkbox"${isDone ? ' checked="checked"' : ''}><span></span></label><div><p>${inner}</p></div></li>`;
+      patch.html = textToTaskHtml(text, isDone);
     }
   }
 
