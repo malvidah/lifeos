@@ -636,7 +636,19 @@ function DashboardInner() {
             />
           )}
 
-          {/* 2b. Goals kanban — right below the Projects mountain map */}
+          {/* 2b. CalendarCard */}
+          {!searchOpen && !calCollapsed && (
+            <div style={{flexShrink:0}}>
+              <ErrorBoundary label="Calendar">
+              <CalendarCard selected={selected} onSelect={setSelected}
+                events={events} setEvents={setEvents} healthDots={healthDots}
+                token={token} collapsed={false}
+                calView={calView} onCalViewChange={v=>{setCalView(v);}} expandHref="/calendar"/>
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {/* 2c. Goals kanban */}
           {!searchOpen && !goalsCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Goals">
@@ -647,21 +659,9 @@ function DashboardInner() {
             </div>
           )}
 
-          {/* 2c. WorldMapCard — location timeline */}
+          {/* 2d. WorldMapCard — location timeline */}
           {!searchOpen && !timelineCollapsed && (
             <WorldMapCard token={token} />
-          )}
-
-          {/* 3. CalendarCard — hidden when toggled off in dock */}
-          {!searchOpen && !calCollapsed && (
-            <div style={{flexShrink:0}}>
-              <ErrorBoundary label="Calendar">
-              <CalendarCard selected={selected} onSelect={setSelected}
-                events={events} setEvents={setEvents} healthDots={healthDots}
-                token={token} collapsed={false}
-                calView={calView} onCalViewChange={v=>{setCalView(v);}} expandHref="/calendar"/>
-              </ErrorBoundary>
-            </div>
           )}
 
           {/* 4. HealthCard — hidden when toggled off in dock */}
