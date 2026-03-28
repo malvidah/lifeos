@@ -649,7 +649,12 @@ function DashboardInner() {
             </div>
           )}
 
-          {/* 2c. Goals kanban */}
+          {/* 2c. WorldMapCard — location timeline */}
+          {!searchOpen && !timelineCollapsed && (
+            <WorldMapCard token={token} />
+          )}
+
+          {/* 2d. Goals kanban */}
           {!searchOpen && !goalsCollapsed && (
             <div style={{flexShrink:0}}>
               <ErrorBoundary label="Goals">
@@ -659,11 +664,6 @@ function DashboardInner() {
                 </Card>
               </ErrorBoundary>
             </div>
-          )}
-
-          {/* 2d. WorldMapCard — location timeline */}
-          {!searchOpen && !timelineCollapsed && (
-            <WorldMapCard token={token} />
           )}
 
           {/* 4. HealthCard — hidden when toggled off in dock */}
