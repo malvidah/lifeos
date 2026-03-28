@@ -409,23 +409,20 @@ function buildIslandGeo(projects, radius, noise2D, edgeR, vitality = 50) {
       const dx = x - p.x, dz = z - p.z;
       const dist = Math.sqrt(dx * dx + dz * dz);
       const peakR = (0.6 + p.score * 0.3) * (p.widthFactor || 1.0);
-      if (dist > peakR * 1.5) continue; // too far from this mountain
-      // Snow starts at 60% of each mountain's own height
-      const localSnowLine = p.height * 0.6;
+      if (dist > peakR * 1.2) continue;
+      // Snow starts at top 30% of each mountain
+      const localSnowLine = p.height * 0.7;
       if (h <= localSnowLine) continue;
-      // Staleness: more days inactive = more snow. 3+ days starts showing snow.
-      const daysSince = p.recencyScore != null
-        ? (p.recencyScore >= 0.7 ? 1 : p.recencyScore >= 0.4 ? 14 : p.recencyScore >= 0.1 ? 60 : 120)
-        : 120;
-      if (daysSince < 3 && p.isActive) continue; // recently active — no snow yet
-      // Snow intensity: ramps up from 3 days to 30+ days inactive
-      const stalenessFactor = Math.min(1, Math.max(0, (daysSince - 2) / 28));
-      const heightBlend = Math.min(1, (h - localSnowLine) / (p.height * 0.35));
-      const distFade = 1 - dist / (peakR * 1.5);
-      const snowStrength = heightBlend * distFade * (0.3 + stalenessFactor * 0.7);
-      if (snowStrength > 0.05) {
-        const noiseVal = noise2D(x * 4, z * 4) * 0.03;
-        return base.map(c => c + (0.95 - c) * snowStrength + noiseVal);
+      // All non-hot mountains get at least light snow at their peak
+      // Stale mountains get heavier snow coverage
+      const isStale = !p.isActive; // no activity in 7+ days
+      const stalenessFactor = isStale ? 0.8 : 0.15; // stale = heavy snow, active = light dusting
+      const heightBlend = Math.min(1, (h - localSnowLine) / (p.height * 0.25));
+      const distFade = 1 - dist / (peakR * 1.2);
+      const snowStrength = heightBlend * distFade * stalenessFactor;
+      if (snowStrength > 0.02) {
+        const noiseVal = noise2D(x * 4, z * 4) * 0.02;
+        return base.map(c => c + (0.97 - c) * snowStrength + noiseVal);
       }
     }
 

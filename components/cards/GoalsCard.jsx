@@ -352,18 +352,22 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         if (mode === 'status') {
           const currentStatus = goal.status || 'active';
           if (currentStatus !== dragOverCol) {
+            // Optimistic update
+            setGoals(prev => prev.map(g => g.id === dragId ? { ...g, status: dragOverCol } : g));
             api.patch('/api/goals', { id: dragId, status: dragOverCol }, token).then(() => {
               refresh();
               window.dispatchEvent(new Event('daylab:goals-changed'));
-            });
+            }).catch(() => refresh());
           }
         } else if (mode === 'kanban') {
           const newProject = dragOverCol === 'unassigned' ? null : dragOverCol;
           if ((goal.project || null) !== newProject) {
+            // Optimistic update
+            setGoals(prev => prev.map(g => g.id === dragId ? { ...g, project: newProject } : g));
             api.patch('/api/goals', { id: dragId, project: newProject }, token).then(() => {
               refresh();
               window.dispatchEvent(new Event('daylab:goals-changed'));
-            });
+            }).catch(() => refresh());
           }
         }
       }
@@ -470,7 +474,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         onDragLeave={e => onColDragLeave(e, colKey)}
         onDrop={onColDrop}
         style={{
-          minWidth: COL_MIN_W, flex: '1 1 0',
+          minWidth: COL_MIN_W, flex: '1 1 0', minHeight: 80,
           display: 'flex', flexDirection: 'column', gap: 6,
           scrollSnapAlign: 'start',
           background: isDropTarget ? `${typeof colColor === 'string' && colColor.startsWith('#') ? colColor : GOAL_COLOR}08` : 'transparent',
