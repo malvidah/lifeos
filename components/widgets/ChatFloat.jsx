@@ -271,6 +271,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
       if (MEM[key] !== undefined) snapshots[key] = JSON.parse(JSON.stringify(MEM[key]));
     });
     window.dispatchEvent(new CustomEvent("daylab:refresh", { detail: { types: refreshTypes } }));
+    if (refreshTypes.includes('goals')) window.dispatchEvent(new Event('daylab:goals-changed'));
     let undoFn = null;
     if (Object.keys(snapshots).length > 0) {
       undoFn = () => {
@@ -283,6 +284,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
         redo: () => {
           Object.keys(snapshots).forEach(k => { delete MEM[k]; delete DIRTY[k]; });
           window.dispatchEvent(new CustomEvent("daylab:refresh", { detail: { types: refreshTypes } }));
+    if (refreshTypes.includes('goals')) window.dispatchEvent(new Event('daylab:goals-changed'));
         },
       });
     }

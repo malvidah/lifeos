@@ -57,7 +57,7 @@ If the request is clearly asking to add, log, edit, or remove data, return:
 If it is a question, is vague, references unsupported sources, or you genuinely can't determine what to add, return:
 {"ok": false, "message": "Short sentence explaining why (max 10 words)"}
 
-Supported types: meals, tasks, notes, activity, calendar
+Supported types: meals, tasks, notes, activity, calendar, goals
 NOT supported: strava, oura, health metrics
 
 Action formats:
@@ -65,10 +65,16 @@ Action formats:
 {"type":"tasks","entries":[{"text":"call dentist","done":false}]}
 {"type":"journal","append":"felt good today"}
 {"type":"workouts","entries":["30 min run"]}
+{"type":"goals","entries":[{"name":"Half marathon","project":"health","status":"active"}]}
+{"type":"goals","edit":{"find":"half marathon","replace":{"name":"Full marathon"}}}
+{"type":"goals","delete":"half marathon"}
 {"type":"meals","edit":{"find":"salmon","replace":"salmon tacos"}}
 {"type":"tasks","delete":"call dentist"}
 {"type":"calendar","events":[{"title":"Lunch with Sarah","startTime":"12:00","endTime":"13:00","allDay":false}]}
 {"type":"calendar","events":[{"title":"Team offsite","allDay":true}]}
+
+For goals: name is required. project is optional (attach to a project). status defaults to "active" (options: active, planned, completed, archived).
+When user says "add a goal" or "set a goal" or "new goal", use type "goals" — do NOT add goals as tasks.
 
 IMPORTANT for tasks: preserve ALL user formatting tokens in the text field exactly as typed.
 - Project tags like {personal}, {work}, {fitness} — keep the curly braces
@@ -252,6 +258,51 @@ ${contextSnippet}`;
           results.push({ type: 'workouts', count: 1, deleted: [{ id: match.id, prev: match }] });
         } else {
           results.push({ type: 'workouts', count: 1 });
+        }
+      }
+    }
+
+    // ── GOALS ──────────────────────────────────────────────────────────────────
+    if (type === 'goals') {
+      if (action.entries?.length) {
+        const { data: gRows } = await supabase.from('goals').insert(
+          action.entries.map(e => ({
+            user_id: user.id,
+            name: e.name,
+            project: e.project || null,
+            status: e.status || 'active',
+            done: false,
+          }))
+        ).select('id');
+        results.push({ type: 'goals', count: action.entries.length, created: gRows?.map(r => r.id) || [] });
+        window?.dispatchEvent?.(new Event('daylab:goals-changed'));
+      }
+      if (action.edit) {
+        const { data: rows } = await supabase.from('goals').select('id, name, project, status')
+          .eq('user_id', user.id);
+        const match = rows?.find(r => r.name?.toLowerCase().includes(action.edit.find.toLowerCase()));
+        if (match) {
+          const patch = {};
+          if (action.edit.replace?.name) patch.name = action.edit.replace.name;
+          if (action.edit.replace?.project !== undefined) patch.project = action.edit.replace.project || null;
+          if (action.edit.replace?.status) patch.status = action.edit.replace.status;
+          if (Object.keys(patch).length) {
+            await supabase.from('goals').update(patch).eq('id', match.id).eq('user_id', user.id);
+          }
+          results.push({ type: 'goals', count: 1, edited: [{ id: match.id, prev: { name: match.name, project: match.project, status: match.status } }] });
+        } else {
+          results.push({ type: 'goals', count: 1 });
+        }
+      }
+      if (action.delete) {
+        const { data: rows } = await supabase.from('goals').select('id, name, project, status, done')
+          .eq('user_id', user.id);
+        const match = rows?.find(r => r.name?.toLowerCase().includes(action.delete.toLowerCase()));
+        if (match) {
+          await supabase.from('goals').delete().eq('id', match.id).eq('user_id', user.id);
+          results.push({ type: 'goals', count: 1, deleted: [{ id: match.id, prev: match }] });
+        } else {
+          results.push({ type: 'goals', count: 1 });
         }
       }
     }

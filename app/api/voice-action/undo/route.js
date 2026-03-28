@@ -10,6 +10,7 @@ const TABLE_MAP = {
   meals: 'meal_items',
   journal: 'journal_blocks',
   workouts: 'workouts',
+  goals: 'goals',
 };
 
 export const POST = withAuth(async (req, { supabase, user }) => {
