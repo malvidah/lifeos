@@ -5,7 +5,7 @@ import { mono, serif, F } from "@/lib/tokens";
 
 const StandaloneShell = dynamic(() => import("@/components/StandaloneShell"), { ssr: false });
 
-const SECTION_LABEL = { fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dl-middle)', marginBottom: 8 };
+const SECTION_LABEL = { fontFamily: mono, fontSize: 12, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dl-highlight)', marginBottom: 8 };
 const STATUS_COLORS = { new: '#E8917A', read: '#6BAED6', resolved: '#5BA89D' };
 
 const LAYER_CARD = {
@@ -23,7 +23,8 @@ const LAYER_DESC = {
 };
 const ARROW_STYLE = {
   fontFamily: mono, fontSize: 18, color: 'var(--dl-border2)',
-  textAlign: 'center', padding: '2px 0', lineHeight: 1,
+  textAlign: 'center', padding: '0', lineHeight: 1,
+  margin: '-4px 0',
 };
 const BODY_TEXT = {
   fontFamily: serif, fontSize: 14, color: 'var(--dl-middle)', lineHeight: 1.85,
@@ -97,13 +98,28 @@ const APP_FEATURES = [
     back: 'Hover over "Ask AI" to open the quick bar, or click the chat icon for full sidebar. Say "add a goal: run a marathon" or "log oatmeal for breakfast" \u2014 accept or reject with one tap.' },
 ];
 
+// ── Hover style helpers ─────────────────────────────────────────────────────
+const FLIP_HOVER = {
+  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+};
+function addHover(e) {
+  e.currentTarget.style.transform = 'scale(1.02)';
+  e.currentTarget.style.boxShadow = '0 4px 16px rgba(0,0,0,0.10)';
+}
+function removeHover(e) {
+  e.currentTarget.style.transform = 'scale(1)';
+  e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,0.04)';
+}
+
 // ── FlipCard component — simple show/hide, no 3D transform issues ────────────
 function FlipCard({ front, back, style }) {
   const [flipped, setFlipped] = useState(false);
   return (
     <div
       onClick={() => setFlipped(f => !f)}
-      style={{ cursor: 'pointer', ...style }}
+      onMouseEnter={addHover}
+      onMouseLeave={removeHover}
+      style={{ cursor: 'pointer', ...FLIP_HOVER, ...style }}
     >
       <div style={{
         transition: 'opacity 0.25s ease',
@@ -124,7 +140,7 @@ function FlipCard({ front, back, style }) {
 // ── Service flip card ────────────────────────────────────────────────────────
 function ServiceFlipCard({ svc, isOwner }) {
   const cardBase = {
-    ...LAYER_CARD, borderLeft: `3px solid ${svc.color}`,
+    ...LAYER_CARD,
     padding: '14px 16px', height: '100%',
     display: 'flex', flexDirection: 'column', gap: 6,
     boxSizing: 'border-box',
@@ -140,13 +156,10 @@ function ServiceFlipCard({ svc, isOwner }) {
       <div style={{ ...CARD_DESC, flex: 1 }}>
         {svc.desc}
       </div>
-      <div style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-border2)', textAlign: 'right' }}>
-        tap to flip
-      </div>
     </div>
   );
   const back = (
-    <div style={{ ...cardBase, background: 'var(--dl-bg)', borderLeft: `3px solid ${svc.color}44` }}>
+    <div style={{ ...cardBase, background: 'var(--dl-bg)' }}>
       <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 600, color: svc.color, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
         {svc.provider}
       </div>
@@ -169,9 +182,6 @@ function ServiceFlipCard({ svc, isOwner }) {
           Check billing &rarr;
         </a>
       )}
-      <div style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-border2)', textAlign: 'right' }}>
-        tap to flip back
-      </div>
     </div>
   );
   return <FlipCard front={front} back={back} style={{ height: 130 }} />;
@@ -180,7 +190,7 @@ function ServiceFlipCard({ svc, isOwner }) {
 // ── Feature explainer flip card ──────────────────────────────────────────────
 function FeatureFlipCard({ feat }) {
   const cardBase = {
-    ...LAYER_CARD, borderLeft: `3px solid ${feat.color}`,
+    ...LAYER_CARD,
     padding: '14px 16px', height: '100%',
     display: 'flex', flexDirection: 'column', gap: 6,
     boxSizing: 'border-box',
@@ -196,21 +206,15 @@ function FeatureFlipCard({ feat }) {
       <div style={{ ...CARD_DESC, flex: 1 }}>
         {feat.desc}
       </div>
-      <div style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-border2)', textAlign: 'right' }}>
-        tap to flip
-      </div>
     </div>
   );
   const back = (
-    <div style={{ ...cardBase, background: 'var(--dl-bg)', borderLeft: `3px solid ${feat.color}44` }}>
+    <div style={{ ...cardBase, background: 'var(--dl-bg)' }}>
       <div style={{ fontFamily: mono, fontSize: 10, fontWeight: 600, color: feat.color, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
         How to use
       </div>
       <div style={{ ...CARD_DESC, flex: 1 }}>
         {feat.back}
-      </div>
-      <div style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-border2)', textAlign: 'right' }}>
-        tap to flip back
       </div>
     </div>
   );
@@ -220,7 +224,7 @@ function FeatureFlipCard({ feat }) {
 // ── Architecture layer flip card ─────────────────────────────────────────────
 function LayerFlipCard({ emoji, title, color, frontText, backText, archRouteCount }) {
   const cardBase = {
-    ...LAYER_CARD, borderLeft: `3px solid ${color}`,
+    ...LAYER_CARD,
     height: '100%', display: 'flex', flexDirection: 'column',
     boxSizing: 'border-box',
   };
@@ -237,21 +241,15 @@ function LayerFlipCard({ emoji, title, color, frontText, backText, archRouteCoun
           </span>
         )}
       </div>
-      <div style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-border2)', textAlign: 'right', marginTop: 8 }}>
-        tap to flip
-      </div>
     </div>
   );
   const back = (
-    <div style={{ ...cardBase, background: 'var(--dl-bg)', borderLeft: `3px solid ${color}44` }}>
+    <div style={{ ...cardBase, background: 'var(--dl-bg)' }}>
       <div style={{ ...LAYER_TITLE(color), opacity: 0.7 }}>
         {emoji} {title}
       </div>
       <div style={{ ...CARD_DESC, flex: 1 }}>
         {backText}
-      </div>
-      <div style={{ fontFamily: mono, fontSize: 8, color: 'var(--dl-border2)', textAlign: 'right', marginTop: 8 }}>
-        tap to flip back
       </div>
     </div>
   );
@@ -386,14 +384,11 @@ function AboutInner({ token }) {
   const routeCount = arch?.apiRoutes?.length;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
       {/* 1. DAY LAB STATS (owner only) */}
       {isOwner && st && (
-        <div style={{
-          background: 'var(--dl-card)', border: '1px solid var(--dl-border)',
-          borderRadius: 14, padding: '16px 18px',
-        }}>
+        <div style={LAYER_CARD}>
           <div style={SECTION_LABEL}>Day Lab Stats</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <StatPill label="Premium" value={st.premiumCount} color="#5BA89D" />
@@ -410,7 +405,7 @@ function AboutInner({ token }) {
       )}
 
       {/* 2. What is Day Lab */}
-      <div>
+      <div style={LAYER_CARD}>
         <div style={SECTION_LABEL}>What is Day Lab</div>
         <div style={BODY_TEXT}>
           <p style={{ margin: '0 0 14px' }}>
@@ -426,7 +421,7 @@ function AboutInner({ token }) {
       </div>
 
       {/* 3. How to Use Day Lab — feature explainer flip cards */}
-      <div>
+      <div style={LAYER_CARD}>
         <div style={SECTION_LABEL}>How to Use Day Lab</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
           {APP_FEATURES.map(feat => (
@@ -436,53 +431,57 @@ function AboutInner({ token }) {
       </div>
 
       {/* 4. How Day Lab Works — architecture */}
-      <div style={SECTION_LABEL}>How Day Lab Works</div>
+      <div style={LAYER_CARD}>
+        <div style={{ ...SECTION_LABEL, marginBottom: 12 }}>How Day Lab Works</div>
 
-      {/* Layer 1: Your Device — flippable */}
-      <LayerFlipCard
-        emoji={'\uD83D\uDCBB'}
-        title="Your Device"
-        color="var(--dl-accent)"
-        frontText="You interact with Day Lab through your browser or desktop app. Everything you see — the journal, tasks, habits, maps — runs right here on your device."
-        backText="Built with React and Next.js. The editor uses Tiptap with custom extensions for tasks, habits, and tags. The 3D project map uses Three.js. Voice input uses your browser's speech recognition or Groq's Whisper AI."
-      />
+        {/* Layer 1: Your Device */}
+        <LayerFlipCard
+          emoji={'\uD83D\uDCBB'}
+          title="Your Device"
+          color="var(--dl-accent)"
+          frontText="You interact with Day Lab through your browser or desktop app. Everything you see — the journal, tasks, habits, maps — runs right here on your device."
+          backText="Built with React and Next.js. The editor uses Tiptap with custom extensions for tasks, habits, and tags. The 3D project map uses Three.js. Voice input uses your browser's speech recognition or Groq's Whisper AI."
+        />
 
-      <div style={ARROW_STYLE}>{'\u2193'}</div>
+        <div style={ARROW_STYLE}>{'\u2193'}</div>
 
-      {/* Layer 2: The Brain — flippable */}
-      <LayerFlipCard
-        emoji={'\u2699\uFE0F'}
-        title="The Brain"
-        color="#6BAED6"
-        frontText="When you save an entry, add a meal, or ask the AI something, your device sends it to our server. The server decides what to do — store your data, ask AI for help, or sync with your calendar."
-        backText={`Runs on Vercel as serverless functions.${routeCount ? ` ${routeCount} API endpoints` : ' API endpoints'} handle everything from saving a journal entry to asking AI a question. Each request is authenticated and your data is isolated with row-level security.`}
-        archRouteCount={null}
-      />
+        {/* Layer 2: The Brain */}
+        <LayerFlipCard
+          emoji={'\u2699\uFE0F'}
+          title="The Brain"
+          color="#6BAED6"
+          frontText="When you save an entry, add a meal, or ask the AI something, your device sends it to our server. The server decides what to do — store your data, ask AI for help, or sync with your calendar."
+          backText={`Runs on Vercel as serverless functions.${routeCount ? ` ${routeCount} API endpoints` : ' API endpoints'} handle everything from saving a journal entry to asking AI a question. Each request is authenticated and your data is isolated with row-level security.`}
+          archRouteCount={null}
+        />
 
-      <div style={ARROW_STYLE}>{'\u2193'}</div>
+        <div style={ARROW_STYLE}>{'\u2193'}</div>
 
-      {/* System Services — flippable cards */}
-      <div>
-        <div style={{ ...SECTION_LABEL, marginBottom: 4 }}>System Services</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-          {SYSTEM_SERVICES.map(svc => (
-            <ServiceFlipCard key={svc.name} svc={svc} isOwner={isOwner} />
-          ))}
+        {/* System Services */}
+        <div>
+          <div style={{ ...SECTION_LABEL, marginBottom: 4 }}>System Services</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+            {SYSTEM_SERVICES.map(svc => (
+              <ServiceFlipCard key={svc.name} svc={svc} isOwner={isOwner} />
+            ))}
+          </div>
         </div>
-      </div>
 
-      {/* User Connections — flippable cards */}
-      <div>
-        <div style={{ ...SECTION_LABEL, marginBottom: 4 }}>Your Connections</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-          {USER_SERVICES.map(svc => (
-            <ServiceFlipCard key={svc.name} svc={svc} isOwner={isOwner} />
-          ))}
+        <div style={{ ...ARROW_STYLE, margin: '4px 0' }}>{'\u2193'}</div>
+
+        {/* User Connections */}
+        <div>
+          <div style={{ ...SECTION_LABEL, marginBottom: 4 }}>Your Connections</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+            {USER_SERVICES.map(svc => (
+              <ServiceFlipCard key={svc.name} svc={svc} isOwner={isOwner} />
+            ))}
+          </div>
         </div>
       </div>
 
       {/* 5. Data & Privacy */}
-      <div>
+      <div style={LAYER_CARD}>
         <div style={SECTION_LABEL}>Data &amp; Privacy</div>
         <div style={BODY_TEXT}>
           <p style={{ margin: '0 0 14px' }}>
@@ -499,7 +498,7 @@ function AboutInner({ token }) {
 
       {/* 6. Built With */}
       {techPills.length > 0 && (
-        <div>
+        <div style={LAYER_CARD}>
           <div style={SECTION_LABEL}>Built With</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {techPills.map(t => (
@@ -532,7 +531,7 @@ function AboutInner({ token }) {
 
       {/* 8. Feedback (owner only) */}
       {isOwner && (
-        <div>
+        <div style={LAYER_CARD}>
           <div style={SECTION_LABEL}>
             Feedback ({feedback.length})
           </div>
