@@ -288,6 +288,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
   const [dragId, setDragId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
+  const listContainerRef = useRef(null);
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -339,20 +340,56 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
 
   // ── Drag handlers ──────────────────────────────────────────────────────────
   const onDragStart = (e, goalId) => {
-    // List mode allows drag but doesn't change any field
     setDragId(goalId);
     e.dataTransfer.effectAllowed = 'move';
     if (e.target) e.target.style.opacity = '0.5';
   };
+  const onListDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (!listContainerRef.current) return;
+    const cards = Array.from(listContainerRef.current.querySelectorAll('[data-goal-idx]'));
+    let closest = null;
+    let closestDist = Infinity;
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      const midY = rect.top + rect.height / 2;
+      const dist = Math.abs(e.clientY - midY);
+      if (dist < closestDist) { closestDist = dist; closest = card; }
+    }
+    if (closest) {
+      const rect = closest.getBoundingClientRect();
+      const idx = parseInt(closest.dataset.goalIdx, 10);
+      // If cursor is below midpoint, insert after this item
+      setDragOverIdx(e.clientY > rect.top + rect.height / 2 ? idx + 1 : idx);
+    }
+  };
   const onDragEnd = (e) => {
     if (e.target) e.target.style.opacity = '1';
-    if (dragId && dragOverCol !== null) {
+    if (dragId && mode === 'list' && dragOverIdx !== null) {
+      const fromIdx = goals.findIndex(g => g.id === dragId);
+      if (fromIdx !== -1 && fromIdx !== dragOverIdx && fromIdx !== dragOverIdx - 1) {
+        const reordered = [...goals];
+        const [moved] = reordered.splice(fromIdx, 1);
+        const toIdx = dragOverIdx > fromIdx ? dragOverIdx - 1 : dragOverIdx;
+        reordered.splice(toIdx, 0, moved);
+        // Optimistic update with new positions
+        const updated = reordered.map((g, i) => ({ ...g, position: i }));
+        setGoals(updated);
+        // Persist all positions
+        Promise.all(updated.map(g => api.patch('/api/goals', { id: g.id, position: g.position }, token)))
+          .then(() => {
+            refresh();
+            window.dispatchEvent(new Event('daylab:goals-changed'));
+          })
+          .catch(() => refresh());
+      }
+    } else if (dragId && dragOverCol !== null) {
       const goal = goals.find(g => g.id === dragId);
       if (goal) {
         if (mode === 'status') {
           const currentStatus = goal.status || 'active';
           if (currentStatus !== dragOverCol) {
-            // Optimistic update
             setGoals(prev => prev.map(g => g.id === dragId ? { ...g, status: dragOverCol } : g));
             api.patch('/api/goals', { id: dragId, status: dragOverCol }, token).then(() => {
               refresh();
@@ -362,7 +399,6 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         } else if (mode === 'kanban') {
           const newProject = dragOverCol === 'unassigned' ? null : dragOverCol;
           if ((goal.project || null) !== newProject) {
-            // Optimistic update
             setGoals(prev => prev.map(g => g.id === dragId ? { ...g, project: newProject } : g));
             api.patch('/api/goals', { id: dragId, project: newProject }, token).then(() => {
               refresh();
@@ -546,16 +582,33 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode }) {
         </div>
       )}
 
-      {/* ── Manual sort — 4 kanban columns, drag reorders only ─────────── */}
-      {mode === 'list' && goals.length > 0 && (() => {
-        const cols = [[], [], [], []];
-        goals.forEach((g, i) => cols[i % 4].push(g));
-        return (
-          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, scrollSnapType: 'x proximity', WebkitOverflowScrolling: 'touch' }}>
-            {cols.map((items, ci) => renderColumn(`col-${ci}`, '', GOAL_COLOR, items, true, false))}
-          </div>
-        );
-      })()}
+      {/* ── Manual sort — flat grid, drag reorders ─────────────────────── */}
+      {mode === 'list' && goals.length > 0 && (
+        <div
+          ref={listContainerRef}
+          onDragOver={onListDragOver}
+          onDrop={e => e.preventDefault()}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
+            gap: 6, paddingBottom: 6,
+          }}
+        >
+          {goals.map((goal, idx) => (
+            <React.Fragment key={goal.id}>
+              {dragId && dragOverIdx === idx && (
+                <div style={{ gridColumn: '1 / -1', height: 2, background: GOAL_COLOR, borderRadius: 1, margin: '0 0 -2px 0' }} />
+              )}
+              <div data-goal-idx={idx}>
+                {renderGoalCard(goal, true)}
+              </div>
+            </React.Fragment>
+          ))}
+          {dragId && dragOverIdx === goals.length && (
+            <div style={{ gridColumn: '1 / -1', height: 2, background: GOAL_COLOR, borderRadius: 1 }} />
+          )}
+        </div>
+      )}
 
       {/* ── Kanban by project ──────────────────────────────────────────── */}
       {mode === 'kanban' && goals.length > 0 && (
