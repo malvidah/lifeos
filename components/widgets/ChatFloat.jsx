@@ -133,11 +133,30 @@ export function InsightsCard({date, token, userId, healthKey, collapsed, onToggl
 // Collapsed: floating entry bar (quick commands, no history).
 // Expanded: full-height panel with conversation history, Q&A + entry actions.
 
-// ─── DayLabLoader ─────────────────────────────────────────────────────────────
+// ─── DL Sparkle icon (4-pointed star) ────────────────────────────────────────
+function DLSparkle({ size = 14, color = "var(--dl-accent)" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color} style={{ flexShrink: 0 }}>
+      <path d="M12 2L13.9 10.1L22 12L13.9 13.9L12 22L10.1 13.9L2 12L10.1 10.1Z"/>
+    </svg>
+  );
+}
+
 export default function ChatFloat({date, token, userId, healthKey, theme}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
+  // ── Pill phase state machine ─────────────────────────────────────────────
+  // idle → input → busy → result-change | result-info → idle
+  const [pillPhase, setPillPhase] = useState('idle');
+  const [resultText, setResultText] = useState('');
+  const [resultExpanded, setResultExpanded] = useState(false); // "show more"
+  const [busyText, setBusyText] = useState('Thinking\u2026');
+  const [followUpText, setFollowUpText] = useState('');
+  const undoFnRef = useRef(null);
+  const abortedRef = useRef(false);
+  const pillRef = useRef(null);
 
 
   const [messages, setMessages] = useState([]); // [{role, content, actions, summary, isInsight}]
@@ -198,6 +217,18 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [expanded]);
+
+  // Close input pill on click outside
+  useEffect(() => {
+    if (pillPhase !== 'input') return;
+    function handleOutside(e) {
+      if (pillRef.current && !pillRef.current.contains(e.target)) {
+        setPillPhase('idle');
+      }
+    }
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [pillPhase]);
 
   // ── Insight generation — seeded as messages[0] ──────────────────────────
   useEffect(() => {
@@ -345,28 +376,31 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
     setTranscribing(false);
   }
 
-  // Dispatch refresh after chat actions, with undo support
+  // Dispatch refresh after chat actions, with undo support. Returns undoFn or null.
   function dispatchRefresh(refreshTypes, summary) {
-    if (!refreshTypes?.length) return;
+    if (!refreshTypes?.length) return null;
     const snapshots = {};
     refreshTypes.forEach(t => {
       const key = `${userId}:${date}:${t}`;
       if (MEM[key] !== undefined) snapshots[key] = JSON.parse(JSON.stringify(MEM[key]));
     });
     window.dispatchEvent(new CustomEvent("daylab:refresh", { detail: { types: refreshTypes } }));
+    let undoFn = null;
     if (Object.keys(snapshots).length > 0) {
+      undoFn = () => {
+        Object.entries(snapshots).forEach(([k, v]) => { MEM[k] = v; DIRTY[k] = true; });
+        window.dispatchEvent(new CustomEvent("daylab:snapshot-restore", { detail: { keys: Object.keys(snapshots) } }));
+      };
       pushHistory({
         label: `AI: ${summary || "entry"}`,
-        undo: () => {
-          Object.entries(snapshots).forEach(([k, v]) => { MEM[k] = v; DIRTY[k] = true; });
-          window.dispatchEvent(new CustomEvent("daylab:snapshot-restore", { detail: { keys: Object.keys(snapshots) } }));
-        },
+        undo: undoFn,
         redo: () => {
           Object.keys(snapshots).forEach(k => { delete MEM[k]; delete DIRTY[k]; });
           window.dispatchEvent(new CustomEvent("daylab:refresh", { detail: { types: refreshTypes } }));
         },
       });
     }
+    return undoFn;
   }
 
   // ── Collapsed mode: quick command via voice-action ──────────────────────
@@ -378,30 +412,82 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
     ]);
   }
 
-  async function sendQuick() {
-    if (!input.trim() || busy) return;
-    const userText = input.trim();
+  async function sendQuick(textOverride) {
+    const userText = (textOverride ?? input).trim();
+    if (!userText || busy) return;
     setInput("");
     if (inputRef.current) inputRef.current.style.height = "auto";
+    setFollowUpText('');
     stopMic();
     setBusy(true);
+    setBusyText('Thinking\u2026');
+    setPillPhase('busy');
+    setResultExpanded(false);
+    abortedRef.current = false;
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const data = await api.post("/api/voice-action", { text: userText, date, tz }, token);
+      if (abortedRef.current) return;
       if (data?.ok && data.results?.length > 0) {
-        dispatchRefresh(data.results.map(r => r.type), data.summary);
+        // AI made data changes → show accept/reject + highlight
+        const undoFn = dispatchRefresh(data.results.map(r => r.type), data.summary);
+        undoFnRef.current = undoFn;
         logToChat(userText, data.summary || "Done");
+        setResultText(data.summary || "Done");
+        window.dispatchEvent(new CustomEvent("daylab:ai-pending", { detail: { types: data.results.map(r => r.type) } }));
+        setPillPhase('result-change');
       } else if (data.tier === "free") {
         logToChat(userText, "Voice entry requires Premium");
+        setResultText("Voice entry requires Premium — upgrade to use AI entry.");
+        setPillPhase('result-info');
       } else if (data.message) {
+        // Informational answer, no data changes
         logToChat(userText, data.message);
+        setResultText(data.message);
+        setPillPhase('result-info');
       } else if (data.error) {
         logToChat(userText, data.error);
+        setResultText(data.error);
+        setPillPhase('result-info');
       } else {
-        logToChat(userText, "Not sure what to add — try being more specific");
+        logToChat(userText, "Not sure what to add — try being more specific.");
+        setResultText("Not sure what to add — try being more specific.");
+        setPillPhase('result-info');
       }
-    } catch (e) { logToChat(userText, "Something went wrong"); }
+    } catch (e) {
+      if (!abortedRef.current) {
+        logToChat(userText, "Something went wrong");
+        setResultText("Something went wrong — please try again.");
+        setPillPhase('result-info');
+      }
+    }
     setBusy(false);
+  }
+
+  function handleStop() {
+    abortedRef.current = true;
+    setBusy(false);
+    setPillPhase('idle');
+  }
+
+  function handleAccept() {
+    window.dispatchEvent(new CustomEvent("daylab:ai-resolved"));
+    undoFnRef.current = null;
+    setPillPhase('idle');
+  }
+
+  function handleReject() {
+    window.dispatchEvent(new CustomEvent("daylab:ai-resolved"));
+    if (undoFnRef.current) {
+      undoFnRef.current();
+      undoFnRef.current = null;
+    }
+    setPillPhase('idle');
+  }
+
+  function dismissResult() {
+    setPillPhase('idle');
+    setResultText('');
   }
 
   // ── Expanded mode: conversational chat ───────────────────────────────────
@@ -454,57 +540,71 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
   const hasMic = !!(window?.SpeechRecognition || window?.webkitSpeechRecognition || navigator?.mediaDevices?.getUserMedia);
   return (
     <>
-      {/* ── AI chat view — sits below TopBar (zIndex 95), pill floats above at 97 ── */}
+      {/* ── AI chat view — sidebar on desktop, fullscreen on mobile ── */}
       {expanded && (
         <div style={{
-          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-          zIndex: 95,
+          position: "fixed", zIndex: 95,
           background: "var(--dl-bg)",
           display: "flex", flexDirection: "column",
           animation: "fadeIn 0.15s ease",
+          // Desktop: right sidebar; Mobile: fullscreen
+          ...(mobile ? {
+            top: 0, left: 0, right: 0, bottom: 0,
+          } : {
+            top: 0, right: 0, bottom: 0,
+            width: 380,
+            borderLeft: "1px solid var(--dl-border)",
+            boxShadow: "-4px 0 24px color-mix(in srgb, var(--dl-strong) 8%, transparent)",
+          }),
         }}>
-          {/* Spacer to clear the TopBar (safe-area + 10px padding + 52px pill + 10px padding) */}
-          <div style={{ flexShrink: 0, height: "calc(env(safe-area-inset-top, 0px) + 64px)" }}/>
+          {/* Spacer: on mobile clears TopBar; on desktop clears safe-area */}
+          <div style={{ flexShrink: 0, height: mobile ? "calc(env(safe-area-inset-top, 0px) + 64px)" : "env(safe-area-inset-top, 16px)" }}/>
 
-          {/* AI header — chevron down to collapse, title, date */}
+          {/* Header */}
           <div style={{
             flexShrink: 0,
-            padding: "16px 20px 24px",
-            display: "flex", flexDirection: "column", alignItems: "center", gap: 0,
+            padding: mobile ? "16px 20px 24px" : "12px 16px 16px",
+            display: "flex", flexDirection: mobile ? "column" : "row", alignItems: "center",
+            gap: mobile ? 0 : 0,
+            borderBottom: mobile ? "none" : "1px solid var(--dl-border)",
           }}>
-            {/* Chevron down — collapse */}
-            <button onClick={() => setExpanded(false)} style={{
-              background: "none", border: "none", cursor: "pointer",
-              color: "var(--dl-middle)", display: "flex", alignItems: "center", justifyContent: "center",
-              width: 36, height: 36, borderRadius: 8,
-              transition: "color 0.15s, background 0.15s",
-              marginBottom: 12,
-            }}
-            onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = "var(--dl-strong)0e"; }}
-            onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.background = "transparent"; }}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-
-            {/* DAY LAB AI + Premium badge */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-              <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--dl-middle)" }}>
-                Day Lab AI
-              </span>
-              {isPremiumUser && (
-                <span style={{
-                  fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase",
-                  color: "var(--dl-accent)", background: "var(--dl-accent)18", border: "1px solid var(--dl-accent)40",
-                  borderRadius: 4, padding: "2px 6px",
-                }}>Premium</span>
-              )}
-            </div>
-
-            {/* Date */}
-            <span style={{ fontFamily: blurweb, fontSize: F.lg, color: "var(--dl-strong)", letterSpacing: "0.06em" }}>
-              {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
-            </span>
+            {mobile ? (
+              /* Mobile: centered layout with chevron-down */
+              <>
+                <button onClick={() => setExpanded(false)} style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "var(--dl-middle)", display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 36, height: 36, borderRadius: 8,
+                  transition: "color 0.15s, background 0.15s", marginBottom: 12,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = "var(--dl-strong)0e"; }}
+                onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.background = "transparent"; }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                  <DLSparkle size={14} />
+                  <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--dl-middle)" }}>Day Lab AI</span>
+                  {isPremiumUser && <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--dl-accent)", background: "var(--dl-accent)18", border: "1px solid var(--dl-accent)40", borderRadius: 4, padding: "2px 6px" }}>Premium</span>}
+                </div>
+                <span style={{ fontFamily: blurweb, fontSize: F.lg, color: "var(--dl-strong)", letterSpacing: "0.06em" }}>
+                  {new Date(date + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })}
+                </span>
+              </>
+            ) : (
+              /* Desktop sidebar: horizontal header row */
+              <>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1 }}>
+                  <DLSparkle size={13} />
+                  <span style={{ fontFamily: mono, fontSize: F.sm, letterSpacing: "0.1em", textTransform: "uppercase", color: "var(--dl-middle)" }}>Day Lab AI</span>
+                  {isPremiumUser && <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--dl-accent)", background: "var(--dl-accent)18", border: "1px solid var(--dl-accent)40", borderRadius: 4, padding: "2px 6px" }}>Premium</span>}
+                </div>
+                <button onClick={() => setExpanded(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dl-middle)", display: "flex", alignItems: "center", justifyContent: "center", width: 30, height: 30, borderRadius: 6, transition: "color 0.15s, background 0.15s" }}
+                  onMouseEnter={e => { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.background = "var(--dl-strong)0e"; }}
+                  onMouseLeave={e => { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.background = "transparent"; }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </>
+            )}
           </div>
 
           {/* Messages scroll area */}
@@ -512,7 +612,8 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
             flex: 1, overflowY: "auto", position: "relative",
             display: "flex", flexDirection: "column", alignItems: "center",
             padding: "0 10px",
-            paddingBottom: "calc(52px + max(28px, env(safe-area-inset-bottom, 28px)) + 24px)",
+            // Mobile: pad for floating pill; Desktop sidebar: no extra bottom pad (input is inside panel)
+            paddingBottom: mobile ? "calc(52px + max(28px, env(safe-area-inset-bottom, 28px)) + 24px)" : "24px",
           }}>
             {/* Free tier vignette — sticky top overlay as limit approaches */}
             {!isPremiumUser && (chatQueryCount >= FREE_CHAT_LIMIT - 1 || chatLimitReached) && (
@@ -609,11 +710,41 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
             </div>
           </div>
 
+          {/* Desktop sidebar: input at bottom of panel */}
+          {!mobile && (
+            <div style={{ flexShrink: 0, borderTop: "1px solid var(--dl-border)", padding: "10px 12px", paddingBottom: "calc(10px + env(safe-area-inset-bottom, 0px))" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, background: "color-mix(in srgb, var(--dl-strong) 5%, transparent)", borderRadius: 100, padding: "8px 10px 8px 14px" }}>
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 100) + "px"; }}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                  className="dl-chat-input"
+                  placeholder={busy ? "Thinking…" : "Ask AI anything…"}
+                  disabled={busy || (chatLimitReached && !isPremiumUser)}
+                  rows={1}
+                  style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", padding: "0", margin: "0", opacity: (busy || (chatLimitReached && !isPremiumUser)) ? 0.4 : 1, lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "100px", display: "block" }}
+                />
+                {busy ? (
+                  <div style={{ width: 12, height: 12, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+                ) : input.trim() ? (
+                  <button onClick={() => sendChat()} style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                  </button>
+                ) : hasMic ? (
+                  <button onClick={transcribing ? undefined : toggleMic} style={{ background: transcribing ? "var(--dl-accent)22" : listening ? "var(--dl-red)22" : "transparent", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: transcribing ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    {transcribing ? <div style={{ width: 9, height: 9, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/> : listening ? <div style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          )}
+
         </div>
       )}
 
-      {/* ── Floating pill — ALWAYS same capsule shape, fixed at bottom ── */}
-      <div style={{
+      {/* ── Floating pill / card — hidden when desktop sidebar is open ── */}
+      {(!expanded || mobile) && <div ref={pillRef} style={{
         position: "fixed", bottom: 0, left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
@@ -621,92 +752,223 @@ export default function ChatFloat({date, token, userId, healthKey, theme}) {
         paddingBottom: mobile ? "env(safe-area-inset-bottom, 6px)" : "16px",
         pointerEvents: "none",
       }}>
-        <div style={{
-          width: "100%", maxWidth: 560,
-          pointerEvents: "auto",
-          display: "flex", flexDirection: "row", alignItems: "center",
-          backdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
-          WebkitBackdropFilter: expanded ? "none" : "blur(20px) saturate(1.4)",
-          background: expanded ? "var(--dl-bg)" : "var(--dl-glass)",
-          border: expanded ? "1px solid var(--dl-border)" : "1px solid var(--dl-glass-border)",
-          borderRadius: 100,
-          minHeight: 52,
-          boxShadow: "var(--dl-shadow)",
-          overflow: "hidden",
-          cursor: !expanded ? "pointer" : "default",
-          transition: "box-shadow 0.18s ease",
-        }}
-        onClick={!expanded ? () => inputRef.current?.focus() : undefined}>
 
-          {/* ── Input row ── */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: 8,
-            width: "100%",
-            padding: mobile ? "14px 10px 14px 16px" : "14px 10px 14px 18px",
-            boxSizing: "border-box",
-          }}>
-            {/* Text input well */}
-            <div style={{
-              flex: 1,
-              background: "transparent",
-              display: "flex", alignItems: "center", gap: 6,
-            }}>
-              <textarea
-                ref={inputRef}
-                value={input}
-                onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-                onFocus={() => { if (!expanded) setExpanded(true); }}
-                className="dl-chat-input"
-                placeholder={busy ? "…" : "Ask AI anything…"}
-                disabled={busy || (expanded && chatLimitReached && !isPremiumUser)}
-                rows={1}
-                style={{
-                  flex: 1, background: "transparent", border: "none", outline: "none",
-                  fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)",
-                  padding: "0", margin: "0", opacity: (busy || (expanded && chatLimitReached && !isPremiumUser)) ? 0.4 : 1,
-                  lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px",
-                  display: "block",
-                }}
-              />
+        {/* Shared glass styles */}
+        {(() => {
+          const glass = {
+            backdropFilter: "blur(20px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+            background: "var(--dl-glass)",
+            border: "1px solid var(--dl-glass-border)",
+            boxShadow: "var(--dl-shadow)",
+          };
 
-              {/* Send or mic */}
-              {input.trim() ? (
-                <button onClick={send} disabled={busy} style={{
-                  background: "var(--dl-accent)", border: "none", borderRadius: "50%",
-                  width: 32, height: 32, cursor: busy ? "default" : "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, opacity: busy ? 0.4 : 1, transition: "opacity 0.15s",
-                }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="19" x2="12" y2="5"/>
-                    <polyline points="5 12 12 5 19 12"/>
-                  </svg>
-                </button>
-              ) : hasMic ? (
-                <button onClick={transcribing ? undefined : toggleMic} style={{
-                  background: transcribing ? "var(--dl-accent)22" : listening ? "var(--dl-red)22" : "transparent",
-                  border: "none", borderRadius: "50%",
-                  width: 32, height: 32, cursor: transcribing ? "default" : "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0, transition: "background 0.2s",
-                }}>
-                  {transcribing ? (
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/>
-                  ) : listening ? (
-                    <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={"var(--dl-highlight)"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="9" y="2" width="6" height="11" rx="3"/>
-                      <path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/>
+          // ── EXPANDED MODE: solid input bar at bottom of full-panel ──────────
+          if (expanded) {
+            return (
+              <div style={{
+                width: "100%", maxWidth: 560, pointerEvents: "auto",
+                display: "flex", alignItems: "center",
+                background: "var(--dl-bg)", border: "1px solid var(--dl-border)",
+                borderRadius: 100, minHeight: 52, overflow: "hidden",
+                boxShadow: "var(--dl-shadow)",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: mobile ? "12px 10px 12px 16px" : "12px 10px 12px 18px", boxSizing: "border-box" }}>
+                  <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6 }}>
+                    <textarea
+                      ref={inputRef}
+                      value={input}
+                      onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChat(); } }}
+                      className="dl-chat-input"
+                      placeholder={busy ? "…" : "Ask AI anything…"}
+                      disabled={busy || (chatLimitReached && !isPremiumUser)}
+                      rows={1}
+                      style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", padding: "0", margin: "0", opacity: (busy || (chatLimitReached && !isPremiumUser)) ? 0.4 : 1, lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px", display: "block" }}
+                    />
+                    {input.trim() ? (
+                      <button onClick={() => sendChat()} disabled={busy} style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: busy ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: busy ? 0.4 : 1 }}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                      </button>
+                    ) : hasMic ? (
+                      <button onClick={transcribing ? undefined : toggleMic} style={{ background: transcribing ? "var(--dl-accent)22" : listening ? "var(--dl-red)22" : "transparent", border: "none", borderRadius: "50%", width: 32, height: 32, cursor: transcribing ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.2s" }}>
+                        {transcribing ? <div style={{ width: 10, height: 10, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/> : listening ? <div style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/> : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          }
+
+          // ── IDLE: compact glass bubble ───────────────────────────────────────
+          if (pillPhase === 'idle') {
+            return (
+              <div
+                onClick={() => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 40); }}
+                style={{ pointerEvents: "auto", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 100, cursor: "pointer", animation: "fadeIn 0.15s ease", ...glass }}
+              >
+                <DLSparkle size={13} />
+                <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI…</span>
+              </div>
+            );
+          }
+
+          // ── INPUT: full pill with textarea ────────────────────────────────────
+          if (pillPhase === 'input') {
+            return (
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", animation: "fadeIn 0.12s ease", ...glass }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 8px 12px 16px" : "12px 8px 12px 18px", boxSizing: "border-box" }}>
+                  <textarea
+                    ref={inputRef}
+                    value={input}
+                    onChange={e => { setInput(e.target.value); e.target.style.height = "auto"; e.target.style.height = Math.min(e.target.scrollHeight, 120) + "px"; }}
+                    onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendQuick(); } }}
+                    className="dl-chat-input"
+                    placeholder="Ask AI anything…"
+                    autoFocus
+                    rows={1}
+                    style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", padding: "0", margin: "0", lineHeight: 1.4, resize: "none", overflow: "hidden", maxHeight: "120px", display: "block" }}
+                  />
+                  {/* Send or mic */}
+                  {input.trim() ? (
+                    <button onClick={() => sendQuick()} style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                    </button>
+                  ) : hasMic ? (
+                    <button onClick={transcribing ? undefined : toggleMic} style={{ background: transcribing ? "var(--dl-accent)22" : listening ? "var(--dl-red)22" : "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: transcribing ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      {transcribing ? <div style={{ width: 9, height: 9, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite" }}/> : listening ? <div style={{ width: 9, height: 9, borderRadius: "50%", background: "var(--dl-red)", boxShadow: "0 0 0 3px var(--dl-red)30", animation: "pulse 1.2s ease-in-out infinite" }}/> : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 10a7 7 0 0 0 14 0"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="9" y1="22" x2="15" y2="22"/></svg>}
+                    </button>
+                  ) : null}
+                  {/* History / open full chat */}
+                  <button
+                    onClick={() => { setExpanded(true); setPillPhase('idle'); }}
+                    title="Open chat history"
+                    style={{ background: "transparent", border: "none", borderRadius: "50%", width: 30, height: 30, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)", transition: "color 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                     </svg>
-                  )}
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // ── BUSY: spinner + text + stop ───────────────────────────────────────
+          if (pillPhase === 'busy') {
+            return (
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", animation: "fadeIn 0.12s ease", ...glass }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "14px 14px 14px 18px", boxSizing: "border-box" }}>
+                  <div style={{ width: 14, height: 14, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontFamily: serif, fontSize: F.md, color: "var(--dl-middle)", lineHeight: 1.4 }}>{busyText}</span>
+                  <button onClick={handleStop} title="Stop" style={{ background: "color-mix(in srgb, var(--dl-strong) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--dl-strong) 12%, transparent)", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)" }}>
+                    <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
+                  </button>
+                </div>
+              </div>
+            );
+          }
+
+          // ── Shared follow-up input row (used in result states) ────────────────
+          const followUpRow = (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 12px 12px 16px", boxSizing: "border-box" }}>
+              <input
+                value={followUpText}
+                onChange={e => setFollowUpText(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter" && followUpText.trim()) { sendQuick(followUpText); setFollowUpText(''); } }}
+                placeholder="Ask a follow-up…"
+                style={{ flex: 1, background: "transparent", border: "none", outline: "none", fontFamily: serif, fontSize: F.sm, color: "var(--dl-strong)", lineHeight: 1.4 }}
+              />
+              {followUpText.trim() && (
+                <button onClick={() => { sendQuick(followUpText); setFollowUpText(''); }} style={{ background: "var(--dl-accent)", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                 </button>
-              ) : null}
+              )}
+              <button onClick={() => { setExpanded(true); setPillPhase('idle'); }} title="Open full chat" style={{ background: "transparent", border: "none", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)" }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
             </div>
-          </div>
-        </div>
-      </div>
+          );
+
+          // ── RESULT-CHANGE: summary + accept/reject + follow-up ────────────────
+          if (pillPhase === 'result-change') {
+            const PREVIEW = 160;
+            const isLong = resultText.length > PREVIEW;
+            const shown = isLong && !resultExpanded ? resultText.slice(0, PREVIEW) + '…' : resultText;
+            return (
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", flexDirection: "column", borderRadius: 20, overflow: "hidden", animation: "fadeInUp 0.15s ease", ...glass }}>
+                {/* Top: sparkle + response + accept/reject */}
+                <div style={{ padding: "14px 14px 10px 16px" }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 10 }}>
+                    <DLSparkle size={14} color="var(--dl-accent)" />
+                    <div style={{ flex: 1 }}>
+                      <span style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", lineHeight: 1.5 }}>{shown}</span>
+                      {isLong && (
+                        <button onClick={() => setResultExpanded(p => !p)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: mono, fontSize: 10, color: "var(--dl-accent)", letterSpacing: "0.06em", padding: "0 0 0 6px" }}>
+                          {resultExpanded ? 'show less' : 'show more'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {/* Accept / Reject */}
+                  <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                    <button onClick={handleReject} style={{ fontFamily: mono, fontSize: 10, letterSpacing: "0.08em", color: "var(--dl-middle)", background: "color-mix(in srgb, var(--dl-strong) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--dl-strong) 12%, transparent)", borderRadius: 20, padding: "5px 14px", cursor: "pointer" }}>
+                      Reject
+                    </button>
+                    <button onClick={handleAccept} style={{ fontFamily: mono, fontSize: 10, letterSpacing: "0.08em", color: "#fff", background: "var(--dl-accent)", border: "none", borderRadius: 20, padding: "5px 14px", cursor: "pointer" }}>
+                      Accept
+                    </button>
+                  </div>
+                </div>
+                {/* Divider */}
+                <div style={{ height: 1, background: "color-mix(in srgb, var(--dl-strong) 10%, transparent)", margin: "0 2px" }} />
+                {/* Follow-up */}
+                {followUpRow}
+              </div>
+            );
+          }
+
+          // ── RESULT-INFO: informational response + follow-up ───────────────────
+          if (pillPhase === 'result-info') {
+            const PREVIEW = 220;
+            const isLong = resultText.length > PREVIEW;
+            const shown = isLong && !resultExpanded ? resultText.slice(0, PREVIEW) + '…' : resultText;
+            return (
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", flexDirection: "column", borderRadius: 20, overflow: "hidden", animation: "fadeInUp 0.15s ease", ...glass }}>
+                {/* Top bar: sparkle + close */}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 12px 6px 16px" }}>
+                  <DLSparkle size={14} color="var(--dl-accent)" />
+                  <button onClick={dismissResult} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dl-middle)", display: "flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", transition: "color 0.15s" }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                {/* Scrollable response */}
+                <div style={{ padding: "0 16px 12px", maxHeight: 220, overflowY: "auto", scrollbarWidth: "none" }}>
+                  <span style={{ fontFamily: serif, fontSize: F.md, color: "var(--dl-strong)", lineHeight: 1.55, display: "block" }}>{shown}</span>
+                  {isLong && (
+                    <button onClick={() => setResultExpanded(p => !p)} style={{ background: "none", border: "none", cursor: "pointer", fontFamily: mono, fontSize: 10, color: "var(--dl-accent)", letterSpacing: "0.06em", padding: "4px 0 0", display: "block" }}>
+                      {resultExpanded ? 'show less' : 'show more'}
+                    </button>
+                  )}
+                </div>
+                {/* Divider */}
+                <div style={{ height: 1, background: "color-mix(in srgb, var(--dl-strong) 10%, transparent)", margin: "0 2px" }} />
+                {/* Follow-up */}
+                {followUpRow}
+              </div>
+            );
+          }
+
+          return null;
+        })()}
+      </div>}
     </>
   )}
 
