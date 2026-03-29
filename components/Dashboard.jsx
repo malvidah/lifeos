@@ -27,6 +27,9 @@ import { useRealtimeSync } from "@/lib/useRealtimeSync";
 import { CARD_REGISTRY } from "./dashboard/cardRegistry";
 import PageContainer from "./dashboard/PageContainer";
 import PageDots from "./dashboard/PageDots";
+import { DraggableCard } from "./dashboard/DraggableCard";
+import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, TouchSensor } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 
 // ── Dock items derived from card registry ─────────────────────────────────────
 const DOCK_ORDER = ['project-graph','world-map','cal','goals','health','habits','notes','tasks','journal','meals','workouts'];
@@ -472,6 +475,29 @@ function DashboardInner() {
   const mobile = useIsMobile();
   const layout = useDashboardLayout(token, mobile);
 
+  // ── Layout edit mode ─────────────────────────────────────────────────────
+  // Triggered by a 500ms long-press on any card header (via DraggableCard).
+  const [editMode, setEditMode] = useState(false);
+  const enterEditMode = useCallback(() => setEditMode(true),  []);
+  const exitEditMode  = useCallback(() => setEditMode(false), []);
+
+  // Close edit mode when the user switches pages (swipe while editing isn't
+  // possible, but programmatic page switches still work).
+  const prevPageRef = useRef(layout.currentPageIdx);
+  useEffect(() => {
+    if (prevPageRef.current !== layout.currentPageIdx) {
+      prevPageRef.current = layout.currentPageIdx;
+      setEditMode(false);
+    }
+  }, [layout.currentPageIdx]);
+
+  // dnd-kit sensors — PointerSensor with a 5px distance threshold so a tap
+  // on the drag handle doesn't immediately fire a drag.
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor,   { activationConstraint: { delay: 50, tolerance: 5 } }),
+  );
+
   // Persist currentPageIdx to localStorage so it survives refresh
   useEffect(() => {
     if (layout.loaded) {
@@ -513,19 +539,49 @@ function DashboardInner() {
   // Current page's card IDs — used for dock active state
   const currentPageCards = layout.pages[layout.currentPageIdx]?.cards || [];
 
-  // renderPage: renders all cards for a given page config
+  // renderPage: renders all cards for a given page config.
+  // Wraps cards in DndContext + SortableContext so drag-to-reorder works in
+  // edit mode without touching any individual card component.
   const renderPage = useCallback((page, pageIdx) => {
+    const handleDragEnd = (event) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+      const ids = page.cards;
+      const oldIdx = ids.indexOf(String(active.id));
+      const newIdx = ids.indexOf(String(over.id));
+      if (oldIdx === -1 || newIdx === -1) return;
+      layout.reorderCards(pageIdx, arrayMove(ids, oldIdx, newIdx));
+    };
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, paddingTop: 0, maxWidth: 1200, width: '100%', margin: '0 auto' }}>
-        {page.cards.map(cardId => {
-          const entry = CARD_REGISTRY.find(c => c.id === cardId);
-          if (!entry) return null;
-          return <React.Fragment key={cardId}>{entry.render(cardProps)}</React.Fragment>;
-        })}
-        <div style={{ paddingBottom: 200 }} />
-      </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext items={page.cards} strategy={verticalListSortingStrategy}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, paddingTop: 0, maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+            {page.cards.map(cardId => {
+              const entry = CARD_REGISTRY.find(c => c.id === cardId);
+              if (!entry) return null;
+              return (
+                <DraggableCard
+                  key={cardId}
+                  cardId={cardId}
+                  editMode={editMode}
+                  onEnterEditMode={enterEditMode}
+                  onRemove={() => layout.removeCard(pageIdx, cardId)}
+                >
+                  {entry.render(cardProps)}
+                </DraggableCard>
+              );
+            })}
+            <div style={{ paddingBottom: 200 }} />
+          </div>
+        </SortableContext>
+      </DndContext>
     );
-  }, [cardProps]);
+  }, [cardProps, editMode, enterEditMode, layout, sensors]);
 
   // Early returns AFTER all hooks
   if(!authReady) return (
@@ -609,16 +665,58 @@ function DashboardInner() {
             </div>
           ) : layout.loaded ? (
             <>
+              {/* ── Edit-mode bar — shown above the page content ── */}
+              {editMode && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  padding: '5px 16px', flexShrink: 0,
+                  background: 'var(--dl-glass)',
+                  backdropFilter: 'blur(20px) saturate(1.4)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                  borderBottom: '1px solid var(--dl-border)',
+                  maxWidth: 1200, width: '100%', margin: '0 auto',
+                  boxSizing: 'border-box',
+                  animation: 'fadeInUp 0.15s ease',
+                }}>
+                  <span style={{
+                    fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
+                    textTransform: 'uppercase', color: 'var(--dl-highlight)',
+                  }}>
+                    Editing — {layout.pages[layout.currentPageIdx]?.name}
+                  </span>
+                  <button
+                    onClick={exitEditMode}
+                    style={{
+                      background: 'var(--dl-accent)', color: '#fff', border: 'none',
+                      borderRadius: 100, padding: '4px 16px', cursor: 'pointer',
+                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.06em',
+                      fontWeight: 'bold',
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+
               <PageContainer
                 pages={layout.pages}
                 renderPage={renderPage}
                 currentPageIdx={layout.currentPageIdx}
                 onPageChange={layout.setCurrentPageIdx}
+                editMode={editMode}
               />
               <PageDots
                 count={layout.pages.length}
                 active={layout.currentPageIdx}
+                pages={layout.pages}
                 onDotClick={(i) => layout.setCurrentPageIdx(i)}
+                onAddPage={(name) => {
+                  layout.addPage(name);
+                  // Navigate to the newly created page after state update
+                  setTimeout(() => layout.setCurrentPageIdx(layout.pages.length), 50);
+                }}
+                onRenamePage={(i, name) => layout.renamePage(i, name)}
+                onDeletePage={(i) => layout.removePage(i)}
               />
             </>
           ) : null}

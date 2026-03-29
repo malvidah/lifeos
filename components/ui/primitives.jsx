@@ -56,7 +56,7 @@ export function Ring({score,color,size=48}) {
 // (bare Card + CardHeader lets the body be edge-to-edge with no content padding).
 export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft, headerRight, expandHref }) {
   return (
-    <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
+    <div data-card-header="true" style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
       minHeight:44,boxSizing:"border-box",
       borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0}}>
       {headerLeft}
@@ -114,7 +114,7 @@ export function Card({
         display:"flex",flexDirection:"column",
         ...((collapsed || useAutoHeight) ? {height:"auto"} : {flex:1}),
       }}>
-        <div style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
+        <div data-card-header="true" style={{display:"flex",alignItems:"center",gap:8,padding:"11px 14px",
           minHeight:44,boxSizing:"border-box",
           borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0}}>
           {headerLeft}

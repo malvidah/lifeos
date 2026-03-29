@@ -1,31 +1,43 @@
 "use client";
 import { useRef, useEffect, useCallback } from 'react';
 
-export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange }) {
-  const containerRef = useRef(null);
-  const isScrollingRef = useRef(false);
+/**
+ * PageContainer — horizontal scroll-snap container for swipeable pages.
+ *
+ * Props:
+ *   pages           Array<page>
+ *   renderPage      (page, index) => ReactNode
+ *   currentPageIdx  number
+ *   onPageChange    (index: number) => void
+ *   editMode        boolean  — when true, swipe/scroll is disabled so the user
+ *                             can drag cards without accidentally changing pages
+ */
+export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange, editMode }) {
+  const containerRef    = useRef(null);
+  const isScrollingRef  = useRef(false);
 
   // Scroll to page programmatically when currentPageIdx changes externally
   useEffect(() => {
+    if (editMode) return; // don't animate away from current page while editing
     const el = containerRef.current;
     if (!el) return;
     const target = currentPageIdx * el.offsetWidth;
     if (Math.abs(el.scrollLeft - target) > 2) {
       isScrollingRef.current = true;
       el.scrollTo({ left: target, behavior: 'smooth' });
-      // Reset flag after scroll animation
       setTimeout(() => { isScrollingRef.current = false; }, 400);
     }
-  }, [currentPageIdx]);
+  }, [currentPageIdx, editMode]);
 
   // Detect page changes from user swipe via scroll position
   const handleScroll = useCallback(() => {
+    if (editMode) return;           // ignore scroll events during layout edit
     if (isScrollingRef.current) return;
     const el = containerRef.current;
     if (!el || !el.offsetWidth) return;
     const page = Math.round(el.scrollLeft / el.offsetWidth);
     onPageChange(page);
-  }, [onPageChange]);
+  }, [onPageChange, editMode]);
 
   return (
     <div
@@ -34,8 +46,8 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       onScroll={handleScroll}
       style={{
         display: 'flex',
-        overflowX: 'auto',
-        scrollSnapType: 'x mandatory',
+        overflowX: editMode ? 'hidden' : 'auto',  // freeze swipe in edit mode
+        scrollSnapType: editMode ? 'none' : 'x mandatory',
         scrollBehavior: 'smooth',
         WebkitOverflowScrolling: 'touch',
         flex: 1,
