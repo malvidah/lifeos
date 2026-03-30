@@ -555,7 +555,7 @@ function DashboardInner() {
   },[loadDots]);
 
   const mobile = useIsMobile();
-  const layout = useDashboardLayout(token, mobile);
+  const layout = useDashboardLayout(token);
 
   // Keep a stable ref to layout so renderPage can call reorderCards without
   // needing layout in its dep array (which would cause renderPage to churn on
@@ -725,7 +725,7 @@ function DashboardInner() {
         </div>
       </div>
 
-      {/* ── Separated glass nav bubbles ──────────────────────────────────── */}
+      {/* ── Nav bubbles ────────────────────────────────────────────────────── */}
       {(() => {
         const today = todayKey();
         const relLabel = fmtRelative(selected, today);
@@ -753,86 +753,15 @@ function DashboardInner() {
         };
         return (
           <>
-            {/* ── LEFT: edit toggle + project filter (2 separate circles) ─── */}
-            <div style={{
-              position: "fixed", top: TOP, left: 12, zIndex: 100,
-              display: "flex", gap: 8, WebkitAppRegion: "no-drag",
-            }}>
-              {/* Edit mode toggle */}
-              <button
-                onClick={() => setEditMode(v => !v)}
-                title={editMode ? "Exit edit mode" : "Edit layout"}
-                style={navBtn(editMode)}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>
-                </svg>
-              </button>
-
-              {/* Project filter */}
-              <div ref={projectFilterRef} style={{ position: "relative" }}>
-                <button
-                  onClick={() => setProjectFilterOpen(v => !v)}
-                  title="Filter by project"
-                  style={navBtn(!!activeProject || projectFilterOpen)}
-                >
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill={activeProject ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
-                  </svg>
-                </button>
-                {projectFilterOpen && (
-                  <div style={{
-                    position: "absolute", top: "calc(100% + 8px)", left: 0,
-                    background: "var(--dl-card)", border: "1px solid var(--dl-border2)",
-                    borderRadius: 12, padding: "6px 0", minWidth: 180,
-                    boxShadow: "var(--dl-shadow)", zIndex: 200,
-                    display: "flex", flexDirection: "column",
-                  }}>
-                    <button
-                      onClick={() => { selectProject(null); setProjectFilterOpen(false); }}
-                      style={{
-                        background: !activeProject ? "var(--dl-glass-active)" : "none",
-                        border: "none", cursor: "pointer", textAlign: "left",
-                        padding: "8px 14px", fontFamily: mono, fontSize: 11,
-                        letterSpacing: "0.08em", textTransform: "uppercase",
-                        color: !activeProject ? "var(--dl-strong)" : "var(--dl-highlight)",
-                        transition: "background 0.15s",
-                      }}
-                      onMouseEnter={e => { if (activeProject) e.currentTarget.style.background = "var(--dl-glass-active)"; }}
-                      onMouseLeave={e => { if (activeProject) e.currentTarget.style.background = "none"; }}
-                    >All Projects</button>
-                    {allProjectNames.length > 0 && <div style={{ height: 1, background: "var(--dl-border)", margin: "4px 0" }} />}
-                    {allProjectNames.map(name => (
-                      <button key={name}
-                        onClick={() => { selectProject(name); setProjectFilterOpen(false); }}
-                        style={{
-                          background: activeProject === name ? "var(--dl-glass-active)" : "none",
-                          border: "none", cursor: "pointer", textAlign: "left",
-                          padding: "8px 14px", fontFamily: mono, fontSize: 11,
-                          letterSpacing: "0.06em",
-                          color: activeProject === name ? "var(--dl-strong)" : "var(--dl-highlight)",
-                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                          transition: "background 0.15s",
-                        }}
-                        onMouseEnter={e => { if (activeProject !== name) e.currentTarget.style.background = "var(--dl-glass-active)"; }}
-                        onMouseLeave={e => { if (activeProject !== name) e.currentTarget.style.background = "none"; }}
-                      >{tagDisplayName ? tagDisplayName(name) : name}</button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* ── CENTER: date pill / card dock / search input ─────────────── */}
-            <div style={{
-              position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
-              zIndex: 100, WebkitAppRegion: "no-drag",
-            }}>
-              {searchOpen ? (
-                /* Search input pill */
+            {/* ── When search is open: full-width search bar only ────────── */}
+            {searchOpen && (
+              <div style={{
+                position: "fixed", top: TOP, left: 12, right: 12, zIndex: 100,
+                WebkitAppRegion: "no-drag",
+              }}>
                 <div style={{
                   display: "flex", alignItems: "center", gap: 8, height: 40,
-                  padding: "0 10px 0 16px", borderRadius: 100, minWidth: 280, maxWidth: 480,
+                  padding: "0 10px 0 16px", borderRadius: 100,
                   ...glass,
                 }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0}}>
@@ -853,7 +782,34 @@ function DashboardInner() {
                     </svg>
                   </button>
                 </div>
-              ) : editMode ? (
+              </div>
+            )}
+
+            {/* ── TOP LEFT: edit toggle (hidden when search open) ─────────── */}
+            {!searchOpen && (
+              <div style={{
+                position: "fixed", top: TOP, left: 12, zIndex: 100,
+                WebkitAppRegion: "no-drag",
+              }}>
+                <button
+                  onClick={() => setEditMode(v => !v)}
+                  title={editMode ? "Exit edit mode" : "Edit layout"}
+                  style={navBtn(editMode)}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>
+                  </svg>
+                </button>
+              </div>
+            )}
+
+            {/* ── CENTER: date pill / card dock (hidden when search open) ─── */}
+            {!searchOpen && (
+            <div style={{
+              position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
+              zIndex: 100, WebkitAppRegion: "no-drag",
+            }}>
+              {editMode ? (
                 /* Card dock pill */
                 <div style={{
                   display: "flex", alignItems: "center", gap: 1, height: 40,
@@ -960,35 +916,27 @@ function DashboardInner() {
                 </div>
               )}
             </div>
+            )} {/* end !searchOpen center zone */}
 
-            {/* ── RIGHT: search circle + user circle (2 separate circles) ─── */}
-            <div style={{
-              position: "fixed", top: TOP, right: 12, zIndex: 100,
-              display: "flex", gap: 8, WebkitAppRegion: "no-drag",
-            }}>
-              {/* Search circle */}
-              <button
-                onClick={searchOpen ? closeSearch : openSearch}
-                title="Search"
-                style={navBtn(searchOpen)}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-              </button>
-              {/* User avatar circle */}
+            {/* ── TOP RIGHT: user avatar only (hidden when search open) ────── */}
+            {!searchOpen && (
               <div style={{
-                width: 40, height: 40, borderRadius: "50%",
-                display: "flex", alignItems: "center", justifyContent: "center",
-                flexShrink: 0, ...glass,
+                position: "fixed", top: TOP, right: 12, zIndex: 100,
+                WebkitAppRegion: "no-drag",
               }}>
-                <UserMenu
-                  session={session} token={token} userId={userId}
-                  theme={theme} themePreference={preference} onThemeChange={setTheme}
-                  stravaConnected={stravaConnected} onStravaChange={setStravaConnected}
-                />
+                <div style={{
+                  width: 40, height: 40, borderRadius: "50%",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, ...glass,
+                }}>
+                  <UserMenu
+                    session={session} token={token} userId={userId}
+                    theme={theme} themePreference={preference} onThemeChange={setTheme}
+                    stravaConnected={stravaConnected} onStravaChange={setStravaConnected}
+                  />
+                </div>
               </div>
-            </div>
+            )}
           </>
         );
       })()}
@@ -1000,59 +948,142 @@ function DashboardInner() {
         background:"linear-gradient(to top, var(--dl-bg) 0%, var(--dl-bg)99 35%, transparent 100%)",
       }}/>
 
-      {/* ── Fixed bottom bar: PageDots pill + AI circle ───────────────────── */}
-      {!searchOpen && !chatIsOpen && layout.loaded && (
-        <div style={{
-          position: "fixed",
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
-          left: 0, right: 0,
-          zIndex: 99,
-          display: "flex", justifyContent: "center", alignItems: "center",
-          gap: 8,
-          pointerEvents: "none",
-        }}>
-          {/* PageDots pill */}
-          <div style={{ pointerEvents: "auto" }}>
-            <PageDots
-              count={layout.pages.length}
-              active={layout.currentPageIdx}
-              pages={layout.pages}
-              onDotClick={(i) => layout.setCurrentPageIdx(i)}
-              onAddPage={(name) => {
-                layout.addPage(name);
-                setTimeout(() => layout.setCurrentPageIdx(layout.pages.length), 50);
-              }}
-              onRenamePage={(i, name) => layout.renamePage(i, name)}
-              onDeletePage={(i) => layout.removePage(i)}
-            />
-          </div>
-          {/* AI circle button */}
-          <button
-            onClick={() => setChatOpenCount(c => c + 1)}
-            title="Ask AI"
-            style={{
-              pointerEvents: "auto",
-              width: 34, height: 34, borderRadius: "50%",
-              background: "var(--dl-glass)",
-              backdropFilter: "blur(16px) saturate(1.3)",
-              WebkitBackdropFilter: "blur(16px) saturate(1.3)",
-              border: "1px solid var(--dl-glass-border)",
-              boxShadow: "var(--dl-glass-shadow)",
-              cursor: "pointer",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              flexShrink: 0,
-              transition: "background 0.18s",
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = "var(--dl-glass-active)"}
-            onMouseLeave={e => e.currentTarget.style.background = "var(--dl-glass)"}
-          >
-            {/* DL Sparkle */}
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--dl-highlight)" style={{flexShrink:0}}>
-              <path d="M12 2L13.9 10.1L22 12L13.9 13.9L12 22L10.1 13.9L2 12L10.1 10.1Z"/>
-            </svg>
-          </button>
-        </div>
-      )}
+      {/* ── Bottom bar: filter (left) + dots+AI (center) + search (right) ── */}
+      {!searchOpen && !chatIsOpen && layout.loaded && (() => {
+        const BOTTOM = "calc(env(safe-area-inset-bottom, 0px) + 16px)";
+        const circleBtn = (active) => ({
+          width: 40, height: 40, borderRadius: "50%",
+          background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
+          backdropFilter: "blur(20px) saturate(1.4)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+          border: "1px solid var(--dl-glass-border)",
+          boxShadow: "var(--dl-glass-shadow)",
+          cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          flexShrink: 0,
+          color: active ? "var(--dl-strong)" : "var(--dl-highlight)",
+          transition: "background 0.2s, color 0.2s",
+        });
+        return (
+          <>
+            {/* Filter — bottom left */}
+            <div ref={projectFilterRef} style={{
+              position: "fixed", bottom: BOTTOM, left: 12, zIndex: 99,
+            }}>
+              <button
+                onClick={() => setProjectFilterOpen(v => !v)}
+                title="Filter by project"
+                style={circleBtn(!!activeProject || projectFilterOpen)}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill={activeProject ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                </svg>
+              </button>
+              {projectFilterOpen && (
+                <div style={{
+                  position: "absolute", bottom: "calc(100% + 8px)", left: 0,
+                  background: "var(--dl-card)", border: "1px solid var(--dl-border2)",
+                  borderRadius: 12, padding: "6px 0", minWidth: 180,
+                  boxShadow: "var(--dl-shadow)", zIndex: 200,
+                  display: "flex", flexDirection: "column",
+                }}>
+                  <button
+                    onClick={() => { selectProject(null); setProjectFilterOpen(false); }}
+                    style={{
+                      background: !activeProject ? "var(--dl-glass-active)" : "none",
+                      border: "none", cursor: "pointer", textAlign: "left",
+                      padding: "8px 14px", fontFamily: mono, fontSize: 11,
+                      letterSpacing: "0.08em", textTransform: "uppercase",
+                      color: !activeProject ? "var(--dl-strong)" : "var(--dl-highlight)",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={e => { if (activeProject) e.currentTarget.style.background = "var(--dl-glass-active)"; }}
+                    onMouseLeave={e => { if (activeProject) e.currentTarget.style.background = "none"; }}
+                  >All Projects</button>
+                  {allProjectNames.length > 0 && <div style={{ height: 1, background: "var(--dl-border)", margin: "4px 0" }} />}
+                  {allProjectNames.map(name => (
+                    <button key={name}
+                      onClick={() => { selectProject(name); setProjectFilterOpen(false); }}
+                      style={{
+                        background: activeProject === name ? "var(--dl-glass-active)" : "none",
+                        border: "none", cursor: "pointer", textAlign: "left",
+                        padding: "8px 14px", fontFamily: mono, fontSize: 11,
+                        letterSpacing: "0.06em",
+                        color: activeProject === name ? "var(--dl-strong)" : "var(--dl-highlight)",
+                        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={e => { if (activeProject !== name) e.currentTarget.style.background = "var(--dl-glass-active)"; }}
+                      onMouseLeave={e => { if (activeProject !== name) e.currentTarget.style.background = "none"; }}
+                    >{tagDisplayName ? tagDisplayName(name) : name}</button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* PageDots + AI — bottom center */}
+            <div style={{
+              position: "fixed", bottom: BOTTOM,
+              left: 0, right: 0,
+              zIndex: 99,
+              display: "flex", justifyContent: "center", alignItems: "center",
+              gap: 8, pointerEvents: "none",
+            }}>
+              <div style={{ pointerEvents: "auto" }}>
+                <PageDots
+                  count={layout.pages.length}
+                  active={layout.currentPageIdx}
+                  pages={layout.pages}
+                  onDotClick={(i) => layout.setCurrentPageIdx(i)}
+                  onAddPage={(name) => {
+                    layout.addPage(name);
+                    setTimeout(() => layout.setCurrentPageIdx(layout.pages.length), 50);
+                  }}
+                  onRenamePage={(i, name) => layout.renamePage(i, name)}
+                  onDeletePage={(i) => layout.removePage(i)}
+                />
+              </div>
+              <button
+                onClick={() => setChatOpenCount(c => c + 1)}
+                title="Ask AI"
+                style={{
+                  pointerEvents: "auto",
+                  width: 34, height: 34, borderRadius: "50%",
+                  background: "var(--dl-glass)",
+                  backdropFilter: "blur(16px) saturate(1.3)",
+                  WebkitBackdropFilter: "blur(16px) saturate(1.3)",
+                  border: "1px solid var(--dl-glass-border)",
+                  boxShadow: "var(--dl-glass-shadow)",
+                  cursor: "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0, transition: "background 0.18s",
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = "var(--dl-glass-active)"}
+                onMouseLeave={e => e.currentTarget.style.background = "var(--dl-glass)"}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--dl-highlight)" style={{flexShrink:0}}>
+                  <path d="M12 2L13.9 10.1L22 12L13.9 13.9L12 22L10.1 13.9L2 12L10.1 10.1Z"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Search — bottom right */}
+            <div style={{
+              position: "fixed", bottom: BOTTOM, right: 12, zIndex: 99,
+            }}>
+              <button
+                onClick={openSearch}
+                title="Search"
+                style={circleBtn(false)}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </button>
+            </div>
+          </>
+        );
+      })()}
 
       {/* Floating chat pill — hidden during search */}
       {!searchOpen && (
