@@ -685,12 +685,33 @@ function DashboardInner() {
 
       {/* ── Full-height content area — scrolls under the glass overlays ─── */}
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
-        <div ref={scrollContainerRef} style={{flex:1, minHeight:0, display:"flex", flexDirection:"column", overflowY: searchOpen ? 'auto' : 'hidden'}}>
 
-          {searchOpen ? (
-            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease',
-              padding: '0 10px', paddingTop: "calc(env(safe-area-inset-top, 0px) + 74px)",
-              maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+        {/* PageContainer is always mounted so state (scroll pos, loaded data)
+            is never lost when search or AI opens. Search results float over it. */}
+        {layout.loaded && (
+          <PageContainer
+            pages={layout.pages}
+            renderPage={renderPage}
+            currentPageIdx={layout.currentPageIdx}
+            editMode={editMode}
+          />
+        )}
+
+        {/* Search results — absolutely overlaid so PageContainer stays mounted */}
+        {searchOpen && (
+          <div
+            ref={scrollContainerRef}
+            style={{
+              position: 'absolute', inset: 0, zIndex: 10,
+              overflowY: 'auto',
+              animation: 'fadeInUp 0.18s ease',
+              padding: '0 10px',
+              paddingTop: "calc(env(safe-area-inset-top, 0px) + 74px)",
+              boxSizing: 'border-box',
+              background: 'var(--dl-bg)',
+            }}
+          >
+            <div style={{ maxWidth: 1200, margin: '0 auto' }}>
               <SearchResults
                 results={srResults}
                 loading={srLoading}
@@ -698,17 +719,9 @@ function DashboardInner() {
                 onSelectDate={d => { closeSearch(); setSelected(d); }}
               />
             </div>
-          ) : layout.loaded ? (
-            <PageContainer
-              pages={layout.pages}
-              renderPage={renderPage}
-              currentPageIdx={layout.currentPageIdx}
-              onPageChange={layout.setCurrentPageIdx}
-              editMode={editMode}
-            />
-          ) : null}
+          </div>
+        )}
 
-        </div>
       </div>
 
       {/* ── Nav bubbles ────────────────────────────────────────────────────── */}
@@ -1031,6 +1044,7 @@ function DashboardInner() {
                   count={layout.pages.length}
                   active={layout.currentPageIdx}
                   pages={layout.pages}
+                  homeIdx={layout.homeIdx}
                   onDotClick={(i) => layout.setCurrentPageIdx(i)}
                   onSwipePrev={() => layout.setCurrentPageIdx(Math.max(0, layout.currentPageIdx - 1))}
                   onSwipeNext={() => layout.setCurrentPageIdx(Math.min(layout.pages.length - 1, layout.currentPageIdx + 1))}
@@ -1040,6 +1054,8 @@ function DashboardInner() {
                   }}
                   onRenamePage={(i, name) => layout.renamePage(i, name)}
                   onDeletePage={(i) => layout.removePage(i)}
+                  onReorderPages={(from, to) => layout.reorderPages(from, to)}
+                  onSetHomeIdx={(i) => layout.setHomeIdx(i)}
                 />
               </div>
               <button

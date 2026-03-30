@@ -7,25 +7,31 @@ import { mono, F } from "@/lib/tokens";
  *
  * Features:
  *   • Pill dots — active page is a wider pill, inactive are small circles.
- *     Animated with CSS transition.
+ *     The "home" page gets a rounded-square shape at rest.
  *   • Tap a dot  — navigate to that page.
- *   • Long-press a dot (500ms) — open a rename/delete popover for that page.
+ *   • Long-press a dot (500ms) — open a rename / move / home / delete popover.
+ *   • Swipe left/right on the pill background — navigate prev/next page.
  *   • "+" button — shows an inline name input to create a new page.
- *   • Always rendered (even with 1 page) so the "+" is always accessible.
  *
  * Props:
- *   count          number
- *   active         number              currently visible page index
- *   pages          Array<{name}>       page configs (for displaying names)
- *   onDotClick     (i: number) => void
- *   onAddPage      (name: string) => void
- *   onRenamePage   (i: number, name: string) => void
- *   onDeletePage   (i: number) => void
+ *   count            number
+ *   active           number              currently visible page index
+ *   homeIdx          number              which page is the "home" (rounded-square)
+ *   pages            Array<{name}>
+ *   onDotClick       (i: number) => void
+ *   onSwipePrev      () => void
+ *   onSwipeNext      () => void
+ *   onAddPage        (name: string) => void
+ *   onRenamePage     (i: number, name: string) => void
+ *   onDeletePage     (i: number) => void
+ *   onReorderPages   (fromIdx: number, toIdx: number) => void
+ *   onSetHomeIdx     (i: number) => void
  */
 export default function PageDots({
-  count, active, pages = [],
+  count, active, homeIdx = 1, pages = [],
   onDotClick, onSwipePrev, onSwipeNext,
   onAddPage, onRenamePage, onDeletePage,
+  onReorderPages, onSetHomeIdx,
 }) {
   // ── State ────────────────────────────────────────────────────────────────
   const [addingPage,   setAddingPage]   = useState(false);
@@ -37,11 +43,10 @@ export default function PageDots({
   const nameInputRef    = useRef(null);
   const renameInputRef  = useRef(null);
 
-  // ── Swipe gesture on the pill (for mobile page navigation) ───────────────
-  const swipeRef = useRef(null); // { x: startX }
+  // ── Swipe gesture on the pill background (not on dot buttons) ────────────
+  const swipeRef = useRef(null);
 
   const onPillPointerDown = useCallback((e) => {
-    // Only track if not on an interactive child (buttons handle their own events)
     if (e.target.closest('button') || e.target.closest('input')) return;
     swipeRef.current = { x: e.clientX };
   }, []);
@@ -50,12 +55,12 @@ export default function PageDots({
     if (!swipeRef.current) return;
     const dx = e.clientX - swipeRef.current.x;
     swipeRef.current = null;
-    if (Math.abs(dx) < 28) return; // too short — not a swipe
-    if (dx < 0) onSwipeNext?.();   // swipe left  → next page
-    else         onSwipePrev?.();  // swipe right → prev page
+    if (Math.abs(dx) < 28) return;
+    if (dx < 0) onSwipeNext?.();
+    else         onSwipePrev?.();
   }, [onSwipePrev, onSwipeNext]);
 
-  // Focus the add-page input as soon as it mounts
+  // Focus inputs when they appear
   useEffect(() => {
     if (addingPage) {
       setNewPageName("");
@@ -63,14 +68,13 @@ export default function PageDots({
     }
   }, [addingPage]);
 
-  // Focus the rename input when the page menu opens
   useEffect(() => {
     if (menuPage !== null) {
       setTimeout(() => renameInputRef.current?.focus(), 40);
     }
   }, [menuPage]);
 
-  // ── Long-press on dot ────────────────────────────────────────────────────
+  // ── Long-press on dot ─────────────────────────────────────────────────────
   const startDotLongPress = useCallback((i) => {
     longPressTimer.current = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(30);
@@ -83,7 +87,7 @@ export default function PageDots({
     clearTimeout(longPressTimer.current);
   }, []);
 
-  // ── Add page ─────────────────────────────────────────────────────────────
+  // ── Add page ──────────────────────────────────────────────────────────────
   const confirmAddPage = useCallback(() => {
     const name = newPageName.trim() || "New Page";
     onAddPage?.(name);
@@ -91,7 +95,7 @@ export default function PageDots({
     setNewPageName("");
   }, [newPageName, onAddPage]);
 
-  // ── Rename / delete ───────────────────────────────────────────────────────
+  // ── Rename / move / home / delete ─────────────────────────────────────────
   const confirmRename = useCallback(() => {
     const name = renameValue.trim();
     if (name && menuPage !== null) onRenamePage?.(menuPage, name);
@@ -103,7 +107,26 @@ export default function PageDots({
     setMenuPage(null);
   }, [menuPage, onDeletePage]);
 
-  // ── Shared input style ────────────────────────────────────────────────────
+  const confirmMoveLeft = useCallback(() => {
+    if (menuPage !== null && menuPage > 0) {
+      onReorderPages?.(menuPage, menuPage - 1);
+      setMenuPage(menuPage - 1); // follow the page
+    }
+  }, [menuPage, onReorderPages]);
+
+  const confirmMoveRight = useCallback(() => {
+    if (menuPage !== null && menuPage < count - 1) {
+      onReorderPages?.(menuPage, menuPage + 1);
+      setMenuPage(menuPage + 1); // follow the page
+    }
+  }, [menuPage, count, onReorderPages]);
+
+  const confirmSetHome = useCallback(() => {
+    if (menuPage !== null) onSetHomeIdx?.(menuPage);
+    setMenuPage(null);
+  }, [menuPage, onSetHomeIdx]);
+
+  // ── Shared styles ─────────────────────────────────────────────────────────
   const inputStyle = {
     background: "var(--dl-bg)",
     border: "1px solid var(--dl-accent)",
@@ -127,7 +150,6 @@ export default function PageDots({
     flexShrink: 0,
   });
 
-  // ── Glass pill used for both dots row and add-page input ─────────────────
   const glassPill = {
     display: "flex",
     alignItems: "center",
@@ -149,14 +171,14 @@ export default function PageDots({
     flexShrink: 0, transition: "opacity 0.15s",
   });
 
+  const isHome = (i) => i === homeIdx;
+
   return (
-    // Dashboard owns the fixed wrapper; PageDots renders just the pill + popover
     <div style={{ position: "relative", flexShrink: 0, pointerEvents: "auto" }}>
 
-      {/* ── Page rename/delete popover ───────────────────────────────────── */}
+      {/* ── Page options popover (long-press) ──────────────────────────────── */}
       {menuPage !== null && (
         <>
-          {/* Dismiss backdrop */}
           <div
             style={{ position: "fixed", inset: 0, zIndex: 40 }}
             onClick={() => setMenuPage(null)}
@@ -174,15 +196,17 @@ export default function PageDots({
             display: "flex",
             flexDirection: "column",
             gap: 10,
-            minWidth: 200,
+            minWidth: 210,
             zIndex: 50,
           }}>
             <span style={{
               fontFamily: mono, fontSize: 10, letterSpacing: "0.09em",
               textTransform: "uppercase", color: "var(--dl-middle)",
             }}>
-              Page options
+              {pages[menuPage]?.name ?? `Page ${menuPage + 1}`}
             </span>
+
+            {/* Rename */}
             <input
               ref={renameInputRef}
               value={renameValue}
@@ -194,10 +218,69 @@ export default function PageDots({
               placeholder="Page name"
               style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
             />
+
+            {/* Move + Rename row */}
             <div style={{ display: "flex", gap: 7 }}>
+              <button
+                onClick={confirmMoveLeft}
+                disabled={menuPage === 0}
+                title="Move left"
+                style={{
+                  ...btnStyle("color-mix(in srgb, var(--dl-strong) 12%, transparent)"),
+                  color: "var(--dl-strong)",
+                  opacity: menuPage === 0 ? 0.3 : 1,
+                  flex: 1,
+                  padding: "5px 8px",
+                }}
+              >
+                ← Move
+              </button>
               <button onClick={confirmRename} style={{ ...btnStyle("var(--dl-accent)"), flex: 1 }}>
                 Rename
               </button>
+              <button
+                onClick={confirmMoveRight}
+                disabled={menuPage >= count - 1}
+                title="Move right"
+                style={{
+                  ...btnStyle("color-mix(in srgb, var(--dl-strong) 12%, transparent)"),
+                  color: "var(--dl-strong)",
+                  opacity: menuPage >= count - 1 ? 0.3 : 1,
+                  flex: 1,
+                  padding: "5px 8px",
+                }}
+              >
+                Move →
+              </button>
+            </div>
+
+            {/* Set as home + Delete row */}
+            <div style={{ display: "flex", gap: 7 }}>
+              {!isHome(menuPage) && (
+                <button
+                  onClick={confirmSetHome}
+                  title="Set as home page"
+                  style={{
+                    ...btnStyle("color-mix(in srgb, var(--dl-orange) 15%, transparent)"),
+                    color: "var(--dl-orange)",
+                    border: "1px solid color-mix(in srgb, var(--dl-orange) 30%, transparent)",
+                    flex: 1,
+                    fontSize: 11,
+                  }}
+                >
+                  ◈ Set as home
+                </button>
+              )}
+              {isHome(menuPage) && (
+                <div style={{
+                  flex: 1, textAlign: "center",
+                  fontFamily: mono, fontSize: 11,
+                  color: "var(--dl-orange)",
+                  display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
+                }}>
+                  ◈ Home page
+                </div>
+              )}
               {count > 1 && (
                 <button onClick={confirmDelete} style={btnStyle("var(--dl-red, #C0392B)")}>
                   Delete
@@ -218,7 +301,7 @@ export default function PageDots({
         </>
       )}
 
-      {/* ── Add-page input pill (replaces dots row when adding) ──────── */}
+      {/* ── Add-page input pill ────────────────────────────────────────────── */}
       {addingPage ? (
         <div style={{ ...glassPill, padding: "0 8px 0 14px", gap: 6, minWidth: 200 }}>
           <input
@@ -259,39 +342,36 @@ export default function PageDots({
         </div>
       ) : (
 
-      // ── Dots row — swipe left/right on the pill to change pages ─────
+      // ── Dots pill ──────────────────────────────────────────────────────────
       <div
         style={{ ...glassPill, justifyContent: "center", gap: 7, padding: "0 14px", userSelect: "none" }}
         onPointerDown={onPillPointerDown}
         onPointerUp={onPillPointerUp}
         onPointerCancel={() => { swipeRef.current = null; }}
       >
-
-        {/* Page dots */}
         {Array.from({ length: count }, (_, i) => {
-          // Index 1 (2nd page) gets a rounded-square shape as the "home" marker.
-          const isHome   = i === 1;
+          const home     = isHome(i);
           const isActive = i === active;
           return (
-          <button
-            key={i}
-            title={pages[i]?.name ?? `Page ${i + 1}`}
-            onClick={() => { cancelDotLongPress(); onDotClick(i); }}
-            onPointerDown={() => startDotLongPress(i)}
-            onPointerUp={cancelDotLongPress}
-            onPointerCancel={cancelDotLongPress}
-            style={{
-              width:  isActive ? 20 : (isHome ? 7 : 6),
-              height: isActive ? 6  : (isHome ? 7 : 6),
-              borderRadius: isActive ? 3 : (isHome ? 2 : 3),
-              background: isActive ? "var(--dl-strong)" : "var(--dl-border2)",
-              border: "none",
-              padding: 0,
-              cursor: "pointer",
-              transition: "width 0.25s cubic-bezier(.34,1.56,.64,1), height 0.2s, background 0.2s",
-              flexShrink: 0,
-            }}
-          />
+            <button
+              key={i}
+              title={pages[i]?.name ?? `Page ${i + 1}`}
+              onClick={() => { cancelDotLongPress(); onDotClick(i); }}
+              onPointerDown={() => startDotLongPress(i)}
+              onPointerUp={cancelDotLongPress}
+              onPointerCancel={cancelDotLongPress}
+              style={{
+                width:        isActive ? 20 : (home ? 7 : 6),
+                height:       isActive ? 6  : (home ? 7 : 6),
+                borderRadius: isActive ? 3  : (home ? 2 : 3),
+                background:   isActive ? "var(--dl-strong)" : "var(--dl-border2)",
+                border: "none",
+                padding: 0,
+                cursor: "pointer",
+                transition: "width 0.25s cubic-bezier(.34,1.56,.64,1), height 0.2s, background 0.2s",
+                flexShrink: 0,
+              }}
+            />
           );
         })}
 
