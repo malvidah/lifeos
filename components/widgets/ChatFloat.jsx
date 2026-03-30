@@ -74,7 +74,7 @@ function TTSButton({ text, token }) {
   );
 }
 
-export default function ChatFloat({date, token, userId, healthKey, theme, expanded, onExpandedChange, circular}) {
+export default function ChatFloat({date, token, userId, healthKey, theme, expanded, onExpandedChange, openTrigger, onChatOpenChange}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -163,6 +163,18 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
     const t = setTimeout(() => document.addEventListener('mousedown', handleOutside), 10);
     return () => { clearTimeout(t); document.removeEventListener('mousedown', handleOutside); };
   }, [pillPhase]);
+
+  // Open pill when Dashboard's AI button is clicked
+  useEffect(() => {
+    if (!openTrigger) return;
+    setPillPhase('input');
+    setTimeout(() => inputRef.current?.focus(), 120);
+  }, [openTrigger]); // eslint-disable-line
+
+  // Notify parent whether chat pill is open (so Dashboard can hide PageDots)
+  useEffect(() => {
+    onChatOpenChange?.(pillPhase !== 'idle');
+  }, [pillPhase]); // eslint-disable-line
 
   // Reset messages on date change
   useEffect(() => {
@@ -672,18 +684,12 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
       {(!expanded || mobile) && <div ref={pillRef} style={{
         position: "fixed",
         bottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
-        // In circular idle: hugs bottom-right as a small circle.
-        // In any other state (input/closing/expanded-mobile): full-width centered.
-        ...(circular && pillPhase === 'idle' ? {
-          right: 14, left: "auto",
-        } : {
-          left: 0, right: 0,
-          paddingLeft: 10, paddingRight: 10,
-          paddingBottom: mobile ? "6px" : "16px",
-        }),
+        left: 0, right: 0,
+        paddingLeft: 10, paddingRight: 10,
+        paddingBottom: mobile ? "6px" : "16px",
         zIndex: 97,
         display: "flex", flexDirection: "column",
-        alignItems: circular && pillPhase === 'idle' ? "flex-end" : "center",
+        alignItems: "center",
         pointerEvents: "none",
       }}>
 
@@ -735,35 +741,9 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
             );
           }
 
-          // ── IDLE: circular glass icon (bottom-right) or compact pill ────────
+          // ── IDLE: Dashboard owns the trigger button — render nothing ────────
           if (pillPhase === 'idle') {
-            const activate = () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 120); };
-            if (circular) {
-              return (
-                <div
-                  onClick={activate}
-                  onMouseEnter={!mobile ? activate : undefined}
-                  style={{
-                    pointerEvents: "auto", cursor: "pointer",
-                    width: 44, height: 44, borderRadius: "50%",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    ...glass,
-                  }}
-                >
-                  <DLSparkle size={18} />
-                </div>
-              );
-            }
-            return (
-              <div
-                onMouseEnter={!mobile ? activate : undefined}
-                onClick={mobile ? activate : undefined}
-                style={{ pointerEvents: "auto", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 100, cursor: "pointer", ...glass }}
-              >
-                <DLSparkle size={13} />
-                <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI</span>
-              </div>
-            );
+            return null;
           }
 
           // ── CLOSING: reverse of expand animation ──────────────────────────

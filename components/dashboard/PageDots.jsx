@@ -108,16 +108,30 @@ export default function PageDots({
     flexShrink: 0,
   });
 
+  // ── Glass pill used for both dots row and add-page input ─────────────────
+  const glassPill = {
+    display: "flex",
+    alignItems: "center",
+    height: 34,
+    background: "var(--dl-glass)",
+    backdropFilter: "blur(16px) saturate(1.3)",
+    WebkitBackdropFilter: "blur(16px) saturate(1.3)",
+    border: "1px solid var(--dl-glass-border)",
+    borderRadius: 100,
+    boxShadow: "var(--dl-glass-shadow)",
+    boxSizing: "border-box",
+  };
+
+  const circleBtn = (bg) => ({
+    width: 22, height: 22, borderRadius: "50%",
+    background: bg,
+    border: "none", cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center",
+    flexShrink: 0, transition: "opacity 0.15s",
+  });
+
   return (
-    // Floats above the safe area with breathing room
-    <div style={{
-      position: "fixed",
-      bottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
-      left: 0, right: 0,
-      zIndex: 99,
-      display: "flex", justifyContent: "center",
-      pointerEvents: "none",
-    }}>
+    // Dashboard owns the fixed wrapper; PageDots renders just the pill + popover
     <div style={{ position: "relative", flexShrink: 0, pointerEvents: "auto" }}>
 
       {/* ── Page rename/delete popover ───────────────────────────────────── */}
@@ -185,20 +199,49 @@ export default function PageDots({
         </>
       )}
 
-      {/* ── Dots row ────────────────────────────────────────────────────── */}
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        gap: 7,
-        padding: "6px 14px",
-        background: "var(--dl-glass)",
-        backdropFilter: "blur(16px) saturate(1.3)",
-        WebkitBackdropFilter: "blur(16px) saturate(1.3)",
-        border: "1px solid var(--dl-glass-border)",
-        borderRadius: 100,
-        boxShadow: "var(--dl-glass-shadow)",
-      }}>
+      {/* ── Add-page input pill (replaces dots row when adding) ──────── */}
+      {addingPage ? (
+        <div style={{ ...glassPill, padding: "0 8px 0 14px", gap: 6, minWidth: 200 }}>
+          <input
+            ref={nameInputRef}
+            value={newPageName}
+            onChange={(e) => setNewPageName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter")  confirmAddPage();
+              if (e.key === "Escape") setAddingPage(false);
+            }}
+            placeholder="Page name…"
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              color: "var(--dl-strong)",
+              fontFamily: mono,
+              fontSize: F.sm,
+              padding: 0,
+              minWidth: 0,
+            }}
+          />
+          <button onClick={confirmAddPage} title="Confirm" style={circleBtn("var(--dl-accent)")}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12"/>
+            </svg>
+          </button>
+          <button
+            onClick={() => setAddingPage(false)}
+            title="Cancel"
+            style={{ ...circleBtn("color-mix(in srgb, var(--dl-strong) 10%, transparent)"), color: "var(--dl-middle)" }}
+          >
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+            </svg>
+          </button>
+        </div>
+      ) : (
+
+      // ── Dots row ─────────────────────────────────────────────────────
+      <div style={{ ...glassPill, justifyContent: "center", gap: 7, padding: "0 14px" }}>
 
         {/* Page dots */}
         {Array.from({ length: count }, (_, i) => (
@@ -213,7 +256,7 @@ export default function PageDots({
               width:  i === active ? 20 : 6,
               height: 6,
               borderRadius: 3,
-              background: i === active ? "var(--dl-accent)" : "var(--dl-border2)",
+              background: i === active ? "var(--dl-strong)" : "var(--dl-border2)",
               border: "none",
               padding: 0,
               cursor: "pointer",
@@ -224,67 +267,34 @@ export default function PageDots({
         ))}
 
         {/* Separator */}
-        {!addingPage && (
-          <div style={{ width: 1, height: 12, background: "var(--dl-border)", flexShrink: 0, marginLeft: 2 }} />
-        )}
+        <div style={{ width: 1, height: 12, background: "var(--dl-border)", flexShrink: 0, marginLeft: 2 }} />
 
-        {/* Add page: "+" button or inline name input */}
-        {addingPage ? (
-          <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
-            <input
-              ref={nameInputRef}
-              value={newPageName}
-              onChange={(e) => setNewPageName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter")  confirmAddPage();
-                if (e.key === "Escape") setAddingPage(false);
-              }}
-              placeholder="Page name…"
-              style={{ ...inputStyle, width: 130 }}
-            />
-            <button onClick={confirmAddPage} style={btnStyle("var(--dl-accent)")}>✓</button>
-            <button
-              onClick={() => setAddingPage(false)}
-              style={{ ...btnStyle("transparent"), color: "var(--dl-middle)", border: "1px solid var(--dl-border)" }}
-            >
-              ✕
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setAddingPage(true)}
-            title="Add page"
-            style={{
-              width: 20,
-              height: 20,
-              borderRadius: "50%",
-              background: "var(--dl-border2)",
-              border: "none",
-              color: "var(--dl-middle)",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 15,
-              lineHeight: 1,
-              fontWeight: "bold",
-              flexShrink: 0,
-              transition: "background 0.18s, color 0.18s",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--dl-accent)";
-              e.currentTarget.style.color = "#fff";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "var(--dl-border2)";
-              e.currentTarget.style.color = "var(--dl-middle)";
-            }}
-          >
-            +
-          </button>
-        )}
+        {/* "+" add page button */}
+        <button
+          onClick={() => setAddingPage(true)}
+          title="Add page"
+          style={{
+            width: 20, height: 20, borderRadius: "50%",
+            background: "var(--dl-border2)",
+            border: "none", color: "var(--dl-middle)", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 15, lineHeight: 1, fontWeight: "bold", flexShrink: 0,
+            transition: "background 0.18s, color 0.18s",
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background = "var(--dl-accent)";
+            e.currentTarget.style.color = "#fff";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = "var(--dl-border2)";
+            e.currentTarget.style.color = "var(--dl-middle)";
+          }}
+        >
+          +
+        </button>
       </div>
-    </div>
+
+      )}
     </div>
   );
 }

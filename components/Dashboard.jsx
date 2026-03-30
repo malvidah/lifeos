@@ -115,6 +115,8 @@ function DashboardInner() {
   const [authReady, setAuthReady] = useState(false);
   const [selected,  setSelected]  = useUrlDate();
   const [chatExpanded, setChatExpanded] = useState(false);
+  const [chatIsOpen,   setChatIsOpen]   = useState(false);
+  const [chatOpenCount, setChatOpenCount] = useState(0);
   const [calView,   setCalView]   = useState(() => localStorage.getItem('calView') || 'day');
   const [events,    setEvents]    = useState({});
   const [healthDots,setHealthDots]= useState(()=>{
@@ -663,61 +665,43 @@ function DashboardInner() {
               />
             </div>
           ) : layout.loaded ? (
-            <>
-              <PageContainer
-                pages={layout.pages}
-                renderPage={renderPage}
-                currentPageIdx={layout.currentPageIdx}
-                onPageChange={layout.setCurrentPageIdx}
-                editMode={editMode}
-              />
-              <PageDots
-                count={layout.pages.length}
-                active={layout.currentPageIdx}
-                pages={layout.pages}
-                onDotClick={(i) => layout.setCurrentPageIdx(i)}
-                onAddPage={(name) => {
-                  layout.addPage(name);
-                  setTimeout(() => layout.setCurrentPageIdx(layout.pages.length), 50);
-                }}
-                onRenamePage={(i, name) => layout.renamePage(i, name)}
-                onDeletePage={(i) => layout.removePage(i)}
-              />
-            </>
+            <PageContainer
+              pages={layout.pages}
+              renderPage={renderPage}
+              currentPageIdx={layout.currentPageIdx}
+              onPageChange={layout.setCurrentPageIdx}
+              editMode={editMode}
+            />
           ) : null}
 
         </div>
       </div>
 
       {/* ── Glass nav floats — fixed above the scroll area ───────────────── */}
-      {/* Left: layout/edit mode toggle (circular) */}
-      <button
+      {/* Left: layout/edit mode toggle (circular) — hidden during search */}
+      {!searchOpen && <button
         onClick={() => setEditMode(v => !v)}
         style={{
           position: "fixed",
           top: "calc(env(safe-area-inset-top, 0px) + 100px)",
           left: 12, zIndex: 95,
           width: 40, height: 40, borderRadius: "50%",
-          background: editMode
-            ? "color-mix(in srgb, var(--dl-accent) 14%, var(--dl-glass))"
-            : "var(--dl-glass)",
+          background: editMode ? "var(--dl-glass-active)" : "var(--dl-glass)",
           backdropFilter: "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-          border: editMode
-            ? "1px solid color-mix(in srgb, var(--dl-accent) 30%, transparent)"
-            : "1px solid var(--dl-glass-border)",
+          border: "1px solid var(--dl-glass-border)",
           boxShadow: "var(--dl-glass-shadow)",
           cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: editMode ? "var(--dl-accent)" : "var(--dl-highlight)",
-          transition: "background 0.2s, color 0.2s, border 0.2s",
+          color: editMode ? "var(--dl-strong)" : "var(--dl-highlight)",
+          transition: "background 0.2s, color 0.2s",
           WebkitAppRegion: "no-drag",
         }}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>
         </svg>
-      </button>
+      </button>}
 
       {/* Center: project name pill / widget dock (edit mode) / search input */}
       <div style={{
@@ -855,19 +839,73 @@ function DashboardInner() {
         </button>
       )}
 
-      {/* Bottom vignette — fades content up into the AI bar */}
+      {/* Bottom vignette — fades content up into the bottom bar */}
       <div style={{
         position:"fixed", bottom:0, left:0, right:0,
         height:120, pointerEvents:"none", zIndex:96,
         background:"linear-gradient(to top, var(--dl-bg) 0%, var(--dl-bg)99 35%, transparent 100%)",
       }}/>
 
+      {/* ── Fixed bottom bar: PageDots pill + AI circle ───────────────────── */}
+      {!searchOpen && !chatIsOpen && layout.loaded && (
+        <div style={{
+          position: "fixed",
+          bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+          left: 0, right: 0,
+          zIndex: 99,
+          display: "flex", justifyContent: "center", alignItems: "center",
+          gap: 8,
+          pointerEvents: "none",
+        }}>
+          {/* PageDots pill */}
+          <div style={{ pointerEvents: "auto" }}>
+            <PageDots
+              count={layout.pages.length}
+              active={layout.currentPageIdx}
+              pages={layout.pages}
+              onDotClick={(i) => layout.setCurrentPageIdx(i)}
+              onAddPage={(name) => {
+                layout.addPage(name);
+                setTimeout(() => layout.setCurrentPageIdx(layout.pages.length), 50);
+              }}
+              onRenamePage={(i, name) => layout.renamePage(i, name)}
+              onDeletePage={(i) => layout.removePage(i)}
+            />
+          </div>
+          {/* AI circle button */}
+          <button
+            onClick={() => setChatOpenCount(c => c + 1)}
+            title="Ask AI"
+            style={{
+              pointerEvents: "auto",
+              width: 34, height: 34, borderRadius: "50%",
+              background: "var(--dl-glass)",
+              backdropFilter: "blur(16px) saturate(1.3)",
+              WebkitBackdropFilter: "blur(16px) saturate(1.3)",
+              border: "1px solid var(--dl-glass-border)",
+              boxShadow: "var(--dl-glass-shadow)",
+              cursor: "pointer",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+              transition: "background 0.18s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--dl-glass-active)"}
+            onMouseLeave={e => e.currentTarget.style.background = "var(--dl-glass)"}
+          >
+            {/* DL Sparkle */}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--dl-highlight)" style={{flexShrink:0}}>
+              <path d="M12 2L13.9 10.1L22 12L13.9 13.9L12 22L10.1 13.9L2 12L10.1 10.1Z"/>
+            </svg>
+          </button>
+        </div>
+      )}
+
       {/* Floating chat pill — hidden during search */}
       {!searchOpen && (
         <ChatFloat date={selected} token={token} userId={userId} theme={theme}
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
           expanded={chatExpanded} onExpandedChange={setChatExpanded}
-          circular={true} />
+          openTrigger={chatOpenCount} onChatOpenChange={setChatIsOpen} />
       )}
 
       {/* Keyboard shortcut cheatsheet — ? button + overlay */}
