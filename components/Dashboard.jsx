@@ -693,6 +693,7 @@ function DashboardInner() {
             pages={layout.pages}
             renderPage={renderPage}
             currentPageIdx={layout.currentPageIdx}
+            onPageChange={layout.setCurrentPageIdx}
             editMode={editMode}
           />
         )}

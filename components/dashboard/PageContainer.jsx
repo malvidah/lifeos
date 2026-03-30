@@ -24,13 +24,20 @@ import { useEffect, useRef } from 'react';
  * We prevent this by listening for any scroll on the outer wrapper and
  * immediately resetting both axes to 0.
  *
+ * SWIPE NAVIGATION:
+ * Horizontal swipe gestures on the outer div navigate pages. Requires ≥40px
+ * of horizontal movement that is more horizontal than vertical (dy < dx*0.75).
+ * touchAction:'pan-y' lets the browser handle vertical scrolling inside cards
+ * while we receive the horizontal pointer events for page navigation.
+ *
  * Animation is a CSS transition on the track's transform.
  * On first mount the transition is suppressed so there's no sliding-in effect.
  */
-export default function PageContainer({ pages, renderPage, currentPageIdx }) {
+export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange }) {
   const outerRef   = useRef(null);
   const trackRef   = useRef(null);
   const hasMounted = useRef(false);
+  const swipeRef   = useRef(null); // { x, y } on pointerdown
 
   // Lock the outer container's scroll position to (0,0) at all times.
   // The outer should NEVER scroll — paging is done entirely via transform.
@@ -67,9 +74,37 @@ export default function PageContainer({ pages, renderPage, currentPageIdx }) {
   const n   = pages.length || 1;
   const pct = currentPageIdx * (100 / n);  // translateX offset in %
 
+  // ── Swipe-to-navigate handlers ───────────────────────────────────────────
+  // Primary navigation method: swipe anywhere on the page content area.
+  // Requires ≥40px horizontal movement, more horizontal than vertical.
+  // Works for both touch and mouse; touchAction:'pan-y' on the outer div
+  // lets the browser handle vertical card scrolling while we get horizontal.
+  const handlePointerDown = (e) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    swipeRef.current = { x: e.clientX, y: e.clientY };
+  };
+
+  const handlePointerUp = (e) => {
+    if (!swipeRef.current) return;
+    const dx = e.clientX - swipeRef.current.x;
+    const dy = e.clientY - swipeRef.current.y;
+    swipeRef.current = null;
+    if (Math.abs(dx) < 40) return;                       // too short
+    if (Math.abs(dy) > Math.abs(dx) * 0.75) return;     // too vertical
+    const newIdx = dx < 0
+      ? Math.min(currentPageIdx + 1, n - 1)
+      : Math.max(currentPageIdx - 1, 0);
+    if (newIdx !== currentPageIdx) onPageChange?.(newIdx);
+  };
+
+  const handlePointerCancel = () => { swipeRef.current = null; };
+
   return (
     <div
       ref={outerRef}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
       style={{
         position: 'relative',
         overflow: 'hidden',
