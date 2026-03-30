@@ -38,28 +38,27 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     targetPageRef.current = currentPageIdx;
     const target = currentPageIdx * el.offsetWidth;
 
-    if (Math.abs(el.scrollLeft - target) > 2) {
-      clearTimeout(unlockTimer.current);
+    clearTimeout(unlockTimer.current);
 
-      if (!hasMountedRef.current) {
-        // First mount (e.g. after closing search) — jump instantly so there's
-        // no swipe animation back to the page the user was already on.
-        el.scrollTo({ left: target, behavior: 'instant' });
-        isProgrammatic.current = false;
-      } else {
-        // Subsequent index changes (arrow / dot) — animate smoothly.
-        isProgrammatic.current = true;
-        el.scrollTo({ left: target, behavior: 'smooth' });
-        const unlock = () => { isProgrammatic.current = false; };
-        if ('onscrollend' in el) {
-          el.addEventListener('scrollend', unlock, { once: true });
-        } else {
-          unlockTimer.current = setTimeout(unlock, 550);
-        }
-      }
-    } else {
-      clearTimeout(unlockTimer.current);
+    if (!hasMountedRef.current) {
+      // First mount — assign scrollLeft directly (synchronous, fires no events)
+      // so browser scroll-restoration can't override us and trigger scrollend
+      // with a stale page index.
+      el.scrollLeft = target;
       isProgrammatic.current = false;
+    } else {
+      // Subsequent index changes (arrow / dot) — animate smoothly.
+      isProgrammatic.current = true;
+      el.scrollTo({ left: target, behavior: 'smooth' });
+      const unlock = () => {
+        clearTimeout(unlockTimer.current);
+        isProgrammatic.current = false;
+      };
+      if ('onscrollend' in el) {
+        el.addEventListener('scrollend', unlock, { once: true });
+      }
+      // Fallback: unlock after 600ms in case scrollend never fires
+      unlockTimer.current = setTimeout(unlock, 600);
     }
 
     hasMountedRef.current = true;
