@@ -33,7 +33,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   // Fetch habit templates — tasks with data-habit attribute in HTML.
   const { data: allHabitRows, error: tErr } = await supabase
     .from('tasks')
-    .select('id, date, text, html, done, project_tags, position')
+    .select('id, date, due_date, text, html, done, project_tags, position')
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .ilike('html', '%data-habit=%');
@@ -62,9 +62,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     const display = displayTaskText(t.text);
     const matchKey = cleanTaskText(t.text);
 
+    // due_date is treated as an explicit end-date when set to a date
+    // different from the template's own creation date (which would mean
+    // it was intentionally specified, not accidentally defaulted).
+    const endDate = (t.due_date && t.due_date !== t.date) ? t.due_date : null;
+
     return {
       id: t.id,
       date: t.date,
+      endDate,
       text: display || t.text,
       matchKey,
       schedule,
@@ -242,16 +248,23 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     }
   }
 
-  // Days-limited habits: calculate expiry date (creation date + N days)
+  // Determine expiry date and archived state for each habit
   for (const h of dedupedHabits) {
+    const todayStr = today || new Date().toISOString().slice(0, 10);
+
     if (h.daysLimit) {
+      // daysLimit: show for N days from creation
       const created = new Date(h.date + 'T12:00:00');
       created.setDate(created.getDate() + h.daysLimit);
       h.expiryDate = `${created.getFullYear()}-${String(created.getMonth()+1).padStart(2,'0')}-${String(created.getDate()).padStart(2,'0')}`;
-      const todayStr = today || new Date().toISOString().slice(0, 10);
       h.daysExpired = todayStr > h.expiryDate;
+    } else if (h.endDate) {
+      // endDate (from due_date): show until this explicit date, then archive
+      h.expiryDate = h.endDate;
+      h.daysExpired = todayStr > h.endDate;
     }
-    // Mark archived: count-complete OR days-expired
+
+    // Mark archived: count-complete OR end-date passed
     h.archived = !!(h.countComplete || h.daysExpired);
   }
 

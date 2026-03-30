@@ -269,9 +269,12 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
   // When text changes, re-parse structured fields from tokens
   if ('text' in patch) {
     const text = patch.text || '';
-    const dateMatch = text.match(/@(\d{4}-\d{2}-\d{2})/);
-    if (dateMatch && !('due_date' in patch)) {
-      patch.due_date = dateMatch[1];
+    // Keep due_date in sync with the @date token in text.
+    // If the token is removed we clear the field so stale due_dates
+    // don't cause recurring/habit templates to silently expire.
+    if (!('due_date' in patch)) {
+      const dateMatch = text.match(/@(\d{4}-\d{2}-\d{2})/);
+      patch.due_date = dateMatch ? dateMatch[1] : null;
     }
     if (!('project_tags' in patch)) {
       const tags = [];
