@@ -24,7 +24,7 @@ import { mono, F } from "@/lib/tokens";
  */
 export default function PageDots({
   count, active, homeIdx = 1, pages = [],
-  onDotClick, onSwipePrev, onSwipeNext,
+  onDotClick, onSwipePrev, onSwipeNext, onCycleNext,
   onAddPage, onRenamePage, onDeletePage,
   onReorderPages,
 }) {
@@ -125,11 +125,9 @@ export default function PageDots({
     if (menuPage !== null) return;
 
     if (Math.abs(dx) <= 10) {
-      // ── Tap — navigate to tapped dot ────────────────────────────────────
-      if (dotIdx !== null) {
-        dragWasRef.current = true; // suppress upcoming click event
-        onDotClick?.(dotIdx);
-      }
+      // ── Tap anywhere on pill → cycle to next page (wraps around) ────────
+      dragWasRef.current = true; // suppress upcoming click event
+      onCycleNext?.();
       return;
     }
 

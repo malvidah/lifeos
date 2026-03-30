@@ -99,12 +99,56 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
 
   const handlePointerCancel = () => { swipeRef.current = null; };
 
+  // ── Touch-based swipe (more reliable on mobile) ──────────────────────────
+  // Pointer events can get cancelled by the browser's scroll handling on
+  // mobile. Touch events always fire, so we use them as the primary swipe
+  // detection for touch devices.
+  const touchRef = useRef(null);
+
+  const handleTouchStart = (e) => {
+    if (e.touches.length !== 1) return;
+    const t = e.touches[0];
+    touchRef.current = { x: t.clientX, y: t.clientY, settled: false };
+  };
+
+  const handleTouchMove = (e) => {
+    if (!touchRef.current || touchRef.current.settled) return;
+    const t = e.touches[0];
+    const dx = t.clientX - touchRef.current.x;
+    const dy = t.clientY - touchRef.current.y;
+    // Once we know it's a horizontal swipe, prevent vertical scroll
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+      e.preventDefault();
+      touchRef.current.settled = true;
+    } else if (Math.abs(dy) > 10) {
+      // Vertical — let browser handle, stop tracking
+      touchRef.current = null;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!touchRef.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchRef.current.x;
+    const dy = t.clientY - touchRef.current.y;
+    touchRef.current = null;
+    if (Math.abs(dx) < 40) return;
+    if (Math.abs(dy) > Math.abs(dx) * 0.75) return;
+    const newIdx = dx < 0
+      ? Math.min(currentPageIdx + 1, n - 1)
+      : Math.max(currentPageIdx - 1, 0);
+    if (newIdx !== currentPageIdx) onPageChange?.(newIdx);
+  };
+
   return (
     <div
       ref={outerRef}
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       style={{
         position: 'relative',
         overflow: 'hidden',

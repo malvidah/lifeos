@@ -1047,6 +1047,7 @@ function DashboardInner() {
                   pages={layout.pages}
                   homeIdx={layout.homeIdx}
                   onDotClick={(i) => layout.setCurrentPageIdx(i)}
+                  onCycleNext={() => layout.setCurrentPageIdx((layout.currentPageIdx + 1) % layout.pages.length)}
                   onSwipePrev={() => layout.setCurrentPageIdx(Math.max(0, layout.currentPageIdx - 1))}
                   onSwipeNext={() => layout.setCurrentPageIdx(Math.min(layout.pages.length - 1, layout.currentPageIdx + 1))}
                   onAddPage={(name) => {
