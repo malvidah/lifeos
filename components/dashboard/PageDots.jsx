@@ -185,6 +185,20 @@ export default function PageDots({
 
   const isHome = (i) => i === homeIdx;
 
+  // Clean house icon — used bare (no pill wrapper) in both the dot and popover
+  const HouseIcon = ({ size = 11, color = "currentColor", style: s = {} }) => (
+    <svg
+      width={size} height={size}
+      viewBox="0 0 24 24" fill="none"
+      stroke={color} strokeWidth="2"
+      strokeLinecap="round" strokeLinejoin="round"
+      style={{ display: "block", flexShrink: 0, ...s }}
+    >
+      <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/>
+      <polyline points="9 21 9 12 15 12 15 21"/>
+    </svg>
+  );
+
   // Compute visual order of dots during drag-to-reorder
   const displayOrder = (() => {
     const order = Array.from({ length: count }, (_, i) => i);
@@ -216,9 +230,9 @@ export default function PageDots({
             height: 40, padding: "0 6px 0 14px", gap: 2,
             whiteSpace: "nowrap",
           }}>
-            {/* ◈ home indicator */}
+            {/* House icon — home page indicator */}
             {isHome(menuPage) && (
-              <span style={{ color: "var(--dl-orange)", fontSize: 10, opacity: 0.9, marginRight: 2, flexShrink: 0 }}>◈</span>
+              <HouseIcon size={12} color="var(--dl-accent)" style={{ opacity: 0.8, marginRight: 2 }} />
             )}
 
             {/* Page name — click to edit inline */}
@@ -355,7 +369,7 @@ export default function PageDots({
           const isDragging = dragTo?.fromIdx === pageIdx;
 
           if (home) {
-            // Home dot — always shows ◈ symbol in both selected and idle states
+            // Home dot — bare house icon, no pill wrapper, colour shifts on active
             return (
               <button
                 key={pageIdx}
@@ -370,27 +384,19 @@ export default function PageDots({
                 onPointerUp={(e) => onDotPointerUp(e, pageIdx)}
                 onPointerCancel={onDotPointerCancel}
                 style={{
-                  background: isActive
-                    ? "var(--dl-strong)"
-                    : "transparent",
-                  border: "none", padding: isActive ? "1px 6px" : "0",
-                  borderRadius: isActive ? 4 : 0,
+                  background: "none", border: "none", padding: 0,
                   cursor: "pointer", flexShrink: 0,
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  opacity: isDragging ? 0.4 : 1,
-                  transition: "opacity 0.15s, background 0.2s, padding 0.2s",
+                  opacity: isDragging ? 0.35 : 1,
+                  transition: "opacity 0.15s",
                   touchAction: "none",
                 }}
               >
-                <span style={{
-                  fontSize: 9,
-                  lineHeight: 1,
-                  color: isActive ? "var(--dl-bg)" : "var(--dl-accent)",
-                  fontFamily: "system-ui, sans-serif",
-                  display: "block",
-                  opacity: isActive ? 1 : 0.75,
-                  transition: "color 0.2s, opacity 0.2s",
-                }}>◈</span>
+                <HouseIcon
+                  size={11}
+                  color={isActive ? "var(--dl-strong)" : "var(--dl-border2)"}
+                  style={{ transition: "stroke 0.2s" }}
+                />
               </button>
             );
           }
