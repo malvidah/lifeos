@@ -799,24 +799,35 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     return () => { cancelled = true; };
   }, [token, userId, startDate, endDate, refreshKey]);
 
-  // Auto-scroll to center today (accounting for month dividers before today)
-  useEffect(() => {
-    if (!scrollRef.current || loading) return;
-    const scrollTarget = date || today;
-    const targetIdx = dates.indexOf(scrollTarget);
-    if (targetIdx >= 0) {
-      const colW = 28;
-      const divW = 28;
-      // Count month boundaries before target index
-      let dividers = 0;
-      for (let i = 1; i <= targetIdx; i++) {
-        if (dayNum(dates[i]) === 1) dividers++;
-      }
-      const targetOffset = targetIdx * colW + dividers * divW;
-      const containerW = scrollRef.current.clientWidth;
-      scrollRef.current.scrollLeft = Math.max(0, targetOffset - containerW / 2);
+  // Scroll the grid so a given date is horizontally centred.
+  const scrollToDate = useCallback((target) => {
+    if (!scrollRef.current) return;
+    const targetIdx = dates.indexOf(target);
+    if (targetIdx < 0) return;
+    const colW = 28, divW = 28;
+    let dividers = 0;
+    for (let i = 1; i <= targetIdx; i++) {
+      if (dayNum(dates[i]) === 1) dividers++;
     }
-  }, [loading, date, today]);
+    const targetOffset = targetIdx * colW + dividers * divW;
+    const containerW = scrollRef.current.clientWidth;
+    scrollRef.current.scrollLeft = Math.max(0, targetOffset - containerW / 2);
+  }, [dates]);
+
+  // Auto-scroll to the selected date (or today) whenever data finishes loading
+  // or the selected date changes.
+  useEffect(() => {
+    if (loading) return;
+    scrollToDate(date || today);
+  }, [loading, date, today, scrollToDate]);
+
+  // Allow the navbar "today" button to snap us back even when the date is
+  // already today (in which case the date dep above won't re-fire).
+  useEffect(() => {
+    const handler = () => { if (!loading) scrollToDate(today); };
+    window.addEventListener('daylab:scroll-to-today', handler);
+    return () => window.removeEventListener('daylab:scroll-to-today', handler);
+  }, [loading, today, scrollToDate]);
 
   // Toggle a habit completion for a specific date
   const toggleCompletion = useCallback((habit, cellDate) => {

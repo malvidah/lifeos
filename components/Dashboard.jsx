@@ -871,7 +871,7 @@ function DashboardInner() {
 
                   {/* Date text — click goes to today */}
                   <button
-                    onClick={() => { selectProject(null); setSelected(todayKey()); }}
+                    onClick={() => { selectProject(null); setSelected(todayKey()); window.dispatchEvent(new CustomEvent('daylab:scroll-to-today')); }}
                     style={{
                       background: "transparent", border: "none", cursor: "pointer", padding: 0,
                       fontFamily: mono, fontSize: 12, letterSpacing: "0.12em",
@@ -888,7 +888,7 @@ function DashboardInner() {
                         background: "var(--dl-border2)", opacity: 0.5,
                       }}/>
                       <button
-                        onClick={() => setSelected(todayKey())}
+                        onClick={() => { setSelected(todayKey()); window.dispatchEvent(new CustomEvent('daylab:scroll-to-today')); }}
                         style={{
                           background: "transparent", border: "none", cursor: isToday ? "default" : "pointer",
                           padding: 0, fontFamily: mono, fontSize: 9, letterSpacing: "0.13em",
