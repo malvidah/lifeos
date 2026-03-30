@@ -9,8 +9,8 @@ import { useRef, useEffect, useCallback } from 'react';
  *   renderPage      (page, index) => ReactNode
  *   currentPageIdx  number
  *   onPageChange    (index: number) => void
- *   editMode        boolean  — when true, swipe/scroll is disabled so the user
- *                             can drag cards without accidentally changing pages
+ *   editMode        boolean  — passed through; swipe stays enabled in edit mode
+ *                             so users can switch pages while editing layout
  */
 export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange, editMode }) {
   const containerRef    = useRef(null);
@@ -18,7 +18,6 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
 
   // Scroll to page programmatically when currentPageIdx changes externally
   useEffect(() => {
-    if (editMode) return; // don't animate away from current page while editing
     const el = containerRef.current;
     if (!el) return;
     const target = currentPageIdx * el.offsetWidth;
@@ -27,17 +26,16 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       el.scrollTo({ left: target, behavior: 'smooth' });
       setTimeout(() => { isScrollingRef.current = false; }, 400);
     }
-  }, [currentPageIdx, editMode]);
+  }, [currentPageIdx]);
 
   // Detect page changes from user swipe via scroll position
   const handleScroll = useCallback(() => {
-    if (editMode) return;           // ignore scroll events during layout edit
     if (isScrollingRef.current) return;
     const el = containerRef.current;
     if (!el || !el.offsetWidth) return;
     const page = Math.round(el.scrollLeft / el.offsetWidth);
     onPageChange(page);
-  }, [onPageChange, editMode]);
+  }, [onPageChange]);
 
   return (
     <div
@@ -46,8 +44,8 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       onScroll={handleScroll}
       style={{
         display: 'flex',
-        overflowX: editMode ? 'hidden' : 'auto',  // freeze swipe in edit mode
-        scrollSnapType: editMode ? 'none' : 'x mandatory',
+        overflowX: 'auto',
+        scrollSnapType: 'x mandatory',
         scrollBehavior: 'smooth',
         WebkitOverflowScrolling: 'touch',
         flex: 1,

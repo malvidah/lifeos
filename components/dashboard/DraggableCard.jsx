@@ -79,8 +79,8 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
         transition: transition || undefined,
         opacity: isDragging ? 0.4 : 1,
         position: "relative",
-        // Let the page scroll naturally; only lock touch when in edit mode
-        touchAction: editMode ? "none" : "pan-y",
+        // Only lock touch while actively dragging — lets page swipe work in edit mode
+        touchAction: isDragging ? "none" : "pan-y",
         zIndex: isDragging ? 50 : undefined,
       }}
       onPointerDown={startLongPress}
@@ -88,7 +88,7 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
       onPointerCancel={cancelLongPress}
       onPointerMove={moveLongPress}
     >
-      {/* ── Edit mode: transparent drag zone over header + grip icon ── */}
+      {/* ── Edit mode: drag handle pill centered at top of card ── */}
       {editMode && (
         <div
           {...attributes}
@@ -102,26 +102,21 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
             zIndex: 20,
             cursor: isDragging ? "grabbing" : "grab",
             display: "flex",
-            alignItems: "center",
-            paddingLeft: 14,
+            alignItems: "flex-start",
+            justifyContent: "center",
+            paddingTop: 7,
           }}
         >
-          {/* Six-dot grip — subtly matches the card's muted header color */}
-          <svg
-            width="10"
-            height="14"
-            viewBox="0 0 10 14"
-            fill="var(--dl-highlight)"
-            opacity="0.35"
-            style={{ pointerEvents: "none", flexShrink: 0 }}
-          >
-            <circle cx="3" cy="2"  r="1.3" />
-            <circle cx="7" cy="2"  r="1.3" />
-            <circle cx="3" cy="7"  r="1.3" />
-            <circle cx="7" cy="7"  r="1.3" />
-            <circle cx="3" cy="12" r="1.3" />
-            <circle cx="7" cy="12" r="1.3" />
-          </svg>
+          {/* Centered pill handle — like iOS modal drag indicator */}
+          <div style={{
+            width: 32,
+            height: 4,
+            borderRadius: 2,
+            background: "var(--dl-border2)",
+            opacity: 0.55,
+            pointerEvents: "none",
+            flexShrink: 0,
+          }} />
         </div>
       )}
 

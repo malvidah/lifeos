@@ -584,15 +584,7 @@ function DashboardInner() {
     return () => { clearTimeout(t); document.removeEventListener('mousedown', handler); };
   }, [projectFilterOpen]);
 
-  // Close edit mode when the user switches pages (swipe while editing isn't
-  // possible, but programmatic page switches still work).
-  const prevPageRef = useRef(layout.currentPageIdx);
-  useEffect(() => {
-    if (prevPageRef.current !== layout.currentPageIdx) {
-      prevPageRef.current = layout.currentPageIdx;
-      setEditMode(false);
-    }
-  }, [layout.currentPageIdx]);
+  // (no longer exit edit mode on page change — swipe is allowed while editing)
 
   // dnd-kit sensors — PointerSensor with a 5px distance threshold so a tap
   // on the drag handle doesn't immediately fire a drag.
