@@ -74,7 +74,7 @@ function TTSButton({ text, token }) {
   );
 }
 
-export default function ChatFloat({date, token, userId, healthKey, theme, expanded, onExpandedChange}) {
+export default function ChatFloat({date, token, userId, healthKey, theme, expanded, onExpandedChange, circular}) {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -671,13 +671,19 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
       {/* ── Floating pill / card — hidden when desktop sidebar is open ── */}
       {(!expanded || mobile) && <div ref={pillRef} style={{
         position: "fixed",
-        // Sit above the PageDots bar (≈30px) + safe-area so both are visible
-        bottom: "calc(30px + env(safe-area-inset-bottom, 0px))",
-        left: 0, right: 0,
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
+        // In circular idle: hugs bottom-right as a small circle.
+        // In any other state (input/closing/expanded-mobile): full-width centered.
+        ...(circular && pillPhase === 'idle' ? {
+          right: 14, left: "auto",
+        } : {
+          left: 0, right: 0,
+          paddingLeft: 10, paddingRight: 10,
+          paddingBottom: mobile ? "6px" : "16px",
+        }),
         zIndex: 97,
-        display: "flex", flexDirection: "column", alignItems: "center",
-        paddingLeft: 10, paddingRight: 10,
-        paddingBottom: mobile ? "6px" : "16px",
+        display: "flex", flexDirection: "column",
+        alignItems: circular && pillPhase === 'idle' ? "flex-end" : "center",
         pointerEvents: "none",
       }}>
 
@@ -729,12 +735,29 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
             );
           }
 
-          // ── IDLE: compact glass bubble ───────────────────────────────────────
+          // ── IDLE: circular glass icon (bottom-right) or compact pill ────────
           if (pillPhase === 'idle') {
+            const activate = () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 120); };
+            if (circular) {
+              return (
+                <div
+                  onClick={activate}
+                  onMouseEnter={!mobile ? activate : undefined}
+                  style={{
+                    pointerEvents: "auto", cursor: "pointer",
+                    width: 44, height: 44, borderRadius: "50%",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    ...glass,
+                  }}
+                >
+                  <DLSparkle size={18} />
+                </div>
+              );
+            }
             return (
               <div
-                onMouseEnter={!mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 120); } : undefined}
-                onClick={mobile ? () => { setPillPhase('input'); setTimeout(() => inputRef.current?.focus(), 120); } : undefined}
+                onMouseEnter={!mobile ? activate : undefined}
+                onClick={mobile ? activate : undefined}
                 style={{ pointerEvents: "auto", display: "inline-flex", alignItems: "center", gap: 8, padding: "11px 18px", borderRadius: 100, cursor: "pointer", ...glass }}
               >
                 <DLSparkle size={13} />

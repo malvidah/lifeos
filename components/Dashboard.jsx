@@ -1,7 +1,7 @@
 "use client";
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { ThemeProvider, useTheme } from "@/lib/theme";
-import { mono, F, injectBlurWebFont } from "@/lib/tokens";
+import { mono, serif, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
 import { api } from "@/lib/api";
 import { todayKey, toKey, shift } from "@/lib/dates";
@@ -15,7 +15,6 @@ import { useDashboardLayout } from "@/lib/useDashboardLayout";
 import { useProjects } from "@/lib/useProjects";
 import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext } from "@/lib/contexts";
 import Header from "./nav/Header.jsx";
-import NavBar from "./nav/NavBar.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
@@ -53,7 +52,10 @@ function PageContent({ page, pageIdx, editMode, enterEditMode, cardProps, sensor
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={page.cards} strategy={verticalListSortingStrategy}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, paddingTop: 0, maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10,
+          // Push first card below header (≈88px) + glass nav row (40px) + gaps
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 148px)",
+          maxWidth: 1200, width: '100%', margin: '0 auto' }}>
           {page.cards.map(cardId => {
             const entry = CARD_REGISTRY.find(c => c.id === cardId);
             if (!entry) return null;
@@ -132,8 +134,6 @@ function DashboardInner() {
     } catch { return null; }
   });
   const [searchOpen, setSearchOpen] = useState(false);
-  // toolsOpen mirrors editMode — the leftmost icon toggles both together
-  // (derive rather than keep separate state to guarantee they stay in sync)
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -523,11 +523,9 @@ function DashboardInner() {
   const enterEditMode = useCallback(() => setEditMode(true),  []);
   const exitEditMode  = useCallback(() => setEditMode(false), []);
 
-  // toolsOpen is derived from editMode — dock is always open while editing
-  const toolsOpen = editMode;
-  const setToolsOpen = useCallback((v) => {
-    setEditMode(typeof v === 'function' ? v(editMode) : Boolean(v));
-  }, [editMode]);
+  // openSearch / closeSearch — used by the glass search float
+  const openSearch  = useCallback(() => { setSearchOpen(true);  setTimeout(() => searchInputRef.current?.focus(), 60); }, []);
+  const closeSearch = useCallback(() => { setSearchOpen(false); setSearchQuery(''); }, []);
 
   // Close edit mode when the user switches pages (swipe while editing isn't
   // possible, but programmatic page switches still work).
@@ -649,47 +647,19 @@ function DashboardInner() {
     <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
       <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onSelectDate={setSelected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{selectProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
 
-      {/* ── Main scroll area ─── */}
+      {/* ── Full-height content area — scrolls under the glass overlays ─── */}
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
-
-        {/* ── Fixed nav + header spacer ── */}
         <div ref={scrollContainerRef} style={{flex:1, minHeight:0, display:"flex", flexDirection:"column", overflowY: searchOpen ? 'auto' : 'hidden'}}>
-        <div style={{maxWidth:1200, width:"100%", margin:"0 auto", padding:10, paddingTop:0, display:"flex", flexDirection:"column", gap:8, flexShrink:0}}>
 
-          {/* Spacer for fixed header */}
-          <div style={{height:"calc(env(safe-area-inset-top, 0px) + 100px)",flexShrink:0}}/>
-
-          {/* NavBar — dock icons centered between settings and search */}
-          <NavBar
-            searchOpen={searchOpen} setSearchOpen={setSearchOpen}
-            searchQuery={searchQuery} setSearchQuery={setSearchQuery}
-            searchInputRef={searchInputRef} srLoading={srLoading}
-            toolsOpen={toolsOpen} setToolsOpen={setToolsOpen}
-            activeProjectName={activeProjectName}
-            onBack={activeProject ? () => { selectProject(null); setSelected(todayKey()); } : null}
-            dockItems={DOCK_ITEMS.map(item => ({
-              ...item,
-              isOpen: currentPageCards.includes(item.id),
-              onToggle: () => {
-                const pageIdx = layout.currentPageIdx;
-                if (currentPageCards.includes(item.id)) {
-                  layout.removeCard(pageIdx, item.id);
-                } else {
-                  layout.addCard(pageIdx, item.id);
-                }
-              },
-            }))}
-          />
-        </div>
-
-          {/* Search results replace page content when open */}
           {searchOpen ? (
-            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease', padding: '0 10px', maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+            <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease',
+              padding: '0 10px', paddingTop: "calc(env(safe-area-inset-top, 0px) + 148px)",
+              maxWidth: 1200, width: '100%', margin: '0 auto' }}>
               <SearchResults
                 results={srResults}
                 loading={srLoading}
                 query={searchQuery}
-                onSelectDate={d => { setSearchOpen(false); setSearchQuery(''); setSelected(d); }}
+                onSelectDate={d => { closeSearch(); setSelected(d); }}
               />
             </div>
           ) : layout.loaded ? (
@@ -708,7 +678,6 @@ function DashboardInner() {
                 onDotClick={(i) => layout.setCurrentPageIdx(i)}
                 onAddPage={(name) => {
                   layout.addPage(name);
-                  // Navigate to the newly created page after state update
                   setTimeout(() => layout.setCurrentPageIdx(layout.pages.length), 50);
                 }}
                 onRenamePage={(i, name) => layout.renamePage(i, name)}
@@ -717,9 +686,174 @@ function DashboardInner() {
             </>
           ) : null}
 
-        </div>{/* close scroll outer */}
-
+        </div>
       </div>
+
+      {/* ── Glass nav floats — fixed above the scroll area ───────────────── */}
+      {/* Left: layout/edit mode toggle (circular) */}
+      <button
+        onClick={() => setEditMode(v => !v)}
+        style={{
+          position: "fixed",
+          top: "calc(env(safe-area-inset-top, 0px) + 100px)",
+          left: 12, zIndex: 95,
+          width: 40, height: 40, borderRadius: "50%",
+          background: editMode
+            ? "color-mix(in srgb, var(--dl-accent) 14%, var(--dl-glass))"
+            : "var(--dl-glass)",
+          backdropFilter: "blur(20px) saturate(1.4)",
+          WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+          border: editMode
+            ? "1px solid color-mix(in srgb, var(--dl-accent) 30%, transparent)"
+            : "1px solid var(--dl-glass-border)",
+          boxShadow: "var(--dl-glass-shadow)",
+          cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: editMode ? "var(--dl-accent)" : "var(--dl-highlight)",
+          transition: "background 0.2s, color 0.2s, border 0.2s",
+          WebkitAppRegion: "no-drag",
+        }}
+      >
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>
+        </svg>
+      </button>
+
+      {/* Center: project name pill / widget dock (edit mode) / search input */}
+      <div style={{
+        position: "fixed",
+        top: "calc(env(safe-area-inset-top, 0px) + 100px)",
+        left: 60, right: 60,
+        zIndex: 95,
+        display: "flex", justifyContent: "center",
+        WebkitAppRegion: "no-drag",
+      }}>
+        {searchOpen ? (
+          /* Search input pill */
+          <div style={{
+            display: "flex", alignItems: "center", height: 40, gap: 8,
+            background: "var(--dl-glass)",
+            backdropFilter: "blur(20px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+            border: "1px solid var(--dl-glass-border)", borderRadius: 100,
+            boxShadow: "var(--dl-glass-shadow)",
+            padding: "0 10px 0 16px", width: "100%", maxWidth: 480,
+          }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0}}>
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Escape') closeSearch(); }}
+              placeholder="Search"
+              style={{ flex:1, background:'transparent', border:'none', outline:'none', fontFamily:serif, fontSize:F.md, color:"var(--dl-strong)", caretColor:"var(--dl-accent)" }}
+            />
+            {srLoading && <span style={{fontFamily:mono,fontSize:8,color:"var(--dl-highlight)",letterSpacing:'0.12em',flexShrink:0}}>…</span>}
+            <button onClick={closeSearch} style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',flexShrink:0}}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          </div>
+        ) : editMode ? (
+          /* Widget dock */
+          <div style={{
+            display: "flex", alignItems: "center", height: 40, gap: 2,
+            background: "var(--dl-glass)",
+            backdropFilter: "blur(20px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+            border: "1px solid var(--dl-glass-border)", borderRadius: 100,
+            boxShadow: "var(--dl-glass-shadow)",
+            padding: "0 4px",
+            overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none",
+          }}>
+            {DOCK_ITEMS.map(item => {
+              const isOpen = currentPageCards.includes(item.id);
+              return (
+                <button key={item.id}
+                  onClick={() => {
+                    const pageIdx = layout.currentPageIdx;
+                    if (isOpen) layout.removeCard(pageIdx, item.id);
+                    else layout.addCard(pageIdx, item.id);
+                  }}
+                  title={item.label}
+                  style={{
+                    background: isOpen ? 'var(--dl-glass-active)' : 'transparent',
+                    border: 'none', borderRadius: 100, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: isOpen ? "var(--dl-strong)" : "var(--dl-highlight)",
+                    width: 34, height: 34, flexShrink: 0,
+                    transition: 'background 0.15s, color 0.15s',
+                  }}
+                >
+                  {item.icon}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          /* Project name pill */
+          <div style={{
+            display: "flex", alignItems: "center", height: 40, gap: 4,
+            background: "var(--dl-glass)",
+            backdropFilter: "blur(20px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+            border: "1px solid var(--dl-glass-border)", borderRadius: 100,
+            boxShadow: "var(--dl-glass-shadow)",
+            padding: "0 16px",
+          }}>
+            {activeProject && (
+              <button
+                onClick={() => { selectProject(null); setSelected(todayKey()); }}
+                style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',padding:'2px 2px 2px 0',transition:'color 0.15s'}}
+                onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </button>
+            )}
+            <span
+              style={{fontFamily:mono, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:"var(--dl-highlight)", cursor: activeProject ? 'pointer' : 'default', whiteSpace:'nowrap'}}
+              onClick={activeProject ? () => { selectProject(null); setSelected(todayKey()); } : undefined}
+            >
+              {activeProjectName || 'All Projects'}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Right: search toggle (circular) */}
+      {!searchOpen && (
+        <button
+          onClick={openSearch}
+          style={{
+            position: "fixed",
+            top: "calc(env(safe-area-inset-top, 0px) + 100px)",
+            right: 12, zIndex: 95,
+            width: 40, height: 40, borderRadius: "50%",
+            background: "var(--dl-glass)",
+            backdropFilter: "blur(20px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+            border: "1px solid var(--dl-glass-border)",
+            boxShadow: "var(--dl-glass-shadow)",
+            cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            color: "var(--dl-highlight)",
+            transition: "color 0.15s",
+            WebkitAppRegion: "no-drag",
+          }}
+          onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+          onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+        >
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+      )}
 
       {/* Bottom vignette — fades content up into the AI bar */}
       <div style={{
@@ -732,7 +866,8 @@ function DashboardInner() {
       {!searchOpen && (
         <ChatFloat date={selected} token={token} userId={userId} theme={theme}
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
-          expanded={chatExpanded} onExpandedChange={setChatExpanded}/>
+          expanded={chatExpanded} onExpandedChange={setChatExpanded}
+          circular={true} />
       )}
 
       {/* Keyboard shortcut cheatsheet — ? button + overlay */}

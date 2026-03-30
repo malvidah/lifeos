@@ -109,12 +109,12 @@ export default function PageDots({
   });
 
   return (
-    // Fixed above ChatFloat — pointerEvents:none so the transparent area
-    // doesn't block scroll; restored on interactive children
+    // Floats above the safe area with breathing room
     <div style={{
-      position: "fixed", bottom: 0, left: 0, right: 0,
+      position: "fixed",
+      bottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
+      left: 0, right: 0,
       zIndex: 99,
-      paddingBottom: "env(safe-area-inset-bottom, 0px)",
       display: "flex", justifyContent: "center",
       pointerEvents: "none",
     }}>
