@@ -5,22 +5,18 @@ import { mono, F } from "@/lib/tokens";
 /**
  * PageDots — page navigation pill.
  *
- * Dots pill:
- *   • Tap a dot            → navigate to that page
- *   • Drag a dot L/R <40px → reorder pages (dots animate to new positions live)
- *   • Swipe pill L/R ≥40px → prev / next page (works anywhere including on dots)
- *   • Long-press dot 480ms → open compact glass popover (rename / delete)
- *   • "+"                  → add page
+ * Dots pill (entire element is the tap target):
+ *   • Tap              → cycle to next page (wraps around)
+ *   • Double-tap       → open detail popover for current page
+ *   • Long-press 480ms → open detail popover for current page
+ *   • Swipe L/R ≥40px  → prev / next page
+ *   • "+"              → add page
  *
- * All gesture detection is handled at the pill div level with setPointerCapture
- * so swipe is always reliable regardless of which child the pointer starts on.
+ * Dots are purely visual indicators (not individually clickable).
  *
- * Home page dot shows a solid filled house icon (no door) in both selected and
- * unselected states.
- *
- * Popover — compact glass pill, same visual language as nav:
- *   🏠 · [editable name] · 🗑 · ✕
- *   Trash requires two taps to confirm deletion.
+ * Popover — compact glass pill:
+ *   ‹ › · [editable name] · 🗑 · ✕
+ *   Arrows reorder pages. Trash requires two taps to confirm.
  */
 export default function PageDots({
   count, active, homeIdx = 1, pages = [],
@@ -35,7 +31,6 @@ export default function PageDots({
   const [nameEditing, setNameEditing] = useState(false);
   const [nameValue,   setNameValue]   = useState("");
   const [deleteArmed, setDeleteArmed] = useState(false);
-  const [dragTo,      setDragTo]      = useState(null); // { fromIdx, toIdx } while dragging
 
   const longPressTimer = useRef(null);
   const addInputRef    = useRef(null);
@@ -44,37 +39,33 @@ export default function PageDots({
   const pillRef        = useRef(null);
 
   // Unified gesture ref — set on pointerdown, cleared on pointerup/cancel.
-  // { startX, dx, dotIdx: number|null }
   const gestureRef  = useRef(null);
-  // Suppress onClick on a dot button after a drag (any |dx|>10) has been handled.
   const dragWasRef  = useRef(false);
 
-  // DOT_SPACING: approximate px between adjacent dot centres (dot width + gap).
-  // Used to map horizontal drag distance → index offset.
-  const DOT_SPACING = 15;
+  // ── Long-press / double-tap → open detail for current page ─────────────
+  const openPageDetail = useCallback(() => {
+    if (navigator.vibrate) navigator.vibrate(20);
+    setMenuPage(active);
+    setNameValue(pages[active]?.name ?? "");
+    setNameEditing(false);
+    setDeleteArmed(false);
+  }, [active, pages]);
 
-  // ── Long-press on dot ─────────────────────────────────────────────────────
-  const startDotLongPress = useCallback((i) => {
-    longPressTimer.current = setTimeout(() => {
-      if (navigator.vibrate) navigator.vibrate(20);
-      setMenuPage(i);
-      setNameValue(pages[i]?.name ?? "");
-      setNameEditing(false);
-      setDeleteArmed(false);
-    }, 480);
-  }, [pages]);
+  const startLongPress = useCallback(() => {
+    longPressTimer.current = setTimeout(openPageDetail, 480);
+  }, [openPageDetail]);
 
-  const cancelDotLongPress = useCallback(() => {
+  const cancelLongPress = useCallback(() => {
     clearTimeout(longPressTimer.current);
   }, []);
 
+  // Double-tap detection
+  const lastTapRef = useRef(0);
+
   // ── Unified pill-level gesture handlers ────────────────────────────────────
-  // All swipe / drag / tap detection lives here so that:
-  //   a) Swipe works even when the gesture starts on a dot button, and
-  //   b) Drag-to-reorder works without needing setPointerCapture on the button.
-  //
-  // The pill div calls setPointerCapture on itself so it reliably receives
-  // move and up events even when the pointer leaves its bounds.
+  // Tap → cycle to next page
+  // Long-press or double-tap → open detail for current page
+  // Swipe L/R → prev / next page
 
   const onPillPointerDown = useCallback((e) => {
     // Let text inputs handle their own events
@@ -88,15 +79,11 @@ export default function PageDots({
     // Capture pointer to pill so move/up are always received
     pillRef.current?.setPointerCapture(e.pointerId);
 
-    // Detect which dot (if any) the gesture started on
-    const btn    = e.target.closest("[data-dot-idx]");
-    const dotIdx = btn ? parseInt(btn.dataset.dotIdx, 10) : null;
-
-    gestureRef.current = { startX: e.clientX, dx: 0, dotIdx };
+    gestureRef.current = { startX: e.clientX, dx: 0 };
     dragWasRef.current = false;
 
-    if (dotIdx !== null) startDotLongPress(dotIdx);
-  }, [startDotLongPress]);
+    startLongPress();
+  }, [startLongPress]);
 
   const onPillPointerMove = useCallback((e) => {
     if (!gestureRef.current) return;
@@ -104,56 +91,44 @@ export default function PageDots({
     gestureRef.current.dx = dx;
 
     if (Math.abs(dx) > 10) {
-      cancelDotLongPress();
-      // If gesture started on a dot, show live drag-to-reorder preview
-      const { dotIdx } = gestureRef.current;
-      if (dotIdx !== null) {
-        const offset = Math.round(dx / DOT_SPACING);
-        const toIdx  = Math.max(0, Math.min(count - 1, dotIdx + offset));
-        setDragTo(prev =>
-          (prev?.fromIdx === dotIdx && prev?.toIdx === toIdx) ? prev : { fromIdx: dotIdx, toIdx }
-        );
-      }
+      cancelLongPress();
     }
-  }, [cancelDotLongPress, count]);
+  }, [cancelLongPress]);
 
   const onPillPointerUp = useCallback((e) => {
     if (!gestureRef.current) return;
-    const { dx, dotIdx } = gestureRef.current;
+    const { dx } = gestureRef.current;
     gestureRef.current = null;
-    setDragTo(null);
-    cancelDotLongPress();
+    cancelLongPress();
 
-    // If the long-press menu opened, don't fire any navigation/reorder
+    // If the long-press menu opened, don't fire any navigation
     if (menuPage !== null) return;
 
     if (Math.abs(dx) <= 10) {
-      // ── Tap anywhere on pill → cycle to next page (wraps around) ────────
-      dragWasRef.current = true; // suppress upcoming click event
-      onCycleNext?.();
+      // ── Tap — check for double-tap, otherwise cycle ─────────────────────
+      const now = Date.now();
+      if (now - lastTapRef.current < 350) {
+        // Double-tap → open detail
+        lastTapRef.current = 0;
+        openPageDetail();
+      } else {
+        lastTapRef.current = now;
+        onCycleNext?.();
+      }
       return;
     }
 
-    // Any movement > 10px = drag; suppress the upcoming click on the button
-    dragWasRef.current = true;
-
     if (Math.abs(dx) >= 40) {
-      // ── Large swipe (anywhere on pill, including on dots) → page nav ────
+      // ── Swipe → page nav ───────────────────────────────────────────────
       if (dx < 0) onSwipeNext?.();
       else         onSwipePrev?.();
-    } else if (dotIdx !== null) {
-      // ── Small drag on a dot (10–39px) → reorder pages ───────────────────
-      const offset = Math.round(dx / DOT_SPACING);
-      const toIdx  = Math.max(0, Math.min(count - 1, dotIdx + offset));
-      if (dotIdx !== toIdx) onReorderPages?.(dotIdx, toIdx);
     }
-  }, [menuPage, cancelDotLongPress, count, onDotClick, onReorderPages, onSwipePrev, onSwipeNext]);
+  }, [menuPage, cancelLongPress, openPageDetail, onCycleNext, onSwipePrev, onSwipeNext]);
 
   const onPillPointerCancel = useCallback(() => {
     gestureRef.current = null;
-    setDragTo(null);
-    cancelDotLongPress();
-  }, [cancelDotLongPress]);
+    cancelLongPress();
+  }, [cancelLongPress]);
 
   // ── Focus inputs when they appear ─────────────────────────────────────────
   useEffect(() => {
@@ -236,17 +211,6 @@ export default function PageDots({
       <rect x="4" y="12" width="16" height="10" rx="2.5" fill={color} />
     </svg>
   );
-
-  // Compute visual order of dots during drag-to-reorder
-  const displayOrder = (() => {
-    const order = Array.from({ length: count }, (_, i) => i);
-    if (dragTo && dragTo.fromIdx !== dragTo.toIdx) {
-      const { fromIdx, toIdx } = dragTo;
-      order.splice(fromIdx, 1);
-      order.splice(toIdx, 0, fromIdx);
-    }
-    return order;
-  })();
 
   return (
     <div style={{ position: "relative", flexShrink: 0, pointerEvents: "auto" }}>
@@ -453,60 +417,25 @@ export default function PageDots({
         onPointerUp={onPillPointerUp}
         onPointerCancel={onPillPointerCancel}
       >
-        {displayOrder.map((pageIdx) => {
-          const home      = isHome(pageIdx);
-          const isActive  = pageIdx === active;
-          const isDragging = dragTo?.fromIdx === pageIdx;
+        {pages.map((_, pageIdx) => {
+          const isActive = pageIdx === active;
 
-          if (home) {
-            // Home dot — bare house icon, no pill wrapper
+          if (isHome(pageIdx)) {
             return (
-              <button
-                key={pageIdx}
-                data-dot-idx={pageIdx}
-                title={pages[pageIdx]?.name ?? `Page ${pageIdx + 1}`}
-                onClick={() => {
-                  // onClick fires for keyboard users; pointer users are handled in onPillPointerUp
-                  if (dragWasRef.current) { dragWasRef.current = false; return; }
-                  onDotClick?.(pageIdx);
-                }}
-                style={{
-                  background: "none", border: "none", padding: 0,
-                  cursor: "pointer", flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  opacity: isDragging ? 0.35 : 1,
-                  transition: "opacity 0.15s",
-                  touchAction: "none",
-                }}
-              >
-                <HouseIcon
-                  size={11}
-                  color={isActive ? "var(--dl-strong)" : "var(--dl-border2)"}
-                />
-              </button>
+              <div key={pageIdx} style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, pointerEvents: "none" }}>
+                <HouseIcon size={11} color={isActive ? "var(--dl-strong)" : "var(--dl-border2)"} />
+              </div>
             );
           }
 
-          // Regular dot
           return (
-            <button
+            <div
               key={pageIdx}
-              data-dot-idx={pageIdx}
-              title={pages[pageIdx]?.name ?? `Page ${pageIdx + 1}`}
-              onClick={() => {
-                if (dragWasRef.current) { dragWasRef.current = false; return; }
-                onDotClick?.(pageIdx);
-              }}
               style={{
-                width:        6,
-                height:       6,
-                borderRadius: 3,
-                background:   isActive ? "var(--dl-strong)" : "var(--dl-border2)",
-                border: "none", padding: 0, cursor: "pointer",
-                opacity: isDragging ? 0.35 : 1,
-                transition: "opacity 0.15s, background 0.2s",
-                flexShrink: 0,
-                touchAction: "none",
+                width: 6, height: 6, borderRadius: 3,
+                background: isActive ? "var(--dl-strong)" : "var(--dl-border2)",
+                transition: "background 0.2s",
+                flexShrink: 0, pointerEvents: "none",
               }}
             />
           );
