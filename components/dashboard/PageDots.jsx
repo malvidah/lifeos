@@ -179,34 +179,89 @@ export default function PageDots({
       {/* ── Page options popover (long-press) ──────────────────────────────── */}
       {menuPage !== null && (
         <>
+          {/* Dismiss backdrop */}
           <div
             style={{ position: "fixed", inset: 0, zIndex: 40 }}
             onClick={() => setMenuPage(null)}
           />
+
+          {/* Glass card */}
           <div style={{
             position: "absolute",
-            bottom: "calc(100% + 8px)",
+            bottom: "calc(100% + 10px)",
             left: "50%",
             transform: "translateX(-50%)",
             background: "var(--dl-card)",
-            border: "1px solid var(--dl-border)",
-            borderRadius: 14,
-            padding: "14px 14px 12px",
-            boxShadow: "0 8px 32px rgba(0,0,0,0.28)",
+            backdropFilter: "blur(24px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+            border: "1px solid var(--dl-glass-border)",
+            borderRadius: 18,
+            boxShadow: "0 12px 40px rgba(0,0,0,0.14), 0 1px 0 rgba(255,255,255,0.06) inset",
+            padding: "14px 16px 12px",
             display: "flex",
             flexDirection: "column",
-            gap: 10,
-            minWidth: 210,
+            gap: 0,
+            minWidth: 220,
             zIndex: 50,
           }}>
-            <span style={{
-              fontFamily: mono, fontSize: 10, letterSpacing: "0.09em",
-              textTransform: "uppercase", color: "var(--dl-middle)",
-            }}>
-              {pages[menuPage]?.name ?? `Page ${menuPage + 1}`}
-            </span>
 
-            {/* Rename */}
+            {/* Header: page name label + move arrows + close */}
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+              <span style={{
+                fontFamily: mono, fontSize: 10, letterSpacing: "0.1em",
+                textTransform: "uppercase", color: "var(--dl-middle)",
+                flex: 1,
+              }}>
+                {pages[menuPage]?.name ?? `Page ${menuPage + 1}`}
+              </span>
+
+              {/* Move left */}
+              <button
+                onClick={confirmMoveLeft}
+                disabled={menuPage === 0}
+                title="Move left"
+                style={{
+                  background: "none", border: "none", cursor: menuPage === 0 ? "default" : "pointer",
+                  color: "var(--dl-middle)", fontFamily: mono, fontSize: 14,
+                  opacity: menuPage === 0 ? 0.25 : 0.7,
+                  padding: "2px 5px", borderRadius: 6,
+                  transition: "opacity 0.15s",
+                }}
+                onMouseEnter={(e) => { if (menuPage > 0) e.currentTarget.style.opacity = 1; }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = menuPage === 0 ? "0.25" : "0.7"; }}
+              >‹</button>
+
+              {/* Move right */}
+              <button
+                onClick={confirmMoveRight}
+                disabled={menuPage >= count - 1}
+                title="Move right"
+                style={{
+                  background: "none", border: "none", cursor: menuPage >= count - 1 ? "default" : "pointer",
+                  color: "var(--dl-middle)", fontFamily: mono, fontSize: 14,
+                  opacity: menuPage >= count - 1 ? 0.25 : 0.7,
+                  padding: "2px 5px", borderRadius: 6,
+                  transition: "opacity 0.15s",
+                }}
+                onMouseEnter={(e) => { if (menuPage < count - 1) e.currentTarget.style.opacity = 1; }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = menuPage >= count - 1 ? "0.25" : "0.7"; }}
+              >›</button>
+
+              {/* Close */}
+              <button
+                onClick={() => setMenuPage(null)}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  color: "var(--dl-middle)", fontSize: 13,
+                  opacity: 0.5, padding: "2px 4px", borderRadius: 6,
+                  marginLeft: 2, transition: "opacity 0.15s",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.opacity = 1; }}
+                onMouseLeave={(e) => { e.currentTarget.style.opacity = "0.5"; }}
+              >✕</button>
+            </div>
+
+            {/* Rename input */}
             <input
               ref={renameInputRef}
               value={renameValue}
@@ -216,87 +271,97 @@ export default function PageDots({
                 if (e.key === "Escape") setMenuPage(null);
               }}
               placeholder="Page name"
-              style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
+              style={{
+                width: "100%", boxSizing: "border-box",
+                background: "color-mix(in srgb, var(--dl-strong) 5%, transparent)",
+                border: "1px solid var(--dl-glass-border)",
+                borderRadius: 8,
+                padding: "7px 10px",
+                color: "var(--dl-strong)",
+                fontFamily: mono, fontSize: F.sm,
+                outline: "none",
+                marginBottom: 10,
+              }}
             />
 
-            {/* Move + Rename row */}
-            <div style={{ display: "flex", gap: 7 }}>
+            {/* Save rename — only show if name changed */}
+            {renameValue.trim() && renameValue.trim() !== (pages[menuPage]?.name ?? "") && (
               <button
-                onClick={confirmMoveLeft}
-                disabled={menuPage === 0}
-                title="Move left"
+                onClick={confirmRename}
                 style={{
-                  ...btnStyle("color-mix(in srgb, var(--dl-strong) 12%, transparent)"),
-                  color: "var(--dl-strong)",
-                  opacity: menuPage === 0 ? 0.3 : 1,
-                  flex: 1,
-                  padding: "5px 8px",
+                  background: "var(--dl-accent)",
+                  border: "none", borderRadius: 8,
+                  color: "#fff", fontFamily: mono, fontSize: F.sm,
+                  padding: "7px 0", cursor: "pointer",
+                  width: "100%", marginBottom: 10,
+                  transition: "opacity 0.15s",
                 }}
               >
-                ← Move
+                Save name
               </button>
-              <button onClick={confirmRename} style={{ ...btnStyle("var(--dl-accent)"), flex: 1 }}>
-                Rename
-              </button>
-              <button
-                onClick={confirmMoveRight}
-                disabled={menuPage >= count - 1}
-                title="Move right"
-                style={{
-                  ...btnStyle("color-mix(in srgb, var(--dl-strong) 12%, transparent)"),
-                  color: "var(--dl-strong)",
-                  opacity: menuPage >= count - 1 ? 0.3 : 1,
-                  flex: 1,
-                  padding: "5px 8px",
-                }}
-              >
-                Move →
-              </button>
-            </div>
+            )}
 
-            {/* Set as home + Delete row */}
-            <div style={{ display: "flex", gap: 7 }}>
-              {!isHome(menuPage) && (
-                <button
-                  onClick={confirmSetHome}
-                  title="Set as home page"
-                  style={{
-                    ...btnStyle("color-mix(in srgb, var(--dl-orange) 15%, transparent)"),
-                    color: "var(--dl-orange)",
-                    border: "1px solid color-mix(in srgb, var(--dl-orange) 30%, transparent)",
-                    flex: 1,
-                    fontSize: 11,
-                  }}
-                >
-                  ◈ Set as home
-                </button>
-              )}
-              {isHome(menuPage) && (
-                <div style={{
-                  flex: 1, textAlign: "center",
-                  fontFamily: mono, fontSize: 11,
-                  color: "var(--dl-orange)",
-                  display: "flex", alignItems: "center", justifyContent: "center", gap: 4,
-                }}>
-                  ◈ Home page
-                </div>
-              )}
-              {count > 1 && (
-                <button onClick={confirmDelete} style={btnStyle("var(--dl-red, #C0392B)")}>
-                  Delete
-                </button>
-              )}
+            {/* Divider */}
+            <div style={{ height: 1, background: "var(--dl-glass-border)", margin: "0 -4px 10px" }} />
+
+            {/* Set as home / Home page indicator */}
+            {isHome(menuPage) ? (
+              <div style={{
+                fontFamily: mono, fontSize: 11, color: "var(--dl-orange)",
+                opacity: 0.8, display: "flex", alignItems: "center", gap: 6,
+                padding: "2px 0 6px",
+              }}>
+                <span style={{ fontSize: 10 }}>◈</span> Home page
+              </div>
+            ) : (
               <button
-                onClick={() => setMenuPage(null)}
+                onClick={confirmSetHome}
                 style={{
-                  ...btnStyle("transparent"),
-                  color: "var(--dl-middle)",
-                  border: "1px solid var(--dl-border)",
+                  background: "none", border: "none", cursor: "pointer",
+                  fontFamily: mono, fontSize: 11,
+                  color: "var(--dl-middle)", opacity: 0.7,
+                  textAlign: "left", padding: "2px 0 6px",
+                  display: "flex", alignItems: "center", gap: 6,
+                  transition: "opacity 0.15s, color 0.15s",
+                  width: "100%",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = 1;
+                  e.currentTarget.style.color = "var(--dl-orange)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "0.7";
+                  e.currentTarget.style.color = "var(--dl-middle)";
                 }}
               >
-                ✕
+                <span style={{ fontSize: 10 }}>◈</span> Set as home
               </button>
-            </div>
+            )}
+
+            {/* Delete */}
+            {count > 1 && (
+              <button
+                onClick={confirmDelete}
+                style={{
+                  background: "none", border: "none", cursor: "pointer",
+                  fontFamily: mono, fontSize: 11,
+                  color: "var(--dl-middle)", opacity: 0.5,
+                  textAlign: "left", padding: "2px 0 0",
+                  transition: "opacity 0.15s, color 0.15s",
+                  width: "100%",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.opacity = 1;
+                  e.currentTarget.style.color = "var(--dl-red, #C0392B)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.opacity = "0.5";
+                  e.currentTarget.style.color = "var(--dl-middle)";
+                }}
+              >
+                Delete page
+              </button>
+            )}
           </div>
         </>
       )}
