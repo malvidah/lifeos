@@ -892,89 +892,79 @@ function DashboardInner() {
                   })}
                 </div>
               ) : (
-                /* Date pill with relative badge overlapping bottom edge + flanking arrow circles */
-                <div style={{ position: "relative", display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
-                  {/* Big date pill — extra bottom padding so text isn't hidden by the badge */}
+                /* Single unified date pill: [‹] DATE · LABEL [›] */
+                <div style={{
+                  ...glass, borderRadius: 100,
+                  border: "1px solid var(--dl-glass-border)",
+                  display: "flex", alignItems: "center",
+                  height: 40, overflow: "hidden",
+                }}>
+                  {/* Left arrow */}
+                  <button
+                    onClick={() => setSelected(stepDateKey(selected, -1))}
+                    style={{
+                      height: "100%", padding: "0 12px 0 16px",
+                      background: "transparent", border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center",
+                      color: "var(--dl-border2)", transition: "color 0.15s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-border2)"}
+                  >
+                    <svg width="5" height="8" viewBox="0 0 5 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="4 0.5 1 4 4 7.5"/>
+                    </svg>
+                  </button>
+
+                  {/* Date text — click goes to today */}
                   <button
                     onClick={() => { selectProject(null); setSelected(todayKey()); }}
                     style={{
-                      ...glass, borderRadius: 100,
-                      padding: relLabel ? "10px 24px 22px" : "0 24px",
-                      height: relLabel ? "auto" : 44,
-                      border: "1px solid var(--dl-glass-border)",
-                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                      background: "transparent", border: "none", cursor: "pointer", padding: 0,
                       fontFamily: mono, fontSize: 12, letterSpacing: "0.12em",
                       textTransform: "uppercase", color: "var(--dl-strong)",
-                      whiteSpace: "nowrap", userSelect: "none", transition: "opacity 0.15s",
+                      whiteSpace: "nowrap", userSelect: "none", lineHeight: 1,
                     }}
-                    onMouseEnter={e => e.currentTarget.style.opacity = "0.7"}
-                    onMouseLeave={e => e.currentTarget.style.opacity = "1"}
                   >{fmtNavDate(selected)}</button>
 
-                  {/* Bottom badge row: [‹] [relative pill] [›] — overlaps date pill bottom */}
+                  {/* Separator + relative label */}
                   {relLabel && (
-                    <div style={{
-                      position: "absolute", bottom: -11, left: "50%", transform: "translateX(-50%)",
-                      display: "flex", alignItems: "center", gap: 4,
-                      pointerEvents: "auto",
-                    }}>
-                      {/* Left arrow — small glass circle */}
-                      <button
-                        onClick={() => setSelected(stepDateKey(selected, -1))}
-                        style={{
-                          width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                          ...glass, border: "1px solid var(--dl-glass-border)",
-                          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                          color: "var(--dl-highlight)", transition: "color 0.15s",
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                        onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
-                      >
-                        <svg width="4" height="7" viewBox="0 0 4 7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3.5 0.5 1 3.5 3.5 6.5"/>
-                        </svg>
-                      </button>
-
-                      {/* Relative date pill */}
+                    <>
+                      <span style={{
+                        margin: "0 10px", width: 1, height: 14, flexShrink: 0,
+                        background: "var(--dl-border2)", opacity: 0.5,
+                      }}/>
                       <button
                         onClick={() => setSelected(todayKey())}
                         style={{
-                          borderRadius: 100, padding: "3px 10px", lineHeight: 1,
-                          fontFamily: mono, fontSize: 9, letterSpacing: "0.13em",
-                          whiteSpace: "nowrap", cursor: "pointer",
+                          background: "transparent", border: "none", cursor: isToday ? "default" : "pointer",
+                          padding: 0, fontFamily: mono, fontSize: 9, letterSpacing: "0.13em",
+                          textTransform: "uppercase", whiteSpace: "nowrap", lineHeight: 1,
+                          color: isToday ? "var(--dl-orange)" : "var(--dl-middle)",
                           transition: "opacity 0.15s",
-                          ...(isToday ? {
-                            color: "var(--dl-orange)",
-                            background: "var(--dl-orange-13)",
-                            border: "1px solid color-mix(in srgb, var(--dl-orange) 22%, transparent)",
-                          } : {
-                            ...glass,
-                            color: "var(--dl-middle)",
-                            border: "1px solid var(--dl-glass-border)",
-                          }),
                         }}
-                        onMouseEnter={e => e.currentTarget.style.opacity = "0.7"}
-                        onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                        onMouseEnter={e => { if (!isToday) e.currentTarget.style.opacity = "0.6"; }}
+                        onMouseLeave={e => { e.currentTarget.style.opacity = "1"; }}
                       >{relLabel}</button>
-
-                      {/* Right arrow — small glass circle */}
-                      <button
-                        onClick={() => setSelected(stepDateKey(selected, +1))}
-                        style={{
-                          width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                          ...glass, border: "1px solid var(--dl-glass-border)",
-                          cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                          color: "var(--dl-highlight)", transition: "color 0.15s",
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                        onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
-                      >
-                        <svg width="4" height="7" viewBox="0 0 4 7" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="0.5 0.5 3 3.5 0.5 6.5"/>
-                        </svg>
-                      </button>
-                    </div>
+                    </>
                   )}
+
+                  {/* Right arrow */}
+                  <button
+                    onClick={() => setSelected(stepDateKey(selected, +1))}
+                    style={{
+                      height: "100%", padding: "0 16px 0 12px",
+                      background: "transparent", border: "none", cursor: "pointer",
+                      display: "flex", alignItems: "center",
+                      color: "var(--dl-border2)", transition: "color 0.15s",
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-border2)"}
+                  >
+                    <svg width="5" height="8" viewBox="0 0 5 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="1 0.5 4 4 1 7.5"/>
+                    </svg>
+                  </button>
                 </div>
               )}
             </div>
