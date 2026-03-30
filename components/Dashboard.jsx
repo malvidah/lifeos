@@ -951,7 +951,13 @@ function DashboardInner() {
 
       {/* ── Bottom bar: filter (left) + dots+AI (center) + search (right) ── */}
       {!searchOpen && !chatIsOpen && layout.loaded && (() => {
-        const BOTTOM = "calc(env(safe-area-inset-bottom, 0px) + 16px)";
+        // On mobile, env(safe-area-inset-bottom) is ~34px for the home indicator,
+        // so adding 16px more would push buttons too high. Use 4px on mobile so
+        // the total clearance (~38px) stays close to the physical edge.
+        // Desktop has no safe-area, so 16px puts them nicely above the window edge.
+        const BOTTOM = mobile
+          ? "calc(env(safe-area-inset-bottom, 0px) + 4px)"
+          : "calc(env(safe-area-inset-bottom, 0px) + 16px)";
         const circleBtn = (active) => ({
           width: 40, height: 40, borderRadius: "50%",
           background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
