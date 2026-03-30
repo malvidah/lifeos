@@ -898,12 +898,17 @@ function DashboardInner() {
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <button
                       onClick={() => setSelected(stepDateKey(selected, -1))}
-                      style={navBtn(false)}
-                      onMouseEnter={e => { e.currentTarget.style.background = "var(--dl-glass-active)"; e.currentTarget.style.color = "var(--dl-strong)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "var(--dl-glass)"; e.currentTarget.style.color = "var(--dl-highlight)"; }}
+                      style={{
+                        width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                        background: "transparent", border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "var(--dl-highlight)", transition: "color 0.15s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                      onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
                     >
-                      <svg width="7" height="12" viewBox="0 0 7 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="6 1 1 6 6 11"/>
+                      <svg width="5" height="9" viewBox="0 0 5 9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="4 1 1 4.5 4 8"/>
                       </svg>
                     </button>
 
@@ -923,12 +928,17 @@ function DashboardInner() {
 
                     <button
                       onClick={() => setSelected(stepDateKey(selected, +1))}
-                      style={navBtn(false)}
-                      onMouseEnter={e => { e.currentTarget.style.background = "var(--dl-glass-active)"; e.currentTarget.style.color = "var(--dl-strong)"; }}
-                      onMouseLeave={e => { e.currentTarget.style.background = "var(--dl-glass)"; e.currentTarget.style.color = "var(--dl-highlight)"; }}
+                      style={{
+                        width: 28, height: 28, borderRadius: "50%", flexShrink: 0,
+                        background: "transparent", border: "none", cursor: "pointer",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        color: "var(--dl-highlight)", transition: "color 0.15s",
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                      onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
                     >
-                      <svg width="7" height="12" viewBox="0 0 7 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="1 1 6 6 1 11"/>
+                      <svg width="5" height="9" viewBox="0 0 5 9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="1 1 4 4.5 1 8"/>
                       </svg>
                     </button>
                   </div>
