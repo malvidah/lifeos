@@ -126,7 +126,11 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     if (!scheduleKey) return false;
     const recurrence = keyToRecurrence(scheduleKey, t.date);
     if (!recurrence || !matchesSchedule(date, recurrence)) return false;
-    if (t.due_date && t.due_date < date) return false;
+    // Only treat due_date as an expiry if it was explicitly set to a date
+    // different from the template's own creation date. A due_date equal to
+    // t.date means it was accidentally set (e.g. default task date) rather
+    // than intentionally chosen as an end-date for the recurring schedule.
+    if (t.due_date && t.due_date !== t.date && t.due_date < date) return false;
     return true;
   }).map(t => {
     const isDone = completedHabitIds.has(t.id);
