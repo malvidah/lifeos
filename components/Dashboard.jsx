@@ -1062,6 +1062,7 @@ function DashboardInner() {
               </div>
               <button
                 onClick={() => setChatOpenCount(c => c + 1)}
+                onMouseEnter={() => setChatOpenCount(c => c + 1)}
                 title="Ask AI"
                 style={{
                   pointerEvents: "auto",
@@ -1075,8 +1076,6 @@ function DashboardInner() {
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0, transition: "background 0.18s",
                 }}
-                onMouseEnter={e => e.currentTarget.style.background = "var(--dl-glass-active)"}
-                onMouseLeave={e => e.currentTarget.style.background = "var(--dl-glass)"}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--dl-highlight)" style={{flexShrink:0}}>
                   <path d="M12 2L13.9 10.1L22 12L13.9 13.9L12 22L10.1 13.9L2 12L10.1 10.1Z"/>
