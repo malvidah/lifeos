@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 
 /**
  * PageContainer — horizontally paginated container using CSS transforms.
@@ -12,15 +12,19 @@ import { useState, useEffect, useRef, useCallback } from 'react';
  * Swipe navigation:
  *   Touch: imperative listeners with { passive: false } so we can claim
  *     horizontal gestures via preventDefault() before the browser does.
- *   Mouse: pointer events with setPointerCapture for reliable drag detection.
+ *   Mouse: pointer events with setPointerCapture + pointermove preventDefault
+ *     to block native text-selection drag that would cancel the gesture.
  *
  * Animation is a CSS transition on the track's transform.
- * On first mount the transition is suppressed so there's no slide-in effect.
+ * On first mount the transition is briefly suppressed via useLayoutEffect
+ * so there's no slide-in effect.
  */
 export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange }) {
   const outerRef   = useRef(null);
   const trackRef   = useRef(null);
-  const [animated, setAnimated] = useState(false);
+  const mountedRef = useRef(false);
+
+  const TRANSITION = 'transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)';
 
   // Lock the outer container's scroll position to (0,0) at all times.
   useEffect(() => {
@@ -34,18 +38,27 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     return () => outer.removeEventListener('scroll', lock);
   }, []);
 
-  // Enable animation after first paint so there's no slide-in on load.
-  useEffect(() => {
+  // Suppress transition on first mount so there's no slide-in animation.
+  // useLayoutEffect runs before paint, so the browser never sees the initial
+  // transition. After two rAFs (one full frame) we restore it.
+  useLayoutEffect(() => {
+    const track = trackRef.current;
+    if (!track || mountedRef.current) return;
+    mountedRef.current = true;
+    track.style.transition = 'none';
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => setAnimated(true));
+      requestAnimationFrame(() => {
+        if (trackRef.current) {
+          trackRef.current.style.transition = TRANSITION;
+        }
+      });
     });
   }, []);
 
   const n   = pages.length || 1;
   const pct = currentPageIdx * (100 / n);
 
-  // ── Stable callback ref for onPageChange ─────────────────────────────────
-  // So the imperative touch effect doesn't re-attach listeners on every render.
+  // ── Stable refs for changing values ──────────────────────────────────────
   const onPageChangeRef = useRef(onPageChange);
   onPageChangeRef.current = onPageChange;
   const currentIdxRef = useRef(currentPageIdx);
@@ -54,7 +67,6 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   pageCountRef.current = n;
 
   // ── Touch swipe (mobile) ─────────────────────────────────────────────────
-  // Imperative with { passive: false } so preventDefault() works.
   const touchRef = useRef(null);
 
   useEffect(() => {
@@ -114,18 +126,29 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       outer.removeEventListener('touchmove',  onTouchMove);
       outer.removeEventListener('touchend',   onTouchEnd);
     };
-  }, []); // stable — uses refs for changing values
+  }, []);
 
   // ── Pointer swipe (desktop mouse) ────────────────────────────────────────
-  // setPointerCapture ensures pointerup fires even if cursor leaves the div.
-  // Only handles mouse — touch is handled above via touch events.
   const pointerRef = useRef(null);
 
   const handlePointerDown = useCallback((e) => {
-    if (e.pointerType !== 'mouse') return; // touch handled by touch events
+    if (e.pointerType !== 'mouse') return;
     if (e.button !== 0) return;
     outerRef.current?.setPointerCapture(e.pointerId);
-    pointerRef.current = { x: e.clientX, y: e.clientY };
+    pointerRef.current = { x: e.clientX, y: e.clientY, dragging: false };
+  }, []);
+
+  const handlePointerMove = useCallback((e) => {
+    if (!pointerRef.current) return;
+    const dx = e.clientX - pointerRef.current.x;
+    // Once horizontal movement is detected, prevent native drag/selection
+    if (!pointerRef.current.dragging && Math.abs(dx) > 10) {
+      pointerRef.current.dragging = true;
+      e.preventDefault();
+    }
+    if (pointerRef.current.dragging) {
+      e.preventDefault();
+    }
   }, []);
 
   const handlePointerUp = useCallback((e) => {
@@ -151,6 +174,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     <div
       ref={outerRef}
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       style={{
@@ -166,7 +190,6 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
           display: 'flex',
           width: `${n * 100}%`,
           height: '100%',
-          transition: animated ? 'transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)' : 'none',
           transform: `translateX(-${pct}%)`,
           willChange: 'transform',
         }}

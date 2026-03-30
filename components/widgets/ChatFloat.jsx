@@ -683,10 +683,10 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
       {/* ── Floating pill / card — hidden when desktop sidebar is open ── */}
       {(!expanded || mobile) && <div ref={pillRef} style={{
         position: "fixed",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)",
+        bottom: "env(safe-area-inset-bottom, 0px)",
         left: 0, right: 0,
         paddingLeft: 10, paddingRight: 10,
-        paddingBottom: mobile ? "6px" : "16px",
+        paddingBottom: mobile ? "4px" : "8px",
         zIndex: 97,
         display: "flex", flexDirection: "column",
         alignItems: "center",
@@ -746,43 +746,15 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
             return null;
           }
 
-          // ── CLOSING: reverse of expand animation ──────────────────────────
+          // ── CLOSING: fade out ──────────────────────────────────────────
           if (pillPhase === 'closing') {
-            return (
-              <div style={{
-                pointerEvents: "none",
-                display: "flex", alignItems: "center",
-                borderRadius: 100, overflow: "hidden",
-                width: "100%", maxWidth: 560, minHeight: 52,
-                animation: "pillCollapse 0.12s ease-in forwards",
-                ...glass,
-              }}>
-                <style>{`
-                  @keyframes pillCollapse {
-                    0%   { max-width: 560px; min-height: 52px; opacity: 1; }
-                    60%  { max-width: 340px; min-height: 46px; opacity: 0.92; }
-                    100% { max-width: 140px; min-height: 40px; opacity: 0.85; }
-                  }
-                `}</style>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "11px 18px", width: "100%" }}>
-                  <DLSparkle size={13} />
-                  <span style={{ fontFamily: mono, fontSize: F.sm, color: "var(--dl-middle)", letterSpacing: "0.04em" }}>Ask AI</span>
-                </div>
-              </div>
-            );
+            return null;
           }
 
           // ── INPUT: expanded pill with textarea (stays open until click outside) ──
           if (pillPhase === 'input') {
             return (
-              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", animation: "pillExpand 0.12s ease-out", ...glass }}>
-                <style>{`
-                  @keyframes pillExpand {
-                    0%   { max-width: 140px; min-height: 40px; opacity: 0.85; }
-                    40%  { max-width: 340px; min-height: 46px; opacity: 0.92; }
-                    100% { max-width: 560px; min-height: 52px; opacity: 1; }
-                  }
-                `}</style>
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", ...glass }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
                   {/* Open full chat — left side */}
                   <button
