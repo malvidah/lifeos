@@ -3,14 +3,20 @@ import { useRef, useCallback } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
+// Interactive element tags that should never trigger the long-press edit mode.
+// Typing in a task input, tapping a filter button, etc. must not fire it.
+const INTERACTIVE = new Set(["INPUT", "TEXTAREA", "BUTTON", "SELECT", "A", "LABEL"]);
+
 /**
  * DraggableCard — wraps each card with two behaviours:
  *
- * NORMAL MODE  — 500ms long-press on any [data-card-header] element triggers
- *                layout edit mode. Normal taps pass through unaffected.
+ * NORMAL MODE  — 500ms long-press on a [data-card-header] element (that is
+ *                not an interactive control) triggers layout edit mode.
+ *                Normal taps, scrolls, and input interactions pass through
+ *                completely unaffected.
  *
- * EDIT MODE    — a small grip-dot handle appears on the left side of the card
- *                header. The whole header area becomes draggable via @dnd-kit.
+ * EDIT MODE    — a small grip-dot handle appears over the card header and
+ *                makes the whole header draggable via @dnd-kit.
  *                No rings, no remove buttons — the navbar dock handles add/remove.
  */
 export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
@@ -29,7 +35,14 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
 
   const startLongPress = useCallback((e) => {
     if (editMode) return;
+    // Only fire from the card header zone
     if (!e.target.closest("[data-card-header]")) return;
+    // Never fire on interactive elements — typing/tapping buttons must work normally
+    if (INTERACTIVE.has(e.target.tagName)) return;
+    if (e.target.isContentEditable) return;
+    // Don't steal from ongoing text selection
+    if (window.getSelection?.()?.type === "Range") return;
+
     startPosRef.current = { x: e.clientX, y: e.clientY };
     timerRef.current = setTimeout(() => {
       if (navigator.vibrate) navigator.vibrate(30);
@@ -45,22 +58,30 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
 
   const moveLongPress = useCallback((e) => {
     if (!startPosRef.current) return;
+    // Cancel if pointer drifted — user is scrolling, not holding
     if (Math.abs(e.clientX - startPosRef.current.x) > 6 ||
         Math.abs(e.clientY - startPosRef.current.y) > 6) {
       cancelLongPress();
     }
   }, [cancelLongPress]);
 
+  // ── Wrapper style ────────────────────────────────────────────────────────
+  // CSS.Transform.toString(null) returns '' which, when set as style.transform,
+  // still creates a new stacking context and causes layout shifts on first mount.
+  // Convert falsy transform to undefined so React skips setting the attribute.
+  const transformStr = CSS.Transform.toString(transform) || undefined;
+
   return (
     <div
       ref={setNodeRef}
       style={{
-        transform: CSS.Transform.toString(transform),
-        transition,
+        transform: transformStr,
+        transition: transition || undefined,
         opacity: isDragging ? 0.4 : 1,
         position: "relative",
+        // Let the page scroll naturally; only lock touch when in edit mode
         touchAction: editMode ? "none" : "pan-y",
-        zIndex: isDragging ? 50 : "auto",
+        zIndex: isDragging ? 50 : undefined,
       }}
       onPointerDown={startLongPress}
       onPointerUp={cancelLongPress}
@@ -85,7 +106,7 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
             paddingLeft: 14,
           }}
         >
-          {/* Six-dot grip — matches the card's existing header muted color */}
+          {/* Six-dot grip — subtly matches the card's muted header color */}
           <svg
             width="10"
             height="14"

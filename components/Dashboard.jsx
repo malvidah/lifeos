@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect, useLayoutEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { mono, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
@@ -475,6 +475,12 @@ function DashboardInner() {
   const mobile = useIsMobile();
   const layout = useDashboardLayout(token, mobile);
 
+  // Keep a stable ref to layout so renderPage can call reorderCards without
+  // needing layout in its dep array (which would cause renderPage to churn on
+  // every debounced Supabase save, re-mounting every card on the page).
+  const layoutRef = useRef(layout);
+  useEffect(() => { layoutRef.current = layout; });
+
   // ── Layout edit mode ─────────────────────────────────────────────────────
   // Triggered by a 500ms long-press on any card header (via DraggableCard).
   const [editMode, setEditMode] = useState(false);
@@ -526,15 +532,25 @@ function DashboardInner() {
     ? (tagDisplayName ? tagDisplayName(projectFilter) : projectFilter)
     : 'All Projects';
 
-  // Props bag passed to every card's render function from the registry
-  const cardProps = {
+  // Props bag passed to every card's render function from the registry.
+  // Memoized so renderPage (and therefore every card) only re-renders when
+  // actual data they depend on changes — not on every parent state update
+  // (e.g. syncing, editMode, searchQuery shouldn't re-render the Tasks card).
+  const cardProps = useMemo(() => ({
     date: selected, setSelected, token, userId, projectFilter, selectProject,
     graphData, healthDots, events, setEvents, calView, setCalView,
     stravaConnected, journalMode, setJournalMode,
     goalsViewMode, setGoalsViewMode, habitFilter, setHabitFilter,
     taskFilter, setTaskFilter, startSync, endSync, onHealthChange, onScoresReady,
     searchOpen, allNoteNames, setAllNoteNames,
-  };
+  }), [
+    selected, setSelected, token, userId, projectFilter, selectProject,
+    graphData, healthDots, events, setEvents, calView, setCalView,
+    stravaConnected, journalMode, setJournalMode,
+    goalsViewMode, setGoalsViewMode, habitFilter, setHabitFilter,
+    taskFilter, setTaskFilter, startSync, endSync, onHealthChange, onScoresReady,
+    searchOpen, allNoteNames, setAllNoteNames,
+  ]); // eslint-disable-line
 
   // Current page's card IDs — used for dock active state
   const currentPageCards = layout.pages[layout.currentPageIdx]?.cards || [];
@@ -550,7 +566,9 @@ function DashboardInner() {
       const oldIdx = ids.indexOf(String(active.id));
       const newIdx = ids.indexOf(String(over.id));
       if (oldIdx === -1 || newIdx === -1) return;
-      layout.reorderCards(pageIdx, arrayMove(ids, oldIdx, newIdx));
+      // Use layoutRef so we always call the latest reorderCards without
+      // including `layout` in renderPage's deps (avoids re-mounting cards on save)
+      layoutRef.current.reorderCards(pageIdx, arrayMove(ids, oldIdx, newIdx));
     };
 
     return (
@@ -580,7 +598,7 @@ function DashboardInner() {
         </SortableContext>
       </DndContext>
     );
-  }, [cardProps, editMode, enterEditMode, layout, sensors]);
+  }, [cardProps, editMode, enterEditMode, sensors]); // layout accessed via layoutRef — intentionally omitted
 
   // Early returns AFTER all hooks
   if(!authReady) return (
