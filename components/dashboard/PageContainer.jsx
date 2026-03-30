@@ -43,19 +43,51 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     clearTimeout(unlockTimer.current);
 
     if (!hasMountedRef.current) {
-      // First mount — el.offsetWidth may be 0 if layout hasn't happened yet.
-      // Spin on rAF until we get a real width, then hard-set scrollLeft
-      // (synchronous assignment fires no scroll events, so nothing can fight us).
+      // First mount strategy:
+      //
+      // Two problems to beat simultaneously:
+      //   1. el.offsetWidth may be 0 at effect time (element not laid out yet)
+      //   2. Browsers restore scroll positions of overflow containers from session
+      //      history AFTER the load event — i.e. AFTER useEffect and rAF fire.
+      //      window.history.scrollRestoration = 'manual' only guards the window,
+      //      not custom overflow divs.
+      //
+      // Solution: spin on rAF until we have a real width, set scrollLeft, then
+      // attach a short-lived 'scroll' guard that resets scrollLeft to the correct
+      // position if browser restoration (or anything else) overrides it.
+      const restoreGuardRef = { timer: null, fn: null };
+
       const setInitialScroll = () => {
         const w = el.offsetWidth;
-        if (w > 0) {
-          el.scrollLeft = currentPageIdxRef.current * w;
-          hasMountedRef.current = true;
-        } else {
+        if (w === 0) {
           requestAnimationFrame(setInitialScroll);
+          return;
         }
+
+        const target = currentPageIdxRef.current * w;
+        el.scrollLeft = target;
+        hasMountedRef.current = true;
+
+        // Guard: if browser scroll restoration fires and overrides our position,
+        // snap back immediately. The guard listens for 500ms — well past the
+        // window where restoration fires on any major browser.
+        const guard = () => {
+          el.scrollLeft = currentPageIdxRef.current * el.offsetWidth;
+        };
+        el.addEventListener('scroll', guard, { passive: true });
+        restoreGuardRef.fn = guard;
+        restoreGuardRef.timer = setTimeout(() => {
+          el.removeEventListener('scroll', guard);
+        }, 500);
       };
+
       requestAnimationFrame(setInitialScroll);
+
+      // Cleanup in case the component unmounts while the guard is still active
+      return () => {
+        clearTimeout(restoreGuardRef.timer);
+        if (restoreGuardRef.fn) el.removeEventListener('scroll', restoreGuardRef.fn);
+      };
     } else {
       // Subsequent changes — smooth animation.
       const target = currentPageIdx * el.offsetWidth;
