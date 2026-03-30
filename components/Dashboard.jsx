@@ -946,38 +946,33 @@ function DashboardInner() {
               )}
             </div>
 
-            {/* ── RIGHT: search + user avatar in one glass pill ────────────── */}
+            {/* ── RIGHT: search circle + user circle (2 separate circles) ─── */}
             <div style={{
               position: "fixed", top: TOP, right: 12, zIndex: 100,
-              display: "flex", alignItems: "center", gap: 2,
-              height: 40, borderRadius: 100, padding: "0 4px",
-              WebkitAppRegion: "no-drag",
-              ...glass,
+              display: "flex", gap: 8, WebkitAppRegion: "no-drag",
             }}>
-              {/* Search button */}
+              {/* Search circle */}
               <button
                 onClick={searchOpen ? closeSearch : openSearch}
                 title="Search"
-                style={{
-                  width: 32, height: 32, borderRadius: "50%", border: "none", cursor: "pointer",
-                  background: searchOpen ? "var(--dl-glass-active)" : "transparent",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  color: searchOpen ? "var(--dl-strong)" : "var(--dl-highlight)",
-                  transition: "background 0.18s, color 0.18s", flexShrink: 0,
-                }}
-                onMouseEnter={e => { if (!searchOpen) { e.currentTarget.style.background = "var(--dl-glass-active)"; e.currentTarget.style.color = "var(--dl-strong)"; }}}
-                onMouseLeave={e => { if (!searchOpen) { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "var(--dl-highlight)"; }}}
+                style={navBtn(searchOpen)}
               >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
                 </svg>
               </button>
-              {/* User avatar */}
-              <UserMenu
-                session={session} token={token} userId={userId}
-                theme={theme} themePreference={preference} onThemeChange={setTheme}
-                stravaConnected={stravaConnected} onStravaChange={setStravaConnected}
-              />
+              {/* User avatar circle */}
+              <div style={{
+                width: 40, height: 40, borderRadius: "50%",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                flexShrink: 0, ...glass,
+              }}>
+                <UserMenu
+                  session={session} token={token} userId={userId}
+                  theme={theme} themePreference={preference} onThemeChange={setTheme}
+                  stravaConnected={stravaConnected} onStravaChange={setStravaConnected}
+                />
+              </div>
             </div>
           </>
         );
