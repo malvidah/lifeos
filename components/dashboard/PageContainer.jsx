@@ -1,32 +1,35 @@
 "use client";
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 
 /**
  * PageContainer — horizontal scroll-snap container for swipeable pages.
  *
- * Props:
- *   pages           Array<page>
- *   renderPage      (page, index) => ReactNode
- *   currentPageIdx  number
- *   onPageChange    (index: number) => void
- *   editMode        boolean  — passed through; swipe stays enabled in edit mode
- *                             so users can switch pages while editing layout
+ * Root causes of previous jerk/catch on swipe:
  *
- * Navigation reliability notes:
- *   - scrollTimerRef is always cleared before a new scroll starts, so rapid
- *     arrow clicks never leave stale "unlock" timers that fire mid-animation.
- *   - targetPageRef tracks where we *intend* to land; handleScroll ignores
- *     intermediate positions that don't match, preventing the 1→3 reset bug.
- *   - 'scrollend' is used when available (modern browsers) for a precise
- *     unlock signal instead of the fixed 500ms fallback.
+ *   1. `scrollBehavior: smooth` on the container made the CSS snap-into-place
+ *      after a user swipe also animate smoothly, which conflicted with the
+ *      programmatic scrollTo and the mid-swipe onPageChange calls.
+ *      Fix: remove scrollBehavior from CSS; only use behavior:'smooth' in the
+ *      explicit scrollTo call so arrow navigation is smooth but swipe snap is
+ *      handled natively by the browser.
+ *
+ *   2. The `onScroll` handler fired mid-swipe (Math.round returns target page
+ *      when user is >50% through), calling onPageChange, which triggered the
+ *      useEffect, which fired a programmatic smooth scroll while the swipe
+ *      gesture was still in progress — two scroll animations colliding.
+ *      Fix: use `scrollend` (fires once scroll + snap fully settle) to detect
+ *      user swipes instead of the continuous `scroll` event.
+ *
+ *   3. Multiple rapid arrow clicks left stale unlock timers — fixed by always
+ *      clearTimeout before each new programmatic scroll.
  */
-export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange, editMode }) {
+export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange }) {
   const containerRef   = useRef(null);
-  const isScrollingRef = useRef(false);
-  const scrollTimerRef = useRef(null);   // single timer — cleared on every new scroll
-  const targetPageRef  = useRef(currentPageIdx); // where we intend to land
+  const isProgrammatic = useRef(false); // true while arrow/dot navigation is animating
+  const unlockTimer    = useRef(null);
+  const targetPageRef  = useRef(currentPageIdx);
 
-  // Programmatic scroll — fires when currentPageIdx changes via arrow / PageDots
+  // ── Programmatic navigation (arrow buttons / PageDots) ───────────────────
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -35,50 +38,70 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     const target = currentPageIdx * el.offsetWidth;
 
     if (Math.abs(el.scrollLeft - target) > 2) {
-      // Clear any previous unlock timer before starting a fresh scroll
-      clearTimeout(scrollTimerRef.current);
-      isScrollingRef.current = true;
+      clearTimeout(unlockTimer.current);
+      isProgrammatic.current = true;
       el.scrollTo({ left: target, behavior: 'smooth' });
 
-      // Fallback unlock — use scrollend if supported, else fixed timeout
-      const unlock = () => { isScrollingRef.current = false; };
+      const unlock = () => { isProgrammatic.current = false; };
       if ('onscrollend' in el) {
         el.addEventListener('scrollend', unlock, { once: true });
       } else {
-        scrollTimerRef.current = setTimeout(unlock, 500);
+        // Fallback: 550ms covers typical smooth-scroll duration on older browsers
+        unlockTimer.current = setTimeout(unlock, 550);
       }
     } else {
-      // Already at target — ensure lock is cleared
-      clearTimeout(scrollTimerRef.current);
-      isScrollingRef.current = false;
+      clearTimeout(unlockTimer.current);
+      isProgrammatic.current = false;
     }
   }, [currentPageIdx]);
 
-  // Detect page changes from user swipe via scroll position.
-  // Only fires for genuine user gestures (isScrollingRef gate) and only
-  // calls onPageChange when the settled page differs from the intended target
-  // (prevents mid-animation intermediate positions from resetting the index).
-  const handleScroll = useCallback(() => {
-    if (isScrollingRef.current) return;
+  // ── User swipe detection ─────────────────────────────────────────────────
+  // We listen for `scrollend` (fires after scroll + snap have fully settled)
+  // instead of the continuous `scroll` event, so we never call onPageChange
+  // while a swipe or programmatic animation is still in progress.
+  useEffect(() => {
     const el = containerRef.current;
-    if (!el || !el.offsetWidth) return;
-    const page = Math.round(el.scrollLeft / el.offsetWidth);
-    if (page !== targetPageRef.current) {
-      targetPageRef.current = page;
-      onPageChange(page);
+    if (!el) return;
+
+    const onSettled = () => {
+      if (isProgrammatic.current) return; // ignore programmatic scrolls
+      const page = Math.round(el.scrollLeft / el.offsetWidth);
+      if (page !== targetPageRef.current) {
+        targetPageRef.current = page;
+        onPageChange(page);
+      }
+    };
+
+    if ('onscrollend' in el) {
+      // Modern Chrome / Firefox — fires exactly once after scroll+snap settle
+      el.addEventListener('scrollend', onSettled);
+      return () => el.removeEventListener('scrollend', onSettled);
     }
+
+    // Safari fallback — debounce: report 160ms after last scroll event
+    let debounce;
+    const onScroll = () => {
+      if (isProgrammatic.current) return;
+      clearTimeout(debounce);
+      debounce = setTimeout(onSettled, 160);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      clearTimeout(debounce);
+    };
   }, [onPageChange]);
 
   return (
     <div
       ref={containerRef}
       className="page-container"
-      onScroll={handleScroll}
       style={{
         display: 'flex',
         overflowX: 'auto',
         scrollSnapType: 'x mandatory',
-        scrollBehavior: 'smooth',
+        // No scrollBehavior here — let the browser snap natively after swipe.
+        // Programmatic scrollTo uses behavior:'smooth' explicitly (above).
         WebkitOverflowScrolling: 'touch',
         flex: 1,
         scrollbarWidth: 'none',

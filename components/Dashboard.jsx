@@ -753,11 +753,12 @@ function DashboardInner() {
         };
         return (
           <>
-            {/* ── When search is open: full-width search bar only ────────── */}
+            {/* ── When search is open: centered pill only ─────────────────── */}
             {searchOpen && (
               <div style={{
-                position: "fixed", top: TOP, left: 12, right: 12, zIndex: 100,
-                WebkitAppRegion: "no-drag",
+                position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
+                zIndex: 100, WebkitAppRegion: "no-drag",
+                width: "min(480px, calc(100vw - 24px))",
               }}>
                 <div style={{
                   display: "flex", alignItems: "center", gap: 8, height: 40,
