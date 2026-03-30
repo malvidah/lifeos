@@ -99,46 +99,74 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
 
   const handlePointerCancel = () => { swipeRef.current = null; };
 
-  // ── Touch-based swipe (more reliable on mobile) ──────────────────────────
-  // Pointer events can get cancelled by the browser's scroll handling on
-  // mobile. Touch events always fire, so we use them as the primary swipe
-  // detection for touch devices.
+  // ── Touch-based swipe (imperative, non-passive) ──────────────────────────
+  // React synthetic touch handlers are passive, so preventDefault() is ignored.
+  // We attach listeners imperatively with { passive: false } so we can claim
+  // horizontal gestures and prevent the browser from scrolling / cancelling.
   const touchRef = useRef(null);
 
-  const handleTouchStart = (e) => {
-    if (e.touches.length !== 1) return;
-    const t = e.touches[0];
-    touchRef.current = { x: t.clientX, y: t.clientY, settled: false };
-  };
+  useEffect(() => {
+    const outer = outerRef.current;
+    if (!outer) return;
 
-  const handleTouchMove = (e) => {
-    if (!touchRef.current || touchRef.current.settled) return;
-    const t = e.touches[0];
-    const dx = t.clientX - touchRef.current.x;
-    const dy = t.clientY - touchRef.current.y;
-    // Once we know it's a horizontal swipe, prevent vertical scroll
-    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-      e.preventDefault();
-      touchRef.current.settled = true;
-    } else if (Math.abs(dy) > 10) {
-      // Vertical — let browser handle, stop tracking
+    const onTouchStart = (e) => {
+      if (e.touches.length !== 1) return;
+      const t = e.touches[0];
+      touchRef.current = { x: t.clientX, y: t.clientY, claimed: false };
+    };
+
+    const onTouchMove = (e) => {
+      if (!touchRef.current) return;
+      const t = e.touches[0];
+      const dx = t.clientX - touchRef.current.x;
+      const dy = t.clientY - touchRef.current.y;
+
+      if (touchRef.current.claimed) {
+        // Already claimed horizontal — keep preventing default
+        e.preventDefault();
+        return;
+      }
+
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+        // Vertical — let browser handle, stop tracking
+        touchRef.current = null;
+        return;
+      }
+
+      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        // Horizontal — claim it, prevent browser scroll
+        e.preventDefault();
+        touchRef.current.claimed = true;
+      }
+    };
+
+    const onTouchEnd = (e) => {
+      if (!touchRef.current) return;
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touchRef.current.x;
+      const dy = t.clientY - touchRef.current.y;
+      const wasClaimed = touchRef.current.claimed;
       touchRef.current = null;
-    }
-  };
+      if (!wasClaimed) return;                              // wasn't a horizontal swipe
+      if (Math.abs(dx) < 40) return;                       // too short
+      if (Math.abs(dy) > Math.abs(dx) * 0.75) return;     // too vertical
+      const total = pages.length || 1;
+      const newIdx = dx < 0
+        ? Math.min(currentPageIdx + 1, total - 1)
+        : Math.max(currentPageIdx - 1, 0);
+      if (newIdx !== currentPageIdx) onPageChange?.(newIdx);
+    };
 
-  const handleTouchEnd = (e) => {
-    if (!touchRef.current) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - touchRef.current.x;
-    const dy = t.clientY - touchRef.current.y;
-    touchRef.current = null;
-    if (Math.abs(dx) < 40) return;
-    if (Math.abs(dy) > Math.abs(dx) * 0.75) return;
-    const newIdx = dx < 0
-      ? Math.min(currentPageIdx + 1, n - 1)
-      : Math.max(currentPageIdx - 1, 0);
-    if (newIdx !== currentPageIdx) onPageChange?.(newIdx);
-  };
+    outer.addEventListener('touchstart',  onTouchStart, { passive: true });
+    outer.addEventListener('touchmove',   onTouchMove,  { passive: false });
+    outer.addEventListener('touchend',    onTouchEnd,   { passive: true });
+
+    return () => {
+      outer.removeEventListener('touchstart',  onTouchStart);
+      outer.removeEventListener('touchmove',   onTouchMove);
+      outer.removeEventListener('touchend',    onTouchEnd);
+    };
+  }, [pages.length, currentPageIdx, onPageChange]);
 
   return (
     <div
@@ -146,9 +174,6 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       onPointerDown={handlePointerDown}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={handleTouchEnd}
       style={{
         position: 'relative',
         overflow: 'hidden',

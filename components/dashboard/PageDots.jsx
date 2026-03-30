@@ -82,6 +82,9 @@ export default function PageDots({
     // Only primary pointer button (ignore right-click on mouse)
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
+    // Prevent browser's native long-press behaviour (text selection, context menu)
+    e.preventDefault();
+
     // Capture pointer to pill so move/up are always received
     pillRef.current?.setPointerCapture(e.pointerId);
 
@@ -269,6 +272,55 @@ export default function PageDots({
             {isHome(menuPage) && (
               <HouseIcon size={12} color="var(--dl-accent)" style={{ opacity: 0.8, marginRight: 2 }} />
             )}
+
+            {/* Reorder arrows */}
+            <button
+              onClick={() => {
+                if (menuPage > 0) {
+                  onReorderPages?.(menuPage, menuPage - 1);
+                  setMenuPage(menuPage - 1);
+                }
+              }}
+              disabled={menuPage === 0}
+              title="Move page left"
+              style={{
+                ...ghostBtn(),
+                opacity: menuPage === 0 ? 0.2 : 0.55,
+                cursor: menuPage === 0 ? "default" : "pointer",
+                padding: "0 2px",
+              }}
+              onMouseEnter={(e) => { if (menuPage > 0) e.currentTarget.style.opacity = 1; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = menuPage === 0 ? "0.2" : "0.55"; }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <button
+              onClick={() => {
+                if (menuPage < count - 1) {
+                  onReorderPages?.(menuPage, menuPage + 1);
+                  setMenuPage(menuPage + 1);
+                }
+              }}
+              disabled={menuPage === count - 1}
+              title="Move page right"
+              style={{
+                ...ghostBtn(),
+                opacity: menuPage === count - 1 ? 0.2 : 0.55,
+                cursor: menuPage === count - 1 ? "default" : "pointer",
+                padding: "0 2px",
+              }}
+              onMouseEnter={(e) => { if (menuPage < count - 1) e.currentTarget.style.opacity = 1; }}
+              onMouseLeave={(e) => { e.currentTarget.style.opacity = menuPage === count - 1 ? "0.2" : "0.55"; }}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+
+            {/* Divider */}
+            <div style={{ width: 1, height: 14, background: "var(--dl-glass-border)", margin: "0 2px", flexShrink: 0 }} />
 
             {/* Page name — click to edit inline */}
             {nameEditing ? (
