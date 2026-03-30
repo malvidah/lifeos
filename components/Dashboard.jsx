@@ -1,10 +1,10 @@
 "use client";
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from "react";
 import { ThemeProvider, useTheme } from "@/lib/theme";
-import { mono, serif, F, injectBlurWebFont } from "@/lib/tokens";
+import { mono, serif, blurweb, F, injectBlurWebFont } from "@/lib/tokens";
 import { createClient } from "@/lib/supabase";
 import { api } from "@/lib/api";
-import { todayKey, toKey, shift } from "@/lib/dates";
+import { todayKey, toKey, shift, MONTHS_FULL } from "@/lib/dates";
 import { isValidDate } from "@/lib/validate";
 import { tagDisplayName } from "@/lib/tags";
 import { bustOuraCache } from "@/lib/ouraCache";
@@ -14,7 +14,7 @@ import { useIsMobile, useCollapse } from "@/lib/hooks";
 import { useDashboardLayout } from "@/lib/useDashboardLayout";
 import { useProjects } from "@/lib/useProjects";
 import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext } from "@/lib/contexts";
-import Header from "./nav/Header.jsx";
+import UserMenu from "./nav/UserMenu.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
 import LoginScreen from "./views/LoginScreen.jsx";
@@ -33,6 +33,48 @@ import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-ki
 // ── Dock items derived from card registry ─────────────────────────────────────
 const DOCK_ORDER = ['project-graph','world-map','cal','goals','health','habits','notes','tasks','journal','meals','workouts'];
 const DOCK_ITEMS = DOCK_ORDER.map(id => { const c = CARD_REGISTRY.find(r => r.id === id); return { id, label: c.label.replace(/^.*?\s/, ''), icon: c.icon }; });
+
+// ── Nav date formatting (lifted from Header.jsx) ──────────────────────────────
+const DAYS_FULL = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+function fmtNavDate(dateKey) {
+  if (!dateKey) return '';
+  const [y, m, d] = dateKey.split('-').map(Number);
+  return `${MONTHS_FULL[m - 1].toUpperCase()} ${d}, ${y}`;
+}
+function weekStart(date) { const s = new Date(date); s.setDate(s.getDate() - s.getDay()); return s; }
+function fmtRelative(dateKey, today) {
+  if (!dateKey || !today) return null;
+  if (dateKey === today) return 'TODAY';
+  const d = new Date(dateKey + 'T12:00:00'), t = new Date(today + 'T12:00:00');
+  const diffDays = Math.round((t - d) / 86400000);
+  if (diffDays === 1) return 'YESTERDAY';
+  if (diffDays === -1) return 'TOMORROW';
+  const absDays = Math.abs(diffDays), dayName = DAYS_FULL[d.getDay()];
+  const todayWS = weekStart(t).getTime(), dateWS = weekStart(d).getTime(), sameWeek = todayWS === dateWS;
+  if (diffDays > 0) {
+    if (sameWeek) return dayName;
+    if (absDays <= 13) return `LAST ${dayName}`;
+    if (absDays < 30) { const h = Math.round(absDays / 7 * 2) / 2; return `${h} WEEK${h === 1 ? '' : 'S'} AGO`; }
+    const mo = (t.getFullYear() - d.getFullYear()) * 12 + (t.getMonth() - d.getMonth());
+    if (mo < 2) return 'LAST MONTH'; if (mo < 12) return `${mo} MONTHS AGO`;
+    const yrs = Math.floor(mo / 12), mos = mo % 12;
+    if (mos === 0) return yrs === 1 ? 'LAST YEAR' : `${yrs} YEARS AGO`;
+    return `${yrs} YEAR${yrs > 1 ? 'S' : ''} ${mos} MONTH${mos > 1 ? 'S' : ''} AGO`;
+  }
+  if (sameWeek) return dayName;
+  if (absDays <= 13) return `NEXT ${dayName}`;
+  if (absDays < 30) { const h = Math.round(absDays / 7 * 2) / 2; return `IN ${h} WEEK${h === 1 ? '' : 'S'}`; }
+  const mo = (d.getFullYear() - t.getFullYear()) * 12 + (d.getMonth() - t.getMonth());
+  if (mo < 2) return 'NEXT MONTH'; if (mo < 12) return `IN ${mo} MONTHS`;
+  const yrs = Math.floor(mo / 12), mos = mo % 12;
+  if (mos === 0) return yrs === 1 ? 'NEXT YEAR' : `IN ${yrs} YEARS`;
+  return `IN ${yrs} YEAR${yrs > 1 ? 'S' : ''} ${mos} MONTH${mos > 1 ? 'S' : ''}`;
+}
+function stepDateKey(dateKey, dir) {
+  const [y, m, d] = dateKey.split('-').map(Number);
+  const dt = new Date(y, m - 1, d); dt.setDate(dt.getDate() + dir);
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
 
 // ── PageContent ───────────────────────────────────────────────────────────────
 // Extracted as a proper React component so DndContext gets stable identity
@@ -54,7 +96,7 @@ function PageContent({ page, pageIdx, editMode, enterEditMode, cardProps, sensor
       <SortableContext items={page.cards} strategy={verticalListSortingStrategy}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10,
           // Push first card below header (≈88px) + glass nav row (40px) + gaps
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 148px)",
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 74px)",
           maxWidth: 1200, width: '100%', margin: '0 auto' }}>
           {page.cards.map(cardId => {
             const entry = CARD_REGISTRY.find(c => c.id === cardId);
@@ -117,6 +159,8 @@ function DashboardInner() {
   const [chatExpanded, setChatExpanded] = useState(false);
   const [chatIsOpen,   setChatIsOpen]   = useState(false);
   const [chatOpenCount, setChatOpenCount] = useState(0);
+  const [projectFilterOpen, setProjectFilterOpen] = useState(false);
+  const projectFilterRef = useRef(null);
   const [calView,   setCalView]   = useState(() => localStorage.getItem('calView') || 'day');
   const [events,    setEvents]    = useState({});
   const [healthDots,setHealthDots]= useState(()=>{
@@ -525,9 +569,20 @@ function DashboardInner() {
   const enterEditMode = useCallback(() => setEditMode(true),  []);
   const exitEditMode  = useCallback(() => setEditMode(false), []);
 
-  // openSearch / closeSearch — used by the glass search float
+  // openSearch / closeSearch — used by the glass nav bar search button
   const openSearch  = useCallback(() => { setSearchOpen(true);  setTimeout(() => searchInputRef.current?.focus(), 60); }, []);
   const closeSearch = useCallback(() => { setSearchOpen(false); setSearchQuery(''); }, []);
+
+  // Close project filter dropdown on outside click
+  useEffect(() => {
+    if (!projectFilterOpen) return;
+    function handler(e) {
+      if (projectFilterRef.current && !projectFilterRef.current.contains(e.target))
+        setProjectFilterOpen(false);
+    }
+    const t = setTimeout(() => document.addEventListener('mousedown', handler), 10);
+    return () => { clearTimeout(t); document.removeEventListener('mousedown', handler); };
+  }, [projectFilterOpen]);
 
   // Close edit mode when the user switches pages (swipe while editing isn't
   // possible, but programmatic page switches still work).
@@ -647,7 +702,8 @@ function DashboardInner() {
       },
     }}>
     <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
-      <Header session={session} token={token} userId={userId} syncStatus={syncStatus} theme={theme} themePreference={preference} onThemeChange={setTheme} selected={selected} onSelectDate={setSelected} onGoToToday={()=>setSelected(todayKey())} onGoHome={()=>{selectProject(null);setSelected(todayKey());}} stravaConnected={stravaConnected} onStravaChange={setStravaConnected}/>
+      {/* Pull-down overscroll patch — keeps background solid above safe area */}
+      <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:"var(--dl-bg)",zIndex:99}}/>
 
       {/* ── Full-height content area — scrolls under the glass overlays ─── */}
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
@@ -655,7 +711,7 @@ function DashboardInner() {
 
           {searchOpen ? (
             <div style={{ flex: 1, overflowY: 'auto', animation: 'fadeInUp 0.18s ease',
-              padding: '0 10px', paddingTop: "calc(env(safe-area-inset-top, 0px) + 148px)",
+              padding: '0 10px', paddingTop: "calc(env(safe-area-inset-top, 0px) + 74px)",
               maxWidth: 1200, width: '100%', margin: '0 auto' }}>
               <SearchResults
                 results={srResults}
@@ -677,167 +733,247 @@ function DashboardInner() {
         </div>
       </div>
 
-      {/* ── Glass nav floats — fixed above the scroll area ───────────────── */}
-      {/* Left: layout/edit mode toggle (circular) — hidden during search */}
-      {!searchOpen && <button
-        onClick={() => setEditMode(v => !v)}
-        style={{
-          position: "fixed",
-          top: "calc(env(safe-area-inset-top, 0px) + 100px)",
-          left: 12, zIndex: 95,
-          width: 40, height: 40, borderRadius: "50%",
-          background: editMode ? "var(--dl-glass-active)" : "var(--dl-glass)",
-          backdropFilter: "blur(20px) saturate(1.4)",
-          WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-          border: "1px solid var(--dl-glass-border)",
-          boxShadow: "var(--dl-glass-shadow)",
-          cursor: "pointer",
+      {/* ── Unified glass nav bar ─────────────────────────────────────────── */}
+      {(() => {
+        const today = todayKey();
+        const relLabel = fmtRelative(selected, today);
+        const isToday = selected === today;
+        const navBtn = (active) => ({
+          width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+          background: active ? "var(--dl-glass-active)" : "transparent",
+          border: "none", cursor: "pointer",
           display: "flex", alignItems: "center", justifyContent: "center",
-          color: editMode ? "var(--dl-strong)" : "var(--dl-highlight)",
-          transition: "background 0.2s, color 0.2s",
-          WebkitAppRegion: "no-drag",
-        }}
-      >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>
-        </svg>
-      </button>}
+          color: active ? "var(--dl-strong)" : "var(--dl-highlight)",
+          transition: "background 0.18s, color 0.18s",
+        });
+        return (
+          <div style={{
+            position: "fixed", top: 0, left: 0, right: 0, zIndex: 100,
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+            paddingBottom: 10, paddingLeft: 10, paddingRight: 10,
+            background: "var(--dl-glass)",
+            backdropFilter: "blur(20px) saturate(1.4)",
+            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
+            borderBottom: "1px solid var(--dl-glass-border)",
+            boxShadow: "var(--dl-glass-shadow)",
+            display: "flex", alignItems: "center", gap: 6,
+            WebkitAppRegion: "drag", userSelect: "none",
+          }}>
 
-      {/* Center: project name pill / widget dock (edit mode) / search input */}
-      <div style={{
-        position: "fixed",
-        top: "calc(env(safe-area-inset-top, 0px) + 100px)",
-        left: 60, right: 60,
-        zIndex: 95,
-        display: "flex", justifyContent: "center",
-        WebkitAppRegion: "no-drag",
-      }}>
-        {searchOpen ? (
-          /* Search input pill */
-          <div style={{
-            display: "flex", alignItems: "center", height: 40, gap: 8,
-            background: "var(--dl-glass)",
-            backdropFilter: "blur(20px) saturate(1.4)",
-            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-            border: "1px solid var(--dl-glass-border)", borderRadius: 100,
-            boxShadow: "var(--dl-glass-shadow)",
-            padding: "0 10px 0 16px", width: "100%", maxWidth: 480,
-          }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0}}>
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input
-              ref={searchInputRef}
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Escape') closeSearch(); }}
-              placeholder="Search"
-              style={{ flex:1, background:'transparent', border:'none', outline:'none', fontFamily:serif, fontSize:F.md, color:"var(--dl-strong)", caretColor:"var(--dl-accent)" }}
-            />
-            {srLoading && <span style={{fontFamily:mono,fontSize:8,color:"var(--dl-highlight)",letterSpacing:'0.12em',flexShrink:0}}>…</span>}
-            <button onClick={closeSearch} style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',flexShrink:0}}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-            </button>
-          </div>
-        ) : editMode ? (
-          /* Widget dock */
-          <div style={{
-            display: "flex", alignItems: "center", height: 40, gap: 2,
-            background: "var(--dl-glass)",
-            backdropFilter: "blur(20px) saturate(1.4)",
-            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-            border: "1px solid var(--dl-glass-border)", borderRadius: 100,
-            boxShadow: "var(--dl-glass-shadow)",
-            padding: "0 4px",
-            overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none",
-          }}>
-            {DOCK_ITEMS.map(item => {
-              const isOpen = currentPageCards.includes(item.id);
-              return (
-                <button key={item.id}
-                  onClick={() => {
-                    const pageIdx = layout.currentPageIdx;
-                    if (isOpen) layout.removeCard(pageIdx, item.id);
-                    else layout.addCard(pageIdx, item.id);
-                  }}
-                  title={item.label}
-                  style={{
-                    background: isOpen ? 'var(--dl-glass-active)' : 'transparent',
-                    border: 'none', borderRadius: 100, cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: isOpen ? "var(--dl-strong)" : "var(--dl-highlight)",
-                    width: 34, height: 34, flexShrink: 0,
-                    transition: 'background 0.15s, color 0.15s',
-                  }}
-                >
-                  {item.icon}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          /* Project name pill */
-          <div style={{
-            display: "flex", alignItems: "center", height: 40, gap: 4,
-            background: "var(--dl-glass)",
-            backdropFilter: "blur(20px) saturate(1.4)",
-            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-            border: "1px solid var(--dl-glass-border)", borderRadius: 100,
-            boxShadow: "var(--dl-glass-shadow)",
-            padding: "0 16px",
-          }}>
-            {activeProject && (
+            {/* ── LEFT: edit toggle + project filter ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, WebkitAppRegion: "no-drag" }}>
+              {/* Edit mode toggle */}
               <button
-                onClick={() => { selectProject(null); setSelected(todayKey()); }}
-                style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',padding:'2px 2px 2px 0',transition:'color 0.15s'}}
-                onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+                onClick={() => setEditMode(v => !v)}
+                title={editMode ? "Exit edit mode" : "Edit layout"}
+                style={navBtn(editMode)}
+                onMouseEnter={e => { if (!editMode) e.currentTarget.style.background = "var(--dl-glass-active)"; }}
+                onMouseLeave={e => { if (!editMode) e.currentTarget.style.background = "transparent"; }}
               >
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="15 18 9 12 15 6"/>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>
                 </svg>
               </button>
-            )}
-            <span
-              style={{fontFamily:mono, fontSize:11, letterSpacing:'0.1em', textTransform:'uppercase', color:"var(--dl-highlight)", cursor: activeProject ? 'pointer' : 'default', whiteSpace:'nowrap'}}
-              onClick={activeProject ? () => { selectProject(null); setSelected(todayKey()); } : undefined}
-            >
-              {activeProjectName || 'All Projects'}
-            </span>
-          </div>
-        )}
-      </div>
 
-      {/* Right: search toggle (circular) */}
-      {!searchOpen && (
-        <button
-          onClick={openSearch}
-          style={{
-            position: "fixed",
-            top: "calc(env(safe-area-inset-top, 0px) + 100px)",
-            right: 12, zIndex: 95,
-            width: 40, height: 40, borderRadius: "50%",
-            background: "var(--dl-glass)",
-            backdropFilter: "blur(20px) saturate(1.4)",
-            WebkitBackdropFilter: "blur(20px) saturate(1.4)",
-            border: "1px solid var(--dl-glass-border)",
-            boxShadow: "var(--dl-glass-shadow)",
-            cursor: "pointer",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            color: "var(--dl-highlight)",
-            transition: "color 0.15s",
-            WebkitAppRegion: "no-drag",
-          }}
-          onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-          onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-        </button>
-      )}
+              {/* Project filter */}
+              <div ref={projectFilterRef} style={{ position: "relative" }}>
+                <button
+                  onClick={() => setProjectFilterOpen(v => !v)}
+                  title="Filter by project"
+                  style={navBtn(!!activeProject || projectFilterOpen)}
+                  onMouseEnter={e => { if (!activeProject && !projectFilterOpen) e.currentTarget.style.background = "var(--dl-glass-active)"; }}
+                  onMouseLeave={e => { if (!activeProject && !projectFilterOpen) e.currentTarget.style.background = "transparent"; }}
+                >
+                  {/* Funnel icon */}
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill={activeProject ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+                  </svg>
+                </button>
+
+                {/* Project filter dropdown */}
+                {projectFilterOpen && (
+                  <div style={{
+                    position: "absolute", top: "calc(100% + 8px)", left: 0,
+                    background: "var(--dl-card)", border: "1px solid var(--dl-border2)",
+                    borderRadius: 12, padding: "6px 0", minWidth: 180,
+                    boxShadow: "var(--dl-shadow)", zIndex: 200,
+                    display: "flex", flexDirection: "column",
+                  }}>
+                    {/* All Projects */}
+                    <button
+                      onClick={() => { selectProject(null); setProjectFilterOpen(false); }}
+                      style={{
+                        background: !activeProject ? "var(--dl-glass-active)" : "none",
+                        border: "none", cursor: "pointer", textAlign: "left",
+                        padding: "8px 14px",
+                        fontFamily: mono, fontSize: 11, letterSpacing: "0.08em",
+                        textTransform: "uppercase",
+                        color: !activeProject ? "var(--dl-strong)" : "var(--dl-highlight)",
+                        transition: "background 0.15s",
+                      }}
+                      onMouseEnter={e => { if (activeProject) e.currentTarget.style.background = "var(--dl-glass-active)"; }}
+                      onMouseLeave={e => { if (activeProject) e.currentTarget.style.background = "none"; }}
+                    >All Projects</button>
+                    {allProjectNames.length > 0 && (
+                      <div style={{ height: 1, background: "var(--dl-border)", margin: "4px 0" }} />
+                    )}
+                    {allProjectNames.map(name => (
+                      <button
+                        key={name}
+                        onClick={() => { selectProject(name); setProjectFilterOpen(false); }}
+                        style={{
+                          background: activeProject === name ? "var(--dl-glass-active)" : "none",
+                          border: "none", cursor: "pointer", textAlign: "left",
+                          padding: "8px 14px",
+                          fontFamily: mono, fontSize: 11, letterSpacing: "0.06em",
+                          color: activeProject === name ? "var(--dl-strong)" : "var(--dl-highlight)",
+                          whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+                          transition: "background 0.15s",
+                        }}
+                        onMouseEnter={e => { if (activeProject !== name) e.currentTarget.style.background = "var(--dl-glass-active)"; }}
+                        onMouseLeave={e => { if (activeProject !== name) e.currentTarget.style.background = "none"; }}
+                      >{tagDisplayName ? tagDisplayName(name) : name}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* ── CENTER: date nav / card dock / search input ── */}
+            <div style={{ flex: 1, display: "flex", justifyContent: "center", alignItems: "center", minWidth: 0, WebkitAppRegion: "no-drag" }}>
+              {searchOpen ? (
+                /* Search input */
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 8, width: "100%", maxWidth: 480,
+                  background: "color-mix(in srgb, var(--dl-strong) 6%, transparent)",
+                  borderRadius: 100, padding: "0 10px 0 14px", height: 36,
+                }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--dl-highlight)" strokeWidth="2.5" strokeLinecap="round" style={{flexShrink:0}}>
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  <input
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Escape') closeSearch(); }}
+                    placeholder="Search"
+                    style={{ flex:1, background:'transparent', border:'none', outline:'none', fontFamily:serif, fontSize:F.md, color:"var(--dl-strong)", caretColor:"var(--dl-accent)" }}
+                  />
+                  {srLoading && <span style={{fontFamily:mono,fontSize:8,color:"var(--dl-highlight)",letterSpacing:'0.12em',flexShrink:0}}>…</span>}
+                  <button onClick={closeSearch} style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',justifyContent:'center',width:24,height:24,borderRadius:'50%',flexShrink:0}}>
+                    <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+              ) : editMode ? (
+                /* Card dock */
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 1,
+                  overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none",
+                  maxWidth: "100%",
+                }}>
+                  {DOCK_ITEMS.map(item => {
+                    const isOpen = currentPageCards.includes(item.id);
+                    return (
+                      <button key={item.id}
+                        onClick={() => {
+                          const pageIdx = layout.currentPageIdx;
+                          if (isOpen) layout.removeCard(pageIdx, item.id);
+                          else layout.addCard(pageIdx, item.id);
+                        }}
+                        title={item.label}
+                        style={{
+                          background: isOpen ? 'var(--dl-glass-active)' : 'transparent',
+                          border: 'none', borderRadius: 100, cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: isOpen ? "var(--dl-strong)" : "var(--dl-highlight)",
+                          width: 32, height: 32, flexShrink: 0,
+                          transition: 'background 0.15s, color 0.15s',
+                        }}
+                      >
+                        {item.icon}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* Date display with ‹ › navigation */
+                <div style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                  <button
+                    onClick={() => setSelected(stepDateKey(selected, -1))}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dl-highlight)", padding: "2px 5px", fontFamily: mono, fontSize: 17, lineHeight: 1, transition: "color 0.15s", userSelect: "none" }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+                  >‹</button>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1 }}>
+                    {relLabel && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                        <span style={{
+                          fontFamily: mono, fontSize: 9, letterSpacing: "0.13em",
+                          padding: "1px 7px", borderRadius: 100, lineHeight: 1,
+                          ...(isToday ? {
+                            color: "var(--dl-orange)",
+                            background: "var(--dl-orange-13)",
+                            border: "1px solid color-mix(in srgb, var(--dl-orange) 22%, transparent)",
+                          } : {
+                            color: "var(--dl-middle)",
+                            background: "color-mix(in srgb, var(--dl-strong) 7%, transparent)",
+                            border: "1px solid color-mix(in srgb, var(--dl-strong) 12%, transparent)",
+                          }),
+                        }}>{relLabel}</span>
+                        {!isToday && (
+                          <button
+                            onClick={() => setSelected(todayKey())}
+                            style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: mono, fontSize: 9, letterSpacing: "0.1em", color: "var(--dl-highlight)", lineHeight: 1, transition: "color 0.15s" }}
+                            onMouseEnter={e => e.currentTarget.style.color = "var(--dl-orange)"}
+                            onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+                          >↩ today</button>
+                        )}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => { selectProject(null); setSelected(todayKey()); }}
+                      style={{ background: "none", border: "none", cursor: "pointer", padding: "2px 6px", fontFamily: blurweb, fontSize: 15, fontWeight: 400, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--dl-strong)", whiteSpace: "nowrap", userSelect: "none", transition: "opacity 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.6"}
+                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                    >{fmtNavDate(selected)}</button>
+                  </div>
+                  <button
+                    onClick={() => setSelected(stepDateKey(selected, +1))}
+                    style={{ background: "none", border: "none", cursor: "pointer", color: "var(--dl-highlight)", padding: "2px 5px", fontFamily: mono, fontSize: 17, lineHeight: 1, transition: "color 0.15s", userSelect: "none" }}
+                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
+                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
+                  >›</button>
+                </div>
+              )}
+            </div>
+
+            {/* ── RIGHT: search + user menu ── */}
+            <div style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0, WebkitAppRegion: "no-drag" }}>
+              {!searchOpen && (
+                <button
+                  onClick={openSearch}
+                  title="Search"
+                  style={navBtn(false)}
+                  onMouseEnter={e => e.currentTarget.style.background = "var(--dl-glass-active)"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                </button>
+              )}
+              <UserMenu
+                session={session} token={token} userId={userId}
+                theme={theme} themePreference={preference} onThemeChange={setTheme}
+                stravaConnected={stravaConnected} onStravaChange={setStravaConnected}
+              />
+            </div>
+
+          </div>
+        );
+      })()}
 
       {/* Bottom vignette — fades content up into the bottom bar */}
       <div style={{
