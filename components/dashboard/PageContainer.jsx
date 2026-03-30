@@ -12,53 +12,68 @@ import { useEffect, useRef } from 'react';
  * page is always shown immediately — no effects, no rAF, no guards needed.
  *
  * Layout:
- *   outer (overflow:hidden, flex:1)
- *     track (flex, width = pages.length * 100%, translateX drives paging)
- *       page (width = 100% / pages.length, overflow-y:auto)
+ *   outer (overflow:hidden, flex:1)   ← must NEVER scroll
+ *     track (flex, width = n*100%, translateX drives paging)
+ *       page (width = 100%/n, overflow-y:auto)
+ *
+ * WHY WE LOCK THE OUTER'S SCROLL POSITION:
+ * Even with overflow:hidden, the browser CAN still scroll the element
+ * programmatically — most commonly via scrollIntoView() triggered by a card
+ * initialising (e.g. the Map card auto-focusing its canvas). That scroll
+ * stacks on top of the CSS transform and lands you between pages.
+ * We prevent this by listening for any scroll on the outer wrapper and
+ * immediately resetting both axes to 0.
  *
  * Animation is a CSS transition on the track's transform.
  * On first mount the transition is suppressed so there's no sliding-in effect.
- *
- * Touch gestures on the content are blocked via touchAction:'pan-y' so that
- * cards with internal horizontal scroll (e.g. Calendar) don't trigger
- * accidental page changes. Page navigation on mobile is via the PageDots pill.
  */
 export default function PageContainer({ pages, renderPage, currentPageIdx }) {
-  const trackRef    = useRef(null);
-  const hasMounted  = useRef(false);
+  const outerRef   = useRef(null);
+  const trackRef   = useRef(null);
+  const hasMounted = useRef(false);
 
-  // On the very first render the track must show the correct page with NO
-  // transition (otherwise it slides in from the left on every page load).
-  // We achieve this by setting the transition to 'none' for one frame.
+  // Lock the outer container's scroll position to (0,0) at all times.
+  // The outer should NEVER scroll — paging is done entirely via transform.
+  // Cards that call scrollIntoView (e.g. Map) would otherwise push the
+  // container's scrollLeft and make pages appear offset.
   useEffect(() => {
-    const track = trackRef.current;
-    if (!track) return;
-    if (!hasMounted.current) {
-      track.style.transition = 'none';
-      hasMounted.current = true;
-      // Re-enable the transition after the browser has painted the initial position
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (trackRef.current) {
-            trackRef.current.style.transition =
-              'transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)';
-          }
-        });
-      });
-    }
+    const outer = outerRef.current;
+    if (!outer) return;
+    const lock = () => {
+      if (outer.scrollLeft !== 0) outer.scrollLeft = 0;
+      if (outer.scrollTop  !== 0) outer.scrollTop  = 0;
+    };
+    outer.addEventListener('scroll', lock, { passive: true });
+    return () => outer.removeEventListener('scroll', lock);
   }, []);
 
-  const n        = pages.length || 1;
-  const pct      = currentPageIdx * (100 / n);   // translateX offset in %
+  // Suppress the CSS transition for the very first render so there's no
+  // slide-in animation on page load. Re-enable it after two rAFs (one frame).
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || hasMounted.current) return;
+    track.style.transition = 'none';
+    hasMounted.current = true;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (trackRef.current) {
+          trackRef.current.style.transition =
+            'transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)';
+        }
+      });
+    });
+  }, []);
+
+  const n   = pages.length || 1;
+  const pct = currentPageIdx * (100 / n);  // translateX offset in %
 
   return (
     <div
+      ref={outerRef}
       style={{
         position: 'relative',
         overflow: 'hidden',
         flex: 1,
-        // Keep the outer wrapper from being a scroll container so the browser
-        // has nothing to save/restore scroll positions for.
         touchAction: 'pan-y',
       }}
     >
@@ -68,8 +83,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx }) {
           display: 'flex',
           width: `${n * 100}%`,
           height: '100%',
-          // Start with no transition; useEffect enables it after mount
-          transition: 'none',
+          transition: 'none',               // overridden to smooth after mount
           transform: `translateX(-${pct}%)`,
           willChange: 'transform',
         }}
