@@ -4,10 +4,10 @@ const StandaloneShell = dynamic(() => import("@/components/StandaloneShell"), { 
 const JournalEditor = dynamic(() => import("@/components/widgets/JournalEditor").then(m => ({ default: m.JournalEditor })), { ssr: false });
 const JournalModeToggle = dynamic(() => import("@/components/widgets/JournalEditor").then(m => ({ default: m.JournalModeToggle })), { ssr: false });
 
-import { useState } from "react";
+import { useJournalMode } from "@/lib/hooks";
 
 export default function JournalPage() {
-  const [journalMode, setJournalMode] = useState('recent');
+  const [journalMode, setJournalMode] = useJournalMode();
   return (
     <StandaloneShell label="Journal">
       {({ token, userId, selected }) => (

@@ -10,7 +10,7 @@ import { tagDisplayName } from "@/lib/tags";
 import { bustOuraCache } from "@/lib/ouraCache";
 import { saveLocationIfNeeded } from "@/lib/weather";
 import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
-import { useIsMobile, useCollapse } from "@/lib/hooks";
+import { useIsMobile, useCollapse, useJournalMode } from "@/lib/hooks";
 import { useDashboardLayout } from "@/lib/useDashboardLayout";
 import { useProjects } from "@/lib/useProjects";
 import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext } from "@/lib/contexts";
@@ -171,7 +171,7 @@ function DashboardInner() {
   const [syncing,   setSyncing]   = useState(new Set());
   const [lastSync,  setLastSync]  = useState(null);
   const [stravaConnected, setStravaConnected] = useState(false);
-  const [journalMode, setJournalMode] = useState('recent');
+  const [journalMode, setJournalMode] = useJournalMode();
   const [activeProject, setActiveProject] = useState(() => {
     try {
       const v = localStorage.getItem('daylab:activeProject');
