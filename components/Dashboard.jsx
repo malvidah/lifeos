@@ -933,14 +933,16 @@ function DashboardInner() {
                     </button>
                   </div>
 
-                  {/* Relative date pill — sits below */}
+                  {/* Relative date pill — sits below, click goes to today */}
                   {relLabel && (
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                      <span style={{
+                    <button
+                      onClick={() => setSelected(todayKey())}
+                      style={{
                         ...glass, borderRadius: 100,
                         padding: "4px 11px", lineHeight: 1,
                         fontFamily: mono, fontSize: 9, letterSpacing: "0.13em",
-                        whiteSpace: "nowrap",
+                        whiteSpace: "nowrap", border: "none", cursor: "pointer",
+                        transition: "opacity 0.15s",
                         ...(isToday ? {
                           color: "var(--dl-orange)",
                           background: "var(--dl-orange-13)",
@@ -949,16 +951,10 @@ function DashboardInner() {
                           color: "var(--dl-middle)",
                           border: "1px solid var(--dl-glass-border)",
                         }),
-                      }}>{relLabel}</span>
-                      {!isToday && (
-                        <button
-                          onClick={() => setSelected(todayKey())}
-                          style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontFamily: mono, fontSize: 9, letterSpacing: "0.1em", color: "var(--dl-highlight)", lineHeight: 1, transition: "color 0.15s" }}
-                          onMouseEnter={e => e.currentTarget.style.color = "var(--dl-orange)"}
-                          onMouseLeave={e => e.currentTarget.style.color = "var(--dl-highlight)"}
-                        >↩ today</button>
-                      )}
-                    </div>
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.opacity = "0.7"}
+                      onMouseLeave={e => e.currentTarget.style.opacity = "1"}
+                    >{relLabel}</button>
                   )}
                 </div>
               )}
