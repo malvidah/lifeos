@@ -570,7 +570,6 @@ function DashboardInner() {
                   cardId={cardId}
                   editMode={editMode}
                   onEnterEditMode={enterEditMode}
-                  onRemove={() => layout.removeCard(pageIdx, cardId)}
                 >
                   {entry.render(cardProps)}
                 </DraggableCard>
@@ -665,32 +664,28 @@ function DashboardInner() {
             </div>
           ) : layout.loaded ? (
             <>
-              {/* ── Edit-mode bar — shown above the page content ── */}
+              {/* ── Edit-mode bar ── */}
               {editMode && (
                 <div style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '5px 16px', flexShrink: 0,
-                  background: 'var(--dl-glass)',
-                  backdropFilter: 'blur(20px) saturate(1.4)',
-                  WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                  padding: '0 16px', height: 36, flexShrink: 0,
                   borderBottom: '1px solid var(--dl-border)',
                   maxWidth: 1200, width: '100%', margin: '0 auto',
                   boxSizing: 'border-box',
-                  animation: 'fadeInUp 0.15s ease',
                 }}>
                   <span style={{
-                    fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
-                    textTransform: 'uppercase', color: 'var(--dl-highlight)',
+                    fontFamily: mono, fontSize: 10, letterSpacing: '0.1em',
+                    textTransform: 'uppercase', color: 'var(--dl-middle)',
                   }}>
-                    Editing — {layout.pages[layout.currentPageIdx]?.name}
+                    Drag to reorder · use navbar to add or hide
                   </span>
                   <button
                     onClick={exitEditMode}
                     style={{
                       background: 'var(--dl-accent)', color: '#fff', border: 'none',
-                      borderRadius: 100, padding: '4px 16px', cursor: 'pointer',
-                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.06em',
-                      fontWeight: 'bold',
+                      borderRadius: 100, padding: '3px 14px', cursor: 'pointer',
+                      fontFamily: mono, fontSize: 10, letterSpacing: '0.08em',
+                      fontWeight: 'bold', flexShrink: 0,
                     }}
                   >
                     Done
