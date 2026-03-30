@@ -28,6 +28,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   const isProgrammatic = useRef(false); // true while arrow/dot navigation is animating
   const unlockTimer    = useRef(null);
   const targetPageRef  = useRef(currentPageIdx);
+  const hasMountedRef  = useRef(false); // false on first render, true after
 
   // ── Programmatic navigation (arrow buttons / PageDots) ───────────────────
   useEffect(() => {
@@ -39,20 +40,29 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
 
     if (Math.abs(el.scrollLeft - target) > 2) {
       clearTimeout(unlockTimer.current);
-      isProgrammatic.current = true;
-      el.scrollTo({ left: target, behavior: 'smooth' });
 
-      const unlock = () => { isProgrammatic.current = false; };
-      if ('onscrollend' in el) {
-        el.addEventListener('scrollend', unlock, { once: true });
+      if (!hasMountedRef.current) {
+        // First mount (e.g. after closing search) — jump instantly so there's
+        // no swipe animation back to the page the user was already on.
+        el.scrollTo({ left: target, behavior: 'instant' });
+        isProgrammatic.current = false;
       } else {
-        // Fallback: 550ms covers typical smooth-scroll duration on older browsers
-        unlockTimer.current = setTimeout(unlock, 550);
+        // Subsequent index changes (arrow / dot) — animate smoothly.
+        isProgrammatic.current = true;
+        el.scrollTo({ left: target, behavior: 'smooth' });
+        const unlock = () => { isProgrammatic.current = false; };
+        if ('onscrollend' in el) {
+          el.addEventListener('scrollend', unlock, { once: true });
+        } else {
+          unlockTimer.current = setTimeout(unlock, 550);
+        }
       }
     } else {
       clearTimeout(unlockTimer.current);
       isProgrammatic.current = false;
     }
+
+    hasMountedRef.current = true;
   }, [currentPageIdx]);
 
   // ── User swipe detection ─────────────────────────────────────────────────
