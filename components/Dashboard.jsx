@@ -753,10 +753,12 @@ function DashboardInner() {
         };
         return (
           <>
-            {/* ── When search is open: centered pill only ─────────────────── */}
+            {/* ── When search is open: bottom-centered pill (near AI pill zone) ── */}
             {searchOpen && (
               <div style={{
-                position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
+                position: "fixed",
+                bottom: mobile ? "env(safe-area-inset-bottom, 6px)" : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+                left: "50%", transform: "translateX(-50%)",
                 zIndex: 100, WebkitAppRegion: "no-drag",
                 width: "min(480px, calc(100vw - 24px))",
               }}>
@@ -809,9 +811,12 @@ function DashboardInner() {
             <div style={{
               position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
               zIndex: 100, WebkitAppRegion: "no-drag",
+              // Cap width so the dock pill never overlaps the left/right nav circles
+              // (each side has 12px margin + 40px button + 8px gap = 60px clearance)
+              maxWidth: "calc(100vw - 128px)",
             }}>
               {editMode ? (
-                /* Card dock pill */
+                /* Card dock pill — scrollable, never wider than the cap above */
                 <div style={{
                   display: "flex", alignItems: "center", gap: 1, height: 40,
                   padding: "0 4px", borderRadius: 100,
