@@ -1063,7 +1063,7 @@ function DashboardInner() {
                 title="Ask AI"
                 style={{
                   pointerEvents: "auto",
-                  width: 34, height: 34, borderRadius: "50%",
+                  width: 40, height: 40, borderRadius: "50%",
                   background: "var(--dl-glass)",
                   backdropFilter: "blur(16px) saturate(1.3)",
                   WebkitBackdropFilter: "blur(16px) saturate(1.3)",
