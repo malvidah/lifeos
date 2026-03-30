@@ -498,13 +498,13 @@ export default function PageDots({
                 onDotClick?.(pageIdx);
               }}
               style={{
-                width:        isActive ? 20 : 6,
-                height:       isActive ? 6  : 6,
+                width:        6,
+                height:       6,
                 borderRadius: 3,
                 background:   isActive ? "var(--dl-strong)" : "var(--dl-border2)",
                 border: "none", padding: 0, cursor: "pointer",
                 opacity: isDragging ? 0.35 : 1,
-                transition: "width 0.25s cubic-bezier(.34,1.56,.64,1), opacity 0.15s, background 0.2s",
+                transition: "opacity 0.15s, background 0.2s",
                 flexShrink: 0,
                 touchAction: "none",
               }}
