@@ -109,7 +109,16 @@ export default function PageDots({
   });
 
   return (
-    <div style={{ position: "relative", flexShrink: 0 }}>
+    // Fixed above ChatFloat — pointerEvents:none so the transparent area
+    // doesn't block scroll; restored on interactive children
+    <div style={{
+      position: "fixed", bottom: 0, left: 0, right: 0,
+      zIndex: 99,
+      paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      display: "flex", justifyContent: "center",
+      pointerEvents: "none",
+    }}>
+    <div style={{ position: "relative", flexShrink: 0, pointerEvents: "auto" }}>
 
       {/* ── Page rename/delete popover ───────────────────────────────────── */}
       {menuPage !== null && (
@@ -182,7 +191,13 @@ export default function PageDots({
         justifyContent: "center",
         alignItems: "center",
         gap: 7,
-        padding: "8px 16px",
+        padding: "6px 14px",
+        background: "var(--dl-glass)",
+        backdropFilter: "blur(16px) saturate(1.3)",
+        WebkitBackdropFilter: "blur(16px) saturate(1.3)",
+        border: "1px solid var(--dl-glass-border)",
+        borderRadius: 100,
+        boxShadow: "var(--dl-glass-shadow)",
       }}>
 
         {/* Page dots */}
@@ -269,6 +284,7 @@ export default function PageDots({
           </button>
         )}
       </div>
+    </div>
     </div>
   );
 }

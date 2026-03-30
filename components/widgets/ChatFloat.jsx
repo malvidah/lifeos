@@ -670,11 +670,14 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
 
       {/* ── Floating pill / card — hidden when desktop sidebar is open ── */}
       {(!expanded || mobile) && <div ref={pillRef} style={{
-        position: "fixed", bottom: 0, left: 0, right: 0,
+        position: "fixed",
+        // Sit above the PageDots bar (≈30px) + safe-area so both are visible
+        bottom: "calc(30px + env(safe-area-inset-bottom, 0px))",
+        left: 0, right: 0,
         zIndex: 97,
         display: "flex", flexDirection: "column", alignItems: "center",
         paddingLeft: 10, paddingRight: 10,
-        paddingBottom: mobile ? "env(safe-area-inset-bottom, 6px)" : "16px",
+        paddingBottom: mobile ? "6px" : "16px",
         pointerEvents: "none",
       }}>
 

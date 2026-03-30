@@ -35,6 +35,41 @@ import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-ki
 const DOCK_ORDER = ['project-graph','world-map','cal','goals','health','habits','notes','tasks','journal','meals','workouts'];
 const DOCK_ITEMS = DOCK_ORDER.map(id => { const c = CARD_REGISTRY.find(r => r.id === id); return { id, label: c.label.replace(/^.*?\s/, ''), icon: c.icon }; });
 
+// ── PageContent ───────────────────────────────────────────────────────────────
+// Extracted as a proper React component so DndContext gets stable identity
+// across renders. Inline JSX inside renderPage caused DndContext to re-register
+// wheel event listeners on every editMode change → WebGL context loss.
+function PageContent({ page, pageIdx, editMode, enterEditMode, cardProps, sensors, layoutRef }) {
+  const handleDragEnd = useCallback((event) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = page.cards;
+    const oldIdx = ids.indexOf(String(active.id));
+    const newIdx = ids.indexOf(String(over.id));
+    if (oldIdx === -1 || newIdx === -1) return;
+    layoutRef.current.reorderCards(pageIdx, arrayMove(ids, oldIdx, newIdx));
+  }, [page.cards, pageIdx, layoutRef]);
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={page.cards} strategy={verticalListSortingStrategy}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, paddingTop: 0, maxWidth: 1200, width: '100%', margin: '0 auto' }}>
+          {page.cards.map(cardId => {
+            const entry = CARD_REGISTRY.find(c => c.id === cardId);
+            if (!entry) return null;
+            return (
+              <DraggableCard key={cardId} cardId={cardId} editMode={editMode} onEnterEditMode={enterEditMode}>
+                {entry.render(cardProps)}
+              </DraggableCard>
+            );
+          })}
+          <div style={{ paddingBottom: 200 }} />
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 
 // ── URL-based date state ─────────────────────────────────────────────────────
 // Reads ?date=YYYY-MM-DD from URL; defaults to today if absent or invalid.
@@ -97,7 +132,8 @@ function DashboardInner() {
     } catch { return null; }
   });
   const [searchOpen, setSearchOpen] = useState(false);
-  const [toolsOpen, setToolsOpen] = useState(false);
+  // toolsOpen mirrors editMode — the leftmost icon toggles both together
+  // (derive rather than keep separate state to guarantee they stay in sync)
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -482,10 +518,16 @@ function DashboardInner() {
   useEffect(() => { layoutRef.current = layout; });
 
   // ── Layout edit mode ─────────────────────────────────────────────────────
-  // Triggered by a 500ms long-press on any card header (via DraggableCard).
+  // Triggered by long-pressing a card header OR tapping the leftmost grid icon.
   const [editMode, setEditMode] = useState(false);
   const enterEditMode = useCallback(() => setEditMode(true),  []);
   const exitEditMode  = useCallback(() => setEditMode(false), []);
+
+  // toolsOpen is derived from editMode — dock is always open while editing
+  const toolsOpen = editMode;
+  const setToolsOpen = useCallback((v) => {
+    setEditMode(typeof v === 'function' ? v(editMode) : Boolean(v));
+  }, [editMode]);
 
   // Close edit mode when the user switches pages (swipe while editing isn't
   // possible, but programmatic page switches still work).
@@ -555,50 +597,20 @@ function DashboardInner() {
   // Current page's card IDs — used for dock active state
   const currentPageCards = layout.pages[layout.currentPageIdx]?.cards || [];
 
-  // renderPage: renders all cards for a given page config.
-  // Wraps cards in DndContext + SortableContext so drag-to-reorder works in
-  // edit mode without touching any individual card component.
-  const renderPage = useCallback((page, pageIdx) => {
-    const handleDragEnd = (event) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
-      const ids = page.cards;
-      const oldIdx = ids.indexOf(String(active.id));
-      const newIdx = ids.indexOf(String(over.id));
-      if (oldIdx === -1 || newIdx === -1) return;
-      // Use layoutRef so we always call the latest reorderCards without
-      // including `layout` in renderPage's deps (avoids re-mounting cards on save)
-      layoutRef.current.reorderCards(pageIdx, arrayMove(ids, oldIdx, newIdx));
-    };
-
-    return (
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragEnd={handleDragEnd}
-      >
-        <SortableContext items={page.cards} strategy={verticalListSortingStrategy}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 10, paddingTop: 0, maxWidth: 1200, width: '100%', margin: '0 auto' }}>
-            {page.cards.map(cardId => {
-              const entry = CARD_REGISTRY.find(c => c.id === cardId);
-              if (!entry) return null;
-              return (
-                <DraggableCard
-                  key={cardId}
-                  cardId={cardId}
-                  editMode={editMode}
-                  onEnterEditMode={enterEditMode}
-                >
-                  {entry.render(cardProps)}
-                </DraggableCard>
-              );
-            })}
-            <div style={{ paddingBottom: 200 }} />
-          </div>
-        </SortableContext>
-      </DndContext>
-    );
-  }, [cardProps, editMode, enterEditMode, sensors]); // layout accessed via layoutRef — intentionally omitted
+  // renderPage: renders all cards for a given page as a PageContent component.
+  // PageContent is a proper React component (not inline JSX) so DndContext gets
+  // stable identity — prevents wheel event re-registration and WebGL context loss.
+  const renderPage = useCallback((page, pageIdx) => (
+    <PageContent
+      page={page}
+      pageIdx={pageIdx}
+      editMode={editMode}
+      enterEditMode={enterEditMode}
+      cardProps={cardProps}
+      sensors={sensors}
+      layoutRef={layoutRef}
+    />
+  ), [editMode, enterEditMode, cardProps, sensors, layoutRef]);
 
   // Early returns AFTER all hooks
   if(!authReady) return (
@@ -682,35 +694,6 @@ function DashboardInner() {
             </div>
           ) : layout.loaded ? (
             <>
-              {/* ── Edit-mode bar ── */}
-              {editMode && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '0 16px', height: 36, flexShrink: 0,
-                  borderBottom: '1px solid var(--dl-border)',
-                  maxWidth: 1200, width: '100%', margin: '0 auto',
-                  boxSizing: 'border-box',
-                }}>
-                  <span style={{
-                    fontFamily: mono, fontSize: 10, letterSpacing: '0.1em',
-                    textTransform: 'uppercase', color: 'var(--dl-middle)',
-                  }}>
-                    Drag to reorder · use navbar to add or hide
-                  </span>
-                  <button
-                    onClick={exitEditMode}
-                    style={{
-                      background: 'var(--dl-accent)', color: '#fff', border: 'none',
-                      borderRadius: 100, padding: '3px 14px', cursor: 'pointer',
-                      fontFamily: mono, fontSize: 10, letterSpacing: '0.08em',
-                      fontWeight: 'bold', flexShrink: 0,
-                    }}
-                  >
-                    Done
-                  </button>
-                </div>
-              )}
-
               <PageContainer
                 pages={layout.pages}
                 renderPage={renderPage}
