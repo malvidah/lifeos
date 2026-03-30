@@ -274,23 +274,19 @@ export default function PageDots({
           onClick={() => setAddingPage(true)}
           title="Add page"
           style={{
-            width: 20, height: 20, borderRadius: "50%",
-            background: "var(--dl-border2)",
-            border: "none", color: "var(--dl-middle)", cursor: "pointer",
+            width: 18, height: 18, borderRadius: "50%",
+            background: "transparent",
+            border: "none", color: "var(--dl-border2)", cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 15, lineHeight: 1, fontWeight: "bold", flexShrink: 0,
-            transition: "background 0.18s, color 0.18s",
+            flexShrink: 0, transition: "color 0.15s",
+            padding: 0,
           }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = "var(--dl-accent)";
-            e.currentTarget.style.color = "#fff";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = "var(--dl-border2)";
-            e.currentTarget.style.color = "var(--dl-middle)";
-          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--dl-strong)"; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--dl-border2)"; }}
         >
-          +
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <line x1="5" y1="1" x2="5" y2="9"/><line x1="1" y1="5" x2="9" y2="5"/>
+          </svg>
         </button>
       </div>
 
