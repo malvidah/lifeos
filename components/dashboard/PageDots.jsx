@@ -24,7 +24,8 @@ import { mono, F } from "@/lib/tokens";
  */
 export default function PageDots({
   count, active, pages = [],
-  onDotClick, onAddPage, onRenamePage, onDeletePage,
+  onDotClick, onSwipePrev, onSwipeNext,
+  onAddPage, onRenamePage, onDeletePage,
 }) {
   // ── State ────────────────────────────────────────────────────────────────
   const [addingPage,   setAddingPage]   = useState(false);
@@ -35,6 +36,24 @@ export default function PageDots({
   const longPressTimer  = useRef(null);
   const nameInputRef    = useRef(null);
   const renameInputRef  = useRef(null);
+
+  // ── Swipe gesture on the pill (for mobile page navigation) ───────────────
+  const swipeRef = useRef(null); // { x: startX }
+
+  const onPillPointerDown = useCallback((e) => {
+    // Only track if not on an interactive child (buttons handle their own events)
+    if (e.target.closest('button') || e.target.closest('input')) return;
+    swipeRef.current = { x: e.clientX };
+  }, []);
+
+  const onPillPointerUp = useCallback((e) => {
+    if (!swipeRef.current) return;
+    const dx = e.clientX - swipeRef.current.x;
+    swipeRef.current = null;
+    if (Math.abs(dx) < 28) return; // too short — not a swipe
+    if (dx < 0) onSwipeNext?.();   // swipe left  → next page
+    else         onSwipePrev?.();  // swipe right → prev page
+  }, [onSwipePrev, onSwipeNext]);
 
   // Focus the add-page input as soon as it mounts
   useEffect(() => {
@@ -240,11 +259,20 @@ export default function PageDots({
         </div>
       ) : (
 
-      // ── Dots row ─────────────────────────────────────────────────────
-      <div style={{ ...glassPill, justifyContent: "center", gap: 7, padding: "0 14px" }}>
+      // ── Dots row — swipe left/right on the pill to change pages ─────
+      <div
+        style={{ ...glassPill, justifyContent: "center", gap: 7, padding: "0 14px", userSelect: "none" }}
+        onPointerDown={onPillPointerDown}
+        onPointerUp={onPillPointerUp}
+        onPointerCancel={() => { swipeRef.current = null; }}
+      >
 
         {/* Page dots */}
-        {Array.from({ length: count }, (_, i) => (
+        {Array.from({ length: count }, (_, i) => {
+          // Index 1 (2nd page) gets a rounded-square shape as the "home" marker.
+          const isHome   = i === 1;
+          const isActive = i === active;
+          return (
           <button
             key={i}
             title={pages[i]?.name ?? `Page ${i + 1}`}
@@ -253,18 +281,19 @@ export default function PageDots({
             onPointerUp={cancelDotLongPress}
             onPointerCancel={cancelDotLongPress}
             style={{
-              width:  i === active ? 20 : 6,
-              height: 6,
-              borderRadius: 3,
-              background: i === active ? "var(--dl-strong)" : "var(--dl-border2)",
+              width:  isActive ? 20 : (isHome ? 7 : 6),
+              height: isActive ? 6  : (isHome ? 7 : 6),
+              borderRadius: isActive ? 3 : (isHome ? 2 : 3),
+              background: isActive ? "var(--dl-strong)" : "var(--dl-border2)",
               border: "none",
               padding: 0,
               cursor: "pointer",
-              transition: "width 0.25s cubic-bezier(.34,1.56,.64,1), background 0.2s",
+              transition: "width 0.25s cubic-bezier(.34,1.56,.64,1), height 0.2s, background 0.2s",
               flexShrink: 0,
             }}
           />
-        ))}
+          );
+        })}
 
         {/* Separator */}
         <div style={{ width: 1, height: 12, background: "var(--dl-border)", flexShrink: 0, marginLeft: 2 }} />

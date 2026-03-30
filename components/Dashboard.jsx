@@ -593,23 +593,9 @@ function DashboardInner() {
     useSensor(TouchSensor,   { activationConstraint: { delay: 50, tolerance: 5 } }),
   );
 
-  // Persist currentPageIdx to localStorage so it survives refresh
-  useEffect(() => {
-    if (layout.loaded) {
-      try { localStorage.setItem('daylab:pageIdx', String(layout.currentPageIdx)); } catch {}
-    }
-  }, [layout.currentPageIdx, layout.loaded]);
-  // Restore on load
-  useEffect(() => {
-    if (layout.loaded) {
-      try {
-        const saved = parseInt(localStorage.getItem('daylab:pageIdx'), 10);
-        if (!isNaN(saved) && saved > 0 && saved < layout.pages.length) {
-          layout.setCurrentPageIdx(saved);
-        }
-      } catch {}
-    }
-  }, [layout.loaded]); // eslint-disable-line
+  // Page index is NOT persisted to localStorage — always starts fresh at the
+  // default (page 2 / index 1). This prevents stale saved values from
+  // overriding the current page on reload or when search closes.
 
   const syncStatus={syncing:syncing.size>0,lastSync};
 
@@ -1046,6 +1032,8 @@ function DashboardInner() {
                   active={layout.currentPageIdx}
                   pages={layout.pages}
                   onDotClick={(i) => layout.setCurrentPageIdx(i)}
+                  onSwipePrev={() => layout.setCurrentPageIdx(Math.max(0, layout.currentPageIdx - 1))}
+                  onSwipeNext={() => layout.setCurrentPageIdx(Math.min(layout.pages.length - 1, layout.currentPageIdx + 1))}
                   onAddPage={(name) => {
                     layout.addPage(name);
                     setTimeout(() => layout.setCurrentPageIdx(layout.pages.length), 50);
