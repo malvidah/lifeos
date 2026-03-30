@@ -7,7 +7,6 @@ import { mono, F } from "@/lib/tokens";
  *
  * Dots pill (entire element is the tap target):
  *   • Tap              → cycle to next page (wraps around)
- *   • Double-tap       → open detail popover for current page
  *   • Long-press 480ms → open detail popover for current page
  *   • Swipe L/R ≥40px  → prev / next page
  *   • "+"              → add page
@@ -59,12 +58,9 @@ export default function PageDots({
     clearTimeout(longPressTimer.current);
   }, []);
 
-  // Double-tap detection
-  const lastTapRef = useRef(0);
-
   // ── Unified pill-level gesture handlers ────────────────────────────────────
   // Tap → cycle to next page
-  // Long-press or double-tap → open detail for current page
+  // Long-press → open detail for current page
   // Swipe L/R → prev / next page
 
   const onPillPointerDown = useCallback((e) => {
@@ -105,16 +101,8 @@ export default function PageDots({
     if (menuPage !== null) return;
 
     if (Math.abs(dx) <= 10) {
-      // ── Tap — check for double-tap, otherwise cycle ─────────────────────
-      const now = Date.now();
-      if (now - lastTapRef.current < 350) {
-        // Double-tap → open detail
-        lastTapRef.current = 0;
-        openPageDetail();
-      } else {
-        lastTapRef.current = now;
-        onCycleNext?.();
-      }
+      // ── Tap → cycle to next page ───────────────────────────────────────
+      onCycleNext?.();
       return;
     }
 
