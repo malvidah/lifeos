@@ -202,38 +202,18 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   const handlePointerCancel = useCallback(() => { pointerRef.current = null; }, []);
 
   // ── Trackpad two-finger swipe (wheel events) ──────────────────────────────
-  // Three-phase state machine that handles MacBook momentum scroll correctly:
-  //
-  //  READY       Accumulate deltaX; navigate at ≥60px.
-  //  HARD-LOCKED First 300ms after navigation — ignore all events completely.
-  //              Covers the 280ms page animation; early momentum (which can
-  //              be large, >20px/event) can't trigger a false second nav.
-  //  SOFT-LOCKED After 300ms — distinguish momentum from a new intentional swipe:
-  //    • event deltaX ≤ 20px → decaying momentum; extend a 150ms idle timer.
-  //      When the timer fires (150ms of silence), return to READY.
-  //    • event deltaX > 20px → characteristic of a new finger gesture, not
-  //      momentum decay; unlock immediately and count the event toward the
-  //      next navigation. This lets quick consecutive swipes register without
-  //      waiting for all inertia to die, while the hard-lock phase stops the
-  //      early large-momentum events that caused the double-page bug.
+  // One navigation per physical gesture, no momentum continuation.
+  // A "gesture" ends when wheel events stop for 100ms (the OS physics engine
+  // fires events ~every 16ms while active, so 100ms of silence is unambiguous).
+  // gestureNavigated prevents momentum tail events from triggering a second
+  // navigation within the same gesture. No locking phases needed.
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
-    // 'ready' | 'hard' | 'soft'
-    let phase     = 'ready';
-    let accDeltaX = 0;
-    let idleTimer = null;
-    let hardTimer = null;
-
-    const clearIdle = () => { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } };
-    const clearHard = () => { if (hardTimer) { clearTimeout(hardTimer); hardTimer = null; } };
-
-    const enterSoft = () => {
-      phase = 'soft';
-      clearIdle();
-      idleTimer = setTimeout(() => { idleTimer = null; phase = 'ready'; accDeltaX = 0; }, 150);
-    };
+    let gestureNavigated = false;
+    let accDeltaX        = 0;
+    let idleTimer        = null;
 
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
@@ -241,49 +221,30 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       if (isInsideHorizontalScroll(e.target, outer)) return;
       if (e.target.closest('[data-no-page-swipe]')) return;
 
-      if (phase === 'hard') return; // animation playing — drop everything
+      // Any event from this gesture resets the idle timer
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        idleTimer        = null;
+        accDeltaX        = 0;
+        gestureNavigated = false;
+      }, 100);
 
-      if (phase === 'soft') {
-        if (Math.abs(e.deltaX) > 20) {
-          // New intentional swipe detected — unlock and process this event
-          phase = 'ready';
-          clearIdle();
-          accDeltaX = 0;
-          // fall through to READY logic below
-        } else {
-          // Still momentum — keep extending the idle timer
-          clearIdle();
-          idleTimer = setTimeout(() => { idleTimer = null; phase = 'ready'; accDeltaX = 0; }, 150);
-          return;
-        }
-      }
+      if (gestureNavigated) return; // already navigated this gesture
 
-      // ── READY phase ──
       accDeltaX += e.deltaX;
-      clearIdle();
-      idleTimer = setTimeout(() => { idleTimer = null; accDeltaX = 0; }, 200);
-
       if (Math.abs(accDeltaX) < 60) return;
 
+      gestureNavigated = true;
       const idx    = currentIdxRef.current;
       const total  = pageCountRef.current;
       const newIdx = accDeltaX > 0 ? Math.min(idx + 1, total - 1) : Math.max(idx - 1, 0);
-
-      clearIdle();
-      accDeltaX = 0;
-
-      if (newIdx !== idx) {
-        phase = 'hard';
-        onPageChangeRef.current?.(newIdx);
-        hardTimer = setTimeout(() => { hardTimer = null; enterSoft(); }, 300);
-      }
+      if (newIdx !== idx) onPageChangeRef.current?.(newIdx);
     };
 
     outer.addEventListener('wheel', onWheel, { passive: true });
     return () => {
       outer.removeEventListener('wheel', onWheel);
-      clearIdle();
-      clearHard();
+      if (idleTimer) clearTimeout(idleTimer);
     };
   }, []);
 
