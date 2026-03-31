@@ -60,7 +60,7 @@ export function CardHeader({ label, labelColor, collapsed, onToggle, headerLeft,
       minHeight:44,boxSizing:"border-box",
       borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0}}>
       {headerLeft}
-      <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+      <span data-drag-zone="true" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
         textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}><LabelText>{label}</LabelText></span>
       {!collapsed && headerRight}
       <ExpandArrow href={expandHref}/>
@@ -118,7 +118,7 @@ export function Card({
           minHeight:44,boxSizing:"border-box",
           borderBottom:collapsed?"none":"1px solid var(--dl-border)",flexShrink:0}}>
           {headerLeft}
-          <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
+          <span data-drag-zone="true" style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.06em",
             textTransform:"uppercase",color:labelColor||"var(--dl-highlight)",flex:1}}><LabelText>{label}</LabelText></span>
           {!collapsed && headerRight}
           <ExpandArrow href={expandHref}/>

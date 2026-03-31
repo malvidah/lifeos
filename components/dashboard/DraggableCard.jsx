@@ -35,8 +35,8 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
 
   const startLongPress = useCallback((e) => {
     if (editMode) return;
-    // Only fire from the card header zone
-    if (!e.target.closest("[data-card-header]")) return;
+    // Only fire from the card label zone — NOT from headerRight controls
+    if (!e.target.closest("[data-drag-zone]")) return;
     // Never fire on interactive elements — typing/tapping buttons must work normally.
     // Check both the direct target AND ancestors: clicks on SVG icons or spans
     // inside a button would otherwise pass the tagName check and start a long-press.
