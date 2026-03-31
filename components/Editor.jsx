@@ -5,7 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import TaskList from '@tiptap/extension-task-list';
 import TaskItem from '@tiptap/extension-task-item';
-import { Extension, Node } from '@tiptap/core';
+import { Extension, Node, Mark } from '@tiptap/core';
 import { Table } from '@tiptap/extension-table';
 import { TableRow } from '@tiptap/extension-table-row';
 import { TableCell } from '@tiptap/extension-table-cell';
@@ -372,6 +372,29 @@ const URLExtension = Extension.create({
   },
 });
 
+// ── HyperlinkMark: stored as [display text](url), rendered as <a> ────────────
+// Allows display text to differ from the URL (e.g. "Cauliflower Recipe" → href).
+// Bare https:// URLs with no custom display text still use the URLExtension
+// decoration so the storage format stays as plain URL text.
+const HyperlinkMark = Mark.create({
+  name: 'hyperlink',
+  addAttributes() {
+    return { href: { default: null } };
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['a', {
+      href: HTMLAttributes.href,
+      target: '_blank',
+      rel: 'noreferrer noopener',
+      class: 'dl-hyperlink',
+      style: `color:${WARM};text-decoration:underline;text-underline-offset:2px;cursor:pointer`,
+    }, 0];
+  },
+  parseHTML() {
+    return [{ tag: 'a.dl-hyperlink[href]', getAttrs: el => ({ href: el.getAttribute('href') }) }];
+  },
+});
+
 // ── Format toolbar (appears on text selection in noteTitle mode) ──────────────
 function FormatToolbar({ editor }) {
   const [pos, setPos] = useState(null);
@@ -450,176 +473,189 @@ function FormatToolbar({ editor }) {
   );
 }
 
-// ── Link popover (Google Docs style) ──────────────────────────────────────────
+// ── Link popover ──────────────────────────────────────────────────────────────
+// Three actions: Rename (change display text) | Edit URL | Remove link
+// Works for both bare URL decorations and HyperlinkMark (display text ≠ URL).
 function LinkPopover({ editor }) {
-  const [state, setState] = useState(null); // { url, rect, pos, linkEl }
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
-  const popRef = useRef(null);
+  const [state, setState]       = useState(null); // { url, displayText, rect, linkEl, isHyperlink }
+  const [editMode, setEditMode] = useState(null); // null | 'rename' | 'editurl'
+  const [draft, setDraft]       = useState('');
+  const popRef   = useRef(null);
   const inputRef = useRef(null);
 
-  // Listen for link clicks from URLExtension
   useEffect(() => {
     const handler = (e) => {
-      const { url, rect, pos, linkEl } = e.detail;
-      setState({ url, rect, pos, linkEl });
-      setEditing(false);
-      setDraft(url);
+      const { url, displayText, rect, pos, linkEl, isHyperlink } = e.detail;
+      setState({ url, displayText: displayText || url, rect, pos, linkEl, isHyperlink: !!isHyperlink });
+      setEditMode(null);
+      setDraft('');
     };
     window.addEventListener('daylab:link-click', handler);
     return () => window.removeEventListener('daylab:link-click', handler);
   }, []);
 
-  // Close on outside click or scroll
+  // Close on outside click; skip scroll-close while editing (editor reflow fires scroll)
   useEffect(() => {
     if (!state) return;
-    const close = (e) => {
-      if (popRef.current?.contains(e.target)) return;
-      setState(null);
-    };
-    // Don't close on scroll while in edit mode — focusing the URL input causes the
-    // editor to blur+save, which can trigger a layout reflow scroll and dismiss the
-    // popup before the user has a chance to type the new URL.
-    const closeScroll = () => { if (!editing) setState(null); };
+    const close = (e) => { if (!popRef.current?.contains(e.target)) setState(null); };
+    const closeScroll = () => { if (!editMode) setState(null); };
     document.addEventListener('mousedown', close);
     document.addEventListener('scroll', closeScroll, true);
     return () => {
       document.removeEventListener('mousedown', close);
       document.removeEventListener('scroll', closeScroll, true);
     };
-  }, [state, editing]);
+  }, [state, editMode]);
 
-  // Focus input when entering edit mode
   useEffect(() => {
-    if (editing && inputRef.current) {
+    if (editMode && inputRef.current) {
       inputRef.current.focus();
       inputRef.current.select();
     }
-  }, [editing]);
+  }, [editMode]);
 
   if (!state) return null;
 
-  const { url, rect, linkEl } = state;
-  // Position below the link
-  const top = rect.bottom + 6;
-  const left = Math.max(8, Math.min(rect.left, window.innerWidth - 320));
+  const { url, displayText, rect, linkEl, isHyperlink } = state;
+  const top  = rect.bottom + 6;
+  const left = Math.max(8, Math.min(rect.left, window.innerWidth - 300));
 
-  const handleOpen = () => {
-    window.open(url, '_blank', 'noreferrer');
-    setState(null);
-  };
-
-  const handleRemove = () => {
-    if (!editor || !linkEl) { setState(null); return; }
-    // Find the URL text range in the doc and just leave the text (it's already plain text in storage)
-    // Since URLs are decorations on plain text, "removing" the link means nothing in storage.
-    // But we can delete the URL text entirely if user wants.
+  // Locate the link range in the document for editing.
+  const findRange = () => {
+    if (!editor || !linkEl) return null;
     const view = editor.view;
-    const linkText = linkEl.textContent;
-    // Find position of this text
-    let found = null;
-    view.state.doc.descendants((node, pos) => {
-      if (found) return false;
-      if (!node.isText) return;
-      const idx = node.text.indexOf(linkText);
-      if (idx >= 0) {
-        found = { from: pos + idx, to: pos + idx + linkText.length };
-      }
-    });
-    if (found) {
-      editor.chain().focus().deleteRange(found).run();
+    if (isHyperlink) {
+      let found = null;
+      view.state.doc.descendants((node, pos) => {
+        if (found || !node.isText) return;
+        if (node.marks.some(mk => mk.type.name === 'hyperlink' && mk.attrs.href === url)
+            && node.text === displayText) {
+          found = { from: pos, to: pos + node.nodeSize };
+        }
+      });
+      return found;
     }
+    const linkText = linkEl.textContent;
+    let found = null;
+    view.state.doc.descendants((node, pos) => {
+      if (found || !node.isText) return;
+      const idx = node.text.indexOf(linkText);
+      if (idx >= 0) found = { from: pos + idx, to: pos + idx + linkText.length };
+    });
+    return found;
+  };
+
+  const handleRename = () => {
+    const range = findRange();
+    if (!range || !editor) { setState(null); return; }
+    const newText = draft.trim();
+    if (!newText) { setEditMode(null); return; }
+    // Both bare-URL and hyperlink: replace the text, apply/keep the hyperlink mark
+    editor.chain().focus()
+      .deleteRange(range)
+      .insertContentAt(range.from, { type: 'text', text: newText, marks: [{ type: 'hyperlink', attrs: { href: url } }] })
+      .run();
     setState(null);
   };
 
-  const handleSave = () => {
-    if (!editor || !linkEl) { setState(null); return; }
-    const oldText = linkEl.textContent;
+  const handleEditUrl = () => {
+    const range = findRange();
+    if (!range || !editor) { setState(null); return; }
     const newUrl = draft.trim();
-    if (!newUrl || newUrl === oldText) { setEditing(false); return; }
-    // Find and replace the old URL text
-    const view = editor.view;
-    let found = null;
-    view.state.doc.descendants((node, pos) => {
-      if (found) return false;
-      if (!node.isText) return;
-      const idx = node.text.indexOf(oldText);
-      if (idx >= 0) {
-        found = { from: pos + idx, to: pos + idx + oldText.length };
-      }
-    });
-    if (found) {
+    if (!newUrl) { setEditMode(null); return; }
+    if (isHyperlink) {
       editor.chain().focus()
-        .deleteRange(found)
-        .insertContentAt(found.from, newUrl)
+        .setTextSelection(range)
+        .unsetMark('hyperlink')
+        .setMark('hyperlink', { href: newUrl })
+        .run();
+    } else {
+      // Bare URL: replace the URL text with the new URL text
+      editor.chain().focus()
+        .deleteRange(range)
+        .insertContentAt(range.from, newUrl)
         .run();
     }
     setState(null);
   };
 
-  const btnStyle = {
-    background: 'transparent', border: 'none', cursor: 'pointer',
-    padding: '4px 8px', borderRadius: 4, fontSize: 12, fontFamily: mono,
-    color: 'var(--dl-strong)', letterSpacing: '0.02em',
+  const handleRemove = () => {
+    const range = findRange();
+    if (!range || !editor) { setState(null); return; }
+    if (isHyperlink) {
+      // Remove the mark, keep the display text
+      editor.chain().focus().setTextSelection(range).unsetMark('hyperlink').run();
+    } else {
+      // Bare URL: delete the text entirely
+      editor.chain().focus().deleteRange(range).run();
+    }
+    setState(null);
   };
-  const btnHover = 'var(--dl-border)';
+
+  const popStyle = {
+    position: 'fixed', top, left, zIndex: 9999,
+    background: 'var(--dl-surface)', border: '1px solid var(--dl-border)',
+    borderRadius: 8, boxShadow: 'var(--dl-shadow)', padding: '5px 8px',
+    display: 'flex', alignItems: 'center', gap: 2,
+  };
+  const btnBase = {
+    background: 'transparent', border: 'none', cursor: 'pointer',
+    padding: '3px 7px', borderRadius: 4, fontSize: 11, fontFamily: mono,
+    color: 'var(--dl-muted)', letterSpacing: '0.03em', whiteSpace: 'nowrap',
+  };
+  const inputStyle = {
+    flex: 1, minWidth: 150, background: 'var(--dl-bg, #000)',
+    border: '1px solid var(--dl-border)', borderRadius: 5,
+    padding: '3px 7px', fontSize: 11, fontFamily: mono,
+    color: 'var(--dl-strong)', outline: 'none',
+  };
+  const divider = <span style={{ width: 1, height: 11, background: 'var(--dl-border)', flexShrink: 0, margin: '0 2px' }} />;
+
+  const Btn = ({ label, onAct, danger }) => (
+    <button
+      onMouseDown={e => { e.preventDefault(); onAct(); }}
+      style={{ ...btnBase, ...(danger ? { color: 'var(--dl-red, #c44)' } : {}) }}
+      onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+      onMouseLeave={e => e.currentTarget.style.color = danger ? 'var(--dl-red, #c44)' : 'var(--dl-muted)'}
+    >{label}</button>
+  );
+
+  const onKey = (e, saveFn) => {
+    if (e.key === 'Enter')  { e.preventDefault(); saveFn(); }
+    if (e.key === 'Escape') { e.preventDefault(); setEditMode(null); }
+  };
+
+  if (editMode) {
+    const isRename = editMode === 'rename';
+    const label    = isRename ? 'name' : 'url';
+    const saveFn   = isRename ? handleRename : handleEditUrl;
+    return createPortal(
+      <div ref={popRef} onMouseDown={e => e.stopPropagation()} style={popStyle}>
+        <span style={{ fontSize: 10, fontFamily: mono, color: 'var(--dl-muted)', paddingRight: 4, flexShrink: 0 }}>{label}</span>
+        <input
+          ref={inputRef}
+          value={draft}
+          placeholder={isRename ? displayText : url}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => onKey(e, saveFn)}
+          style={inputStyle}
+        />
+        <button
+          onMouseDown={e => { e.preventDefault(); saveFn(); }}
+          style={{ ...btnBase, color: 'var(--dl-accent)', fontWeight: 600, paddingLeft: 8 }}
+        >Save</button>
+      </div>,
+      document.body
+    );
+  }
 
   return createPortal(
-    <div ref={popRef} onMouseDown={e => e.stopPropagation()} style={{
-      position: 'fixed', top, left, zIndex: 9999,
-      background: 'var(--dl-surface)', border: '1px solid var(--dl-border)',
-      borderRadius: 10, boxShadow: 'var(--dl-shadow)', padding: '6px 10px',
-      display: 'flex', alignItems: 'center', gap: 6, maxWidth: 360,
-    }}>
-      {editing ? (
-        <>
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') { e.preventDefault(); handleSave(); }
-              if (e.key === 'Escape') { e.preventDefault(); setEditing(false); }
-            }}
-            style={{
-              flex: 1, minWidth: 160, background: 'var(--dl-bg, #000)',
-              border: '1px solid var(--dl-border)', borderRadius: 6,
-              padding: '4px 8px', fontSize: 12, fontFamily: mono,
-              color: 'var(--dl-strong)', outline: 'none',
-            }}
-          />
-          <button
-            onMouseDown={e => { e.preventDefault(); handleSave(); }}
-            style={{ ...btnStyle, color: 'var(--dl-accent)', fontWeight: 600 }}
-          >Save</button>
-        </>
-      ) : (
-        <>
-          <span style={{
-            flex: 1, fontSize: 12, fontFamily: mono, color: 'var(--dl-accent)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            maxWidth: 180, cursor: 'default',
-          }}>{url}</span>
-          <button
-            onMouseDown={e => { e.preventDefault(); handleOpen(); }}
-            style={btnStyle}
-            onMouseEnter={e => e.target.style.background = btnHover}
-            onMouseLeave={e => e.target.style.background = 'transparent'}
-          >Open</button>
-          <button
-            onMouseDown={e => { e.preventDefault(); setEditing(true); }}
-            style={btnStyle}
-            onMouseEnter={e => e.target.style.background = btnHover}
-            onMouseLeave={e => e.target.style.background = 'transparent'}
-          >Edit</button>
-          <button
-            onMouseDown={e => { e.preventDefault(); handleRemove(); }}
-            style={{ ...btnStyle, color: 'var(--dl-red, #c44)' }}
-            onMouseEnter={e => e.target.style.background = btnHover}
-            onMouseLeave={e => e.target.style.background = 'transparent'}
-          >Remove</button>
-        </>
-      )}
+    <div ref={popRef} onMouseDown={e => e.stopPropagation()} style={popStyle}>
+      <Btn label="Rename"   onAct={() => { setDraft(isHyperlink ? displayText : ''); setEditMode('rename'); }} />
+      {divider}
+      <Btn label="Edit URL" onAct={() => { setDraft(url); setEditMode('editurl'); }} />
+      {divider}
+      <Btn label="Remove"   onAct={handleRemove} danger />
     </div>,
     document.body
   );
@@ -635,7 +671,11 @@ function LinkPopover({ editor }) {
 export function docToText(docJson) {
   function walkInline(nodes) {
     return (nodes || []).map(c => {
-      if (c.type === 'text')        return c.text ?? '';
+      if (c.type === 'text') {
+        const linkMark = c.marks?.find(mk => mk.type === 'hyperlink');
+        if (linkMark) return `[${c.text ?? ''}](${linkMark.attrs?.href ?? ''})`;
+        return c.text ?? '';
+      }
       if (c.type === 'hardBreak')   return '\n';
       if (c.type === 'projectTag')  return `{${c.attrs?.name ?? ''}}`;
       if (c.type === 'placeTag')    return `{l:${c.attrs?.name ?? ''}}`;
@@ -663,8 +703,10 @@ export function docToText(docJson) {
 
 function parseLineContent(line) {
   const content = [];
-  // Tokens: {project} | {l:place} | {r:key:label} | {h:key:label} | {g:name} | [note] | @YYYY-MM-DD | legacy #Tag
-  const re = /\{h:([^:}]+):([^}]*)\}|\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{g:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})|#([A-Za-z][A-Za-z0-9]+)/g;
+  // Tokens: {project} | {l:place} | {r:key:label} | {h:key:label} | {g:name} |
+  //         [text](url) hyperlink | [note] | @YYYY-MM-DD | legacy #Tag
+  // Hyperlink [text](url) must come before [note] so the parser prefers it.
+  const re = /\{h:([^:}]+):([^}]*)\}|\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{g:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]*)\]\((https?:\/\/[^)]*)\)|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})|#([A-Za-z][A-Za-z0-9]+)/g;
   let last = 0, m;
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
@@ -683,9 +725,10 @@ function parseLineContent(line) {
     else if (m[5] != null) content.push({ type: 'placeTag',  attrs: { name: m[5] } });
     else if (m[6] != null) content.push({ type: 'goalTag',   attrs: { name: m[6] } });
     else if (m[7] != null) content.push({ type: 'projectTag', attrs: { name: m[7] } });
-    else if (m[8] != null) content.push({ type: 'noteLink',   attrs: { name: m[8] } });
-    else if (m[9] != null) content.push({ type: 'dateTag',    attrs: { date: m[9] } });
-    else if (m[10] != null) content.push({ type: 'projectTag', attrs: { name: m[10].toLowerCase() } });
+    else if (m[8] != null) content.push({ type: 'text', text: m[8], marks: [{ type: 'hyperlink', attrs: { href: m[9] } }] });
+    else if (m[10] != null) content.push({ type: 'noteLink',  attrs: { name: m[10] } });
+    else if (m[11] != null) content.push({ type: 'dateTag',   attrs: { date: m[11] } });
+    else if (m[12] != null) content.push({ type: 'projectTag', attrs: { name: m[12].toLowerCase() } });
     last = m.index + m[0].length;
   }
   if (last < line.length) content.push({ type: 'text', text: line.slice(last) });
@@ -1112,6 +1155,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         underline: noteTitle ? {} : false,
       }),
       URLExtension,
+      HyperlinkMark,
       ProjectTagNode,
       NoteLinkNode,
       PlaceTagNode,
@@ -1507,7 +1551,22 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           onNoteClickRef.current(noteEl.getAttribute('data-note-link'));
           return true;
         }
-        // URL link click → show popover instead of navigating
+        // Hyperlink mark click (<a class="dl-hyperlink">) → show popover
+        const hlEl = t.closest?.('a.dl-hyperlink');
+        if (hlEl) {
+          event.preventDefault();
+          event.stopPropagation();
+          const rect = hlEl.getBoundingClientRect();
+          const href = hlEl.getAttribute('href');
+          const displayText = hlEl.textContent;
+          if (href) {
+            window.dispatchEvent(new CustomEvent('daylab:link-click', {
+              detail: { url: href, displayText, rect, pos, linkEl: hlEl, isHyperlink: true },
+            }));
+          }
+          return true;
+        }
+        // Bare URL decoration click → show popover
         const linkEl = t.closest?.('.dl-url-link');
         if (linkEl) {
           event.preventDefault();
@@ -1516,7 +1575,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           const url = linkEl.getAttribute('data-href');
           if (url) {
             window.dispatchEvent(new CustomEvent('daylab:link-click', {
-              detail: { url, rect, pos, linkEl },
+              detail: { url, displayText: url, rect, pos, linkEl, isHyperlink: false },
             }));
           }
           return true;
