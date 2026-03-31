@@ -294,7 +294,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     // If removed we clear the field so stale due_dates don't cause silent expiry.
     if (!('due_date' in patch)) {
       const m1 = text.match(/@(\d{4}-\d{2}-\d{2})/);
-      const m2 = text.match(/\{r:[^:]+:[^:]+:(\d{4}-\d{2}-\d{2})\}/);
+      const m2 = text.match(/\{[hr]:[^:]+:[^:]+:(\d{4}-\d{2}-\d{2})\}/);
       patch.due_date = (m1 || m2)?.[1] ?? null;
     }
     if (!('project_tags' in patch)) {
