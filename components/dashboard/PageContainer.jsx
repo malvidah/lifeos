@@ -204,25 +204,35 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   // ── Trackpad two-finger swipe (wheel events) ──────────────────────────────
   // One navigation per physical gesture.
   //
-  // GESTURE SEPARATION via gap detection — calibrated from real event data:
-  // On a MacBook trackpad, momentum events fire at ~8ms intervals (120Hz).
-  // A rapid double-swipe produces an inter-gesture gap of ~35ms (fingers lift
-  // and replace). GAP_MS=25ms sits safely between normal event spacing (8ms)
-  // and the real inter-gesture gap (35ms+), so it catches new gestures quickly
-  // without false-firing on momentum jitter.
+  // Calibrated from real MacBook trackpad data on a rapid double-swipe:
+  //   momentum events : ~8ms apart, dx slowly decelerating (57→26→24→7→...)
+  //   inter-gesture   : 35ms gap, dx immediately dropped to 26 from 57 (-55%)
+  //   new gesture     : dx valley at 7px, then ramped up (7→28→51→72→99)
   //
-  // IMPORTANT: the < 3px magnitude filter is placed AFTER we record
-  // lastEventTime, so tiny decelerating momentum events still keep the gap
-  // clock alive and don't create phantom "gesture ended" signals.
+  // Two complementary unlock conditions (either fires the unlock):
+  //
+  //  GAP + DROP  — a timing gap of ≥30ms where velocity also dropped ≥40%.
+  //                Pure reflow jitter can create a >25ms gap but won't cause
+  //                a simultaneous 40%+ velocity drop; the real inter-gesture
+  //                gap hits both (35ms gap + 55% velocity drop).
+  //
+  //  VALLEY + SURGE — momentum velocity fell below DYING_THRESHOLD (12px),
+  //                then a new event arrives ≥ SURGE_THRESHOLD (30px).
+  //                This is the unmistakable "lift fingers, place again" shape.
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
-    const GAP_MS = 25; // ms — calibrated: momentum=8ms apart, real gap≥35ms
+    const GAP_MS         = 30;   // ms gap needed for gap+drop unlock
+    const DROP_RATIO     = 0.60; // new event must be < 60% of last to pair with gap
+    const DYING_THRESHOLD = 12;  // px — momentum is dying when events drop here
+    const SURGE_THRESHOLD = 30;  // px — new gesture confirmed when velocity surges here
 
     let gestureNavigated = false;
     let accDeltaX        = 0;
     let lastEventTime    = 0;
+    let lastLockedDelta  = 0; // last delta seen while locked (for gap+drop check)
+    let momentumDying    = false;
     let idleTimer        = null;
 
     const onWheel = (e) => {
@@ -234,26 +244,29 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       const absDelta = Math.abs(e.deltaX);
 
       if (gestureNavigated) {
-        // Record time for ALL events (even tiny ones) so decelerating momentum
-        // keeps the gap clock alive and doesn't create false gaps.
-        const gap = lastEventTime > 0 ? now - lastEventTime : 0;
+        const gap     = lastEventTime > 0 ? now - lastEventTime : 0;
         lastEventTime = now;
 
-        if (gap >= GAP_MS) {
-          // Real inter-gesture gap detected — unlock for new swipe
-          accDeltaX        = 0;
+        const gapUnlock   = gap >= GAP_MS && absDelta < lastLockedDelta * DROP_RATIO;
+        const surgeUnlock = momentumDying && absDelta >= SURGE_THRESHOLD;
+
+        if (gapUnlock || surgeUnlock) {
           gestureNavigated = false;
+          momentumDying    = false;
+          accDeltaX        = 0;
+          lastLockedDelta  = 0;
           if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-          // Only process this event further if it's meaningful
           if (absDelta < 3) return;
-          // fall through to accumulate
+          // fall through to accumulate this event as start of new gesture
         } else {
-          return; // still momentum, discard
+          if (absDelta < DYING_THRESHOLD) momentumDying = true;
+          lastLockedDelta = absDelta;
+          return;
         }
       }
 
       lastEventTime = now;
-      if (absDelta < 3) return; // ignore noise when not locked
+      if (absDelta < 3) return;
 
       // Idle timer: reset partial accumulation after a quiet pause
       if (idleTimer) clearTimeout(idleTimer);
@@ -267,6 +280,8 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       if (Math.abs(accDeltaX) < 60) return;
 
       gestureNavigated = true;
+      momentumDying    = false;
+      lastLockedDelta  = absDelta;
       if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
 
       const idx    = currentIdxRef.current;
