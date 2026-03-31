@@ -25,6 +25,9 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
   const [resyncing, setResyncing]=useState(false); // local state for Score History resync
   const [urlCopied,setUrlCopied]=useState(false);
   const [planInfo,setPlanInfo]=useState(null); // null | { isPremium, insightCount }
+  const [calendarsList,setCalendarsList]=useState(null); // null=loading, []|[...]=loaded
+  const [extraCalendars,setExtraCalendars]=useState([]); // [{ id, summary, color }]
+  const [calSaving,setCalSaving]=useState(false);
 
   const ref=useRef(null);
   const user=session?.user;
@@ -41,6 +44,7 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
         if(settings.ouraToken){setOuraKey(settings.ouraToken);setOuraConnected(true);}
         if(settings.garminTokens?.oauth1){setGarminConnected(true);}
         if(settings.stravaToken?.access_token){setStravaConnected(true);}
+        if(settings.extraCalendars) setExtraCalendars(settings.extraCalendars);
         // Read premium status from user_settings (same source as server-side isPremium)
         setPlanInfo({
           isPremium: settings.premium?.active === true,
@@ -48,6 +52,10 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           plan: settings.premium?.plan || null,
         });
       }).catch(()=>{});
+    // Load available Google calendars for the calendar picker
+    setCalendarsList(null);
+    fetch("/api/calendar/list",{headers:{Authorization:`Bearer ${token}`}})
+      .then(r=>r.json()).then(d=>{ setCalendarsList(d?.calendars||[]); }).catch(()=>setCalendarsList([]));
     // Check Apple Health data + Claude MCP connection (use singleton — no new GoTrueClient)
     const _sb = createClient();
     _sb.from("health_metrics").select("id").eq("source","apple").limit(5)
@@ -201,6 +209,25 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
     setStravaConnected(false);
   }
 
+  async function toggleCalendar(cal) {
+    if (cal.primary) return;
+    const isEnabled = extraCalendars.some(e => e.id === cal.id);
+    const newList = isEnabled
+      ? extraCalendars.filter(e => e.id !== cal.id)
+      : [...extraCalendars, { id: cal.id, summary: cal.summary, color: cal.backgroundColor }];
+    setExtraCalendars(newList);
+    setCalSaving(true);
+    try {
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: {"Content-Type":"application/json","Authorization":`Bearer ${token}`},
+        body: JSON.stringify({ extraCalendars: newList }),
+      });
+      window.dispatchEvent(new CustomEvent('daylab:refresh', { detail: { types: ['calendar'] } }));
+    } catch(e) { console.warn("Calendar save failed:", e); }
+    setCalSaving(false);
+  }
+
   return (
     <div ref={ref} style={{position:"relative"}}>
       <button onClick={()=>setOpen(o=>!o)} style={{
@@ -246,7 +273,9 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           {divider}
           {planBadge}
 
+          {/* ── Health ─────────────────────────────────────────────────── */}
           {divider}
+          <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Health</div>
 
           {/* Apple Health */}
           <div style={row}>
@@ -259,7 +288,7 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
             />
           </div>
 
-          {divider}
+          <div style={{height:8}}/>
 
           {/* Oura */}
           <div style={row}>
@@ -286,10 +315,22 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
             </IntegrationRow>
           </div>
 
-          {divider}
+          <div style={{height:8}}/>
+
+          {/* Strava */}
+          <div style={row}>
+            <IntegrationRow
+              label="Strava"
+              subtitle={syncing==="strava" ? "Syncing history…" : null}
+              connected={stravaConnected}
+              onToggleOn={connectStrava}
+              onToggleOff={disconnectStrava}
+            />
+          </div>
 
           {/* Garmin — gated behind ENABLE_GARMIN feature flag */}
           {ENABLE_GARMIN && <>
+          <div style={{height:8}}/>
           <div style={row}>
             <IntegrationRow
               label="Garmin"
@@ -319,24 +360,71 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
             {!garminConnected && garminLoading && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-middle)",marginTop:4,display:"block"}}>Connecting…</span>}
             {!garminConnected && garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-red)",marginTop:4,display:"block"}}>{garminError}</span>}
           </div>
-
-          {divider}
           </>}
 
-          {/* Strava */}
+          {/* ── Calendar ────────────────────────────────────────────────── */}
+          {divider}
+          <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Calendar</div>
+
+          {/* Google Calendar — always connected; shows calendar picker below */}
           <div style={row}>
-            <IntegrationRow
-              label="Strava"
-              subtitle={syncing==="strava" ? "Syncing history…" : null}
-              connected={stravaConnected}
-              onToggleOn={connectStrava}
-              onToggleOff={disconnectStrava}
-            />
+            <div style={{display:'flex',alignItems:'center',gap:8,paddingTop:1,marginBottom:6}}>
+              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:'var(--dl-highlight)',flexShrink:0}}>
+                Google
+              </span>
+              <div style={{marginLeft:'auto',flexShrink:0,display:'flex',alignItems:'center',gap:6}}>
+                {calSaving && <span style={{fontFamily:mono,fontSize:10,color:'var(--dl-middle)'}}>saving…</span>}
+                <span style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-green)'}}>✓</span>
+              </div>
+            </div>
+            {calendarsList === null ? (
+              <div style={{fontFamily:mono,fontSize:10,color:'var(--dl-middle)',paddingBottom:2}}>Loading calendars…</div>
+            ) : calendarsList.length === 0 ? null : (
+              <div style={{display:'flex',flexDirection:'column',gap:1}}>
+                {calendarsList.map(cal => {
+                  const isEnabled = cal.primary || extraCalendars.some(e => e.id === cal.id);
+                  return (
+                    <button key={cal.id} onClick={()=>toggleCalendar(cal)} disabled={cal.primary}
+                      style={{
+                        display:'flex',alignItems:'center',gap:8,
+                        background:'none',border:'none',
+                        cursor:cal.primary?'default':'pointer',
+                        padding:'4px 0',width:'100%',textAlign:'left',
+                        opacity:cal.primary?0.5:1,
+                      }}>
+                      <div style={{width:10,height:10,borderRadius:'50%',background:cal.backgroundColor,flexShrink:0}}/>
+                      <span style={{
+                        fontFamily:mono,fontSize:F.sm,
+                        color:isEnabled?'var(--dl-highlight)':'var(--dl-middle)',
+                        flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+                      }}>{cal.summary}</span>
+                      <div style={{
+                        width:14,height:14,
+                        border:`1.5px solid ${isEnabled?cal.backgroundColor:'var(--dl-border2)'}`,
+                        borderRadius:3,
+                        background:isEnabled?cal.backgroundColor:'transparent',
+                        flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+                        transition:'all 0.15s',
+                      }}>
+                        {isEnabled && (
+                          <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                            <path d="M1.5 5.5L4 8L8.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
+          {/* ── Integrations ────────────────────────────────────────────── */}
           {divider}
+          <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Integrations</div>
 
-          {/* Claude */}          <div style={row}>
+          {/* Claude MCP */}
+          <div style={row}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:6}}>
               <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-highlight)"}}>
                 Claude MCP
@@ -379,10 +467,9 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
             </div>
           </div>
 
-          {divider}
-
           {/* Google Tasks Import — gated behind ENABLE_GOOGLE_TASKS feature flag (doubles tasks bug) */}
           {ENABLE_GOOGLE_TASKS && <>
+          <div style={{height:8}}/>
           <div style={row}>
             <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
               <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:"0.04em",textTransform:"uppercase",color:"var(--dl-highlight)"}}>

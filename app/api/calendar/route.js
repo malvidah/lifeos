@@ -92,7 +92,8 @@ async function withGoogleToken(supabase, userId, fn, clientToken = null) {
 }
 
 // ─── GET /api/calendar?start=YYYY-MM-DD&end=YYYY-MM-DD&tz=... ────────────────
-// Lists events grouped by local date.
+// Lists events grouped by local date. Fetches primary + any extra calendars
+// stored in user_settings.data.extraCalendars = [{ id, summary, color }].
 
 export const GET = withAuth(async (request, { supabase, user }) => {
   const { searchParams } = new URL(request.url);
@@ -102,39 +103,79 @@ export const GET = withAuth(async (request, { supabase, user }) => {
 
   if (!start || !end) return Response.json({ error: "start and end required" }, { status: 400 });
 
-  const gcalUrl = new URL("https://www.googleapis.com/calendar/v3/calendars/primary/events");
-  gcalUrl.searchParams.set("timeMin", `${start}T00:00:00Z`);
-  gcalUrl.searchParams.set("timeMax", `${end}T23:59:59Z`);
-  gcalUrl.searchParams.set("singleEvents", "true");
-  gcalUrl.searchParams.set("orderBy", "startTime");
-  gcalUrl.searchParams.set("maxResults", "250");
-  const urlStr = gcalUrl.toString();
+  // Read extra calendars from user settings (same row withGoogleToken reads for token)
+  const { data: stored } = await supabase.from("user_settings").select("data")
+    .eq("user_id", user.id).maybeSingle();
+  const extraCalendars = stored?.data?.extraCalendars || []; // [{ id, summary, color }]
 
-  const { ok, status, data, accessToken, error } = await withGoogleToken(
-    supabase, user.id,
-    (token) => fetch(urlStr, { headers: { Authorization: `Bearer ${token}` } })
-      .then(async r => ({ ok: r.ok, status: r.status, data: r.ok ? await r.json() : null }))
+  const buildUrl = (calId) => {
+    const u = new URL(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calId)}/events`);
+    u.searchParams.set("timeMin", `${start}T00:00:00Z`);
+    u.searchParams.set("timeMax", `${end}T23:59:59Z`);
+    u.searchParams.set("singleEvents", "true");
+    u.searchParams.set("orderBy", "startTime");
+    u.searchParams.set("maxResults", "250");
+    return u.toString();
+  };
+
+  // Fetch all calendars in parallel; extra calendar failures are non-fatal
+  const fetchAll = async (token) => {
+    const calIds = ['primary', ...extraCalendars.map(c => c.id)];
+    const results = await Promise.all(
+      calIds.map(calId =>
+        fetch(buildUrl(calId), { headers: { Authorization: `Bearer ${token}` } })
+          .then(async r => ({ ok: r.ok, status: r.status, calId, data: r.ok ? await r.json() : null }))
+          .catch(() => ({ ok: false, status: 500, calId, data: null }))
+      )
+    );
+    const primary = results.find(r => r.calId === 'primary');
+    if (!primary?.ok) return { ok: false, status: primary?.status || 500, results };
+    return { ok: true, status: 200, results };
+  };
+
+  const { ok, status, results, accessToken, error } = await withGoogleToken(
+    supabase, user.id, fetchAll
   );
 
   if (error) return Response.json({ error }, { status });
   if (!ok) return Response.json({ error: "Calendar fetch failed" }, { status: status || 500 });
 
+  // Build a color map: calId → color (for extra calendars, use their stored color)
+  const calColorMap = {};
+  for (const cal of extraCalendars) calColorMap[cal.id] = cal.color;
+
   const byDay = {};
-  for (const ev of data?.items || []) {
-    const dateStr = ev.start?.dateTime || ev.start?.date;
-    const key = localDateKey(dateStr, tz);
-    if (!key) continue;
-    (byDay[key] ??= []).push({
-      id:            ev.id,
-      title:         ev.summary || "(no title)",
-      time:          ev.start?.date ? "all day" : fmtTime(ev.start?.dateTime, tz),
-      endTime:       ev.end?.date   ? null        : fmtTime(ev.end?.dateTime,   tz),
-      startDateTime: ev.start?.dateTime || null,
-      endDateTime:   ev.end?.dateTime   || null,
-      startDate:     ev.start?.date     || null,
-      color:         eventColor(ev.summary),
-      zoomUrl:       zoomUrl(ev),
-      allDay:        !!ev.start?.date,
+  for (const { calId, data: calData, ok: calOk } of results) {
+    if (!calOk || !calData?.items) continue;
+    const isExtra = calId !== 'primary';
+    const calColor = calColorMap[calId]; // undefined for primary → use eventColor()
+
+    for (const ev of calData.items) {
+      const dateStr = ev.start?.dateTime || ev.start?.date;
+      const key = localDateKey(dateStr, tz);
+      if (!key) continue;
+      (byDay[key] ??= []).push({
+        id:            ev.id,
+        calendarId:    calId,
+        title:         ev.summary || "(no title)",
+        time:          ev.start?.date ? "all day" : fmtTime(ev.start?.dateTime, tz),
+        endTime:       ev.end?.date   ? null        : fmtTime(ev.end?.dateTime,   tz),
+        startDateTime: ev.start?.dateTime || null,
+        endDateTime:   ev.end?.dateTime   || null,
+        startDate:     ev.start?.date     || null,
+        color:         isExtra ? (calColor || '#4A7A9B') : eventColor(ev.summary),
+        zoomUrl:       zoomUrl(ev),
+        allDay:        !!ev.start?.date,
+      });
+    }
+  }
+
+  // Sort each day's events chronologically
+  for (const key of Object.keys(byDay)) {
+    byDay[key].sort((a, b) => {
+      const at = a.startDateTime || (a.startDate + 'T00:00:00Z');
+      const bt = b.startDateTime || (b.startDate + 'T00:00:00Z');
+      return at < bt ? -1 : at > bt ? 1 : 0;
     });
   }
 
