@@ -274,6 +274,79 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           {divider}
           {planBadge}
 
+          {/* ── Calendar ────────────────────────────────────────────────── */}
+          {divider}
+          <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Calendar</div>
+
+          {/* Google Calendar — always connected; expandable calendar picker */}
+          <div style={row}>
+            <IntegrationRow
+              label="Google"
+              connected={true}
+              onToggleOn={()=>{}}
+              onToggleOff={()=>{}}
+            />
+            {/* "Select calendars" expander */}
+            <button
+              onClick={()=>{setCalExpanded(o=>!o);}}
+              style={{
+                display:'flex',alignItems:'center',gap:4,marginTop:5,
+                background:'none',border:'none',cursor:'pointer',padding:0,
+                fontFamily:mono,fontSize:'10px',letterSpacing:'0.04em',
+                color:'var(--dl-middle)',textTransform:'uppercase',
+              }}
+              onMouseEnter={e=>e.currentTarget.style.color='var(--dl-highlight)'}
+              onMouseLeave={e=>e.currentTarget.style.color='var(--dl-middle)'}
+            >
+              <span style={{transition:'transform 0.15s',display:'inline-block',transform:calExpanded?'rotate(90deg)':'rotate(0deg)'}}>›</span>
+              {extraCalendars.length > 0
+                ? `${extraCalendars.length + 1} calendar${extraCalendars.length > 0 ? 's' : ''} syncing`
+                : 'Select calendars'}
+              {calSaving && <span style={{opacity:0.5}}> · saving…</span>}
+            </button>
+            {/* Expanded calendar list */}
+            {calExpanded && (
+              <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:1}}>
+                {calendarsList === null ? (
+                  <div style={{fontFamily:mono,fontSize:10,color:'var(--dl-middle)',padding:'4px 0'}}>Loading…</div>
+                ) : calendarsList.map(cal => {
+                  const isEnabled = cal.primary || extraCalendars.some(e => e.id === cal.id);
+                  return (
+                    <button key={cal.id} onClick={()=>toggleCalendar(cal)} disabled={cal.primary}
+                      style={{
+                        display:'flex',alignItems:'center',gap:8,
+                        background:'none',border:'none',
+                        cursor:cal.primary?'default':'pointer',
+                        padding:'4px 0',width:'100%',textAlign:'left',
+                        opacity:cal.primary?0.5:1,
+                      }}>
+                      <div style={{width:10,height:10,borderRadius:'50%',background:cal.backgroundColor,flexShrink:0}}/>
+                      <span style={{
+                        fontFamily:mono,fontSize:F.sm,
+                        color:isEnabled?'var(--dl-highlight)':'var(--dl-middle)',
+                        flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
+                      }}>{cal.summary}</span>
+                      <div style={{
+                        width:14,height:14,
+                        border:`1.5px solid ${isEnabled?cal.backgroundColor:'var(--dl-border2)'}`,
+                        borderRadius:3,
+                        background:isEnabled?cal.backgroundColor:'transparent',
+                        flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
+                        transition:'all 0.15s',
+                      }}>
+                        {isEnabled && (
+                          <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
+                            <path d="M1.5 5.5L4 8L8.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           {/* ── Health ─────────────────────────────────────────────────── */}
           {divider}
           <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Health</div>
@@ -362,79 +435,6 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
             {!garminConnected && garminError && <span style={{fontFamily:mono,fontSize:F.sm,color:"var(--dl-red)",marginTop:4,display:"block"}}>{garminError}</span>}
           </div>
           </>}
-
-          {/* ── Calendar ────────────────────────────────────────────────── */}
-          {divider}
-          <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Calendar</div>
-
-          {/* Google Calendar — always connected; expandable calendar picker */}
-          <div style={row}>
-            <IntegrationRow
-              label="Google"
-              connected={true}
-              onToggleOn={()=>{}}
-              onToggleOff={()=>{}}
-            />
-            {/* "Select calendars" expander */}
-            <button
-              onClick={()=>{setCalExpanded(o=>!o);}}
-              style={{
-                display:'flex',alignItems:'center',gap:4,marginTop:5,
-                background:'none',border:'none',cursor:'pointer',padding:0,
-                fontFamily:mono,fontSize:'10px',letterSpacing:'0.04em',
-                color:'var(--dl-middle)',textTransform:'uppercase',
-              }}
-              onMouseEnter={e=>e.currentTarget.style.color='var(--dl-highlight)'}
-              onMouseLeave={e=>e.currentTarget.style.color='var(--dl-middle)'}
-            >
-              <span style={{transition:'transform 0.15s',display:'inline-block',transform:calExpanded?'rotate(90deg)':'rotate(0deg)'}}>›</span>
-              {extraCalendars.length > 0
-                ? `${extraCalendars.length + 1} calendar${extraCalendars.length > 0 ? 's' : ''} syncing`
-                : 'Select calendars'}
-              {calSaving && <span style={{opacity:0.5}}> · saving…</span>}
-            </button>
-            {/* Expanded calendar list */}
-            {calExpanded && (
-              <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:1}}>
-                {calendarsList === null ? (
-                  <div style={{fontFamily:mono,fontSize:10,color:'var(--dl-middle)',padding:'4px 0'}}>Loading…</div>
-                ) : calendarsList.map(cal => {
-                  const isEnabled = cal.primary || extraCalendars.some(e => e.id === cal.id);
-                  return (
-                    <button key={cal.id} onClick={()=>toggleCalendar(cal)} disabled={cal.primary}
-                      style={{
-                        display:'flex',alignItems:'center',gap:8,
-                        background:'none',border:'none',
-                        cursor:cal.primary?'default':'pointer',
-                        padding:'4px 0',width:'100%',textAlign:'left',
-                        opacity:cal.primary?0.5:1,
-                      }}>
-                      <div style={{width:10,height:10,borderRadius:'50%',background:cal.backgroundColor,flexShrink:0}}/>
-                      <span style={{
-                        fontFamily:mono,fontSize:F.sm,
-                        color:isEnabled?'var(--dl-highlight)':'var(--dl-middle)',
-                        flex:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',
-                      }}>{cal.summary}</span>
-                      <div style={{
-                        width:14,height:14,
-                        border:`1.5px solid ${isEnabled?cal.backgroundColor:'var(--dl-border2)'}`,
-                        borderRadius:3,
-                        background:isEnabled?cal.backgroundColor:'transparent',
-                        flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',
-                        transition:'all 0.15s',
-                      }}>
-                        {isEnabled && (
-                          <svg width="8" height="8" viewBox="0 0 10 10" fill="none">
-                            <path d="M1.5 5.5L4 8L8.5 2" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          </svg>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
 
           {/* ── Integrations ────────────────────────────────────────────── */}
           {divider}
@@ -528,7 +528,10 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           {divider}
           </>}
 
-          {/* Theme */}
+          {/* ── Theme ───────────────────────────────────────────────────── */}
+          {divider}
+          <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Theme</div>
+
           <div style={{...row,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
             <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:"var(--dl-highlight)"}}>
               Theme
