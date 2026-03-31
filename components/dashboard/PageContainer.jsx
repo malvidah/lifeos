@@ -173,13 +173,23 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   // ── Trackpad two-finger swipe (wheel events) ─────────────────────────────
   // Trackpad horizontal swipes fire `wheel` events with deltaX — they are NOT
   // touch or pointer events. A single physical swipe produces a burst of events
-  // over ~200-400ms; we navigate on the first qualifying event and suppress the
-  // rest for 500ms so the page doesn't skip multiple steps.
+  // that can have multiple peaks (momentum). We use two separate mechanisms:
+  //
+  //   hasNavigated — flips true on first qualifying event, preventing any
+  //   further navigation within the same gesture burst.
+  //
+  //   idleTimer — debounced: resets on every qualifying event, expires only
+  //   after wheel events have been absent for 350ms (gesture truly finished).
+  //   Only then does hasNavigated reset, allowing the next swipe.
+  //
+  // This is more robust than a fixed cooldown, which can either fire too soon
+  // (double-skip) or block a fast second intentional swipe for too long.
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
-    let cooldown = false;
+    let hasNavigated = false;
+    let idleTimer    = null;
 
     const onWheel = (e) => {
       // Only handle gestures that are more horizontal than vertical
@@ -188,10 +198,17 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       // If the wheel event came from inside a horizontally scrollable card,
       // let that card consume the scroll rather than changing pages
       if (isInsideHorizontalScroll(e.target, outer)) return;
-      // One navigation per swipe burst
-      if (cooldown) return;
-      cooldown = true;
-      setTimeout(() => { cooldown = false; }, 500);
+
+      // Debounce: extend the idle window on every qualifying event
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        idleTimer    = null;
+        hasNavigated = false;  // gesture is done — allow the next swipe
+      }, 350);
+
+      // Only navigate once per burst
+      if (hasNavigated) return;
+      hasNavigated = true;
 
       const idx   = currentIdxRef.current;
       const total = pageCountRef.current;
@@ -202,7 +219,10 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     };
 
     outer.addEventListener('wheel', onWheel, { passive: true });
-    return () => outer.removeEventListener('wheel', onWheel);
+    return () => {
+      outer.removeEventListener('wheel', onWheel);
+      if (idleTimer) clearTimeout(idleTimer);
+    };
   }, []);
 
   return (
