@@ -139,6 +139,8 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     let wheelTimer = null;
     const onWheel = (e) => {
       if (!containerRef.current?.contains(e.target)) return;
+      // Let horizontal swipes pass through to PageContainer for page navigation
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
       e.preventDefault();
       cancelRaf.current();
       isDragging.current = false;
