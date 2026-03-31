@@ -183,6 +183,8 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
   const activePen = useRef(false);
   const quickShapeTimer = useRef(null);
   const isDrawing = useRef(false);
+  const historyRef = useRef([]); // past stroke arrays for undo
+  const futureRef = useRef([]);  // undone stroke arrays for redo
 
   // Keep refs in sync with props
   useEffect(() => { toolRef.current = tool; }, [tool]);
@@ -278,6 +280,8 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
       }
 
       if (finalStroke.points.length > 0) {
+        historyRef.current.push(strokesRef.current); // save for undo
+        futureRef.current = [];                       // clear redo stack
         const next = [...strokesRef.current, finalStroke];
         strokesRef.current = next;
         const canvas = canvasRef.current;
@@ -358,8 +362,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
     if (cursorRef.current) cursorRef.current.style.display = 'none';
   };
 
-  const handleUndo = () => {
-    const next = strokesRef.current.slice(0, -1);
+  const applyStrokes = (next) => {
     strokesRef.current = next;
     const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
@@ -368,14 +371,38 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
     onStrokesChangeRef.current?.(next, canvas, logSizeRef.current);
   };
 
-  const handleClear = () => {
-    strokesRef.current = [];
-    const canvas = canvasRef.current;
-    const { w, h } = logSizeRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
-    onStrokesChangeRef.current?.([], canvas, logSizeRef.current);
+  const handleUndo = () => {
+    if (historyRef.current.length === 0) return;
+    futureRef.current.push(strokesRef.current);
+    applyStrokes(historyRef.current.pop());
   };
+
+  const handleRedo = () => {
+    if (futureRef.current.length === 0) return;
+    historyRef.current.push(strokesRef.current);
+    applyStrokes(futureRef.current.pop());
+  };
+
+  const handleClear = () => {
+    if (strokesRef.current.length === 0) return;
+    historyRef.current.push(strokesRef.current);
+    futureRef.current = [];
+    applyStrokes([]);
+  };
+
+  // Keyboard shortcuts: Cmd+Z = undo, Cmd+Shift+Z = redo
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) handleRedo();
+        else handleUndo();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', overflow: 'hidden', borderRadius: 6, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}>
@@ -402,9 +429,10 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
         }}
       />
 
-      {/* ── Left: Size slider + Undo + Clear ─────────────────────────────────── */}
+      {/* ── Left: Size slider + Undo + Redo + Clear ──────────────────────────── */}
       <LeftControls
         onUndo={handleUndo}
+        onRedo={handleRedo}
         onClear={handleClear}
         sizeRef={sizeRef}
       />
@@ -413,7 +441,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
 }
 
 // ── Vertical size slider (Procreate-style, drag up = bigger) ──────────────────
-function LeftControls({ onUndo, onClear, sizeRef }) {
+function LeftControls({ onUndo, onRedo, onClear, sizeRef }) {
   const [size, setSize] = useState(DEFAULT_SIZE);
   const sliderTrackRef = useRef(null);
   const dragRef = useRef(null);
@@ -465,10 +493,21 @@ function LeftControls({ onUndo, onClear, sizeRef }) {
       <button
         onPointerDown={e => { e.stopPropagation(); onUndo(); }}
         style={pillBtnStyle}
-        title="Undo"
+        title="Undo (⌘Z)"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 7v6h6"/><path d="M3 13C4.7 8.7 8.9 6 14 6a9 9 0 0 1 0 18 9 9 0 0 1-8.46-5.9"/>
+        </svg>
+      </button>
+
+      {/* Redo */}
+      <button
+        onPointerDown={e => { e.stopPropagation(); onRedo(); }}
+        style={pillBtnStyle}
+        title="Redo (⌘⇧Z)"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 7v6h-6"/><path d="M21 13C19.3 8.7 15.1 6 10 6a9 9 0 0 0 0 18 9 9 0 0 0 8.46-5.9"/>
         </svg>
       </button>
 
