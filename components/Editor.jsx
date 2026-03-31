@@ -1090,7 +1090,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ...(noteTitle ? [Table.configure({ resizable: true }), TableRow, TableCell, TableHeader] : []),
       ...(taskList ? [
         TaskList,
-        TaskItem.configure({ nested: false }).extend({
+        TaskItem.configure({ nested: true }).extend({
           addAttributes() {
             return {
               ...this.parent?.(),

@@ -76,6 +76,9 @@ export function injectTaskListStyles(accentHex, date) {
     [data-filter="open"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"] { display:none; }
     [data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="false"] { display:none; }
     ${date ? `[data-filter="done"] .dl-editor ul[data-type="taskList"] > li[data-checked="true"][data-completed-date]:not([data-completed-date="${date}"]) { display:none; }` : ''}
+    .dl-editor ul[data-type="taskList"] ul[data-type="taskList"] { padding-left:20px; margin-top:2px; margin-bottom:0; }
+    .dl-editor ul[data-type="taskList"] ul[data-type="taskList"] > li > label > input[type="checkbox"] { width:12px; height:12px; min-width:12px; border-radius:3px; }
+    .dl-editor ul[data-type="taskList"] ul[data-type="taskList"] > li { padding:2px 0; opacity:0.85; }
   `;
 }
 
