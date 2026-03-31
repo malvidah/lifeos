@@ -37,8 +37,11 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
     if (editMode) return;
     // Only fire from the card header zone
     if (!e.target.closest("[data-card-header]")) return;
-    // Never fire on interactive elements — typing/tapping buttons must work normally
+    // Never fire on interactive elements — typing/tapping buttons must work normally.
+    // Check both the direct target AND ancestors: clicks on SVG icons or spans
+    // inside a button would otherwise pass the tagName check and start a long-press.
     if (INTERACTIVE.has(e.target.tagName)) return;
+    if (e.target.closest('button, a, input, textarea, select, label, [role="button"], [role="switch"], [role="checkbox"], [role="tab"]')) return;
     if (e.target.isContentEditable) return;
     // Don't steal from ongoing text selection
     if (window.getSelection?.()?.type === "Range") return;
