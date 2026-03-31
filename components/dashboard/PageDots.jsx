@@ -217,7 +217,7 @@ export default function PageDots({
             borderRadius: 100,
             zIndex: 50,
             display: "flex", alignItems: "center",
-            height: 40, padding: "0 6px 0 14px", gap: 2,
+            height: 52, padding: "0 6px 0 14px", gap: 2,
             whiteSpace: "nowrap",
           }}>
             {/* House icon — home page indicator */}
@@ -345,7 +345,7 @@ export default function PageDots({
       {/* ── Add-page input pill ────────────────────────────────────────────── */}
       {addingPage ? (
         <div style={{
-          ...glass, borderRadius: 100, height: 40,
+          ...glass, borderRadius: 100, height: 52,
           display: "flex", alignItems: "center",
           padding: "0 8px 0 16px", gap: 6, minWidth: 180,
         }}>
@@ -394,7 +394,7 @@ export default function PageDots({
       <div
         ref={pillRef}
         style={{
-          ...glass, borderRadius: 100, height: 40,
+          ...glass, borderRadius: 100, height: 52,
           display: "flex", alignItems: "center",
           justifyContent: "center", gap: 7,
           padding: "0 14px", userSelect: "none",
