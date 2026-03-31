@@ -586,9 +586,10 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
         }}
         title="Brush"
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 19c-1.5 0-3-1-3-3 0-1.7 1.3-3 3-3s3 1.3 3 3c0 2.5-3 5-6 6"/>
-          <path d="M9.5 9.5l8-8a2.1 2.1 0 0 1 3 3l-8 8"/>
+        {/* simple pen: diagonal line + nib dot */}
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+          <line x1="11" y1="2" x2="3" y2="10"/>
+          <circle cx="2.5" cy="11" r="1.5" fill="currentColor" stroke="none"/>
         </svg>
       </button>
 
@@ -606,9 +607,9 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
         }}
         title="Eraser"
       >
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M20 20H7L3 16l12-12 5 5-5 5"/>
-          <path d="M6.7 10.3L3 14"/>
+        {/* simple eraser: small filled rectangle */}
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="5" width="10" height="6" rx="1.5"/>
         </svg>
       </button>
 
@@ -656,7 +657,7 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
         <button
           onPointerDown={e => { e.stopPropagation(); setShowPalette(p => !p); }}
           style={{
-            ...pillBtnStyle,
+            ...pillBtnStyle(dark),
             background: color,
             border: '2px solid rgba(255,255,255,0.7)',
             boxShadow: '0 0 0 1px rgba(0,0,0,0.2), 0 2px 8px rgba(0,0,0,0.2)',
@@ -806,8 +807,16 @@ function DrawingTitleEditor({ title, onRename }) {
 
   return (
     <div
-      onClick={() => setEditing(true)}
-      style={{ ...titleStyle, cursor: 'text', userSelect: 'none' }}
+      onPointerDown={e => { e.stopPropagation(); setEditing(true); }}
+      style={{
+        ...titleStyle,
+        cursor: 'text',
+        userSelect: 'none',
+        borderBottom: '1px solid transparent',
+        transition: 'border-color 0.15s',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.borderBottomColor = 'var(--dl-accent)'; }}
+      onMouseLeave={e => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
       title="Click to rename"
     >
       {title || 'Untitled'}
