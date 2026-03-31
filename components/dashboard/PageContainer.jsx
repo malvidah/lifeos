@@ -168,6 +168,13 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     if (e.pointerType !== 'mouse') return;
     if (e.button !== 0) return;
     if (isInsideHorizontalScroll(e.target, outerRef.current)) return;
+    // Don't capture pointer for interactive element clicks.
+    // setPointerCapture redirects subsequent pointer events to the outer div,
+    // which on trackpads causes pointerleave to fire on the clicked element
+    // mid-press (micro-movement under physical click pressure), making the
+    // click miss its target or require two presses. Swipes always start from
+    // non-interactive areas so skipping capture here doesn't break swipe nav.
+    if (e.target.closest('button, a, input, textarea, select, [role="button"], [role="switch"], [role="checkbox"], [role="tab"]')) return;
     outerRef.current?.setPointerCapture(e.pointerId);
     pointerRef.current = { x: e.clientX, y: e.clientY };
   }, []);
