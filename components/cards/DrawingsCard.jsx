@@ -218,6 +218,36 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
     return () => ro.disconnect();
   }, []);
 
+  // Global pointermove — tracks pointer across whole page so drawing never drops
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!isDrawing.current || !curStroke.current) return;
+      if (e.pointerType === 'touch' && activePen.current) return;
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      // Update cursor
+      const el = cursorRef.current;
+      if (el) {
+        const sz = sizeRef.current;
+        el.style.display = 'block';
+        el.style.width = sz + 'px';
+        el.style.height = sz + 'px';
+        el.style.transform = `translate(${x - sz / 2}px, ${y - sz / 2}px)`;
+      }
+
+      curStroke.current.points.push({ x, y, p: e.pressure ?? 0.5 });
+      const { w, h } = logSizeRef.current;
+      const ctx = canvas.getContext('2d');
+      redrawCanvas(ctx, strokesRef.current, curStroke.current, w, h, DPR());
+    };
+    window.addEventListener('pointermove', onMove);
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
+
   // Global pointerup/cancel fallback — ensures stroke always commits even if
   // the pointer leaves the canvas or the browser doesn't fire onPointerUp
   useEffect(() => {
@@ -282,10 +312,12 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
   };
 
   const onPointerDown = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     if (e.pointerType === 'touch' && activePen.current) return;
     if (e.pointerType === 'pen') activePen.current = true;
 
-    e.target.setPointerCapture(e.pointerId);
+    try { e.target.setPointerCapture(e.pointerId); } catch (_) {}
     const canvas = canvasRef.current;
     const pos = getLogicalPos(e, canvas);
     isDrawing.current = true;
@@ -340,12 +372,11 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
   };
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', overflow: 'hidden', borderRadius: 6 }}>
+    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', overflow: 'hidden', borderRadius: 6, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}>
       <canvas
         ref={canvasRef}
-        style={{ display: 'block', cursor: 'none', touchAction: 'none' }}
+        style={{ display: 'block', cursor: 'none', touchAction: 'none', userSelect: 'none' }}
         onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
         onPointerLeave={onPointerLeave}
       />
       {/* Custom cursor circle */}
