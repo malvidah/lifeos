@@ -190,7 +190,15 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
   useEffect(() => { toolRef.current = tool; }, [tool]);
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { sizeRef.current = size; }, [size]);
-  useEffect(() => { strokesRef.current = strokes; }, [strokes]);
+  useEffect(() => {
+    strokesRef.current = strokes;
+    // Redraw whenever strokes prop changes (e.g. loading a saved drawing)
+    const canvas = canvasRef.current;
+    const { w, h } = logSizeRef.current;
+    if (!canvas || w === 0 || h === 0) return;
+    const ctx = canvas.getContext('2d');
+    redrawCanvas(ctx, strokes, null, w, h, DPR());
+  }, [strokes]);
 
   // Expose canvas + logSize for thumbnail generation
   const onStrokesChangeRef = useRef(onStrokesChange);
