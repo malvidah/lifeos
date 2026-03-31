@@ -28,6 +28,7 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
   const [calendarsList,setCalendarsList]=useState(null); // null=loading, []|[...]=loaded
   const [extraCalendars,setExtraCalendars]=useState([]); // [{ id, summary, color }]
   const [calSaving,setCalSaving]=useState(false);
+  const [calExpanded,setCalExpanded]=useState(false);
 
   const ref=useRef(null);
   const user=session?.user;
@@ -366,22 +367,38 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           {divider}
           <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Calendar</div>
 
-          {/* Google Calendar — always connected; shows calendar picker below */}
+          {/* Google Calendar — always connected; expandable calendar picker */}
           <div style={row}>
-            <div style={{display:'flex',alignItems:'center',gap:8,paddingTop:1,marginBottom:6}}>
-              <span style={{fontFamily:mono,fontSize:F.sm,letterSpacing:'0.04em',textTransform:'uppercase',color:'var(--dl-highlight)',flexShrink:0}}>
-                Google
-              </span>
-              <div style={{marginLeft:'auto',flexShrink:0,display:'flex',alignItems:'center',gap:6}}>
-                {calSaving && <span style={{fontFamily:mono,fontSize:10,color:'var(--dl-middle)'}}>saving…</span>}
-                <span style={{fontFamily:mono,fontSize:F.sm,color:'var(--dl-green)'}}>✓</span>
-              </div>
-            </div>
-            {calendarsList === null ? (
-              <div style={{fontFamily:mono,fontSize:10,color:'var(--dl-middle)',paddingBottom:2}}>Loading calendars…</div>
-            ) : calendarsList.length === 0 ? null : (
-              <div style={{display:'flex',flexDirection:'column',gap:1}}>
-                {calendarsList.map(cal => {
+            <IntegrationRow
+              label="Google"
+              connected={true}
+              onToggleOn={()=>{}}
+              onToggleOff={()=>{}}
+            />
+            {/* "Select calendars" expander */}
+            <button
+              onClick={()=>{setCalExpanded(o=>!o);}}
+              style={{
+                display:'flex',alignItems:'center',gap:4,marginTop:5,
+                background:'none',border:'none',cursor:'pointer',padding:0,
+                fontFamily:mono,fontSize:'10px',letterSpacing:'0.04em',
+                color:'var(--dl-middle)',textTransform:'uppercase',
+              }}
+              onMouseEnter={e=>e.currentTarget.style.color='var(--dl-highlight)'}
+              onMouseLeave={e=>e.currentTarget.style.color='var(--dl-middle)'}
+            >
+              <span style={{transition:'transform 0.15s',display:'inline-block',transform:calExpanded?'rotate(90deg)':'rotate(0deg)'}}>›</span>
+              {extraCalendars.length > 0
+                ? `${extraCalendars.length + 1} calendar${extraCalendars.length > 0 ? 's' : ''} syncing`
+                : 'Select calendars'}
+              {calSaving && <span style={{opacity:0.5}}> · saving…</span>}
+            </button>
+            {/* Expanded calendar list */}
+            {calExpanded && (
+              <div style={{marginTop:6,display:'flex',flexDirection:'column',gap:1}}>
+                {calendarsList === null ? (
+                  <div style={{fontFamily:mono,fontSize:10,color:'var(--dl-middle)',padding:'4px 0'}}>Loading…</div>
+                ) : calendarsList.map(cal => {
                   const isEnabled = cal.primary || extraCalendars.some(e => e.id === cal.id);
                   return (
                     <button key={cal.id} onClick={()=>toggleCalendar(cal)} disabled={cal.primary}
