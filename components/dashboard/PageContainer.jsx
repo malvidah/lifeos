@@ -202,20 +202,23 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   const handlePointerCancel = useCallback(() => { pointerRef.current = null; }, []);
 
   // ── Trackpad two-finger swipe (wheel events) ──────────────────────────────
-  // Accumulate deltaX until ≥60px to navigate, then hard-lock for 400ms so
-  // MacBook momentum events can't both block the second swipe AND prevent the
-  // idle timer from resetting. Previously the idle timer kept getting pushed
-  // out by momentum events, so hasNavigated stayed true until the user happened
-  // to move the cursor over a blocked area that filtered the momentum events.
-  // Now: navigate → reset accumulator immediately → ignore all wheel events for
-  // 400ms (covers the 280ms page animation + a small buffer) → unlock.
+  // Two-state machine:
+  //   READY  — accumulate deltaX; navigate when ≥60px threshold is crossed.
+  //   LOCKED — after a navigation, stay locked while momentum events keep
+  //            arriving; unlock only after 200ms of silence so leftover
+  //            inertia can never push accDeltaX past the threshold again.
+  // This avoids both the "cursor must move" bug (old idle-timer approach let
+  // momentum keep resetting hasNavigated) and the "double-page" bug (fixed
+  // lockout expired while momentum was still active).
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
-    let locked    = false;  // true for 400ms after each navigation
+    let locked    = false;
     let accDeltaX = 0;
     let idleTimer = null;
+
+    const clearIdle = () => { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } };
 
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
@@ -223,34 +226,39 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       if (isInsideHorizontalScroll(e.target, outer)) return;
       if (e.target.closest('[data-no-page-swipe]')) return;
 
-      if (locked) return;  // absorb momentum from the previous gesture
+      if (locked) {
+        // Momentum events extend the unlock timer; we stay locked until
+        // 200ms after the last event so they can't cause a second navigation.
+        clearIdle();
+        idleTimer = setTimeout(() => { idleTimer = null; locked = false; accDeltaX = 0; }, 200);
+        return;
+      }
 
       accDeltaX += e.deltaX;
 
-      // Reset accumulator if the gesture pauses (aborted swipe)
-      if (idleTimer) clearTimeout(idleTimer);
+      // Idle timer resets the accumulator if the gesture pauses without reaching threshold
+      clearIdle();
       idleTimer = setTimeout(() => { idleTimer = null; accDeltaX = 0; }, 200);
 
       if (Math.abs(accDeltaX) < 60) return;
 
-      // Navigate — lock immediately so momentum can't interfere
       const idx    = currentIdxRef.current;
       const total  = pageCountRef.current;
       const newIdx = accDeltaX > 0 ? Math.min(idx + 1, total - 1) : Math.max(idx - 1, 0);
+
+      clearIdle();
       accDeltaX = 0;
-      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+
       if (newIdx !== idx) {
         locked = true;
         onPageChangeRef.current?.(newIdx);
-        setTimeout(() => { locked = false; }, 400);
+        // Seed the unlock timer; momentum events will keep extending it
+        idleTimer = setTimeout(() => { idleTimer = null; locked = false; }, 200);
       }
     };
 
     outer.addEventListener('wheel', onWheel, { passive: true });
-    return () => {
-      outer.removeEventListener('wheel', onWheel);
-      if (idleTimer) clearTimeout(idleTimer);
-    };
+    return () => { outer.removeEventListener('wheel', onWheel); clearIdle(); };
   }, []);
 
   // ── Arrow key navigation ──────────────────────────────────────────────────
