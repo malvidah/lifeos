@@ -1075,7 +1075,6 @@ function DashboardInner() {
               </div>
               <button
                 onClick={() => setChatOpenCount(c => c + 1)}
-                onMouseEnter={() => setChatOpenCount(c => c + 1)}
                 title="Ask AI"
                 style={{
                   pointerEvents: "auto",
