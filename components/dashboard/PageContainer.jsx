@@ -1,24 +1,71 @@
 "use client";
-import { useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { useLayoutEffect, useRef, useCallback, useEffect } from 'react';
 
 /**
  * PageContainer — horizontally paginated container using CSS transforms.
  *
  * Layout:
- *   outer (overflow:hidden, flex:1)   ← must NEVER scroll
+ *   outer (overflow:clip, flex:1, touch-action:pan-y)
  *     track (flex, width = n*100%, translateX drives paging)
- *       page (width = 100%/n, overflow-y:auto)
+ *       page (width = 100%/n, overflow-y:auto, touch-action:pan-y)
  *
- * Swipe navigation:
- *   Touch: imperative listeners with { passive: false } so we can claim
- *     horizontal gestures via preventDefault() before the browser does.
- *   Mouse: pointer events with setPointerCapture + pointermove preventDefault
- *     to block native text-selection drag that would cancel the gesture.
+ * WHY overflow:clip NOT overflow:hidden:
+ * overflow:hidden creates a scroll container the browser can still scroll
+ * programmatically (e.g. scrollIntoView from a card initialising its canvas).
+ * overflow:clip doesn't create a scroll container at all, so that's impossible.
  *
- * Animation is a CSS transition on the track's transform.
- * On first mount the transition is briefly suppressed via useLayoutEffect
- * so there's no slide-in effect.
+ * SWIPE STRATEGY:
+ *
+ * Three input paths — touch, mouse pointer, and trackpad wheel — each handled
+ * independently. All three share two context guards:
+ *
+ *   1. isInsideHorizontalScroll — if the gesture started inside a card that
+ *      can scroll horizontally (e.g. the Habits date picker), we let the card
+ *      handle it and do NOT change pages.
+ *
+ *   2. hasTextSelection — if the user has highlighted text (e.g. in Notes),
+ *      we treat the gesture as text-selection intent and do NOT change pages.
+ *
+ * TOUCH (mobile):
+ *   touch-action:pan-y lets the browser own vertical scrolling; we get
+ *   horizontal events. Fully passive listeners — no preventDefault needed.
+ *   Decide at touchend: enough horizontal distance and not too vertical.
+ *
+ * POINTER/MOUSE (desktop click-drag):
+ *   setPointerCapture ensures pointerup fires even if cursor leaves the element.
+ *   Decide at pointerup.
+ *
+ * WHEEL (trackpad two-finger swipe):
+ *   Trackpad horizontal swipes fire `wheel` events (deltaX), NOT touch/pointer.
+ *   A single physical swipe produces a burst of events; we navigate once and
+ *   then ignore further wheel events for 500ms (matching the CSS transition).
+ *
+ * Animation: CSS transition on the track's transform, suppressed on first mount
+ * via useLayoutEffect so there's no slide-in effect.
  */
+
+/**
+ * Returns true if `el` (or any ancestor up to `boundary`) is a container that
+ * can actually scroll horizontally — i.e. overflowX is scroll/auto AND the
+ * content is wider than the box. This guards against navigating pages when
+ * the user is interacting with a horizontally scrollable card region.
+ */
+function isInsideHorizontalScroll(el, boundary) {
+  while (el && el !== boundary) {
+    const ox = window.getComputedStyle(el).overflowX;
+    if ((ox === 'scroll' || ox === 'auto') && el.scrollWidth > el.clientWidth) {
+      return true;
+    }
+    el = el.parentElement;
+  }
+  return false;
+}
+
+/** Returns true if the user currently has text highlighted. */
+function hasTextSelection() {
+  return !!window.getSelection?.()?.toString();
+}
+
 export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange }) {
   const outerRef   = useRef(null);
   const trackRef   = useRef(null);
@@ -26,21 +73,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
 
   const TRANSITION = 'transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)';
 
-  // Lock the outer container's scroll position to (0,0) at all times.
-  useEffect(() => {
-    const outer = outerRef.current;
-    if (!outer) return;
-    const lock = () => {
-      if (outer.scrollLeft !== 0) outer.scrollLeft = 0;
-      if (outer.scrollTop  !== 0) outer.scrollTop  = 0;
-    };
-    outer.addEventListener('scroll', lock, { passive: true });
-    return () => outer.removeEventListener('scroll', lock);
-  }, []);
-
   // Suppress transition on first mount so there's no slide-in animation.
-  // useLayoutEffect runs before paint, so the browser never sees the initial
-  // transition. After two rAFs (one full frame) we restore it.
   useLayoutEffect(() => {
     const track = trackRef.current;
     if (!track || mountedRef.current) return;
@@ -48,9 +81,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     track.style.transition = 'none';
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (trackRef.current) {
-          trackRef.current.style.transition = TRANSITION;
-        }
+        if (trackRef.current) trackRef.current.style.transition = TRANSITION;
       });
     });
   }, []);
@@ -58,7 +89,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   const n   = pages.length || 1;
   const pct = currentPageIdx * (100 / n);
 
-  // ── Stable refs for changing values ──────────────────────────────────────
+  // ── Stable refs so effects never need to re-mount ────────────────────────
   const onPageChangeRef = useRef(onPageChange);
   onPageChangeRef.current = onPageChange;
   const currentIdxRef = useRef(currentPageIdx);
@@ -66,7 +97,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   const pageCountRef = useRef(n);
   pageCountRef.current = n;
 
-  // ── Touch swipe (mobile) ─────────────────────────────────────────────────
+  // ── Touch swipe (mobile) — fully passive, decide at touchend ─────────────
   const touchRef = useRef(null);
 
   useEffect(() => {
@@ -75,28 +106,10 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
 
     const onTouchStart = (e) => {
       if (e.touches.length !== 1) return;
+      // Don't swipe pages if the touch started inside a horizontally scrollable card
+      if (isInsideHorizontalScroll(e.target, outer)) return;
       const t = e.touches[0];
-      touchRef.current = { x: t.clientX, y: t.clientY, claimed: false };
-    };
-
-    const onTouchMove = (e) => {
-      if (!touchRef.current) return;
-      const t = e.touches[0];
-      const dx = t.clientX - touchRef.current.x;
-      const dy = t.clientY - touchRef.current.y;
-
-      if (touchRef.current.claimed) {
-        e.preventDefault();
-        return;
-      }
-      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
-        touchRef.current = null;
-        return;
-      }
-      if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
-        e.preventDefault();
-        touchRef.current.claimed = true;
-      }
+      touchRef.current = { x: t.clientX, y: t.clientY };
     };
 
     const onTouchEnd = (e) => {
@@ -104,12 +117,11 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       const t = e.changedTouches[0];
       const dx = t.clientX - touchRef.current.x;
       const dy = t.clientY - touchRef.current.y;
-      const wasClaimed = touchRef.current.claimed;
       touchRef.current = null;
-      if (!wasClaimed) return;
-      if (Math.abs(dx) < 40) return;
-      if (Math.abs(dy) > Math.abs(dx) * 0.75) return;
-      const idx = currentIdxRef.current;
+      if (Math.abs(dx) < 40) return;                     // too short
+      if (Math.abs(dy) > Math.abs(dx) * 0.75) return;   // too vertical
+      if (hasTextSelection()) return;                     // user is selecting text
+      const idx   = currentIdxRef.current;
       const total = pageCountRef.current;
       const newIdx = dx < 0
         ? Math.min(idx + 1, total - 1)
@@ -117,38 +129,29 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       if (newIdx !== idx) onPageChangeRef.current?.(newIdx);
     };
 
+    const onTouchCancel = () => { touchRef.current = null; };
+
     outer.addEventListener('touchstart', onTouchStart, { passive: true });
-    outer.addEventListener('touchmove',  onTouchMove,  { passive: false });
     outer.addEventListener('touchend',   onTouchEnd,   { passive: true });
+    outer.addEventListener('touchcancel',onTouchCancel,{ passive: true });
 
     return () => {
       outer.removeEventListener('touchstart', onTouchStart);
-      outer.removeEventListener('touchmove',  onTouchMove);
       outer.removeEventListener('touchend',   onTouchEnd);
+      outer.removeEventListener('touchcancel',onTouchCancel);
     };
   }, []);
 
-  // ── Pointer swipe (desktop mouse) ────────────────────────────────────────
+  // ── Pointer swipe (desktop mouse click-drag) ─────────────────────────────
   const pointerRef = useRef(null);
 
   const handlePointerDown = useCallback((e) => {
     if (e.pointerType !== 'mouse') return;
     if (e.button !== 0) return;
+    // Don't track drags that start inside a horizontally scrollable card
+    if (isInsideHorizontalScroll(e.target, outerRef.current)) return;
     outerRef.current?.setPointerCapture(e.pointerId);
-    pointerRef.current = { x: e.clientX, y: e.clientY, dragging: false };
-  }, []);
-
-  const handlePointerMove = useCallback((e) => {
-    if (!pointerRef.current) return;
-    const dx = e.clientX - pointerRef.current.x;
-    // Once horizontal movement is detected, prevent native drag/selection
-    if (!pointerRef.current.dragging && Math.abs(dx) > 10) {
-      pointerRef.current.dragging = true;
-      e.preventDefault();
-    }
-    if (pointerRef.current.dragging) {
-      e.preventDefault();
-    }
+    pointerRef.current = { x: e.clientX, y: e.clientY };
   }, []);
 
   const handlePointerUp = useCallback((e) => {
@@ -158,7 +161,8 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     pointerRef.current = null;
     if (Math.abs(dx) < 40) return;
     if (Math.abs(dy) > Math.abs(dx) * 0.75) return;
-    const idx = currentIdxRef.current;
+    if (hasTextSelection()) return;                      // user dragged to select text
+    const idx   = currentIdxRef.current;
     const total = pageCountRef.current;
     const newIdx = dx < 0
       ? Math.min(idx + 1, total - 1)
@@ -170,16 +174,50 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     pointerRef.current = null;
   }, []);
 
+  // ── Trackpad two-finger swipe (wheel events) ─────────────────────────────
+  // Trackpad horizontal swipes fire `wheel` events with deltaX — they are NOT
+  // touch or pointer events. A single physical swipe produces a burst of events
+  // over ~200-400ms; we navigate on the first qualifying event and suppress the
+  // rest for 500ms so the page doesn't skip multiple steps.
+  useEffect(() => {
+    const outer = outerRef.current;
+    if (!outer) return;
+
+    let cooldown = false;
+
+    const onWheel = (e) => {
+      // Only handle gestures that are more horizontal than vertical
+      if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+      if (Math.abs(e.deltaX) < 10) return;  // ignore tiny nudges
+      // If the wheel event came from inside a horizontally scrollable card,
+      // let that card consume the scroll rather than changing pages
+      if (isInsideHorizontalScroll(e.target, outer)) return;
+      // One navigation per swipe burst
+      if (cooldown) return;
+      cooldown = true;
+      setTimeout(() => { cooldown = false; }, 500);
+
+      const idx   = currentIdxRef.current;
+      const total = pageCountRef.current;
+      const newIdx = e.deltaX > 0
+        ? Math.min(idx + 1, total - 1)
+        : Math.max(idx - 1, 0);
+      if (newIdx !== idx) onPageChangeRef.current?.(newIdx);
+    };
+
+    outer.addEventListener('wheel', onWheel, { passive: true });
+    return () => outer.removeEventListener('wheel', onWheel);
+  }, []);
+
   return (
     <div
       ref={outerRef}
       onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       style={{
         position: 'relative',
-        overflow: 'hidden',
+        overflow: 'clip',
         flex: 1,
         touchAction: 'pan-y',
       }}
@@ -204,6 +242,8 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
               overflowX: 'hidden',
               display: 'flex',
               flexDirection: 'column',
+              touchAction: 'pan-y',  // explicit on each page so child scroll
+                                     // containers don't override the outer constraint
             }}
           >
             {renderPage(page, i)}
