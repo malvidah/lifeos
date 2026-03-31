@@ -21,9 +21,7 @@ const PALETTE = [
 ];
 
 const DEFAULT_COLOR = '#1c1b18';
-const MIN_SIZE = 1;
-const MAX_SIZE = 28;
-const DEFAULT_SIZE = 5;
+const DEFAULT_SIZE = 8; // matches SIZE_PRESETS medium
 
 const DPR = () =>
   typeof window !== 'undefined' ? Math.min(window.devicePixelRatio || 1, 3) : 1;
@@ -448,42 +446,21 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
   );
 }
 
-// ── Vertical size slider (Procreate-style, drag up = bigger) ──────────────────
+// ── Size presets ───────────────────────────────────────────────────────────────
+const SIZE_PRESETS = [
+  { label: 'S', value: 3,  dot: 4  },
+  { label: 'M', value: 8,  dot: 9  },
+  { label: 'L', value: 20, dot: 16 },
+];
+
+// ── Left controls: undo/redo, size toggles, clear ─────────────────────────────
 function LeftControls({ onUndo, onRedo, onClear, sizeRef }) {
-  const [size, setSize] = useState(DEFAULT_SIZE);
-  const sliderTrackRef = useRef(null);
-  const dragRef = useRef(null);
+  const [sizeIdx, setSizeIdx] = useState(1); // default: Medium
 
-  // Keep sizeRef in sync
-  useEffect(() => { sizeRef.current = size; }, [size, sizeRef]);
-
-  const TRACK_H = 160;
-
-  const sizeToFraction = (s) => (s - MIN_SIZE) / (MAX_SIZE - MIN_SIZE);
-  const fractionToSize = (f) => Math.round(MIN_SIZE + f * (MAX_SIZE - MIN_SIZE));
-
-  const onSliderPointerDown = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.target.setPointerCapture(e.pointerId);
-    const rect = sliderTrackRef.current.getBoundingClientRect();
-    dragRef.current = { startY: e.clientY, startFrac: sizeToFraction(size), trackH: rect.height };
-  };
-
-  const onSliderPointerMove = (e) => {
-    if (!dragRef.current) return;
-    const { startY, startFrac, trackH } = dragRef.current;
-    const dy = startY - e.clientY; // drag up = bigger
-    const delta = dy / trackH;
-    const newFrac = Math.max(0, Math.min(1, startFrac + delta));
-    const newSize = fractionToSize(newFrac);
-    setSize(newSize);
-  };
-
-  const onSliderPointerUp = () => { dragRef.current = null; };
-
-  const frac = sizeToFraction(size);
-  const fillH = Math.round(frac * TRACK_H);
+  // Keep sizeRef in sync with selected preset
+  useEffect(() => {
+    sizeRef.current = SIZE_PRESETS[sizeIdx].value;
+  }, [sizeIdx, sizeRef]);
 
   return (
     <div style={{
@@ -519,51 +496,47 @@ function LeftControls({ onUndo, onRedo, onClear, sizeRef }) {
         </svg>
       </button>
 
-      {/* Vertical size slider pill */}
-      <div
-        ref={sliderTrackRef}
-        onPointerDown={onSliderPointerDown}
-        onPointerMove={onSliderPointerMove}
-        onPointerUp={onSliderPointerUp}
-        onPointerCancel={onSliderPointerUp}
-        style={{
-          width: 28,
-          height: TRACK_H,
-          borderRadius: 14,
-          background: 'rgba(240,238,234,0.92)',
-          backdropFilter: 'blur(8px)',
-          WebkitBackdropFilter: 'blur(8px)',
-          border: '1px solid rgba(0,0,0,0.10)',
-          cursor: 'ns-resize',
-          position: 'relative',
-          overflow: 'hidden',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-          touchAction: 'none',
-        }}
-        title={`Size: ${size}px`}
-      >
-        {/* Fill from bottom */}
-        <div style={{
-          position: 'absolute',
-          bottom: 0,
-          left: 0,
-          right: 0,
-          height: fillH,
-          background: 'rgba(0,0,0,0.18)',
-          transition: 'height 0.05s',
-        }} />
-        {/* Grip dot */}
-        <div style={{
-          position: 'absolute',
-          bottom: fillH - 5,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: Math.max(4, Math.min(20, size * 0.9)),
-          height: Math.max(4, Math.min(20, size * 0.9)),
-          borderRadius: '50%',
-          background: 'rgba(0,0,0,0.35)',
-          transition: 'bottom 0.05s, width 0.05s, height 0.05s',
-        }} />
+      {/* Size toggles: S / M / L */}
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        background: 'rgba(240,238,234,0.92)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
+        border: '1px solid rgba(0,0,0,0.10)',
+        borderRadius: 14,
+        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        overflow: 'hidden',
+        width: 28,
+      }}>
+        {SIZE_PRESETS.map((preset, i) => (
+          <button
+            key={preset.label}
+            onPointerDown={e => { e.stopPropagation(); setSizeIdx(i); }}
+            title={`${preset.label} (${preset.value}px)`}
+            style={{
+              width: 28,
+              height: 32,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: sizeIdx === i ? 'rgba(0,0,0,0.12)' : 'transparent',
+              border: 'none',
+              borderBottom: i < SIZE_PRESETS.length - 1 ? '1px solid rgba(0,0,0,0.08)' : 'none',
+              cursor: 'pointer',
+              padding: 0,
+              outline: 'none',
+            }}
+          >
+            <div style={{
+              width: preset.dot,
+              height: preset.dot,
+              borderRadius: '50%',
+              background: sizeIdx === i ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)',
+            }} />
+          </button>
+        ))}
       </div>
 
       {/* Clear */}
