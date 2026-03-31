@@ -91,6 +91,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     const onTouchStart = (e) => {
       if (e.touches.length !== 1) return;
       if (isInsideHorizontalScroll(e.target, outer)) return;
+      if (e.target.closest('[data-no-page-swipe]')) return;
       const t = e.touches[0];
       touchRef.current = { x: t.clientX, y: t.clientY, dx: 0, horizontal: false };
     };
@@ -196,32 +197,64 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   const handlePointerCancel = useCallback(() => { pointerRef.current = null; }, []);
 
   // ── Trackpad two-finger swipe (wheel events) ──────────────────────────────
+  // Accumulate deltaX across events so a single gesture must reach ≥60px
+  // before navigating — prevents accidental triggers from small scrolls.
+  // After 200ms of silence the accumulator resets, allowing the next gesture.
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
     let hasNavigated = false;
+    let accDeltaX    = 0;
     let idleTimer    = null;
 
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-      if (Math.abs(e.deltaX) < 10) return;
+      if (Math.abs(e.deltaX) < 3) return;
       if (isInsideHorizontalScroll(e.target, outer)) return;
+      if (e.target.closest('[data-no-page-swipe]')) return;
+
+      accDeltaX += e.deltaX;
 
       if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => { idleTimer = null; hasNavigated = false; }, 350);
+      idleTimer = setTimeout(() => {
+        idleTimer    = null;
+        accDeltaX    = 0;
+        hasNavigated = false;
+      }, 200);
 
       if (hasNavigated) return;
-      hasNavigated = true;
+      if (Math.abs(accDeltaX) < 60) return;
 
-      const idx   = currentIdxRef.current;
-      const total = pageCountRef.current;
-      const newIdx = e.deltaX > 0 ? Math.min(idx + 1, total - 1) : Math.max(idx - 1, 0);
+      hasNavigated = true;
+      const idx    = currentIdxRef.current;
+      const total  = pageCountRef.current;
+      const newIdx = accDeltaX > 0 ? Math.min(idx + 1, total - 1) : Math.max(idx - 1, 0);
       if (newIdx !== idx) onPageChangeRef.current?.(newIdx);
     };
 
     outer.addEventListener('wheel', onWheel, { passive: true });
     return () => { outer.removeEventListener('wheel', onWheel); if (idleTimer) clearTimeout(idleTimer); };
+  }, []);
+
+  // ── Arrow key navigation ──────────────────────────────────────────────────
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      // Don't steal keys from text inputs
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.isContentEditable) return;
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        const newIdx = Math.max(0, currentIdxRef.current - 1);
+        if (newIdx !== currentIdxRef.current) onPageChangeRef.current?.(newIdx);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        const newIdx = Math.min(pageCountRef.current - 1, currentIdxRef.current + 1);
+        if (newIdx !== currentIdxRef.current) onPageChangeRef.current?.(newIdx);
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
   }, []);
 
   return (

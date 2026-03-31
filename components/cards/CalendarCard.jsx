@@ -363,6 +363,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
         {/* Main scrollable calendar pane */}
         <div
           ref={containerRef}
+          data-no-page-swipe="true"
           style={{ flex: 1, overflow: 'hidden', position: 'relative',
                    cursor: isDragging.current ? 'grabbing' : 'grab' }}
           onMouseDown={handleMouseDown}
@@ -675,7 +676,9 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
       </div>
 
       {/* ── Day columns with events ──────────────────────────────────────── */}
-      {!collapsed&&<div style={{
+      {!collapsed&&<div
+        data-no-page-swipe="true"
+        style={{
         overflow:"hidden", position:"relative",
         touchAction:"none", cursor:"grab",
         padding:"8px 0 12px",
