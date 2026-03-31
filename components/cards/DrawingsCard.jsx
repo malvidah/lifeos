@@ -696,74 +696,155 @@ function RightToolbar({ tool, setTool, color, setColor, onShare }) {
   );
 }
 
-// ── Drawing selector strip ─────────────────────────────────────────────────────
+// ── Drawing tab strip ─────────────────────────────────────────────────────────
 function DrawingStrip({ drawings, selectedId, onSelect, onCreate, isLoading }) {
   return (
     <div style={{
       display: 'flex',
-      gap: 6,
+      gap: 4,
       padding: '6px 0 4px 0',
       overflowX: 'auto',
       alignItems: 'center',
-      minHeight: 52,
+      minHeight: 40,
       flexShrink: 0,
     }}>
+      {/* New drawing button */}
       <button
         onClick={onCreate}
         style={{
           flexShrink: 0,
-          width: 40,
-          height: 40,
+          height: 30,
+          width: 30,
           borderRadius: 6,
-          border: '1.5px dashed rgba(0,0,0,0.25)',
+          border: '1.5px dashed rgba(0,0,0,0.22)',
           background: 'transparent',
           cursor: 'pointer',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 20,
-          color: 'rgba(0,0,0,0.4)',
-          transition: 'background 0.15s',
+          fontSize: 18,
+          color: 'rgba(0,0,0,0.35)',
         }}
         title="New drawing"
       >+</button>
 
       {isLoading && (
-        <span style={{ fontSize: F.xs, color: 'var(--dl-middle)', fontFamily: mono }}>loading…</span>
+        <span style={{ fontSize: F.xs, color: 'var(--dl-middle)', fontFamily: mono, padding: '0 4px' }}>loading…</span>
       )}
 
-      {drawings.map(d => (
-        <button
-          key={d.id}
-          onClick={() => onSelect(d.id)}
-          style={{
-            flexShrink: 0,
-            width: 60,
-            height: 40,
-            borderRadius: 6,
-            border: selectedId === d.id ? '2px solid var(--dl-accent)' : '1.5px solid rgba(0,0,0,0.15)',
-            background: '#fff',
-            cursor: 'pointer',
-            overflow: 'hidden',
-            padding: 0,
-            position: 'relative',
-          }}
-          title={d.title}
-        >
-          {d.thumbnail
-            ? <img src={d.thumbnail} alt={d.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <div style={{ width: '100%', height: '100%', background: '#f5f4f0' }} />
-          }
-        </button>
-      ))}
+      {drawings.map(d => {
+        const selected = selectedId === d.id;
+        return (
+          <button
+            key={d.id}
+            onClick={() => onSelect(d.id)}
+            title={d.title}
+            style={{
+              flexShrink: 0,
+              height: 30,
+              maxWidth: 140,
+              padding: '0 10px',
+              borderRadius: 6,
+              border: selected ? '2px solid var(--dl-accent)' : '1.5px solid rgba(0,0,0,0.13)',
+              background: selected ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.03)',
+              cursor: 'pointer',
+              fontFamily: mono,
+              fontSize: F.xs,
+              fontWeight: selected ? 600 : 400,
+              color: selected ? 'var(--dl-dark)' : 'var(--dl-middle)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              transition: 'border-color 0.15s, background 0.15s',
+            }}
+          >
+            {d.title || 'Untitled'}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Inline title editor ────────────────────────────────────────────────────────
+function DrawingTitleEditor({ title, onRename }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(title);
+  const inputRef = useRef(null);
+
+  // Sync draft when title prop changes (e.g. switching drawings)
+  useEffect(() => { setDraft(title); setEditing(false); }, [title]);
+
+  const commit = () => {
+    const trimmed = draft.trim() || 'Untitled';
+    setDraft(trimmed);
+    setEditing(false);
+    if (trimmed !== title) onRename(trimmed);
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { setDraft(title); setEditing(false); }
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={onKeyDown}
+        autoFocus
+        style={{
+          width: '100%',
+          fontFamily: mono,
+          fontSize: F.sm,
+          fontWeight: 600,
+          color: 'var(--dl-dark)',
+          background: 'transparent',
+          border: 'none',
+          borderBottom: '1.5px solid var(--dl-accent)',
+          outline: 'none',
+          padding: '2px 0',
+          marginBottom: 6,
+        }}
+      />
+    );
+  }
+
+  return (
+    <div
+      onClick={() => setEditing(true)}
+      style={{
+        fontFamily: mono,
+        fontSize: F.sm,
+        fontWeight: 600,
+        color: 'var(--dl-dark)',
+        cursor: 'text',
+        padding: '2px 0',
+        marginBottom: 6,
+        userSelect: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+      }}
+      title="Click to rename"
+    >
+      {title || 'Untitled'}
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35, flexShrink: 0 }}>
+        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+      </svg>
     </div>
   );
 }
 
 // ── Main DrawingsCard ──────────────────────────────────────────────────────────
-export default function DrawingsCard({ token, userId }) {
+export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
   const [drawings, setDrawings] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
+  const [title, setTitle] = useState('Untitled');
   const [strokes, setStrokes] = useState([]);
   const [tool, setTool] = useState('pen');
   const [color, setColor] = useState(DEFAULT_COLOR);
@@ -772,6 +853,13 @@ export default function DrawingsCard({ token, userId }) {
   const selectedIdRef = useRef(selectedId);
   const lastCanvasRef = useRef(null); // for share/export
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  // Propagate drawing titles up so NoteContext can provide them for /d suggestions
+  const onDrawingNamesChangeRef = useRef(onDrawingNamesChange);
+  useEffect(() => { onDrawingNamesChangeRef.current = onDrawingNamesChange; }, [onDrawingNamesChange]);
+  useEffect(() => {
+    onDrawingNamesChangeRef.current?.(drawings.map(d => d.title || 'Untitled'));
+  }, [drawings]);
 
   const handleShare = async () => {
     const canvas = lastCanvasRef.current;
@@ -826,6 +914,7 @@ export default function DrawingsCard({ token, userId }) {
       const drawing = d.drawing;
       if (!drawing) return;
       setSelectedId(drawing.id);
+      setTitle(drawing.title ?? 'Untitled');
       setStrokes(drawing.strokes ?? []);
     } catch (e) {
       console.error('load drawing error', e);
@@ -841,12 +930,25 @@ export default function DrawingsCard({ token, userId }) {
       if (!drawing) return;
       setDrawings(prev => [drawing, ...prev]);
       setSelectedId(drawing.id);
+      setTitle(drawing.title ?? 'Untitled');
       setStrokes([]);
     } catch (e) {
       console.error('create drawing error', e);
       showToast('Failed to create drawing');
     }
   };
+
+  const handleRenameDrawing = useCallback(async (newTitle) => {
+    const id = selectedIdRef.current;
+    if (!id || !token) return;
+    setTitle(newTitle);
+    setDrawings(prev => prev.map(d => d.id === id ? { ...d, title: newTitle } : d));
+    try {
+      await api.patch('/api/drawings', { id, title: newTitle }, token);
+    } catch (e) {
+      console.error('rename drawing error', e);
+    }
+  }, [token]);
 
   const handleStrokesChange = useCallback((nextStrokes, canvas, logSize) => {
     setStrokes(nextStrokes);
@@ -879,6 +981,7 @@ export default function DrawingsCard({ token, userId }) {
         onCreate={createDrawing}
         isLoading={isLoading}
       />
+      <DrawingTitleEditor title={title} onRename={handleRenameDrawing} />
       <div style={{ position: 'relative', width: '100%', height: 400, flexShrink: 0 }}>
         {/* Right floating toolbar — sits over canvas */}
         <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onShare={handleShare} />

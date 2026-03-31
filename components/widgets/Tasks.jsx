@@ -86,7 +86,7 @@ export function injectTaskListStyles(accentHex, date) {
 export default function Tasks({ date, token, userId, taskFilter = "all", project }) {
   const { theme } = useTheme();
   const projectNames = useContext(ProjectNamesContext);
-  const { notes: noteNames } = useContext(NoteContext);
+  const { notes: noteNames, drawings: drawingNames } = useContext(NoteContext);
   const placeNames = useContext(PlaceNamesContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
 
@@ -354,6 +354,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         placeholder="Type a task, use / for commands"
         projectNames={projectNames}
         noteNames={noteNames}
+        drawingNames={drawingNames}
         placeNames={placeNames}
         textColor={"var(--dl-strong)"}
         mutedColor={"var(--dl-middle)"}

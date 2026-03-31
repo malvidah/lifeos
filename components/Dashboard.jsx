@@ -438,6 +438,7 @@ function DashboardInner() {
 
   // ── Note names for NoteContext — shared across Journal + Notes editors ──────
   const [allNoteNames, setAllNoteNames] = useState([]);
+  const [allDrawingNames, setAllDrawingNames] = useState([]);
 
   // ── Project recency tracking — update last_active when a project is selected ─
   const { updateProject } = useProjects(token);
@@ -637,14 +638,14 @@ function DashboardInner() {
     stravaConnected, journalMode, setJournalMode,
     goalsViewMode, setGoalsViewMode, habitFilter, setHabitFilter,
     taskFilter, setTaskFilter, startSync, endSync, onHealthChange, onScoresReady,
-    searchOpen, allNoteNames, setAllNoteNames,
+    searchOpen, allNoteNames, setAllNoteNames, setAllDrawingNames,
   }), [
     selected, setSelected, token, userId, projectFilter, selectProject,
     graphData, healthDots, events, setEvents, calView, setCalView,
     stravaConnected, journalMode, setJournalMode,
     goalsViewMode, setGoalsViewMode, habitFilter, setHabitFilter,
     taskFilter, setTaskFilter, startSync, endSync, onHealthChange, onScoresReady,
-    searchOpen, allNoteNames, setAllNoteNames,
+    searchOpen, allNoteNames, setAllNoteNames, setAllDrawingNames,
   ]); // eslint-disable-line
 
   // Current page's card IDs — used for dock active state
@@ -676,7 +677,7 @@ function DashboardInner() {
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
     <PlaceNamesContext.Provider value={allPlaceNames}>
-    <NoteContext.Provider value={{ notes: allNoteNames, onCreateNote: (name) => {
+    <NoteContext.Provider value={{ notes: allNoteNames, drawings: allDrawingNames, onCreateNote: (name) => {
       window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name } }));
     }}}>
     <ToastContainer/>

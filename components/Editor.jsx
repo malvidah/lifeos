@@ -144,6 +144,25 @@ const PlaceTagNode = Node.create({
   },
 });
 
+// DrawingTag: stored as {d:title}, rendered as lilac chip atom node.
+const DrawingTagNode = Node.create({
+  name: 'drawingTag', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() { return { name: { default: '' } }; },
+  parseHTML() {
+    return [{ tag: 'span[data-drawing-tag]', getAttrs: el => ({ name: el.getAttribute('data-drawing-tag') || '' }) }];
+  },
+  renderHTML({ node }) {
+    const name = node.attrs.name || '';
+    return ['span', {
+      'data-drawing-tag': name,
+      style: Object.entries({ ...CHIP_TOKENS.drawing, cursor: 'pointer', userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
+    }, '\uD83D\uDDBC\uFE0F ' + name];
+  },
+});
+
 // DateTag: stored as @YYYY-MM-DD, rendered as urgency-colored chip.
 const DateTagNode = Node.create({
   name: 'dateTag', group: 'inline', inline: true,
@@ -876,6 +895,7 @@ function SuggestionDropdown({ state, onSelect }) {
         const isExistingGoal     = item.startsWith('__goal__:');
         const isNewGoal          = item.startsWith('__create_goal__:');
         const isGoal             = isExistingGoal || isNewGoal;
+        const isDrawing          = item.startsWith('__drawing__:');
         const isCreate           = item.startsWith('__create__:') || isNewProject || isNewPlace || isNewGoal;
         const rawLabel           = isCmd ? item.slice(8)
                                  : isDate ? item.slice(20)
@@ -887,6 +907,7 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : isExistingPlace ? item.slice(10)
                                  : isNewGoal ? item.slice(16)
                                  : isExistingGoal ? item.slice(9)
+                                 : isDrawing ? item.slice(12)
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9);
         const dateStr            = isDate ? item.slice(9, 19) : null;
@@ -895,9 +916,10 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : isHabit ? `🎯 ${rawLabel}`
                                  : isRecurrence ? `↻ ${rawLabel}`
                                  : isDate ? rawLabel
+                                 : isDrawing ? `🖼️ ${rawLabel}`
                                  : isGoal && !isCreate ? `🏁 ${rawLabel.toUpperCase()}`
                                  : isCreate ? `+ Create "${rawLabel}"` : isProject ? rawLabel.toUpperCase() : isPlace ? `📍 ${rawLabel.toUpperCase()}` : rawLabel;
-        const col                = isProject ? projectColor(rawLabel) : isPlace ? 'var(--dl-blue)' : isGoal ? 'var(--dl-teal, #5BA89D)' : isDate ? dateChipColor(dateStr) : isHabit ? 'var(--dl-accent)' : isRecurrence ? 'var(--dl-green)' : null;
+        const col                = isProject ? projectColor(rawLabel) : isPlace ? 'var(--dl-blue)' : isGoal ? 'var(--dl-teal, #5BA89D)' : isDate ? dateChipColor(dateStr) : isHabit ? 'var(--dl-accent)' : isRecurrence ? 'var(--dl-green)' : isDrawing ? '#7a5a9e' : null;
         const selected  = i === state.selectedIndex;
         return (
           <button
@@ -947,6 +969,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onImageUpload,
   onImageDelete,     // (src) — called when an imageChip is deleted (orphan cleanup)
   noteNames,
+  drawingNames,
   projectNames,
   placeNames,
   goalNames,
@@ -985,6 +1008,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onImageUploadRef    = useRef(onImageUpload);
   const onImageDeleteRef    = useRef(onImageDelete);
   const noteNamesRef        = useRef(noteNames || []);
+  const drawingNamesRef     = useRef(drawingNames || []);
   const projectNamesRef     = useRef(projectNames || []);
   const placeNamesRef       = useRef(placeNames || []);
   const goalNamesRef        = useRef(goalNames || []);
@@ -1010,6 +1034,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onImageUploadRef.current     = onImageUpload; },    [onImageUpload]);
   useEffect(() => { onImageDeleteRef.current     = onImageDelete; },    [onImageDelete]);
   useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
+  useEffect(() => { drawingNamesRef.current      = drawingNames || []; }, [drawingNames]);
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
   useEffect(() => { placeNamesRef.current        = placeNames || []; },  [placeNames]);
   useEffect(() => { goalNamesRef.current         = goalNames || []; },   [goalNames]);
@@ -1159,6 +1184,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ProjectTagNode,
       NoteLinkNode,
       PlaceTagNode,
+      DrawingTagNode,
       RecurrenceTagNode,
       HabitTagNode,
       GoalTagNode,
@@ -1273,12 +1299,25 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             // Never return empty — keeps the suggestion plugin alive while typing
             return matches.length ? matches : ['__create__:' + (qTrim || 'note')];
           }
-          if (cmd === '@' || cmd === 'd') {
+          if (cmd === '@') {
             // Date suggestions only
             const dateItems = generateDateSuggestions(search)
               .filter(s => s.date)
               .map(s => `__date__:${s.date}:${s.label}`);
             return dateItems;
+          }
+          if (cmd === 'd') {
+            // Drawing suggestions — show user's drawing titles
+            const names  = drawingNamesRef.current || [];
+            const q      = search.toLowerCase().replace(/\s/g, '');
+            const qTrim  = search.trim();
+            const matches = names
+              .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
+              .map(n => `__drawing__:${n}`);
+            if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+              matches.push(`__drawing__:${qTrim}`);
+            }
+            return matches.length ? matches : ['__drawing__:' + (qTrim || 'drawing')];
           }
           if (cmd === 'r') {
             // Repeat/recurrence suggestions
@@ -1411,6 +1450,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               window.dispatchEvent(new CustomEvent('daylab:create-project', { detail: { name: pName } }));
               onCreateProjectRef.current?.(pName);
             }
+          } else if (name.startsWith('__drawing__:')) {
+            // Drawing chip: "__drawing__:title"
+            const dName = name.slice(12);
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'drawingTag', attrs: { name: dName } },
+              { type: 'text', text: ' ' },
+            ]).run();
           } else {
             // Note chip: "__note__:name" (existing) or "__create__:name" (new)
             const noteName = name.startsWith('__create__:') ? name.slice(11) : name.slice(9); // __note__: = 9 (7+prefix)

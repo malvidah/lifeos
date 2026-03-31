@@ -203,7 +203,7 @@ export const CARD_REGISTRY = [
     icon: <span style={{fontSize:14,lineHeight:1}}>🖼️</span>,
     render: (props) => (
       <ErrorBoundary label="🖼️ Drawings">
-        <DrawingsCard token={props.token} userId={props.userId} />
+        <DrawingsCard token={props.token} userId={props.userId} onDrawingNamesChange={props.setAllDrawingNames} />
       </ErrorBoundary>
     ),
   },

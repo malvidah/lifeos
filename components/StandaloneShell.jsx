@@ -21,6 +21,7 @@ function ShellInner({ label, children }) {
   const [projectNames, setProjectNames] = useState([]);
   const [placeNames, setPlaceNames] = useState([]);
   const [noteNames, setNoteNames] = useState([]);
+  const [drawingNames, setDrawingNames] = useState([]);
 
   useEffect(() => {
     if (!token) return;
@@ -30,6 +31,9 @@ function ShellInner({ label, children }) {
     api.get('/api/places', token).then(d => {
       setPlaceNames((d?.places ?? []).map(p => p.name));
     });
+    api.get('/api/drawings', token).then(d => {
+      setDrawingNames((d?.drawings ?? []).map(dr => dr.title || 'Untitled'));
+    }).catch(() => {});
     // Check strava connection status
     api.get('/api/settings', token).then(d => {
       if (d?.settings?.strava_connected) setStravaConnected(true);
@@ -49,7 +53,7 @@ function ShellInner({ label, children }) {
   return (
     <ProjectNamesContext.Provider value={projectNames}>
     <PlaceNamesContext.Provider value={placeNames}>
-    <NoteContext.Provider value={{ notes: noteNames, onCreateNote: (name) => {
+    <NoteContext.Provider value={{ notes: noteNames, drawings: drawingNames, onCreateNote: (name) => {
       window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name } }));
     }}}>
     <NavigationContext.Provider value={{

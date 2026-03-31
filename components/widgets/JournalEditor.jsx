@@ -544,7 +544,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
   // All hooks must be called unconditionally (React rules of hooks).
   // The mode check happens in the render output below.
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
-  const { notes: ctxNotes } = useContext(NoteContext);
+  const { notes: ctxNotes, drawings: ctxDrawings } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxPlaces = useContext(PlaceNamesContext);
   const { navigateToProject, navigateToNote, navigateToPlace } = useContext(NavigationContext);
@@ -720,6 +720,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
           onImageUpload={file => uploadImageFile(file, token)}
           onImageDelete={src => deleteImageFile(src, token)}
           noteNames={ctxNotes}
+          drawingNames={ctxDrawings}
           projectNames={ctxProjects}
           placeNames={ctxPlaces}
           onProjectClick={name => navigateToProject(name)}
@@ -979,6 +980,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         projectNames={ctxProjects}
         placeNames={ctxPlaces}
         noteNames={ctxNotes.notes}
+        drawingNames={ctxNotes.drawings}
         textColor={"var(--dl-strong)"}
         mutedColor={"var(--dl-middle)"}
         color={col}
