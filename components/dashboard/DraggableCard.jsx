@@ -94,8 +94,6 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
       {/* ── Edit mode: drag handle pill centered at top of card ── */}
       {editMode && (
         <div
-          {...attributes}
-          {...listeners}
           style={{
             position: "absolute",
             top: 0,
@@ -103,23 +101,39 @@ export function DraggableCard({ cardId, editMode, onEnterEditMode, children }) {
             right: 0,
             height: 44,
             zIndex: 20,
-            cursor: isDragging ? "grabbing" : "grab",
             display: "flex",
             alignItems: "flex-start",
             justifyContent: "center",
-            paddingTop: 7,
+            paddingTop: 4,
+            pointerEvents: "none",  /* let clicks pass through to header buttons */
           }}
         >
-          {/* Centered pill handle — like iOS modal drag indicator */}
-          <div style={{
-            width: 32,
-            height: 4,
-            borderRadius: 2,
-            background: "var(--dl-border2)",
-            opacity: 0.55,
-            pointerEvents: "none",
-            flexShrink: 0,
-          }} />
+          {/* Grab zone — only this area intercepts pointer events for dragging */}
+          <div
+            {...attributes}
+            {...listeners}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 64,
+              height: 24,
+              borderRadius: 8,
+              cursor: isDragging ? "grabbing" : "grab",
+              pointerEvents: "auto",
+              flexShrink: 0,
+            }}
+          >
+            {/* Centered pill handle — like iOS modal drag indicator */}
+            <div style={{
+              width: 32,
+              height: 4,
+              borderRadius: 2,
+              background: "var(--dl-border2)",
+              opacity: 0.55,
+              flexShrink: 0,
+            }} />
+          </div>
         </div>
       )}
 
