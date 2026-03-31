@@ -179,7 +179,11 @@ function DashboardInner() {
       return (v && v !== '__graph__') ? v : null;
     } catch { return null; }
   });
-  const [searchOpen, setSearchOpen] = useState(false);
+  // 'closed' | 'open' | 'closing'  — 'closing' keeps the pill mounted
+  // while it fades out, then nav elements fade back in after it's gone.
+  const [searchState, setSearchState] = useState('closed');
+  const searchOpen    = searchState !== 'closed';   // pill is visible
+  const searchNavHide = searchState === 'open';     // nav elements are hidden
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -570,8 +574,12 @@ function DashboardInner() {
   const exitEditMode  = useCallback(() => setEditMode(false), []);
 
   // openSearch / closeSearch — used by the glass nav bar search button
-  const openSearch  = useCallback(() => { setSearchOpen(true);  setTimeout(() => searchInputRef.current?.focus(), 60); }, []);
-  const closeSearch = useCallback(() => { setSearchOpen(false); setSearchQuery(''); }, []);
+  const openSearch  = useCallback(() => { setSearchState('open'); setTimeout(() => searchInputRef.current?.focus(), 60); }, []);
+  const closeSearch = useCallback(() => {
+    setSearchState('closing');
+    setSearchQuery('');
+    setTimeout(() => setSearchState('closed'), 180);
+  }, []);
 
   // Close project filter dropdown on outside click
   useEffect(() => {
@@ -761,6 +769,8 @@ function DashboardInner() {
                 left: "50%", transform: "translateX(-50%)",
                 zIndex: 100, WebkitAppRegion: "no-drag",
                 width: "min(560px, calc(100vw - 24px))",
+                opacity: searchState === 'closing' ? 0 : 1,
+                transition: "opacity 0.15s ease",
               }}>
                 <div style={{
                   display: "flex", alignItems: "center", gap: 8, height: 52,
@@ -789,10 +799,11 @@ function DashboardInner() {
             )}
 
             {/* ── TOP LEFT: edit toggle (hidden when search open) ─────────── */}
-            {!searchOpen && (
+            {!searchNavHide && (
               <div style={{
                 position: "fixed", top: TOP, left: 12, zIndex: 100,
                 WebkitAppRegion: "no-drag",
+                animation: "fadeIn 0.15s ease",
               }}>
                 <button
                   onClick={() => setEditMode(v => !v)}
@@ -807,9 +818,10 @@ function DashboardInner() {
             )}
 
             {/* ── CENTER: date pill / card dock (hidden when search open) ─── */}
-            {!searchOpen && (
+            {!searchNavHide && (
             <div style={{
               position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
+              animation: "fadeIn 0.15s ease",
               zIndex: 100, WebkitAppRegion: "no-drag",
               // Cap width so the dock pill never overlaps the left/right nav circles
               // (each side has 12px margin + 52px button + 8px gap = 72px clearance)
@@ -925,10 +937,11 @@ function DashboardInner() {
             )} {/* end !searchOpen center zone */}
 
             {/* ── TOP RIGHT: user avatar only (hidden when search open) ────── */}
-            {!searchOpen && (
+            {!searchNavHide && (
               <div style={{
                 position: "fixed", top: TOP, right: 12, zIndex: 100,
                 WebkitAppRegion: "no-drag",
+                animation: "fadeIn 0.15s ease",
               }}>
                 <div style={{
                   width: 52, height: 52, borderRadius: "50%",
@@ -955,7 +968,7 @@ function DashboardInner() {
       }}/>
 
       {/* ── Bottom bar: filter (left) + dots+AI (center) + search (right) ── */}
-      {!searchOpen && !chatIsOpen && layout.loaded && (() => {
+      {!searchNavHide && !chatIsOpen && layout.loaded && (() => {
         // Mobile: sit right at the safe-area edge (home indicator) with no extra gap.
         // env() fallback of 6px covers browsers where safe-area isn't reported.
         // Desktop: 16px above the window edge (no safe-area there).
@@ -1102,7 +1115,7 @@ function DashboardInner() {
       })()}
 
       {/* Floating chat pill — hidden during search */}
-      {!searchOpen && (
+      {!searchNavHide && (
         <ChatFloat date={selected} token={token} userId={userId} theme={theme}
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
           expanded={chatExpanded} onExpandedChange={setChatExpanded}
