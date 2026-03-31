@@ -115,6 +115,23 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       .filter(Boolean)
   );
 
+  // For count-limited recurring tasks ({r:key:label:N}), fetch total completions
+  // so we can suppress them once they've been done N times.
+  const countLimitedIds = (recurringCandidates ?? [])
+    .filter(t => t.html?.includes('data-recurrence-count='))
+    .map(t => t.id);
+  let completionCounts = {};
+  if (countLimitedIds.length > 0) {
+    const { data: cRows } = await supabase
+      .from('habit_completions')
+      .select('habit_id')
+      .eq('user_id', user.id)
+      .in('habit_id', countLimitedIds);
+    for (const c of cRows ?? []) {
+      completionCounts[c.habit_id] = (completionCounts[c.habit_id] || 0) + 1;
+    }
+  }
+
   const recurringTasks = (recurringCandidates ?? []).filter(t => {
     if (ownIds.has(t.id)) return false;
     if (persistentIds.has(t.id)) return false;
@@ -126,11 +143,14 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     if (!scheduleKey) return false;
     const recurrence = keyToRecurrence(scheduleKey, t.date);
     if (!recurrence || !matchesSchedule(date, recurrence)) return false;
-    // Only treat due_date as an expiry if it was explicitly set to a date
-    // different from the template's own creation date. A due_date equal to
-    // t.date means it was accidentally set (e.g. default task date) rather
-    // than intentionally chosen as an end-date for the recurring schedule.
-    if (t.due_date && t.due_date !== t.date && t.due_date < date) return false;
+    // Until-date from {r:key:label:YYYY-MM-DD} token — suppress on/after that date
+    const untilAttr = t.html?.match(/data-recurrence-until="([^"]+)"/);
+    if (untilAttr && untilAttr[1] < date) return false;
+    // Count-limited: suppress once all N occurrences have been completed
+    const countAttr = t.html?.match(/data-recurrence-count="(\d+)"/);
+    if (countAttr && (completionCounts[t.id] || 0) >= parseInt(countAttr[1], 10)) return false;
+    // Legacy due_date expiry (only when different from creation date and no until-attr)
+    if (!untilAttr && t.due_date && t.due_date !== t.date && t.due_date < date) return false;
     return true;
   }).map(t => {
     const isDone = completedHabitIds.has(t.id);
@@ -269,12 +289,13 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
   // When text changes, re-parse structured fields from tokens
   if ('text' in patch) {
     const text = patch.text || '';
-    // Keep due_date in sync with the @date token in text.
-    // If the token is removed we clear the field so stale due_dates
-    // don't cause recurring/habit templates to silently expire.
+    // Keep due_date in sync with date tokens in text.
+    // Reads @YYYY-MM-DD or an until-date embedded in {r:key:label:YYYY-MM-DD}.
+    // If removed we clear the field so stale due_dates don't cause silent expiry.
     if (!('due_date' in patch)) {
-      const dateMatch = text.match(/@(\d{4}-\d{2}-\d{2})/);
-      patch.due_date = dateMatch ? dateMatch[1] : null;
+      const m1 = text.match(/@(\d{4}-\d{2}-\d{2})/);
+      const m2 = text.match(/\{r:[^:]+:[^:]+:(\d{4}-\d{2}-\d{2})\}/);
+      patch.due_date = (m1 || m2)?.[1] ?? null;
     }
     if (!('project_tags' in patch)) {
       const tags = [];
