@@ -221,24 +221,30 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
   // Global pointermove — tracks pointer across whole page so drawing never drops
   useEffect(() => {
     const onMove = (e) => {
-      if (!isDrawing.current || !curStroke.current) return;
       if (e.pointerType === 'touch' && activePen.current) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
       const rect = canvas.getBoundingClientRect();
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
+      const insideCanvas = x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
 
-      // Update cursor
+      // Always update cursor when inside canvas
       const el = cursorRef.current;
       if (el) {
-        const sz = sizeRef.current;
-        el.style.display = 'block';
-        el.style.width = sz + 'px';
-        el.style.height = sz + 'px';
-        el.style.transform = `translate(${x - sz / 2}px, ${y - sz / 2}px)`;
+        if (insideCanvas || isDrawing.current) {
+          const sz = sizeRef.current;
+          el.style.display = 'block';
+          el.style.width = sz + 'px';
+          el.style.height = sz + 'px';
+          el.style.transform = `translate(${x - sz / 2}px, ${y - sz / 2}px)`;
+        } else {
+          el.style.display = 'none';
+        }
       }
 
+      // Only add points when actively drawing
+      if (!isDrawing.current || !curStroke.current) return;
       curStroke.current.points.push({ x, y, p: e.pressure ?? 0.5 });
       const { w, h } = logSizeRef.current;
       const ctx = canvas.getContext('2d');
