@@ -178,7 +178,6 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     else snapTo.current(Math.round(liveOff.current * 4) / 4);
   };
   const handleMouseDown = (e) => {
-    e.preventDefault();
     cancelRaf.current();
     isDragging.current = true;
     totalDrag.current  = 0;
@@ -363,7 +362,7 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
         {/* Main scrollable calendar pane */}
         <div
           ref={containerRef}
-          data-no-page-swipe="true"
+          data-no-pointer-capture="true"
           style={{ flex: 1, overflow: 'hidden', position: 'relative',
                    cursor: isDragging.current ? 'grabbing' : 'grab' }}
           onMouseDown={handleMouseDown}
@@ -662,17 +661,6 @@ function MobileCalPicker({selected, onSelect, events, healthDots={}, desktop=fal
             );
           })}
         </div>
-        {expandHref && !collapsed && (
-          <a href={expandHref} title="Open full page" onClick={e=>e.stopPropagation()}
-            style={{color:"var(--dl-middle)",display:"flex",alignItems:"center",justifyContent:"center",
-              padding:"2px 4px",borderRadius:3,transition:"color 0.15s",flexShrink:0,textDecoration:"none"}}
-            onMouseEnter={e=>e.currentTarget.style.color="var(--dl-highlight)"}
-            onMouseLeave={e=>e.currentTarget.style.color="var(--dl-middle)"}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M7 17L17 7"/><path d="M7 7h10v10"/>
-            </svg>
-          </a>
-        )}
       </div>
 
       {/* ── Day columns with events ──────────────────────────────────────── */}
@@ -1041,17 +1029,6 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
                 );
               })}
             </div>
-            {expandHref && !collapsed && (
-              <a href={expandHref} title="Open full page" onClick={e=>e.stopPropagation()}
-                style={{color:"var(--dl-middle)",display:"flex",alignItems:"center",justifyContent:"center",
-                  padding:"2px 4px",borderRadius:3,transition:"color 0.15s",flexShrink:0,textDecoration:"none"}}
-                onMouseEnter={e=>e.currentTarget.style.color="var(--dl-highlight)"}
-                onMouseLeave={e=>e.currentTarget.style.color="var(--dl-middle)"}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M7 17L17 7"/><path d="M7 7h10v10"/>
-                </svg>
-              </a>
-            )}
           </div>
           {!collapsed&&<MonthView
             initYear={selDateObj.getFullYear()} initMonth={selDateObj.getMonth()}

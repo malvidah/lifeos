@@ -64,7 +64,7 @@ export const CARD_REGISTRY = [
           <CalendarCard selected={props.date} onSelect={props.setSelected}
             events={props.events} setEvents={props.setEvents} healthDots={props.healthDots}
             token={props.token} collapsed={false}
-            calView={props.calView} onCalViewChange={v=>{props.setCalView(v);}} expandHref="/calendar"/>
+            calView={props.calView} onCalViewChange={v=>{props.setCalView(v);}}/>
           </ErrorBoundary>
         </div>
       );

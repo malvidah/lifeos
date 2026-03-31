@@ -176,6 +176,11 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     // click miss its target or require two presses. Swipes always start from
     // non-interactive areas so skipping capture here doesn't break swipe nav.
     if (e.target.closest('button, a, input, textarea, select, [role="button"], [role="switch"], [role="checkbox"], [role="tab"]')) return;
+    // Also skip pointer capture for areas that own their own click/drag interactions.
+    // data-no-page-swipe = area handles horizontal gestures (day scroller, etc.)
+    // data-no-pointer-capture = area has clickable non-button divs that break when
+    //   pointer capture reassigns click dispatch to the outer container instead.
+    if (e.target.closest('[data-no-page-swipe], [data-no-pointer-capture]')) return;
     outerRef.current?.setPointerCapture(e.pointerId);
     pointerRef.current = { x: e.clientX, y: e.clientY };
   }, []);
@@ -286,7 +291,10 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
               overflowX: 'hidden',
               display: 'flex',
               flexDirection: 'column',
-              touchAction: 'pan-y',
+              // No touchAction here — the outer's pan-y already governs the
+              // whole subtree. Setting it again on page divs confuses iOS Safari
+              // into not passing horizontal swipes from empty background areas
+              // up to our outer-level touch listeners.
             }}
           >
             {renderPage(page, i)}
