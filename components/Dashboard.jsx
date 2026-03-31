@@ -679,7 +679,7 @@ function DashboardInner() {
         }
       },
     }}>
-    <div style={{background:"var(--dl-bg)",height:"100vh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflowY:mobile?"auto":"hidden",position:"relative"}}>
+    <div style={{background:"var(--dl-bg)",height:"100dvh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
       {/* Pull-down overscroll patch — keeps background solid above safe area */}
       <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:"var(--dl-bg)",zIndex:99}}/>
 

@@ -1,5 +1,5 @@
 "use client";
-import { useLayoutEffect, useRef, useCallback, useEffect } from 'react';
+import { useLayoutEffect, useRef, useCallback, useEffect, useState } from 'react';
 
 /**
  * PageContainer — horizontally paginated container using CSS transforms.
@@ -67,22 +67,18 @@ function hasTextSelection() {
 }
 
 export default function PageContainer({ pages, renderPage, currentPageIdx, onPageChange }) {
-  const outerRef   = useRef(null);
-  const trackRef   = useRef(null);
-  const mountedRef = useRef(false);
+  const outerRef = useRef(null);
+  const trackRef = useRef(null);
 
   const TRANSITION = 'transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)';
 
-  // Suppress transition on first mount so there's no slide-in animation.
+  // Suppress the CSS transition on first mount so there's no slide-in animation.
+  // Using state means React manages `transition` in the style prop — no risk of
+  // it being overwritten on re-render the way an imperative style.transition would be.
+  const [transitionReady, setTransitionReady] = useState(false);
   useLayoutEffect(() => {
-    const track = trackRef.current;
-    if (!track || mountedRef.current) return;
-    mountedRef.current = true;
-    track.style.transition = 'none';
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        if (trackRef.current) trackRef.current.style.transition = TRANSITION;
-      });
+      requestAnimationFrame(() => setTransitionReady(true));
     });
   }, []);
 
@@ -229,6 +225,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
           width: `${n * 100}%`,
           height: '100%',
           transform: `translateX(-${pct}%)`,
+          transition: transitionReady ? TRANSITION : 'none',
           willChange: 'transform',
         }}
       >
@@ -238,12 +235,12 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
             style={{
               width: `${100 / n}%`,
               minWidth: `${100 / n}%`,
+              height: '100%',
               overflowY: 'auto',
               overflowX: 'hidden',
               display: 'flex',
               flexDirection: 'column',
-              touchAction: 'pan-y',  // explicit on each page so child scroll
-                                     // containers don't override the outer constraint
+              touchAction: 'pan-y',
             }}
           >
             {renderPage(page, i)}
