@@ -731,7 +731,7 @@ function DashboardInner() {
         const relLabel = fmtRelative(selected, today);
         const isToday = selected === today;
         const navBtn = (active) => ({
-          width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
+          width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
           background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
           backdropFilter: "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: "blur(20px) saturate(1.4)",
@@ -763,7 +763,7 @@ function DashboardInner() {
                 width: "min(560px, calc(100vw - 24px))",
               }}>
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 8, height: 40,
+                  display: "flex", alignItems: "center", gap: 8, height: 52,
                   padding: "0 10px 0 16px", borderRadius: 100,
                   ...glass,
                 }}>
@@ -779,7 +779,7 @@ function DashboardInner() {
                     style={{ flex:1, background:'transparent', border:'none', outline:'none', fontFamily:serif, fontSize:F.md, color:"var(--dl-strong)", caretColor:"var(--dl-accent)" }}
                   />
                   {srLoading && <span style={{fontFamily:mono,fontSize:8,color:"var(--dl-highlight)",letterSpacing:'0.12em',flexShrink:0}}>…</span>}
-                  <button onClick={closeSearch} style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',flexShrink:0}}>
+                  <button onClick={closeSearch} style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:'50%',flexShrink:0}}>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
@@ -812,13 +812,13 @@ function DashboardInner() {
               position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
               zIndex: 100, WebkitAppRegion: "no-drag",
               // Cap width so the dock pill never overlaps the left/right nav circles
-              // (each side has 12px margin + 40px button + 8px gap = 60px clearance)
-              maxWidth: "calc(100vw - 128px)",
+              // (each side has 12px margin + 52px button + 8px gap = 72px clearance)
+              maxWidth: "calc(100vw - 152px)",
             }}>
               {editMode ? (
                 /* Card dock pill — scrollable, never wider than the cap above */
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 1, height: 40,
+                  display: "flex", alignItems: "center", gap: 1, height: 52,
                   padding: "0 4px", borderRadius: 100,
                   overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none",
                   ...glass,
@@ -838,7 +838,7 @@ function DashboardInner() {
                           border: "none", borderRadius: 100, cursor: "pointer",
                           display: "flex", alignItems: "center", justifyContent: "center",
                           color: isOpen ? "var(--dl-strong)" : "var(--dl-highlight)",
-                          width: 34, height: 34, flexShrink: 0,
+                          width: 44, height: 44, flexShrink: 0,
                           transition: "background 0.15s, color 0.15s",
                         }}
                       >{item.icon}</button>
@@ -851,7 +851,7 @@ function DashboardInner() {
                   ...glass, borderRadius: 100,
                   border: "1px solid var(--dl-glass-border)",
                   display: "flex", alignItems: "center",
-                  height: 40, overflow: "hidden",
+                  height: 52, overflow: "hidden",
                 }}>
                   {/* Left arrow */}
                   <button
@@ -931,7 +931,7 @@ function DashboardInner() {
                 WebkitAppRegion: "no-drag",
               }}>
                 <div style={{
-                  width: 40, height: 40, borderRadius: "50%",
+                  width: 52, height: 52, borderRadius: "50%",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0, ...glass,
                 }}>
@@ -963,7 +963,7 @@ function DashboardInner() {
           ? "env(safe-area-inset-bottom, 6px)"
           : "calc(env(safe-area-inset-bottom, 0px) + 16px)";
         const circleBtn = (active) => ({
-          width: 40, height: 40, borderRadius: "50%",
+          width: 52, height: 52, borderRadius: "50%",
           background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
           backdropFilter: "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: "blur(20px) saturate(1.4)",
@@ -1066,7 +1066,7 @@ function DashboardInner() {
                 title="Ask AI"
                 style={{
                   pointerEvents: "auto",
-                  width: 40, height: 40, borderRadius: "50%",
+                  width: 52, height: 52, borderRadius: "50%",
                   background: "var(--dl-glass)",
                   backdropFilter: "blur(16px) saturate(1.3)",
                   WebkitBackdropFilter: "blur(16px) saturate(1.3)",
