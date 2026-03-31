@@ -31,7 +31,7 @@ import { DndContext, closestCenter, useSensor, useSensors, PointerSensor, TouchS
 import { SortableContext, verticalListSortingStrategy, arrayMove } from "@dnd-kit/sortable";
 
 // ── Dock items derived from card registry ─────────────────────────────────────
-const DOCK_ORDER = ['project-graph','world-map','cal','goals','health','habits','notes','tasks','journal','meals','workouts'];
+const DOCK_ORDER = ['project-graph','world-map','cal','goals','health','habits','notes','drawings','tasks','journal','meals','workouts'];
 const DOCK_ITEMS = DOCK_ORDER.map(id => { const c = CARD_REGISTRY.find(r => r.id === id); return { id, label: c.label.replace(/^.*?\s/, ''), icon: c.icon }; });
 
 // ── Nav date formatting (lifted from Header.jsx) ──────────────────────────────

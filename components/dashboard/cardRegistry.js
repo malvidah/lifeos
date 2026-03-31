@@ -19,6 +19,7 @@ import GoalsCard, { GoalsViewToggle } from "../cards/GoalsCard.jsx";
 import { JournalEditor, JournalModeToggle, Meals } from "../widgets/JournalEditor.jsx";
 import Tasks, { TaskFilterBtns, TaskSaveIndicator } from "../widgets/Tasks.jsx";
 import NotesCard from "../widgets/NotesCard.jsx";
+import DrawingsCard from "../cards/DrawingsCard.jsx";
 
 const GOAL_COLOR = "#5BA89D";
 
@@ -195,6 +196,16 @@ export const CARD_REGISTRY = [
         </ErrorBoundary>
       );
     },
+  },
+  {
+    id: 'drawings',
+    label: '✏️ Drawings',
+    icon: <span style={{fontSize:14,lineHeight:1}}>✏️</span>,
+    render: (props) => (
+      <ErrorBoundary label="✏️ Drawings">
+        <DrawingsCard token={props.token} userId={props.userId} />
+      </ErrorBoundary>
+    ),
   },
   {
     id: 'workouts',
