@@ -732,8 +732,8 @@ function makeSlashSuggestionMatch() {
       const prev = i > 0 ? nodeText[i - 1] : ' ';
       if (!/\s/.test(prev) && i !== 0) continue; // require space-before or line start
       const after = nodeText.slice(i + 1);
-      // Match bare / (show command menu), /p, /n, /l, /@, /d, /r...
-      if (after.length > 0 && !/^[pnl@drhmg]/i.test(after)) continue;
+      // Match bare / (show command menu), /p, /n, /l, /@, /d, /r, /t...
+      if (after.length > 0 && !/^[pnl@drhmgt]/i.test(after)) continue;
       return {
         range: { from: nodeStart + i, to: $position.pos },
         query: after,           // "" (bare /), "p", "p big think", "n", "n my note"
@@ -807,6 +807,7 @@ function SuggestionDropdown({ state, onSelect }) {
         const isDate             = item.startsWith('__date__:');
         const isRecurrence       = item.startsWith('__recurrence__:');
         const isHabit            = item.startsWith('__habit__:');
+        const isTable            = item.startsWith('__table__:');
         const isExistingProject  = item.startsWith('__project__:');
         const isNewProject       = item.startsWith('__create_project__:');
         const isProject          = isExistingProject || isNewProject;
@@ -820,6 +821,7 @@ function SuggestionDropdown({ state, onSelect }) {
         const rawLabel           = isCmd ? item.slice(8)
                                  : isDate ? item.slice(20)
                                  : (isRecurrence || isHabit) ? item.split(':').slice(2).join(':')
+                                 : isTable ? item.slice(9)   // "3:3"
                                  : isNewProject ? item.slice(19)
                                  : isExistingProject ? item.slice(12)
                                  : isNewPlace ? item.slice(16)
@@ -829,7 +831,8 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9);
         const dateStr            = isDate ? item.slice(9, 19) : null;
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === 'l' ? '/l  Location' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'r' ? '/r  Repeat' : rawLabel === 'h' ? '/h  Habit' : rawLabel === 'g' ? '/g  Goal' : '/m  Media')
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === 'l' ? '/l  Location' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'r' ? '/r  Repeat' : rawLabel === 'h' ? '/h  Habit' : rawLabel === 'g' ? '/g  Goal' : rawLabel === 't' ? '/t  Table' : '/m  Media')
+                                 : isTable ? `⊞ Insert table`
                                  : isHabit ? `🎯 ${rawLabel}`
                                  : isRecurrence ? `↻ ${rawLabel}`
                                  : isDate ? rawLabel
@@ -1035,7 +1038,21 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           // Command menu item (bare /) — type the letter to refine the query
           // instead of calling command (which exits the suggestion)
           if (item.startsWith('__cmd__:')) {
-            const cmd = item.slice(8); // 'p', 'n', or 'm'
+            const cmd = item.slice(8); // 'p', 'n', 't', 'm', etc.
+            if (cmd === 't') {
+              // Table: close dropdown, delete the /, insert a 3×3 table
+              s.command({ id: '__noop__' }); // close suggestion
+              setSugg(null); suggRef.current = null;
+              const from = editorRef.current?.state.selection.from;
+              if (from != null) {
+                editorRef.current?.chain().focus()
+                  .deleteRange({ from: Math.max(0, from - 1), to: from })
+                  .insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+                  .run();
+              }
+              event.preventDefault();
+              return true;
+            }
             if (cmd === 'm') {
               // Media: close dropdown, delete the /, trigger file picker
               s.command({ id: '__noop__' }); // close suggestion
@@ -1139,7 +1156,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         findMatch: makeSlashSuggestionMatch(),
         itemsFn: (query) => {
           // Bare / — show command menu
-          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:l', '__cmd__:d', '__cmd__:r', '__cmd__:h', '__cmd__:g', ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
+          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:l', '__cmd__:d', '__cmd__:r', '__cmd__:h', '__cmd__:g', ...(noteTitle ? ['__cmd__:t'] : []), ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
@@ -1231,6 +1248,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             }
             return base;
           }
+          if (cmd === 't') {
+            // /t — insert table. Return a single selectable item; commandFn handles insertion.
+            return noteTitle ? ['__table__:3:3'] : [];
+          }
           if (cmd === 'g') {
             const q = search.toLowerCase().replace(/\s/g, '');
             const qTrim = search.trim();
@@ -1252,6 +1273,15 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
 
           justInsertedRef.current = true;
           setTimeout(() => { justInsertedRef.current = false; }, 150);
+
+          if (name.startsWith('__table__:')) {
+            const parts = name.split(':');
+            const rows = parseInt(parts[1]) || 3;
+            const cols = parseInt(parts[2]) || 3;
+            editor.chain().focus().deleteRange(range)
+              .insertTable({ rows, cols, withHeaderRow: true }).run();
+            return;
+          }
 
           if (name.startsWith('__habit__:')) {
             // Format: __habit__:key:label or __habit__:key:label:N or __habit__:key:label:Nd
@@ -1746,7 +1776,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           sugg?.command(item); setSugg(null); firstSlashTip.show();
         }}
       />
-      <Tip visible={firstSlashTip.visible} message="All commands: /h habit, /r repeat, /p project, /l location, /d date" anchorRef={editorContainerRef} position="below" onDismiss={firstSlashTip.dismiss} />
+      <Tip visible={firstSlashTip.visible} message="All commands: /h habit, /r repeat, /p project, /l location, /d date, /t table" anchorRef={editorContainerRef} position="below" onDismiss={firstSlashTip.dismiss} />
     </>
   );
 });
