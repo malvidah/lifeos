@@ -238,7 +238,11 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
       if (isInsideHorizontalScroll(e.target, outer)) return;
-      if (e.target.closest('[data-no-page-swipe]')) return;
+      // NOTE: intentionally NOT checking data-no-page-swipe here.
+      // data-no-page-swipe blocks touch/pointer drags from conflicting with
+      // cards that handle their own horizontal gestures (e.g. day strip).
+      // Those cards use mouse/touch drag — not wheel events — so trackpad
+      // two-finger swipes should still navigate pages even over those areas.
 
       const now      = Date.now();
       const absDelta = Math.abs(e.deltaX);
