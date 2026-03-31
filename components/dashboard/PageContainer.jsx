@@ -204,55 +204,58 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   // ── Trackpad two-finger swipe (wheel events) ──────────────────────────────
   // One navigation per physical gesture.
   //
-  // GESTURE SEPARATION via gap detection:
-  // Momentum events from macOS fire continuously at ~60fps (≈16ms apart).
-  // When the user lifts their fingers and places them again for a new swipe,
-  // there is always a pause of ≥100ms between the last momentum event and the
-  // first event of the new gesture. We detect this gap to distinguish
-  // "momentum tail of gesture 1" from "start of gesture 2", without needing
-  // a fixed-length lockout timer (which either blocks legitimate swipes or
-  // lets momentum events leak through as phantom navigations).
+  // GESTURE SEPARATION via gap detection — calibrated from real event data:
+  // On a MacBook trackpad, momentum events fire at ~8ms intervals (120Hz).
+  // A rapid double-swipe produces an inter-gesture gap of ~35ms (fingers lift
+  // and replace). GAP_MS=25ms sits safely between normal event spacing (8ms)
+  // and the real inter-gesture gap (35ms+), so it catches new gestures quickly
+  // without false-firing on momentum jitter.
   //
-  // After a navigation, incoming wheel events are silently consumed.
-  // Once a gap of GAP_MS is observed, the accumulator resets and the very
-  // next events are treated as a fresh gesture.
+  // IMPORTANT: the < 3px magnitude filter is placed AFTER we record
+  // lastEventTime, so tiny decelerating momentum events still keep the gap
+  // clock alive and don't create phantom "gesture ended" signals.
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
-    const GAP_MS = 150; // ms gap between consecutive events → new gesture
+    const GAP_MS = 25; // ms — calibrated: momentum=8ms apart, real gap≥35ms
 
     let gestureNavigated = false;
     let accDeltaX        = 0;
     let lastEventTime    = 0;
-    let idleTimer        = null; // resets partial (non-navigating) accumulation
+    let idleTimer        = null;
 
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-      if (Math.abs(e.deltaX) < 3) return;
       if (isInsideHorizontalScroll(e.target, outer)) return;
       if (e.target.closest('[data-no-page-swipe]')) return;
 
-      const now = Date.now();
+      const now      = Date.now();
+      const absDelta = Math.abs(e.deltaX);
 
       if (gestureNavigated) {
-        // Still locked after a navigation. Check if there's been a inter-gesture
-        // gap — if yes, this event starts a fresh gesture.
-        if (lastEventTime > 0 && (now - lastEventTime) >= GAP_MS) {
+        // Record time for ALL events (even tiny ones) so decelerating momentum
+        // keeps the gap clock alive and doesn't create false gaps.
+        const gap = lastEventTime > 0 ? now - lastEventTime : 0;
+        lastEventTime = now;
+
+        if (gap >= GAP_MS) {
+          // Real inter-gesture gap detected — unlock for new swipe
           accDeltaX        = 0;
           gestureNavigated = false;
           if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
-          // fall through to process this event as part of the new gesture
+          // Only process this event further if it's meaningful
+          if (absDelta < 3) return;
+          // fall through to accumulate
         } else {
-          lastEventTime = now;
-          return; // still momentum from previous gesture, discard
+          return; // still momentum, discard
         }
       }
 
       lastEventTime = now;
+      if (absDelta < 3) return; // ignore noise when not locked
 
-      // Idle timer: if the user pauses mid-gesture without navigating,
-      // reset the partial accumulation so it doesn't bleed into the next swipe.
+      // Idle timer: reset partial accumulation after a quiet pause
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
         idleTimer     = null;
