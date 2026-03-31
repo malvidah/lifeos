@@ -477,14 +477,17 @@ function LinkPopover({ editor }) {
       if (popRef.current?.contains(e.target)) return;
       setState(null);
     };
-    const closeScroll = () => setState(null);
+    // Don't close on scroll while in edit mode — focusing the URL input causes the
+    // editor to blur+save, which can trigger a layout reflow scroll and dismiss the
+    // popup before the user has a chance to type the new URL.
+    const closeScroll = () => { if (!editing) setState(null); };
     document.addEventListener('mousedown', close);
     document.addEventListener('scroll', closeScroll, true);
     return () => {
       document.removeEventListener('mousedown', close);
       document.removeEventListener('scroll', closeScroll, true);
     };
-  }, [state]);
+  }, [state, editing]);
 
   // Focus input when entering edit mode
   useEffect(() => {
@@ -726,11 +729,21 @@ function makeSlashSuggestionMatch() {
     const nodeText  = nodeBefore.text;
     const nodeStart = $position.pos - nodeBefore.nodeSize;
 
-    // Scan backward for / preceded by whitespace or at paragraph start
+    // Scan backward for / preceded by whitespace or at true paragraph start.
+    // "True paragraph start" means the text node starts at the paragraph's first
+    // content position — not just position 0 in its text, which could be right
+    // after an inline chip (projectTag, dateChip, etc.) that left no whitespace.
+    const paraStart = $position.start();
     for (let i = nodeText.length - 1; i >= 0; i--) {
       if (nodeText[i] !== '/') continue;
-      const prev = i > 0 ? nodeText[i - 1] : ' ';
-      if (!/\s/.test(prev) && i !== 0) continue; // require space-before or line start
+      if (i === 0) {
+        // Only valid when this text node is the first content in the paragraph.
+        // nodeStart > paraStart means something (e.g. a chip) precedes this node.
+        if (nodeStart > paraStart) continue;
+      } else {
+        const prev = nodeText[i - 1];
+        if (!/\s/.test(prev)) continue; // require space before /
+      }
       const after = nodeText.slice(i + 1);
       // Match bare / (show command menu), /p, /n, /l, /@, /d, /r, /t...
       if (after.length > 0 && !/^[pnl@drhmgt]/i.test(after)) continue;
@@ -753,7 +766,10 @@ function createSuggestion({ char, itemsFn, commandFn, renderRef, suggKey, findMa
         editor,
         char,
         allowSpaces: true,
-        allowedPrefixes: null,
+        // Restrict # and @ triggers to space-only prefix so that URL fragments
+        // like /#anchor or email addresses like user@host don't fire accidentally.
+        // The / trigger uses a custom findSuggestionMatch so this has no effect on it.
+        allowedPrefixes: [' '],
         pluginKey: new PluginKey(`suggestion_${suggKey}`),
         items: ({ query }) => itemsFn(query),
         command: ({ editor, range, props }) => commandFn({ editor, range, name: props }),
