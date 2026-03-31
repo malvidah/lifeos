@@ -179,11 +179,7 @@ function DashboardInner() {
       return (v && v !== '__graph__') ? v : null;
     } catch { return null; }
   });
-  // 'closed' | 'open' | 'closing'  — 'closing' keeps the pill mounted
-  // while it fades out, then nav elements fade back in after it's gone.
-  const [searchState, setSearchState] = useState('closed');
-  const searchOpen    = searchState !== 'closed';   // pill is visible
-  const searchNavHide = searchState === 'open';     // nav elements are hidden
+  const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -574,12 +570,8 @@ function DashboardInner() {
   const exitEditMode  = useCallback(() => setEditMode(false), []);
 
   // openSearch / closeSearch — used by the glass nav bar search button
-  const openSearch  = useCallback(() => { setSearchState('open'); setTimeout(() => searchInputRef.current?.focus(), 60); }, []);
-  const closeSearch = useCallback(() => {
-    setSearchState('closing');
-    setSearchQuery('');
-    setTimeout(() => setSearchState('closed'), 180);
-  }, []);
+  const openSearch  = useCallback(() => { setSearchOpen(true);  setTimeout(() => searchInputRef.current?.focus(), 60); }, []);
+  const closeSearch = useCallback(() => { setSearchOpen(false); setSearchQuery(''); }, []);
 
   // Close project filter dropdown on outside click
   useEffect(() => {
@@ -739,7 +731,7 @@ function DashboardInner() {
         const relLabel = fmtRelative(selected, today);
         const isToday = selected === today;
         const navBtn = (active) => ({
-          width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
+          width: 40, height: 40, borderRadius: "50%", flexShrink: 0,
           background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
           backdropFilter: "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: "blur(20px) saturate(1.4)",
@@ -769,11 +761,9 @@ function DashboardInner() {
                 left: "50%", transform: "translateX(-50%)",
                 zIndex: 100, WebkitAppRegion: "no-drag",
                 width: "min(560px, calc(100vw - 24px))",
-                opacity: searchState === 'closing' ? 0 : 1,
-                transition: "opacity 0.15s ease",
               }}>
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 8, height: 52,
+                  display: "flex", alignItems: "center", gap: 8, height: 40,
                   padding: "0 10px 0 16px", borderRadius: 100,
                   ...glass,
                 }}>
@@ -789,7 +779,7 @@ function DashboardInner() {
                     style={{ flex:1, background:'transparent', border:'none', outline:'none', fontFamily:serif, fontSize:F.md, color:"var(--dl-strong)", caretColor:"var(--dl-accent)" }}
                   />
                   {srLoading && <span style={{fontFamily:mono,fontSize:8,color:"var(--dl-highlight)",letterSpacing:'0.12em',flexShrink:0}}>…</span>}
-                  <button onClick={closeSearch} style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',justifyContent:'center',width:32,height:32,borderRadius:'50%',flexShrink:0}}>
+                  <button onClick={closeSearch} style={{background:'none',border:'none',cursor:'pointer',color:"var(--dl-highlight)",display:'flex',alignItems:'center',justifyContent:'center',width:26,height:26,borderRadius:'50%',flexShrink:0}}>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                       <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
                     </svg>
@@ -799,11 +789,10 @@ function DashboardInner() {
             )}
 
             {/* ── TOP LEFT: edit toggle (hidden when search open) ─────────── */}
-            {!searchNavHide && (
+            {!searchOpen && (
               <div style={{
                 position: "fixed", top: TOP, left: 12, zIndex: 100,
                 WebkitAppRegion: "no-drag",
-                animation: "fadeIn 0.15s ease",
               }}>
                 <button
                   onClick={() => setEditMode(v => !v)}
@@ -818,19 +807,18 @@ function DashboardInner() {
             )}
 
             {/* ── CENTER: date pill / card dock (hidden when search open) ─── */}
-            {!searchNavHide && (
+            {!searchOpen && (
             <div style={{
               position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
-              animation: "fadeIn 0.15s ease",
               zIndex: 100, WebkitAppRegion: "no-drag",
               // Cap width so the dock pill never overlaps the left/right nav circles
-              // (each side has 12px margin + 52px button + 8px gap = 72px clearance)
-              maxWidth: "calc(100vw - 152px)",
+              // (each side has 12px margin + 40px button + 8px gap = 60px clearance)
+              maxWidth: "calc(100vw - 128px)",
             }}>
               {editMode ? (
                 /* Card dock pill — scrollable, never wider than the cap above */
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 1, height: 52,
+                  display: "flex", alignItems: "center", gap: 1, height: 40,
                   padding: "0 4px", borderRadius: 100,
                   overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none",
                   ...glass,
@@ -850,7 +838,7 @@ function DashboardInner() {
                           border: "none", borderRadius: 100, cursor: "pointer",
                           display: "flex", alignItems: "center", justifyContent: "center",
                           color: isOpen ? "var(--dl-strong)" : "var(--dl-highlight)",
-                          width: 44, height: 44, flexShrink: 0,
+                          width: 34, height: 34, flexShrink: 0,
                           transition: "background 0.15s, color 0.15s",
                         }}
                       >{item.icon}</button>
@@ -863,7 +851,7 @@ function DashboardInner() {
                   ...glass, borderRadius: 100,
                   border: "1px solid var(--dl-glass-border)",
                   display: "flex", alignItems: "center",
-                  height: 52, overflow: "hidden",
+                  height: 40, overflow: "hidden",
                 }}>
                   {/* Left arrow */}
                   <button
@@ -937,14 +925,13 @@ function DashboardInner() {
             )} {/* end !searchOpen center zone */}
 
             {/* ── TOP RIGHT: user avatar only (hidden when search open) ────── */}
-            {!searchNavHide && (
+            {!searchOpen && (
               <div style={{
                 position: "fixed", top: TOP, right: 12, zIndex: 100,
                 WebkitAppRegion: "no-drag",
-                animation: "fadeIn 0.15s ease",
               }}>
                 <div style={{
-                  width: 52, height: 52, borderRadius: "50%",
+                  width: 40, height: 40, borderRadius: "50%",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0, ...glass,
                 }}>
@@ -968,7 +955,7 @@ function DashboardInner() {
       }}/>
 
       {/* ── Bottom bar: filter (left) + dots+AI (center) + search (right) ── */}
-      {!searchNavHide && !chatIsOpen && layout.loaded && (() => {
+      {!searchOpen && !chatIsOpen && layout.loaded && (() => {
         // Mobile: sit right at the safe-area edge (home indicator) with no extra gap.
         // env() fallback of 6px covers browsers where safe-area isn't reported.
         // Desktop: 16px above the window edge (no safe-area there).
@@ -976,7 +963,7 @@ function DashboardInner() {
           ? "env(safe-area-inset-bottom, 6px)"
           : "calc(env(safe-area-inset-bottom, 0px) + 16px)";
         const circleBtn = (active) => ({
-          width: 52, height: 52, borderRadius: "50%",
+          width: 40, height: 40, borderRadius: "50%",
           background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
           backdropFilter: "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: "blur(20px) saturate(1.4)",
@@ -1079,7 +1066,7 @@ function DashboardInner() {
                 title="Ask AI"
                 style={{
                   pointerEvents: "auto",
-                  width: 52, height: 52, borderRadius: "50%",
+                  width: 40, height: 40, borderRadius: "50%",
                   background: "var(--dl-glass)",
                   backdropFilter: "blur(16px) saturate(1.3)",
                   WebkitBackdropFilter: "blur(16px) saturate(1.3)",
@@ -1115,7 +1102,7 @@ function DashboardInner() {
       })()}
 
       {/* Floating chat pill — hidden during search */}
-      {!searchNavHide && (
+      {!searchOpen && (
         <ChatFloat date={selected} token={token} userId={userId} theme={theme}
           healthKey={`${selected}:${healthDots[selected]?.sleep||0}:${healthDots[selected]?.readiness||0}`}
           expanded={chatExpanded} onExpandedChange={setChatExpanded}
