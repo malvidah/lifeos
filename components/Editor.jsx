@@ -562,7 +562,7 @@ function LinkPopover({ editor }) {
   const btnHover = 'var(--dl-border)';
 
   return createPortal(
-    <div ref={popRef} style={{
+    <div ref={popRef} onMouseDown={e => e.stopPropagation()} style={{
       position: 'fixed', top, left, zIndex: 9999,
       background: 'var(--dl-surface)', border: '1px solid var(--dl-border)',
       borderRadius: 10, boxShadow: 'var(--dl-shadow)', padding: '6px 10px',
