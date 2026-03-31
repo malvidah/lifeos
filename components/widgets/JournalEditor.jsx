@@ -723,6 +723,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
           drawingNames={ctxDrawings}
           projectNames={ctxProjects}
           placeNames={ctxPlaces}
+          showScheduleTags={false}
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
           onPlaceClick={name => navigateToPlace(name)}
@@ -981,6 +982,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         placeNames={ctxPlaces}
         noteNames={ctxNotes.notes}
         drawingNames={ctxNotes.drawings}
+        showScheduleTags={false}
         textColor={"var(--dl-strong)"}
         mutedColor={"var(--dl-middle)"}
         color={col}

@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { mono, F } from "@/lib/tokens";
+import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { Card } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
@@ -168,7 +169,7 @@ function useSaveQueue() {
 }
 
 // ── DrawingCanvas ──────────────────────────────────────────────────────────────
-function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
+function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, paperDots }) {
   const canvasRef = useRef(null);
   const cursorRef = useRef(null);
   const containerRef = useRef(null);
@@ -415,8 +416,8 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
       position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: 6,
       touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
       // Dot grid — purely decorative CSS, never touches the canvas or exports
-      background: '#fff',
-      backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.18) 1px, transparent 1px)',
+      background: paperBg,
+      backgroundImage: `radial-gradient(circle, ${paperDots} 1px, transparent 1px)`,
       backgroundSize: '20px 20px',
     }}>
       <canvas
@@ -579,9 +580,19 @@ const pillBtnStyle = {
   touchAction: 'none',
 };
 
+const saveMenuItemStyle = {
+  display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 6,
+  background: 'transparent', color: 'rgba(255,255,255,0.88)', cursor: 'pointer',
+  fontFamily: mono, fontSize: 12, padding: '7px 12px',
+  letterSpacing: '0.04em', outline: 'none',
+};
+
 // ── Right toolbar: Brush, Eraser, Color ───────────────────────────────────────
-function RightToolbar({ tool, setTool, color, setColor, onShare }) {
+const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent || '');
+
+function RightToolbar({ tool, setTool, color, setColor, onSave }) {
   const [showPalette, setShowPalette] = useState(false);
+  const [showSaveMenu, setShowSaveMenu] = useState(false);
 
   return (
     <div style={{
@@ -626,18 +637,44 @@ function RightToolbar({ tool, setTool, color, setColor, onShare }) {
         </svg>
       </button>
 
-      {/* Share / download */}
-      <button
-        onPointerDown={e => { e.stopPropagation(); onShare(); }}
-        style={pillBtnStyle}
-        title="Save as JPEG"
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-      </button>
+      {/* Save / share */}
+      <div style={{ position: 'relative' }}>
+        <button
+          onPointerDown={e => {
+            e.stopPropagation();
+            if (isIOS) { onSave('native'); }
+            else { setShowSaveMenu(p => !p); }
+          }}
+          style={pillBtnStyle}
+          title={isIOS ? 'Share drawing' : 'Save drawing'}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+        </button>
+        {showSaveMenu && (
+          <div style={{
+            position: 'absolute', top: 36, right: 0,
+            background: 'rgba(22,20,18,0.94)',
+            backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+            borderRadius: 10, padding: 6,
+            display: 'flex', flexDirection: 'column', gap: 3,
+            boxShadow: '0 4px 24px rgba(0,0,0,0.45)', zIndex: 30,
+            minWidth: 210,
+          }}>
+            <button
+              onPointerDown={e => { e.stopPropagation(); setShowSaveMenu(false); onSave('paper'); }}
+              style={saveMenuItemStyle}
+            >↓ Save JPEG (with background)</button>
+            <button
+              onPointerDown={e => { e.stopPropagation(); setShowSaveMenu(false); onSave('transparent'); }}
+              style={saveMenuItemStyle}
+            >↓ Save PNG (transparent)</button>
+          </div>
+        )}
+      </div>
 
       {/* Color circle + palette */}
       <div style={{ position: 'relative' }}>
@@ -842,6 +879,12 @@ function DrawingTitleEditor({ title, onRename }) {
 
 // ── Main DrawingsCard ──────────────────────────────────────────────────────────
 export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
+  const { theme } = useTheme();
+  const paperBg   = theme === 'dark' ? '#2d2922' : '#f5f0e8';
+  const paperDots = theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.15)';
+  const paperBgRef = useRef(paperBg);
+  useEffect(() => { paperBgRef.current = paperBg; }, [paperBg]);
+
   const [drawings, setDrawings] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
   const [title, setTitle] = useState('Untitled');
@@ -851,8 +894,10 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
   const [isLoading, setIsLoading] = useState(false);
   const enqueue = useSaveQueue();
   const selectedIdRef = useRef(selectedId);
-  const lastCanvasRef = useRef(null); // for share/export
+  const lastCanvasRef = useRef(null); // for save/export
+  const titleRef = useRef(title);
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+  useEffect(() => { titleRef.current = title; }, [title]);
 
   // Propagate drawing titles up so NoteContext can provide them for /d suggestions
   const onDrawingNamesChangeRef = useRef(onDrawingNamesChange);
@@ -861,32 +906,52 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
     onDrawingNamesChangeRef.current?.(drawings.map(d => d.title || 'Untitled'));
   }, [drawings]);
 
-  const handleShare = async () => {
+  const handleSave = useCallback(async (option) => {
     const canvas = lastCanvasRef.current;
     if (!canvas) return;
-    // Composite onto white background (canvas itself may have transparent BG)
+    const fname = (titleRef.current || 'drawing').replace(/[^a-z0-9 _-]/gi, '').trim() || 'drawing';
+
+    if (option === 'native') {
+      // iOS: native share sheet
+      const out = document.createElement('canvas');
+      out.width = canvas.width; out.height = canvas.height;
+      const ctx = out.getContext('2d');
+      ctx.fillStyle = paperBgRef.current;
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(canvas, 0, 0);
+      if (navigator.share && navigator.canShare) {
+        const blob = await new Promise(res => out.toBlob(res, 'image/jpeg', 0.92));
+        const file = new File([blob], `${fname}.jpg`, { type: 'image/jpeg' });
+        if (navigator.canShare({ files: [file] })) {
+          try { await navigator.share({ files: [file], title: titleRef.current || 'Drawing' }); return; } catch (_) {}
+        }
+      }
+      // iOS fallback
+      const a = document.createElement('a');
+      a.href = out.toDataURL('image/jpeg', 0.92);
+      a.download = `${fname}.jpg`; a.click();
+      return;
+    }
+
+    if (option === 'transparent') {
+      // Save PNG with transparent background
+      const a = document.createElement('a');
+      a.href = canvas.toDataURL('image/png');
+      a.download = `${fname}.png`; a.click();
+      return;
+    }
+
+    // 'paper' — Save JPEG with the paper background
     const out = document.createElement('canvas');
-    out.width = canvas.width;
-    out.height = canvas.height;
+    out.width = canvas.width; out.height = canvas.height;
     const ctx = out.getContext('2d');
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = paperBgRef.current;
     ctx.fillRect(0, 0, out.width, out.height);
     ctx.drawImage(canvas, 0, 0);
-
-    // Try native share (iOS / Android)
-    if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
-      const blob = await new Promise(res => out.toBlob(res, 'image/jpeg', 0.92));
-      const file = new File([blob], 'drawing.jpg', { type: 'image/jpeg' });
-      if (navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: 'Drawing' }); return; } catch (_) {}
-      }
-    }
-    // Fallback: download JPEG
     const a = document.createElement('a');
     a.href = out.toDataURL('image/jpeg', 0.92);
-    a.download = 'drawing.jpg';
-    a.click();
-  };
+    a.download = `${fname}.jpg`; a.click();
+  }, []);
 
   // Load drawing list on mount
   useEffect(() => {
@@ -984,7 +1049,7 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
       <DrawingTitleEditor title={title} onRename={handleRenameDrawing} />
       <div style={{ position: 'relative', width: '100%', height: 400, flexShrink: 0 }}>
         {/* Right floating toolbar — sits over canvas */}
-        <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onShare={handleShare} />
+        <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onSave={handleSave} />
         {/* Canvas */}
         <DrawingCanvas
           strokes={strokes}
@@ -992,6 +1057,8 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
           tool={tool}
           color={color}
           size={DEFAULT_SIZE} // sizeRef managed inside DrawingCanvas via LeftControls
+          paperBg={paperBg}
+          paperDots={paperDots}
         />
       </div>
     </Card>

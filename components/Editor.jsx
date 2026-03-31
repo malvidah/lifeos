@@ -973,6 +973,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   projectNames,
   placeNames,
   goalNames,
+  showScheduleTags = true, // set false in notes/journal to hide /h and /r
   onProjectClick,
   onNoteClick,
   onPlaceClick,
@@ -1007,8 +1008,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onArrowUpAtStartRef  = useRef(onArrowUpAtStart);
   const onImageUploadRef    = useRef(onImageUpload);
   const onImageDeleteRef    = useRef(onImageDelete);
-  const noteNamesRef        = useRef(noteNames || []);
-  const drawingNamesRef     = useRef(drawingNames || []);
+  const noteNamesRef          = useRef(noteNames || []);
+  const drawingNamesRef       = useRef(drawingNames || []);
+  const showScheduleTagsRef   = useRef(showScheduleTags);
   const projectNamesRef     = useRef(projectNames || []);
   const placeNamesRef       = useRef(placeNames || []);
   const goalNamesRef        = useRef(goalNames || []);
@@ -1035,6 +1037,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onImageDeleteRef.current     = onImageDelete; },    [onImageDelete]);
   useEffect(() => { noteNamesRef.current         = noteNames || []; },  [noteNames]);
   useEffect(() => { drawingNamesRef.current      = drawingNames || []; }, [drawingNames]);
+  useEffect(() => { showScheduleTagsRef.current  = showScheduleTags; }, [showScheduleTags]);
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
   useEffect(() => { placeNamesRef.current        = placeNames || []; },  [placeNames]);
   useEffect(() => { goalNamesRef.current         = goalNames || []; },   [goalNames]);
@@ -1242,7 +1245,11 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         findMatch: makeSlashSuggestionMatch(),
         itemsFn: (query) => {
           // Bare / — show command menu
-          if (!query) return ['__cmd__:p', '__cmd__:n', '__cmd__:l', '__cmd__:d', '__cmd__:r', '__cmd__:h', '__cmd__:g', ...(noteTitle ? ['__cmd__:t'] : []), ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
+          if (!query) {
+            const baseCmds = ['__cmd__:p', '__cmd__:n', '__cmd__:l', '__cmd__:d', '__cmd__:g', ...(noteTitle ? ['__cmd__:t'] : []), ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
+            if (showScheduleTagsRef.current) baseCmds.splice(4, 0, '__cmd__:r', '__cmd__:h');
+            return baseCmds;
+          }
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
           const search = query.slice(1).replace(/^\s+/, '');  // text after /p or /n
@@ -1320,10 +1327,12 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             return matches.length ? matches : ['__drawing__:' + (qTrim || 'drawing')];
           }
           if (cmd === 'r') {
+            if (!showScheduleTagsRef.current) return [];
             // Repeat/recurrence suggestions
             return getRecurrenceSuggestions(search);
           }
           if (cmd === 'h') {
+            if (!showScheduleTagsRef.current) return [];
             // Habit suggestions — same schedule options as /r but inserts habitTag
             // "/h mwf 10"      → count-limited: MWF until 10 completions  → {h:mwf:M·W·F:10}
             // "/h mwf 10 days" → time-limited:  MWF for 10 days          → {h:mwf:M·W·F:10d}

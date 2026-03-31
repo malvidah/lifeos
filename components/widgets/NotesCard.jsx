@@ -565,6 +565,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 value={activeNote.content || ''}
                 noteTitle
                 autoFocus
+                showScheduleTags={false}
                 onBlur={html => updateNoteContent(activeNote.id, html)}
                 onImageUpload={file => uploadImageFile(file, token)}
                 onImageDelete={src => deleteImageFile(src, token)}
@@ -588,6 +589,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 key="phantom"
                 value=""
                 noteTitle
+                showScheduleTags={false}
                 onBlur={html => {
                   if (skipPhantomBlur.current) { skipPhantomBlur.current = false; return; }
                   const text = html?.replace(/<[^>]*>/g, '').trim();
