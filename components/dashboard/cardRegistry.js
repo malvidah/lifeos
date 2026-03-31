@@ -199,10 +199,10 @@ export const CARD_REGISTRY = [
   },
   {
     id: 'drawings',
-    label: '✏️ Drawings',
-    icon: <span style={{fontSize:14,lineHeight:1}}>✏️</span>,
+    label: '🖼️ Drawings',
+    icon: <span style={{fontSize:14,lineHeight:1}}>🖼️</span>,
     render: (props) => (
-      <ErrorBoundary label="✏️ Drawings">
+      <ErrorBoundary label="🖼️ Drawings">
         <DrawingsCard token={props.token} userId={props.userId} />
       </ErrorBoundary>
     ),

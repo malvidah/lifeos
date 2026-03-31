@@ -411,7 +411,14 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size }) {
   }, []);
 
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: '100%', height: '100%', background: '#fff', overflow: 'hidden', borderRadius: 6, touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}>
+    <div ref={containerRef} style={{
+      position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: 6,
+      touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
+      // Dot grid — purely decorative CSS, never touches the canvas or exports
+      background: '#fff',
+      backgroundImage: 'radial-gradient(circle, rgba(0,0,0,0.18) 1px, transparent 1px)',
+      backgroundSize: '20px 20px',
+    }}>
       <canvas
         ref={canvasRef}
         style={{ display: 'block', cursor: 'none', touchAction: 'none', userSelect: 'none' }}
@@ -573,7 +580,7 @@ const pillBtnStyle = {
 };
 
 // ── Right toolbar: Brush, Eraser, Color ───────────────────────────────────────
-function RightToolbar({ tool, setTool, color, setColor }) {
+function RightToolbar({ tool, setTool, color, setColor, onShare }) {
   const [showPalette, setShowPalette] = useState(false);
 
   return (
@@ -616,6 +623,19 @@ function RightToolbar({ tool, setTool, color, setColor }) {
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M20 20H7L3 16l12-12 5 5-5 5"/>
           <path d="M6.7 10.3L3 14"/>
+        </svg>
+      </button>
+
+      {/* Share / download */}
+      <button
+        onPointerDown={e => { e.stopPropagation(); onShare(); }}
+        style={pillBtnStyle}
+        title="Save as JPEG"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
       </button>
 
@@ -750,7 +770,35 @@ export default function DrawingsCard({ token, userId }) {
   const [isLoading, setIsLoading] = useState(false);
   const enqueue = useSaveQueue();
   const selectedIdRef = useRef(selectedId);
+  const lastCanvasRef = useRef(null); // for share/export
   useEffect(() => { selectedIdRef.current = selectedId; }, [selectedId]);
+
+  const handleShare = async () => {
+    const canvas = lastCanvasRef.current;
+    if (!canvas) return;
+    // Composite onto white background (canvas itself may have transparent BG)
+    const out = document.createElement('canvas');
+    out.width = canvas.width;
+    out.height = canvas.height;
+    const ctx = out.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, out.width, out.height);
+    ctx.drawImage(canvas, 0, 0);
+
+    // Try native share (iOS / Android)
+    if (typeof navigator !== 'undefined' && navigator.share && navigator.canShare) {
+      const blob = await new Promise(res => out.toBlob(res, 'image/jpeg', 0.92));
+      const file = new File([blob], 'drawing.jpg', { type: 'image/jpeg' });
+      if (navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'Drawing' }); return; } catch (_) {}
+      }
+    }
+    // Fallback: download JPEG
+    const a = document.createElement('a');
+    a.href = out.toDataURL('image/jpeg', 0.92);
+    a.download = 'drawing.jpg';
+    a.click();
+  };
 
   // Load drawing list on mount
   useEffect(() => {
@@ -802,6 +850,7 @@ export default function DrawingsCard({ token, userId }) {
 
   const handleStrokesChange = useCallback((nextStrokes, canvas, logSize) => {
     setStrokes(nextStrokes);
+    if (canvas) lastCanvasRef.current = canvas;
     const id = selectedIdRef.current;
     if (!id || !token) return;
 
@@ -822,7 +871,7 @@ export default function DrawingsCard({ token, userId }) {
   }, [token, enqueue]);
 
   return (
-    <Card label="✏️ Drawings" color={CARD_COLOR} collapsed={false} autoHeight expandHref="/drawings">
+    <Card label="🖼️ Drawings" color={CARD_COLOR} collapsed={false} autoHeight expandHref="/drawings">
       <DrawingStrip
         drawings={drawings}
         selectedId={selectedId}
@@ -832,7 +881,7 @@ export default function DrawingsCard({ token, userId }) {
       />
       <div style={{ position: 'relative', width: '100%', height: 400, flexShrink: 0 }}>
         {/* Right floating toolbar — sits over canvas */}
-        <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} />
+        <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onShare={handleShare} />
         {/* Canvas */}
         <DrawingCanvas
           strokes={strokes}

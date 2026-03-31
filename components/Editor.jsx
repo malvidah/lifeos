@@ -890,7 +890,7 @@ function SuggestionDropdown({ state, onSelect }) {
                                  : item.startsWith('__create__:') ? item.slice(11)
                                  : item.slice(9);
         const dateStr            = isDate ? item.slice(9, 19) : null;
-        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === 'l' ? '/l  Location' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Date' : rawLabel === 'r' ? '/r  Repeat' : rawLabel === 'h' ? '/h  Habit' : rawLabel === 'g' ? '/g  Goal' : rawLabel === 't' ? '/t  Table' : '/m  Media')
+        const label              = isCmd ? (rawLabel === 'p' ? '/p  Project' : rawLabel === 'n' ? '/n  Note' : rawLabel === 'l' ? '/l  Location' : rawLabel === '@' ? '/@  Date' : rawLabel === 'd' ? '/d  Drawing' : rawLabel === 'r' ? '/r  Repeat' : rawLabel === 'h' ? '/h  Habit' : rawLabel === 'g' ? '/g  Goal' : rawLabel === 't' ? '/t  Table' : '/m  Media')
                                  : isTable ? `⊞ Insert table`
                                  : isHabit ? `🎯 ${rawLabel}`
                                  : isRecurrence ? `↻ ${rawLabel}`
@@ -1851,7 +1851,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           sugg?.command(item); setSugg(null); firstSlashTip.show();
         }}
       />
-      <Tip visible={firstSlashTip.visible} message="All commands: /h habit, /r repeat, /p project, /l location, /d date, /t table" anchorRef={editorContainerRef} position="below" onDismiss={firstSlashTip.dismiss} />
+      <Tip visible={firstSlashTip.visible} message="All commands: /h habit, /r repeat, /p project, /l location, /d drawing, /t table" anchorRef={editorContainerRef} position="below" onDismiss={firstSlashTip.dismiss} />
     </>
   );
 });
