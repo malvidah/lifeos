@@ -202,33 +202,23 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   const handlePointerCancel = useCallback(() => { pointerRef.current = null; }, []);
 
   // ── Trackpad two-finger swipe (wheel events) ──────────────────────────────
-  // One navigation per physical gesture, no momentum continuation.
-  // A "gesture" ends when wheel events stop for 100ms (the OS physics engine
-  // fires events ~every 16ms while active, so 100ms of silence is unambiguous).
-  // gestureNavigated prevents momentum tail events from triggering a second
-  // navigation within the same gesture.
+  // One navigation per physical gesture.
   //
-  // NEW-GESTURE BURST DETECTION:
-  // If gestureNavigated is true (we already navigated) and a new wheel event
-  // arrives that is significantly larger than the previous event, it's almost
-  // certainly a fresh finger contact — real momentum always decelerates
-  // smoothly, so a sudden surge means a new swipe started before the old
-  // momentum fully died. We reset the accumulator so the new gesture can fire.
+  // Two timers serve different purposes:
+  //   idleTimer  — 100ms of silence resets a partial (non-navigating) gesture
+  //                so its partial accDeltaX doesn't bleed into the next one.
+  //   rearmTimer — fires 350ms after a navigation (just past the 280ms CSS
+  //                transition) to unlock the next gesture. This decouples
+  //                "ready for next swipe" from momentum tail events, which can
+  //                keep firing for seconds and would otherwise block new input.
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
     let gestureNavigated = false;
     let accDeltaX        = 0;
-    let lastAbsDeltaX    = 0;
     let idleTimer        = null;
-
-    const resetGesture = () => {
-      idleTimer        = null;
-      accDeltaX        = 0;
-      gestureNavigated = false;
-      lastAbsDeltaX    = 0;
-    };
+    let rearmTimer       = null;
 
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
@@ -236,29 +226,28 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       if (isInsideHorizontalScroll(e.target, outer)) return;
       if (e.target.closest('[data-no-page-swipe]')) return;
 
-      const absDelta = Math.abs(e.deltaX);
+      // While locked after a navigation, ignore all events (momentum tail).
+      // The rearmTimer will unlock us after the transition finishes.
+      if (gestureNavigated) return;
 
-      // Burst detection: a new swipe while momentum from a prior gesture is
-      // still running. Momentum decelerates monotonically, so an event that
-      // is ≥1.8× the last one strongly signals a new finger contact.
-      if (gestureNavigated && lastAbsDeltaX > 0 && absDelta >= lastAbsDeltaX * 1.8 && absDelta > 8) {
-        accDeltaX        = 0;
-        gestureNavigated = false;
-        // keep lastAbsDeltaX = absDelta (set below) so the burst itself seeds
-        // the tracking window for the new gesture
-      }
-      lastAbsDeltaX = absDelta;
-
-      // Any event from this gesture resets the idle timer
+      // Reset partial accumulation if the user pauses between gestures.
       if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(resetGesture, 100);
-
-      if (gestureNavigated) return; // already navigated this gesture
+      idleTimer = setTimeout(() => { idleTimer = null; accDeltaX = 0; }, 100);
 
       accDeltaX += e.deltaX;
-      if (Math.abs(accDeltaX) < 60) return;
+      if (Math.abs(accDeltaX) < 40) return;
 
+      // Navigate
       gestureNavigated = true;
+      if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+
+      // Re-arm after transition completes — fresh accumulator for next swipe
+      rearmTimer = setTimeout(() => {
+        rearmTimer       = null;
+        accDeltaX        = 0;
+        gestureNavigated = false;
+      }, 350);
+
       const idx    = currentIdxRef.current;
       const total  = pageCountRef.current;
       const newIdx = accDeltaX > 0 ? Math.min(idx + 1, total - 1) : Math.max(idx - 1, 0);
@@ -268,7 +257,8 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     outer.addEventListener('wheel', onWheel, { passive: true });
     return () => {
       outer.removeEventListener('wheel', onWheel);
-      if (idleTimer) clearTimeout(idleTimer);
+      if (idleTimer)  clearTimeout(idleTimer);
+      if (rearmTimer) clearTimeout(rearmTimer);
     };
   }, []);
 
