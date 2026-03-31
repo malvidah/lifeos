@@ -699,7 +699,7 @@ export default function DrawingsCard({ token, userId }) {
   useEffect(() => {
     if (!token) return;
     setIsLoading(true);
-    api('/api/drawings', { token })
+    api.get('/api/drawings', token)
       .then(d => {
         const list = d.drawings ?? [];
         setDrawings(list);
@@ -717,7 +717,7 @@ export default function DrawingsCard({ token, userId }) {
   const loadDrawing = async (id) => {
     if (!token) return;
     try {
-      const d = await api(`/api/drawings?id=${id}`, { token });
+      const d = await api.get(`/api/drawings?id=${id}`, token);
       const drawing = d.drawing;
       if (!drawing) return;
       setSelectedId(drawing.id);
@@ -731,7 +731,7 @@ export default function DrawingsCard({ token, userId }) {
   const createDrawing = async () => {
     if (!token) return;
     try {
-      const d = await api('/api/drawings', { method: 'POST', token, body: { title: 'Untitled', strokes: [], thumbnail: null } });
+      const d = await api.post('/api/drawings', { title: 'Untitled', strokes: [], thumbnail: null }, token);
       const drawing = d.drawing;
       if (!drawing) return;
       setDrawings(prev => [drawing, ...prev]);
@@ -754,11 +754,7 @@ export default function DrawingsCard({ token, userId }) {
         thumbnail = generateThumbnail(canvas, logSize.w, logSize.h);
       }
       try {
-        const d = await api('/api/drawings', {
-          method: 'PATCH',
-          token,
-          body: { id, strokes: nextStrokes, thumbnail },
-        });
+        const d = await api.patch('/api/drawings', { id, strokes: nextStrokes, thumbnail }, token);
         if (d.drawing) {
           setDrawings(prev => prev.map(dr => dr.id === id ? { ...dr, thumbnail: d.drawing.thumbnail, updated_at: d.drawing.updated_at } : dr));
         }
