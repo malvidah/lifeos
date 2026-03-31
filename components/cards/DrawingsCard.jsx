@@ -169,7 +169,7 @@ function useSaveQueue() {
 }
 
 // ── DrawingCanvas ──────────────────────────────────────────────────────────────
-function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, paperDots, dark }) {
+function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, paperDots, dark, onDelete }) {
   const canvasRef = useRef(null);
   const cursorRef = useRef(null);
   const containerRef = useRef(null);
@@ -443,11 +443,11 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         }}
       />
 
-      {/* ── Left: Undo + Redo + Size + Clear ────────────────────────────────── */}
+      {/* ── Left: Undo + Redo + Size + Delete ───────────────────────────────── */}
       <LeftControls
         onUndo={handleUndo}
         onRedo={handleRedo}
-        onClear={handleClear}
+        onDelete={onDelete}
         sizeRef={sizeRef}
         dark={dark}
       />
@@ -462,9 +462,10 @@ const SIZE_PRESETS = [
   { label: 'L', value: 20, dot: 16 },
 ];
 
-// ── Left controls: undo/redo, size toggles, clear ─────────────────────────────
-function LeftControls({ onUndo, onRedo, onClear, sizeRef, dark }) {
+// ── Left controls: undo/redo, size toggles, delete ────────────────────────────
+function LeftControls({ onUndo, onRedo, onDelete, sizeRef, dark }) {
   const [sizeIdx, setSizeIdx] = useState(1); // default: Medium
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Keep sizeRef in sync with selected preset
   useEffect(() => {
@@ -525,12 +526,47 @@ function LeftControls({ onUndo, onRedo, onClear, sizeRef, dark }) {
         ))}
       </div>
 
-      {/* Clear */}
-      <button onPointerDown={e => { e.stopPropagation(); onClear(); }} style={pillBtnStyle(dark)} title="Clear canvas">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
-        </svg>
-      </button>
+      {/* Delete drawing — with confirm */}
+      {confirmDelete ? (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+          background: dark ? 'rgba(62,54,44,0.97)' : 'rgba(240,238,234,0.97)',
+          backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+          border: dark ? '1px solid rgba(255,100,100,0.4)' : '1px solid rgba(180,0,0,0.25)',
+          borderRadius: 10, padding: '8px 6px',
+          boxShadow: dark ? '0 2px 12px rgba(0,0,0,0.6)' : '0 2px 12px rgba(0,0,0,0.18)',
+        }}>
+          <span style={{
+            fontFamily: mono, fontSize: 9, fontWeight: 400, letterSpacing: '0.06em',
+            textTransform: 'uppercase', color: dark ? 'rgba(255,120,120,0.9)' : 'rgba(180,0,0,0.8)',
+            whiteSpace: 'nowrap',
+          }}>Delete?</span>
+          <button
+            onPointerDown={e => { e.stopPropagation(); setConfirmDelete(false); onDelete(); }}
+            style={{ ...pillBtnStyle(dark), background: 'rgba(200,50,50,0.85)', color: '#fff', border: '1px solid rgba(255,100,100,0.4)' }}
+            title="Yes, delete"
+          >
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <line x1="2" y1="2" x2="12" y2="12"/><line x1="12" y1="2" x2="2" y2="12"/>
+            </svg>
+          </button>
+          <button
+            onPointerDown={e => { e.stopPropagation(); setConfirmDelete(false); }}
+            style={pillBtnStyle(dark)}
+            title="Cancel"
+          >
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <polyline points="2,7 5.5,11 12,3"/>
+            </svg>
+          </button>
+        </div>
+      ) : (
+        <button onPointerDown={e => { e.stopPropagation(); setConfirmDelete(true); }} style={pillBtnStyle(dark)} title="Delete drawing">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
+          </svg>
+        </button>
+      )}
     </div>
   );
 }
@@ -775,8 +811,17 @@ const titleStyle = {
 function DrawingTitleEditor({ title, onRename }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
+  const inputRef = useRef(null);
 
   useEffect(() => { setDraft(title); setEditing(false); }, [title]);
+
+  // Explicitly focus + select after React commits the input to the DOM
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
 
   const commit = () => {
     const trimmed = draft.trim() || 'Untitled';
@@ -788,6 +833,7 @@ function DrawingTitleEditor({ title, onRename }) {
   if (editing) {
     return (
       <input
+        ref={inputRef}
         value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
@@ -795,11 +841,11 @@ function DrawingTitleEditor({ title, onRename }) {
           if (e.key === 'Enter') { e.preventDefault(); commit(); }
           if (e.key === 'Escape') { setDraft(title); setEditing(false); }
         }}
-        autoFocus
         style={{
           ...titleStyle,
           width: '100%', background: 'transparent', border: 'none',
           borderBottom: '1.5px solid var(--dl-accent)', outline: 'none',
+          display: 'block',
         }}
       />
     );
@@ -814,6 +860,7 @@ function DrawingTitleEditor({ title, onRename }) {
         userSelect: 'none',
         borderBottom: '1px solid transparent',
         transition: 'border-color 0.15s',
+        minHeight: 22,
       }}
       onMouseEnter={e => { e.currentTarget.style.borderBottomColor = 'var(--dl-accent)'; }}
       onMouseLeave={e => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
@@ -966,6 +1013,27 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
     }
   }, [token]);
 
+  const handleDeleteDrawing = useCallback(async () => {
+    const id = selectedIdRef.current;
+    if (!id || !token) return;
+    // Optimistically remove from list
+    const remaining = drawings.filter(d => d.id !== id);
+    setDrawings(remaining);
+    try {
+      await api.delete(`/api/drawings?id=${id}`, token);
+    } catch (e) {
+      console.error('delete drawing error', e);
+      showToast('Failed to delete drawing');
+    }
+    // Load next drawing or create fresh one
+    if (remaining.length > 0) {
+      loadDrawing(remaining[0].id);
+    } else {
+      createDrawing();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, drawings]);
+
   const handleStrokesChange = useCallback((nextStrokes, canvas, logSize) => {
     setStrokes(nextStrokes);
     if (canvas) lastCanvasRef.current = canvas;
@@ -1012,6 +1080,7 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
           paperBg={paperBg}
           paperDots={paperDots}
           dark={dark}
+          onDelete={handleDeleteDrawing}
         />
       </div>
     </Card>
