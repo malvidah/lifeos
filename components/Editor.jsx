@@ -1315,7 +1315,9 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
           }
           if (cmd === 'd') {
             // Drawing suggestions — show user's drawing titles
-            const names  = drawingNamesRef.current || [];
+            // drawingNames can be string[] or { title, thumbnail }[]
+            const rawNames = drawingNamesRef.current || [];
+            const names = rawNames.map(d => typeof d === 'object' ? d.title : d);
             const q      = search.toLowerCase().replace(/\s/g, '');
             const qTrim  = search.trim();
             const matches = names

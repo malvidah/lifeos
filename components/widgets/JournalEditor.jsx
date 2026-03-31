@@ -40,6 +40,16 @@ export function stripImageChips(html) {
   return result;
 }
 
+// Extract drawing tag titles from journal/note content
+export function extractDrawingTags(content) {
+  if (!content) return [];
+  const titles = [];
+  const re = /data-drawing-tag="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(content)) !== null) titles.push(m[1]);
+  return [...new Set(titles)];
+}
+
 // Extract image URLs from journal/note content
 export function extractImages(content) {
   if (!content) return [];
@@ -562,6 +572,26 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
+  // Build a thumbnail map from drawing objects in context
+  const drawingThumbnailMap = useMemo(() => {
+    const map = {};
+    (ctxDrawings || []).forEach(d => {
+      if (d && typeof d === 'object' && d.title && d.thumbnail) {
+        map[d.title] = d.thumbnail;
+      }
+    });
+    return map;
+  }, [ctxDrawings]);
+
+  // Drawing thumbnails referenced by /d tags in the journal content
+  const drawingImages = useMemo(() => {
+    const titles = extractDrawingTags(value);
+    return titles.map(t => drawingThumbnailMap[t]).filter(Boolean);
+  }, [value, drawingThumbnailMap]);
+
+  // All visual media: real photos + drawing thumbnails
+  const allImages = useMemo(() => [...images, ...drawingImages], [images, drawingImages]);
+
   // Persist mode preference to user_settings for public share pages only
   useEffect(() => {
     if (journalMode) return; // only run in day mode
@@ -572,13 +602,12 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   // Close slideshow when navigating to a day with no images
   useEffect(() => {
-    if (journalMode) return; // only run in day mode
-    if (images.length === 0 && lightboxIdx != null) setLightboxIdx(null);
-    // Clamp index if beyond available images
-    if (lightboxIdx != null && images.length > 0 && lightboxIdx >= images.length) {
+    if (journalMode) return;
+    if (allImages.length === 0 && lightboxIdx != null) setLightboxIdx(null);
+    if (lightboxIdx != null && allImages.length > 0 && lightboxIdx >= allImages.length) {
       setLightboxIdx(0);
     }
-  }, [images.length, journalMode]); // eslint-disable-line
+  }, [allImages.length, journalMode]); // eslint-disable-line
 
   // Format date for chip label: "Mar 16"
   const chipDate = useMemo(() => {
@@ -643,14 +672,27 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   // Click delegation: image chip → open slideshow at that photo
   const handleChipClick = useCallback((e) => {
-    const chip = e.target.closest?.('[data-image-chip]');
-    if (!chip) return;
-    const url = chip.dataset.imageChip;
-    if (!url) return;
-    const idx = images.indexOf(url);
-    if (idx === -1) return;
-    setLightboxIdx(idx);
-  }, [images]);
+    // Photo chip click
+    const photoChip = e.target.closest?.('[data-image-chip]');
+    if (photoChip) {
+      const url = photoChip.dataset.imageChip;
+      if (!url) return;
+      const idx = allImages.indexOf(url);
+      if (idx !== -1) setLightboxIdx(idx);
+      return;
+    }
+    // Drawing chip click
+    const drawingChip = e.target.closest?.('[data-drawing-tag]');
+    if (drawingChip) {
+      const dTitle = drawingChip.dataset.drawingTag;
+      if (!dTitle) return;
+      const thumb = drawingThumbnailMap[dTitle];
+      if (thumb) {
+        const idx = allImages.indexOf(thumb);
+        if (idx !== -1) setLightboxIdx(idx);
+      }
+    }
+  }, [allImages, drawingThumbnailMap]);
 
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
@@ -703,10 +745,10 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {lightboxIdx != null && images.length > 0 ? (
-        <Slideshow images={images} index={lightboxIdx} onClose={() => setLightboxIdx(null)} />
-      ) : images.length > 0 ? (
-        <PhotoStrip images={images} onViewImage={i => setLightboxIdx(i)} onReorder={reorderImages} />
+      {lightboxIdx != null && allImages.length > 0 ? (
+        <Slideshow images={allImages} index={lightboxIdx} onClose={() => setLightboxIdx(null)} />
+      ) : allImages.length > 0 ? (
+        <PhotoStrip images={allImages} onViewImage={i => setLightboxIdx(i)} onReorder={images.length > 1 ? reorderImages : undefined} />
       ) : null}
       {(dragging || uploading) ? (
         <DropZone uploading={uploading} />

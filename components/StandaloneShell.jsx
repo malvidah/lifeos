@@ -32,7 +32,10 @@ function ShellInner({ label, children }) {
       setPlaceNames((d?.places ?? []).map(p => p.name));
     });
     api.get('/api/drawings', token).then(d => {
-      setDrawingNames((d?.drawings ?? []).map(dr => dr.title || 'Untitled'));
+      setDrawingNames((d?.drawings ?? []).map(dr => ({
+        title: dr.title || 'Untitled',
+        thumbnail: dr.thumbnail || null,
+      })));
     }).catch(() => {});
     // Check strava connection status
     api.get('/api/settings', token).then(d => {

@@ -169,7 +169,7 @@ function useSaveQueue() {
 }
 
 // ── DrawingCanvas ──────────────────────────────────────────────────────────────
-function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, paperDots }) {
+function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, paperDots, dark }) {
   const canvasRef = useRef(null);
   const cursorRef = useRef(null);
   const containerRef = useRef(null);
@@ -443,12 +443,13 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         }}
       />
 
-      {/* ── Left: Size slider + Undo + Redo + Clear ──────────────────────────── */}
+      {/* ── Left: Undo + Redo + Size + Clear ────────────────────────────────── */}
       <LeftControls
         onUndo={handleUndo}
         onRedo={handleRedo}
         onClear={handleClear}
         sizeRef={sizeRef}
+        dark={dark}
       />
     </div>
   );
@@ -462,7 +463,7 @@ const SIZE_PRESETS = [
 ];
 
 // ── Left controls: undo/redo, size toggles, clear ─────────────────────────────
-function LeftControls({ onUndo, onRedo, onClear, sizeRef }) {
+function LeftControls({ onUndo, onRedo, onClear, sizeRef, dark }) {
   const [sizeIdx, setSizeIdx] = useState(1); // default: Medium
 
   // Keep sizeRef in sync with selected preset
@@ -472,33 +473,18 @@ function LeftControls({ onUndo, onRedo, onClear, sizeRef }) {
 
   return (
     <div style={{
-      position: 'absolute',
-      left: 10,
-      top: '50%',
-      transform: 'translateY(-50%)',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 8,
-      zIndex: 20,
+      position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, zIndex: 20,
     }}>
       {/* Undo */}
-      <button
-        onPointerDown={e => { e.stopPropagation(); onUndo(); }}
-        style={pillBtnStyle}
-        title="Undo (⌘Z)"
-      >
+      <button onPointerDown={e => { e.stopPropagation(); onUndo(); }} style={pillBtnStyle(dark)} title="Undo (⌘Z)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 7v6h6"/><path d="M3 13C4.7 8.7 8.9 6 14 6a9 9 0 0 1 0 18 9 9 0 0 1-8.46-5.9"/>
         </svg>
       </button>
 
       {/* Redo */}
-      <button
-        onPointerDown={e => { e.stopPropagation(); onRedo(); }}
-        style={pillBtnStyle}
-        title="Redo (⌘⇧Z)"
-      >
+      <button onPointerDown={e => { e.stopPropagation(); onRedo(); }} style={pillBtnStyle(dark)} title="Redo (⌘⇧Z)">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 7v6h-6"/><path d="M21 13C19.3 8.7 15.1 6 10 6a9 9 0 0 0 0 18 9 9 0 0 0 8.46-5.9"/>
         </svg>
@@ -506,17 +492,13 @@ function LeftControls({ onUndo, onRedo, onClear, sizeRef }) {
 
       {/* Size toggles: S / M / L */}
       <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        background: 'rgba(240,238,234,0.92)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        border: '1px solid rgba(0,0,0,0.10)',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        background: dark ? 'rgba(62,54,44,0.95)' : 'rgba(240,238,234,0.92)',
+        backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+        border: dark ? '1px solid rgba(255,255,255,0.10)' : '1px solid rgba(0,0,0,0.10)',
         borderRadius: 14,
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        overflow: 'hidden',
-        width: 28,
+        boxShadow: dark ? '0 2px 8px rgba(0,0,0,0.5)' : '0 2px 8px rgba(0,0,0,0.15)',
+        overflow: 'hidden', width: 28,
       }}>
         {SIZE_PRESETS.map((preset, i) => (
           <button
@@ -524,35 +506,27 @@ function LeftControls({ onUndo, onRedo, onClear, sizeRef }) {
             onPointerDown={e => { e.stopPropagation(); setSizeIdx(i); }}
             title={`${preset.label} (${preset.value}px)`}
             style={{
-              width: 28,
-              height: 32,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: sizeIdx === i ? 'rgba(0,0,0,0.12)' : 'transparent',
+              width: 28, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: sizeIdx === i ? dark ? 'rgba(255,255,255,0.10)' : 'rgba(0,0,0,0.12)' : 'transparent',
               border: 'none',
-              borderBottom: i < SIZE_PRESETS.length - 1 ? '1px solid rgba(0,0,0,0.08)' : 'none',
-              cursor: 'pointer',
-              padding: 0,
-              outline: 'none',
+              borderBottom: i < SIZE_PRESETS.length - 1
+                ? dark ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(0,0,0,0.08)'
+                : 'none',
+              cursor: 'pointer', padding: 0, outline: 'none',
             }}
           >
             <div style={{
-              width: preset.dot,
-              height: preset.dot,
-              borderRadius: '50%',
-              background: sizeIdx === i ? 'rgba(0,0,0,0.55)' : 'rgba(0,0,0,0.25)',
+              width: preset.dot, height: preset.dot, borderRadius: '50%',
+              background: sizeIdx === i
+                ? dark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.55)'
+                : dark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)',
             }} />
           </button>
         ))}
       </div>
 
       {/* Clear */}
-      <button
-        onPointerDown={e => { e.stopPropagation(); onClear(); }}
-        style={pillBtnStyle}
-        title="Clear canvas"
-      >
+      <button onPointerDown={e => { e.stopPropagation(); onClear(); }} style={pillBtnStyle(dark)} title="Clear canvas">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/>
         </svg>
@@ -561,24 +535,17 @@ function LeftControls({ onUndo, onRedo, onClear, sizeRef }) {
   );
 }
 
-const pillBtnStyle = {
-  width: 28,
-  height: 28,
-  borderRadius: '50%',
-  border: '1px solid rgba(0,0,0,0.12)',
-  background: 'rgba(240,238,234,0.92)',
-  backdropFilter: 'blur(8px)',
-  WebkitBackdropFilter: 'blur(8px)',
-  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
+const pillBtnStyle = (dark = false) => ({
+  width: 28, height: 28, borderRadius: '50%',
+  border: dark ? '1px solid rgba(255,255,255,0.14)' : '1px solid rgba(0,0,0,0.12)',
+  background: dark ? 'rgba(62,54,44,0.95)' : 'rgba(240,238,234,0.92)',
+  backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+  boxShadow: dark ? '0 2px 8px rgba(0,0,0,0.5)' : '0 2px 8px rgba(0,0,0,0.15)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
   cursor: 'pointer',
-  color: 'rgba(0,0,0,0.6)',
-  padding: 0,
-  outline: 'none',
-  touchAction: 'none',
-};
+  color: dark ? 'rgba(255,255,255,0.78)' : 'rgba(0,0,0,0.6)',
+  padding: 0, outline: 'none', touchAction: 'none',
+});
 
 const saveMenuItemStyle = {
   display: 'block', width: '100%', textAlign: 'left', border: 'none', borderRadius: 6,
@@ -590,7 +557,7 @@ const saveMenuItemStyle = {
 // ── Right toolbar: Brush, Eraser, Color ───────────────────────────────────────
 const isIOS = typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent || '');
 
-function RightToolbar({ tool, setTool, color, setColor, onSave }) {
+function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
   const [showPalette, setShowPalette] = useState(false);
   const [showSaveMenu, setShowSaveMenu] = useState(false);
 
@@ -609,9 +576,13 @@ function RightToolbar({ tool, setTool, color, setColor, onSave }) {
       <button
         onPointerDown={e => { e.stopPropagation(); setTool('pen'); }}
         style={{
-          ...pillBtnStyle,
-          border: tool === 'pen' ? '2px solid rgba(0,0,0,0.5)' : '1px solid rgba(0,0,0,0.12)',
-          background: tool === 'pen' ? 'rgba(255,255,255,0.95)' : 'rgba(240,238,234,0.92)',
+          ...pillBtnStyle(dark),
+          border: tool === 'pen'
+            ? dark ? '2px solid rgba(255,255,255,0.6)' : '2px solid rgba(0,0,0,0.5)'
+            : dark ? '1px solid rgba(255,255,255,0.14)' : '1px solid rgba(0,0,0,0.12)',
+          background: tool === 'pen'
+            ? dark ? 'rgba(90,80,68,0.98)' : 'rgba(255,255,255,0.95)'
+            : undefined,
         }}
         title="Brush"
       >
@@ -625,9 +596,13 @@ function RightToolbar({ tool, setTool, color, setColor, onSave }) {
       <button
         onPointerDown={e => { e.stopPropagation(); setTool('eraser'); }}
         style={{
-          ...pillBtnStyle,
-          border: tool === 'eraser' ? '2px solid rgba(0,0,0,0.5)' : '1px solid rgba(0,0,0,0.12)',
-          background: tool === 'eraser' ? 'rgba(255,255,255,0.95)' : 'rgba(240,238,234,0.92)',
+          ...pillBtnStyle(dark),
+          border: tool === 'eraser'
+            ? dark ? '2px solid rgba(255,255,255,0.6)' : '2px solid rgba(0,0,0,0.5)'
+            : dark ? '1px solid rgba(255,255,255,0.14)' : '1px solid rgba(0,0,0,0.12)',
+          background: tool === 'eraser'
+            ? dark ? 'rgba(90,80,68,0.98)' : 'rgba(255,255,255,0.95)'
+            : undefined,
         }}
         title="Eraser"
       >
@@ -645,7 +620,7 @@ function RightToolbar({ tool, setTool, color, setColor, onSave }) {
             if (isIOS) { onSave('native'); }
             else { setShowSaveMenu(p => !p); }
           }}
-          style={pillBtnStyle}
+          style={pillBtnStyle(dark)}
           title={isIOS ? 'Share drawing' : 'Save drawing'}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -734,33 +709,22 @@ function RightToolbar({ tool, setTool, color, setColor, onSave }) {
 }
 
 // ── Drawing tab strip ─────────────────────────────────────────────────────────
-function DrawingStrip({ drawings, selectedId, onSelect, onCreate, isLoading }) {
+function DrawingStrip({ drawings, selectedId, onSelect, onCreate, isLoading, dark }) {
   return (
     <div style={{
-      display: 'flex',
-      gap: 4,
-      padding: '6px 0 4px 0',
-      overflowX: 'auto',
-      alignItems: 'center',
-      minHeight: 40,
-      flexShrink: 0,
+      display: 'flex', gap: 4, padding: '6px 0 4px 0', overflowX: 'auto',
+      alignItems: 'center', minHeight: 40, flexShrink: 0,
+      scrollbarWidth: 'none', msOverflowStyle: 'none',
     }}>
       {/* New drawing button */}
       <button
         onClick={onCreate}
         style={{
-          flexShrink: 0,
-          height: 30,
-          width: 30,
-          borderRadius: 6,
-          border: '1.5px dashed rgba(0,0,0,0.22)',
-          background: 'transparent',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: 18,
-          color: 'rgba(0,0,0,0.35)',
+          flexShrink: 0, height: 28, width: 28, borderRadius: 6,
+          border: dark ? '1.5px dashed rgba(255,255,255,0.2)' : '1.5px dashed rgba(0,0,0,0.22)',
+          background: 'transparent', cursor: 'pointer',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 18, color: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)',
         }}
         title="New drawing"
       >+</button>
@@ -777,21 +741,18 @@ function DrawingStrip({ drawings, selectedId, onSelect, onCreate, isLoading }) {
             onClick={() => onSelect(d.id)}
             title={d.title}
             style={{
-              flexShrink: 0,
-              height: 30,
-              maxWidth: 140,
-              padding: '0 10px',
-              borderRadius: 6,
-              border: selected ? '2px solid var(--dl-accent)' : '1.5px solid rgba(0,0,0,0.13)',
-              background: selected ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.03)',
+              flexShrink: 0, height: 28, maxWidth: 140, padding: '0 10px', borderRadius: 6,
+              border: selected
+                ? '2px solid var(--dl-accent)'
+                : dark ? '1.5px solid rgba(255,255,255,0.13)' : '1.5px solid rgba(0,0,0,0.13)',
+              background: selected
+                ? dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.9)'
+                : 'transparent',
               cursor: 'pointer',
-              fontFamily: mono,
-              fontSize: F.xs,
-              fontWeight: selected ? 600 : 400,
-              color: selected ? 'var(--dl-dark)' : 'var(--dl-middle)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              fontFamily: mono, fontSize: F.xs, fontWeight: 400,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: selected ? 'var(--dl-strong)' : 'var(--dl-middle)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
               transition: 'border-color 0.15s, background 0.15s',
             }}
           >
@@ -804,12 +765,16 @@ function DrawingStrip({ drawings, selectedId, onSelect, onCreate, isLoading }) {
 }
 
 // ── Inline title editor ────────────────────────────────────────────────────────
+const titleStyle = {
+  fontFamily: mono, fontSize: 13, fontWeight: 400,
+  letterSpacing: '0.1em', textTransform: 'uppercase',
+  color: 'var(--dl-strong)', padding: '2px 0', marginBottom: 4,
+};
+
 function DrawingTitleEditor({ title, onRename }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
-  const inputRef = useRef(null);
 
-  // Sync draft when title prop changes (e.g. switching drawings)
   useEffect(() => { setDraft(title); setEditing(false); }, [title]);
 
   const commit = () => {
@@ -819,32 +784,21 @@ function DrawingTitleEditor({ title, onRename }) {
     if (trimmed !== title) onRename(trimmed);
   };
 
-  const onKeyDown = (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); commit(); }
-    if (e.key === 'Escape') { setDraft(title); setEditing(false); }
-  };
-
   if (editing) {
     return (
       <input
-        ref={inputRef}
         value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={commit}
-        onKeyDown={onKeyDown}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          if (e.key === 'Escape') { setDraft(title); setEditing(false); }
+        }}
         autoFocus
         style={{
-          width: '100%',
-          fontFamily: mono,
-          fontSize: F.sm,
-          fontWeight: 600,
-          color: 'var(--dl-dark)',
-          background: 'transparent',
-          border: 'none',
-          borderBottom: '1.5px solid var(--dl-accent)',
-          outline: 'none',
-          padding: '2px 0',
-          marginBottom: 6,
+          ...titleStyle,
+          width: '100%', background: 'transparent', border: 'none',
+          borderBottom: '1.5px solid var(--dl-accent)', outline: 'none',
         }}
       />
     );
@@ -853,26 +807,10 @@ function DrawingTitleEditor({ title, onRename }) {
   return (
     <div
       onClick={() => setEditing(true)}
-      style={{
-        fontFamily: mono,
-        fontSize: F.sm,
-        fontWeight: 600,
-        color: 'var(--dl-dark)',
-        cursor: 'text',
-        padding: '2px 0',
-        marginBottom: 6,
-        userSelect: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-      }}
+      style={{ ...titleStyle, cursor: 'text', userSelect: 'none' }}
       title="Click to rename"
     >
       {title || 'Untitled'}
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.35, flexShrink: 0 }}>
-        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-      </svg>
     </div>
   );
 }
@@ -880,8 +818,9 @@ function DrawingTitleEditor({ title, onRename }) {
 // ── Main DrawingsCard ──────────────────────────────────────────────────────────
 export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
   const { theme } = useTheme();
-  const paperBg   = theme === 'dark' ? '#2d2922' : '#f5f0e8';
-  const paperDots = theme === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.15)';
+  const dark      = theme === 'dark';
+  const paperBg   = dark ? '#433c34' : '#f5f0e8';
+  const paperDots = dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.15)';
   const paperBgRef = useRef(paperBg);
   useEffect(() => { paperBgRef.current = paperBg; }, [paperBg]);
 
@@ -890,7 +829,7 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
   const [title, setTitle] = useState('Untitled');
   const [strokes, setStrokes] = useState([]);
   const [tool, setTool] = useState('pen');
-  const [color, setColor] = useState(DEFAULT_COLOR);
+  const [color, setColor] = useState(() => theme === 'dark' ? '#ffffff' : DEFAULT_COLOR);
   const [isLoading, setIsLoading] = useState(false);
   const enqueue = useSaveQueue();
   const selectedIdRef = useRef(selectedId);
@@ -903,7 +842,10 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
   const onDrawingNamesChangeRef = useRef(onDrawingNamesChange);
   useEffect(() => { onDrawingNamesChangeRef.current = onDrawingNamesChange; }, [onDrawingNamesChange]);
   useEffect(() => {
-    onDrawingNamesChangeRef.current?.(drawings.map(d => d.title || 'Untitled'));
+    onDrawingNamesChangeRef.current?.(drawings.map(d => ({
+      title: d.title || 'Untitled',
+      thumbnail: d.thumbnail || null,
+    })));
   }, [drawings]);
 
   const handleSave = useCallback(async (option) => {
@@ -1045,20 +987,22 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
         onSelect={loadDrawing}
         onCreate={createDrawing}
         isLoading={isLoading}
+        dark={dark}
       />
       <DrawingTitleEditor title={title} onRename={handleRenameDrawing} />
       <div style={{ position: 'relative', width: '100%', height: 400, flexShrink: 0 }}>
         {/* Right floating toolbar — sits over canvas */}
-        <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onSave={handleSave} />
+        <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onSave={handleSave} dark={dark} />
         {/* Canvas */}
         <DrawingCanvas
           strokes={strokes}
           onStrokesChange={handleStrokesChange}
           tool={tool}
           color={color}
-          size={DEFAULT_SIZE} // sizeRef managed inside DrawingCanvas via LeftControls
+          size={DEFAULT_SIZE}
           paperBg={paperBg}
           paperDots={paperDots}
+          dark={dark}
         />
       </div>
     </Card>
