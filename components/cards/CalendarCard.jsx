@@ -106,6 +106,17 @@ function MonthView({ initYear, initMonth, selected, onSelectDay, onMonthChange, 
     if (Math.abs(liveOff.current - target) > 0.5) animateTo.current(target);
   }, [initYear, initMonth]); // eslint-disable-line
 
+  // Jump back to today's month when the navbar date/label is clicked
+  useEffect(() => {
+    const onGoToToday = () => {
+      const t = new Date();
+      const target = t.getFullYear() * 12 + t.getMonth();
+      animateTo.current(target);
+    };
+    window.addEventListener('daylab:scroll-to-today', onGoToToday);
+    return () => window.removeEventListener('daylab:scroll-to-today', onGoToToday);
+  }, []);
+
   // ── Mount-only global listeners (refs keep them fresh) ─────────────────
   useEffect(() => {
     const onMouseMove = (e) => {
