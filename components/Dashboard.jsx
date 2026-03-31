@@ -419,8 +419,20 @@ function DashboardInner() {
     setHabitFilter_(f);
     try { localStorage.setItem('daylab:habitFilter', f); } catch {}
   }, []);
-  const [taskFilter, setTaskFilter] = useState('all');
-  const [goalsViewMode, setGoalsViewMode] = useState('kanban');
+  const [taskFilter, setTaskFilter_] = useState(() => {
+    try { return localStorage.getItem('daylab:taskFilter') || 'all'; } catch { return 'all'; }
+  });
+  const setTaskFilter = useCallback((f) => {
+    setTaskFilter_(f);
+    try { localStorage.setItem('daylab:taskFilter', f); } catch {}
+  }, []);
+  const [goalsViewMode, setGoalsViewMode_] = useState(() => {
+    try { return localStorage.getItem('daylab:goalsViewMode') || 'kanban'; } catch { return 'kanban'; }
+  });
+  const setGoalsViewMode = useCallback((m) => {
+    setGoalsViewMode_(m);
+    try { localStorage.setItem('daylab:goalsViewMode', m); } catch {}
+  }, []);
   // World-map collapse kept for navigateToPlace behavior
   const [timelineCollapsed, toggleTimeline] = useCollapse("world-map", true);
 
