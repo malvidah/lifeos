@@ -206,14 +206,29 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
   // A "gesture" ends when wheel events stop for 100ms (the OS physics engine
   // fires events ~every 16ms while active, so 100ms of silence is unambiguous).
   // gestureNavigated prevents momentum tail events from triggering a second
-  // navigation within the same gesture. No locking phases needed.
+  // navigation within the same gesture.
+  //
+  // NEW-GESTURE BURST DETECTION:
+  // If gestureNavigated is true (we already navigated) and a new wheel event
+  // arrives that is significantly larger than the previous event, it's almost
+  // certainly a fresh finger contact — real momentum always decelerates
+  // smoothly, so a sudden surge means a new swipe started before the old
+  // momentum fully died. We reset the accumulator so the new gesture can fire.
   useEffect(() => {
     const outer = outerRef.current;
     if (!outer) return;
 
     let gestureNavigated = false;
     let accDeltaX        = 0;
+    let lastAbsDeltaX    = 0;
     let idleTimer        = null;
+
+    const resetGesture = () => {
+      idleTimer        = null;
+      accDeltaX        = 0;
+      gestureNavigated = false;
+      lastAbsDeltaX    = 0;
+    };
 
     const onWheel = (e) => {
       if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
@@ -221,13 +236,22 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       if (isInsideHorizontalScroll(e.target, outer)) return;
       if (e.target.closest('[data-no-page-swipe]')) return;
 
-      // Any event from this gesture resets the idle timer
-      if (idleTimer) clearTimeout(idleTimer);
-      idleTimer = setTimeout(() => {
-        idleTimer        = null;
+      const absDelta = Math.abs(e.deltaX);
+
+      // Burst detection: a new swipe while momentum from a prior gesture is
+      // still running. Momentum decelerates monotonically, so an event that
+      // is ≥1.8× the last one strongly signals a new finger contact.
+      if (gestureNavigated && lastAbsDeltaX > 0 && absDelta >= lastAbsDeltaX * 1.8 && absDelta > 8) {
         accDeltaX        = 0;
         gestureNavigated = false;
-      }, 100);
+        // keep lastAbsDeltaX = absDelta (set below) so the burst itself seeds
+        // the tracking window for the new gesture
+      }
+      lastAbsDeltaX = absDelta;
+
+      // Any event from this gesture resets the idle timer
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(resetGesture, 100);
 
       if (gestureNavigated) return; // already navigated this gesture
 
