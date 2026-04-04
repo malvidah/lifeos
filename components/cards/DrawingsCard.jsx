@@ -622,10 +622,10 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
         }}
         title="Brush"
       >
-        {/* simple pen: diagonal line + nib dot */}
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-          <line x1="11" y1="2" x2="3" y2="10"/>
-          <circle cx="2.5" cy="11" r="1.5" fill="currentColor" stroke="none"/>
+        {/* Lucide pencil icon */}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
+          <path d="m15 5 4 4"/>
         </svg>
       </button>
 
@@ -643,9 +643,11 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
         }}
         title="Eraser"
       >
-        {/* simple eraser: small filled rectangle */}
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-          <rect x="2" y="5" width="10" height="6" rx="1.5"/>
+        {/* Lucide eraser icon */}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/>
+          <path d="M22 21H7"/>
+          <path d="m5 11 9 9"/>
         </svg>
       </button>
 
@@ -811,23 +813,56 @@ const titleStyle = {
 function DrawingTitleEditor({ title, onRename }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(title);
+  const [renameError, setRenameError] = useState(null);
   const inputRef = useRef(null);
+  const editingRef = useRef(false);
 
-  useEffect(() => { setDraft(title); setEditing(false); }, [title]);
+  // Keep editingRef in sync so the title-change effect can read it synchronously
+  useEffect(() => { editingRef.current = editing; }, [editing]);
 
-  // Explicitly focus + select after React commits the input to the DOM
+  // Sync draft when title prop changes — but NEVER cancel an active edit
   useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
+    if (!editingRef.current) setDraft(title);
+  }, [title]);
+
+  // Focus + select after React commits the input to DOM.
+  // setTimeout(0) ensures we're past any concurrent-mode batched renders.
+  useEffect(() => {
+    if (!editing) return;
+    const id = setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.focus();
+        inputRef.current.select();
+        console.log('[DrawingTitleEditor] input focused, draft=', draft);
+      } else {
+        console.warn('[DrawingTitleEditor] editing=true but inputRef is null after timeout');
+      }
+    }, 0);
+    return () => clearTimeout(id);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editing]);
 
-  const commit = () => {
+  const commit = async () => {
     const trimmed = draft.trim() || 'Untitled';
     setDraft(trimmed);
     setEditing(false);
-    if (trimmed !== title) onRename(trimmed);
+    setRenameError(null);
+    if (trimmed !== title) {
+      console.log('[DrawingTitleEditor] committing rename:', title, '→', trimmed);
+      try {
+        await onRename(trimmed);
+      } catch (e) {
+        console.error('[DrawingTitleEditor] rename failed:', e);
+        setRenameError('Rename failed');
+        setTimeout(() => setRenameError(null), 3000);
+      }
+    }
+  };
+
+  const startEditing = (e) => {
+    e.stopPropagation();
+    console.log('[DrawingTitleEditor] startEditing clicked, current title=', title);
+    setEditing(true);
   };
 
   if (editing) {
@@ -852,21 +887,30 @@ function DrawingTitleEditor({ title, onRename }) {
   }
 
   return (
-    <div
-      onPointerDown={e => { e.stopPropagation(); setEditing(true); }}
-      style={{
-        ...titleStyle,
-        cursor: 'text',
-        userSelect: 'none',
-        borderBottom: '1px solid transparent',
-        transition: 'border-color 0.15s',
-        minHeight: 22,
-      }}
-      onMouseEnter={e => { e.currentTarget.style.borderBottomColor = 'var(--dl-accent)'; }}
-      onMouseLeave={e => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
-      title="Click to rename"
-    >
-      {title || 'Untitled'}
+    <div style={{ position: 'relative' }}>
+      <div
+        onClick={startEditing}
+        onPointerDown={startEditing}
+        style={{
+          ...titleStyle,
+          cursor: 'text',
+          userSelect: 'none',
+          borderBottom: '1px solid transparent',
+          transition: 'border-color 0.15s',
+          minHeight: 22,
+        }}
+        onMouseEnter={e => { e.currentTarget.style.borderBottomColor = 'var(--dl-accent)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderBottomColor = 'transparent'; }}
+        title="Click to rename"
+      >
+        {title || 'Untitled'}
+      </div>
+      {renameError && (
+        <span style={{
+          fontFamily: mono, fontSize: 10, color: 'rgba(200,60,60,0.85)',
+          letterSpacing: '0.04em', position: 'absolute', left: 0, top: '100%',
+        }}>{renameError}</span>
+      )}
     </div>
   );
 }
@@ -1003,13 +1047,19 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
 
   const handleRenameDrawing = useCallback(async (newTitle) => {
     const id = selectedIdRef.current;
-    if (!id || !token) return;
+    console.log('[DrawingsCard] handleRenameDrawing id=', id, 'newTitle=', newTitle, 'hasToken=', !!token);
+    if (!id || !token) {
+      console.warn('[DrawingsCard] rename aborted — missing id or token');
+      throw new Error('Missing id or token');
+    }
     setTitle(newTitle);
     setDrawings(prev => prev.map(d => d.id === id ? { ...d, title: newTitle } : d));
     try {
-      await api.patch('/api/drawings', { id, title: newTitle }, token);
+      const result = await api.patch('/api/drawings', { id, title: newTitle }, token);
+      console.log('[DrawingsCard] rename success:', result);
     } catch (e) {
-      console.error('rename drawing error', e);
+      console.error('[DrawingsCard] rename drawing error:', e);
+      throw e; // propagate so DrawingTitleEditor can show error state
     }
   }, [token]);
 

@@ -1246,14 +1246,17 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
             userSelect: 'none',
             textAlign: 'right',
           }}>
+          {tempHigh != null && (
+            <div style={{ fontSize: 10, marginBottom: 2, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.05em' }}>
+              {useCelsius ? `${Math.round((tempHigh - 32) * 5 / 9)}°` : `${Math.round(tempHigh)}°`}
+            </div>
+          )}
           <div style={{ fontSize: 13 }}>
             {useCelsius ? `${Math.round((temperature - 32) * 5 / 9)}°C` : `${Math.round(temperature)}°F`}
           </div>
-          {(tempLow != null || tempHigh != null) && (
-            <div style={{ fontSize: 10, marginTop: 2, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>
-              {tempLow != null && (useCelsius ? `${Math.round((tempLow - 32) * 5 / 9)}°` : `${Math.round(tempLow)}°`)}
-              {tempLow != null && tempHigh != null && ' · '}
-              {tempHigh != null && (useCelsius ? `${Math.round((tempHigh - 32) * 5 / 9)}°` : `${Math.round(tempHigh)}°`)}
+          {tempLow != null && (
+            <div style={{ fontSize: 10, marginTop: 2, color: 'rgba(255,255,255,0.22)', letterSpacing: '0.05em' }}>
+              {useCelsius ? `${Math.round((tempLow - 32) * 5 / 9)}°` : `${Math.round(tempLow)}°`}
             </div>
           )}
         </div>
