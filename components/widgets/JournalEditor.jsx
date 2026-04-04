@@ -537,7 +537,12 @@ function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
       return (
         <div
           key="map"
-          onClick={() => onViewItem(mediaIdx)}
+          onPointerDown={e => { e.stopPropagation(); e.currentTarget._tapStart = { x: e.clientX, y: e.clientY }; }}
+          onPointerUp={e => {
+            e.stopPropagation();
+            const s = e.currentTarget._tapStart;
+            if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) < DRAG_THRESHOLD * 2) onViewItem(mediaIdx);
+          }}
           style={{
             width: SIZE, height: SIZE, flexShrink: 0, borderRadius: 10, overflow: 'hidden',
             cursor: 'pointer', position: 'relative', background: '#0d1a24',
@@ -551,22 +556,28 @@ function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
     }
 
     // Drawing mini-card
+    // Use pointer events (not onClick) so taps fire reliably even when the
+    // parent container has pointer-capture set for photo drag-reorder.
     return (
       <div
         key={'drawing-' + mediaIdx}
-        onClick={() => onViewItem(mediaIdx)}
+        onPointerDown={e => { e.stopPropagation(); e.currentTarget._tapStart = { x: e.clientX, y: e.clientY }; }}
+        onPointerUp={e => {
+          e.stopPropagation();
+          const s = e.currentTarget._tapStart;
+          if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) < DRAG_THRESHOLD * 2) onViewItem(mediaIdx);
+        }}
         style={{
           width: SIZE, height: SIZE, flexShrink: 0, borderRadius: 10, overflow: 'hidden',
           cursor: 'pointer', position: 'relative',
           ...paperStyle(dark),
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          flexDirection: 'column',
         }}
         onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
         onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
       >
+        {/* objectFit:cover fills the square cleanly — thumbnail has paper bg baked in */}
         <img src={item.thumbnail} alt={item.title} loading="lazy" draggable="false"
-          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }} />
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
         {/* Title bar at bottom */}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
