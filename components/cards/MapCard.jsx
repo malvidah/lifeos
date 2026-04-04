@@ -1129,6 +1129,8 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
   // Weather condition for island atmosphere + temperature
   const [weather, setWeather] = useState('clear');
   const [temperature, setTemperature] = useState(null);
+  const [tempHigh, setTempHigh] = useState(null);
+  const [tempLow, setTempLow] = useState(null);
   const [cityName, setCityName] = useState(null);
   const [useCelsius, setUseCelsius] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -1159,6 +1161,8 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
         .then(w => {
           if (w?.condition) setWeather(w.condition);
           if (w?.temperature != null) setTemperature(w.temperature);
+          if (w?.tempHigh != null) setTempHigh(w.tempHigh);
+          if (w?.tempLow != null) setTempLow(w.tempLow);
         })
         .catch(() => {});
     } else {
@@ -1168,6 +1172,8 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
       fetchWeather(dateStr, loc.lat, loc.lng).then(w => {
         if (w?.condition) setWeather(w.condition);
         if (w?.temperature != null) setTemperature(w.temperature);
+        if (w?.tempHigh != null) setTempHigh(w.tempHigh);
+        if (w?.tempLow != null) setTempLow(w.tempLow);
       });
       // Also try to load city name for today from saved location
       if (isToday && token) {
@@ -1212,6 +1218,7 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
 
   return (
     <div
+      data-no-page-swipe
       style={{
         height: 450, borderRadius: 12, overflow: 'hidden', position: 'relative',
         background: `linear-gradient(180deg, ${sky.skyTop} 0%, ${sky.skyBot} 100%)`,
@@ -1231,14 +1238,24 @@ export function MapCard({ allTags, connections, recency, entryCounts, completedT
           }}
           style={{
             position: 'absolute', top: 16, right: 18, zIndex: 10,
-            fontFamily: mono, fontSize: 13,
+            fontFamily: mono,
             fontVariantNumeric: 'tabular-nums',
             letterSpacing: '0.04em',
             color: 'rgba(255,255,255,0.35)',
             cursor: 'pointer',
             userSelect: 'none',
+            textAlign: 'right',
           }}>
-          {useCelsius ? `${Math.round((temperature - 32) * 5 / 9)}°C` : `${Math.round(temperature)}°F`}
+          <div style={{ fontSize: 13 }}>
+            {useCelsius ? `${Math.round((temperature - 32) * 5 / 9)}°C` : `${Math.round(temperature)}°F`}
+          </div>
+          {(tempLow != null || tempHigh != null) && (
+            <div style={{ fontSize: 10, marginTop: 2, color: 'rgba(255,255,255,0.25)', letterSpacing: '0.05em' }}>
+              {tempLow != null && (useCelsius ? `${Math.round((tempLow - 32) * 5 / 9)}°` : `${Math.round(tempLow)}°`)}
+              {tempLow != null && tempHigh != null && ' · '}
+              {tempHigh != null && (useCelsius ? `${Math.round((tempHigh - 32) * 5 / 9)}°` : `${Math.round(tempHigh)}°`)}
+            </div>
+          )}
         </div>
       )}
       {cityName && (
