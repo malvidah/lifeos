@@ -170,20 +170,60 @@ function useSaveQueue() {
 
 // ── DrawingCanvas ──────────────────────────────────────────────────────────────
 function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, paperDots, dark, onDelete }) {
-  const canvasRef = useRef(null);
-  const cursorRef = useRef(null);
+  const canvasRef    = useRef(null);
+  const cursorRef    = useRef(null);
   const containerRef = useRef(null);
-  const curStroke = useRef(null);
-  const strokesRef = useRef(strokes);
-  const toolRef = useRef(tool);
-  const colorRef = useRef(color);
-  const sizeRef = useRef(size);
-  const logSizeRef = useRef({ w: 0, h: 0 });
-  const activePen = useRef(false);
+  const wrapperRef   = useRef(null); // receives CSS viewport transform
+  const curStroke    = useRef(null);
+  const strokesRef   = useRef(strokes);
+  const toolRef      = useRef(tool);
+  const colorRef     = useRef(color);
+  const sizeRef      = useRef(size);
+  const logSizeRef   = useRef({ w: 0, h: 0 });
+  const activePen    = useRef(false);
   const quickShapeTimer = useRef(null);
-  const isDrawing = useRef(false);
-  const historyRef = useRef([]); // past stroke arrays for undo
-  const futureRef = useRef([]);  // undone stroke arrays for redo
+  const isDrawing    = useRef(false);
+  const historyRef   = useRef([]);
+  const futureRef    = useRef([]);
+
+  // ── Viewport (pan + zoom) ────────────────────────────────────────────────────
+  // viewportRef: canvas-level pan/zoom, applied as CSS transform to wrapperRef.
+  // Logical coords (the canvas drawing space) are the same as before; we just
+  // shift/scale where on screen they appear.
+  const viewportRef  = useRef({ x: 0, y: 0, scale: 1 });
+
+  // ── Multi-touch tracking for gesture detection ───────────────────────────────
+  const touchPtrsRef = useRef(new Map()); // pointerId -> {x, y}
+  const gestureRef   = useRef(null);      // {midX, midY, dist, vp} at gesture start
+  const isGesturing  = useRef(false);
+
+  // ── Hand tool pan tracking (mouse / pen / 1-finger with hand tool) ───────────
+  const isPanning    = useRef(false);
+  const panStartRef  = useRef(null); // {clientX, clientY, startVp}
+
+  // Apply viewport to the wrapper div (CSS transform)
+  const applyViewport = useCallback(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const { x, y, scale } = viewportRef.current;
+    el.style.transformOrigin = '0 0';
+    el.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+  }, []);
+
+  // Convert a pointer event's screen coords to canvas logical coords.
+  // The canvas element is inside the (transformed) wrapper, so
+  // getBoundingClientRect() already accounts for the transform.
+  // Dividing the offset by scale un-does the visual scaling.
+  const getLogicalPos = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect  = canvas.getBoundingClientRect();
+    const scale = viewportRef.current.scale;
+    return {
+      x: (e.clientX - rect.left) / scale,
+      y: (e.clientY - rect.top)  / scale,
+    };
+  }, []);
 
   // Keep refs in sync with props
   useEffect(() => { toolRef.current = tool; }, [tool]);
@@ -191,7 +231,6 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
   useEffect(() => { sizeRef.current = size; }, [size]);
   useEffect(() => {
     strokesRef.current = strokes;
-    // Redraw whenever strokes prop changes (e.g. loading a saved drawing)
     const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
     if (!canvas || w === 0 || h === 0) return;
@@ -199,74 +238,127 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     redrawCanvas(ctx, strokes, null, w, h, DPR());
   }, [strokes]);
 
-  // Expose canvas + logSize for thumbnail generation
   const onStrokesChangeRef = useRef(onStrokesChange);
   useEffect(() => { onStrokesChangeRef.current = onStrokesChange; }, [onStrokesChange]);
 
   // Resize canvas when container size changes
   useEffect(() => {
     const container = containerRef.current;
-    const canvas = canvasRef.current;
+    const canvas    = canvasRef.current;
     if (!container || !canvas) return;
-
     const ro = new ResizeObserver(entries => {
       const entry = entries[0];
       const w = Math.floor(entry.contentRect.width);
       const h = Math.floor(entry.contentRect.height);
       if (w === 0 || h === 0) return;
       const dpr = DPR();
-      canvas.width = w * dpr;
+      canvas.width  = w * dpr;
       canvas.height = h * dpr;
-      canvas.style.width = w + 'px';
+      canvas.style.width  = w + 'px';
       canvas.style.height = h + 'px';
       logSizeRef.current = { w, h };
-      const ctx = canvas.getContext('2d');
-      redrawCanvas(ctx, strokesRef.current, curStroke.current, w, h, dpr);
+      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, dpr);
     });
     ro.observe(container);
     return () => ro.disconnect();
   }, []);
 
-  // Global pointermove — tracks pointer across whole page so drawing never drops
+  // ── Global pointermove ───────────────────────────────────────────────────────
   useEffect(() => {
     const onMove = (e) => {
+      // ── Gesture: 2-finger pan / pinch-zoom ──────────────────────────────────
+      if (isGesturing.current && e.pointerType === 'touch' && touchPtrsRef.current.has(e.pointerId)) {
+        touchPtrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        const pts = [...touchPtrsRef.current.values()];
+        if (pts.length >= 2) {
+          const newMidX = (pts[0].x + pts[1].x) / 2;
+          const newMidY = (pts[0].y + pts[1].y) / 2;
+          const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+          const gs   = gestureRef.current;
+          const rect = containerRef.current?.getBoundingClientRect();
+          if (gs && rect) {
+            // Scale: keep the same ratio as start, clamped
+            const newScale = Math.min(8, Math.max(0.15, gs.vp.scale * newDist / gs.dist));
+            // Pan: keep the midpoint anchored to the same canvas-logical point
+            const midCanvasX = (gs.midX - rect.left - gs.vp.x) / gs.vp.scale;
+            const midCanvasY = (gs.midY - rect.top  - gs.vp.y) / gs.vp.scale;
+            const newX = (newMidX - rect.left) - midCanvasX * newScale;
+            const newY = (newMidY - rect.top)  - midCanvasY * newScale;
+            viewportRef.current = { x: newX, y: newY, scale: newScale };
+            applyViewport();
+          }
+        }
+        return;
+      }
+
+      // ── Hand tool pan (mouse / pen / single touch with hand tool) ───────────
+      if (isPanning.current && panStartRef.current) {
+        const { clientX: sx, clientY: sy, startVp } = panStartRef.current;
+        viewportRef.current = {
+          ...startVp,
+          x: startVp.x + (e.clientX - sx),
+          y: startVp.y + (e.clientY - sy),
+        };
+        applyViewport();
+        return;
+      }
+
+      // ── Drawing cursor / stroke tracking ────────────────────────────────────
       if (e.pointerType === 'touch' && activePen.current) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const y = e.clientY - rect.top;
-      const insideCanvas = x >= 0 && y >= 0 && x <= rect.width && y <= rect.height;
 
-      // Always update cursor when inside canvas
+      // Use container rect + viewport inverse for cursor positioning
+      const cRect = containerRef.current?.getBoundingClientRect();
+      if (!cRect) return;
+      const { x: vx, y: vy, scale: vs } = viewportRef.current;
+      const logX = (e.clientX - cRect.left - vx) / vs;
+      const logY = (e.clientY - cRect.top  - vy) / vs;
+      const { w, h } = logSizeRef.current;
+      const inside = logX >= 0 && logY >= 0 && logX <= w && logY <= h;
+
       const el = cursorRef.current;
       if (el) {
-        if (insideCanvas || isDrawing.current) {
+        // Only show the custom cursor circle when using drawing tools (not hand tool)
+        if ((inside || isDrawing.current) && toolRef.current !== 'hand') {
           const sz = sizeRef.current;
-          el.style.display = 'block';
-          el.style.width = sz + 'px';
-          el.style.height = sz + 'px';
-          el.style.transform = `translate(${x - sz / 2}px, ${y - sz / 2}px)`;
+          el.style.display    = 'block';
+          el.style.width      = sz + 'px';
+          el.style.height     = sz + 'px';
+          // Position in wrapper (logical) coords — wrapper transform handles screen mapping
+          el.style.transform  = `translate(${logX - sz / 2}px, ${logY - sz / 2}px)`;
         } else {
           el.style.display = 'none';
         }
       }
 
-      // Only add points when actively drawing
       if (!isDrawing.current || !curStroke.current) return;
-      curStroke.current.points.push({ x, y, p: e.pressure ?? 0.5 });
-      const { w, h } = logSizeRef.current;
-      const ctx = canvas.getContext('2d');
-      redrawCanvas(ctx, strokesRef.current, curStroke.current, w, h, DPR());
+      curStroke.current.points.push({ x: logX, y: logY, p: e.pressure ?? 0.5 });
+      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR());
     };
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
-  }, []);
+  }, [applyViewport]);
 
-  // Global pointerup/cancel fallback — ensures stroke always commits even if
-  // the pointer leaves the canvas or the browser doesn't fire onPointerUp
+  // ── Global pointerup / cancel ────────────────────────────────────────────────
   useEffect(() => {
     const finishStroke = (e) => {
+      // Clean up touch tracking
+      if (e.pointerType === 'touch') {
+        touchPtrsRef.current.delete(e.pointerId);
+        if (touchPtrsRef.current.size < 2) {
+          isGesturing.current = false;
+          gestureRef.current  = null;
+        }
+      }
+
+      // Reset hand-tool pan state
+      if (isPanning.current) {
+        isPanning.current = false;
+        panStartRef.current = null;
+        if (canvasRef.current) canvasRef.current.style.cursor = toolRef.current === 'hand' ? 'grab' : 'none';
+      }
+
       if (!isDrawing.current) return;
       isDrawing.current = false;
       activePen.current = false;
@@ -274,7 +366,6 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       if (!cur) return;
       curStroke.current = null;
 
-      // QuickShape detection
       if (quickShapeTimer.current) clearTimeout(quickShapeTimer.current);
       const shape = detectShape(cur.points);
       let finalStroke = cur;
@@ -287,8 +378,8 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       }
 
       if (finalStroke.points.length > 0) {
-        historyRef.current.push(strokesRef.current); // save for undo
-        futureRef.current = [];                       // clear redo stack
+        historyRef.current.push(strokesRef.current);
+        futureRef.current = [];
         const next = [...strokesRef.current, finalStroke];
         strokesRef.current = next;
         const canvas = canvasRef.current;
@@ -298,71 +389,86 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         onStrokesChangeRef.current?.(next, canvas, logSizeRef.current);
       }
 
-      // Hide cursor circle
       if (cursorRef.current) cursorRef.current.style.display = 'none';
     };
-
-    window.addEventListener('pointerup', finishStroke);
+    window.addEventListener('pointerup',     finishStroke);
     window.addEventListener('pointercancel', finishStroke);
     return () => {
-      window.removeEventListener('pointerup', finishStroke);
+      window.removeEventListener('pointerup',     finishStroke);
       window.removeEventListener('pointercancel', finishStroke);
     };
-  }, []); // stable refs only — no deps needed
+  }, []);
 
-  const getLogicalPos = (e, canvas) => {
-    const rect = canvas.getBoundingClientRect();
-    return {
-      x: (e.clientX - rect.left),
-      y: (e.clientY - rect.top),
-    };
-  };
-
-  const moveCursor = (x, y) => {
+  const moveCursor = (logX, logY) => {
     const el = cursorRef.current;
     if (!el) return;
     const sz = sizeRef.current;
-    el.style.display = 'block';
-    el.style.width = sz + 'px';
-    el.style.height = sz + 'px';
-    el.style.transform = `translate(${x - sz / 2}px, ${y - sz / 2}px)`;
+    el.style.display   = 'block';
+    el.style.width     = sz + 'px';
+    el.style.height    = sz + 'px';
+    el.style.transform = `translate(${logX - sz / 2}px, ${logY - sz / 2}px)`;
   };
 
   const onPointerDown = (e) => {
     e.preventDefault();
     e.stopPropagation();
+
+    // ── 2-finger touch: start gesture mode ──────────────────────────────────
+    if (e.pointerType === 'touch') {
+      touchPtrsRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+      if (touchPtrsRef.current.size >= 2) {
+        // Abort any in-progress stroke and switch to pan/zoom gesture
+        isDrawing.current = false;
+        curStroke.current = null;
+        isGesturing.current = true;
+        if (cursorRef.current) cursorRef.current.style.display = 'none';
+
+        const pts  = [...touchPtrsRef.current.values()];
+        const rect = containerRef.current?.getBoundingClientRect();
+        const midX = (pts[0].x + pts[1].x) / 2;
+        const midY = (pts[0].y + pts[1].y) / 2;
+        const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+        gestureRef.current = { midX, midY, dist, vp: { ...viewportRef.current } };
+        return;
+      }
+    }
+
     if (e.pointerType === 'touch' && activePen.current) return;
     if (e.pointerType === 'pen') activePen.current = true;
 
     try { e.target.setPointerCapture(e.pointerId); } catch (_) {}
-    const canvas = canvasRef.current;
-    const pos = getLogicalPos(e, canvas);
-    isDrawing.current = true;
 
+    // ── Hand tool: pan the viewport instead of drawing ───────────────────────
+    if (toolRef.current === 'hand') {
+      isPanning.current = true;
+      panStartRef.current = { clientX: e.clientX, clientY: e.clientY, startVp: { ...viewportRef.current } };
+      if (cursorRef.current) cursorRef.current.style.display = 'none';
+      if (canvasRef.current) canvasRef.current.style.cursor = 'grabbing';
+      return;
+    }
+
+    const pos = getLogicalPos(e);
+    isDrawing.current = true;
     curStroke.current = {
-      tool: toolRef.current,
-      color: colorRef.current,
-      size: sizeRef.current,
+      tool:   toolRef.current,
+      color:  colorRef.current,
+      size:   sizeRef.current,
       points: [{ x: pos.x, y: pos.y, p: e.pressure ?? 0.5 }],
     };
-
     moveCursor(pos.x, pos.y);
   };
 
   const onPointerMove = (e) => {
-    const canvas = canvasRef.current;
-    const pos = getLogicalPos(e, canvas);
+    if (toolRef.current === 'hand') return; // global handler covers pan
+    const pos = getLogicalPos(e);
     moveCursor(pos.x, pos.y);
-
     if (!isDrawing.current || !curStroke.current) return;
     if (e.pointerType === 'touch' && activePen.current) return;
-
     curStroke.current.points.push({ x: pos.x, y: pos.y, p: e.pressure ?? 0.5 });
-
+    const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
-    const ctx = canvas.getContext('2d');
-    const dpr = DPR();
-    redrawCanvas(ctx, strokesRef.current, curStroke.current, w, h, dpr);
+    redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR());
   };
 
   const onPointerLeave = () => {
@@ -378,32 +484,15 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     onStrokesChangeRef.current?.(next, canvas, logSizeRef.current);
   };
 
-  const handleUndo = () => {
-    if (historyRef.current.length === 0) return;
-    futureRef.current.push(strokesRef.current);
-    applyStrokes(historyRef.current.pop());
-  };
+  const handleUndo  = () => { if (historyRef.current.length === 0) return; futureRef.current.push(strokesRef.current); applyStrokes(historyRef.current.pop()); };
+  const handleRedo  = () => { if (futureRef.current.length === 0)  return; historyRef.current.push(strokesRef.current); applyStrokes(futureRef.current.pop()); };
+  const handleClear = () => { if (strokesRef.current.length === 0) return; historyRef.current.push(strokesRef.current); futureRef.current = []; applyStrokes([]); };
 
-  const handleRedo = () => {
-    if (futureRef.current.length === 0) return;
-    historyRef.current.push(strokesRef.current);
-    applyStrokes(futureRef.current.pop());
-  };
-
-  const handleClear = () => {
-    if (strokesRef.current.length === 0) return;
-    historyRef.current.push(strokesRef.current);
-    futureRef.current = [];
-    applyStrokes([]);
-  };
-
-  // Keyboard shortcuts: Cmd+Z = undo, Cmd+Shift+Z = redo
   useEffect(() => {
     const onKeyDown = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
         e.preventDefault();
-        if (e.shiftKey) handleRedo();
-        else handleUndo();
+        if (e.shiftKey) handleRedo(); else handleUndo();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -415,35 +504,32 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     <div ref={containerRef} style={{
       position: 'relative', width: '100%', height: '100%', overflow: 'hidden', borderRadius: 6,
       touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none',
-      // Dot grid — purely decorative CSS, never touches the canvas or exports
+      // Paper dot grid — purely decorative, never baked into canvas
       background: paperBg,
       backgroundImage: `radial-gradient(circle, ${paperDots} 1px, transparent 1px)`,
       backgroundSize: '20px 20px',
     }}>
-      <canvas
-        ref={canvasRef}
-        style={{ display: 'block', cursor: 'none', touchAction: 'none', userSelect: 'none' }}
-        onPointerDown={onPointerDown}
-        onPointerLeave={onPointerLeave}
-      />
-      {/* Custom cursor circle */}
-      <div
-        ref={cursorRef}
-        style={{
-          display: 'none',
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          borderRadius: '50%',
-          border: '1.5px solid rgba(0,0,0,0.5)',
-          background: 'rgba(0,0,0,0.08)',
-          pointerEvents: 'none',
-          zIndex: 10,
-          boxSizing: 'border-box',
-        }}
-      />
+      {/* Viewport wrapper — receives CSS pan/zoom transform */}
+      <div ref={wrapperRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', transformOrigin: '0 0' }}>
+        <canvas
+          ref={canvasRef}
+          style={{ display: 'block', cursor: tool === 'hand' ? 'grab' : 'none', userSelect: 'none', touchAction: 'none' }}
+          onPointerDown={onPointerDown}
+          onPointerLeave={onPointerLeave}
+        />
+        {/* Custom cursor circle — lives in wrapper so logical coords map correctly */}
+        <div
+          ref={cursorRef}
+          style={{
+            display: 'none', position: 'absolute', top: 0, left: 0,
+            borderRadius: '50%', border: '1.5px solid rgba(0,0,0,0.5)',
+            background: 'rgba(0,0,0,0.08)', pointerEvents: 'none',
+            zIndex: 10, boxSizing: 'border-box',
+          }}
+        />
+      </div>
 
-      {/* ── Left: Undo + Redo + Size + Delete ───────────────────────────────── */}
+      {/* ── Left controls: stays at fixed position regardless of viewport ── */}
       <LeftControls
         onUndo={handleUndo}
         onRedo={handleRedo}
@@ -626,6 +712,29 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
           <path d="m15 5 4 4"/>
+        </svg>
+      </button>
+
+      {/* Hand / Pan tool */}
+      <button
+        onPointerDown={e => { e.stopPropagation(); setTool('hand'); }}
+        style={{
+          ...pillBtnStyle(dark),
+          border: tool === 'hand'
+            ? dark ? '2px solid rgba(255,255,255,0.6)' : '2px solid rgba(0,0,0,0.5)'
+            : dark ? '1px solid rgba(255,255,255,0.14)' : '1px solid rgba(0,0,0,0.12)',
+          background: tool === 'hand'
+            ? dark ? 'rgba(90,80,68,0.98)' : 'rgba(255,255,255,0.95)'
+            : undefined,
+        }}
+        title="Pan canvas"
+      >
+        {/* Hand icon */}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
+          <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
+          <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
+          <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
         </svg>
       </button>
 
@@ -1107,32 +1216,34 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
   }, [token, enqueue]);
 
   return (
-    <Card label="🖼️ Drawings" color={CARD_COLOR} collapsed={false} autoHeight expandHref="/drawings">
-      <DrawingStrip
-        drawings={drawings}
-        selectedId={selectedId}
-        onSelect={loadDrawing}
-        onCreate={createDrawing}
-        isLoading={isLoading}
-        dark={dark}
-      />
-      <DrawingTitleEditor title={title} onRename={handleRenameDrawing} />
-      <div style={{ position: 'relative', width: '100%', height: 400, flexShrink: 0 }}>
-        {/* Right floating toolbar — sits over canvas */}
-        <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onSave={handleSave} dark={dark} />
-        {/* Canvas */}
-        <DrawingCanvas
-          strokes={strokes}
-          onStrokesChange={handleStrokesChange}
-          tool={tool}
-          color={color}
-          size={DEFAULT_SIZE}
-          paperBg={paperBg}
-          paperDots={paperDots}
+    <div data-no-page-swipe>
+      <Card label="🖼️ Drawings" color={CARD_COLOR} collapsed={false} autoHeight expandHref="/drawings">
+        <DrawingStrip
+          drawings={drawings}
+          selectedId={selectedId}
+          onSelect={loadDrawing}
+          onCreate={createDrawing}
+          isLoading={isLoading}
           dark={dark}
-          onDelete={handleDeleteDrawing}
         />
-      </div>
-    </Card>
+        <DrawingTitleEditor title={title} onRename={handleRenameDrawing} />
+        <div style={{ position: 'relative', width: '100%', height: 400, flexShrink: 0 }}>
+          {/* Right floating toolbar — sits over canvas */}
+          <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onSave={handleSave} dark={dark} />
+          {/* Canvas */}
+          <DrawingCanvas
+            strokes={strokes}
+            onStrokesChange={handleStrokesChange}
+            tool={tool}
+            color={color}
+            size={DEFAULT_SIZE}
+            paperBg={paperBg}
+            paperDots={paperDots}
+            dark={dark}
+            onDelete={handleDeleteDrawing}
+          />
+        </div>
+      </Card>
+    </div>
   );
 }

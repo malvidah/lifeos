@@ -51,6 +51,16 @@ export function extractDrawingTags(content) {
   return [...new Set(titles)];
 }
 
+// Extract place tag names from journal/note content
+export function extractPlaceTags(content) {
+  if (!content) return [];
+  const names = [];
+  const re = /data-place-tag="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(content)) !== null) names.push(m[1].trim());
+  return [...new Set(names)];
+}
+
 // Extract image URLs from journal/note content
 export function extractImages(content) {
   if (!content) return [];
@@ -332,6 +342,89 @@ function paperStyle(dark) {
   };
 }
 
+// ── MiniLocationMap — SVG map showing tagged location pins ────────────────────
+// Renders an equirectangular projection auto-zoomed to fit all pins.
+// Design language mirrors WorldMapCard: deep navy bg, teal grid, colored pins.
+function MiniLocationMap({ places }) {
+  if (!places || places.length === 0) return null;
+
+  const lats = places.map(p => p.lat);
+  const lngs = places.map(p => p.lng);
+  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+
+  // Add padding; minimum ±12° so a single pin doesn't fill the whole view
+  const latSpan = Math.max(maxLat - minLat, 24);
+  const lngSpan = Math.max(maxLng - minLng, 24);
+  const latPad = latSpan * 0.35;
+  const lngPad = lngSpan * 0.35;
+  const vMinLat = Math.max(-85, minLat - latPad);
+  const vMaxLat = Math.min(85, maxLat + latPad);
+  const vMinLng = Math.max(-180, minLng - lngPad);
+  const vMaxLng = Math.min(180, maxLng + lngPad);
+
+  const proj = (lat, lng) => ({
+    x: ((lng - vMinLng) / (vMaxLng - vMinLng) * 100).toFixed(2) + '%',
+    y: ((vMaxLat - lat) / (vMaxLat - vMinLat) * 100).toFixed(2) + '%',
+  });
+
+  // Grid lines within the view window
+  const latLines = [-60, -30, 0, 30, 60].filter(l => l > vMinLat && l < vMaxLat);
+  const lngLines = [-120, -60, 0, 60, 120].filter(l => l > vMinLng && l < vMaxLng);
+
+  return (
+    <div style={{ width: '100%', height: '100%', background: '#0d1a24', position: 'relative', overflow: 'hidden', borderRadius: 8 }}>
+      <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}>
+        {/* Latitude grid lines */}
+        {latLines.map(lat => {
+          const y = ((vMaxLat - lat) / (vMaxLat - vMinLat) * 100).toFixed(2);
+          return <line key={'lat'+lat} x1="0" y1={y+'%'} x2="100%" y2={y+'%'} stroke="rgba(80,200,220,0.12)" strokeWidth="0.5" />;
+        })}
+        {/* Equator — slightly brighter */}
+        {0 > vMinLat && 0 < vMaxLat && (
+          <line x1="0" y1={((vMaxLat) / (vMaxLat - vMinLat) * 100).toFixed(2)+'%'} x2="100%" y2={((vMaxLat) / (vMaxLat - vMinLat) * 100).toFixed(2)+'%'} stroke="rgba(80,200,220,0.22)" strokeWidth="0.8" />
+        )}
+        {/* Longitude grid lines */}
+        {lngLines.map(lng => {
+          const x = ((lng - vMinLng) / (vMaxLng - vMinLng) * 100).toFixed(2);
+          return <line key={'lng'+lng} x1={x+'%'} y1="0" x2={x+'%'} y2="100%" stroke="rgba(80,200,220,0.12)" strokeWidth="0.5" />;
+        })}
+
+        {/* Location pins */}
+        {places.map((p, i) => {
+          const pos = proj(p.lat, p.lng);
+          const color = p.color || '#4EC9B0';
+          return (
+            <g key={i}>
+              {/* Outer pulse ring */}
+              <circle cx={pos.x} cy={pos.y} r="6" fill="none" stroke={color} strokeWidth="1" opacity="0.35" />
+              {/* Pin dot */}
+              <circle cx={pos.x} cy={pos.y} r="3.5" fill={color} opacity="0.92" />
+              {/* Name label */}
+              <text
+                x={pos.x} y={pos.y}
+                dx="7" dy="4"
+                fill="rgba(200,230,240,0.75)"
+                fontSize="8.5"
+                fontFamily="ui-monospace, monospace"
+                style={{ userSelect: 'none', pointerEvents: 'none' }}
+              >{p.name}</text>
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* "LOCATIONS" label — top-left corner, WorldMapCard style */}
+      <div style={{
+        position: 'absolute', top: 6, left: 8,
+        fontFamily: 'ui-monospace, monospace', fontSize: 8, letterSpacing: '0.12em',
+        textTransform: 'uppercase', color: 'rgba(80,200,220,0.45)',
+        pointerEvents: 'none',
+      }}>Locations</div>
+    </div>
+  );
+}
+
 // ── MediaStrip — photos + drawing mini-cards in one horizontal row ─────────────
 // Photos support drag-to-reorder; drawing tiles are click-only.
 // mediaItems: Array<{type:'photo',url:string}|{type:'drawing',title:string,thumbnail:string}>
@@ -439,6 +532,24 @@ function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
       );
     }
 
+    // Map mini-card
+    if (item.type === 'map') {
+      return (
+        <div
+          key="map"
+          onClick={() => onViewItem(mediaIdx)}
+          style={{
+            width: SIZE, height: SIZE, flexShrink: 0, borderRadius: 10, overflow: 'hidden',
+            cursor: 'pointer', position: 'relative', background: '#0d1a24',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+        >
+          <MiniLocationMap places={item.places} />
+        </div>
+      );
+    }
+
     // Drawing mini-card
     return (
       <div
@@ -535,7 +646,11 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
     >
-      {item?.type === 'drawing' ? (
+      {item?.type === 'map' ? (
+        <div style={{ width: '100%', aspectRatio: '4/3', background: '#0d1a24', position: 'relative', overflow: 'hidden' }}>
+          <MiniLocationMap places={item.places} />
+        </div>
+      ) : item?.type === 'drawing' ? (
         <div style={{
           width: '100%', aspectRatio: '4/3',
           display: 'flex', flexDirection: 'column',
@@ -581,6 +696,18 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
+
+      {/* Map places badge */}
+      {item?.type === 'map' && (
+        <div style={{
+          position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(13,26,36,0.75)', borderRadius: 6, padding: '3px 10px',
+          fontFamily: mono, fontSize: 11, letterSpacing: '0.07em', textTransform: 'uppercase',
+          color: 'rgba(80,200,220,0.8)', pointerEvents: 'none', whiteSpace: 'nowrap',
+        }}>
+          {item.places.map(p => p.name).join(' · ')}
+        </div>
+      )}
 
       {/* Drawing title badge */}
       {item?.type === 'drawing' && (
@@ -887,8 +1014,30 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
       .filter(Boolean);
   }, [value, drawingThumbnailMap]);
 
-  // All visual media as typed items: photos first, then drawings
-  const allMedia = useMemo(() => [...photoItems, ...drawingItems], [photoItems, drawingItems]);
+  // All places with lat/lng data (fetched once for location map)
+  const [allPlaces, setAllPlaces] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    api.get('/api/places', token).then(d => setAllPlaces(d?.places ?? [])).catch(() => {});
+  }, [token]);
+
+  // Place tags referenced in journal content → single map item if any have coordinates
+  const mapItem = useMemo(() => {
+    const taggedNames = extractPlaceTags(value);
+    if (!taggedNames.length || !allPlaces.length) return null;
+    const tagged = taggedNames
+      .map(name => allPlaces.find(p => p.name === name))
+      .filter(p => p && p.lat != null && p.lng != null)
+      .map(p => ({ name: p.name, lat: p.lat, lng: p.lng, color: p.color }));
+    return tagged.length ? { type: 'map', places: tagged } : null;
+  }, [value, allPlaces]);
+
+  // All visual media as typed items: photos, then drawings, then map (if any tagged places)
+  const allMedia = useMemo(() => {
+    const items = [...photoItems, ...drawingItems];
+    if (mapItem) items.push(mapItem);
+    return items;
+  }, [photoItems, drawingItems, mapItem]);
 
   // Flat image URL list kept for backward-compat (reorderImages, legacy refs)
   const allImages = useMemo(() => allMedia.map(m => m.type === 'photo' ? m.url : m.thumbnail), [allMedia]);
