@@ -2,6 +2,7 @@
 import { useState, useEffect, useRef, useCallback, useContext, useMemo, Fragment } from "react";
 import { mono, serif, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
+import { useTheme } from "@/lib/theme";
 import { NoteContext, ProjectNamesContext, PlaceNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
@@ -315,6 +316,296 @@ export function Slideshow({ images, index, onClose }) {
   );
 }
 
+// ── Drawing paper helpers ─────────────────────────────────────────────────────
+const PAPER_LIGHT = '#f5f0e8';
+const PAPER_DARK  = '#433c34';
+const DOTS_LIGHT  = 'rgba(0,0,0,0.13)';
+const DOTS_DARK   = 'rgba(255,255,255,0.18)';
+
+function paperStyle(dark) {
+  const bg   = dark ? PAPER_DARK : PAPER_LIGHT;
+  const dots = dark ? DOTS_DARK  : DOTS_LIGHT;
+  return {
+    background: bg,
+    backgroundImage: `radial-gradient(circle, ${dots} 1px, transparent 1px)`,
+    backgroundSize: '14px 14px',
+  };
+}
+
+// ── MediaStrip — photos + drawing mini-cards in one horizontal row ─────────────
+// Photos support drag-to-reorder; drawing tiles are click-only.
+// mediaItems: Array<{type:'photo',url:string}|{type:'drawing',title:string,thumbnail:string}>
+// onViewItem(idx): called with the index into mediaItems
+// onReorderPhotos(newPhotoUrls): called when photos are reordered (drawings stay in place)
+function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
+  const containerRef = useRef(null);
+  const [dragging, setDragging]   = useState(false);
+  const [dragIdx, setDragIdx]     = useState(null);
+  const [overIdx, setOverIdx]     = useState(null);
+  const [cursorX, setCursorX]     = useState(0);
+  const [cursorY, setCursorY]     = useState(0);
+  const pendingRef = useRef(null);
+
+  if (!mediaItems.length) return null;
+
+  // Only photo items can be reordered
+  const photoItems = mediaItems.filter(i => i.type === 'photo');
+  const canReorder = !!onReorderPhotos && photoItems.length > 1;
+
+  // Build display order for photos within their sub-array (other items stay fixed)
+  // We apply reordering display only to photo slots
+  const photoDisplayMap = photoItems.map((_, i) => i); // identity unless dragging
+  let reorderedPhotoMap = [...photoDisplayMap];
+  if (dragging && dragIdx != null && overIdx != null && dragIdx !== overIdx) {
+    const moved = reorderedPhotoMap.splice(dragIdx, 1)[0];
+    reorderedPhotoMap.splice(overIdx, 0, moved);
+  }
+
+  // Map photo drag indices (within photos-only) to full mediaItems indices
+  let photoMediaIdx = 0;
+  const photoMediaIndices = mediaItems.map((item, i) => item.type === 'photo' ? i : null).filter(i => i !== null);
+
+  const calcOverIdx = (clientX) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return 0;
+    const relX = clientX - rect.left + (containerRef.current?.scrollLeft || 0);
+    return Math.max(0, Math.min(photoItems.length - 1, Math.floor(relX / (SIZE + GAP))));
+  };
+
+  const handlePointerDown = (e, photoIdx) => {
+    if (!canReorder) return;
+    e.preventDefault();
+    pendingRef.current = { idx: photoIdx, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY };
+    containerRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e) => {
+    const p = pendingRef.current;
+    if (!p && !dragging) return;
+    if (p && !dragging) {
+      if (Math.abs(e.clientX - p.startX) < DRAG_THRESHOLD && Math.abs(e.clientY - p.startY) < DRAG_THRESHOLD) return;
+      setDragging(true); setDragIdx(p.idx); setOverIdx(p.idx);
+      pendingRef.current = null;
+    }
+    setCursorX(e.clientX); setCursorY(e.clientY);
+    setOverIdx(calcOverIdx(e.clientX));
+  };
+
+  const handlePointerUp = (e) => {
+    const wasPending = pendingRef.current;
+    const wasDragging = dragging;
+    if (wasPending?.pointerId != null) {
+      try { containerRef.current?.releasePointerCapture(wasPending.pointerId); } catch {}
+    }
+    if (wasDragging && dragIdx != null && overIdx != null && dragIdx !== overIdx && onReorderPhotos) {
+      const arr = photoItems.map(i => i.url);
+      const [moved] = arr.splice(dragIdx, 1);
+      arr.splice(overIdx, 0, moved);
+      onReorderPhotos(arr);
+    }
+    if (wasPending && !wasDragging) {
+      // click on photo — find its full mediaItems index
+      const mediaIdx = photoMediaIndices[wasPending.idx] ?? wasPending.idx;
+      onViewItem(mediaIdx);
+    }
+    pendingRef.current = null;
+    setDragging(false); setDragIdx(null); setOverIdx(null);
+  };
+
+  // Build rendered list: photos in (possibly reordered) display order, drawings at their positions
+  let photoSlot = 0;
+  const renderedItems = mediaItems.map((item, mediaIdx) => {
+    if (item.type === 'photo') {
+      const pIdx = photoSlot++;
+      const displayPIdx = reorderedPhotoMap.indexOf(pIdx);
+      const isDragged = dragging && pIdx === dragIdx;
+      return (
+        <div
+          key={'photo-' + mediaIdx}
+          onPointerDown={canReorder ? e => handlePointerDown(e, pIdx) : undefined}
+          onClick={!canReorder ? () => onViewItem(mediaIdx) : undefined}
+          style={{
+            width: SIZE, height: SIZE, flexShrink: 0, borderRadius: 10, overflow: 'hidden',
+            cursor: dragging ? 'grabbing' : 'pointer', background: 'var(--dl-well)',
+            opacity: isDragged ? 0.25 : 1,
+            transition: dragging ? 'transform 0.2s ease, opacity 0.15s' : 'none',
+          }}
+          onMouseEnter={e => { if (!dragging) e.currentTarget.style.opacity = '0.85'; }}
+          onMouseLeave={e => { if (!dragging) e.currentTarget.style.opacity = '1'; }}
+        >
+          <img src={item.url} alt="" loading="lazy" draggable="false"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+        </div>
+      );
+    }
+
+    // Drawing mini-card
+    return (
+      <div
+        key={'drawing-' + mediaIdx}
+        onClick={() => onViewItem(mediaIdx)}
+        style={{
+          width: SIZE, height: SIZE, flexShrink: 0, borderRadius: 10, overflow: 'hidden',
+          cursor: 'pointer', position: 'relative',
+          ...paperStyle(dark),
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexDirection: 'column',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
+        onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+      >
+        <img src={item.thumbnail} alt={item.title} loading="lazy" draggable="false"
+          style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none' }} />
+        {/* Title bar at bottom */}
+        <div style={{
+          position: 'absolute', bottom: 0, left: 0, right: 0,
+          background: dark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.55)',
+          padding: '3px 6px',
+          fontFamily: mono, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase',
+          color: dark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>{item.title}</div>
+      </div>
+    );
+  });
+
+  return (
+    <div
+      ref={containerRef}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      style={{
+        display: 'flex', gap: GAP, overflowX: dragging ? 'hidden' : 'auto', overflowY: 'hidden',
+        marginBottom: 12, borderRadius: 10,
+        scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch',
+        userSelect: 'none', position: 'relative',
+        touchAction: dragging ? 'none' : 'pan-x',
+      }}
+    >
+      {renderedItems}
+
+      {/* Drag ghost for photo */}
+      {dragging && dragIdx != null && (
+        <div style={{
+          position: 'fixed', left: cursorX - SIZE / 2, top: cursorY - SIZE / 2,
+          width: SIZE, height: SIZE, borderRadius: 10, overflow: 'hidden',
+          boxShadow: '0 8px 24px rgba(0,0,0,0.4)', opacity: 0.85, pointerEvents: 'none',
+          zIndex: 9999, transform: 'scale(1.08)',
+        }}>
+          <img src={photoItems[dragIdx]?.url} alt="" draggable="false"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── MediaSlideshow — carousel that handles both photos and drawing mini-cards ──
+function MediaSlideshow({ mediaItems, index, onClose, dark }) {
+  const [idx, setIdx] = useState(index);
+  const pointerStart = useRef(null);
+
+  const prev = () => setIdx(i => (i - 1 + mediaItems.length) % mediaItems.length);
+  const next = () => setIdx(i => (i + 1) % mediaItems.length);
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.key === 'ArrowLeft') prev();
+      else if (e.key === 'ArrowRight') next();
+      else if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [onClose]);
+
+  const onPointerDown = (e) => { pointerStart.current = e.clientX; };
+  const onPointerUp = (e) => {
+    if (pointerStart.current == null) return;
+    const diff = e.clientX - pointerStart.current;
+    if (Math.abs(diff) > 40) { diff > 0 ? prev() : next(); }
+    pointerStart.current = null;
+  };
+
+  const item = mediaItems[idx];
+
+  return (
+    <div
+      style={{ marginBottom: 12, position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'grab', userSelect: 'none' }}
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+    >
+      {item?.type === 'drawing' ? (
+        <div style={{
+          width: '100%', aspectRatio: '4/3',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          ...paperStyle(dark),
+        }}>
+          <img
+            src={item.thumbnail}
+            alt={item.title}
+            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+          />
+        </div>
+      ) : (
+        <img src={item?.url} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'contain', display: 'block' }} />
+      )}
+
+      {/* Left chevron */}
+      {mediaItems.length > 1 && (
+        <div onClick={prev} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
+        >
+          <span style={{ fontSize: 22, fontFamily: mono, textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>‹</span>
+        </div>
+      )}
+
+      {/* Right chevron */}
+      {mediaItems.length > 1 && (
+        <div onClick={next} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s' }}
+          onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
+        >
+          <span style={{ fontSize: 22, fontFamily: mono, textShadow: '0 1px 6px rgba(0,0,0,0.5)' }}>›</span>
+        </div>
+      )}
+
+      {/* Close X */}
+      <button onClick={e => { e.stopPropagation(); onClose(); }} style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, background: 'rgba(0,0,0,0.4)', border: 'none', borderRadius: 100, width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.6)', transition: 'color 0.15s, background 0.15s' }}
+        onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.background = 'rgba(0,0,0,0.4)'; }}
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+
+      {/* Drawing title badge */}
+      {item?.type === 'drawing' && (
+        <div style={{
+          position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)',
+          background: dark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.65)',
+          borderRadius: 6, padding: '3px 10px',
+          fontFamily: mono, fontSize: 11, letterSpacing: '0.07em', textTransform: 'uppercase',
+          color: dark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.55)',
+          pointerEvents: 'none',
+        }}>{item.title}</div>
+      )}
+
+      {/* Dots */}
+      {mediaItems.length > 1 && (
+        <div style={{ position: 'absolute', bottom: 8, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 6 }}>
+          {mediaItems.map((_, i) => (
+            <div key={i} onClick={() => setIdx(i)} style={{ width: 6, height: 6, borderRadius: '50%', cursor: 'pointer', background: i === idx ? '#fff' : 'rgba(255,255,255,0.35)', transition: 'background 0.2s' }} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Drop Zone ─────────────────────────────────────────────────────────────────
 export function DropZone({ uploading }) {
   return (
@@ -554,6 +845,8 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
   // All hooks must be called unconditionally (React rules of hooks).
   // The mode check happens in the render output below.
   const {value, setValue, loaded, markDirty} = useDbSave(date, 'journal', '', token, userId);
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
   const { notes: ctxNotes, drawings: ctxDrawings } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxPlaces = useContext(PlaceNamesContext);
@@ -572,7 +865,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
-  // Build a thumbnail map from drawing objects in context
+  // Build a data map from drawing objects in context: title → { thumbnail }
   const drawingThumbnailMap = useMemo(() => {
     const map = {};
     (ctxDrawings || []).forEach(d => {
@@ -583,14 +876,22 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     return map;
   }, [ctxDrawings]);
 
-  // Drawing thumbnails referenced by /d tags in the journal content
-  const drawingImages = useMemo(() => {
+  // Typed photo media items
+  const photoItems = useMemo(() => images.map(url => ({ type: 'photo', url })), [images]);
+
+  // Typed drawing media items referenced by /d tags in the journal content
+  const drawingItems = useMemo(() => {
     const titles = extractDrawingTags(value);
-    return titles.map(t => drawingThumbnailMap[t]).filter(Boolean);
+    return titles
+      .map(t => drawingThumbnailMap[t] ? { type: 'drawing', title: t, thumbnail: drawingThumbnailMap[t] } : null)
+      .filter(Boolean);
   }, [value, drawingThumbnailMap]);
 
-  // All visual media: real photos + drawing thumbnails
-  const allImages = useMemo(() => [...images, ...drawingImages], [images, drawingImages]);
+  // All visual media as typed items: photos first, then drawings
+  const allMedia = useMemo(() => [...photoItems, ...drawingItems], [photoItems, drawingItems]);
+
+  // Flat image URL list kept for backward-compat (reorderImages, legacy refs)
+  const allImages = useMemo(() => allMedia.map(m => m.type === 'photo' ? m.url : m.thumbnail), [allMedia]);
 
   // Persist mode preference to user_settings for public share pages only
   useEffect(() => {
@@ -600,14 +901,15 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     if (token) api.patch('/api/settings', { photoMode: mode }, token).catch(() => {});
   }, [lightboxIdx != null, journalMode]); // eslint-disable-line
 
-  // Close slideshow when navigating to a day with no images
+
+  // Close slideshow when navigating to a day with no media
   useEffect(() => {
     if (journalMode) return;
-    if (allImages.length === 0 && lightboxIdx != null) setLightboxIdx(null);
-    if (lightboxIdx != null && allImages.length > 0 && lightboxIdx >= allImages.length) {
+    if (allMedia.length === 0 && lightboxIdx != null) setLightboxIdx(null);
+    if (lightboxIdx != null && allMedia.length > 0 && lightboxIdx >= allMedia.length) {
       setLightboxIdx(0);
     }
-  }, [allImages.length, journalMode]); // eslint-disable-line
+  }, [allMedia.length, journalMode]); // eslint-disable-line
 
   // Format date for chip label: "Mar 16"
   const chipDate = useMemo(() => {
@@ -670,14 +972,14 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     }
   }, [token, addImage]);
 
-  // Click delegation: image chip → open slideshow at that photo
+  // Click delegation: image chip → open slideshow at that media item
   const handleChipClick = useCallback((e) => {
     // Photo chip click
     const photoChip = e.target.closest?.('[data-image-chip]');
     if (photoChip) {
       const url = photoChip.dataset.imageChip;
       if (!url) return;
-      const idx = allImages.indexOf(url);
+      const idx = allMedia.findIndex(m => m.type === 'photo' && m.url === url);
       if (idx !== -1) setLightboxIdx(idx);
       return;
     }
@@ -686,13 +988,10 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     if (drawingChip) {
       const dTitle = drawingChip.dataset.drawingTag;
       if (!dTitle) return;
-      const thumb = drawingThumbnailMap[dTitle];
-      if (thumb) {
-        const idx = allImages.indexOf(thumb);
-        if (idx !== -1) setLightboxIdx(idx);
-      }
+      const idx = allMedia.findIndex(m => m.type === 'drawing' && m.title === dTitle);
+      if (idx !== -1) setLightboxIdx(idx);
     }
-  }, [allImages, drawingThumbnailMap]);
+  }, [allMedia]);
 
   const handleDragEnter = useCallback((e) => {
     e.preventDefault();
@@ -745,10 +1044,10 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {lightboxIdx != null && allImages.length > 0 ? (
-        <Slideshow images={allImages} index={lightboxIdx} onClose={() => setLightboxIdx(null)} />
-      ) : allImages.length > 0 ? (
-        <PhotoStrip images={allImages} onViewImage={i => setLightboxIdx(i)} onReorder={images.length > 1 ? reorderImages : undefined} />
+      {lightboxIdx != null && allMedia.length > 0 ? (
+        <MediaSlideshow mediaItems={allMedia} index={lightboxIdx} onClose={() => setLightboxIdx(null)} dark={dark} />
+      ) : allMedia.length > 0 ? (
+        <MediaStrip mediaItems={allMedia} onViewItem={i => setLightboxIdx(i)} onReorderPhotos={images.length > 1 ? reorderImages : undefined} dark={dark} />
       ) : null}
       {(dragging || uploading) ? (
         <DropZone uploading={uploading} />

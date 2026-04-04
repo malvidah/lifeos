@@ -131,15 +131,15 @@ function redrawCanvas(ctx, strokes, currentStroke, w, h, scale) {
   if (currentStroke && currentStroke.points.length > 0) renderStroke(ctx, currentStroke, scale);
 }
 
-function generateThumbnail(canvas, w, h) {
-  const tw = 120, th = 90;
+function generateThumbnail(canvas, w, h, paperBg = '#f5f0e8') {
+  const tw = 400, th = 300;
   const tmp = document.createElement('canvas');
   tmp.width = tw; tmp.height = th;
   const ctx = tmp.getContext('2d');
-  ctx.fillStyle = '#fff';
+  ctx.fillStyle = paperBg;
   ctx.fillRect(0, 0, tw, th);
   ctx.drawImage(canvas, 0, 0, tw, th);
-  return tmp.toDataURL('image/png');
+  return tmp.toDataURL('image/jpeg', 0.88);
 }
 
 // ── SaveQueue ──────────────────────────────────────────────────────────────────
@@ -1093,7 +1093,7 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
     enqueue(async () => {
       let thumbnail = null;
       if (canvas && logSize.w > 0) {
-        thumbnail = generateThumbnail(canvas, logSize.w, logSize.h);
+        thumbnail = generateThumbnail(canvas, logSize.w, logSize.h, paperBgRef.current);
       }
       try {
         const d = await api.patch('/api/drawings', { id, strokes: nextStrokes, thumbnail }, token);
