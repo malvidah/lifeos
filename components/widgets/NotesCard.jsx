@@ -9,7 +9,9 @@ import { ProjectNamesContext, NavigationContext } from "@/lib/contexts";
 import { Card } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 import { DayLabEditor } from "../Editor.jsx";
-import { extractImages, stripImageChips, PhotoStrip, Slideshow, DropZone } from "./JournalEditor.jsx";
+import { extractImages, stripImageChips, extractDrawingTags, extractPlaceTags, MediaStrip, MediaSlideshow, DropZone } from "./JournalEditor.jsx";
+import { NoteContext } from "@/lib/contexts";
+import { useTheme } from "@/lib/theme";
 import { uploadImageFile, deleteImageFile } from "@/lib/images";
 
 // ─── NotesCard ────────────────────────────────────────────────────────────────
@@ -19,6 +21,9 @@ import { uploadImageFile, deleteImageFile } from "@/lib/images";
 export default function NotesCard({ project, token, userId, onNoteNamesChange, collapsed: externalCollapsed, onToggle: externalToggle, expandHref }) {
   const pvProjectNames = useContext(ProjectNamesContext);
   const { navigateToProject } = useContext(NavigationContext);
+  const { drawings: ctxDrawings } = useContext(NoteContext);
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
 
   // null means "all notes"
   const effectiveProject = project || '__everything__';
@@ -30,12 +35,28 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
   const [activeNoteId, setActiveNoteId] = useState(null);
   const deletedNoteIds = useRef(new Set());
 
-  // Note photos state
-  const [noteLightbox, setNoteLightbox] = useState(null);
+  // Note media state
+  const [noteMediaIdx, setNoteMediaIdx] = useState(null); // null = strip, 0+ = slideshow
   const [noteDragging, setNoteDragging] = useState(false);
   const [noteUploading, setNoteUploading] = useState(false);
   const noteEditorRef = useRef(null);
   const noteDragCounter = useRef(0);
+
+  // Drawings data pipeline (same as JournalEditor)
+  const [allDrawingsList, setAllDrawingsList] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    api.get('/api/drawings', token).then(d => setAllDrawingsList(d?.drawings ?? [])).catch(() => {});
+  }, [token]);
+
+  const [drawingStrokesCache, setDrawingStrokesCache] = useState({});
+
+  // All places for map items
+  const [allPlaces, setAllPlaces] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    api.get('/api/places', token).then(d => setAllPlaces(d?.places ?? [])).catch(() => {});
+  }, [token]);
 
   // Load notes whenever project changes
   useEffect(() => {
@@ -347,10 +368,70 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
 
   const noteImages = useMemo(() => extractImages(activeNote?.content), [activeNote?.content]);
 
+  // Fetch strokes for drawing tags in the active note
   useEffect(() => {
-    if (noteImages.length === 0) setNoteLightbox(null);
-    else if (noteLightbox != null && noteLightbox >= noteImages.length) setNoteLightbox(0);
-  }, [noteImages.length, activeNoteId]); // eslint-disable-line
+    if (!token || !allDrawingsList.length || !activeNote?.content) return;
+    const titles = extractDrawingTags(activeNote.content);
+    if (!titles.length) return;
+    const needed = allDrawingsList.filter(d => titles.includes(d.title) && !drawingStrokesCache[d.id]);
+    if (!needed.length) return;
+    Promise.all(needed.map(d => api.get(`/api/drawings?id=${d.id}`, token)))
+      .then(results => {
+        const updates = {};
+        results.forEach((r, i) => { if (r?.drawing?.strokes) updates[needed[i].id] = r.drawing.strokes; });
+        if (Object.keys(updates).length) setDrawingStrokesCache(prev => ({ ...prev, ...updates }));
+      }).catch(() => {});
+  }, [token, allDrawingsList, activeNote?.content]); // eslint-disable-line
+
+  // Build drawing data map: title → { strokes, thumbnail }
+  const drawingDataMap = useMemo(() => {
+    const map = {};
+    allDrawingsList.forEach(d => {
+      map[d.title] = { strokes: drawingStrokesCache[d.id] || [], thumbnail: d.thumbnail || null };
+    });
+    // Only override with live context strokes when non-empty (ctxDrawings list API has no strokes)
+    (ctxDrawings || []).forEach(d => {
+      if (d && typeof d === 'object' && d.title && d.strokes?.length > 0) {
+        map[d.title] = { strokes: d.strokes, thumbnail: d.thumbnail || null };
+      }
+    });
+    return map;
+  }, [allDrawingsList, drawingStrokesCache, ctxDrawings]);
+
+  // Typed photo media items
+  const notePhotoItems = useMemo(() => noteImages.map(url => ({ type: 'photo', url })), [noteImages]);
+
+  // Typed drawing media items from /d tags in the note content
+  const noteDrawingItems = useMemo(() => {
+    if (!activeNote?.content) return [];
+    return extractDrawingTags(activeNote.content)
+      .map(t => drawingDataMap[t] ? { type: 'drawing', title: t, strokes: drawingDataMap[t].strokes, thumbnail: drawingDataMap[t].thumbnail } : null)
+      .filter(Boolean);
+  }, [activeNote?.content, drawingDataMap]);
+
+  // Place map item from /p tags in the note content
+  const noteMapItem = useMemo(() => {
+    if (!activeNote?.content || !allPlaces.length) return null;
+    const taggedNames = extractPlaceTags(activeNote.content);
+    if (!taggedNames.length) return null;
+    const tagged = taggedNames
+      .map(name => allPlaces.find(p => p.name === name))
+      .filter(p => p && p.lat != null && p.lng != null)
+      .map(p => ({ name: p.name, lat: p.lat, lng: p.lng, color: p.color }));
+    return tagged.length ? { type: 'map', places: tagged } : null;
+  }, [activeNote?.content, allPlaces]);
+
+  // All visual media: photos + drawings + map
+  const allNoteMedia = useMemo(() => {
+    const items = [...notePhotoItems, ...noteDrawingItems];
+    if (noteMapItem) items.push(noteMapItem);
+    return items;
+  }, [notePhotoItems, noteDrawingItems, noteMapItem]);
+
+  useEffect(() => {
+    if (allNoteMedia.length === 0) setNoteMediaIdx(null);
+    else if (noteMediaIdx != null && noteMediaIdx >= allNoteMedia.length) setNoteMediaIdx(0);
+  }, [allNoteMedia.length, activeNoteId]); // eslint-disable-line
 
   const addImageToNote = useCallback((url) => {
     if (!activeNote) return;
@@ -550,11 +631,11 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 </svg>
               </button>
             )}
-            {/* Photos for current note */}
-            {noteImages.length > 0 && (
-              noteLightbox != null
-                ? <Slideshow images={noteImages} index={noteLightbox} onClose={() => setNoteLightbox(null)} />
-                : <PhotoStrip images={noteImages} onViewImage={i => setNoteLightbox(i)} onReorder={reorderNoteImages} />
+            {/* Media strip / slideshow for current note */}
+            {allNoteMedia.length > 0 && (
+              noteMediaIdx != null
+                ? <MediaSlideshow mediaItems={allNoteMedia} index={noteMediaIdx} onClose={() => setNoteMediaIdx(null)} dark={dark} />
+                : <MediaStrip mediaItems={allNoteMedia} onViewItem={i => setNoteMediaIdx(i)} onReorderPhotos={reorderNoteImages} dark={dark} />
             )}
             {(noteDragging || noteUploading) ? (
               <DropZone uploading={noteUploading} />

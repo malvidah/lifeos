@@ -507,20 +507,24 @@ function miniRenderStroke(ctx, stroke, scale, offX, offY) {
   ctx.restore();
 }
 
-function MiniDrawingCanvas({ strokes, dark }) {
-  const canvasRef = useRef(null);
+export function MiniDrawingCanvas({ strokes, dark }) {
+  const canvasRef    = useRef(null);
+  const containerRef = useRef(null);
+  const strokesRef   = useRef(strokes); // always-current ref so ResizeObserver sees latest strokes
   const paperBg   = dark ? '#433c34' : '#f5f0e8';
   const paperDots = dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)';
 
-  useEffect(() => {
+  // Render all strokes onto the canvas at its current pixel dimensions.
+  const render = useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !strokes?.length) return;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!strokesRef.current?.length) return;
 
     // Bounding box across all stroke points + ellipse extents
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const s of strokes) {
+    for (const s of strokesRef.current) {
       for (const p of (s.points || [])) {
         if (minX > p.x) minX = p.x; if (maxX < p.x) maxX = p.x;
         if (minY > p.y) minY = p.y; if (maxY < p.y) maxY = p.y;
@@ -538,26 +542,51 @@ function MiniDrawingCanvas({ strokes, dark }) {
     const padY = Math.max(contentH * 0.1, 20);
     const totalW = contentW + padX * 2;
     const totalH = contentH + padY * 2;
+    // canvas.width is already in physical pixels (container * DPR), so this
+    // scale maps logical drawing coords → physical canvas pixels.
     const scale = Math.min(canvas.width / totalW, canvas.height / totalH);
 
-    // Centre within the canvas
     const startX = (canvas.width  - totalW * scale) / 2;
     const startY = (canvas.height - totalH * scale) / 2;
     const offX = minX - padX - startX / scale;
     const offY = minY - padY - startY / scale;
 
-    for (const s of strokes) miniRenderStroke(ctx, s, scale, offX, offY);
-  }, [strokes, dark]);
+    for (const s of strokesRef.current) miniRenderStroke(ctx, s, scale, offX, offY);
+  }, []);
+
+  // Size canvas to container × DPR so it's never upscaled (no more blurriness).
+  useEffect(() => {
+    const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const ro = new ResizeObserver(entries => {
+      const { width: w, height: h } = entries[0].contentRect;
+      if (!w || !h) return;
+      canvas.width  = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width  = w + 'px';
+      canvas.style.height = h + 'px';
+      render();
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, [render]);
+
+  // Re-render whenever strokes or dark theme changes
+  useEffect(() => {
+    strokesRef.current = strokes;
+    render();
+  }, [strokes, dark, render]);
 
   return (
-    <div style={{
+    <div ref={containerRef} style={{
       width: '100%', height: '100%',
       background: paperBg,
       backgroundImage: `radial-gradient(circle, ${paperDots} 1px, transparent 1px)`,
       backgroundSize: '20px 20px',
     }}>
-      <canvas ref={canvasRef} width={400} height={400}
-        style={{ width: '100%', height: '100%', display: 'block' }} />
+      <canvas ref={canvasRef} style={{ display: 'block' }} />
     </div>
   );
 }
@@ -567,7 +596,7 @@ function MiniDrawingCanvas({ strokes, dark }) {
 // mediaItems: Array<{type:'photo',url:string}|{type:'drawing',title:string,strokes:array}>
 // onViewItem(idx): called with the index into mediaItems
 // onReorderPhotos(newPhotoUrls): called when photos are reordered (drawings stay in place)
-function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
+export function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
   const containerRef = useRef(null);
   const [dragging, setDragging]   = useState(false);
   const [dragIdx, setDragIdx]     = useState(null);
@@ -763,7 +792,7 @@ function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
 }
 
 // ── MediaSlideshow — carousel that handles both photos and drawing mini-cards ──
-function MediaSlideshow({ mediaItems, index, onClose, dark }) {
+export function MediaSlideshow({ mediaItems, index, onClose, dark }) {
   const [idx, setIdx] = useState(index);
   const pointerStart = useRef(null);
 

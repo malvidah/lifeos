@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { Card } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 import { getStroke } from "perfect-freehand";
+import { MiniDrawingCanvas } from "../widgets/JournalEditor.jsx";
 
 // Convert perfect-freehand outline array → SVG path string (for Path2D)
 function svgPathFromPFStroke(outline) {
@@ -930,28 +931,58 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
 }
 
 // ── Drawing tab strip ─────────────────────────────────────────────────────────
-function DrawingStrip({ drawings, selectedId, onSelect, onCreate, isLoading, dark }) {
+const STRIP_W = 88;   // card width
+const STRIP_H = 68;   // canvas preview height inside card
+const STRIP_LABEL = 20; // title bar height
+
+const PAPER_LIGHT = '#f5f0e8';
+const PAPER_DARK  = '#433c34';
+const DOTS_LIGHT  = 'rgba(0,0,0,0.13)';
+const DOTS_DARK   = 'rgba(255,255,255,0.18)';
+
+function DrawingStrip({ drawings, selectedId, onSelect, onCreate, isLoading, dark, strokesCache }) {
+  const paperBg   = dark ? PAPER_DARK  : PAPER_LIGHT;
+  const paperDots = dark ? DOTS_DARK   : DOTS_LIGHT;
+  const paperBgStyle = {
+    background: paperBg,
+    backgroundImage: `radial-gradient(circle, ${paperDots} 1px, transparent 1px)`,
+    backgroundSize: '14px 14px',
+  };
+
   return (
     <div style={{
-      display: 'flex', gap: 4, padding: '6px 0 4px 0', overflowX: 'auto',
-      alignItems: 'center', minHeight: 40, flexShrink: 0,
+      display: 'flex', gap: 6, padding: '4px 0 10px 0', overflowX: 'auto',
+      alignItems: 'flex-start', flexShrink: 0,
       scrollbarWidth: 'none', msOverflowStyle: 'none',
     }}>
-      {/* New drawing button */}
+      {/* New drawing button — card-shaped */}
       <button
         onClick={onCreate}
+        title="New drawing"
         style={{
-          flexShrink: 0, height: 28, width: 28, borderRadius: 6,
+          flexShrink: 0,
+          width: STRIP_W,
+          height: STRIP_H + STRIP_LABEL,
+          borderRadius: 8,
           border: dark ? '1.5px dashed rgba(255,255,255,0.2)' : '1.5px dashed rgba(0,0,0,0.22)',
           background: 'transparent', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, color: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)',
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          gap: 4,
+          color: dark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.35)',
+          transition: 'border-color 0.15s, opacity 0.15s',
         }}
-        title="New drawing"
-      >+</button>
+        onMouseEnter={e => e.currentTarget.style.opacity = '0.7'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        <span style={{ fontFamily: mono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase' }}>new</span>
+      </button>
 
       {isLoading && (
-        <span style={{ fontSize: F.xs, color: 'var(--dl-middle)', fontFamily: mono, padding: '0 4px' }}>loading…</span>
+        <span style={{ fontSize: F.xs, color: 'var(--dl-middle)', fontFamily: mono, padding: '0 4px', alignSelf: 'center' }}>loading…</span>
       )}
 
       {drawings.map(d => {
@@ -962,22 +993,41 @@ function DrawingStrip({ drawings, selectedId, onSelect, onCreate, isLoading, dar
             onClick={() => onSelect(d.id)}
             title={d.title}
             style={{
-              flexShrink: 0, height: 28, maxWidth: 140, padding: '0 10px', borderRadius: 6,
+              flexShrink: 0, padding: 0,
+              width: STRIP_W,
+              height: STRIP_H + STRIP_LABEL,
+              borderRadius: 8,
               border: selected
-                ? '2px solid var(--dl-accent)'
+                ? '2px solid var(--dl-accent, #4EC9B0)'
                 : dark ? '1.5px solid rgba(255,255,255,0.13)' : '1.5px solid rgba(0,0,0,0.13)',
-              background: selected
-                ? dark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.9)'
-                : 'transparent',
-              cursor: 'pointer',
-              fontFamily: mono, fontSize: F.xs, fontWeight: 400,
-              letterSpacing: '0.06em', textTransform: 'uppercase',
-              color: selected ? 'var(--dl-strong)' : 'var(--dl-middle)',
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              transition: 'border-color 0.15s, background 0.15s',
+              cursor: 'pointer', overflow: 'hidden',
+              display: 'flex', flexDirection: 'column',
+              background: 'transparent',
+              boxShadow: selected ? '0 0 0 1px var(--dl-accent, #4EC9B0)22' : 'none',
+              transition: 'border-color 0.15s, box-shadow 0.15s, opacity 0.15s',
             }}
+            onMouseEnter={e => { if (!selected) e.currentTarget.style.opacity = '0.8'; }}
+            onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
           >
-            {d.title || 'Untitled'}
+            {/* Live stroke preview */}
+            <div style={{ width: '100%', height: STRIP_H, position: 'relative', overflow: 'hidden', ...paperBgStyle }}>
+              <MiniDrawingCanvas strokes={strokesCache?.[d.id] || []} dark={dark} />
+            </div>
+            {/* Title bar */}
+            <div style={{
+              width: '100%', height: STRIP_LABEL, flexShrink: 0,
+              background: dark ? 'rgba(30,24,20,0.92)' : 'rgba(245,240,232,0.95)',
+              display: 'flex', alignItems: 'center', padding: '0 6px',
+              fontFamily: mono, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: selected
+                ? 'var(--dl-accent, #4EC9B0)'
+                : dark ? 'rgba(255,255,255,0.55)' : 'rgba(0,0,0,0.5)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              borderTop: dark ? '1px solid rgba(255,255,255,0.07)' : '1px solid rgba(0,0,0,0.08)',
+              transition: 'color 0.15s',
+            }}>
+              {d.title || 'Untitled'}
+            </div>
           </button>
         );
       })}
@@ -1113,6 +1163,7 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
   const [tool, setTool] = useState('pen');
   const [color, setColor] = useState(() => theme === 'dark' ? '#ffffff' : DEFAULT_COLOR);
   const [isLoading, setIsLoading] = useState(false);
+  const [strokesCache, setStrokesCache] = useState({}); // { [drawingId]: strokes[] }
   const enqueue = useSaveQueue();
   const selectedIdRef = useRef(selectedId);
   const lastCanvasRef = useRef(null); // for save/export
@@ -1187,7 +1238,21 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
         const list = d.drawings ?? [];
         setDrawings(list);
         if (list.length > 0) {
-          loadDrawing(list[0].id);
+          loadDrawing(list[0].id).then(() => {
+            // After the first drawing is loaded, batch-fetch remaining strokes for strip previews
+            const rest = list.slice(1);
+            if (!rest.length) return;
+            Promise.allSettled(rest.map(dr => api.get(`/api/drawings?id=${dr.id}`, token)))
+              .then(results => {
+                const updates = {};
+                results.forEach((r, i) => {
+                  if (r.status === 'fulfilled' && r.value?.drawing?.strokes) {
+                    updates[rest[i].id] = r.value.drawing.strokes;
+                  }
+                });
+                if (Object.keys(updates).length) setStrokesCache(prev => ({ ...prev, ...updates }));
+              });
+          });
         } else {
           createDrawing();
         }
@@ -1206,6 +1271,8 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
       setSelectedId(drawing.id);
       setTitle(drawing.title ?? 'Untitled');
       setStrokes(drawing.strokes ?? []);
+      // Cache strokes for strip preview
+      setStrokesCache(prev => ({ ...prev, [drawing.id]: drawing.strokes ?? [] }));
     } catch (e) {
       console.error('load drawing error', e);
       showToast('Failed to load drawing');
@@ -1222,6 +1289,7 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
       setSelectedId(drawing.id);
       setTitle(drawing.title ?? 'Untitled');
       setStrokes([]);
+      setStrokesCache(prev => ({ ...prev, [drawing.id]: [] }));
     } catch (e) {
       console.error('create drawing error', e);
       showToast('Failed to create drawing');
@@ -1272,6 +1340,8 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
     if (canvas) lastCanvasRef.current = canvas;
     const id = selectedIdRef.current;
     if (!id || !token) return;
+    // Keep strip preview in sync with live strokes
+    setStrokesCache(prev => prev[id] === nextStrokes ? prev : { ...prev, [id]: nextStrokes });
 
     enqueue(async () => {
       let thumbnail = null;
@@ -1299,9 +1369,10 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
           onCreate={createDrawing}
           isLoading={isLoading}
           dark={dark}
+          strokesCache={strokesCache}
         />
         <DrawingTitleEditor title={title} onRename={handleRenameDrawing} />
-        <div style={{ position: 'relative', width: '100%', height: 400, flexShrink: 0 }}>
+        <div style={{ position: 'relative', width: '100%', aspectRatio: '1/1', flexShrink: 0 }}>
           {/* Right floating toolbar — sits over canvas */}
           <RightToolbar tool={tool} setTool={setTool} color={color} setColor={setColor} onSave={handleSave} dark={dark} />
           {/* Canvas */}
