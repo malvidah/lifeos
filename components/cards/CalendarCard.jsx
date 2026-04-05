@@ -824,6 +824,23 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
   const mobile = useIsMobile();
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  // Summaries for day view — fetched per-month as selected date changes.
+  // (MonthView manages its own summaries for the month grid; this feeds MobileCalPicker.)
+  const [daySummaries,    setDaySummaries]    = useState({});
+  const [daySummaryCache, setDaySummaryCache] = useState({});
+  useEffect(() => {
+    if (!token || !selected) return;
+    const d = new Date(selected + 'T12:00:00');
+    const yr = d.getFullYear(), mo = d.getMonth();
+    const key = `${yr}-${mo}`;
+    if (daySummaryCache[key] !== undefined) return;
+    setDaySummaryCache(prev => ({ ...prev, [key]: null }));
+    api.post('/api/month-summaries', { year: yr, month: mo }, token).then(res => {
+      if (res?.summaries) setDaySummaries(prev => ({ ...prev, ...res.summaries }));
+      setDaySummaryCache(prev => ({ ...prev, [key]: true }));
+    }).catch(() => {});
+  }, [selected, token]); // eslint-disable-line
+
   const [active,   setActive]  = useState(null);
   const [form,     setForm]    = useState({title:'',startTime:'',endTime:'',allDay:false});
   const [saving,   setSaving]  = useState(false);
@@ -1061,6 +1078,7 @@ export default function CalendarCard({selected, onSelect, events, setEvents, hea
           collapsed={collapsed} onToggle={onToggle}
           calView={calView} onCalViewChange={onCalViewChange}
           expandHref={expandHref}
+          summaries={daySummaries}
         />
       )}
 
