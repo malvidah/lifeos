@@ -146,40 +146,105 @@ function renderStroke(ctx, stroke, scale) {
 
 // shiftHeld: if true, renders the current stroke as a ghost + overlays the
 // detected snapped shape as a preview of what will be committed on release.
-function redrawCanvas(ctx, strokes, currentStroke, w, h, scale, shiftHeld = false) {
-  ctx.clearRect(0, 0, w * scale, h * scale);
-  for (const s of strokes) renderStroke(ctx, s, scale);
-  if (currentStroke && currentStroke.points.length > 0) {
-    if (shiftHeld) {
-      // Draw the raw freehand as a faint ghost so the user can see what they drew
-      ctx.globalAlpha = 0.22;
-      renderStroke(ctx, currentStroke, scale);
-      ctx.globalAlpha = 1;
-      // Overlay the snapped shape (full opacity) as the shift-preview
-      const shape = detectShape(currentStroke.points);
-      if (shape) {
-        const snapped = shape.type === 'line'
-          ? { ...currentStroke, shape: 'line' }
-          : { ...currentStroke, shape: 'ellipse', cx: shape.cx, cy: shape.cy, rx: shape.rx, ry: shape.ry };
-        renderStroke(ctx, snapped, scale);
+// vp: { x, y, scale } viewport — when provided, applies it as a ctx transform
+//   so strokes stored in world coords are correctly clipped to the canvas area.
+//   Without vp, strokes are drawn at world_coord * dpr (backward-compat).
+function redrawCanvas(ctx, strokes, currentStroke, w, h, dpr, shiftHeld = false, vp = null) {
+  ctx.clearRect(0, 0, w * dpr, h * dpr);
+  ctx.save();
+  if (vp) {
+    // Apply viewport: world coords → physical canvas pixels
+    // canvas_px = world * vpScale * dpr + vpOffset * dpr
+    ctx.setTransform(vp.scale * dpr, 0, 0, vp.scale * dpr, vp.x * dpr, vp.y * dpr);
+    // renderStroke uses scale=1 → world coords, ctx transform handles dpr+vpScale
+    const rs = (s) => renderStroke(ctx, s, 1);
+    for (const s of strokes) rs(s);
+    if (currentStroke && currentStroke.points.length > 0) {
+      if (shiftHeld) {
+        ctx.globalAlpha = 0.22;
+        rs(currentStroke);
+        ctx.globalAlpha = 1;
+        const shape = detectShape(currentStroke.points);
+        if (shape) {
+          const snapped = shape.type === 'line'
+            ? { ...currentStroke, shape: 'line' }
+            : { ...currentStroke, shape: 'ellipse', cx: shape.cx, cy: shape.cy, rx: shape.rx, ry: shape.ry };
+          rs(snapped);
+        } else {
+          rs(currentStroke);
+        }
       } else {
-        // Nothing to snap — render normally (shift has no effect for this stroke)
-        renderStroke(ctx, currentStroke, scale);
+        rs(currentStroke);
       }
-    } else {
-      renderStroke(ctx, currentStroke, scale);
+    }
+  } else {
+    // No viewport: legacy path — world coord = canvas CSS pixel
+    for (const s of strokes) renderStroke(ctx, s, dpr);
+    if (currentStroke && currentStroke.points.length > 0) {
+      if (shiftHeld) {
+        ctx.globalAlpha = 0.22;
+        renderStroke(ctx, currentStroke, dpr);
+        ctx.globalAlpha = 1;
+        const shape = detectShape(currentStroke.points);
+        if (shape) {
+          const snapped = shape.type === 'line'
+            ? { ...currentStroke, shape: 'line' }
+            : { ...currentStroke, shape: 'ellipse', cx: shape.cx, cy: shape.cy, rx: shape.rx, ry: shape.ry };
+          renderStroke(ctx, snapped, dpr);
+        } else {
+          renderStroke(ctx, currentStroke, dpr);
+        }
+      } else {
+        renderStroke(ctx, currentStroke, dpr);
+      }
     }
   }
+  ctx.restore();
 }
 
-function generateThumbnail(canvas, w, h, paperBg = '#f5f0e8') {
+// Generate a fit-to-content thumbnail from the raw stroke data.
+// This renders all strokes centered and scaled to fill the thumbnail
+// regardless of the current viewport pan/zoom position.
+function generateThumbnail(canvas, w, h, paperBg = '#f5f0e8', strokes = null) {
   const tw = 400, th = 300;
   const tmp = document.createElement('canvas');
   tmp.width = tw; tmp.height = th;
   const ctx = tmp.getContext('2d');
   ctx.fillStyle = paperBg;
   ctx.fillRect(0, 0, tw, th);
-  ctx.drawImage(canvas, 0, 0, tw, th);
+
+  if (strokes && strokes.length > 0) {
+    // Fit all stroke content into the thumbnail (viewport-independent)
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const s of strokes) {
+      for (const p of (s.points || [])) {
+        if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+      }
+      if (s.shape === 'ellipse' && s.cx != null) {
+        minX = Math.min(minX, s.cx - s.rx); maxX = Math.max(maxX, s.cx + s.rx);
+        minY = Math.min(minY, s.cy - s.ry); maxY = Math.max(maxY, s.cy + s.ry);
+      }
+    }
+    if (isFinite(minX)) {
+      const cW = maxX - minX || 1;
+      const cH = maxY - minY || 1;
+      const pad = Math.max(cW, cH) * 0.08;
+      const tW  = cW + pad * 2;
+      const tH  = cH + pad * 2;
+      const sc  = Math.min(tw / tW, th / tH);
+      const ox  = (tw - tW * sc) / 2 / sc - minX + pad;
+      const oy  = (th - tH * sc) / 2 / sc - minY + pad;
+      // Apply a fit-to-content transform: scale + center offset
+      ctx.save();
+      ctx.setTransform(sc, 0, 0, sc, (tw - tW * sc) / 2 - (minX - pad) * sc, (th - tH * sc) / 2 - (minY - pad) * sc);
+      for (const s of strokes) renderStroke(ctx, s, 1);
+      ctx.restore();
+    }
+  } else {
+    // Fallback: copy current canvas content (legacy behavior)
+    ctx.drawImage(canvas, 0, 0, tw, th);
+  }
   return tmp.toDataURL('image/jpeg', 0.88);
 }
 
@@ -214,7 +279,6 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
   const canvasRef    = useRef(null);
   const cursorRef    = useRef(null);
   const containerRef = useRef(null);
-  const wrapperRef   = useRef(null); // receives CSS viewport transform
   const curStroke    = useRef(null);
   const strokesRef   = useRef(strokes);
   const toolRef      = useRef(tool);
@@ -228,7 +292,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
   const futureRef    = useRef([]);
 
   // ── Viewport (pan + zoom) ────────────────────────────────────────────────────
-  // viewportRef: canvas-level pan/zoom, applied as CSS transform to wrapperRef.
+  // viewportRef: canvas-level pan/zoom, applied via ctx.setTransform in redrawCanvas.
   // Logical coords (the canvas drawing space) are the same as before; we just
   // shift/scale where on screen they appear.
   const viewportRef  = useRef({ x: 0, y: 0, scale: 1 });
@@ -243,13 +307,16 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
   const isPanning    = useRef(false);
   const panStartRef  = useRef(null); // {clientX, clientY, startVp}
 
-  // Apply viewport to the wrapper div (CSS transform)
+  // Apply viewport: redraw canvas with ctx transform so strokes appear in the right
+  // world-space position regardless of how far the user has panned.
+  // The CSS transform on the wrapper is no longer used for drawing — only the
+  // custom cursor circle uses container-relative coords (converted below).
   const applyViewport = useCallback(() => {
-    const el = wrapperRef.current;
-    if (!el) return;
-    const { x, y, scale } = viewportRef.current;
-    el.style.transformOrigin = '0 0';
-    el.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+    const canvas = canvasRef.current;
+    const { w, h } = logSizeRef.current;
+    if (canvas && w > 0) {
+      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current, viewportRef.current);
+    }
   }, []);
 
   // Convert a pointer event's screen coords to canvas logical coords.
@@ -277,7 +344,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     const { w, h } = logSizeRef.current;
     if (!canvas || w === 0 || h === 0) return;
     const ctx = canvas.getContext('2d');
-    redrawCanvas(ctx, strokes, null, w, h, DPR());
+    redrawCanvas(ctx, strokes, null, w, h, DPR(), false, viewportRef.current);
   }, [strokes]);
 
   const onStrokesChangeRef = useRef(onStrokesChange);
@@ -299,7 +366,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       canvas.style.width  = w + 'px';
       canvas.style.height = h + 'px';
       logSizeRef.current = { w, h };
-      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, dpr);
+      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, dpr, false, viewportRef.current);
     });
     ro.observe(container);
     return () => ro.disconnect();
@@ -350,25 +417,29 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      // Use container rect + viewport inverse for cursor positioning
+      // Compute world coords via viewport inverse (works anywhere on the infinite canvas)
       const cRect = containerRef.current?.getBoundingClientRect();
       if (!cRect) return;
       const { x: vx, y: vy, scale: vs } = viewportRef.current;
       const logX = (e.clientX - cRect.left - vx) / vs;
       const logY = (e.clientY - cRect.top  - vy) / vs;
       const { w, h } = logSizeRef.current;
-      const inside = logX >= 0 && logY >= 0 && logX <= w && logY <= h;
+
+      // Is the pointer inside the container bounds (for showing/hiding cursor)?
+      const inContainer = e.clientX >= cRect.left && e.clientX <= cRect.right &&
+                          e.clientY >= cRect.top  && e.clientY <= cRect.bottom;
 
       const el = cursorRef.current;
       if (el) {
-        // Only show the custom cursor circle when using drawing tools (not hand tool)
-        if ((inside || isDrawing.current) && toolRef.current !== 'hand') {
-          const sz = sizeRef.current;
+        if ((inContainer || isDrawing.current) && toolRef.current !== 'hand') {
+          // Convert world coords → container-relative CSS position
+          const sz  = sizeRef.current * vs;
+          const cx  = logX * vs + vx;
+          const cy  = logY * vs + vy;
           el.style.display    = 'block';
           el.style.width      = sz + 'px';
           el.style.height     = sz + 'px';
-          // Position in wrapper (logical) coords — wrapper transform handles screen mapping
-          el.style.transform  = `translate(${logX - sz / 2}px, ${logY - sz / 2}px)`;
+          el.style.transform  = `translate(${cx - sz / 2}px, ${cy - sz / 2}px)`;
         } else {
           el.style.display = 'none';
         }
@@ -376,7 +447,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
 
       if (!isDrawing.current || !curStroke.current) return;
       curStroke.current.points.push({ x: logX, y: logY, p: e.pressure ?? 0.5 });
-      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current);
+      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current, viewportRef.current);
     };
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
@@ -432,7 +503,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         const canvas = canvasRef.current;
         const { w, h } = logSizeRef.current;
         const ctx = canvas?.getContext('2d');
-        if (ctx) redrawCanvas(ctx, next, null, w, h, DPR());
+        if (ctx) redrawCanvas(ctx, next, null, w, h, DPR(), false, viewportRef.current);
         onStrokesChangeRef.current?.(next, canvas, logSizeRef.current);
       }
 
@@ -446,14 +517,20 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     };
   }, []);
 
-  const moveCursor = (logX, logY) => {
+  // Convert world coords → container-relative CSS coords for cursor overlay.
+  // Since the wrapper no longer has a CSS transform, we apply the viewport here.
+  const moveCursor = (worldX, worldY) => {
     const el = cursorRef.current;
     if (!el) return;
-    const sz = sizeRef.current;
+    const { x: vpX, y: vpY, scale: vpScale } = viewportRef.current;
+    // Container CSS pixel = world * vpScale + vpOffset
+    const cx = worldX * vpScale + vpX;
+    const cy = worldY * vpScale + vpY;
+    const sz = sizeRef.current * vpScale; // cursor ring scales with zoom
     el.style.display   = 'block';
     el.style.width     = sz + 'px';
     el.style.height    = sz + 'px';
-    el.style.transform = `translate(${logX - sz / 2}px, ${logY - sz / 2}px)`;
+    el.style.transform = `translate(${cx - sz / 2}px, ${cy - sz / 2}px)`;
   };
 
   const onPointerDown = (e) => {
@@ -520,7 +597,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     curStroke.current.points.push({ x: pos.x, y: pos.y, p: e.pressure ?? 0.5 });
     const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
-    redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current);
+    redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current, viewportRef.current);
   };
 
   const onPointerLeave = () => {
@@ -532,7 +609,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
     const ctx = canvas?.getContext('2d');
-    if (ctx) redrawCanvas(ctx, next, null, w, h, DPR());
+    if (ctx) redrawCanvas(ctx, next, null, w, h, DPR(), false, viewportRef.current);
     onStrokesChangeRef.current?.(next, canvas, logSizeRef.current);
   };
 
@@ -552,7 +629,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         if (isDrawing.current && curStroke.current) {
           const canvas = canvasRef.current;
           const { w, h } = logSizeRef.current;
-          if (canvas) redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), true);
+          if (canvas) redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), true, viewportRef.current);
         }
       }
     };
@@ -563,7 +640,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         if (isDrawing.current && curStroke.current) {
           const canvas = canvasRef.current;
           const { w, h } = logSizeRef.current;
-          if (canvas) redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), false);
+          if (canvas) redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), false, viewportRef.current);
         }
       }
     };
@@ -585,25 +662,27 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       backgroundImage: `radial-gradient(circle, ${paperDots} 1px, transparent 1px)`,
       backgroundSize: '20px 20px',
     }}>
-      {/* Viewport wrapper — receives CSS pan/zoom transform */}
-      <div ref={wrapperRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', transformOrigin: '0 0' }}>
-        <canvas
-          ref={canvasRef}
-          style={{ display: 'block', cursor: tool === 'hand' ? 'grab' : 'none', userSelect: 'none', touchAction: 'none' }}
-          onPointerDown={onPointerDown}
-          onPointerLeave={onPointerLeave}
-        />
-        {/* Custom cursor circle — lives in wrapper so logical coords map correctly */}
-        <div
-          ref={cursorRef}
-          style={{
-            display: 'none', position: 'absolute', top: 0, left: 0,
-            borderRadius: '50%', border: '1.5px solid rgba(0,0,0,0.5)',
-            background: 'rgba(0,0,0,0.08)', pointerEvents: 'none',
-            zIndex: 10, boxSizing: 'border-box',
-          }}
-        />
-      </div>
+      {/* Canvas fills the full container — viewport is applied via ctx.setTransform */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          display: 'block', position: 'absolute', top: 0, left: 0,
+          cursor: tool === 'hand' ? 'grab' : 'none',
+          userSelect: 'none', touchAction: 'none',
+        }}
+        onPointerDown={onPointerDown}
+        onPointerLeave={onPointerLeave}
+      />
+      {/* Custom cursor circle — container-relative, converted from world coords in moveCursor */}
+      <div
+        ref={cursorRef}
+        style={{
+          display: 'none', position: 'absolute', top: 0, left: 0,
+          borderRadius: '50%', border: '1.5px solid rgba(0,0,0,0.5)',
+          background: 'rgba(0,0,0,0.08)', pointerEvents: 'none',
+          zIndex: 10, boxSizing: 'border-box',
+        }}
+      />
 
       {/* ── Left controls: stays at fixed position regardless of viewport ── */}
       <LeftControls
@@ -1345,8 +1424,9 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
 
     enqueue(async () => {
       let thumbnail = null;
-      if (canvas && logSize.w > 0) {
-        thumbnail = generateThumbnail(canvas, logSize.w, logSize.h, paperBgRef.current);
+      if (logSize.w > 0) {
+        // Pass strokes directly so the thumbnail fits all content (viewport-independent)
+        thumbnail = generateThumbnail(canvas, logSize.w, logSize.h, paperBgRef.current, nextStrokes);
       }
       try {
         const d = await api.patch('/api/drawings', { id, strokes: nextStrokes, thumbnail }, token);
