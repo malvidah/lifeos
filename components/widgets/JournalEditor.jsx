@@ -9,6 +9,23 @@ import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/image
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
 import { DayLabEditor } from "../Editor.jsx";
+import { getStroke } from "perfect-freehand";
+
+// Convert perfect-freehand outline → SVG path string for Path2D
+function svgPathFromPFStroke(outline) {
+  if (!outline.length) return '';
+  const d = outline.reduce((acc, [x0, y0], i, arr) => {
+    const [x1, y1] = arr[(i + 1) % arr.length];
+    acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+    return acc;
+  }, ['M', ...outline[0], 'Q']);
+  d.push('Z');
+  return d.join(' ');
+}
+
+// Tile URLs — same CARTO layers as WorldMapCard
+const MAP_TILES_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
+const MAP_TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png';
 
 // Strip image chip spans (which may contain nested child spans) from HTML.
 // Uses balanced-tag counting since the chip's renderHTML creates nested spans.
@@ -342,149 +359,85 @@ function paperStyle(dark) {
   };
 }
 
-// ── Simplified continent / landmass polygons [lat, lng] ──────────────────────
-// Coarse but recognisable outlines — enough for a mini reference map.
-const LAND_POLYS = [
-  // North America
-  [[72,-168],[83,-60],[60,-55],[47,-53],[25,-77],[15,-83],[8,-78],[18,-88],[22,-97],[30,-96],[29,-84],[25,-80],[20,-87],[16,-92],[16,-95],[22,-106],[23,-110],[32,-117],[38,-122],[45,-124],[50,-125],[55,-130],[60,-141],[72,-168]],
-  // Greenland
-  [[83,-44],[76,-18],[60,-44],[62,-51],[68,-53],[83,-44]],
-  // Iceland
-  [[63,-25],[64,-14],[66,-18],[66,-24],[63,-25]],
-  // South America
-  [[12,-73],[11,-62],[8,-60],[5,-51],[-4,-35],[-23,-43],[-34,-53],[-55,-67],[-52,-68],[-42,-73],[-27,-71],[-18,-70],[-4,-80],[0,-78],[5,-77],[11,-74],[12,-73]],
-  // Europe (mainland + Scandinavia)
-  [[71,28],[70,30],[65,25],[60,25],[59,24],[55,21],[54,19],[50,14],[47,9],[44,7],[43,5],[38,-1],[36,-6],[35,-5],[36,-9],[43,-9],[44,-8],[47,-2],[48,-2],[50,2],[51,2],[53,8],[58,5],[62,5],[63,8],[65,14],[71,28]],
-  // Great Britain
-  [[51,-5],[55,-6],[57,-2],[58,-3],[57,0],[53,1],[51,-2],[50,-5],[51,-5]],
-  // Ireland
-  [[52,-10],[55,-8],[54,-7],[52,-6],[52,-10]],
-  // Africa
-  [[37,10],[33,12],[30,32],[22,37],[12,43],[0,42],[-5,40],[-11,37],[-27,33],[-35,27],[-34,18],[-17,12],[-3,8],[5,-5],[4,7],[7,13],[10,10],[15,15],[18,25],[22,37],[37,10]],
-  // Madagascar
-  [[-13,49],[-26,44],[-25,47],[-18,49],[-13,49]],
-  // Asia (Russia north coast → Pacific → SE Asia → India → Arabia → Black Sea back)
-  [[71,28],[73,40],[73,80],[73,130],[73,140],[70,170],[65,172],[60,163],[55,140],[47,141],[42,134],[40,130],[35,129],[28,122],[22,121],[22,114],[10,104],[5,103],[5,100],[10,99],[8,77],[5,77],[8,80],[13,80],[22,88],[22,80],[22,69],[23,66],[24,57],[12,52],[10,44],[22,37],[27,35],[37,36],[37,27],[41,29],[44,43],[47,48],[55,55],[60,60],[65,60],[71,28]],
-  // Japan (Honshu + Kyushu rough)
-  [[45,142],[38,141],[33,131],[31,131],[34,136],[36,138],[40,140],[44,145],[45,142]],
-  // Philippines (rough)
-  [[16,122],[9,126],[6,121],[9,118],[14,121],[16,122]],
-  // Borneo (rough)
-  [[7,117],[0,109],[-5,115],[-4,116],[0,118],[5,117],[7,117]],
-  // Sumatra (rough)
-  [[5,96],[0,104],[-5,105],[-4,103],[2,99],[5,96]],
-  // Australia
-  [[-12,136],[-15,129],[-22,114],[-35,117],[-38,140],[-38,148],[-27,153],[-15,145],[-12,136]],
-  // New Zealand (both islands rough)
-  [[-37,175],[-36,174],[-38,178],[-41,175],[-46,168],[-46,170],[-43,172],[-41,175],[-37,175]],
-  // Antarctica
-  [[-68,-180],[-68,180],[-90,180],[-90,-180],[-68,-180]],
-];
+// ── MiniLocationMap — Leaflet map showing tagged location pins ────────────────
+// Same CARTO tiles + design language as WorldMapCard, in a tiny embedded view.
+// `interactive` = false in the strip thumbnail, true in the carousel.
+function MiniLocationMap({ places, interactive = false }) {
+  const containerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
 
-// ── MiniLocationMap — SVG map showing tagged location pins ────────────────────
-// Renders an equirectangular projection auto-zoomed to fit all pins.
-// Design language mirrors WorldMapCard: deep navy bg, teal grid, colored pins.
-// Two-layer rendering: land polygons in a preserveAspectRatio="none" SVG so
-// shapes fill the frame; pins as HTML divs for crisp non-distorted circles.
-function MiniLocationMap({ places }) {
-  const clipId = useRef(null);
-  if (!clipId.current) clipId.current = 'mc' + Math.random().toString(36).slice(2, 7);
+  useEffect(() => {
+    if (!places?.length) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-  if (!places || places.length === 0) return null;
+    let cancelled = false;
+    let map = null;
 
-  const lats = places.map(p => p.lat);
-  const lngs = places.map(p => p.lng);
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    import('leaflet').then(async Lmod => {
+      if (cancelled) return;
+      await import('leaflet/dist/leaflet.css');
+      const L = Lmod.default || Lmod;
 
-  // Add padding; minimum ±12° so a single pin doesn't fill the whole view
-  const latSpan = Math.max(maxLat - minLat, 24);
-  const lngSpan = Math.max(maxLng - minLng, 24);
-  const latPad = latSpan * 0.35;
-  const lngPad = lngSpan * 0.35;
-  const vMinLat = Math.max(-85, minLat - latPad);
-  const vMaxLat = Math.min(85, maxLat + latPad);
-  const vMinLng = Math.max(-180, minLng - lngPad);
-  const vMaxLng = Math.min(180, maxLng + lngPad);
+      // Destroy previous instance
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
 
-  // Projects to [0,100] in SVG viewBox space
-  const px = (lng) => (lng - vMinLng) / (vMaxLng - vMinLng) * 100;
-  const py = (lat) => (vMaxLat - lat) / (vMaxLat - vMinLat) * 100;
+      map = L.map(container, {
+        zoomControl: false,
+        attributionControl: false,
+        scrollWheelZoom: interactive,
+        doubleClickZoom: interactive,
+        touchZoom: interactive,
+        dragging: interactive,
+        boxZoom: false,
+        keyboard: false,
+        tap: false,
+      });
 
-  const latLines = [-60, -30, 0, 30, 60].filter(l => l > vMinLat && l < vMaxLat);
-  const lngLines = [-120, -60, 0, 60, 120].filter(l => l > vMinLng && l < vMaxLng);
+      L.tileLayer(dark ? MAP_TILES_DARK : MAP_TILES_LIGHT, { maxZoom: 19 }).addTo(map);
+
+      // Teal dot markers matching LifeOS accent style
+      places.forEach(p => {
+        const color = p.color || '#4EC9B0';
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2.5px solid rgba(255,255,255,0.85);box-shadow:0 1px 5px rgba(0,0,0,0.45);"></div>`,
+          iconSize: [12, 12],
+          iconAnchor: [6, 6],
+        });
+        L.marker([p.lat, p.lng], { icon }).addTo(map);
+      });
+
+      // Fit view to all pins
+      if (places.length === 1) {
+        map.setView([places[0].lat, places[0].lng], 11);
+      } else {
+        map.fitBounds(L.latLngBounds(places.map(p => [p.lat, p.lng])), { padding: [20, 20] });
+      }
+
+      // Let Leaflet measure the container after layout
+      requestAnimationFrame(() => { if (!cancelled) map?.invalidateSize(); });
+
+      if (!cancelled) mapInstanceRef.current = map;
+    });
+
+    return () => {
+      cancelled = true;
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
+    };
+  }, [places, dark, interactive]);
 
   return (
-    <div style={{ width: '100%', height: '100%', background: '#0d1a24', position: 'relative', overflow: 'hidden', borderRadius: 8 }}>
-
-      {/* ── Land + grid layer (preserveAspectRatio="none" — fills frame) ── */}
-      <svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%"
-        style={{ position: 'absolute', top: 0, left: 0 }}>
-        <defs>
-          <clipPath id={clipId.current}>
-            <rect x="0" y="0" width="100" height="100" />
-          </clipPath>
-        </defs>
-
-        {/* Continent fills + outlines — clipped to viewBox so fills don't bleed */}
-        <g clipPath={`url(#${clipId.current})`}>
-          {LAND_POLYS.map((coords, i) => (
-            <polygon key={i}
-              points={coords.map(([lat, lng]) => `${px(lng).toFixed(1)},${py(lat).toFixed(1)}`).join(' ')}
-              fill="rgba(22,58,85,0.72)"
-              stroke="rgba(80,200,220,0.38)"
-              strokeWidth="0.45"
-              strokeLinejoin="round"
-            />
-          ))}
-        </g>
-
-        {/* Grid lines */}
-        {latLines.map(lat => (
-          <line key={'lat'+lat} x1="0" y1={py(lat)} x2="100" y2={py(lat)}
-            stroke="rgba(80,200,220,0.12)" strokeWidth="0.4" />
-        ))}
-        {0 > vMinLat && 0 < vMaxLat && (
-          <line x1="0" y1={py(0)} x2="100" y2={py(0)}
-            stroke="rgba(80,200,220,0.22)" strokeWidth="0.6" />
-        )}
-        {lngLines.map(lng => (
-          <line key={'lng'+lng} x1={px(lng)} y1="0" x2={px(lng)} y2="100"
-            stroke="rgba(80,200,220,0.12)" strokeWidth="0.4" />
-        ))}
-      </svg>
-
-      {/* ── Pin layer — HTML divs for crisp, non-distorted circles + labels ── */}
-      {places.map((p, i) => {
-        const x = px(p.lng), y = py(p.lat);
-        const color = p.color || '#4EC9B0';
-        return (
-          <div key={i} style={{
-            position: 'absolute',
-            left: x + '%', top: y + '%',
-            transform: 'translate(-50%, -50%)',
-            pointerEvents: 'none',
-          }}>
-            <svg width="16" height="16" style={{ display: 'block', overflow: 'visible' }}>
-              <circle cx="8" cy="8" r="6" fill="none" stroke={color} strokeWidth="1.2" opacity="0.35" />
-              <circle cx="8" cy="8" r="3.5" fill={color} opacity="0.92" />
-            </svg>
-            <div style={{
-              position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
-              whiteSpace: 'nowrap', fontFamily: 'ui-monospace, monospace', fontSize: 8,
-              color: 'rgba(200,230,240,0.78)', userSelect: 'none',
-              textShadow: '0 1px 3px rgba(0,0,0,0.7)',
-            }}>{p.name}</div>
-          </div>
-        );
-      })}
-
-      {/* "LOCATIONS" label — top-left corner, WorldMapCard style */}
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+      {/* "LOCATIONS" label — WorldMapCard style, sits above the map tiles */}
       <div style={{
-        position: 'absolute', top: 6, left: 8,
+        position: 'absolute', top: 6, left: 8, zIndex: 1000,
         fontFamily: 'ui-monospace, monospace', fontSize: 8, letterSpacing: '0.12em',
-        textTransform: 'uppercase', color: 'rgba(80,200,220,0.45)',
-        pointerEvents: 'none',
+        textTransform: 'uppercase', color: 'rgba(80,200,220,0.7)',
+        pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.5)',
       }}>Locations</div>
     </div>
   );
@@ -496,44 +449,50 @@ function miniRenderStroke(ctx, stroke, scale, offX, offY) {
   const pts = stroke.points;
   if (!pts || pts.length === 0) return;
   ctx.save();
-  if (stroke.tool === 'eraser') {
-    ctx.globalCompositeOperation = 'destination-out';
-    ctx.strokeStyle = 'rgba(0,0,0,1)';
-  } else {
-    ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = stroke.color || '#1c1b18';
-  }
-  ctx.lineWidth = Math.max(0.5, (stroke.size || 3) * scale);
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
+
+  const isEraser = stroke.tool === 'eraser';
+  const color = stroke.color || '#1c1b18';
+  const strokePx = Math.max(0.5, (stroke.size || 3) * scale);
   const tx = x => (x - offX) * scale;
   const ty = y => (y - offY) * scale;
+
+  if (isEraser) {
+    ctx.globalCompositeOperation = 'destination-out';
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
   if (stroke.shape === 'line') {
+    ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : color;
+    ctx.lineWidth = strokePx;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(tx(pts[0].x), ty(pts[0].y));
     ctx.lineTo(tx(pts[pts.length - 1].x), ty(pts[pts.length - 1].y));
     ctx.stroke();
   } else if (stroke.shape === 'ellipse' && stroke.cx != null) {
+    ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : color;
+    ctx.lineWidth = strokePx;
     ctx.beginPath();
     ctx.ellipse(tx(stroke.cx), ty(stroke.cy), stroke.rx * scale, stroke.ry * scale, 0, 0, Math.PI * 2);
     ctx.stroke();
-  } else if (pts.length === 1) {
-    ctx.beginPath();
-    ctx.arc(tx(pts[0].x), ty(pts[0].y), ctx.lineWidth / 2, 0, Math.PI * 2);
-    ctx.fillStyle = ctx.strokeStyle;
-    ctx.fill();
   } else {
-    ctx.beginPath();
-    ctx.moveTo(tx(pts[0].x), ty(pts[0].y));
-    for (let i = 1; i < pts.length - 1; i++) {
-      const mx = (pts[i].x + pts[i + 1].x) / 2;
-      const my = (pts[i].y + pts[i + 1].y) / 2;
-      ctx.quadraticCurveTo(tx(pts[i].x), ty(pts[i].y), tx(mx), ty(my));
+    // Freehand: perfect-freehand for calligraphic tapered strokes
+    const pfPts = pts.map(p => [tx(p.x), ty(p.y)]);
+    const outline = getStroke(pfPts, {
+      size: strokePx * 1.5,
+      thinning: 0.45,
+      smoothing: 0.5,
+      streamline: 0.4,
+      simulatePressure: true,
+      last: true,
+    });
+    if (outline.length) {
+      ctx.fillStyle = isEraser ? 'rgba(0,0,0,1)' : color;
+      ctx.fill(new Path2D(svgPathFromPFStroke(outline)));
     }
-    const last = pts[pts.length - 1];
-    ctx.lineTo(tx(last.x), ty(last.y));
-    ctx.stroke();
   }
+
   ctx.restore();
 }
 
@@ -828,8 +787,8 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
       onPointerUp={onPointerUp}
     >
       {item?.type === 'map' ? (
-        <div style={{ width: '100%', aspectRatio: '4/3', background: '#0d1a24', position: 'relative', overflow: 'hidden' }}>
-          <MiniLocationMap places={item.places} />
+        <div style={{ width: '100%', aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
+          <MiniLocationMap places={item.places} interactive={true} />
         </div>
       ) : item?.type === 'drawing' ? (
         <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden' }}>

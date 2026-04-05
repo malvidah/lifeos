@@ -5,6 +5,19 @@ import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { Card } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
+import { getStroke } from "perfect-freehand";
+
+// Convert perfect-freehand outline array → SVG path string (for Path2D)
+function svgPathFromPFStroke(outline) {
+  if (!outline.length) return '';
+  const d = outline.reduce((acc, [x0, y0], i, arr) => {
+    const [x1, y1] = arr[(i + 1) % arr.length];
+    acc.push(x0, y0, (x0 + x1) / 2, (y0 + y1) / 2);
+    return acc;
+  }, ['M', ...outline[0], 'Q']);
+  d.push('Z');
+  return d.join(' ');
+}
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 const CARD_COLOR = "#B89ACD"; // lilac
@@ -81,47 +94,52 @@ function renderStroke(ctx, stroke, scale) {
   const pts = stroke.points;
   if (!pts || pts.length === 0) return;
   ctx.save();
-  if (stroke.tool === 'eraser') {
+
+  const isEraser = stroke.tool === 'eraser';
+  const color = stroke.color || '#1c1b18';
+  const strokePx = (stroke.size || 3) * scale; // logical-unit size → canvas pixels
+
+  if (isEraser) {
     ctx.globalCompositeOperation = 'destination-out';
-    ctx.strokeStyle = 'rgba(0,0,0,1)';
   } else {
     ctx.globalCompositeOperation = 'source-over';
-    ctx.strokeStyle = stroke.color || '#1c1b18';
   }
-  ctx.lineWidth = (stroke.size || 3) * scale;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
 
   if (stroke.shape === 'line') {
+    // Geometric line: keep simple stroked path
+    ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : color;
+    ctx.lineWidth = strokePx;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.moveTo(pts[0].x * scale, pts[0].y * scale);
     ctx.lineTo(pts[pts.length - 1].x * scale, pts[pts.length - 1].y * scale);
     ctx.stroke();
   } else if (stroke.shape === 'ellipse') {
+    // Geometric ellipse: keep simple stroked path
+    ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : color;
+    ctx.lineWidth = strokePx;
     const { cx, cy, rx, ry } = stroke;
     ctx.beginPath();
     ctx.ellipse(cx * scale, cy * scale, rx * scale, ry * scale, 0, 0, Math.PI * 2);
     ctx.stroke();
   } else {
-    // Freehand: quadratic smoothing
-    if (pts.length === 1) {
-      ctx.beginPath();
-      ctx.arc(pts[0].x * scale, pts[0].y * scale, ctx.lineWidth / 2, 0, Math.PI * 2);
-      ctx.fillStyle = ctx.strokeStyle;
-      ctx.fill();
-    } else {
-      ctx.beginPath();
-      ctx.moveTo(pts[0].x * scale, pts[0].y * scale);
-      for (let i = 1; i < pts.length - 1; i++) {
-        const mx = (pts[i].x + pts[i + 1].x) / 2;
-        const my = (pts[i].y + pts[i + 1].y) / 2;
-        ctx.quadraticCurveTo(pts[i].x * scale, pts[i].y * scale, mx * scale, my * scale);
-      }
-      const last = pts[pts.length - 1];
-      ctx.lineTo(last.x * scale, last.y * scale);
-      ctx.stroke();
+    // Freehand: use perfect-freehand for calligraphic tapered strokes
+    const pfPts = pts.map(p => [p.x * scale, p.y * scale]);
+    const outline = getStroke(pfPts, {
+      size: strokePx * 1.5,     // diameter at full pressure
+      thinning: 0.45,           // how much stroke tapers
+      smoothing: 0.5,
+      streamline: 0.4,
+      simulatePressure: true,   // velocity-based pressure simulation
+      last: true,               // treat the last point as the final point
+    });
+    if (outline.length) {
+      const pathData = svgPathFromPFStroke(outline);
+      ctx.fillStyle = isEraser ? 'rgba(0,0,0,1)' : color;
+      ctx.fill(new Path2D(pathData));
     }
   }
+
   ctx.restore();
 }
 
