@@ -342,10 +342,54 @@ function paperStyle(dark) {
   };
 }
 
+// ── Simplified continent / landmass polygons [lat, lng] ──────────────────────
+// Coarse but recognisable outlines — enough for a mini reference map.
+const LAND_POLYS = [
+  // North America
+  [[72,-168],[83,-60],[60,-55],[47,-53],[25,-77],[15,-83],[8,-78],[18,-88],[22,-97],[30,-96],[29,-84],[25,-80],[20,-87],[16,-92],[16,-95],[22,-106],[23,-110],[32,-117],[38,-122],[45,-124],[50,-125],[55,-130],[60,-141],[72,-168]],
+  // Greenland
+  [[83,-44],[76,-18],[60,-44],[62,-51],[68,-53],[83,-44]],
+  // Iceland
+  [[63,-25],[64,-14],[66,-18],[66,-24],[63,-25]],
+  // South America
+  [[12,-73],[11,-62],[8,-60],[5,-51],[-4,-35],[-23,-43],[-34,-53],[-55,-67],[-52,-68],[-42,-73],[-27,-71],[-18,-70],[-4,-80],[0,-78],[5,-77],[11,-74],[12,-73]],
+  // Europe (mainland + Scandinavia)
+  [[71,28],[70,30],[65,25],[60,25],[59,24],[55,21],[54,19],[50,14],[47,9],[44,7],[43,5],[38,-1],[36,-6],[35,-5],[36,-9],[43,-9],[44,-8],[47,-2],[48,-2],[50,2],[51,2],[53,8],[58,5],[62,5],[63,8],[65,14],[71,28]],
+  // Great Britain
+  [[51,-5],[55,-6],[57,-2],[58,-3],[57,0],[53,1],[51,-2],[50,-5],[51,-5]],
+  // Ireland
+  [[52,-10],[55,-8],[54,-7],[52,-6],[52,-10]],
+  // Africa
+  [[37,10],[33,12],[30,32],[22,37],[12,43],[0,42],[-5,40],[-11,37],[-27,33],[-35,27],[-34,18],[-17,12],[-3,8],[5,-5],[4,7],[7,13],[10,10],[15,15],[18,25],[22,37],[37,10]],
+  // Madagascar
+  [[-13,49],[-26,44],[-25,47],[-18,49],[-13,49]],
+  // Asia (Russia north coast → Pacific → SE Asia → India → Arabia → Black Sea back)
+  [[71,28],[73,40],[73,80],[73,130],[73,140],[70,170],[65,172],[60,163],[55,140],[47,141],[42,134],[40,130],[35,129],[28,122],[22,121],[22,114],[10,104],[5,103],[5,100],[10,99],[8,77],[5,77],[8,80],[13,80],[22,88],[22,80],[22,69],[23,66],[24,57],[12,52],[10,44],[22,37],[27,35],[37,36],[37,27],[41,29],[44,43],[47,48],[55,55],[60,60],[65,60],[71,28]],
+  // Japan (Honshu + Kyushu rough)
+  [[45,142],[38,141],[33,131],[31,131],[34,136],[36,138],[40,140],[44,145],[45,142]],
+  // Philippines (rough)
+  [[16,122],[9,126],[6,121],[9,118],[14,121],[16,122]],
+  // Borneo (rough)
+  [[7,117],[0,109],[-5,115],[-4,116],[0,118],[5,117],[7,117]],
+  // Sumatra (rough)
+  [[5,96],[0,104],[-5,105],[-4,103],[2,99],[5,96]],
+  // Australia
+  [[-12,136],[-15,129],[-22,114],[-35,117],[-38,140],[-38,148],[-27,153],[-15,145],[-12,136]],
+  // New Zealand (both islands rough)
+  [[-37,175],[-36,174],[-38,178],[-41,175],[-46,168],[-46,170],[-43,172],[-41,175],[-37,175]],
+  // Antarctica
+  [[-68,-180],[-68,180],[-90,180],[-90,-180],[-68,-180]],
+];
+
 // ── MiniLocationMap — SVG map showing tagged location pins ────────────────────
 // Renders an equirectangular projection auto-zoomed to fit all pins.
 // Design language mirrors WorldMapCard: deep navy bg, teal grid, colored pins.
+// Two-layer rendering: land polygons in a preserveAspectRatio="none" SVG so
+// shapes fill the frame; pins as HTML divs for crisp non-distorted circles.
 function MiniLocationMap({ places }) {
+  const clipId = useRef(null);
+  if (!clipId.current) clipId.current = 'mc' + Math.random().toString(36).slice(2, 7);
+
   if (!places || places.length === 0) return null;
 
   const lats = places.map(p => p.lat);
@@ -363,56 +407,77 @@ function MiniLocationMap({ places }) {
   const vMinLng = Math.max(-180, minLng - lngPad);
   const vMaxLng = Math.min(180, maxLng + lngPad);
 
-  const proj = (lat, lng) => ({
-    x: ((lng - vMinLng) / (vMaxLng - vMinLng) * 100).toFixed(2) + '%',
-    y: ((vMaxLat - lat) / (vMaxLat - vMinLat) * 100).toFixed(2) + '%',
-  });
+  // Projects to [0,100] in SVG viewBox space
+  const px = (lng) => (lng - vMinLng) / (vMaxLng - vMinLng) * 100;
+  const py = (lat) => (vMaxLat - lat) / (vMaxLat - vMinLat) * 100;
 
-  // Grid lines within the view window
   const latLines = [-60, -30, 0, 30, 60].filter(l => l > vMinLat && l < vMaxLat);
   const lngLines = [-120, -60, 0, 60, 120].filter(l => l > vMinLng && l < vMaxLng);
 
   return (
     <div style={{ width: '100%', height: '100%', background: '#0d1a24', position: 'relative', overflow: 'hidden', borderRadius: 8 }}>
-      <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0, overflow: 'visible' }}>
-        {/* Latitude grid lines */}
-        {latLines.map(lat => {
-          const y = ((vMaxLat - lat) / (vMaxLat - vMinLat) * 100).toFixed(2);
-          return <line key={'lat'+lat} x1="0" y1={y+'%'} x2="100%" y2={y+'%'} stroke="rgba(80,200,220,0.12)" strokeWidth="0.5" />;
-        })}
-        {/* Equator — slightly brighter */}
-        {0 > vMinLat && 0 < vMaxLat && (
-          <line x1="0" y1={((vMaxLat) / (vMaxLat - vMinLat) * 100).toFixed(2)+'%'} x2="100%" y2={((vMaxLat) / (vMaxLat - vMinLat) * 100).toFixed(2)+'%'} stroke="rgba(80,200,220,0.22)" strokeWidth="0.8" />
-        )}
-        {/* Longitude grid lines */}
-        {lngLines.map(lng => {
-          const x = ((lng - vMinLng) / (vMaxLng - vMinLng) * 100).toFixed(2);
-          return <line key={'lng'+lng} x1={x+'%'} y1="0" x2={x+'%'} y2="100%" stroke="rgba(80,200,220,0.12)" strokeWidth="0.5" />;
-        })}
 
-        {/* Location pins */}
-        {places.map((p, i) => {
-          const pos = proj(p.lat, p.lng);
-          const color = p.color || '#4EC9B0';
-          return (
-            <g key={i}>
-              {/* Outer pulse ring */}
-              <circle cx={pos.x} cy={pos.y} r="6" fill="none" stroke={color} strokeWidth="1" opacity="0.35" />
-              {/* Pin dot */}
-              <circle cx={pos.x} cy={pos.y} r="3.5" fill={color} opacity="0.92" />
-              {/* Name label */}
-              <text
-                x={pos.x} y={pos.y}
-                dx="7" dy="4"
-                fill="rgba(200,230,240,0.75)"
-                fontSize="8.5"
-                fontFamily="ui-monospace, monospace"
-                style={{ userSelect: 'none', pointerEvents: 'none' }}
-              >{p.name}</text>
-            </g>
-          );
-        })}
+      {/* ── Land + grid layer (preserveAspectRatio="none" — fills frame) ── */}
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" width="100%" height="100%"
+        style={{ position: 'absolute', top: 0, left: 0 }}>
+        <defs>
+          <clipPath id={clipId.current}>
+            <rect x="0" y="0" width="100" height="100" />
+          </clipPath>
+        </defs>
+
+        {/* Continent fills + outlines — clipped to viewBox so fills don't bleed */}
+        <g clipPath={`url(#${clipId.current})`}>
+          {LAND_POLYS.map((coords, i) => (
+            <polygon key={i}
+              points={coords.map(([lat, lng]) => `${px(lng).toFixed(1)},${py(lat).toFixed(1)}`).join(' ')}
+              fill="rgba(22,58,85,0.72)"
+              stroke="rgba(80,200,220,0.38)"
+              strokeWidth="0.45"
+              strokeLinejoin="round"
+            />
+          ))}
+        </g>
+
+        {/* Grid lines */}
+        {latLines.map(lat => (
+          <line key={'lat'+lat} x1="0" y1={py(lat)} x2="100" y2={py(lat)}
+            stroke="rgba(80,200,220,0.12)" strokeWidth="0.4" />
+        ))}
+        {0 > vMinLat && 0 < vMaxLat && (
+          <line x1="0" y1={py(0)} x2="100" y2={py(0)}
+            stroke="rgba(80,200,220,0.22)" strokeWidth="0.6" />
+        )}
+        {lngLines.map(lng => (
+          <line key={'lng'+lng} x1={px(lng)} y1="0" x2={px(lng)} y2="100"
+            stroke="rgba(80,200,220,0.12)" strokeWidth="0.4" />
+        ))}
       </svg>
+
+      {/* ── Pin layer — HTML divs for crisp, non-distorted circles + labels ── */}
+      {places.map((p, i) => {
+        const x = px(p.lng), y = py(p.lat);
+        const color = p.color || '#4EC9B0';
+        return (
+          <div key={i} style={{
+            position: 'absolute',
+            left: x + '%', top: y + '%',
+            transform: 'translate(-50%, -50%)',
+            pointerEvents: 'none',
+          }}>
+            <svg width="16" height="16" style={{ display: 'block', overflow: 'visible' }}>
+              <circle cx="8" cy="8" r="6" fill="none" stroke={color} strokeWidth="1.2" opacity="0.35" />
+              <circle cx="8" cy="8" r="3.5" fill={color} opacity="0.92" />
+            </svg>
+            <div style={{
+              position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
+              whiteSpace: 'nowrap', fontFamily: 'ui-monospace, monospace', fontSize: 8,
+              color: 'rgba(200,230,240,0.78)', userSelect: 'none',
+              textShadow: '0 1px 3px rgba(0,0,0,0.7)',
+            }}>{p.name}</div>
+          </div>
+        );
+      })}
 
       {/* "LOCATIONS" label — top-left corner, WorldMapCard style */}
       <div style={{
@@ -594,6 +659,7 @@ function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
   return (
     <div
       ref={containerRef}
+      data-no-page-swipe
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
@@ -653,6 +719,7 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
 
   return (
     <div
+      data-no-page-swipe
       style={{ marginBottom: 12, position: 'relative', borderRadius: 10, overflow: 'hidden', background: 'var(--dl-well)', cursor: 'grab', userSelect: 'none' }}
       onPointerDown={onPointerDown}
       onPointerUp={onPointerUp}
@@ -678,9 +745,11 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
         <img src={item?.url} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'contain', display: 'block' }} />
       )}
 
-      {/* Left chevron */}
+      {/* Left chevron — use onPointerDown so it fires before the page-swipe check */}
       {mediaItems.length > 1 && (
-        <div onClick={prev} style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s' }}
+        <div
+          onPointerDown={e => { e.stopPropagation(); prev(); }}
+          style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s', zIndex: 2 }}
           onMouseEnter={e => e.currentTarget.style.color = '#fff'}
           onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
         >
@@ -690,7 +759,9 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
 
       {/* Right chevron */}
       {mediaItems.length > 1 && (
-        <div onClick={next} style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s' }}
+        <div
+          onPointerDown={e => { e.stopPropagation(); next(); }}
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s', zIndex: 2 }}
           onMouseEnter={e => e.currentTarget.style.color = '#fff'}
           onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
         >
