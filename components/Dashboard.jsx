@@ -1108,26 +1108,6 @@ function DashboardInner() {
                 />
               </div>
 
-              {/* Next page chevron */}
-              <button
-                onPointerDown={e => e.stopPropagation()}
-                onClick={() => layout.setCurrentPageIdx(Math.min(layout.pages.length - 1, layout.currentPageIdx + 1))}
-                disabled={layout.currentPageIdx === layout.pages.length - 1}
-                title="Next page"
-                style={{
-                  ...circleBtn(false),
-                  pointerEvents: "auto",
-                  opacity: layout.currentPageIdx === layout.pages.length - 1 ? 0.3 : 1,
-                  transition: "opacity 0.18s",
-                  cursor: layout.currentPageIdx === layout.pages.length - 1 ? "default" : "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 18 15 12 9 6"/>
-                </svg>
-              </button>
               <button
                 onClick={() => setChatOpenCount(c => c + 1)}
                 title="Ask AI"
@@ -1146,6 +1126,27 @@ function DashboardInner() {
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--dl-highlight)" style={{flexShrink:0}}>
                   <path d="M12 2L13.9 10.1L22 12L13.9 13.9L12 22L10.1 13.9L2 12L10.1 10.1Z"/>
+                </svg>
+              </button>
+
+              {/* Next page chevron */}
+              <button
+                onPointerDown={e => e.stopPropagation()}
+                onClick={() => layout.setCurrentPageIdx(Math.min(layout.pages.length - 1, layout.currentPageIdx + 1))}
+                disabled={layout.currentPageIdx === layout.pages.length - 1}
+                title="Next page"
+                style={{
+                  ...circleBtn(false),
+                  pointerEvents: "auto",
+                  opacity: layout.currentPageIdx === layout.pages.length - 1 ? 0.3 : 1,
+                  transition: "opacity 0.18s",
+                  cursor: layout.currentPageIdx === layout.pages.length - 1 ? "default" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
                 </svg>
               </button>
             </div>
