@@ -1410,6 +1410,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   return (
     <div
+      data-no-pointer-capture
       onClickCapture={handleChipClick}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
