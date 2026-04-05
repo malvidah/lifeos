@@ -780,7 +780,11 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
     return () => window.removeEventListener('keydown', handler);
   }, [onClose]);
 
-  const onPointerDown = (e) => { pointerStart.current = e.clientX; };
+  const onPointerDown = (e) => {
+    // Don't start a swipe if the press is inside a no-swipe zone (drawing canvas, interactive map)
+    if (e.target.closest('[data-no-carousel-swipe]')) return;
+    pointerStart.current = e.clientX;
+  };
   const onPointerUp = (e) => {
     if (pointerStart.current == null) return;
     const diff = e.clientX - pointerStart.current;
@@ -798,15 +802,11 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
       onPointerUp={onPointerUp}
     >
       {item?.type === 'map' ? (
-        <div style={{ width: '100%', aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
+        <div data-no-carousel-swipe style={{ width: '100%', aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
           <MiniLocationMap places={item.places} interactive={true} />
         </div>
       ) : item?.type === 'drawing' ? (
-        <div
-          style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden' }}
-          onPointerDown={e => e.stopPropagation()}
-          onPointerUp={e => e.stopPropagation()}
-        >
+        <div data-no-carousel-swipe style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden' }}>
           <MiniDrawingCanvas strokes={item.strokes} dark={dark} />
         </div>
       ) : (
@@ -1185,10 +1185,13 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     allDrawingsList.forEach(d => {
       map[d.title] = { strokes: drawingStrokesCache[d.id] || [], thumbnail: d.thumbnail || null };
     });
-    // Override with live context data if DrawingsCard is mounted (more up-to-date)
+    // Override with live context data ONLY when it has actual strokes.
+    // ctxDrawings comes from DrawingsCard which uses the list API (no strokes),
+    // so d.strokes is [] unless the user just saved a new drawing. Overriding
+    // with [] would blank out the API-fetched strokes, so skip empty arrays.
     (ctxDrawings || []).forEach(d => {
-      if (d && typeof d === 'object' && d.title) {
-        map[d.title] = { strokes: d.strokes || [], thumbnail: d.thumbnail || null };
+      if (d && typeof d === 'object' && d.title && d.strokes?.length > 0) {
+        map[d.title] = { strokes: d.strokes, thumbnail: d.thumbnail || null };
       }
     });
     return map;
