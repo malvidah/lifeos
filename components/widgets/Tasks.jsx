@@ -181,6 +181,76 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   const lastHtmlRef = useRef('');
   const habitToggleInFlightRef = useRef(false);
 
+  // Core save logic — called from the debounced path (handleUpdate) and immediately
+  // from onBlur so a page refresh before the 1 s debounce fires doesn't lose data.
+  const doSave = useCallback(async (html) => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    try {
+      const editorTasks = parseTaskBlocks(html);
+      const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
+
+      // Check for habit toggles that the fast path may have missed
+      // (e.g. if fast path was in-flight when another toggle happened)
+      const toggles = detectHabitToggles(editorTasks, serverById);
+      let habitChanged = false;
+      if (toggles.length > 0 && !habitToggleInFlightRef.current) {
+        try {
+          habitChanged = await fireHabitToggles(toggles);
+        } catch (err) {
+          console.warn('[habit-toggle] debounced path failed:', err);
+          showToast('Failed to save habit', 'error');
+        }
+      }
+
+      // Diff everything else (text edits, regular tasks, creates, deletes)
+      const diff = diffTasks(serverTasksRef.current, editorTasks);
+      const hasChanges = diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length;
+
+      if (hasChanges) {
+        markLocalSave("tasks", date);
+        await applyDiff(date, diff, token);
+        // Reflect updates locally so subsequent diffs see the new state
+        for (const u of diff.toUpdate) {
+          const idx = serverTasksRef.current.findIndex(t => t.id === u.id);
+          if (idx >= 0) {
+            serverTasksRef.current[idx] = { ...serverTasksRef.current[idx], text: u.text, html: u.html, done: u.done, position: u.position };
+          }
+        }
+      }
+
+      // Only re-fetch from server when structure changed (creates/deletes need new IDs).
+      // After re-fetch, the editor reloads with correct data-task-id attrs injected by GET.
+      // Exception: if the editor is focused (user is actively typing), skip the remount
+      // so we don't lose the cursor or disrupt mid-edit text. serverTasksRef is still
+      // updated so subsequent diffs use the fresh IDs; text-based fallback matching
+      // handles editor tasks that haven't yet received their data-task-id.
+      if (diff.toCreate.length || diff.toDelete.length) {
+        const fresh = await api.get(`/api/tasks?date=${date}`, token);
+        if (fresh?.tasks) {
+          serverTasksRef.current = fresh.tasks;
+          const isEditorFocused = editorWrapRef.current?.contains(document.activeElement);
+          if (!isEditorFocused) {
+            // Reload editor so new tasks get their data-task-id from the fresh GET response
+            const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
+            setHtmlValue(freshHtml);
+            lastHtmlRef.current = freshHtml;
+            setEditorKey(k => k + 1);
+          }
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+    } catch (err) {
+      console.warn('[tasks] diff save failed:', err);
+      showToast('Failed to save tasks', 'error');
+      // Clear indicator on error too
+      window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
+    } finally {
+      savingRef.current = false;
+    }
+  }, [date, token, fireHabitToggles]);
+
   const handleUpdate = useCallback((newHtml) => {
     setHtmlValue(newHtml);
     const prevHtml = lastHtmlRef.current;
@@ -219,75 +289,8 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
     // Debounced path: handle text edits, creates, deletes, regular task done toggles
     clearTimeout(saveTimerRef.current);
     window.dispatchEvent(new CustomEvent('daylab:tasks-saving'));
-    saveTimerRef.current = setTimeout(async () => {
-      if (savingRef.current) return;
-      savingRef.current = true;
-
-      try {
-        const editorTasks = parseTaskBlocks(newHtml);
-        const serverById = new Map(serverTasksRef.current.filter(t => t.id).map(t => [t.id, t]));
-
-        // Check for habit toggles that the fast path may have missed
-        // (e.g. if fast path was in-flight when another toggle happened)
-        const toggles = detectHabitToggles(editorTasks, serverById);
-        let habitChanged = false;
-        if (toggles.length > 0 && !habitToggleInFlightRef.current) {
-          try {
-            habitChanged = await fireHabitToggles(toggles);
-          } catch (err) {
-            console.warn('[habit-toggle] debounced path failed:', err);
-            showToast('Failed to save habit', 'error');
-          }
-        }
-
-        // Diff everything else (text edits, regular tasks, creates, deletes)
-        const diff = diffTasks(serverTasksRef.current, editorTasks);
-        const hasChanges = diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length;
-
-        if (hasChanges) {
-          markLocalSave("tasks", date);
-          await applyDiff(date, diff, token);
-          // Reflect updates locally so subsequent diffs see the new state
-          for (const u of diff.toUpdate) {
-            const idx = serverTasksRef.current.findIndex(t => t.id === u.id);
-            if (idx >= 0) {
-              serverTasksRef.current[idx] = { ...serverTasksRef.current[idx], text: u.text, html: u.html, done: u.done, position: u.position };
-            }
-          }
-        }
-
-        // Only re-fetch from server when structure changed (creates/deletes need new IDs).
-        // After re-fetch, the editor reloads with correct data-task-id attrs injected by GET.
-        // Exception: if the editor is focused (user is actively typing), skip the remount
-        // so we don't lose the cursor or disrupt mid-edit text. serverTasksRef is still
-        // updated so subsequent diffs use the fresh IDs; text-based fallback matching
-        // handles editor tasks that haven't yet received their data-task-id.
-        if (diff.toCreate.length || diff.toDelete.length) {
-          const fresh = await api.get(`/api/tasks?date=${date}`, token);
-          if (fresh?.tasks) {
-            serverTasksRef.current = fresh.tasks;
-            const isEditorFocused = editorWrapRef.current?.contains(document.activeElement);
-            if (!isEditorFocused) {
-              // Reload editor so new tasks get their data-task-id from the fresh GET response
-              const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
-              setHtmlValue(freshHtml);
-              lastHtmlRef.current = freshHtml;
-              setEditorKey(k => k + 1);
-            }
-          }
-        }
-
-        window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
-      } catch (err) {
-        console.warn('[tasks] diff save failed:', err);
-        showToast('Failed to save tasks', 'error');
-        // Clear indicator on error too
-        window.dispatchEvent(new CustomEvent('daylab:tasks-saved'));
-      } finally {
-        savingRef.current = false;
-      }
-    }, 1000);
-  }, [date, token, fireHabitToggles]);
+    saveTimerRef.current = setTimeout(() => doSave(newHtml), 1000);
+  }, [date, token, fireHabitToggles, doSave]);
 
   // Flush on unmount / date change
   useEffect(() => {
@@ -348,7 +351,16 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   );
 
   return (
-    <div ref={editorWrapRef} data-no-pointer-capture data-filter={taskFilter} data-tasks-id={filterId} style={{
+    <div ref={editorWrapRef} data-no-pointer-capture data-filter={taskFilter} data-tasks-id={filterId}
+      onBlur={(e) => {
+        // Flush immediately when focus truly leaves the editor (covers the case where
+        // the user clicks the browser refresh button before the 1 s debounce fires).
+        if (!editorWrapRef.current?.contains(e.relatedTarget)) {
+          clearTimeout(saveTimerRef.current);
+          doSave(lastHtmlRef.current);
+        }
+      }}
+      style={{
       '--task-border': "var(--dl-border2)",
       '--task-color': "var(--dl-accent)",
       '--task-fill': theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",
