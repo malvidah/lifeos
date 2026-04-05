@@ -258,15 +258,22 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
 
         // Only re-fetch from server when structure changed (creates/deletes need new IDs).
         // After re-fetch, the editor reloads with correct data-task-id attrs injected by GET.
+        // Exception: if the editor is focused (user is actively typing), skip the remount
+        // so we don't lose the cursor or disrupt mid-edit text. serverTasksRef is still
+        // updated so subsequent diffs use the fresh IDs; text-based fallback matching
+        // handles editor tasks that haven't yet received their data-task-id.
         if (diff.toCreate.length || diff.toDelete.length) {
           const fresh = await api.get(`/api/tasks?date=${date}`, token);
           if (fresh?.tasks) {
             serverTasksRef.current = fresh.tasks;
-            // Reload editor so new tasks get their data-task-id from the fresh GET response
-            const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
-            setHtmlValue(freshHtml);
-            lastHtmlRef.current = freshHtml;
-            setEditorKey(k => k + 1);
+            const isEditorFocused = editorWrapRef.current?.contains(document.activeElement);
+            if (!isEditorFocused) {
+              // Reload editor so new tasks get their data-task-id from the fresh GET response
+              const freshHtml = fresh.data || tasksToHtml(fresh.tasks);
+              setHtmlValue(freshHtml);
+              lastHtmlRef.current = freshHtml;
+              setEditorKey(k => k + 1);
+            }
           }
         }
 
