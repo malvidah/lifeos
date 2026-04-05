@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useContext } from "react";
+import { createPortal } from "react-dom";
 import { mono, F } from "@/lib/tokens";
 import { api } from "@/lib/api";
 import { useCollapse } from "@/lib/hooks";
@@ -691,16 +692,16 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
         </div>
       </Card>
 
-      {/* Delete note confirmation dialog */}
-      {deleteConfirm && (
+      {/* Delete note confirmation dialog — rendered via portal to escape Card's backdropFilter stacking context */}
+      {deleteConfirm && typeof document !== 'undefined' && createPortal(
         <>
           <div
             onClick={() => setDeleteConfirm(null)}
-            style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+            style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
           />
           <div style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
-            zIndex: 301, width: 'min(340px, calc(100vw - 40px))',
+            zIndex: 9001, width: 'min(340px, calc(100vw - 40px))',
             background: 'var(--dl-bg)', border: '1px solid var(--dl-border)',
             borderRadius: 14, padding: '24px 24px 20px',
             boxShadow: '0 24px 64px rgba(0,0,0,0.4)',
@@ -725,7 +726,8 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
               >Delete</button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
     </>
   );
