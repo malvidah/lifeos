@@ -239,7 +239,7 @@ export default function WorkoutsCard({date,token,userId,stravaConnected}) {
           </div>
         ))}
         {/* Manual entries — single multi-line editor + stats columns */}
-        <div style={{display:"flex",gap:0}} onKeyDown={handleKeyDown}>
+        <div data-no-pointer-capture style={{display:"flex",gap:0}} onKeyDown={handleKeyDown}>
           <DayLabEditor
             value={rowsToHtml(safe)}
             onBlur={handleBlur}

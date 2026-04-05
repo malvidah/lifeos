@@ -348,7 +348,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   );
 
   return (
-    <div ref={editorWrapRef} data-filter={taskFilter} data-tasks-id={filterId} style={{
+    <div ref={editorWrapRef} data-no-pointer-capture data-filter={taskFilter} data-tasks-id={filterId} style={{
       '--task-border': "var(--dl-border2)",
       '--task-color': "var(--dl-accent)",
       '--task-fill': theme === 'light' ? "var(--dl-bg)" : "var(--dl-middle)",

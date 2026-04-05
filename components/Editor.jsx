@@ -1677,8 +1677,10 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             if ($from.depth >= 2) {
               const taskItemNode = $from.node($from.depth - 1);
               if (taskItemNode?.type.name === 'taskItem') {
-                // Backspace: block at start of first task item only (prevents destroying list structure)
-                if (e.key === 'Backspace' && $from.parentOffset === 0 && $from.index($from.depth - 2) === 0) return true;
+                // Backspace: block at start of first TOP-LEVEL task item only (prevents destroying list structure).
+                // Skip the block for nested subtasks — grandparent being a taskItem means we're in a nested list.
+                if (e.key === 'Backspace' && $from.parentOffset === 0 && $from.index($from.depth - 2) === 0
+                    && $from.node($from.depth - 3)?.type.name !== 'taskItem') return true;
                 // Enter: block on ANY empty task item (must type something before creating a new task)
                 if (e.key === 'Enter' && $from.parent.content.size === 0) return true;
               }

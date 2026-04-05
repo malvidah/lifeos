@@ -606,6 +606,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
 
           {/* Editor + photos */}
           <div
+            data-no-pointer-capture
             style={{ flex: 1, minWidth: 0, position: 'relative' }}
             onDragEnter={handleNoteDragEnter}
             onDragLeave={handleNoteDragLeave}
