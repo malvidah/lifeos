@@ -836,9 +836,6 @@ function DashboardInner() {
               position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
               zIndex: 100, WebkitAppRegion: "no-drag",
               animation: "fadeIn 0.15s ease",
-              // Cap width so the pill never overlaps the left/right nav circles
-              // (each side has 12px margin + 52px button + 8px gap = 72px clearance)
-              maxWidth: "calc(100vw - 152px)",
               display: "flex", alignItems: "center", gap: 8,
             }}>
               {/* Prev date chevron — only in date mode */}
@@ -885,12 +882,13 @@ function DashboardInner() {
                   })}
                 </div>
               ) : (
-                /* Date pill — DATE · LABEL (no inline arrows) */
+                /* Date pill — fixed width so chevrons don't shift as label appears/disappears */
                 <div style={{
                   ...glass, borderRadius: 100,
                   border: "1px solid var(--dl-glass-border)",
-                  display: "flex", alignItems: "center",
-                  height: 52, overflow: "hidden", flexShrink: 1,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  height: 52, overflow: "hidden",
+                  width: 260, flexShrink: 0,
                 }}>
                   {/* Date text — click goes to today */}
                   <button
