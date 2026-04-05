@@ -398,12 +398,23 @@ function MiniLocationMap({ places, interactive = false }) {
 
       L.tileLayer(dark ? MAP_TILES_DARK : MAP_TILES_LIGHT, { maxZoom: 19 }).addTo(map);
 
-      // Teal dot markers matching LifeOS accent style
+      // Teal dot markers with place name labels matching LifeOS accent style
       places.forEach(p => {
         const color = p.color || '#4EC9B0';
+        const label = p.name ? `<div style="
+          position:absolute;top:16px;left:50%;transform:translateX(-50%);
+          white-space:nowrap;
+          font-family:ui-monospace,monospace;font-size:9px;letter-spacing:0.09em;
+          text-transform:uppercase;color:rgba(80,200,220,0.9);
+          text-shadow:0 1px 4px rgba(0,0,0,0.8),0 0 8px rgba(0,0,0,0.5);
+          pointer-events:none;
+        ">${p.name}</div>` : '';
         const icon = L.divIcon({
           className: '',
-          html: `<div style="width:12px;height:12px;border-radius:50%;background:${color};border:2.5px solid rgba(255,255,255,0.85);box-shadow:0 1px 5px rgba(0,0,0,0.45);"></div>`,
+          html: `<div style="position:relative;width:12px;height:12px;">
+            <div style="width:12px;height:12px;border-radius:50%;background:${color};border:2.5px solid rgba(255,255,255,0.85);box-shadow:0 1px 5px rgba(0,0,0,0.45);"></div>
+            ${label}
+          </div>`,
           iconSize: [12, 12],
           iconAnchor: [6, 6],
         });
@@ -791,7 +802,11 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
           <MiniLocationMap places={item.places} interactive={true} />
         </div>
       ) : item?.type === 'drawing' ? (
-        <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden' }}>
+        <div
+          style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden' }}
+          onPointerDown={e => e.stopPropagation()}
+          onPointerUp={e => e.stopPropagation()}
+        >
           <MiniDrawingCanvas strokes={item.strokes} dark={dark} />
         </div>
       ) : (
@@ -802,7 +817,7 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
       {mediaItems.length > 1 && (
         <div
           onPointerDown={e => { e.stopPropagation(); prev(); }}
-          style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s', zIndex: 2 }}
+          style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s', zIndex: 9999 }}
           onMouseEnter={e => e.currentTarget.style.color = '#fff'}
           onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
         >
@@ -814,7 +829,7 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
       {mediaItems.length > 1 && (
         <div
           onPointerDown={e => { e.stopPropagation(); next(); }}
-          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s', zIndex: 2 }}
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 48, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', transition: 'color 0.15s', zIndex: 9999 }}
           onMouseEnter={e => e.currentTarget.style.color = '#fff'}
           onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
         >
@@ -823,7 +838,7 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
       )}
 
       {/* Close X */}
-      <button onClick={e => { e.stopPropagation(); onClose(); }} style={{ position: 'absolute', top: 8, right: 8, zIndex: 2, background: 'rgba(0,0,0,0.4)', border: 'none', borderRadius: 100, width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.6)', transition: 'color 0.15s, background 0.15s' }}
+      <button onClick={e => { e.stopPropagation(); onClose(); }} onPointerDown={e => e.stopPropagation()} style={{ position: 'absolute', top: 8, right: 8, zIndex: 9999, background: 'rgba(0,0,0,0.4)', border: 'none', borderRadius: 100, width: 28, height: 28, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.6)', transition: 'color 0.15s, background 0.15s' }}
         onMouseEnter={e => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = 'rgba(0,0,0,0.6)'; }}
         onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.6)'; e.currentTarget.style.background = 'rgba(0,0,0,0.4)'; }}
       >
@@ -832,15 +847,26 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
         </svg>
       </button>
 
-      {/* Map places badge */}
-      {item?.type === 'map' && (
+      {/* Map places — individual chips at the bottom like WorldMapCard */}
+      {item?.type === 'map' && item.places.length > 0 && (
         <div style={{
-          position: 'absolute', bottom: 32, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(13,26,36,0.75)', borderRadius: 6, padding: '3px 10px',
-          fontFamily: mono, fontSize: 11, letterSpacing: '0.07em', textTransform: 'uppercase',
-          color: 'rgba(80,200,220,0.8)', pointerEvents: 'none', whiteSpace: 'nowrap',
+          position: 'absolute', bottom: 28, left: 0, right: 0,
+          display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap',
+          padding: '0 12px', pointerEvents: 'none', zIndex: 9999,
         }}>
-          {item.places.map(p => p.name).join(' · ')}
+          {item.places.map(p => (
+            <div key={p.name} style={{
+              background: 'rgba(13,26,36,0.82)',
+              border: `1px solid ${p.color || '#4EC9B0'}44`,
+              borderRadius: 100, padding: '3px 10px',
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.08em', textTransform: 'uppercase',
+              color: p.color || 'rgba(80,200,220,0.9)',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 1px 6px rgba(0,0,0,0.5)',
+            }}>
+              {p.name}
+            </div>
+          ))}
         </div>
       )}
 
@@ -1127,16 +1153,46 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
-  // Build a data map from drawing objects in context: title → { strokes, thumbnail }
+  // Fetch all drawings list (id + title + thumbnail, no strokes) from the API.
+  // This is needed when DrawingsCard isn't mounted on the same page.
+  const [allDrawingsList, setAllDrawingsList] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    api.get('/api/drawings', token).then(d => setAllDrawingsList(d?.drawings ?? [])).catch(() => {});
+  }, [token]);
+
+  // For each drawing tagged in this journal entry, fetch full strokes by ID.
+  const [drawingStrokesCache, setDrawingStrokesCache] = useState({}); // {drawingId: strokes[]}
+  useEffect(() => {
+    if (!token || !allDrawingsList.length) return;
+    const titles = extractDrawingTags(value);
+    if (!titles.length) return;
+    const needed = allDrawingsList.filter(d => titles.includes(d.title) && !drawingStrokesCache[d.id]);
+    if (!needed.length) return;
+    Promise.all(needed.map(d => api.get(`/api/drawings?id=${d.id}`, token)))
+      .then(results => {
+        const updates = {};
+        results.forEach((r, i) => { if (r?.drawing?.strokes) updates[needed[i].id] = r.drawing.strokes; });
+        if (Object.keys(updates).length) setDrawingStrokesCache(prev => ({ ...prev, ...updates }));
+      }).catch(() => {});
+  }, [token, allDrawingsList, value]); // eslint-disable-line
+
+  // Build a data map: title → { strokes, thumbnail }
+  // Merge API-fetched data with live context (ctxDrawings from DrawingsCard, if mounted).
   const drawingDataMap = useMemo(() => {
     const map = {};
+    // Base: API-fetched drawings (list metadata + cached strokes)
+    allDrawingsList.forEach(d => {
+      map[d.title] = { strokes: drawingStrokesCache[d.id] || [], thumbnail: d.thumbnail || null };
+    });
+    // Override with live context data if DrawingsCard is mounted (more up-to-date)
     (ctxDrawings || []).forEach(d => {
       if (d && typeof d === 'object' && d.title) {
         map[d.title] = { strokes: d.strokes || [], thumbnail: d.thumbnail || null };
       }
     });
     return map;
-  }, [ctxDrawings]);
+  }, [allDrawingsList, drawingStrokesCache, ctxDrawings]);
 
   // Typed photo media items
   const photoItems = useMemo(() => images.map(url => ({ type: 'photo', url })), [images]);
