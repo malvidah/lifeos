@@ -432,8 +432,9 @@ export default function PageDots({
         {/* Separator */}
         <div style={{ width: 1, height: 12, background: "var(--dl-border)", flexShrink: 0, marginLeft: 2 }} />
 
-        {/* + add page */}
+        {/* + add page — stop propagation so the pill doesn't treat this as a tap → cycle */}
         <button
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => setAddingPage(true)}
           title="Add page"
           style={{

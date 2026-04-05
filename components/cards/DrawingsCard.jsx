@@ -297,6 +297,40 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
   // shift/scale where on screen they appear.
   const viewportRef  = useRef({ x: 0, y: 0, scale: 1 });
 
+  // ── Offscreen canvas + rAF for high-performance drawing ────────────────────────
+  // Committed strokes are pre-rendered into offscreenRef so that during active
+  // drawing we only need: ctx.drawImage(offscreen) + renderStroke(currentStroke).
+  // This avoids re-running getStroke() on all previous strokes every pointermove.
+  const offscreenRef  = useRef(null); // pre-rendered committed strokes
+  const rafRef        = useRef(null); // rAF id for current-stroke redraws
+
+  // Rebuild the offscreen canvas from all committed strokes + current viewport.
+  const rebuildOffscreen = useCallback((strokes, w, h, dpr, vp) => {
+    if (!offscreenRef.current) offscreenRef.current = document.createElement('canvas');
+    const off = offscreenRef.current;
+    off.width  = w * dpr;
+    off.height = h * dpr;
+    redrawCanvas(off.getContext('2d'), strokes, null, w, h, dpr, false, vp);
+  }, []);
+
+  // Fast draw: blit pre-rendered offscreen + paint only the live stroke on top.
+  const fastDrawStroke = useCallback((currentStroke) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const { w, h } = logSizeRef.current;
+    const dpr = DPR();
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, w * dpr, h * dpr);
+    if (offscreenRef.current) ctx.drawImage(offscreenRef.current, 0, 0);
+    if (currentStroke?.points?.length > 0) {
+      const vp = viewportRef.current;
+      ctx.save();
+      ctx.setTransform(vp.scale * dpr, 0, 0, vp.scale * dpr, vp.x * dpr, vp.y * dpr);
+      renderStroke(ctx, currentStroke, 1);
+      ctx.restore();
+    }
+  }, []);
+
   // ── Multi-touch tracking for gesture detection ───────────────────────────────
   const touchPtrsRef = useRef(new Map()); // pointerId -> {x, y}
   const gestureRef   = useRef(null);      // {midX, midY, dist, vp} at gesture start
@@ -312,12 +346,16 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
   // The CSS transform on the wrapper is no longer used for drawing — only the
   // custom cursor circle uses container-relative coords (converted below).
   const applyViewport = useCallback(() => {
-    const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
-    if (canvas && w > 0) {
-      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current, viewportRef.current);
+    if (w > 0) {
+      const dpr = DPR();
+      const vp  = viewportRef.current;
+      // Rebuild offscreen with new viewport so fast-draw path stays correct
+      rebuildOffscreen(strokesRef.current, w, h, dpr, vp);
+      // Blit to main canvas
+      fastDrawStroke(curStroke.current);
     }
-  }, []);
+  }, [rebuildOffscreen, fastDrawStroke]);
 
   // Convert a pointer event's screen coords to canvas logical coords.
   // The canvas element is inside the (transformed) wrapper, so
@@ -340,12 +378,12 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
   useEffect(() => { sizeRef.current = size; }, [size]);
   useEffect(() => {
     strokesRef.current = strokes;
-    const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
-    if (!canvas || w === 0 || h === 0) return;
-    const ctx = canvas.getContext('2d');
-    redrawCanvas(ctx, strokes, null, w, h, DPR(), false, viewportRef.current);
-  }, [strokes]);
+    if (w === 0 || h === 0) return;
+    const dpr = DPR();
+    rebuildOffscreen(strokes, w, h, dpr, viewportRef.current);
+    fastDrawStroke(null);
+  }, [strokes, rebuildOffscreen, fastDrawStroke]);
 
   const onStrokesChangeRef = useRef(onStrokesChange);
   useEffect(() => { onStrokesChangeRef.current = onStrokesChange; }, [onStrokesChange]);
@@ -366,7 +404,8 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       canvas.style.width  = w + 'px';
       canvas.style.height = h + 'px';
       logSizeRef.current = { w, h };
-      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, dpr, false, viewportRef.current);
+      rebuildOffscreen(strokesRef.current, w, h, dpr, viewportRef.current);
+      fastDrawStroke(curStroke.current);
     });
     ro.observe(container);
     return () => ro.disconnect();
@@ -447,11 +486,23 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
 
       if (!isDrawing.current || !curStroke.current) return;
       curStroke.current.points.push({ x: logX, y: logY, p: e.pressure ?? 0.5 });
-      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current, viewportRef.current);
+      // Fast path during active drawing: blit offscreen (committed strokes) + current stroke.
+      // Throttle with rAF so we never draw faster than the display refresh rate.
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          if (shiftRef.current) {
+            // Shift preview needs full redraw (ghost + snapped overlay)
+            redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), true, viewportRef.current);
+          } else {
+            fastDrawStroke(curStroke.current);
+          }
+        });
+      }
     };
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
-  }, [applyViewport]);
+  }, [applyViewport, fastDrawStroke]);
 
   // ── Global pointerup / cancel ────────────────────────────────────────────────
   useEffect(() => {
@@ -495,6 +546,9 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         }
       }
 
+      // Cancel any pending rAF draw before committing
+      if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+
       if (finalStroke.points.length > 0) {
         historyRef.current.push(strokesRef.current);
         futureRef.current = [];
@@ -502,8 +556,11 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         strokesRef.current = next;
         const canvas = canvasRef.current;
         const { w, h } = logSizeRef.current;
-        const ctx = canvas?.getContext('2d');
-        if (ctx) redrawCanvas(ctx, next, null, w, h, DPR(), false, viewportRef.current);
+        // Rebuild offscreen with committed stroke included, then blit to screen
+        if (w > 0) {
+          rebuildOffscreen(next, w, h, DPR(), viewportRef.current);
+          fastDrawStroke(null);
+        }
         onStrokesChangeRef.current?.(next, canvas, logSizeRef.current);
       }
 
@@ -515,7 +572,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       window.removeEventListener('pointerup',     finishStroke);
       window.removeEventListener('pointercancel', finishStroke);
     };
-  }, []);
+  }, [rebuildOffscreen, fastDrawStroke]);
 
   // Convert world coords → container-relative CSS coords for cursor overlay.
   // Since the wrapper no longer has a CSS transform, we apply the viewport here.
@@ -608,8 +665,10 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     strokesRef.current = next;
     const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (ctx) redrawCanvas(ctx, next, null, w, h, DPR(), false, viewportRef.current);
+    if (w > 0) {
+      rebuildOffscreen(next, w, h, DPR(), viewportRef.current);
+      fastDrawStroke(null);
+    }
     onStrokesChangeRef.current?.(next, canvas, logSizeRef.current);
   };
 
@@ -636,11 +695,9 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     const onKeyUp = (e) => {
       if (e.key === 'Shift') {
         shiftRef.current = false;
-        // Revert to raw freehand preview when shift released mid-stroke
+        // Revert to raw freehand preview (fast path) when shift released mid-stroke
         if (isDrawing.current && curStroke.current) {
-          const canvas = canvasRef.current;
-          const { w, h } = logSizeRef.current;
-          if (canvas) redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), false, viewportRef.current);
+          fastDrawStroke(curStroke.current);
         }
       }
     };
@@ -651,7 +708,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       window.removeEventListener('keyup',   onKeyUp);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fastDrawStroke]);
 
   return (
     <div ref={containerRef} style={{
