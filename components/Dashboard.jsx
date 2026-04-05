@@ -1066,6 +1066,27 @@ function DashboardInner() {
               display: "flex", justifyContent: "center", alignItems: "center",
               gap: 8, pointerEvents: "none",
             }}>
+              {/* Prev page chevron */}
+              <button
+                onPointerDown={e => e.stopPropagation()}
+                onClick={() => layout.setCurrentPageIdx(Math.max(0, layout.currentPageIdx - 1))}
+                disabled={layout.currentPageIdx === 0}
+                title="Previous page"
+                style={{
+                  ...circleBtn(false),
+                  pointerEvents: "auto",
+                  opacity: layout.currentPageIdx === 0 ? 0.3 : 1,
+                  transition: "opacity 0.18s",
+                  cursor: layout.currentPageIdx === 0 ? "default" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+              </button>
+
               <div style={{ pointerEvents: "auto" }}>
                 <PageDots
                   count={layout.pages.length}
@@ -1086,6 +1107,27 @@ function DashboardInner() {
                   onSetHomeIdx={(i) => layout.setHomeIdx(i)}
                 />
               </div>
+
+              {/* Next page chevron */}
+              <button
+                onPointerDown={e => e.stopPropagation()}
+                onClick={() => layout.setCurrentPageIdx(Math.min(layout.pages.length - 1, layout.currentPageIdx + 1))}
+                disabled={layout.currentPageIdx === layout.pages.length - 1}
+                title="Next page"
+                style={{
+                  ...circleBtn(false),
+                  pointerEvents: "auto",
+                  opacity: layout.currentPageIdx === layout.pages.length - 1 ? 0.3 : 1,
+                  transition: "opacity 0.18s",
+                  cursor: layout.currentPageIdx === layout.pages.length - 1 ? "default" : "pointer",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
               <button
                 onClick={() => setChatOpenCount(c => c + 1)}
                 title="Ask AI"
