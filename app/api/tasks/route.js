@@ -135,6 +135,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const recurringTasks = (recurringCandidates ?? []).filter(t => {
     if (ownIds.has(t.id)) return false;
     if (persistentIds.has(t.id)) return false;
+    // Never project a recurring task onto dates before it was created
+    if (date < t.date) return false;
     const cleanTemplateText = cleanTaskText(t.text);
     if (cleanTemplateText && ownTexts.has(cleanTemplateText)) return false;
     const recMatch = t.html?.match(/data-recurrence="([^"]+)"/);

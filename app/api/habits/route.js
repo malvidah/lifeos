@@ -134,6 +134,8 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      // Never project before the habit's creation date
+      if (dateStr < habit.date) continue;
       if (recurrence && matchesSchedule(dateStr, recurrence)) {
         scheduledDates.push(dateStr);
         completionMap[dateStr] = habitCompletions.has(dateStr);
