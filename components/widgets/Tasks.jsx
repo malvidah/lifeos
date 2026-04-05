@@ -180,6 +180,9 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   // The HTML is compared against server state to find done-state flips on habits.
   const lastHtmlRef = useRef('');
   const habitToggleInFlightRef = useRef(false);
+  // Track the active project filter in a ref so doSave doesn't need it in its deps.
+  const projectRef = useRef(project);
+  useEffect(() => { projectRef.current = project; }, [project]);
 
   // Core save logic — called from the debounced path (handleUpdate) and immediately
   // from onBlur so a page refresh before the 1 s debounce fires doesn't lose data.
@@ -204,7 +207,25 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
       }
 
       // Diff everything else (text edits, regular tasks, creates, deletes)
-      const diff = diffTasks(serverTasksRef.current, editorTasks);
+      let diff = diffTasks(serverTasksRef.current, editorTasks);
+
+      // Auto-tag: when a project filter is active, inject the project tag into any
+      // newly-created task that doesn't already have one so it stays visible in the filter.
+      const activeProject = projectRef.current;
+      if (activeProject && activeProject !== '__everything__' && diff.toCreate.length) {
+        const tagHtml = `<span data-project-tag="${activeProject}">⛰️ ${activeProject.toUpperCase()}</span>`;
+        const tagged = diff.toCreate.map(t => {
+          if (!t.html || t.html.includes('data-project-tag')) return t;
+          // Inject at the end of the first <p> in the task item (the main task paragraph).
+          const injected = t.html.replace(
+            /(<p\b[^>]*>)([\s\S]*?)(<\/p>)/,
+            (m, open, content, close) => `${open}${content}${content.trim() ? ' ' : ''}${tagHtml}${close}`
+          );
+          return { ...t, html: injected };
+        });
+        diff = { ...diff, toCreate: tagged };
+      }
+
       const hasChanges = diff.toCreate.length || diff.toUpdate.length || diff.toDelete.length;
 
       if (hasChanges) {
@@ -337,8 +358,10 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   useEffect(() => {
     if (!project || project === '__everything__') return;
     const style = document.createElement('style');
+    // :not(:focus-within) keeps the task visible while the user is actively typing into it,
+    // even before the auto-tag is appended on save.
     style.textContent = `
-      [data-tasks-id="${filterId}"] .dl-editor ul[data-type="taskList"] > li:not(:has(span[data-project-tag="${CSS.escape(project)}"])) { display: none; }
+      [data-tasks-id="${filterId}"] .dl-editor ul[data-type="taskList"] > li:not(:has(span[data-project-tag="${CSS.escape(project)}"])):not(:focus-within) { display: none; }
     `;
     document.head.appendChild(style);
     return () => style.remove();
