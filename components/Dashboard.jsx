@@ -836,10 +836,28 @@ function DashboardInner() {
               position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
               zIndex: 100, WebkitAppRegion: "no-drag",
               animation: "fadeIn 0.15s ease",
-              // Cap width so the dock pill never overlaps the left/right nav circles
+              // Cap width so the pill never overlaps the left/right nav circles
               // (each side has 12px margin + 52px button + 8px gap = 72px clearance)
               maxWidth: "calc(100vw - 152px)",
+              display: "flex", alignItems: "center", gap: 8,
             }}>
+              {/* Prev date chevron — only in date mode */}
+              {!editMode && (
+                <button
+                  onClick={() => setSelected(stepDateKey(selected, -1))}
+                  title="Previous day"
+                  style={{
+                    ...circleBtn(false),
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 18 9 12 15 6"/>
+                  </svg>
+                </button>
+              )}
+
               {editMode ? (
                 /* Card dock pill — scrollable, never wider than the cap above */
                 <div style={{
@@ -871,35 +889,19 @@ function DashboardInner() {
                   })}
                 </div>
               ) : (
-                /* Single unified date pill: [‹] DATE · LABEL [›] */
+                /* Date pill — DATE · LABEL (no inline arrows) */
                 <div style={{
                   ...glass, borderRadius: 100,
                   border: "1px solid var(--dl-glass-border)",
                   display: "flex", alignItems: "center",
-                  height: 52, overflow: "hidden",
+                  height: 52, overflow: "hidden", flexShrink: 1,
                 }}>
-                  {/* Left arrow */}
-                  <button
-                    onClick={() => setSelected(stepDateKey(selected, -1))}
-                    style={{
-                      height: "100%", padding: "0 12px 0 16px",
-                      background: "transparent", border: "none", cursor: "pointer",
-                      display: "flex", alignItems: "center",
-                      color: "var(--dl-border2)", transition: "color 0.15s",
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-border2)"}
-                  >
-                    <svg width="5" height="8" viewBox="0 0 5 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="4 0.5 1 4 4 7.5"/>
-                    </svg>
-                  </button>
-
                   {/* Date text — click goes to today */}
                   <button
                     onClick={() => { selectProject(null); setSelected(todayKey()); window.dispatchEvent(new CustomEvent('daylab:scroll-to-today')); }}
                     style={{
-                      background: "transparent", border: "none", cursor: "pointer", padding: 0,
+                      background: "transparent", border: "none", cursor: "pointer",
+                      padding: "0 20px",
                       fontFamily: mono, fontSize: 12, letterSpacing: "0.12em",
                       textTransform: "uppercase", color: "var(--dl-strong)",
                       whiteSpace: "nowrap", userSelect: "none", lineHeight: 1,
@@ -910,14 +912,15 @@ function DashboardInner() {
                   {relLabel && (
                     <>
                       <span style={{
-                        margin: "0 10px", width: 1, height: 14, flexShrink: 0,
+                        width: 1, height: 14, flexShrink: 0,
                         background: "var(--dl-border2)", opacity: 0.5,
                       }}/>
                       <button
                         onClick={() => { setSelected(todayKey()); window.dispatchEvent(new CustomEvent('daylab:scroll-to-today')); }}
                         style={{
                           background: "transparent", border: "none", cursor: isToday ? "default" : "pointer",
-                          padding: 0, fontFamily: mono, fontSize: 9, letterSpacing: "0.13em",
+                          padding: "0 20px 0 16px",
+                          fontFamily: mono, fontSize: 9, letterSpacing: "0.13em",
                           textTransform: "uppercase", whiteSpace: "nowrap", lineHeight: 1,
                           color: isToday ? "var(--dl-orange)" : "var(--dl-middle)",
                           transition: "opacity 0.15s",
@@ -927,24 +930,24 @@ function DashboardInner() {
                       >{relLabel}</button>
                     </>
                   )}
-
-                  {/* Right arrow */}
-                  <button
-                    onClick={() => setSelected(stepDateKey(selected, +1))}
-                    style={{
-                      height: "100%", padding: "0 16px 0 12px",
-                      background: "transparent", border: "none", cursor: "pointer",
-                      display: "flex", alignItems: "center",
-                      color: "var(--dl-border2)", transition: "color 0.15s",
-                    }}
-                    onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                    onMouseLeave={e => e.currentTarget.style.color = "var(--dl-border2)"}
-                  >
-                    <svg width="5" height="8" viewBox="0 0 5 8" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="1 0.5 4 4 1 7.5"/>
-                    </svg>
-                  </button>
                 </div>
+              )}
+
+              {/* Next date chevron — only in date mode */}
+              {!editMode && (
+                <button
+                  onClick={() => setSelected(stepDateKey(selected, +1))}
+                  title="Next day"
+                  style={{
+                    ...circleBtn(false),
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6"/>
+                  </svg>
+                </button>
               )}
             </div>
             )} {/* end !searchOpen center zone */}
