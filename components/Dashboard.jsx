@@ -704,6 +704,17 @@ function DashboardInner() {
       {/* Pull-down overscroll patch — keeps background solid above safe area */}
       <div style={{position:"fixed",top:"-100px",left:0,right:0,height:"100px",background:"var(--dl-bg)",zIndex:99}}/>
 
+      {/* Draggable title-bar region for desktop app window dragging.
+          Sits behind nav buttons (zIndex 50 < nav zIndex 100). Electron uses
+          z-index hit testing for app-region, so the buttons' no-drag wins at
+          their positions while the empty space between them drags the window. */}
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0,
+        height: "calc(env(safe-area-inset-top, 0px) + 74px)",
+        zIndex: 50,
+        WebkitAppRegion: "drag",
+      }}/>
+
       {/* ── Full-height content area — scrolls under the glass overlays ─── */}
       <div style={{flex:1, minHeight:0, overflow:"hidden", display:"flex", flexDirection:"column", alignItems:"stretch", position:"relative", zIndex:1}}>
 
