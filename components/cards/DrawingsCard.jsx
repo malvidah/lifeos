@@ -1054,6 +1054,7 @@ export default function DrawingsCard({ token, userId, onDrawingNamesChange }) {
     onDrawingNamesChangeRef.current?.(drawings.map(d => ({
       title: d.title || 'Untitled',
       thumbnail: d.thumbnail || null,
+      strokes: d.strokes || [],
     })));
   }, [drawings]);
 

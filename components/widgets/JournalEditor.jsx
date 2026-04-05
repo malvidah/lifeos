@@ -490,9 +490,111 @@ function MiniLocationMap({ places }) {
   );
 }
 
+// ── MiniDrawingCanvas — renders drawing strokes live (no static thumbnail) ────
+// Avoids the theme-mismatch issue where white strokes disappear on light bg.
+function miniRenderStroke(ctx, stroke, scale, offX, offY) {
+  const pts = stroke.points;
+  if (!pts || pts.length === 0) return;
+  ctx.save();
+  if (stroke.tool === 'eraser') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = 'rgba(0,0,0,1)';
+  } else {
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.strokeStyle = stroke.color || '#1c1b18';
+  }
+  ctx.lineWidth = Math.max(0.5, (stroke.size || 3) * scale);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  const tx = x => (x - offX) * scale;
+  const ty = y => (y - offY) * scale;
+  if (stroke.shape === 'line') {
+    ctx.beginPath();
+    ctx.moveTo(tx(pts[0].x), ty(pts[0].y));
+    ctx.lineTo(tx(pts[pts.length - 1].x), ty(pts[pts.length - 1].y));
+    ctx.stroke();
+  } else if (stroke.shape === 'ellipse' && stroke.cx != null) {
+    ctx.beginPath();
+    ctx.ellipse(tx(stroke.cx), ty(stroke.cy), stroke.rx * scale, stroke.ry * scale, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  } else if (pts.length === 1) {
+    ctx.beginPath();
+    ctx.arc(tx(pts[0].x), ty(pts[0].y), ctx.lineWidth / 2, 0, Math.PI * 2);
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.fill();
+  } else {
+    ctx.beginPath();
+    ctx.moveTo(tx(pts[0].x), ty(pts[0].y));
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i].x + pts[i + 1].x) / 2;
+      const my = (pts[i].y + pts[i + 1].y) / 2;
+      ctx.quadraticCurveTo(tx(pts[i].x), ty(pts[i].y), tx(mx), ty(my));
+    }
+    const last = pts[pts.length - 1];
+    ctx.lineTo(tx(last.x), ty(last.y));
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function MiniDrawingCanvas({ strokes, dark }) {
+  const canvasRef = useRef(null);
+  const paperBg   = dark ? '#433c34' : '#f5f0e8';
+  const paperDots = dark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.13)';
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || !strokes?.length) return;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Bounding box across all stroke points + ellipse extents
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const s of strokes) {
+      for (const p of (s.points || [])) {
+        if (minX > p.x) minX = p.x; if (maxX < p.x) maxX = p.x;
+        if (minY > p.y) minY = p.y; if (maxY < p.y) maxY = p.y;
+      }
+      if (s.shape === 'ellipse' && s.cx != null) {
+        minX = Math.min(minX, s.cx - s.rx); maxX = Math.max(maxX, s.cx + s.rx);
+        minY = Math.min(minY, s.cy - s.ry); maxY = Math.max(maxY, s.cy + s.ry);
+      }
+    }
+    if (!isFinite(minX)) return;
+
+    const contentW = maxX - minX || 1;
+    const contentH = maxY - minY || 1;
+    const padX = Math.max(contentW * 0.1, 20);
+    const padY = Math.max(contentH * 0.1, 20);
+    const totalW = contentW + padX * 2;
+    const totalH = contentH + padY * 2;
+    const scale = Math.min(canvas.width / totalW, canvas.height / totalH);
+
+    // Centre within the canvas
+    const startX = (canvas.width  - totalW * scale) / 2;
+    const startY = (canvas.height - totalH * scale) / 2;
+    const offX = minX - padX - startX / scale;
+    const offY = minY - padY - startY / scale;
+
+    for (const s of strokes) miniRenderStroke(ctx, s, scale, offX, offY);
+  }, [strokes, dark]);
+
+  return (
+    <div style={{
+      width: '100%', height: '100%',
+      background: paperBg,
+      backgroundImage: `radial-gradient(circle, ${paperDots} 1px, transparent 1px)`,
+      backgroundSize: '20px 20px',
+    }}>
+      <canvas ref={canvasRef} width={400} height={400}
+        style={{ width: '100%', height: '100%', display: 'block' }} />
+    </div>
+  );
+}
+
 // ── MediaStrip — photos + drawing mini-cards in one horizontal row ─────────────
 // Photos support drag-to-reorder; drawing tiles are click-only.
-// mediaItems: Array<{type:'photo',url:string}|{type:'drawing',title:string,thumbnail:string}>
+// mediaItems: Array<{type:'photo',url:string}|{type:'drawing',title:string,strokes:array}>
 // onViewItem(idx): called with the index into mediaItems
 // onReorderPhotos(newPhotoUrls): called when photos are reordered (drawings stay in place)
 function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
@@ -640,9 +742,10 @@ function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
         onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
         onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
       >
-        {/* objectFit:cover fills the square cleanly — thumbnail has paper bg baked in */}
-        <img src={item.thumbnail} alt={item.title} loading="lazy" draggable="false"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', pointerEvents: 'none' }} />
+        {/* Live stroke render — theme-aware, no static thumbnail needed */}
+        <div style={{ width: '100%', height: '100%', pointerEvents: 'none' }}>
+          <MiniDrawingCanvas strokes={item.strokes} dark={dark} />
+        </div>
         {/* Title bar at bottom */}
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -729,17 +832,8 @@ function MediaSlideshow({ mediaItems, index, onClose, dark }) {
           <MiniLocationMap places={item.places} />
         </div>
       ) : item?.type === 'drawing' ? (
-        <div style={{
-          width: '100%', aspectRatio: '4/3',
-          display: 'flex', flexDirection: 'column',
-          alignItems: 'center', justifyContent: 'center',
-          ...paperStyle(dark),
-        }}>
-          <img
-            src={item.thumbnail}
-            alt={item.title}
-            style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
-          />
+        <div style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden' }}>
+          <MiniDrawingCanvas strokes={item.strokes} dark={dark} />
         </div>
       ) : (
         <img src={item?.url} alt="" style={{ width: '100%', aspectRatio: '4/3', objectFit: 'contain', display: 'block' }} />
@@ -1074,12 +1168,12 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
 
   const images = useMemo(() => extractImages(value), [value]);
 
-  // Build a data map from drawing objects in context: title → { thumbnail }
-  const drawingThumbnailMap = useMemo(() => {
+  // Build a data map from drawing objects in context: title → { strokes, thumbnail }
+  const drawingDataMap = useMemo(() => {
     const map = {};
     (ctxDrawings || []).forEach(d => {
-      if (d && typeof d === 'object' && d.title && d.thumbnail) {
-        map[d.title] = d.thumbnail;
+      if (d && typeof d === 'object' && d.title) {
+        map[d.title] = { strokes: d.strokes || [], thumbnail: d.thumbnail || null };
       }
     });
     return map;
@@ -1092,9 +1186,9 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
   const drawingItems = useMemo(() => {
     const titles = extractDrawingTags(value);
     return titles
-      .map(t => drawingThumbnailMap[t] ? { type: 'drawing', title: t, thumbnail: drawingThumbnailMap[t] } : null)
+      .map(t => drawingDataMap[t] ? { type: 'drawing', title: t, strokes: drawingDataMap[t].strokes, thumbnail: drawingDataMap[t].thumbnail } : null)
       .filter(Boolean);
-  }, [value, drawingThumbnailMap]);
+  }, [value, drawingDataMap]);
 
   // All places with lat/lng data (fetched once for location map)
   const [allPlaces, setAllPlaces] = useState([]);
