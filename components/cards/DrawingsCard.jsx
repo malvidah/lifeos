@@ -143,10 +143,32 @@ function renderStroke(ctx, stroke, scale) {
   ctx.restore();
 }
 
-function redrawCanvas(ctx, strokes, currentStroke, w, h, scale) {
+// shiftHeld: if true, renders the current stroke as a ghost + overlays the
+// detected snapped shape as a preview of what will be committed on release.
+function redrawCanvas(ctx, strokes, currentStroke, w, h, scale, shiftHeld = false) {
   ctx.clearRect(0, 0, w * scale, h * scale);
   for (const s of strokes) renderStroke(ctx, s, scale);
-  if (currentStroke && currentStroke.points.length > 0) renderStroke(ctx, currentStroke, scale);
+  if (currentStroke && currentStroke.points.length > 0) {
+    if (shiftHeld) {
+      // Draw the raw freehand as a faint ghost so the user can see what they drew
+      ctx.globalAlpha = 0.22;
+      renderStroke(ctx, currentStroke, scale);
+      ctx.globalAlpha = 1;
+      // Overlay the snapped shape (full opacity) as the shift-preview
+      const shape = detectShape(currentStroke.points);
+      if (shape) {
+        const snapped = shape.type === 'line'
+          ? { ...currentStroke, shape: 'line' }
+          : { ...currentStroke, shape: 'ellipse', cx: shape.cx, cy: shape.cy, rx: shape.rx, ry: shape.ry };
+        renderStroke(ctx, snapped, scale);
+      } else {
+        // Nothing to snap — render normally (shift has no effect for this stroke)
+        renderStroke(ctx, currentStroke, scale);
+      }
+    } else {
+      renderStroke(ctx, currentStroke, scale);
+    }
+  }
 }
 
 function generateThumbnail(canvas, w, h, paperBg = '#f5f0e8') {
@@ -214,6 +236,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
   const touchPtrsRef = useRef(new Map()); // pointerId -> {x, y}
   const gestureRef   = useRef(null);      // {midX, midY, dist, vp} at gesture start
   const isGesturing  = useRef(false);
+  const shiftRef     = useRef(false);     // true while Shift key is held
 
   // ── Hand tool pan tracking (mouse / pen / 1-finger with hand tool) ───────────
   const isPanning    = useRef(false);
@@ -352,7 +375,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
 
       if (!isDrawing.current || !curStroke.current) return;
       curStroke.current.points.push({ x: logX, y: logY, p: e.pressure ?? 0.5 });
-      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR());
+      redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current);
     };
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
@@ -385,13 +408,18 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
       curStroke.current = null;
 
       if (quickShapeTimer.current) clearTimeout(quickShapeTimer.current);
-      const shape = detectShape(cur.points);
+
+      // Shape snapping only when Shift was held at the moment of release.
+      // Without Shift the raw freehand stroke is always saved as-is.
       let finalStroke = cur;
-      if (shape) {
-        if (shape.type === 'line') {
-          finalStroke = { ...cur, shape: 'line' };
-        } else if (shape.type === 'ellipse') {
-          finalStroke = { ...cur, shape: 'ellipse', cx: shape.cx, cy: shape.cy, rx: shape.rx, ry: shape.ry };
+      if (shiftRef.current) {
+        const shape = detectShape(cur.points);
+        if (shape) {
+          if (shape.type === 'line') {
+            finalStroke = { ...cur, shape: 'line' };
+          } else if (shape.type === 'ellipse') {
+            finalStroke = { ...cur, shape: 'ellipse', cx: shape.cx, cy: shape.cy, rx: shape.rx, ry: shape.ry };
+          }
         }
       }
 
@@ -455,7 +483,12 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     if (e.pointerType === 'touch' && activePen.current) return;
     if (e.pointerType === 'pen') activePen.current = true;
 
-    try { e.target.setPointerCapture(e.pointerId); } catch (_) {}
+    // Only capture pointer for pen/mouse — capturing touch pointers routes their
+    // events exclusively to the canvas element, bypassing the global window listener
+    // that tracks both fingers for pinch-zoom, which breaks multi-touch gestures.
+    if (e.pointerType !== 'touch') {
+      try { e.target.setPointerCapture(e.pointerId); } catch (_) {}
+    }
 
     // ── Hand tool: pan the viewport instead of drawing ───────────────────────
     if (toolRef.current === 'hand') {
@@ -486,7 +519,7 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
     curStroke.current.points.push({ x: pos.x, y: pos.y, p: e.pressure ?? 0.5 });
     const canvas = canvasRef.current;
     const { w, h } = logSizeRef.current;
-    redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR());
+    redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), shiftRef.current);
   };
 
   const onPointerLeave = () => {
@@ -512,9 +545,33 @@ function DrawingCanvas({ strokes, onStrokesChange, tool, color, size, paperBg, p
         e.preventDefault();
         if (e.shiftKey) handleRedo(); else handleUndo();
       }
+      // Shift held: switch to shape-preview mode while drawing
+      if (e.key === 'Shift' && !e.repeat && !shiftRef.current) {
+        shiftRef.current = true;
+        if (isDrawing.current && curStroke.current) {
+          const canvas = canvasRef.current;
+          const { w, h } = logSizeRef.current;
+          if (canvas) redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), true);
+        }
+      }
+    };
+    const onKeyUp = (e) => {
+      if (e.key === 'Shift') {
+        shiftRef.current = false;
+        // Revert to raw freehand preview when shift released mid-stroke
+        if (isDrawing.current && curStroke.current) {
+          const canvas = canvasRef.current;
+          const { w, h } = logSizeRef.current;
+          if (canvas) redrawCanvas(canvas.getContext('2d'), strokesRef.current, curStroke.current, w, h, DPR(), false);
+        }
+      }
     };
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup',   onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup',   onKeyUp);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -712,6 +769,28 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
       gap: 6,
       zIndex: 20,
     }}>
+      {/* Hand / Pan tool — leftmost, before brush */}
+      <button
+        onPointerDown={e => { e.stopPropagation(); setTool('hand'); }}
+        style={{
+          ...pillBtnStyle(dark),
+          border: tool === 'hand'
+            ? dark ? '2px solid rgba(255,255,255,0.6)' : '2px solid rgba(0,0,0,0.5)'
+            : dark ? '1px solid rgba(255,255,255,0.14)' : '1px solid rgba(0,0,0,0.12)',
+          background: tool === 'hand'
+            ? dark ? 'rgba(90,80,68,0.98)' : 'rgba(255,255,255,0.95)'
+            : undefined,
+        }}
+        title="Pan canvas"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
+          <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
+          <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
+          <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
+        </svg>
+      </button>
+
       {/* Brush */}
       <button
         onPointerDown={e => { e.stopPropagation(); setTool('pen'); }}
@@ -726,33 +805,9 @@ function RightToolbar({ tool, setTool, color, setColor, onSave, dark }) {
         }}
         title="Brush"
       >
-        {/* Lucide pencil icon */}
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/>
           <path d="m15 5 4 4"/>
-        </svg>
-      </button>
-
-      {/* Hand / Pan tool */}
-      <button
-        onPointerDown={e => { e.stopPropagation(); setTool('hand'); }}
-        style={{
-          ...pillBtnStyle(dark),
-          border: tool === 'hand'
-            ? dark ? '2px solid rgba(255,255,255,0.6)' : '2px solid rgba(0,0,0,0.5)'
-            : dark ? '1px solid rgba(255,255,255,0.14)' : '1px solid rgba(0,0,0,0.12)',
-          background: tool === 'hand'
-            ? dark ? 'rgba(90,80,68,0.98)' : 'rgba(255,255,255,0.95)'
-            : undefined,
-        }}
-        title="Pan canvas"
-      >
-        {/* Hand icon */}
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 11V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2"/>
-          <path d="M14 10V4a2 2 0 0 0-2-2 2 2 0 0 0-2 2v2"/>
-          <path d="M10 10.5V6a2 2 0 0 0-2-2 2 2 0 0 0-2 2v8"/>
-          <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/>
         </svg>
       </button>
 
