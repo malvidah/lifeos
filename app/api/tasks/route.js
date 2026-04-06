@@ -150,12 +150,15 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     // Until-date from {r:key:label:YYYY-MM-DD} token — suppress on/after that date
     const untilAttr = t.html?.match(/data-recurrence-until="([^"]+)"/);
     if (untilAttr && untilAttr[1] < date) return false;
-    // Count-limited: suppress once all N completions done. /r tasks default to
-    // limit=1 even without an explicit data-recurrence-count attribute.
+    // Count-limited: suppress on future days once the completion limit is reached.
+    // /r tasks default to limit=1 even without an explicit data-recurrence-count attr.
+    // Exception: if the task was completed on THIS date, still show it as done
+    // rather than making it vanish the moment the user checks it off.
     if (recMatch) {
       const countAttr = t.html?.match(/data-recurrence-count="(\d+)"/);
       const limit = countAttr ? parseInt(countAttr[1], 10) : 1;
-      if ((completionCounts[t.id] || 0) >= limit) return false;
+      const completedToday = completedHabitIds.has(t.id);
+      if (!completedToday && (completionCounts[t.id] || 0) >= limit) return false;
     }
     // Legacy due_date expiry (only when different from creation date and no until-attr)
     if (!untilAttr && t.due_date && t.due_date !== t.date && t.due_date < date) return false;
