@@ -21,10 +21,11 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     return Response.json({ error: 'invalid date' }, { status: 400 });
   }
 
-  // Verify the template exists and belongs to this user
+  // Verify the template exists and belongs to this user.
+  // Fetch html too so we can check completion-limit semantics below.
   const { data: template, error: fetchErr } = await supabase
     .from('tasks')
-    .select('id')
+    .select('id, html')
     .eq('id', template_id)
     .eq('user_id', user.id)
     .is('deleted_at', null)
@@ -45,6 +46,31 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     .single();
 
   if (insertErr) throw insertErr;
+
+  // ── Repeated-task cleanup ────────────────────────────────────────────────
+  // Repeated tasks (data-recurrence) default to count=1 — once the limit is
+  // reached, soft-delete the template so future instances stop generating.
+  // Habits (data-habit) are infinite: never soft-deleted on completion.
+  const isRepeated = template.html?.includes('data-recurrence=');
+  if (isRepeated) {
+    const countMatch = template.html.match(/data-recurrence-count="(\d+)"/);
+    if (countMatch) {
+      const limit = parseInt(countMatch[1], 10);
+      const { count: totalCompletions } = await supabase
+        .from('habit_completions')
+        .select('*', { count: 'exact', head: true })
+        .eq('habit_id', template_id)
+        .eq('user_id', user.id);
+      if (totalCompletions >= limit) {
+        await supabase
+          .from('tasks')
+          .update({ deleted_at: new Date().toISOString() })
+          .eq('id', template_id)
+          .eq('user_id', user.id);
+      }
+    }
+  }
+
   return Response.json({ completion: row, task: row });
 });
 
