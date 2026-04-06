@@ -115,18 +115,20 @@ export const GET = withAuth(async (req, { supabase, user }) => {
       .filter(Boolean)
   );
 
-  // For count-limited recurring tasks ({r:key:label:N}), fetch total completions
-  // so we can suppress them once they've been done N times.
-  const countLimitedIds = (recurringCandidates ?? [])
-    .filter(t => t.html?.includes('data-recurrence-count='))
+  // For count-limited recurring tasks, fetch total completions to suppress once done.
+  // All /r tasks default to limit=1 (with or without an explicit data-recurrence-count
+  // attribute), so we need counts for every recurring task that has data-recurrence=,
+  // not just those with an explicit count attribute.
+  const repeatedIds = (recurringCandidates ?? [])
+    .filter(t => t.html?.includes('data-recurrence='))
     .map(t => t.id);
   let completionCounts = {};
-  if (countLimitedIds.length > 0) {
+  if (repeatedIds.length > 0) {
     const { data: cRows } = await supabase
       .from('habit_completions')
       .select('habit_id')
       .eq('user_id', user.id)
-      .in('habit_id', countLimitedIds);
+      .in('habit_id', repeatedIds);
     for (const c of cRows ?? []) {
       completionCounts[c.habit_id] = (completionCounts[c.habit_id] || 0) + 1;
     }
@@ -148,9 +150,13 @@ export const GET = withAuth(async (req, { supabase, user }) => {
     // Until-date from {r:key:label:YYYY-MM-DD} token — suppress on/after that date
     const untilAttr = t.html?.match(/data-recurrence-until="([^"]+)"/);
     if (untilAttr && untilAttr[1] < date) return false;
-    // Count-limited: suppress once all N occurrences have been completed
-    const countAttr = t.html?.match(/data-recurrence-count="(\d+)"/);
-    if (countAttr && (completionCounts[t.id] || 0) >= parseInt(countAttr[1], 10)) return false;
+    // Count-limited: suppress once all N completions done. /r tasks default to
+    // limit=1 even without an explicit data-recurrence-count attribute.
+    if (recMatch) {
+      const countAttr = t.html?.match(/data-recurrence-count="(\d+)"/);
+      const limit = countAttr ? parseInt(countAttr[1], 10) : 1;
+      if ((completionCounts[t.id] || 0) >= limit) return false;
+    }
     // Legacy due_date expiry (only when different from creation date and no until-attr)
     if (!untilAttr && t.due_date && t.due_date !== t.date && t.due_date < date) return false;
     return true;

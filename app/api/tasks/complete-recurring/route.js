@@ -51,23 +51,26 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   // Repeated tasks (data-recurrence) default to count=1 — once the limit is
   // reached, soft-delete the template so future instances stop generating.
   // Habits (data-habit) are infinite: never soft-deleted on completion.
+  //
+  // Two cases handled:
+  //   • Explicit count (data-recurrence-count="N"): delete when completions >= N
+  //   • No count attribute (tasks created before the default-1 change, or explicit
+  //     "infinite" wasn't intended): treat as limit=1 and delete on first completion.
   const isRepeated = template.html?.includes('data-recurrence=');
   if (isRepeated) {
     const countMatch = template.html.match(/data-recurrence-count="(\d+)"/);
-    if (countMatch) {
-      const limit = parseInt(countMatch[1], 10);
-      const { count: totalCompletions } = await supabase
-        .from('habit_completions')
-        .select('*', { count: 'exact', head: true })
-        .eq('habit_id', template_id)
+    const limit = countMatch ? parseInt(countMatch[1], 10) : 1;
+    const { count: totalCompletions } = await supabase
+      .from('habit_completions')
+      .select('*', { count: 'exact', head: true })
+      .eq('habit_id', template_id)
+      .eq('user_id', user.id);
+    if (totalCompletions >= limit) {
+      await supabase
+        .from('tasks')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', template_id)
         .eq('user_id', user.id);
-      if (totalCompletions >= limit) {
-        await supabase
-          .from('tasks')
-          .update({ deleted_at: new Date().toISOString() })
-          .eq('id', template_id)
-          .eq('user_id', user.id);
-      }
     }
   }
 
