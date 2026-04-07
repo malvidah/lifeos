@@ -775,7 +775,9 @@ function DashboardInner() {
           transition: "background 0.2s, color 0.2s",
           WebkitAppRegion: "no-drag",
         });
-        const TOP = "calc(env(safe-area-inset-top, 0px) + 12px)";
+        const TOP = mobile
+          ? "calc(env(safe-area-inset-top, 0px) + 24px)"
+          : "calc(env(safe-area-inset-top, 0px) + 12px)";
         const glass = {
           background: "var(--dl-glass)",
           backdropFilter: "blur(20px) saturate(1.4)",
