@@ -763,7 +763,7 @@ function DashboardInner() {
         const relLabel = fmtRelative(selected, today);
         const isToday = selected === today;
         const navBtn = (active) => ({
-          width: 52, height: 52, borderRadius: "50%", flexShrink: 0,
+          width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
           background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
           backdropFilter: "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: "blur(20px) saturate(1.4)",
@@ -797,7 +797,7 @@ function DashboardInner() {
                 transition: "opacity 0.15s ease",
               }}>
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 8, height: 52,
+                  display: "flex", alignItems: "center", gap: 8, height: 44,
                   padding: "0 10px 0 16px", borderRadius: 100,
                   ...glass,
                 }}>
@@ -865,7 +865,7 @@ function DashboardInner() {
               {editMode ? (
                 /* Card dock pill — scrollable, never wider than the cap above */
                 <div style={{
-                  display: "flex", alignItems: "center", gap: 1, height: 52,
+                  display: "flex", alignItems: "center", gap: 1, height: 44,
                   padding: "0 4px", borderRadius: 100,
                   overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none",
                   ...glass,
@@ -898,7 +898,7 @@ function DashboardInner() {
                   ...glass, borderRadius: 100,
                   border: "1px solid var(--dl-glass-border)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  height: 52, overflow: "hidden",
+                  height: 44, overflow: "hidden",
                   width: 260, flexShrink: 0,
                 }}>
                   {/* Date text — click goes to today */}
@@ -961,7 +961,7 @@ function DashboardInner() {
                 animation: "fadeIn 0.15s ease",
               }}>
                 <div style={{
-                  width: 52, height: 52, borderRadius: "50%",
+                  width: 44, height: 44, borderRadius: "50%",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   flexShrink: 0, ...glass,
                 }}>

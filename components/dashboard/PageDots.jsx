@@ -349,7 +349,7 @@ export default function PageDots({
       {/* ── Add-page input pill ────────────────────────────────────────────── */}
       {addingPage ? (
         <div style={{
-          ...glass, borderRadius: 100, height: 52,
+          ...glass, borderRadius: 100, height: 44,
           display: "flex", alignItems: "center",
           padding: "0 8px 0 16px", gap: 6, minWidth: 180,
         }}>
@@ -398,7 +398,7 @@ export default function PageDots({
       <div
         ref={pillRef}
         style={{
-          ...glass, borderRadius: 100, height: 52,
+          ...glass, borderRadius: 100, height: 44,
           display: "flex", alignItems: "center",
           justifyContent: "center", gap: 7,
           padding: "0 14px", userSelect: "none",
