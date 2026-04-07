@@ -754,8 +754,8 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
           // ── INPUT: expanded pill with textarea (stays open until click outside) ──
           if (pillPhase === 'input') {
             return (
-              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 44, overflow: "hidden", ...glass }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, height: 44, overflow: "hidden", ...glass }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "0 16px 0 8px" : "0 18px 0 8px", boxSizing: "border-box" }}>
                   {/* Open full chat — left side */}
                   <button
                     onClick={() => { onExpandedChange(true); setPillPhase('idle'); }}
@@ -797,8 +797,8 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
           // ── BUSY: spinner + text + stop ───────────────────────────────────────
           if (pillPhase === 'busy') {
             return (
-              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 44, overflow: "hidden", animation: "fadeIn 0.12s ease", ...glass }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "14px 14px 14px 18px", boxSizing: "border-box" }}>
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, height: 44, overflow: "hidden", animation: "fadeIn 0.12s ease", ...glass }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "0 14px 0 18px", boxSizing: "border-box" }}>
                   <div style={{ width: 14, height: 14, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
                   <span style={{ flex: 1, fontFamily: serif, fontSize: F.md, color: "var(--dl-middle)", lineHeight: 1.4 }}>{busyText}</span>
                   <button onClick={handleStop} title="Stop" style={{ background: "color-mix(in srgb, var(--dl-strong) 8%, transparent)", border: "1px solid color-mix(in srgb, var(--dl-strong) 12%, transparent)", borderRadius: "50%", width: 28, height: 28, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, color: "var(--dl-middle)" }}>

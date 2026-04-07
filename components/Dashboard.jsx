@@ -791,7 +791,7 @@ function DashboardInner() {
             {searchOpen && (
               <div style={{
                 position: "fixed",
-                bottom: mobile ? "12px" : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+                bottom: mobile ? "20px" : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
                 left: "50%", transform: "translateX(-50%)",
                 zIndex: 100, WebkitAppRegion: "no-drag",
                 width: "min(560px, calc(100vw - 24px))",
@@ -995,7 +995,7 @@ function DashboardInner() {
         // too high; a flat 6px keeps them right at the bottom where they feel natural.
         // Desktop: 16px above the window edge (no safe-area there).
         const BOTTOM = mobile
-          ? "12px"
+          ? "20px"
           : "calc(env(safe-area-inset-bottom, 0px) + 16px)";
         // Consistent button size everywhere — no mobile/desktop distinction.
         const BTN = 44;
