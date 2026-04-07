@@ -893,28 +893,29 @@ function DashboardInner() {
                   })}
                 </div>
               ) : (
-                /* Date pill — fixed width so chevrons don't shift as label appears/disappears */
+                /* Date pill — fixed width on desktop so chevrons don't shift; auto on mobile */
                 <div style={{
                   ...glass, borderRadius: 100,
                   border: "1px solid var(--dl-glass-border)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   height: 44, overflow: "hidden",
-                  width: 260, flexShrink: 0,
+                  width: mobile ? "auto" : 260, flexShrink: 0,
                 }}>
-                  {/* Date text — click goes to today */}
+                  {/* Date text — click goes to today; orange on mobile when viewing today */}
                   <button
                     onClick={() => { selectProject(null); setSelected(todayKey()); window.dispatchEvent(new CustomEvent('daylab:scroll-to-today')); }}
                     style={{
                       background: "transparent", border: "none", cursor: "pointer",
                       padding: "0 20px",
                       fontFamily: mono, fontSize: 12, letterSpacing: "0.12em",
-                      textTransform: "uppercase", color: "var(--dl-strong)",
+                      textTransform: "uppercase",
+                      color: (mobile && isToday) ? "var(--dl-orange)" : "var(--dl-strong)",
                       whiteSpace: "nowrap", userSelect: "none", lineHeight: 1,
                     }}
                   >{fmtNavDate(selected)}</button>
 
-                  {/* Separator + relative label */}
-                  {relLabel && (
+                  {/* Separator + relative label — desktop only */}
+                  {!mobile && relLabel && (
                     <>
                       <span style={{
                         width: 1, height: 14, flexShrink: 0,
