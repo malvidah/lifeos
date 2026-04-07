@@ -993,7 +993,7 @@ function DashboardInner() {
         // too high; a flat 6px keeps them right at the bottom where they feel natural.
         // Desktop: 16px above the window edge (no safe-area there).
         const BOTTOM = mobile
-          ? "6px"
+          ? "12px"
           : "calc(env(safe-area-inset-bottom, 0px) + 16px)";
         // Consistent button size everywhere — no mobile/desktop distinction.
         const BTN = 44;
