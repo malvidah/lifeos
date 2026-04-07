@@ -992,9 +992,9 @@ function DashboardInner() {
         const BOTTOM = mobile
           ? "env(safe-area-inset-bottom, 6px)"
           : "calc(env(safe-area-inset-bottom, 0px) + 16px)";
-        // Smaller buttons on mobile to avoid crowding the nav row.
-        const BTN = mobile ? 44 : 52;
-        const NAV_GAP = mobile ? 5 : 8;
+        // Consistent button size everywhere — no mobile/desktop distinction.
+        const BTN = 44;
+        const NAV_GAP = 6;
         const circleBtn = (active) => ({
           width: BTN, height: BTN, borderRadius: "50%",
           background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
@@ -1070,7 +1070,7 @@ function DashboardInner() {
               position: "fixed", bottom: BOTTOM,
               left: 0, right: 0,
               zIndex: 99,
-              display: "flex", justifyContent: "center", alignItems: "center",
+              display: "flex", justifyContent: "center", alignItems: "flex-end",
               gap: NAV_GAP, pointerEvents: "none",
             }}>
               {/* Prev page chevron */}
