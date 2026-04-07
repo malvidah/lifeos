@@ -791,7 +791,7 @@ function DashboardInner() {
             {searchOpen && (
               <div style={{
                 position: "fixed",
-                bottom: mobile ? "env(safe-area-inset-bottom, 6px)" : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+                bottom: mobile ? "12px" : "calc(env(safe-area-inset-bottom, 0px) + 16px)",
                 left: "50%", transform: "translateX(-50%)",
                 zIndex: 100, WebkitAppRegion: "no-drag",
                 width: "min(560px, calc(100vw - 24px))",
