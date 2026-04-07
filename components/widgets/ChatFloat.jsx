@@ -710,7 +710,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
                 width: "100%", maxWidth: 560, pointerEvents: "auto",
                 display: "flex", alignItems: "center",
                 background: "var(--dl-bg)", border: "1px solid var(--dl-border)",
-                borderRadius: 100, minHeight: 52, overflow: "hidden",
+                borderRadius: 100, minHeight: 44, overflow: "hidden",
                 boxShadow: "var(--dl-shadow)",
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: mobile ? "12px 10px 12px 16px" : "12px 10px 12px 18px", boxSizing: "border-box" }}>
@@ -754,7 +754,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
           // ── INPUT: expanded pill with textarea (stays open until click outside) ──
           if (pillPhase === 'input') {
             return (
-              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", ...glass }}>
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 44, overflow: "hidden", ...glass }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", padding: mobile ? "12px 16px 12px 8px" : "12px 18px 12px 8px", boxSizing: "border-box" }}>
                   {/* Open full chat — left side */}
                   <button
@@ -797,7 +797,7 @@ export default function ChatFloat({date, token, userId, healthKey, theme, expand
           // ── BUSY: spinner + text + stop ───────────────────────────────────────
           if (pillPhase === 'busy') {
             return (
-              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 52, overflow: "hidden", animation: "fadeIn 0.12s ease", ...glass }}>
+              <div style={{ width: "100%", maxWidth: 560, pointerEvents: "auto", display: "flex", alignItems: "center", borderRadius: 100, minHeight: 44, overflow: "hidden", animation: "fadeIn 0.12s ease", ...glass }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "14px 14px 14px 18px", boxSizing: "border-box" }}>
                   <div style={{ width: 14, height: 14, borderRadius: "50%", border: "1.5px solid var(--dl-accent)", borderTopColor: "transparent", animation: "spin 0.8s linear infinite", flexShrink: 0 }} />
                   <span style={{ flex: 1, fontFamily: serif, fontSize: F.md, color: "var(--dl-middle)", lineHeight: 1.4 }}>{busyText}</span>

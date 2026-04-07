@@ -221,7 +221,7 @@ export default function PageDots({
             borderRadius: 100,
             zIndex: 50,
             display: "flex", alignItems: "center",
-            height: 52, padding: "0 6px 0 14px", gap: 2,
+            height: 44, padding: "0 6px 0 14px", gap: 2,
             whiteSpace: "nowrap",
           }}>
             {/* House icon — home page indicator */}
