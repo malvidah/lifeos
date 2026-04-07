@@ -987,11 +987,13 @@ function DashboardInner() {
 
       {/* ── Bottom bar: filter (left) + dots+AI (center) + search (right) ── */}
       {!searchNavHide && !chatIsOpen && layout.loaded && (() => {
-        // Mobile: sit right at the safe-area edge (home indicator) with no extra gap.
-        // env() fallback of 6px covers browsers where safe-area isn't reported.
+        // Mobile: ignore safe-area and sit 6px above the physical screen edge — the
+        // home indicator is semi-transparent and taps still register through it.
+        // env(safe-area-inset-bottom) is ~34px on iPhone which makes buttons look
+        // too high; a flat 6px keeps them right at the bottom where they feel natural.
         // Desktop: 16px above the window edge (no safe-area there).
         const BOTTOM = mobile
-          ? "env(safe-area-inset-bottom, 6px)"
+          ? "6px"
           : "calc(env(safe-area-inset-bottom, 0px) + 16px)";
         // Consistent button size everywhere — no mobile/desktop distinction.
         const BTN = 44;
