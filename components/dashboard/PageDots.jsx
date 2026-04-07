@@ -6,12 +6,12 @@ import { mono, F } from "@/lib/tokens";
  * PageDots — page navigation pill.
  *
  * Dots pill (entire element is the tap target):
- *   • Tap              → cycle to next page (wraps around)
+ *   • Tap on a dot     → open detail popover for that page
  *   • Long-press 480ms → open detail popover for current page
  *   • Swipe L/R ≥40px  → prev / next page
  *   • "+"              → add page
  *
- * Dots are purely visual indicators (not individually clickable).
+ * Navigation (prev/next) is handled by the arrow buttons in the parent.
  *
  * Popover — compact glass pill:
  *   ‹ › · [editable name] · 🗑 · ✕
@@ -19,7 +19,7 @@ import { mono, F } from "@/lib/tokens";
  */
 export default function PageDots({
   count, active, homeIdx = 1, pages = [],
-  onDotClick, onSwipePrev, onSwipeNext, onCycleNext,
+  onDotClick, onSwipePrev, onSwipeNext,
   onAddPage, onRenamePage, onDeletePage,
   onReorderPages,
 }) {
@@ -31,28 +31,31 @@ export default function PageDots({
   const [nameValue,   setNameValue]   = useState("");
   const [deleteArmed, setDeleteArmed] = useState(false);
 
-  const longPressTimer = useRef(null);
-  const addInputRef    = useRef(null);
-  const nameInputRef   = useRef(null);
-  const deleteTimer    = useRef(null);
-  const pillRef        = useRef(null);
+  const longPressTimer    = useRef(null);
+  const addInputRef       = useRef(null);
+  const nameInputRef      = useRef(null);
+  const deleteTimer       = useRef(null);
+  const pillRef           = useRef(null);
+  // Tracks which dot page the pointer went down on so a tap opens that page's detail.
+  const targetDotPageRef  = useRef(null);
 
   // Unified gesture ref — set on pointerdown, cleared on pointerup/cancel.
   const gestureRef  = useRef(null);
   const dragWasRef  = useRef(false);
 
-  // ── Long-press / double-tap → open detail for current page ─────────────
-  const openPageDetail = useCallback(() => {
+  // ── Open detail for a specific page (defaults to active) ─────────────────
+  const openPageDetail = useCallback((pageIndex) => {
+    const idx = pageIndex ?? active;
     if (navigator.vibrate) navigator.vibrate(20);
-    setMenuPage(active);
-    setNameValue(pages[active]?.name ?? "");
+    setMenuPage(idx);
+    setNameValue(pages[idx]?.name ?? "");
     setNameEditing(false);
     setDeleteArmed(false);
   }, [active, pages]);
 
   const startLongPress = useCallback(() => {
-    longPressTimer.current = setTimeout(openPageDetail, 480);
-  }, [openPageDetail]);
+    longPressTimer.current = setTimeout(() => openPageDetail(active), 480);
+  }, [openPageDetail, active]);
 
   const cancelLongPress = useCallback(() => {
     clearTimeout(longPressTimer.current);
@@ -77,6 +80,7 @@ export default function PageDots({
 
     gestureRef.current = { startX: e.clientX, dx: 0 };
     dragWasRef.current = false;
+    targetDotPageRef.current = null; // reset; individual dots set this on their own pointerDown
 
     startLongPress();
   }, [startLongPress]);
@@ -101,8 +105,8 @@ export default function PageDots({
     if (menuPage !== null) return;
 
     if (Math.abs(dx) <= 10) {
-      // ── Tap → cycle to next page ───────────────────────────────────────
-      onCycleNext?.();
+      // ── Tap → open detail for the tapped dot's page ───────────────────
+      openPageDetail(targetDotPageRef.current ?? active);
       return;
     }
 
@@ -111,7 +115,7 @@ export default function PageDots({
       if (dx < 0) onSwipeNext?.();
       else         onSwipePrev?.();
     }
-  }, [menuPage, cancelLongPress, openPageDetail, onCycleNext, onSwipePrev, onSwipeNext]);
+  }, [menuPage, active, cancelLongPress, openPageDetail, onSwipePrev, onSwipeNext]);
 
   const onPillPointerCancel = useCallback(() => {
     gestureRef.current = null;
@@ -407,10 +411,14 @@ export default function PageDots({
       >
         {pages.map((_, pageIdx) => {
           const isActive = pageIdx === active;
+          // Record which page's dot the pointer went down on so the tap handler
+          // can open the detail for that specific page.
+          const dotPointerDown = () => { targetDotPageRef.current = pageIdx; };
 
           if (isHome(pageIdx)) {
             return (
-              <div key={pageIdx} style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, pointerEvents: "none" }}>
+              <div key={pageIdx} onPointerDown={dotPointerDown}
+                style={{ display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                 <HouseIcon size={11} color={isActive ? "var(--dl-strong)" : "var(--dl-border2)"} />
               </div>
             );
@@ -419,11 +427,12 @@ export default function PageDots({
           return (
             <div
               key={pageIdx}
+              onPointerDown={dotPointerDown}
               style={{
                 width: 6, height: 6, borderRadius: 3,
                 background: isActive ? "var(--dl-strong)" : "var(--dl-border2)",
                 transition: "background 0.2s",
-                flexShrink: 0, pointerEvents: "none",
+                flexShrink: 0,
               }}
             />
           );

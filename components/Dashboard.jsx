@@ -992,8 +992,11 @@ function DashboardInner() {
         const BOTTOM = mobile
           ? "env(safe-area-inset-bottom, 6px)"
           : "calc(env(safe-area-inset-bottom, 0px) + 16px)";
+        // Smaller buttons on mobile to avoid crowding the nav row.
+        const BTN = mobile ? 44 : 52;
+        const NAV_GAP = mobile ? 5 : 8;
         const circleBtn = (active) => ({
-          width: 52, height: 52, borderRadius: "50%",
+          width: BTN, height: BTN, borderRadius: "50%",
           background: active ? "var(--dl-glass-active)" : "var(--dl-glass)",
           backdropFilter: "blur(20px) saturate(1.4)",
           WebkitBackdropFilter: "blur(20px) saturate(1.4)",
@@ -1068,7 +1071,7 @@ function DashboardInner() {
               left: 0, right: 0,
               zIndex: 99,
               display: "flex", justifyContent: "center", alignItems: "center",
-              gap: 8, pointerEvents: "none",
+              gap: NAV_GAP, pointerEvents: "none",
             }}>
               {/* Prev page chevron */}
               <button
@@ -1098,7 +1101,6 @@ function DashboardInner() {
                   pages={layout.pages}
                   homeIdx={layout.homeIdx}
                   onDotClick={(i) => layout.setCurrentPageIdx(i)}
-                  onCycleNext={() => layout.setCurrentPageIdx((layout.currentPageIdx + 1) % layout.pages.length)}
                   onSwipePrev={() => layout.setCurrentPageIdx(Math.max(0, layout.currentPageIdx - 1))}
                   onSwipeNext={() => layout.setCurrentPageIdx(Math.min(layout.pages.length - 1, layout.currentPageIdx + 1))}
                   onAddPage={(name) => {
@@ -1117,7 +1119,7 @@ function DashboardInner() {
                 title="Ask AI"
                 style={{
                   pointerEvents: "auto",
-                  width: 52, height: 52, borderRadius: "50%",
+                  width: BTN, height: BTN, borderRadius: "50%",
                   background: "var(--dl-glass)",
                   backdropFilter: "blur(16px) saturate(1.3)",
                   WebkitBackdropFilter: "blur(16px) saturate(1.3)",
