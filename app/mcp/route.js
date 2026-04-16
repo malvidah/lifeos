@@ -20,16 +20,27 @@ const SERVICE = () => createClient(
 );
 
 const getResourceUrl = (req) => `https://${req.headers.get('host') || 'daylab.me'}`;
-// `${getResourceUrl(request)}/.well-known/oauth-protected-resource` derived per-request
 
-function unauthorizedResponse(msg = 'Authentication required') {
+// Browser-based MCP clients (claude.ai) need these exposed so they can read
+// WWW-Authenticate to kick off OAuth, and MCP-Protocol-Version for handshake.
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, HEAD, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, MCP-Protocol-Version',
+  'Access-Control-Expose-Headers': 'WWW-Authenticate, MCP-Protocol-Version',
+  'Access-Control-Max-Age': '3600',
+};
+
+function unauthorizedResponse(request, msg = 'Authentication required') {
+  const base = getResourceUrl(request);
   return new Response(JSON.stringify({ error: 'unauthorized', message: msg }), {
     status: 401,
     headers: {
       'Content-Type': 'application/json',
       // RFC9728 §5.1 — tell client where to discover auth server
-      'WWW-Authenticate': `Bearer realm="${getResourceUrl(request)}", resource_metadata="${`${getResourceUrl(request)}/.well-known/oauth-protected-resource`}"`,
+      'WWW-Authenticate': `Bearer realm="${base}", resource_metadata="${base}/.well-known/oauth-protected-resource"`,
       'MCP-Protocol-Version': PROTOCOL_VERSION,
+      ...CORS_HEADERS,
     }
   });
 }
@@ -354,8 +365,12 @@ async function handleRPC(body, userId) {
 export async function HEAD() {
   return new Response(null, {
     status: 200,
-    headers: { 'MCP-Protocol-Version': PROTOCOL_VERSION }
+    headers: { 'MCP-Protocol-Version': PROTOCOL_VERSION, ...CORS_HEADERS }
   });
+}
+
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
 export async function POST(request) {
@@ -364,15 +379,22 @@ export async function POST(request) {
 
   let body;
   try { body = await request.json(); } catch {
-    return Response.json({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }, { status: 400 });
+    return Response.json(
+      { jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } },
+      { status: 400, headers: CORS_HEADERS }
+    );
   }
 
   // If no auth and it's not an initialize/notifications call, return 401 so Claude starts OAuth
   const methods = Array.isArray(body) ? body.map(b => b.method) : [body.method];
   const needsAuth = methods.some(m => m && m !== 'initialize' && m !== 'notifications/initialized');
-  if (!userId && needsAuth) return unauthorizedResponse();
+  if (!userId && needsAuth) return unauthorizedResponse(request);
 
-  const mcpHeaders = { 'Content-Type': 'application/json', 'MCP-Protocol-Version': PROTOCOL_VERSION };
+  const mcpHeaders = {
+    'Content-Type': 'application/json',
+    'MCP-Protocol-Version': PROTOCOL_VERSION,
+    ...CORS_HEADERS,
+  };
 
   if (Array.isArray(body)) {
     const results = await Promise.all(body.map(b => handleRPC(b, userId)));
@@ -380,6 +402,6 @@ export async function POST(request) {
   }
 
   const result = await handleRPC(body, userId);
-  if (result === null) return new Response(null, { status: 202 });
+  if (result === null) return new Response(null, { status: 202, headers: CORS_HEADERS });
   return Response.json(result, { headers: mcpHeaders });
 }
