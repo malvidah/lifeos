@@ -71,6 +71,7 @@ function GoalCardWrap({ children, onClick, draggable, onDragStart, onDragEnd, st
   const [hovered, setHovered] = useState(false);
   return (
     <div
+      role="button"
       draggable={draggable}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -564,7 +565,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode, proj
       {/* Empty state */}
       {visibleGoals.length === 0 && !loading && (
         <div style={{ fontFamily: mono, fontSize: 12, color: 'var(--dl-middle)', padding: '16px 0', textAlign: 'center', letterSpacing: '0.04em' }}>
-          No goals yet. Tap <span onClick={() => setCreatingNew(true)} style={{ color: GOAL_COLOR, cursor: 'pointer' }}>+ new</span> or tag a task with <span style={{ color: GOAL_COLOR }}>/g</span>
+          No goals yet. Tap <span role="button" onClick={() => setCreatingNew(true)} style={{ color: GOAL_COLOR, cursor: 'pointer' }}>+ new</span> or tag a task with <span style={{ color: GOAL_COLOR }}>/g</span>
         </div>
       )}
 
@@ -602,6 +603,7 @@ export default function ProjectsCard({ token, date, onSelectDate, viewMode, proj
             return renderColumn(project, project, col, grouped[project], false, true);
           })}
           <div
+            role="button"
             onClick={() => setCreatingNew(true)}
             style={{
               minWidth: 60, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',

@@ -493,7 +493,7 @@ export default function HealthCard({date,token,userId,onHealthChange,onScoresRea
           const isTrend     = expandedMetric  === m.key;
           const isDimmed = expandedMetric && !isTrend;
           return (
-            <div key={m.key}
+            <div key={m.key} role="button"
               onClick={()=>{ isTrend ? setExpandedMetric(null) : setExpandedMetric(m.key); }}
               style={{flex:"1 0 auto",minWidth:120,display:"flex",alignItems:"center",gap:12,
                 borderRight:mi<metrics.length-1?"1px solid var(--dl-border)":"none",
