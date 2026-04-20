@@ -775,6 +775,15 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     };
   }, [refresh]);
 
+  // Re-fetch when HealthCard finishes computing & upserting fresh scores —
+  // the range endpoint reads the cached health_scores table, so without this
+  // the habits dots would miss today until the next reload.
+  useEffect(() => {
+    const handler = () => refresh();
+    window.addEventListener('daylab:scores-ready', handler);
+    return () => window.removeEventListener('daylab:scores-ready', handler);
+  }, [refresh]);
+
   useEffect(() => {
     if (!token || !userId) return;
     let cancelled = false;

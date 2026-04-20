@@ -511,6 +511,9 @@ function DashboardInner() {
       activity: d.activity?.score ?? prev[date]?.activity ?? 0,
       recovery: d.recovery?.score ?? prev[date]?.recovery ?? 0,
     }}));
+    // Notify other cards (e.g. HabitsCard) that fresh scores landed so their
+    // cached range-query data can be refreshed and dots update in sync.
+    try { window.dispatchEvent(new CustomEvent('daylab:scores-ready', { detail: { date } })); } catch {}
   },[]);
 
   // Persist dots to localStorage so they're instant on next page load
@@ -791,7 +794,7 @@ function DashboardInner() {
             {/* ── TOP LEFT: edit toggle (hidden when search open) ─────────── */}
             {!searchOpen && (
               <div style={{
-                position: "fixed", top: TOP, left: 12, zIndex: 100,
+                position: "fixed", top: TOP, left: 12, zIndex: 101,
                 WebkitAppRegion: "no-drag",
               }}>
                 <button
@@ -811,9 +814,11 @@ function DashboardInner() {
             <div style={{
               position: "fixed", top: TOP, left: "50%", transform: "translateX(-50%)",
               zIndex: 100, WebkitAppRegion: "no-drag",
-              // Cap width so the dock pill never overlaps the left/right nav circles
-              // (each side has 12px margin + 40px button + 8px gap = 60px clearance)
-              maxWidth: "calc(100vw - 128px)",
+              // Cap width so the dock pill never overlaps the left/right nav circles.
+              // Mobile needs more clearance because the edit-toggle + user menu (40px each)
+              // plus margins + backdrop glow push up against a narrower viewport.
+              maxWidth: mobile ? "calc(100vw - 140px)" : "calc(100vw - 128px)",
+              width: mobile && editMode ? "calc(100vw - 140px)" : undefined,
             }}>
               {editMode ? (
                 /* Card dock pill — scrollable, never wider than the cap above */
@@ -821,10 +826,12 @@ function DashboardInner() {
                   display: "flex", alignItems: "center", gap: 1, height: 40,
                   padding: "0 4px", borderRadius: 100,
                   overflowX: "auto", scrollbarWidth: "none", msOverflowStyle: "none",
+                  maxWidth: "100%",
                   ...glass,
                 }}>
                   {DOCK_ITEMS.map(item => {
                     const isOpen = currentPageCards.includes(item.id);
+                    const btnSize = mobile ? 28 : 34;
                     return (
                       <button key={item.id}
                         onClick={() => {
@@ -838,7 +845,7 @@ function DashboardInner() {
                           border: "none", borderRadius: 100, cursor: "pointer",
                           display: "flex", alignItems: "center", justifyContent: "center",
                           color: isOpen ? "var(--dl-strong)" : "var(--dl-highlight)",
-                          width: 34, height: 34, flexShrink: 0,
+                          width: btnSize, height: btnSize, flexShrink: 0,
                           transition: "background 0.15s, color 0.15s",
                         }}
                       >{item.icon}</button>
@@ -927,7 +934,7 @@ function DashboardInner() {
             {/* ── TOP RIGHT: user avatar only (hidden when search open) ────── */}
             {!searchOpen && (
               <div style={{
-                position: "fixed", top: TOP, right: 12, zIndex: 100,
+                position: "fixed", top: TOP, right: 12, zIndex: 101,
                 WebkitAppRegion: "no-drag",
               }}>
                 <div style={{
