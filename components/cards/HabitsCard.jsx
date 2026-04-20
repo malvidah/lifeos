@@ -761,16 +761,6 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   const startDate = addDays(today, -365);
   const endDate = addDays(today, 14);
 
-  // Fire confetti once when all of today's habits are completed.
-  useEffect(() => {
-    if (!habits || !isPerfectDay(today, habits, today)) return;
-    const key = `daylab:confetti:${today}`;
-    try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch {}
-    import('canvas-confetti').then(({ default: confetti }) => {
-      confetti({ particleCount: 130, spread: 80, origin: { y: 0.55 } });
-    }).catch(() => {});
-  }, [habits, today]);
-
   const dates = [];
   for (let d = startDate; d <= endDate; d = addDays(d, 1)) dates.push(d);
 
@@ -866,6 +856,27 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
 
     // Show streak tip on first check (not uncheck)
     if (!wasDone) habitStreakTip.show();
+
+    // Fire confetti if this toggle completes the last remaining habit for today.
+    // Checked BEFORE the optimistic update so it can't race with re-renders.
+    if (!wasDone && cellDate === today && habits) {
+      const wouldBePerfect = habits.filter(h => !h.archived && h.completions?.hasOwnProperty(today)).length > 0
+        && habits.every(h => {
+          if (h.archived || !h.completions?.hasOwnProperty(today)) return true;
+          return h.id === habit.id ? true : h.completions[today] === true;
+        });
+      if (wouldBePerfect) {
+        const key = `daylab:confetti:${today}`;
+        try {
+          if (!localStorage.getItem(key)) {
+            localStorage.setItem(key, '1');
+            import('canvas-confetti').then(({ default: confetti }) => {
+              confetti({ particleCount: 130, spread: 80, origin: { y: 0.55 } });
+            }).catch(() => {});
+          }
+        } catch {}
+      }
+    }
 
     // Optimistic update — recalculate streak client-side (instant)
     setHabits(prev => prev?.map(h => {
@@ -1161,7 +1172,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
                     <div
                       onClick={e => { if (dragState.current.moved) return; onSelectDate?.(d); }}
                       style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2, borderRadius: '6px 6px 0 0', background: d === date ? 'var(--dl-accent-10, rgba(208,136,40,0.1))' : 'transparent', cursor: 'pointer' }}>
-                      {perfect && <span style={{ fontSize: 11, lineHeight: 1, marginBottom: 1 }}>🎉</span>}
+                      {perfect && <span style={{ fontSize: 11, lineHeight: 1, marginBottom: 4 }}>🎉</span>}
                       <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayLabel(d)}</span>
                       <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayNum(d)}</span>
                     </div>
