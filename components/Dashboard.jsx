@@ -528,6 +528,8 @@ function DashboardInner() {
       activity: d.activity?.score ?? prev[date]?.activity ?? 0,
       recovery: d.recovery?.score ?? prev[date]?.recovery ?? 0,
     }}));
+    // Tell HabitsCard to refresh so its range-query cache reflects the new scores.
+    try { window.dispatchEvent(new CustomEvent('daylab:scores-ready', { detail: { date } })); } catch {}
   },[]);
 
   // Persist dots to localStorage so they're instant on next page load
@@ -827,7 +829,7 @@ function DashboardInner() {
             {/* ── TOP LEFT: edit toggle (hidden when search open) ─────────── */}
             {!searchNavHide && (
               <div style={{
-                position: "fixed", top: TOP, left: 12, zIndex: 100,
+                position: "fixed", top: TOP, left: 12, zIndex: 101,
                 WebkitAppRegion: "no-drag",
                 animation: "fadeIn 0.15s ease",
               }}>
@@ -850,6 +852,10 @@ function DashboardInner() {
               zIndex: 100, WebkitAppRegion: "no-drag",
               animation: "fadeIn 0.15s ease",
               display: "flex", alignItems: "center", gap: 8,
+              // In edit mode the dock can be wider than the screen on mobile —
+              // cap it so it doesn't reach the edit toggle (left:12) or user
+              // avatar (right:12). 120px = 12px margin + 44px button + 8px gap × 2 sides.
+              maxWidth: editMode ? "calc(100vw - 120px)" : undefined,
             }}>
               {/* Prev date chevron — only in date mode */}
               {!editMode && (
@@ -959,7 +965,7 @@ function DashboardInner() {
             {/* ── TOP RIGHT: user avatar only (hidden when search open) ────── */}
             {!searchNavHide && (
               <div style={{
-                position: "fixed", top: TOP, right: 12, zIndex: 100,
+                position: "fixed", top: TOP, right: 12, zIndex: 101,
                 WebkitAppRegion: "no-drag",
                 animation: "fadeIn 0.15s ease",
               }}>

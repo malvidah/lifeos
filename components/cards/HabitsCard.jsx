@@ -775,6 +775,14 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
     };
   }, [refresh]);
 
+  // Re-fetch when HealthCard finishes computing fresh scores so the health
+  // habit dots update without a full page reload.
+  useEffect(() => {
+    const handler = () => refresh();
+    window.addEventListener('daylab:scores-ready', handler);
+    return () => window.removeEventListener('daylab:scores-ready', handler);
+  }, [refresh]);
+
   useEffect(() => {
     if (!token || !userId) return;
     let cancelled = false;

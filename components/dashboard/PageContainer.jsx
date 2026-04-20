@@ -169,20 +169,21 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     if (e.pointerType !== 'mouse') return;
     if (e.button !== 0) return;
     if (isInsideHorizontalScroll(e.target, outerRef.current)) return;
-    // Don't capture pointer for interactive element clicks.
-    // setPointerCapture redirects subsequent pointer events to the outer div,
-    // which on trackpads causes pointerleave to fire on the clicked element
-    // mid-press (micro-movement under physical click pressure), making the
-    // click miss its target or require two presses. Swipes always start from
-    // non-interactive areas so skipping capture here doesn't break swipe nav.
-    if (e.target.closest('button, a, input, textarea, select, [role="button"], [role="switch"], [role="checkbox"], [role="tab"]')) return;
-    // Also skip pointer capture for areas that own their own click/drag interactions.
-    // data-no-page-swipe = area handles horizontal gestures (day scroller, etc.)
-    // data-no-pointer-capture = area has clickable non-button divs that break when
-    //   pointer capture reassigns click dispatch to the outer container instead.
-    if (e.target.closest('[data-no-page-swipe], [data-no-pointer-capture]')) return;
-    outerRef.current?.setPointerCapture(e.pointerId);
-    pointerRef.current = { x: e.clientX, y: e.clientY };
+    if (e.target.closest('[data-no-page-swipe]')) return;
+    // Don't capture at pointerdown — capturing immediately redirects the
+    // synthetic click event to the outer div, breaking any clickable element
+    // inside (custom divs, non-button interactive elements, etc.).
+    // Capture lazily in pointermove once a real horizontal drag is confirmed.
+    pointerRef.current = { x: e.clientX, y: e.clientY, pointerId: e.pointerId, dragging: false };
+  }, []);
+
+  const handlePointerMove = useCallback((e) => {
+    if (!pointerRef.current || pointerRef.current.dragging) return;
+    const dx = Math.abs(e.clientX - pointerRef.current.x);
+    if (dx > 10) {
+      pointerRef.current.dragging = true;
+      outerRef.current?.setPointerCapture(pointerRef.current.pointerId);
+    }
   }, []);
 
   const handlePointerUp = useCallback((e) => {
@@ -325,6 +326,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
     <div
       ref={outerRef}
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerCancel}
       style={{ position: 'relative', overflow: 'hidden', flex: 1, touchAction: 'pan-y' }}
