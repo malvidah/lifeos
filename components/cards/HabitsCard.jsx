@@ -707,6 +707,13 @@ function HabitDetailView({ habit, token, onBack, onToggle, onUpdated, isNew, onC
   );
 }
 
+// Returns true if every scheduled habit for `d` is completed.
+function isPerfectDay(d, habits, today) {
+  if (!habits || d > today) return false;
+  const scheduled = habits.filter(h => !h.archived && h.completions?.hasOwnProperty(d));
+  return scheduled.length > 0 && scheduled.every(h => h.completions[d] === true);
+}
+
 export default function HabitsCard({ date, token, userId, project, habitFilter = 'all', onSelectDate }) {
   const [habits, setHabits] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -754,6 +761,15 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
   const startDate = addDays(today, -365);
   const endDate = addDays(today, 14);
 
+  // Fire confetti once when all of today's habits are completed.
+  useEffect(() => {
+    if (!habits || !isPerfectDay(today, habits, today)) return;
+    const key = `daylab:confetti:${today}`;
+    try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1'); } catch {}
+    import('canvas-confetti').then(({ default: confetti }) => {
+      confetti({ particleCount: 130, spread: 80, origin: { y: 0.55 } });
+    }).catch(() => {});
+  }, [habits, today]);
 
   const dates = [];
   for (let d = startDate; d <= endDate; d = addDays(d, 1)) dates.push(d);
@@ -1087,7 +1103,7 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
         {/* Left column: names + stats */}
         <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 0 }}>
           {/* Header row */}
-          <div style={{ height: 30, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2, position: 'relative' }}>
+          <div style={{ height: 42, display: 'flex', alignItems: 'flex-end', gap: 0, paddingRight: 10, paddingBottom: 2, position: 'relative' }}>
             <button onClick={() => setCreatingNew(true)} style={{
               fontFamily: mono, fontSize: 10, letterSpacing: '0.04em', textTransform: 'uppercase',
               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)',
@@ -1134,16 +1150,18 @@ export default function HabitsCard({ date, token, userId, project, habitFilter =
         }}>
           <div style={{ display: 'inline-flex', flexDirection: 'column', minWidth: visibleDates.length * colW + monthBoundaries.size * dividerW + 14, paddingRight: 14 }}>
             {/* Date header */}
-            <div style={{ display: 'flex', height: 30, alignItems: 'flex-end' }}>
+            <div style={{ display: 'flex', height: 42, alignItems: 'flex-end' }}>
               {visibleDates.map((d, i) => {
                 const isToday = d === today;
                 const isBoundary = monthBoundaries.has(i);
+                const perfect = isPerfectDay(d, activeHabits, today);
                 return (
                   <React.Fragment key={d}>
                     {isBoundary && <div style={{ width: dividerW }} />}
                     <div
                       onClick={e => { if (dragState.current.moved) return; onSelectDate?.(d); }}
                       style={{ width: colW, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 2, borderRadius: '6px 6px 0 0', background: d === date ? 'var(--dl-accent-10, rgba(208,136,40,0.1))' : 'transparent', cursor: 'pointer' }}>
+                      {perfect && <span style={{ fontSize: 11, lineHeight: 1, marginBottom: 1 }}>🎉</span>}
                       <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayLabel(d)}</span>
                       <span style={{ fontFamily: mono, fontSize: 9, color: isToday ? 'var(--dl-accent)' : d === date ? 'var(--dl-strong)' : 'var(--dl-middle)', fontWeight: isToday ? 700 : 400, lineHeight: 1 }}>{dayNum(d)}</span>
                     </div>
