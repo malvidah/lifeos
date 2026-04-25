@@ -50,17 +50,22 @@ function injectEditorStyles() {
     .dl-hide-images .ProseMirror div[data-imageblock] { display: none; }
     .dl-editor .ProseMirror { counter-reset: imgchip; }
     .dl-img-chip-num::before { content: counter(imgchip); }
-    .dl-editor .ProseMirror table { border-collapse: collapse; width: 100% !important; margin: 8px 0; table-layout: auto; min-width: 100% !important; }
-    .dl-editor .ProseMirror .tableWrapper { overflow-x: auto; margin: 8px 0; }
+    .dl-editor .ProseMirror table { border-collapse: collapse; width: max-content; min-width: 100%; margin: 8px 0; table-layout: auto; }
+    .dl-editor .ProseMirror .tableWrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; margin: 30px 0 8px 72px; }
     .dl-editor .ProseMirror .column-resize-handle { position: absolute; right: -1px; top: 0; bottom: 0; width: 3px; background: var(--dl-accent); opacity: 0; pointer-events: none; cursor: col-resize; }
-    .dl-editor .ProseMirror .resize-cursor { cursor: col-resize; }
+    .dl-editor .ProseMirror.resize-cursor,
+    .dl-editor .ProseMirror.resize-cursor * { cursor: col-resize !important; }
     .dl-editor .ProseMirror td:hover .column-resize-handle,
     .dl-editor .ProseMirror th:hover .column-resize-handle { opacity: 0.5; pointer-events: auto; }
+    @media (pointer: coarse) {
+      .dl-editor .ProseMirror .column-resize-handle { display: none !important; }
+    }
     .dl-editor .ProseMirror th,
     .dl-editor .ProseMirror td {
       border-bottom: 1px solid var(--dl-border);
       border-right: 1px solid var(--dl-border);
       padding: 6px 10px;
+      min-width: 120px;
       text-align: left;
       vertical-align: top;
       font-size: inherit;
@@ -488,6 +493,249 @@ function FormatToolbar({ editor }) {
           }
         }, false);
       })()}
+    </div>
+  );
+}
+
+// ── Table cell controls — floating [ ⠿ ] [ × ] [ + ] above cols / left of rows ─
+// tableWrapper has margin-top:30px margin-left:72px for control space.
+// Column controls float above the header; row controls float in the left margin.
+// Includes drag-to-reorder via pointer events + ProseMirror transactions.
+function TableCellControls({ editor }) {
+  const [hovered, setHovered] = useState(null);
+  const [drag,    setDrag]    = useState(null);   // { type, fromIdx, insertBefore, indicator }
+  const activeRef = useRef(null);
+  const dragRef   = useRef(null);
+
+  // ── Hover tracking ────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!editor) return;
+    const pm = editor.view.dom;
+
+    const update = (cell) => {
+      if (dragRef.current) return;
+      if (!cell || !pm.contains(cell)) {
+        if (activeRef.current) { activeRef.current = null; setHovered(null); }
+        return;
+      }
+      if (cell === activeRef.current) return;
+      activeRef.current = cell;
+      const container = pm.closest('.dl-editor');
+      if (!container) return;
+      const cRect = container.getBoundingClientRect();
+      const r     = cell.getBoundingClientRect();
+      const row   = cell.closest('tr');
+      const table = cell.closest('table');
+      let rowIdx = 0, colIdx = 0;
+      if (row && table) {
+        rowIdx = Array.from(table.querySelectorAll('tr')).indexOf(row);
+        colIdx = Array.from(row.querySelectorAll('th, td')).indexOf(cell);
+      }
+      const wrapper = cell.closest('.tableWrapper');
+      const wr = wrapper?.getBoundingClientRect();
+      setHovered({
+        cell,
+        isHeader:     cell.tagName === 'TH',
+        isFirstChild: cell === cell.parentElement?.firstElementChild,
+        rowIdx, colIdx,
+        top:       r.top  - cRect.top,
+        left:      r.left - cRect.left,
+        w: r.width, h: r.height,
+        tableLeft: wr ? wr.left - cRect.left : r.left - cRect.left,
+        tableTop:  wr ? wr.top  - cRect.top  : r.top  - cRect.top,
+        tableH:    wr ? wr.height : r.height,
+      });
+    };
+
+    const onOver = e => update(e.target.closest?.('th, td'));
+    const onOut  = e => { if (!dragRef.current && !e.relatedTarget?.closest?.('.dl-tbl-ctrl')) { activeRef.current = null; setHovered(null); } };
+    pm.addEventListener('mouseover', onOver);
+    pm.addEventListener('mouseout',  onOut);
+    return () => { pm.removeEventListener('mouseover', onOver); pm.removeEventListener('mouseout', onOut); };
+  }, [editor]);
+
+  // ── Apply ProseMirror row/col reorder ────────────────────────────────────
+  const applyMove = (cell, type, fromIdx, insertBefore) => {
+    // insertBefore is the target slot index (0…n); finalIdx accounts for removal
+    const finalIdx = insertBefore <= fromIdx ? insertBefore : insertBefore - 1;
+    if (fromIdx === finalIdx) return;
+    try {
+      const pos  = editor.view.posAtDOM(cell, 0);
+      const $pos = editor.state.doc.resolve(pos);
+      let depth = -1;
+      for (let d = $pos.depth; d > 0; d--) {
+        if ($pos.node(d).type.name === 'table') { depth = d; break; }
+      }
+      if (depth < 0) return;
+      const tableNode = $pos.node(depth);
+      const rows = [];
+      tableNode.forEach(r => rows.push(r));
+
+      let newRows;
+      if (type === 'row') {
+        newRows = [...rows];
+        const [m] = newRows.splice(fromIdx, 1);
+        newRows.splice(finalIdx, 0, m);
+      } else {
+        newRows = rows.map(row => {
+          const cells = [];
+          row.forEach(c => cells.push(c));
+          const nc = [...cells];
+          if (fromIdx < nc.length && finalIdx < nc.length) {
+            const [m] = nc.splice(fromIdx, 1);
+            nc.splice(finalIdx, 0, m);
+          }
+          return row.type.create(row.attrs, nc, row.marks);
+        });
+      }
+      const newTable = tableNode.type.create(tableNode.attrs, newRows, tableNode.marks);
+      const tr = editor.state.tr.replaceWith($pos.before(depth), $pos.after(depth), newTable);
+      editor.view.dispatch(tr);
+    } catch (err) { console.error('table reorder', err); }
+  };
+
+  // ── Drag-to-reorder (pointer events) ────────────────────────────────────
+  const startDrag = (e, type, fromIdx, cell) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragRef.current = { type, fromIdx, insertBefore: fromIdx, cell };
+    setDrag({ type, fromIdx, insertBefore: fromIdx, indicator: null });
+
+    const onMove = (me) => {
+      const d = dragRef.current;
+      if (!d) return;
+      const table     = d.cell.closest('table');
+      const container = editor.view.dom.closest('.dl-editor');
+      if (!table || !container) return;
+      const cRect     = container.getBoundingClientRect();
+      const tableRect = table.getBoundingClientRect();
+
+      if (d.type === 'row') {
+        const rows = Array.from(table.querySelectorAll('tr'));
+        let ins = rows.length;
+        for (let i = 0; i < rows.length; i++) {
+          const r = rows[i].getBoundingClientRect();
+          if (me.clientY < r.top + r.height / 2) { ins = i; break; }
+        }
+        const ref  = rows[Math.min(ins, rows.length - 1)].getBoundingClientRect();
+        const lineY = ins < rows.length ? ref.top - cRect.top : ref.bottom - cRect.top;
+        d.insertBefore = ins;
+        setDrag(prev => ({ ...prev, insertBefore: ins,
+          indicator: { horiz: true, y: lineY, x: tableRect.left - cRect.left, sz: tableRect.width } }));
+      } else {
+        const headerRow = table.querySelector('tr');
+        if (!headerRow) return;
+        const cs = Array.from(headerRow.querySelectorAll('th, td'));
+        let ins = cs.length;
+        for (let i = 0; i < cs.length; i++) {
+          const r = cs[i].getBoundingClientRect();
+          if (me.clientX < r.left + r.width / 2) { ins = i; break; }
+        }
+        const ref  = cs[Math.min(ins, cs.length - 1)].getBoundingClientRect();
+        const lineX = ins < cs.length ? ref.left - cRect.left : ref.right - cRect.left;
+        d.insertBefore = ins;
+        setDrag(prev => ({ ...prev, insertBefore: ins,
+          indicator: { horiz: false, x: lineX, y: tableRect.top - cRect.top, sz: tableRect.height } }));
+      }
+    };
+
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup',   onUp);
+      const d = dragRef.current;
+      dragRef.current = null;
+      setDrag(null);
+      if (d) applyMove(d.cell, d.type, d.fromIdx, d.insertBefore);
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup',   onUp);
+  };
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  if (!editor || (!hovered && !drag)) return null;
+  const { cell, isHeader, isFirstChild, rowIdx, colIdx,
+          top, left, w, h, tableLeft, tableTop, tableH } = hovered || {};
+
+  const runCmd = (cmd) => (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      const pos = editor.view.posAtDOM(cell, 0) + 1;
+      editor.chain().focus().setTextSelection(pos)[cmd]().run();
+    } catch {}
+    activeRef.current = null;
+    setHovered(null);
+  };
+
+  const GROUP_W = 72; // 3×20px buttons + 2×2px gaps + 4px padding = 68, round up
+  const GROUP_H = 24;
+
+  const CtrlGroup = ({ style, onDrag, onDelete, onAdd }) => (
+    <div style={{
+      position: 'absolute', display: 'flex', alignItems: 'center', gap: 2, padding: '2px 3px',
+      background: 'var(--dl-card)', border: '1px solid var(--dl-border)',
+      borderRadius: 5, boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+      pointerEvents: 'auto', zIndex: 56, userSelect: 'none',
+      ...style,
+    }}>
+      <button onPointerDown={onDrag} title="Drag to reorder"
+        style={{ width: 20, height: 20, padding: 0, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', background: 'transparent', border: 'none',
+          borderRadius: 3, cursor: 'grab', fontSize: 12, color: 'var(--dl-middle)',
+          lineHeight: 1 }}>⠿</button>
+      <button onPointerDown={onDelete} title="Delete"
+        style={{ width: 20, height: 20, padding: 0, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', background: 'transparent', border: 'none',
+          borderRadius: 3, cursor: 'pointer', fontSize: 13, color: 'var(--dl-middle)',
+          lineHeight: 1 }}>×</button>
+      <button onPointerDown={onAdd} title="Add"
+        style={{ width: 20, height: 20, padding: 0, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', background: 'transparent', border: 'none',
+          borderRadius: 3, cursor: 'pointer', fontSize: 16, color: 'var(--dl-middle)',
+          lineHeight: 1 }}>+</button>
+    </div>
+  );
+
+  const ind = drag?.indicator;
+
+  return (
+    <div className="dl-tbl-ctrl"
+         onMouseLeave={() => { if (!dragRef.current) { activeRef.current = null; setHovered(null); } }}
+         style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'none', zIndex: 55 }}>
+
+      {hovered && !drag && <>
+        {/* Column controls: float above the hovered header cell */}
+        {isHeader && (
+          <CtrlGroup
+            style={{ top: top - GROUP_H - 4, left: left + w / 2 - GROUP_W / 2 }}
+            onDrag={e => startDrag(e, 'col', colIdx, cell)}
+            onDelete={runCmd('deleteColumn')}
+            onAdd={runCmd('addColumnAfter')}
+          />
+        )}
+
+        {/* Row controls: float in the left margin of the hovered data row */}
+        {isFirstChild && !isHeader && (
+          <CtrlGroup
+            style={{ top: top + h / 2 - GROUP_H / 2, left: tableLeft - GROUP_W - 6 }}
+            onDrag={e => startDrag(e, 'row', rowIdx, cell)}
+            onDelete={runCmd('deleteRow')}
+            onAdd={runCmd('addRowAfter')}
+          />
+        )}
+      </>}
+
+      {/* Drop indicator line */}
+      {ind && (
+        <div style={{
+          position: 'absolute', pointerEvents: 'none', zIndex: 57,
+          background: 'var(--dl-accent)',
+          ...(ind.horiz
+            ? { top: ind.y - 1, left: ind.x, width: ind.sz, height: 2 }
+            : { left: ind.x - 1, top: ind.y, width: 2, height: ind.sz }),
+        }} />
+      )}
     </div>
   );
 }
@@ -1866,6 +2114,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
         ...style,
       }}>
         {noteTitle && <FormatToolbar editor={editor} />}
+        {noteTitle && <TableCellControls editor={editor} />}
         <LinkPopover editor={editor} />
         <EditorContent editor={editor} />
       </div>

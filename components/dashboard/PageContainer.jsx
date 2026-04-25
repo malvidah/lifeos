@@ -344,7 +344,7 @@ export default function PageContainer({ pages, renderPage, currentPageIdx, onPag
       >
         {pages.map((page, i) => (
           <div
-            key={page.name || i}
+            key={`${page.name ?? ''}-${i}`}
             style={{
               width: `${100 / n}%`,
               minWidth: `${100 / n}%`,

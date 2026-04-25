@@ -529,6 +529,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
           <div style={{ position: 'relative', marginBottom: 8 }}>
             <div
               ref={tabRowRef}
+              data-no-page-swipe
               onPointerMove={handleTabPointerMove}
               onPointerUp={handleTabPointerUp}
               onPointerCancel={handleTabPointerUp}
