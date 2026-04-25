@@ -206,9 +206,12 @@ const AllIcon = () => (
 // ── Schedule options for habit creation ───────────────────────────────────────
 const SCHEDULE_OPTIONS = [
   { key: 'daily', label: 'Daily', chip: 'Daily', search: 'daily everyday' },
-  { key: '1pw', label: '1/week', chip: '1/week', search: '1x per week once weekly 1 per week 1pw' },
-  { key: '2pw', label: '2/week', chip: '2/week', search: '2x per week twice weekly 2 per week 2pw' },
-  { key: '3pw', label: '3/week', chip: '3/week', search: '3x per week three times weekly 3 per week 3pw' },
+  { key: '1pw', label: '1/week', chip: '1/week', search: '1x/week 1x per week once weekly 1 per week 1pw' },
+  { key: '2pw', label: '2/week', chip: '2/week', search: '2x/week 2x per week twice weekly 2 per week 2pw' },
+  { key: '3pw', label: '3/week', chip: '3/week', search: '3x/week 3x per week three times weekly 3 per week 3pw' },
+  { key: '4pw', label: '4/week', chip: '4/week', search: '4x/week 4x per week four times weekly 4 per week 4pw' },
+  { key: '5pw', label: '5/week', chip: '5/week', search: '5x/week 5x per week five times weekly 5 per week 5pw' },
+  { key: '6pw', label: '6/week', chip: '6/week', search: '6x/week 6x per week six times weekly 6 per week 6pw' },
   { key: 'weekdays', label: 'Weekdays (M·T·W·R·F)', chip: 'M·T·W·R·F', search: 'weekdays weekday mtwrf' },
   { key: 'mwf', label: 'M·W·F', chip: 'M·W·F', search: 'mwf monday wednesday friday' },
   { key: 'tr', label: 'T·R', chip: 'T·R', search: 'tr tuesday thursday tuesdays thursdays' },
