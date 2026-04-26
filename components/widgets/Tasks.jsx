@@ -89,7 +89,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   const { notes: noteNames, drawings: drawingNames } = useContext(NoteContext);
   const placeNames = useContext(PlaceNamesContext);
   const tripNames  = useContext(TripNamesContext);
-  const { navigateToProject, navigateToNote } = useContext(NavigationContext);
+  const { navigateToProject, navigateToNote, navigateToTrip } = useContext(NavigationContext);
 
   // Contextual tips
   const slashTip = useTip('tip-slash-commands');
@@ -405,6 +405,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         color={"var(--dl-accent)"}
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
+        onTripClick={name => navigateToTrip(name, { openDetail: true })}
         style={{ padding: 0 }}
       />
       <Tip visible={slashTip.visible} message="Tip: type / to see all commands — habits, projects, dates, and more" anchorRef={editorWrapRef} position="below" onDismiss={slashTip.dismiss} />

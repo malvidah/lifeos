@@ -869,6 +869,35 @@ function MapInner({ token }) {
     return () => window.removeEventListener('daylab:go-to-place', handler);
   }, [places]); // eslint-disable-line
 
+  // Listen for trip chip clicks (chip → detail mode) and ambient note-open
+  // previews (note → preview mode, doesn't override an existing detail view).
+  // The trip lookup uses the slim list returned by /api/trips so it works
+  // before the user has entered trip mode in this session.
+  useEffect(() => {
+    const handler = async (e) => {
+      const { name, openDetail } = e.detail || {};
+      if (!name) return;
+      // Don't yank the user out of an active detail-mode trip with a different
+      // ambient preview — they've explicitly committed to that view.
+      if (!openDetail && inDetail) return;
+
+      setMode('trip');
+      // The trips list might not be loaded yet (user hasn't entered trip mode).
+      // Fetch directly so we can resolve the name → id without waiting.
+      let list = trips.trips;
+      if (!list?.length) {
+        const res = await api.get('/api/trips', token);
+        list = res?.trips ?? [];
+      }
+      const match = list.find(t => t.name?.toLowerCase() === name.toLowerCase());
+      if (!match) return;
+      await trips.selectTrip(match.id);
+      if (openDetail) setInDetail(true);
+    };
+    window.addEventListener('daylab:open-trip', handler);
+    return () => window.removeEventListener('daylab:open-trip', handler);
+  }, [trips, inDetail, token]);
+
   // Fetch location history
   useEffect(() => {
     if (!token || mode !== 'timeline') return;

@@ -1251,6 +1251,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   onProjectClick,
   onNoteClick,
   onPlaceClick,
+  onTripClick,
   onGoalClick,
   onCreateNote,      // (name, {silent}) — called when /n creates a new note
   onCreateProject,   // (name) — called when /p creates a new project
@@ -1292,6 +1293,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const onProjectClickRef   = useRef(onProjectClick);
   const onNoteClickRef      = useRef(onNoteClick);
   const onPlaceClickRef     = useRef(onPlaceClick);
+  const onTripClickRef      = useRef(onTripClick);
   const onGoalClickRef      = useRef(onGoalClick);
   const onCreateNoteRef     = useRef(onCreateNote);
   const onCreateProjectRef  = useRef(onCreateProject);
@@ -1320,6 +1322,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { onProjectClickRef.current    = onProjectClick; },   [onProjectClick]);
   useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
   useEffect(() => { onPlaceClickRef.current      = onPlaceClick; },     [onPlaceClick]);
+  useEffect(() => { onTripClickRef.current       = onTripClick; },      [onTripClick]);
   useEffect(() => { onGoalClickRef.current       = onGoalClick; },      [onGoalClick]);
   useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
   useEffect(() => { onCreateProjectRef.current   = onCreateProject; },  [onCreateProject]);
@@ -1888,6 +1891,18 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             editorRef.current.view?.dom?.blur();
           }
           onPlaceClickRef.current(placeEl.getAttribute('data-place-tag'));
+          return true;
+        }
+        const tripEl = t.closest?.('[data-trip-tag]');
+        if (tripEl && onTripClickRef.current) {
+          if (onBlurRef.current && editorRef.current) {
+            const serialised = singleLineRef.current
+              ? docToText(editorRef.current.getJSON())
+              : editorRef.current.getHTML();
+            onBlurRef.current(serialised);
+            editorRef.current.view?.dom?.blur();
+          }
+          onTripClickRef.current(tripEl.getAttribute('data-trip-tag'));
           return true;
         }
         const goalEl = t.closest?.('[data-goal]');

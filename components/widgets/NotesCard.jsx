@@ -7,6 +7,7 @@ import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import { useDbSave, MEM } from "@/lib/db";
 import { ProjectNamesContext, NavigationContext, TripNamesContext } from "@/lib/contexts";
+import { useTripByName } from "@/lib/useTrips";
 import { Card } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 import { DayLabEditor } from "../Editor.jsx";
@@ -22,7 +23,7 @@ import { uploadImageFile, deleteImageFile } from "@/lib/images";
 export default function NotesCard({ project, token, userId, onNoteNamesChange, collapsed: externalCollapsed, onToggle: externalToggle, expandHref }) {
   const pvProjectNames = useContext(ProjectNamesContext);
   const pvTripNames    = useContext(TripNamesContext);
-  const { navigateToProject } = useContext(NavigationContext);
+  const { navigateToProject, navigateToTrip } = useContext(NavigationContext);
   const { drawings: ctxDrawings } = useContext(NoteContext);
   const { theme } = useTheme();
   const dark = theme === 'dark';
@@ -370,6 +371,17 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
 
   const noteImages = useMemo(() => extractImages(activeNote?.content), [activeNote?.content]);
 
+  // Ambient trip preview: when the active note has a /tr trip tag, surface
+  // that trip on the WorldMap (preview only — won't override an active
+  // detail-mode trip). Picks the FIRST trip tag in the note.
+  useEffect(() => {
+    const html = activeNote?.content || '';
+    const m = html.match(/data-trip-tag="([^"]+)"/);
+    const tripName = m?.[1];
+    if (!tripName) return;
+    navigateToTrip(tripName, { openDetail: false });
+  }, [activeNote?.id, activeNote?.content, navigateToTrip]);
+
   // Fetch strokes for drawing tags in the active note
   useEffect(() => {
     if (!token || !allDrawingsList.length || !activeNote?.content) return;
@@ -423,12 +435,25 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
     return tagged.length ? { type: 'map', places: tagged } : null;
   }, [activeNote?.content, allPlaces]);
 
-  // All visual media: photos + drawings + map
+  // Trip mini-map item from the first /tr tag in the note content. Loaded
+  // lazily; renders as a routed mini-map in the media strip.
+  const noteTripName = useMemo(() => {
+    const m = activeNote?.content?.match(/data-trip-tag="([^"]+)"/);
+    return m?.[1] || null;
+  }, [activeNote?.content]);
+  const noteTripData = useTripByName(noteTripName, token);
+  const noteTripItem = useMemo(() => {
+    if (!noteTripData || !(noteTripData.stops?.length)) return null;
+    return { type: 'trip-map', name: noteTripData.name, trip: noteTripData };
+  }, [noteTripData]);
+
+  // All visual media: photos + drawings + map + trip
   const allNoteMedia = useMemo(() => {
     const items = [...notePhotoItems, ...noteDrawingItems];
-    if (noteMapItem) items.push(noteMapItem);
+    if (noteMapItem)  items.push(noteMapItem);
+    if (noteTripItem) items.push(noteTripItem);
     return items;
-  }, [notePhotoItems, noteDrawingItems, noteMapItem]);
+  }, [notePhotoItems, noteDrawingItems, noteMapItem, noteTripItem]);
 
   useEffect(() => {
     if (allNoteMedia.length === 0) setNoteMediaIdx(null);
@@ -638,8 +663,8 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
             {/* Media strip / slideshow for current note */}
             {allNoteMedia.length > 0 && (
               noteMediaIdx != null
-                ? <MediaSlideshow mediaItems={allNoteMedia} index={noteMediaIdx} onClose={() => setNoteMediaIdx(null)} dark={dark} />
-                : <MediaStrip mediaItems={allNoteMedia} onViewItem={i => setNoteMediaIdx(i)} onReorderPhotos={reorderNoteImages} dark={dark} />
+                ? <MediaSlideshow mediaItems={allNoteMedia} index={noteMediaIdx} onClose={() => setNoteMediaIdx(null)} dark={dark} token={token} />
+                : <MediaStrip mediaItems={allNoteMedia} onViewItem={i => setNoteMediaIdx(i)} onReorderPhotos={reorderNoteImages} dark={dark} token={token} />
             )}
             {(noteDragging || noteUploading) ? (
               <DropZone uploading={noteUploading} />
@@ -659,6 +684,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 tripNames={pvTripNames}
                 onCreateNote={addNote}
                 onProjectClick={name => navigateToProject(name)}
+                onTripClick={name => navigateToTrip(name, { openDetail: true })}
                 onNoteClick={name => {
                   const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
                   if (match) selectNote(match.id);
@@ -687,6 +713,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 tripNames={pvTripNames}
                 onCreateNote={addNote}
                 onProjectClick={name => navigateToProject(name)}
+                onTripClick={name => navigateToTrip(name, { openDetail: true })}
                 textColor={"var(--dl-strong)"}
                 mutedColor={"var(--dl-middle)"}
                 color={"var(--dl-highlight)"}

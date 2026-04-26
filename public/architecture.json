@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-03-30T23:01:16.690Z",
+  "generatedAt": "2026-04-26T01:52:18.203Z",
   "client": {
     "framework": "Next.js 16.1.6 (App Router)",
     "libraries": [
@@ -24,10 +24,12 @@
       "@tiptap/react",
       "@tiptap/starter-kit",
       "@tiptap/suggestion",
+      "canvas-confetti",
       "garmin-connect",
       "immer",
       "leaflet",
       "next",
+      "perfect-freehand",
       "postprocessing",
       "react",
       "react-dom",
@@ -184,6 +186,19 @@
       ]
     },
     {
+      "path": "/api/calendar/list",
+      "methods": [
+        "GET"
+      ],
+      "services": [
+        "supabase",
+        "google"
+      ],
+      "tables": [
+        "user_settings"
+      ]
+    },
+    {
       "path": "/api/chat",
       "methods": [
         "POST"
@@ -225,6 +240,21 @@
       ],
       "tables": [
         "user_discovered"
+      ]
+    },
+    {
+      "path": "/api/drawings",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "drawings"
       ]
     },
     {
@@ -637,6 +667,14 @@
       ]
     },
     {
+      "path": "/api/routes/segment",
+      "methods": [
+        "POST"
+      ],
+      "services": [],
+      "tables": []
+    },
+    {
       "path": "/api/scores-backfill",
       "methods": [],
       "services": [
@@ -857,6 +895,37 @@
       "tables": []
     },
     {
+      "path": "/api/trips",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "trip_stops",
+        "trips"
+      ]
+    },
+    {
+      "path": "/api/trips/stops",
+      "methods": [
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "trip_stops",
+        "trips"
+      ]
+    },
+    {
       "path": "/api/tts",
       "methods": [
         "POST"
@@ -924,6 +993,7 @@
     "supabase": {
       "tables": [
         "day_recaps",
+        "drawings",
         "entries",
         "events",
         "feedback",
@@ -936,6 +1006,8 @@
         "notes",
         "projects",
         "tasks",
+        "trip_stops",
+        "trips",
         "user_discovered",
         "user_locations",
         "user_place_types",
@@ -955,9 +1027,11 @@
         "/api/ai",
         "/api/all-tags",
         "/api/calendar",
+        "/api/calendar/list",
         "/api/chat",
         "/api/cron/oura-sync",
         "/api/discovered",
+        "/api/drawings",
         "/api/entries",
         "/api/events",
         "/api/export",
@@ -1007,6 +1081,8 @@
         "/api/tasks/recover",
         "/api/tasks/reorder",
         "/api/transcribe",
+        "/api/trips",
+        "/api/trips/stops",
         "/api/tts",
         "/api/upload-image",
         "/api/voice-action",
@@ -1043,6 +1119,7 @@
       "usedBy": [
         "/api/agent",
         "/api/calendar",
+        "/api/calendar/list",
         "/api/chat",
         "/api/events",
         "/api/voice-action"

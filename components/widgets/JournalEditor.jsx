@@ -8,6 +8,7 @@ import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
+import { useTripByName } from "@/lib/useTrips";
 import { DayLabEditor } from "../Editor.jsx";
 import { getStroke } from "perfect-freehand";
 
@@ -454,6 +455,88 @@ function MiniLocationMap({ places, interactive = false }) {
   );
 }
 
+// ── MiniTripMap — Leaflet map showing a tagged trip's numbered stops + route ─
+// Mirrors MiniLocationMap but renders trip-specific overlays: numbered badges
+// per stop and per-segment polylines (modes coloured the same as WorldMapCard).
+function MiniTripMap({ trip, token, interactive = false }) {
+  const containerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
+
+  useEffect(() => {
+    const stops = (trip?.stops || [])
+      .map(s => ({ ...s, _lat: s.lat ?? s.place?.lat, _lng: s.lng ?? s.place?.lng }))
+      .filter(s => s._lat != null && s._lng != null);
+    if (!stops.length) return;
+    const container = containerRef.current;
+    if (!container) return;
+
+    let cancelled = false;
+    let map = null;
+
+    (async () => {
+      const Lmod = await import('leaflet');
+      await import('leaflet/dist/leaflet.css');
+      const { resolveTripSegments, MODE_STYLE } = await import('@/lib/routing');
+      if (cancelled) return;
+      const L = Lmod.default || Lmod;
+
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
+
+      map = L.map(container, {
+        zoomControl: false, attributionControl: false,
+        scrollWheelZoom: interactive, doubleClickZoom: interactive,
+        touchZoom: interactive, dragging: interactive,
+        boxZoom: false, keyboard: false, tap: false,
+      });
+      L.tileLayer(dark ? MAP_TILES_DARK : MAP_TILES_LIGHT, { maxZoom: 19 }).addTo(map);
+
+      // Numbered stop badges
+      stops.forEach((stop, i) => {
+        const html = `<div style="
+          width:18px;height:18px;border-radius:50%;
+          background:var(--dl-accent);color:#fff;
+          font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+          font-size:10px;font-weight:700;
+          display:flex;align-items:center;justify-content:center;
+          border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);
+        ">${i + 1}</div>`;
+        const icon = L.divIcon({ className: '', html, iconSize: [22, 22], iconAnchor: [11, 11] });
+        L.marker([stop._lat, stop._lng], { icon, interactive: false }).addTo(map);
+      });
+
+      // Fit bounds before async routing arrives so the layout settles.
+      map.fitBounds(L.latLngBounds(stops.map(s => [s._lat, s._lng])),
+        { padding: [16, 16], maxZoom: 14 });
+      requestAnimationFrame(() => { if (!cancelled) map?.invalidateSize(); });
+
+      // Routed polylines per segment (async).
+      const segments = await resolveTripSegments(stops, 'walk', token);
+      if (cancelled) return;
+      segments.forEach(seg => {
+        if (!seg?.coordinates?.length) return;
+        const latlngs = seg.coordinates.map(([lng, lat]) => [lat, lng]);
+        const style = MODE_STYLE[seg.mode] || MODE_STYLE.walk;
+        L.polyline(latlngs, { ...style, interactive: false }).addTo(map);
+      });
+
+      if (!cancelled) mapInstanceRef.current = map;
+    })();
+
+    return () => {
+      cancelled = true;
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
+    };
+  }, [trip, dark, interactive, token]);
+
+  return (
+    <div style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
+    </div>
+  );
+}
+
 // ── MiniDrawingCanvas — renders drawing strokes live (no static thumbnail) ────
 // Avoids the theme-mismatch issue where white strokes disappear on light bg.
 function miniRenderStroke(ctx, stroke, scale, offX, offY) {
@@ -596,7 +679,7 @@ export function MiniDrawingCanvas({ strokes, dark }) {
 // mediaItems: Array<{type:'photo',url:string}|{type:'drawing',title:string,strokes:array}>
 // onViewItem(idx): called with the index into mediaItems
 // onReorderPhotos(newPhotoUrls): called when photos are reordered (drawings stay in place)
-export function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
+export function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark, token }) {
   const containerRef = useRef(null);
   const [dragging, setDragging]   = useState(false);
   const [dragIdx, setDragIdx]     = useState(null);
@@ -721,6 +804,29 @@ export function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
       );
     }
 
+    // Trip mini-card — routed map showing stops + segments for a tagged trip.
+    if (item.type === 'trip-map') {
+      return (
+        <div
+          key={'trip-' + item.name}
+          onPointerDown={e => { e.stopPropagation(); e.currentTarget._tapStart = { x: e.clientX, y: e.clientY }; }}
+          onPointerUp={e => {
+            e.stopPropagation();
+            const s = e.currentTarget._tapStart;
+            if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) < DRAG_THRESHOLD * 2) onViewItem(mediaIdx);
+          }}
+          style={{
+            width: SIZE, height: SIZE, flexShrink: 0, borderRadius: 10, overflow: 'hidden',
+            cursor: 'pointer', position: 'relative', background: '#0d1a24',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+        >
+          <MiniTripMap trip={item.trip} token={token} />
+        </div>
+      );
+    }
+
     // Drawing mini-card
     // Use pointer events (not onClick) so taps fire reliably even when the
     // parent container has pointer-capture set for photo drag-reorder.
@@ -792,7 +898,7 @@ export function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark }) {
 }
 
 // ── MediaSlideshow — carousel that handles both photos and drawing mini-cards ──
-export function MediaSlideshow({ mediaItems, index, onClose, dark }) {
+export function MediaSlideshow({ mediaItems, index, onClose, dark, token }) {
   const [idx, setIdx] = useState(index);
   const pointerStart = useRef(null);
 
@@ -833,6 +939,10 @@ export function MediaSlideshow({ mediaItems, index, onClose, dark }) {
       {item?.type === 'map' ? (
         <div data-no-carousel-swipe style={{ width: '100%', aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
           <MiniLocationMap places={item.places} interactive={true} />
+        </div>
+      ) : item?.type === 'trip-map' ? (
+        <div data-no-carousel-swipe style={{ width: '100%', aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
+          <MiniTripMap trip={item.trip} token={token} interactive={true} />
         </div>
       ) : item?.type === 'drawing' ? (
         <div data-no-carousel-swipe style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden' }}>
@@ -1168,7 +1278,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxPlaces = useContext(PlaceNamesContext);
   const ctxTrips  = useContext(TripNamesContext);
-  const { navigateToProject, navigateToNote, navigateToPlace } = useContext(NavigationContext);
+  const { navigateToProject, navigateToNote, navigateToPlace, navigateToTrip } = useContext(NavigationContext);
 
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1256,12 +1366,31 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     return tagged.length ? { type: 'map', places: tagged } : null;
   }, [value, allPlaces]);
 
-  // All visual media as typed items: photos, then drawings, then map (if any tagged places)
+  // Trip tag — first /tr tag in journal content
+  const journalTripName = useMemo(() => {
+    const m = (value || '').match(/data-trip-tag="([^"]+)"/);
+    return m?.[1] ?? null;
+  }, [value]);
+  const journalTripData = useTripByName(journalTripName, token);
+  const tripItem = useMemo(() => {
+    if (!journalTripData || !journalTripName) return null;
+    return { type: 'trip-map', name: journalTripName, trip: journalTripData };
+  }, [journalTripName, journalTripData]);
+
+  // Ambient trip preview: when this date's journal has a /tr tag, surface the
+  // trip on the world map (preview only — won't override an active detail view).
+  useEffect(() => {
+    if (!journalTripName) return;
+    navigateToTrip(journalTripName, { openDetail: false });
+  }, [date, journalTripName]); // eslint-disable-line
+
+  // All visual media as typed items: photos, drawings, map, trip
   const allMedia = useMemo(() => {
     const items = [...photoItems, ...drawingItems];
     if (mapItem) items.push(mapItem);
+    if (tripItem) items.push(tripItem);
     return items;
-  }, [photoItems, drawingItems, mapItem]);
+  }, [photoItems, drawingItems, mapItem, tripItem]);
 
   // Flat image URL list kept for backward-compat (reorderImages, legacy refs)
   const allImages = useMemo(() => allMedia.map(m => m.type === 'photo' ? m.url : m.thumbnail), [allMedia]);
@@ -1419,9 +1548,9 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
       onDrop={handleDrop}
     >
       {lightboxIdx != null && allMedia.length > 0 ? (
-        <MediaSlideshow mediaItems={allMedia} index={lightboxIdx} onClose={() => setLightboxIdx(null)} dark={dark} />
+        <MediaSlideshow mediaItems={allMedia} index={lightboxIdx} onClose={() => setLightboxIdx(null)} dark={dark} token={token} />
       ) : allMedia.length > 0 ? (
-        <MediaStrip mediaItems={allMedia} onViewItem={i => setLightboxIdx(i)} onReorderPhotos={images.length > 1 ? reorderImages : undefined} dark={dark} />
+        <MediaStrip mediaItems={allMedia} onViewItem={i => setLightboxIdx(i)} onReorderPhotos={images.length > 1 ? reorderImages : undefined} dark={dark} token={token} />
       ) : null}
       {(dragging || uploading) ? (
         <DropZone uploading={uploading} />
@@ -1443,6 +1572,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
           onPlaceClick={name => navigateToPlace(name)}
+          onTripClick={name => navigateToTrip(name, { openDetail: true })}
           placeholder="What's on your mind? Use / for tags."
           textColor={"var(--dl-strong)"}
           mutedColor={"var(--dl-middle)"}
@@ -1689,7 +1819,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
   const ctxPlaces   = useContext(PlaceNamesContext);
   const ctxTrips    = useContext(TripNamesContext);
   const ctxNotes    = useContext(NoteContext);
-  const { navigateToProject, navigateToNote, navigateToPlace } = useContext(NavigationContext);
+  const { navigateToProject, navigateToNote, navigateToPlace, navigateToTrip } = useContext(NavigationContext);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
       <DayLabEditor
@@ -1708,6 +1838,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         onProjectClick={name => navigateToProject(name)}
         onNoteClick={name => navigateToNote(name)}
         onPlaceClick={name => navigateToPlace(name)}
+        onTripClick={name => navigateToTrip(name, { openDetail: true })}
         onEnterCommit={text => { if (text.trim()) onAdd(text.trim()); }}
         onBlur={text => { if (text.trim()) onAdd(text.trim()); }}
       />

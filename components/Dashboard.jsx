@@ -124,28 +124,35 @@ function readDateFromUrl() {
 }
 function useUrlDate() {
   const [selected, _setSelected] = useState(readDateFromUrl);
+  // Track current value in a ref so setSelected doesn't need a functional updater
+  // (calling pushState inside a React state updater triggers a React warning).
+  const selectedRef = useRef(readDateFromUrl());
 
-  // Sync state when browser back/forward fires popstate
+  // Sync state + ref when browser back/forward fires popstate (no pushState here)
   useEffect(() => {
-    const onPop = () => _setSelected(readDateFromUrl());
+    const onPop = () => {
+      const d = readDateFromUrl();
+      selectedRef.current = d;
+      _setSelected(d);
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
   const setSelected = useCallback(valOrFn => {
-    _setSelected(prev => {
-      const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
-      if (next === prev) return prev;
-      const url = new URL(window.location.href);
-      if (next === todayKey()) {
-        url.searchParams.delete('date');
-      } else {
-        url.searchParams.set('date', next);
-      }
-      window.history.pushState({}, '', url);
-      return next;
-    });
-  }, []);
+    const prev = selectedRef.current;
+    const next = typeof valOrFn === 'function' ? valOrFn(prev) : valOrFn;
+    if (next === prev) return;
+    selectedRef.current = next;
+    _setSelected(next);
+    const url = new URL(window.location.href);
+    if (next === todayKey()) {
+      url.searchParams.delete('date');
+    } else {
+      url.searchParams.set('date', next);
+    }
+    window.history.pushState({}, '', url);
+  }, []); // eslint-disable-line
 
   return [selected, setSelected];
 }
@@ -720,6 +727,15 @@ function DashboardInner() {
         } else {
           window.dispatchEvent(new CustomEvent('daylab:go-to-place', { detail: { name } }));
         }
+      },
+      navigateToTrip: (name, opts = {}) => {
+        // Open the trip on the map. `opts.openDetail = true` enters detail
+        // mode (used by /tr chip click); falsy just previews (used by note
+        // open for ambient context).
+        const fire = () => window.dispatchEvent(new CustomEvent(
+          'daylab:open-trip', { detail: { name, openDetail: !!opts.openDetail } }));
+        if (timelineCollapsed) { toggleTimeline(); setTimeout(fire, 500); }
+        else fire();
       },
     }}>
     <div style={{background:"var(--dl-bg)",height:"100dvh",color:"var(--dl-strong)",display:"flex",flexDirection:"column",overflow:"hidden",position:"relative"}}>
