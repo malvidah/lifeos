@@ -871,7 +871,7 @@ function Birds({ projects }) {
       });
   }, [projects]);
 
-  return birdData.map(b => <Bird key={b.key} {...b} />);
+  return birdData.map(({ key, ...rest }) => <Bird key={key} {...rest} />);
 }
 
 // Tapered wing shape — wide at body, pointed at tip

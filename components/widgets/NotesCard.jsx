@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import { useDbSave, MEM } from "@/lib/db";
-import { ProjectNamesContext, NavigationContext } from "@/lib/contexts";
+import { ProjectNamesContext, NavigationContext, TripNamesContext } from "@/lib/contexts";
 import { Card } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 import { DayLabEditor } from "../Editor.jsx";
@@ -21,6 +21,7 @@ import { uploadImageFile, deleteImageFile } from "@/lib/images";
 // onNoteNamesChange: called whenever note list changes so Dashboard can sync NoteContext
 export default function NotesCard({ project, token, userId, onNoteNamesChange, collapsed: externalCollapsed, onToggle: externalToggle, expandHref }) {
   const pvProjectNames = useContext(ProjectNamesContext);
+  const pvTripNames    = useContext(TripNamesContext);
   const { navigateToProject } = useContext(NavigationContext);
   const { drawings: ctxDrawings } = useContext(NoteContext);
   const { theme } = useTheme();
@@ -655,6 +656,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 onImageDelete={src => deleteImageFile(src, token)}
                 noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
                 projectNames={pvProjectNames}
+                tripNames={pvTripNames}
                 onCreateNote={addNote}
                 onProjectClick={name => navigateToProject(name)}
                 onNoteClick={name => {
@@ -682,6 +684,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 onImageUpload={file => uploadImageFile(file, token)}
                 noteNames={[]}
                 projectNames={pvProjectNames}
+                tripNames={pvTripNames}
                 onCreateNote={addNote}
                 onProjectClick={name => navigateToProject(name)}
                 textColor={"var(--dl-strong)"}

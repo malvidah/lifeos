@@ -6,6 +6,11 @@ import { getCachedLocation, DEFAULT_LOCATION } from "@/lib/weather";
 import { useTheme } from "@/lib/theme";
 import dynamic from "next/dynamic";
 import { feature as topoFeature } from "topojson-client";
+import { useTrips } from "@/lib/useTrips";
+import { resolveTripSegments, MODE_STYLE } from "@/lib/routing";
+import TripScroller from "./trip/TripScroller.jsx";
+import TripHeader from "./trip/TripHeader.jsx";
+import TripStopsRow from "./trip/TripStopsRow.jsx";
 
 // ─── Pin color palette for user-created types ──────────────────────────────
 const PIN_COLORS = [
@@ -27,6 +32,22 @@ const PIN_COLORS = [
 const TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png';
 const TILES_DARK = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png';
 const TILE_ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>';
+
+// Topo: shows hiking/cycling trails, contours, gravel — useful for trip planning.
+// OpenTopoMap is free with attribution; rate limited (~1 req/sec/IP) so we
+// keep the UI responsive but don't over-fetch via aggressive zoom changes.
+const TILES_TOPO = 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png';
+const TILE_ATTR_TOPO = 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> contributors, SRTM | &copy; <a href="https://opentopomap.org">OpenTopoMap</a>';
+
+// Satellite: Esri World Imagery, free for non-commercial.
+const TILES_SAT  = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+const TILE_ATTR_SAT  = 'Imagery &copy; <a href="https://www.esri.com/">Esri</a>, Maxar, Earthstar Geographics';
+
+const TILE_PROVIDERS = {
+  basic:  { url: TILES_LIGHT, urlDark: TILES_DARK, attribution: TILE_ATTR,      maxZoom: 19 },
+  topo:   { url: TILES_TOPO,  urlDark: TILES_TOPO, attribution: TILE_ATTR_TOPO, maxZoom: 17 },
+  sat:    { url: TILES_SAT,   urlDark: TILES_SAT,  attribution: TILE_ATTR_SAT,  maxZoom: 19 },
+};
 
 // ─── Boundary data for discovered regions ────────────────────────────────────
 const COUNTRIES_TOPOJSON_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
@@ -67,8 +88,10 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
     setResults(places.filter(p => p.name.toLowerCase().includes(q)).slice(0, 5));
   }, [query, places]);
 
-  // Search via Photon (OSM-based, good POI search, native location bias)
-  // Falls back to Nominatim if Photon returns nothing
+  // Search runs Photon and Nominatim in PARALLEL and merges results, sorted by
+  // distance from the current map centre. Photon has good name match and
+  // built-in location bias; Nominatim catches POIs Photon misses (transit
+  // stations, named buildings) when constrained to the current view.
   useEffect(() => {
     clearTimeout(timerRef.current);
     if (!query.trim() || query.length < 2) { setGeoResults([]); setSearching(false); return; }
@@ -77,69 +100,85 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
       try {
         const map = mapInstance?.current;
         const loc = map ? map.getCenter() : (getCachedLocation() || DEFAULT_LOCATION);
+        const bounds = map?.getBounds();
 
-        // Photon API — location-biased POI search (free, no key)
         const photonUrl = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${loc.lat}&lon=${loc.lng}&limit=8`;
-        const res = await fetch(photonUrl);
-        if (res.ok) {
-          const data = await res.json();
-          const features = data?.features || [];
-          if (features.length > 0) {
-            setGeoResults(features.map(f => {
-              const p = f.properties || {};
-              const coords = f.geometry?.coordinates || [];
-              const name = p.name || p.street || query;
-              const area = p.city || p.district || p.county || p.state || '';
-              const osmType = p.osm_value || p.type || '';
-              return {
-                name: name + (area ? `, ${area}` : ''),
-                rawName: name,
-                fullName: [name, p.street, p.city, p.state, p.country].filter(Boolean).join(', '),
-                lat: coords[1],
-                lng: coords[0],
-                type: osmType,
-                country: p.country || '',
-                street: p.street || '',
-                city: p.city || p.district || '',
-                state: p.state || '',
-                osmKey: p.osm_key || '',
-              };
-            }));
-            setSearching(false);
-            return;
+        // Nominatim viewbox is "left,top,right,bottom" (lon,lat,lon,lat).
+        // Soft bias (no &bounded=1) so global queries still return when the user
+        // is searching for somewhere far from the current view.
+        const viewbox = bounds
+          ? `${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()},${bounds.getSouth()}`
+          : null;
+        const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=8&addressdetails=1${viewbox ? `&viewbox=${viewbox}` : ''}`;
+
+        const [photonR, nomR] = await Promise.allSettled([
+          fetch(photonUrl).then(r => r.ok ? r.json() : null),
+          fetch(nomUrl, { headers: { 'User-Agent': 'DayLab/1.0' } }).then(r => r.ok ? r.json() : null),
+        ]);
+
+        const merged = [];
+        const seen   = new Set(); // dedup by ~rounded lat/lng
+
+        const dist = (lat, lng) => {
+          const dlat = lat - loc.lat, dlng = lng - loc.lng;
+          return Math.sqrt(dlat * dlat + dlng * dlng);
+        };
+        const addOnce = (item) => {
+          const k = `${item.lat.toFixed(4)},${item.lng.toFixed(4)}`;
+          if (seen.has(k)) return;
+          seen.add(k);
+          merged.push({ ...item, _dist: dist(item.lat, item.lng) });
+        };
+
+        // Photon features
+        if (photonR.status === 'fulfilled' && photonR.value?.features) {
+          for (const f of photonR.value.features) {
+            const p = f.properties || {};
+            const coords = f.geometry?.coordinates || [];
+            if (coords.length < 2) continue;
+            const name = p.name || p.street || query;
+            const area = p.city || p.district || p.county || p.state || '';
+            addOnce({
+              name: name + (area ? `, ${area}` : ''),
+              rawName: name,
+              fullName: [name, p.street, p.city, p.state, p.country].filter(Boolean).join(', '),
+              lat: coords[1],
+              lng: coords[0],
+              type: p.osm_value || p.type || '',
+              country: p.country || '',
+              street: p.street || '',
+              city: p.city || p.district || '',
+              state: p.state || '',
+              osmKey: p.osm_key || '',
+            });
           }
         }
 
-        // Fallback: Nominatim for broader coverage
-        const nomUrl = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=6&addressdetails=1`;
-        const nomRes = await fetch(nomUrl, { headers: { 'User-Agent': 'DayLab/1.0' } });
-        if (nomRes.ok) {
-          const nomData = await nomRes.json();
-          const withDist = nomData.map(d => {
-            const dlat = parseFloat(d.lat) - loc.lat;
-            const dlng = parseFloat(d.lon) - loc.lng;
-            return { ...d, dist: Math.sqrt(dlat * dlat + dlng * dlng) };
-          });
-          withDist.sort((a, b) => a.dist - b.dist);
-          setGeoResults(withDist.map(d => {
+        // Nominatim entries
+        if (nomR.status === 'fulfilled' && Array.isArray(nomR.value)) {
+          for (const d of nomR.value) {
+            const lat = parseFloat(d.lat), lng = parseFloat(d.lon);
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
             const addr = d.address || {};
             const name = addr.amenity || addr.shop || addr.tourism || addr.leisure
-              || addr.restaurant || addr.cafe || addr.building
+              || addr.railway || addr.public_transport || addr.station
               || d.display_name.split(',')[0];
             const area = addr.neighbourhood || addr.suburb || addr.city_district
               || addr.city || addr.town || '';
-            return {
+            addOnce({
               name: name + (area ? `, ${area}` : ''),
               rawName: name,
               fullName: d.display_name,
-              lat: parseFloat(d.lat),
-              lng: parseFloat(d.lon),
+              lat, lng,
               type: d.type,
               country: addr.country || '',
               state: addr.state || '',
-            };
-          }));
+            });
+          }
         }
+
+        merged.sort((a, b) => a._dist - b._dist);
+        setGeoResults(merged.slice(0, 8).map(({ _dist, ...rest }) => rest));
       } catch {}
       setSearching(false);
     }, 350);
@@ -378,24 +417,20 @@ function MapBottomStrip({ collapsed, onToggle, children }) {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       pointerEvents: 'none',
     }}>
-      {/* Chevron toggle */}
+      {/* Chevron toggle — bare floating glyph, no pill */}
       <button onClick={onToggle} style={{
         pointerEvents: 'auto',
-        background: 'var(--dl-glass)',
-        backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-        border: '1px solid var(--dl-glass-border)',
-        borderRadius: '8px 8px 0 0',
-        padding: '2px 16px 0',
+        background: 'none', border: 'none', padding: '4px 8px',
         cursor: 'pointer',
         color: 'var(--dl-middle)',
         display: 'flex', alignItems: 'center',
-        opacity: 0.5,
+        opacity: 0.4,
         transition: 'opacity 0.15s',
       }}
         onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-        onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
+        onMouseLeave={e => e.currentTarget.style.opacity = '0.4'}
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
           style={{ transform: collapsed ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s ease' }}>
           <polyline points="6 9 12 15 18 9"/>
         </svg>
@@ -449,6 +484,26 @@ function MapInner({ token }) {
   const [previewGeo, setPreviewGeo] = useState(null); // search result preview before adding
   const [bottomCollapsed, setBottomCollapsed] = useState(false);
   const [mapBounds, setMapBounds] = useState(null); // track visible bounds for carousel
+  // Trip mode: lazy-loaded, only fetches when the user enters trip mode.
+  const trips = useTrips(token, { enabled: mode === 'trip' });
+  const todayStr = new Date().toISOString().slice(0, 10);
+  // Tile basemap: basic (default) → topo (trails, contours) → satellite. Persisted
+  // per session via localStorage so a topo planner stays in topo on refresh.
+  const [tileMode, setTileModeRaw] = useState(() => {
+    if (typeof window === 'undefined') return 'basic';
+    const stored = localStorage.getItem('daylab:mapTileMode');
+    return ['basic','topo','sat'].includes(stored) ? stored : 'basic';
+  });
+  const setTileMode = useCallback((m) => {
+    setTileModeRaw(m);
+    try { localStorage.setItem('daylab:mapTileMode', m); } catch {}
+  }, []);
+  // Preview vs detail: clicking a trip card the first time PREVIEWS the trip
+  // on the map (route shown, scroller stays). Clicking the same card again
+  // enters DETAIL mode (top-left header, bottom strip becomes stop cards).
+  const [inDetail, setInDetail] = useState(false);
+  // Reset the detail flag whenever the selected trip changes or trip mode exits.
+  useEffect(() => { if (!trips.selectedTrip || mode !== 'trip') setInDetail(false); }, [trips.selectedTrip, mode]);
   const discoveredLayerRef = useRef(null);
   const statesLayerRef = useRef(null);
   const geoJsonCacheRef = useRef(null);
@@ -479,9 +534,10 @@ function MapInner({ token }) {
 
     L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-    tileLayerRef.current = L.tileLayer(isDark ? TILES_DARK : TILES_LIGHT, {
-      attribution: TILE_ATTR,
-      maxZoom: 19,
+    const provider = TILE_PROVIDERS[tileMode] || TILE_PROVIDERS.basic;
+    tileLayerRef.current = L.tileLayer(isDark ? provider.urlDark : provider.url, {
+      attribution: provider.attribution,
+      maxZoom: provider.maxZoom,
       keepBuffer: 8,
       updateWhenZooming: false, // don't load tiles mid-zoom animation
       updateWhenIdle: true,     // load after zoom settles
@@ -497,10 +553,9 @@ function MapInner({ token }) {
     map.on('dblclick', (e) => {
       e.originalEvent.preventDefault();
       setSelectedPlace(null);
-      setAddingPlace({ lat: e.latlng.lat, lng: e.latlng.lng });
-      setNewName('');
-      setNewType('');
-      setNewNotes('');
+      // dblclickHandlerRef holds the live handler — trip mode adds a stop,
+      // other modes open the place editor.
+      dblclickHandlerRef.current?.(e.latlng);
     });
     // Disable default double-click zoom since we use it for pins
     map.doubleClickZoom.disable();
@@ -514,19 +569,20 @@ function MapInner({ token }) {
     return () => { map.remove(); mapInstance.current = null; };
   }, [leafletReady]); // eslint-disable-line
 
-  // Switch tiles on theme change
+  // Switch tiles on theme or basemap change.
   useEffect(() => {
     if (!mapInstance.current || !tileLayerRef.current) return;
     const L = LRef.current;
+    const provider = TILE_PROVIDERS[tileMode] || TILE_PROVIDERS.basic;
     tileLayerRef.current.remove();
-    tileLayerRef.current = L.tileLayer(isDark ? TILES_DARK : TILES_LIGHT, {
-      attribution: TILE_ATTR,
-      maxZoom: 19,
+    tileLayerRef.current = L.tileLayer(isDark ? provider.urlDark : provider.url, {
+      attribution: provider.attribution,
+      maxZoom: provider.maxZoom,
       keepBuffer: 8,
       updateWhenZooming: false,
       updateWhenIdle: true,
     }).addTo(mapInstance.current);
-  }, [isDark]);
+  }, [isDark, tileMode]);
 
   // Render discovered country boundaries
   useEffect(() => {
@@ -828,6 +884,10 @@ function MapInner({ token }) {
     const map = mapInstance.current;
     markersRef.current.forEach(m => m.remove());
     markersRef.current = [];
+    // Place pins only render in places mode. In trip mode they're hidden so the
+    // map stays focused on the trip's own stops; add-to-trip from existing
+    // places will live in the search results / a dedicated picker, not via
+    // clicking pins on the map.
     if (mode !== 'places') return;
 
     // Helper: get pin color from place type
@@ -870,6 +930,186 @@ function MapInner({ token }) {
       markersRef.current.push(marker);
     });
   }, [places, placeTypes, mode, activeFilter, leafletReady, isDark, selectedPlace]); // eslint-disable-line
+
+  // Fit map to a trip's bounds — fires ONLY when the selected trip changes
+  // (not on every stop edit), so editing waypoints doesn't reset zoom/pan.
+  useEffect(() => {
+    if (!mapInstance.current || !leafletReady) return;
+    if (mode !== 'trip' || !trips.selectedTrip) return;
+    const L = LRef.current;
+    const stops = (trips.selectedTrip.stops || [])
+      .map(s => [s.lat ?? s.place?.lat, s.lng ?? s.place?.lng])
+      .filter(([la, ln]) => la != null && ln != null);
+    if (!stops.length) return;
+    const bounds = L.latLngBounds(stops);
+    if (bounds.isValid()) {
+      mapInstance.current.fitBounds(bounds, { padding: [60, 60], maxZoom: 14, animate: true });
+    }
+  }, [trips.selectedTrip?.id, mode, leafletReady]); // eslint-disable-line
+
+  // ── Trip layer: numbered badges + per-segment routed polylines ────────────
+  // Renders for the currently-selected trip (preview AND detail). Numbered
+  // badge markers go OVER the place pins; polylines render below them.
+  // Auto-fits the map to the route bounds whenever the trip switches.
+  const tripLayerRef = useRef(null);
+  useEffect(() => {
+    if (!mapInstance.current || !leafletReady) return;
+    const L   = LRef.current;
+    const map = mapInstance.current;
+    // Tear down any previous trip layer first.
+    if (tripLayerRef.current) {
+      map.removeLayer(tripLayerRef.current);
+      tripLayerRef.current = null;
+    }
+    if (mode !== 'trip' || !trips.selectedTrip) return;
+    // Stops own their own lat/lng directly (post-migration). Fall back to the
+    // linked place's coords if a stop somehow has no embedded geometry.
+    const stops = (trips.selectedTrip.stops || []).map(s => ({
+      ...s,
+      _lat: s.lat ?? s.place?.lat,
+      _lng: s.lng ?? s.place?.lng,
+    })).filter(s => s._lat != null && s._lng != null);
+    if (!stops.length) return;
+
+    const layer = L.layerGroup().addTo(map);
+    tripLayerRef.current = layer;
+    let cancelled = false;
+    // Polyline references per segment index — populated when routing resolves.
+    // Used by via marker drag handlers to update the line in real time without
+    // hitting the routing API on every drag tick.
+    const polysBySeg = {};
+
+    // Numbered badges, rendered above the place pin (no offset; the divIcon
+    // sits on the pin centre and shows a small "1", "2"... in the accent colour).
+    stops.forEach((stop, i) => {
+      const html = `<div style="
+        width:18px;height:18px;border-radius:50%;
+        background:var(--dl-accent);color:#fff;
+        font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+        font-size:10px;font-weight:700;
+        display:flex;align-items:center;justify-content:center;
+        border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);
+      ">${i + 1}</div>`;
+      const icon = L.divIcon({
+        className: 'trip-stop-badge',
+        html,
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      });
+      L.marker([stop._lat, stop._lng], { icon, interactive: false }).addTo(layer);
+    });
+
+    // Via waypoints — small draggable dots in the segment's mode colour.
+    // Drag to reshape the route. Click to remove. Smaller than the numbered
+    // stops so the visual hierarchy stays clear.
+    stops.forEach((stop, i) => {
+      const via = Array.isArray(stop.via_waypoints) ? stop.via_waypoints : [];
+      if (!via.length) return;
+      const segMode = stop.profile_to_next || 'walk';
+      const segColor = (MODE_STYLE[segMode] || MODE_STYLE.walk).color;
+      via.forEach((vw, vi) => {
+        const html = `<div style="
+          width:11px;height:11px;border-radius:50%;
+          background:${segColor};
+          border:2px solid #fff;
+          box-shadow:0 1px 3px rgba(0,0,0,0.4);
+          cursor:grab;
+        "></div>`;
+        const icon = L.divIcon({
+          className: 'trip-via-dot',
+          html,
+          iconSize: [15, 15],
+          iconAnchor: [7.5, 7.5],
+        });
+        const marker = L.marker([vw.lat, vw.lng], {
+          icon, draggable: true,
+          title: 'Drag to reshape · Click to remove',
+        }).addTo(layer);
+
+        // No live polyline preview during drag — straight-line shimmying
+        // looked worse than letting the polyline sit still. The real routed
+        // path refreshes on dragend (a single API call).
+        marker.on('dragend', (e) => {
+          const ll = e.target.getLatLng();
+          const newVia = via.map((w, idx) => idx === vi ? { lat: ll.lat, lng: ll.lng } : w);
+          trips.updateStop(stop.id, { via_waypoints: newVia });
+        });
+        marker.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          const newVia = via.filter((_, idx) => idx !== vi);
+          trips.updateStop(stop.id, { via_waypoints: newVia });
+        });
+      });
+    });
+
+    // (Auto-fit moved to a separate effect — only on trip switch, never on
+    // every stop edit, so editing waypoints doesn't repeatedly reset zoom.)
+
+    // Resolve segments async; draw polylines as they come back.
+    // Each polyline is clickable: clicking inserts a via waypoint at the click
+    // location into the segment's `via_waypoints` array, which re-routes the
+    // segment through that point. Drag-to-refine route shaping.
+    resolveTripSegments(stops, 'walk', token).then(segments => {
+      if (cancelled) return;
+      segments.forEach((seg, i) => {
+        if (!seg?.coordinates?.length) return;
+        const latlngs = seg.coordinates.map(([lng, lat]) => [lat, lng]);
+        const style = MODE_STYLE[seg.mode] || MODE_STYLE.walk;
+        // Synthetic (transit) segments are straight lines — refining them with
+        // via waypoints doesn't make sense, so leave those non-interactive.
+        const interactive = !seg.synthetic;
+        const poly = L.polyline(latlngs, { ...style, interactive }).addTo(layer);
+        polysBySeg[i] = poly;
+        if (!interactive) return;
+
+        // Hover cue: bump line weight so the user can tell it's clickable.
+        poly.on('mouseover', () => poly.setStyle({ weight: style.weight + 2 }));
+        poly.on('mouseout',  () => poly.setStyle({ weight: style.weight }));
+
+        poly.on('click', (e) => {
+          L.DomEvent.stopPropagation(e);
+          const fromStop = stops[i];
+          if (!fromStop?.id) return;
+          const existing = Array.isArray(fromStop.via_waypoints) ? fromStop.via_waypoints : [];
+          const clickPt  = { lat: e.latlng.lat, lng: e.latlng.lng };
+
+          // Insert the new waypoint at the right position along the route, not
+          // just at the end — otherwise out-of-order clicks make the engine
+          // route through them in the wrong sequence and the path branches /
+          // doubles back. We find each via's position along the polyline
+          // (index of nearest polyline coord) and insert the new one in order.
+          const polyPts = seg.coordinates.map(([lng, lat]) => [lat, lng]);
+          const sqDist  = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2;
+          const idxOnLine = (pt) => {
+            let bestIdx = 0, bestD = Infinity;
+            const arr = [pt.lat, pt.lng];
+            for (let k = 0; k < polyPts.length; k++) {
+              const d = sqDist(polyPts[k], arr);
+              if (d < bestD) { bestD = d; bestIdx = k; }
+            }
+            return bestIdx;
+          };
+          const clickIdx   = idxOnLine(clickPt);
+          const viaIndices = existing.map(v => idxOnLine(v));
+          let insertPos = existing.length;
+          for (let k = 0; k < viaIndices.length; k++) {
+            if (clickIdx < viaIndices[k]) { insertPos = k; break; }
+          }
+          const newVia = [...existing];
+          newVia.splice(insertPos, 0, clickPt);
+          trips.updateStop(fromStop.id, { via_waypoints: newVia });
+        });
+      });
+    });
+
+    return () => {
+      cancelled = true;
+      if (tripLayerRef.current) {
+        map.removeLayer(tripLayerRef.current);
+        tripLayerRef.current = null;
+      }
+    };
+  }, [trips.selectedTrip, mode, leafletReady, token]);
 
   // Current location state — updated by locate button or cached
   const [userLoc, setUserLoc] = useState(() => getCachedLocation());
@@ -1025,6 +1265,36 @@ function MapInner({ token }) {
     setNewNotes('');
   }, [addingPlace, newName, newType, newNotes, token]);
 
+  // Trip mode: double-click on the map drops a new stop. Stops own their own
+  // lat/lng/label — they're NOT auto-promoted to saved places, so casual
+  // route stopovers (gas stations, BART stops, lunch spots) don't pollute
+  // the user's saved places list. To save a stop as a place, the user can
+  // do that explicitly later.
+  const addStopAtPoint = useCallback(async (lat, lng) => {
+    if (!trips.selectedTrip || !token) return;
+    const tripId  = trips.selectedTrip.id;
+    const stopNum = (trips.selectedTrip.stops?.length || 0) + 1;
+    await trips.addStop({ trip_id: tripId, lat, lng, label: `Stop ${stopNum}` });
+  }, [trips, token]);
+
+  // Routes the dblclick map gesture: trip mode adds a stop, anything else
+  // opens the inline place editor. A ref keeps the latest behaviour reachable
+  // from the once-registered Leaflet handler.
+  const dblclickHandlerRef = useRef(() => {});
+  useEffect(() => {
+    dblclickHandlerRef.current = (latlng) => {
+      // Adding a stop requires being explicitly in DETAIL mode for a trip —
+      // preview mode shouldn't accept new stops, since the user hasn't yet
+      // committed to "editing" that trip.
+      if (mode === 'trip' && inDetail && trips.selectedTrip) {
+        addStopAtPoint(latlng.lat, latlng.lng);
+      } else {
+        setAddingPlace({ lat: latlng.lat, lng: latlng.lng });
+        setNewName(''); setNewType(''); setNewNotes('');
+      }
+    };
+  }, [mode, inDetail, trips.selectedTrip, addStopAtPoint]);
+
   // Create new type — auto-assigns next color from palette
   const createType = useCallback(async (name) => {
     const trimmed = (name || newTypeName).trim();
@@ -1109,9 +1379,21 @@ function MapInner({ token }) {
   const goToPlace = useCallback((place) => {
     if (!mapInstance.current) return;
     mapInstance.current.flyTo([place.lat, place.lng], 16, { duration: 0.8 });
+    // Trip-detail mode: picking a saved place from search adds it directly as
+    // a stop (no preview pane, since the user already chose it explicitly).
+    // The new stop links to the place via place_id so future renames propagate.
+    if (mode === 'trip' && inDetail && trips.selectedTrip) {
+      trips.addStop({
+        trip_id: trips.selectedTrip.id,
+        lat: place.lat, lng: place.lng,
+        label: place.name,
+        place_id: place.id,
+      });
+      return;
+    }
     setSelectedPlace(place);
     setAddingPlace(null);
-  }, []);
+  }, [mode, inDetail, trips]);
 
   // Track last geo search result for area detection
   const lastGeoRef = useRef(null);
@@ -1311,8 +1593,27 @@ function MapInner({ token }) {
   // Background color to match tiles while loading
   const bgColor = isDark ? 'var(--dl-bg)' : '#F6F4F0';
 
+  // Stop horizontal-dominant wheel events from bubbling to the dashboard's
+  // page-swipe handler. Leaflet uses wheel for zoom (vertical), so we only
+  // need to swallow horizontal swipes. React's onWheelCapture goes through
+  // delegated dispatch and won't stop the native PageContainer listener — we
+  // must attach a real native listener in capture phase.
+  const cardOuterRef = useRef(null);
+  useEffect(() => {
+    const el = cardOuterRef.current;
+    if (!el) return;
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) e.stopPropagation();
+    };
+    el.addEventListener('wheel', onWheel, { capture: true, passive: true });
+    return () => el.removeEventListener('wheel', onWheel, { capture: true });
+  }, []);
+
   return (
-    <div style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 520, background: bgColor, userSelect: 'none', WebkitUserSelect: 'none' }}>
+    <div
+      ref={cardOuterRef}
+      data-no-page-swipe
+      style={{ borderRadius: 12, overflow: 'hidden', position: 'relative', height: 520, background: bgColor, userSelect: 'none', WebkitUserSelect: 'none' }}>
       <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
 
       {/* Empty state hint when no places exist */}
@@ -1353,9 +1654,25 @@ function MapInner({ token }) {
           100% { transform: scale(1); opacity: 0; }
         }
         .leaflet-tile-pane {
-          filter: ${isDark
-            ? 'saturate(0.15) sepia(0.1) brightness(0.65) contrast(1.1)'
-            : 'grayscale(1) sepia(0.2) saturate(0.4) brightness(1.02) contrast(1.15)'
+          filter: ${
+            tileMode === 'topo'
+              // Topo: heavy desaturation so coloured route lines + waypoints
+              // are the loudest thing on screen. Trail texture / contour shapes
+              // are still readable as light gray, but no chromatic noise.
+              ? (isDark
+                ? 'grayscale(0.7) saturate(0.25) brightness(0.78) contrast(0.78)'
+                : 'grayscale(0.7) saturate(0.25) brightness(1.12) contrast(0.78)')
+              : tileMode === 'sat'
+              // Satellite: desaturate aggressively — keep just enough hue to
+              // recognise greenery vs water vs urban, but knock the imagery
+              // back to a quiet base layer so the route line dominates.
+              ? (isDark
+                ? 'saturate(0.3) brightness(0.85) contrast(0.95)'
+                : 'saturate(0.3) brightness(1.05) contrast(0.95)')
+              // Basic CARTO: existing branded sepia/gray look.
+              : (isDark
+                ? 'saturate(0.15) sepia(0.1) brightness(0.65) contrast(1.1)'
+                : 'grayscale(1) sepia(0.2) saturate(0.4) brightness(1.02) contrast(1.15)')
           };
         }
         .leaflet-fade-anim .leaflet-tile { opacity: 0; transition: opacity 0.2s; }
@@ -1371,6 +1688,18 @@ function MapInner({ token }) {
         zIndex: 1000, display: 'flex', flexDirection: 'column', gap: 2,
       }}>
         {[
+          // Basemap toggle — cycles basic → topo → satellite. Sits above the
+          // location button. Active mode shown by the icon (map / mountain /
+          // globe). Topo + satellite are useful for trip planning.
+          { title: `Basemap: ${tileMode}`,
+            onClick: () => setTileMode(tileMode === 'basic' ? 'topo' : tileMode === 'topo' ? 'sat' : 'basic'),
+            icon: tileMode === 'topo'
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 20l5-9 4 6 3-4 6 7"/><circle cx="17" cy="6" r="2"/></svg>
+              : tileMode === 'sat'
+              ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a13 13 0 0 1 0 18M12 3a13 13 0 0 0 0 18"/></svg>
+              : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v16M15 6v16"/></svg>,
+            color: 'var(--dl-highlight)',
+          },
           { title: 'Find my location', onClick: locateMe, icon: locating
             ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 1s linear infinite' }}><circle cx="12" cy="12" r="10"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
             : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>,
@@ -1396,11 +1725,15 @@ function MapInner({ token }) {
         ))}
       </div>
 
-      {/* Top bar: mode toggle (left) + search pill (center) + add button (right) */}
+      {/* Top bar:
+            row 1 = [mode toggle] [search] [+ add]
+            row 2 = [trip header]   (only in trip-detail mode, aligned left under
+                                     the mode toggle) */}
       <div style={{
         position: 'absolute', top: 10, left: 10, right: 10, zIndex: 1000,
-        display: 'flex', alignItems: 'center', gap: 6,
+        display: 'flex', flexDirection: 'column', gap: 6,
       }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
         {/* Mode toggle — glassmorphic pill */}
         <div style={{
           display: 'flex', gap: 1,
@@ -1435,9 +1768,25 @@ function MapInner({ token }) {
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
             </svg>
           </button>
+          <button onClick={() => { setMode('trip'); setAddingPlace(null); setSelectedPlace(null); }}
+            title="Trip planner"
+            style={{
+              background: mode === 'trip' ? 'var(--dl-accent-15)' : 'none',
+              border: 'none', borderRadius: 100, padding: '5px 8px', cursor: 'pointer',
+              color: mode === 'trip' ? 'var(--dl-accent)' : 'var(--dl-middle)',
+              display: 'flex', alignItems: 'center', transition: 'all 0.15s',
+            }}>
+            {/* Curved route between two pins */}
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="5" cy="18" r="2" />
+              <circle cx="19" cy="6" r="2" />
+              <path d="M5 16C5 11 14 13 14 8" />
+            </svg>
+          </button>
         </div>
 
-        {/* Search pill */}
+        {/* Search pill — useful in every mode, including trip mode for finding
+            places to add as stops. */}
         <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} mapInstance={mapInstance} />
 
         {/* + Add pin button — glassmorphic */}
@@ -1459,6 +1808,19 @@ function MapInner({ token }) {
             </svg>
           </button>
         )}
+      </div>
+
+      {/* Row 2: trip header (detail mode only). Aligned left under the mode toggle. */}
+      {mode === 'trip' && inDetail && trips.selectedTrip && (
+        <div style={{ alignSelf: 'flex-start' }}>
+          <TripHeader
+            trip={trips.selectedTrip}
+            onBack={() => setInDetail(false)}
+            onUpdate={trips.updateTrip}
+            onDelete={async (id) => { await trips.deleteTrip(id); }}
+          />
+        </div>
+      )}
       </div>
 
       {/* Type filter pills — below top bar */}
@@ -1500,8 +1862,37 @@ function MapInner({ token }) {
       {/* ─── Map Bottom Strip ─── */}
       <MapBottomStrip collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed(c => !c)}>
 
+      {/* Trip mode bottom strip:
+            - Detail mode → stop cards
+            - Otherwise (browsing or previewing) → trip scroller, with the
+              previewed trip highlighted + auto-centred. */}
+      {mode === 'trip' && (
+        inDetail && trips.selectedTrip
+          ? <TripStopsRow
+              trip={trips.selectedTrip}
+              token={token}
+              onUpdateStop={trips.updateStop}
+              onDeleteStop={trips.deleteStop}
+              onReorder={trips.reorderStops}
+            />
+          : <TripScroller
+              trips={trips.trips}
+              todayStr={todayStr}
+              previewedId={trips.selectedTrip?.id || null}
+              onPreview={(id) => trips.selectTrip(id)}
+              onEnterDetail={(id) => {
+                if (trips.selectedTrip?.id !== id) trips.selectTrip(id);
+                setInDetail(true);
+              }}
+              onCreate={async () => {
+                const t = await trips.createTrip({ name: 'New trip' });
+                if (t?.id) { await trips.selectTrip(t.id); setInDetail(true); }
+              }}
+            />
+      )}
+
       {/* Place carousel */}
-      {(visiblePlaces.length > 0 || addingPlace) && !previewGeo && !selectedDiscovered && (
+      {mode !== 'trip' && (visiblePlaces.length > 0 || addingPlace) && !previewGeo && !selectedDiscovered && (
         <div style={{ pointerEvents: 'none' }}>
           <div ref={carouselRef}
             onMouseDown={e => {
@@ -1789,7 +2180,7 @@ function MapInner({ token }) {
       {/* Edit mode is now inline in cards — no separate panel */}
 
       {/* Search result preview card */}
-      {previewGeo && mode === 'places' && !addingPlace && !editingPlace && !selectedPlace && (
+      {previewGeo && (mode === 'places' || (mode === 'trip' && inDetail && trips.selectedTrip)) && !addingPlace && !editingPlace && !selectedPlace && (
         <div style={{
           margin: '0 2px',
           background: 'var(--dl-overlay)',
@@ -1849,7 +2240,17 @@ function MapInner({ token }) {
                     Mark discovered
                   </button>
                 );
-              })() : (
+              })() : mode === 'trip' && inDetail && trips.selectedTrip ? (
+                <button onClick={async () => {
+                  const tripId  = trips.selectedTrip.id;
+                  const label   = (previewGeo.rawName || previewGeo.name?.split(',')[0] || 'Stop').trim();
+                  await trips.addStop({ trip_id: tripId, lat: previewGeo.lat, lng: previewGeo.lng, label });
+                  setPreviewGeo(null);
+                }}
+                  style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
+                  + Add to trip
+                </button>
+              ) : (
                 <button onClick={addFromPreview}
                   style={{ background: 'var(--dl-accent)', border: 'none', borderRadius: 6, padding: '3px 10px', cursor: 'pointer', fontFamily: mono, fontSize: F.sm - 1, fontWeight: 600, color: '#fff', letterSpacing: '0.04em' }}>
                   + Save pin

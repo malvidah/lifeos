@@ -3,7 +3,7 @@ import { useEffect, useContext, useMemo, useRef, useCallback, useState } from "r
 import { useTheme } from "@/lib/theme";
 import { mono, F, projectColor } from "@/lib/tokens";
 import { api } from "@/lib/api";
-import { NoteContext, ProjectNamesContext, PlaceNamesContext, NavigationContext } from "@/lib/contexts";
+import { NoteContext, ProjectNamesContext, PlaceNamesContext, TripNamesContext, NavigationContext } from "@/lib/contexts";
 import { Shimmer } from "../ui/primitives.jsx";
 import { DayLabEditor } from "../Editor.jsx";
 import { parseTaskBlocks, tasksToHtml } from "@/lib/parseBlocks";
@@ -88,6 +88,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
   const projectNames = useContext(ProjectNamesContext);
   const { notes: noteNames, drawings: drawingNames } = useContext(NoteContext);
   const placeNames = useContext(PlaceNamesContext);
+  const tripNames  = useContext(TripNamesContext);
   const { navigateToProject, navigateToNote } = useContext(NavigationContext);
 
   // Contextual tips
@@ -398,6 +399,7 @@ export default function Tasks({ date, token, userId, taskFilter = "all", project
         noteNames={noteNames}
         drawingNames={drawingNames}
         placeNames={placeNames}
+        tripNames={tripNames}
         textColor={"var(--dl-strong)"}
         mutedColor={"var(--dl-middle)"}
         color={"var(--dl-accent)"}

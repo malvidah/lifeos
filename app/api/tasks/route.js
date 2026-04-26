@@ -313,7 +313,7 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
       const re = /\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}/gi;
       let m;
       while ((m = re.exec(text)) !== null) {
-        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:') && !m[0].startsWith('{g:')) {
+        if (!m[0].startsWith('{r:') && !m[0].startsWith('{l:') && !m[0].startsWith('{h:') && !m[0].startsWith('{g:') && !m[0].startsWith('{tr:')) {
           tags.push(m[1].toLowerCase());
         }
       }

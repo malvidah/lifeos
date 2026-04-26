@@ -32,12 +32,17 @@
 /* ── Derived accent variants ─────────────────────────────────────────────────
    -strong  = mixed 70% toward --dl-strong → readable on dark, rich on light
    -detail  = 12% tint → soft background fills, subtle borders               */
-/* ── Theme-independent glass & overlay ──────────────────────────────────────
-   These use backdrop-blur for the actual glass effect; the background just
-   needs subtle translucency that works on any base colour.                    */
-:root{
+/* ── Glass & overlay ───────────────────────────────────────────────────────
+   Glass uses neutral grey translucency that reads on any base colour.
+   Overlay must invert per theme — a dark overlay on a light background turns
+   into a gray slab with unreadable dark text, and vice versa.                  */
+:root,[data-theme="dark"]{
   --dl-glass:rgba(128,120,112,0.12);--dl-glass-active:rgba(128,120,112,0.08);--dl-glass-border:rgba(128,120,112,0.12);--dl-glass-shadow:0 1px 8px rgba(0,0,0,0.12);
   --dl-overlay:rgba(0,0,0,0.45);--dl-overlay-border:rgba(128,120,112,0.12);--dl-overlay-shadow:0 4px 24px rgba(0,0,0,0.25);
+}
+[data-theme="light"]{
+  --dl-glass:rgba(255,250,243,0.55);--dl-glass-active:rgba(255,250,243,0.35);--dl-glass-border:rgba(140,120,90,0.18);--dl-glass-shadow:0 1px 8px rgba(36,24,12,0.08);
+  --dl-overlay:rgba(255,250,243,0.78);--dl-overlay-border:rgba(140,120,90,0.18);--dl-overlay-shadow:0 4px 24px rgba(36,24,12,0.12);
 }
 :root,[data-theme="dark"],[data-theme="light"]{
   --dl-accent-strong: color-mix(in srgb,var(--dl-accent)  70%,var(--dl-strong));

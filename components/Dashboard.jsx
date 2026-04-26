@@ -13,7 +13,7 @@ import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse, useJournalMode } from "@/lib/hooks";
 import { useDashboardLayout } from "@/lib/useDashboardLayout";
 import { useProjects } from "@/lib/useProjects";
-import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext } from "@/lib/contexts";
+import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext, TripNamesContext } from "@/lib/contexts";
 import UserMenu from "./nav/UserMenu.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
@@ -305,6 +305,25 @@ function DashboardInner() {
     window.addEventListener('daylab:create-place', handler);
     return () => window.removeEventListener('daylab:create-place', handler);
   }, []);
+
+  // Trip names — used by editors for /tr autocomplete. Sorted by recency
+  // (most-recently-edited first); the editor uses this order as-is.
+  // `daylab:trips-changed` triggers a refresh after create/rename/delete.
+  const [allTripNames, setAllTripNames] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    const load = () => api.get('/api/trips', token).then(d => {
+      const names = (d?.trips ?? [])
+        .filter(t => t.name && t.name !== 'Untitled trip' && t.name !== 'New trip')
+        .sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''))
+        .map(t => t.name);
+      setAllTripNames(names);
+    });
+    load();
+    const handler = () => load();
+    window.addEventListener('daylab:trips-changed', handler);
+    return () => window.removeEventListener('daylab:trips-changed', handler);
+  }, [token]);
 
   // Listen for new project chip creation (/p + new name in any editor)
   useEffect(() => {
@@ -679,6 +698,7 @@ function DashboardInner() {
   return (
     <ProjectNamesContext.Provider value={allProjectNames}>
     <PlaceNamesContext.Provider value={allPlaceNames}>
+    <TripNamesContext.Provider value={allTripNames}>
     <NoteContext.Provider value={{ notes: allNoteNames, drawings: allDrawingNames, onCreateNote: (name) => {
       window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name } }));
     }}}>
@@ -1199,6 +1219,7 @@ function DashboardInner() {
     </div>
     </NavigationContext.Provider>
     </NoteContext.Provider>
+    </TripNamesContext.Provider>
     </PlaceNamesContext.Provider>
     </ProjectNamesContext.Provider>
   );

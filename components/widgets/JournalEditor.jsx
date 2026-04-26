@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback, useContext, useMemo, Fragment
 import { mono, serif, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { useTheme } from "@/lib/theme";
-import { NoteContext, ProjectNamesContext, PlaceNamesContext, NavigationContext } from "@/lib/contexts";
+import { NoteContext, ProjectNamesContext, PlaceNamesContext, TripNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
 import { api } from "@/lib/api";
@@ -1167,6 +1167,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
   const { notes: ctxNotes, drawings: ctxDrawings } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxPlaces = useContext(PlaceNamesContext);
+  const ctxTrips  = useContext(TripNamesContext);
   const { navigateToProject, navigateToNote, navigateToPlace } = useContext(NavigationContext);
 
   const [dragging, setDragging] = useState(false);
@@ -1437,6 +1438,7 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
           drawingNames={ctxDrawings}
           projectNames={ctxProjects}
           placeNames={ctxPlaces}
+          tripNames={ctxTrips}
           showScheduleTags={false}
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
@@ -1685,6 +1687,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
   const col = project && project !== '__everything__' ? projectColor(project) : "var(--dl-accent)";
   const ctxProjects = useContext(ProjectNamesContext);
   const ctxPlaces   = useContext(PlaceNamesContext);
+  const ctxTrips    = useContext(TripNamesContext);
   const ctxNotes    = useContext(NoteContext);
   const { navigateToProject, navigateToNote, navigateToPlace } = useContext(NavigationContext);
   return (
@@ -1694,6 +1697,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         placeholder={placeholder || 'Add an entry…'}
         projectNames={ctxProjects}
         placeNames={ctxPlaces}
+        tripNames={ctxTrips}
         noteNames={ctxNotes.notes}
         drawingNames={ctxNotes.drawings}
         showScheduleTags={false}

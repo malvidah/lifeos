@@ -149,6 +149,28 @@ const PlaceTagNode = Node.create({
   },
 });
 
+// TripTag: stored as <span data-trip-tag="name">, rendered as a route chip.
+// Tagged via /tr in notes/journal — links the note to a planned trip by name.
+// (Linking by name rather than id keeps the syntax typeable; renames orphan
+// the tag, which is acceptable for now.)
+const TripTagNode = Node.create({
+  name: 'tripTag', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() { return { name: { default: '' } }; },
+  parseHTML() {
+    return [{ tag: 'span[data-trip-tag]', getAttrs: el => ({ name: el.getAttribute('data-trip-tag') || '' }) }];
+  },
+  renderHTML({ node }) {
+    const name = node.attrs.name || '';
+    return ['span', {
+      'data-trip-tag': name,
+      style: Object.entries({ ...CHIP_TOKENS.trip, cursor: 'pointer', userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
+    }, '\u{1F5FA}\u{FE0F} ' + name.toUpperCase()];
+  },
+});
+
 // DrawingTag: stored as {d:title}, rendered as lilac chip atom node.
 const DrawingTagNode = Node.create({
   name: 'drawingTag', group: 'inline', inline: true,
@@ -946,6 +968,7 @@ export function docToText(docJson) {
       if (c.type === 'hardBreak')   return '\n';
       if (c.type === 'projectTag')  return `{${c.attrs?.name ?? ''}}`;
       if (c.type === 'placeTag')    return `{l:${c.attrs?.name ?? ''}}`;
+      if (c.type === 'tripTag')     return `{tr:${c.attrs?.name ?? ''}}`;
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
       if (c.type === 'recurrenceTag') return `{r:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       if (c.type === 'dateTag')    return `@${c.attrs?.date ?? ''}`;
@@ -970,10 +993,11 @@ export function docToText(docJson) {
 
 function parseLineContent(line) {
   const content = [];
-  // Tokens: {project} | {l:place} | {r:key:label} | {h:key:label} | {g:name} |
+  // Tokens: {project} | {l:place} | {tr:trip} | {r:key:label} | {h:key:label} | {g:name} |
   //         [text](url) hyperlink | [note] | @YYYY-MM-DD | legacy #Tag
   // Hyperlink [text](url) must come before [note] so the parser prefers it.
-  const re = /\{h:([^:}]+):([^}]*)\}|\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{g:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]*)\]\((https?:\/\/[^)]*)\)|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})|#([A-Za-z][A-Za-z0-9]+)/g;
+  // {tr:...} comes before {project} so the project regex doesn't swallow it.
+  const re = /\{h:([^:}]+):([^}]*)\}|\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{tr:([^}]+)\}|\{g:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]*)\]\((https?:\/\/[^)]*)\)|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})|#([A-Za-z][A-Za-z0-9]+)/g;
   let last = 0, m;
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
@@ -990,12 +1014,13 @@ function parseLineContent(line) {
     }
     else if (m[3] != null) content.push({ type: 'recurrenceTag', attrs: { key: m[3], label: m[4] } });
     else if (m[5] != null) content.push({ type: 'placeTag',  attrs: { name: m[5] } });
-    else if (m[6] != null) content.push({ type: 'goalTag',   attrs: { name: m[6] } });
-    else if (m[7] != null) content.push({ type: 'projectTag', attrs: { name: m[7] } });
-    else if (m[8] != null) content.push({ type: 'text', text: m[8], marks: [{ type: 'hyperlink', attrs: { href: m[9] } }] });
-    else if (m[10] != null) content.push({ type: 'noteLink',  attrs: { name: m[10] } });
-    else if (m[11] != null) content.push({ type: 'dateTag',   attrs: { date: m[11] } });
-    else if (m[12] != null) content.push({ type: 'projectTag', attrs: { name: m[12].toLowerCase() } });
+    else if (m[6] != null) content.push({ type: 'tripTag',   attrs: { name: m[6] } });
+    else if (m[7] != null) content.push({ type: 'goalTag',   attrs: { name: m[7] } });
+    else if (m[8] != null) content.push({ type: 'projectTag', attrs: { name: m[8] } });
+    else if (m[9] != null) content.push({ type: 'text', text: m[9], marks: [{ type: 'hyperlink', attrs: { href: m[10] } }] });
+    else if (m[11] != null) content.push({ type: 'noteLink',  attrs: { name: m[11] } });
+    else if (m[12] != null) content.push({ type: 'dateTag',   attrs: { date: m[12] } });
+    else if (m[13] != null) content.push({ type: 'projectTag', attrs: { name: m[13].toLowerCase() } });
     last = m.index + m[0].length;
   }
   if (last < line.length) content.push({ type: 'text', text: line.slice(last) });
@@ -1220,6 +1245,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   drawingNames,
   projectNames,
   placeNames,
+  tripNames,
   goalNames,
   showScheduleTags = true, // set false in notes/journal to hide /h and /r
   onProjectClick,
@@ -1261,6 +1287,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const showScheduleTagsRef   = useRef(showScheduleTags);
   const projectNamesRef     = useRef(projectNames || []);
   const placeNamesRef       = useRef(placeNames || []);
+  const tripNamesRef        = useRef(tripNames || []);
   const goalNamesRef        = useRef(goalNames || []);
   const onProjectClickRef   = useRef(onProjectClick);
   const onNoteClickRef      = useRef(onNoteClick);
@@ -1288,6 +1315,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { showScheduleTagsRef.current  = showScheduleTags; }, [showScheduleTags]);
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
   useEffect(() => { placeNamesRef.current        = placeNames || []; },  [placeNames]);
+  useEffect(() => { tripNamesRef.current         = tripNames || []; },   [tripNames]);
   useEffect(() => { goalNamesRef.current         = goalNames || []; },   [goalNames]);
   useEffect(() => { onProjectClickRef.current    = onProjectClick; },   [onProjectClick]);
   useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
@@ -1435,6 +1463,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       ProjectTagNode,
       NoteLinkNode,
       PlaceTagNode,
+      TripTagNode,
       DrawingTagNode,
       RecurrenceTagNode,
       HabitTagNode,
@@ -1497,6 +1526,25 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             const baseCmds = ['__cmd__:p', '__cmd__:n', '__cmd__:l', '__cmd__:d', '__cmd__:g', ...(noteTitle ? ['__cmd__:t'] : []), ...(onImageUploadRef.current ? ['__cmd__:m'] : [])];
             if (showScheduleTagsRef.current) baseCmds.splice(4, 0, '__cmd__:r', '__cmd__:h');
             return baseCmds;
+          }
+
+          // /tr (trip) is a two-letter command — check before single-letter
+          // dispatch since "tr" starts with "t" (table). Suggests recently-
+          // edited trips (already sorted by recency from the context); always
+          // appends a "create new" option for the typed text.
+          const lowerQ = query.toLowerCase();
+          if (lowerQ === 'tr' || lowerQ.startsWith('tr ') || lowerQ.startsWith('tr\t')) {
+            const trSearch = query.slice(2).replace(/^\s+/, '');
+            const q        = trSearch.toLowerCase().replace(/\s/g, '');
+            const qTrim    = trSearch.trim();
+            const names    = tripNamesRef.current || [];
+            const matches  = names
+              .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
+              .map(n => `__trip__:${n}`);
+            if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+              matches.push(`__trip__:${qTrim}`);
+            }
+            return matches.length ? matches : [`__trip__:${qTrim || 'trip'}`];
           }
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
@@ -1676,6 +1724,16 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             const dateStr = name.slice(9, 19); // YYYY-MM-DD
             editor.chain().focus().deleteRange(range).insertContent([
               { type: 'dateTag', attrs: { date: dateStr } },
+              { type: 'text', text: ' ' },
+            ]).run();
+            return;
+          }
+
+          if (name.startsWith('__trip__:')) {
+            const tName = name.slice(9).trim();
+            if (!tName) return;
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'tripTag', attrs: { name: tName } },
               { type: 'text', text: ' ' },
             ]).run();
             return;
