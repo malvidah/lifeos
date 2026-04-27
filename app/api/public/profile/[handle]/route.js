@@ -72,29 +72,57 @@ export async function GET(_req, { params }) {
   }
   const tripsOut = (trips || []).map(t => ({ ...t, stops: stopsByTrip[t.id] ?? [] }));
 
-  // Public collections (place categories) + the places that fall under them.
-  const { data: collections } = await sb
-    .from('user_place_types')
+  // Public collections (curated lists) + their places. A place shows on the
+  // profile iff it's a member of at least one public collection.
+  const { data: cols } = await sb
+    .from('user_collections')
     .select('id, name, color, position, is_public')
     .eq('user_id', userId)
     .eq('is_public', true)
     .order('position', { ascending: true });
 
-  const publicCategoryNames = new Set((collections || []).map(c => c.name.toLowerCase()));
+  let collections = [];
   let publicPlaces = [];
-  if (publicCategoryNames.size > 0) {
-    const { data: ps } = await sb
-      .from('user_places')
-      .select('id, name, lat, lng, category, color, notes')
-      .eq('user_id', userId);
-    publicPlaces = (ps || []).filter(p => publicCategoryNames.has((p.category || '').toLowerCase()));
+  if ((cols || []).length) {
+    const ids = cols.map(c => c.id);
+    const { data: memberships } = await sb
+      .from('user_collection_places')
+      .select('collection_id, place_id')
+      .in('collection_id', ids);
+    const placeIds = new Set((memberships || []).map(m => m.place_id));
+    const placeIdsByCollection = {};
+    for (const m of memberships || []) {
+      (placeIdsByCollection[m.collection_id] ||= []).push(m.place_id);
+    }
+    if (placeIds.size > 0) {
+      const { data: ps } = await sb
+        .from('user_places')
+        .select('id, name, lat, lng, category, color, notes')
+        .in('id', [...placeIds]);
+      publicPlaces = ps || [];
+    }
+    collections = cols.map(c => ({
+      ...c,
+      place_count: (placeIdsByCollection[c.id] || []).length,
+      place_ids:   placeIdsByCollection[c.id] || [],
+    }));
   }
+
+  // Also expose tags (place_types) so the public viewer can filter by them
+  // exactly like the dashboard does. We expose ALL of the user's tags so that
+  // pin colors stay consistent (a tag is a category, not private data).
+  const { data: tags } = await sb
+    .from('user_place_types')
+    .select('id, name, color, position')
+    .eq('user_id', userId)
+    .order('position', { ascending: true });
 
   return Response.json({
     profile,
     notes: notes ?? [],
     trips: tripsOut,
-    collections: collections ?? [],
+    collections,
     places: publicPlaces,
+    tags: tags ?? [],
   });
 }

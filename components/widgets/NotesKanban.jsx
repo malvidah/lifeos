@@ -26,6 +26,23 @@ function statusColor(name) {
 }
 
 
+// Read-only header — name + count, no rename / add / delete.
+function ReadOnlyColumnHeader({ statusKey, color, count }) {
+  return (
+    <div style={{
+      paddingBottom: 4, gap: 6,
+      borderBottom: `2px solid ${typeof color === 'string' && color.startsWith('#') ? color + '44' : 'var(--dl-border)'}`,
+    }}>
+      <span style={{
+        fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+        color, fontWeight: 600,
+      }}>
+        {statusKey} <span style={{ fontWeight: 400, opacity: 0.6 }}>({count})</span>
+      </span>
+    </div>
+  );
+}
+
 function ColumnHeader({ statusKey, color, count, onRename, onAddNote, onDelete, canDelete }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(statusKey);
@@ -103,6 +120,7 @@ export default function NotesKanban({
   onPatchNote,
   onBulkRenameStatus,
   getMediaPreview,
+  readOnly = false, // public profile: no DnD, no + tile, no rename, no delete, no + status
 }) {
   // Per-project status list. Falls back to defaults until user customizes.
   const customList = projectsMeta?.[effectiveProject]?.noteStatuses;
@@ -224,15 +242,19 @@ export default function NotesKanban({
               transition: 'background 0.15s, padding 0.15s',
             }}
           >
-            <ColumnHeader
-              statusKey={colKey}
-              color={color}
-              count={items.length}
-              onRename={(next) => renameColumn(colKey, next)}
-              onAddNote={() => onAddNote(colKey)}
-              onDelete={() => removeColumn(colKey)}
-              canDelete={canDelete}
-            />
+            {readOnly ? (
+              <ReadOnlyColumnHeader statusKey={colKey} color={color} count={items.length} />
+            ) : (
+              <ColumnHeader
+                statusKey={colKey}
+                color={color}
+                count={items.length}
+                onRename={(next) => renameColumn(colKey, next)}
+                onAddNote={() => onAddNote(colKey)}
+                onDelete={() => removeColumn(colKey)}
+                canDelete={canDelete}
+              />
+            )}
             {items.map(n => (
               <NoteCardItem
                 key={n.id}
@@ -240,13 +262,14 @@ export default function NotesKanban({
                 noteName={noteName}
                 showProjects={showProjects}
                 mediaPreview={getMediaPreview?.(n)}
+                draggable={!readOnly}
                 onClick={() => onSelectNote(n.id)}
-                onDragStart={e => onDragStart(e, n.id)}
-                onDragEnd={onDragEnd}
+                onDragStart={readOnly ? undefined : (e => onDragStart(e, n.id))}
+                onDragEnd={readOnly ? undefined : onDragEnd}
                 isDragging={dragId === n.id}
               />
             ))}
-            {items.length === 0 && (
+            {!readOnly && items.length === 0 && (
               <div
                 onClick={() => onAddNote(colKey)}
                 style={{
@@ -259,7 +282,8 @@ export default function NotesKanban({
           </div>
         );
       })}
-      {/* Add-column control */}
+      {/* Add-column control — hidden in read-only / public view. */}
+      {!readOnly && (
       <div style={{ minWidth: 120, flexShrink: 0, display: 'flex', alignItems: 'flex-start', paddingTop: 2 }}>
         {adding ? (
           <input
@@ -292,6 +316,7 @@ export default function NotesKanban({
           >+ status</button>
         )}
       </div>
+      )}
     </div>
   );
 }

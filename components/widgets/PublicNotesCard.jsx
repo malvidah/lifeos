@@ -207,6 +207,7 @@ export default function PublicNotesCard({ notes, trips, places }) {
           onPatchNote={() => {}}
           onBulkRenameStatus={() => {}}
           getMediaPreview={getMediaPreview}
+          readOnly
         />
       ) : (
         <NotesGrid

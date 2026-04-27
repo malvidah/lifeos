@@ -504,23 +504,52 @@ function MapInner({ token }) {
   // Reset the detail flag whenever the selected trip changes or trip mode exits.
   useEffect(() => { if (!trips.selectedTrip || mode !== 'trip') setInDetail(false); }, [trips.selectedTrip, mode]);
 
-  // Places-mode equivalent of `inDetail`. When false, we show CollectionScroller
-  // (collection cards). When true, we show the existing per-place carousel.
+  // Collections (user-curated lists of places) — separate concept from
+  // place_types (taxonomy tags like "food"). Selected by the bottom scroller;
+  // detail mode shows just that collection's places + lets the user click pins
+  // to toggle membership.
+  const [collections, setCollections] = useState([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState(null);
+  // `placesInDetail` here means "we're inside a collection's detail view"
+  // (or, when no collection is selected and the user clicked ALL twice, we're
+  // viewing the full place list).
   const [placesInDetail, setPlacesInDetail] = useState(false);
-  useEffect(() => { if (mode !== 'places') setPlacesInDetail(false); }, [mode]);
+  useEffect(() => { if (mode !== 'places') { setPlacesInDetail(false); setSelectedCollectionId(null); } }, [mode]);
 
-  // Fit map bounds to the previewed collection's pins when activeFilter changes
-  // in places mode. This is what makes selecting a collection feel "alive".
+  const refreshCollections = useCallback(() => {
+    if (!token) return;
+    api.get('/api/collections', token).then(d => setCollections(d?.collections ?? [])).catch(() => {});
+  }, [token]);
+  useEffect(() => { refreshCollections(); }, [refreshCollections]);
+
+  const selectedCollection = useMemo(
+    () => collections.find(c => c.id === selectedCollectionId) || null,
+    [collections, selectedCollectionId]
+  );
+
+  // Place IDs in the currently selected collection — used for filtering pins
+  // and highlighting "in-collection" markers.
+  const placesInSelectedCollection = useMemo(() => {
+    if (!selectedCollection) return null;
+    return new Set(selectedCollection.place_ids || []);
+  }, [selectedCollection]);
+
+  // Fit map bounds when the selected collection or tag filter changes in
+  // places mode (skipping detail mode — there we let pin clicks drive focus).
   useEffect(() => {
     if (mode !== 'places' || !mapInstance.current || !leafletReady) return;
     const L = LRef.current;
-    const filtered = activeFilter
-      ? places.filter(p => (p.category || '').toLowerCase() === activeFilter.toLowerCase())
-      : places;
+    let filtered = places;
+    if (activeFilter) {
+      filtered = filtered.filter(p => (p.category || '').toLowerCase() === activeFilter.toLowerCase());
+    }
+    if (placesInSelectedCollection) {
+      filtered = filtered.filter(p => placesInSelectedCollection.has(p.id));
+    }
     const coords = filtered.filter(p => p.lat != null && p.lng != null).map(p => [p.lat, p.lng]);
-    if (coords.length < 2) return; // a single pin would zoom uncomfortably tight
+    if (coords.length < 2) return;
     mapInstance.current.fitBounds(L.latLngBounds(coords).pad(0.2));
-  }, [activeFilter, mode, leafletReady]); // eslint-disable-line
+  }, [activeFilter, selectedCollectionId, mode, leafletReady, placesInSelectedCollection, places]); // eslint-disable-line
   const discoveredLayerRef = useRef(null);
   const statesLayerRef = useRef(null);
   const geoJsonCacheRef = useRef(null);
@@ -934,29 +963,68 @@ function MapInner({ token }) {
       return t?.color || (isDark ? '#D08828' : '#B87018');
     };
 
-    const filtered = activeFilter
-      ? places.filter(p => (p.category || '').toLowerCase() === activeFilter.toLowerCase())
-      : places;
+    // Filter pins by tag (top pills) and collection (bottom scroller).
+    // In collection-detail mode we render ALL pins so the user can click any
+    // of them to toggle membership; the in-collection ones are highlighted.
+    let filtered = places;
+    if (activeFilter) {
+      filtered = filtered.filter(p => (p.category || '').toLowerCase() === activeFilter.toLowerCase());
+    }
+    if (placesInSelectedCollection && !placesInDetail) {
+      filtered = filtered.filter(p => placesInSelectedCollection.has(p.id));
+    }
+
+    // True iff we're inside a collection's detail view — clicking a pin
+    // toggles its membership in that collection (matches trip "click map to
+    // add stop" UX).
+    const inCollectionEdit = placesInDetail && selectedCollection;
 
     filtered.forEach(place => {
       const color = place.color || typeColor(place.category);
       const isSelected = selectedPlace?.id === place.id;
-      const size = isSelected ? 16 : 12;
+      const inCollection = placesInSelectedCollection ? placesInSelectedCollection.has(place.id) : false;
+      const size = isSelected ? 16 : (inCollection ? 14 : 12);
+      // Highlight in-collection pins with a teal ring during collection-edit
+      // mode so it's obvious which ones are already in the active collection.
+      const ring = inCollectionEdit && inCollection ? '#5BA89D' : (isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)');
+      const ringW = inCollectionEdit && inCollection ? 3 : 2;
       const icon = L.divIcon({
         className: '',
         html: `<div style="
           width:${size}px;height:${size}px;border-radius:50%;
           background:${color};
-          border:2px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'rgba(255,255,255,0.8)'};
+          border:${ringW}px solid ${ring};
           box-shadow:0 1px 4px rgba(0,0,0,0.3);
           transition:all 0.15s;cursor:pointer;
         "></div>`,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2],
+        iconSize: [size + ringW, size + ringW],
+        iconAnchor: [(size + ringW) / 2, (size + ringW) / 2],
       });
       const marker = L.marker([place.lat, place.lng], { icon }).addTo(map);
-      marker.on('click', (e) => {
+      marker.on('click', async (e) => {
         L.DomEvent.stopPropagation(e);
+        if (inCollectionEdit && token) {
+          // Toggle membership of this place in the active collection.
+          const collectionId = selectedCollection.id;
+          const currentlyIn  = placesInSelectedCollection?.has(place.id);
+          // Optimistic local update.
+          setCollections(arr => arr.map(c => {
+            if (c.id !== collectionId) return c;
+            const ids = new Set(c.place_ids || []);
+            if (currentlyIn) ids.delete(place.id); else ids.add(place.id);
+            return { ...c, place_ids: [...ids], place_count: ids.size };
+          }));
+          try {
+            if (currentlyIn) {
+              await api.delete(`/api/collections/places?collection_id=${collectionId}&place_id=${place.id}`, token);
+            } else {
+              await api.post('/api/collections/places', { collection_id: collectionId, place_id: place.id }, token);
+            }
+          } catch {
+            refreshCollections(); // resync on failure
+          }
+          return;
+        }
         setSelectedPlace(place);
         setHoveredPlace(null);
         setAddingPlace(null);
@@ -967,7 +1035,7 @@ function MapInner({ token }) {
       marker.on('mouseout', () => setHoveredPlace(null));
       markersRef.current.push(marker);
     });
-  }, [places, placeTypes, mode, activeFilter, leafletReady, isDark, selectedPlace]); // eslint-disable-line
+  }, [places, placeTypes, mode, activeFilter, leafletReady, isDark, selectedPlace, placesInDetail, selectedCollection, placesInSelectedCollection, token]); // eslint-disable-line
 
   // Fit map to a trip's bounds — fires ONLY when the selected trip changes
   // (not on every stop edit), so editing waypoints doesn't reset zoom/pan.
@@ -1525,11 +1593,15 @@ function MapInner({ token }) {
     return places
       .filter(p => {
         if (activeFilter && (p.category || '').toLowerCase() !== activeFilter.toLowerCase()) return false;
+        // In a collection's detail view, show only that collection's places
+        // in the carousel. Membership-toggling on the map still uses the full
+        // place set (handled in the marker effect).
+        if (placesInSelectedCollection && !placesInSelectedCollection.has(p.id)) return false;
         return true;
       })
       .map(p => ({ ...p, _z: mortonKey(p.lat, p.lng) }))
       .sort((a, b) => a._z - b._z);
-  }, [places, mode, activeFilter]);
+  }, [places, mode, activeFilter, placesInSelectedCollection]);
 
   // Scroll carousel to nearest card — used on pan settle, filter change, and initial load
   const scrollToNearest = useCallback((smooth = true) => {
@@ -1798,7 +1870,48 @@ function MapInner({ token }) {
       )}
       </div>
 
-      {/* Top-left detail header for places-mode (back arrow + collection name). */}
+      {/* Top-left tag filter pills — restored. These are place TYPES (food, bars,
+          experiences) — a taxonomy. The bottom strip shows COLLECTIONS, which
+          are user-curated lists like "Bay Area Guide" that can hold places of
+          any tag. Hidden in places-mode detail to keep that view focused. */}
+      {mode === 'places' && !placesInDetail && !addingPlace && placeTypes.length > 0 && (
+        <div style={{
+          position: 'absolute', top: 50, left: 10, right: 10, zIndex: 999,
+          display: 'flex', gap: 4, flexWrap: 'wrap',
+        }}>
+          <button onClick={() => setActiveFilter(null)}
+            style={{
+              backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+              background: !activeFilter ? 'var(--dl-accent-20)' : 'var(--dl-glass)',
+              border: `1px solid ${!activeFilter ? 'var(--dl-accent)' : 'var(--dl-glass-border)'}`,
+              borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
+              color: !activeFilter ? 'var(--dl-accent)' : 'var(--dl-middle)',
+              textTransform: 'uppercase',
+            }}>
+            All
+          </button>
+          {placeTypes.map(t => (
+            <button key={t.id} onClick={() => setActiveFilter(activeFilter === t.name ? null : t.name)}
+              style={{
+                backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+                background: activeFilter === t.name ? t.color + '33' : 'var(--dl-glass)',
+                border: `1px solid ${activeFilter === t.name ? t.color : 'var(--dl-glass-border)'}`,
+                borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
+                fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
+                color: activeFilter === t.name ? t.color : 'var(--dl-middle)',
+                textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Top-left detail header for places-mode — back chevron + collection
+          name + (when editing a collection) a hint that clicking pins toggles
+          membership. */}
       {mode === 'places' && placesInDetail && (
         <div style={{
           position: 'absolute', top: 50, left: 10, zIndex: 999,
@@ -1808,16 +1921,25 @@ function MapInner({ token }) {
           border: '1px solid var(--dl-glass-border)',
           borderRadius: 100, padding: '4px 12px',
           boxShadow: 'var(--dl-glass-shadow)',
+          maxWidth: 360,
         }}>
-          <button onClick={() => setPlacesInDetail(false)}
+          <button onClick={() => { setPlacesInDetail(false); setSelectedCollectionId(null); }}
             title="Back to collections"
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', padding: 0, lineHeight: 1, fontSize: 18 }}>‹</button>
           <span style={{
             fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
             color: 'var(--dl-strong)',
           }}>
-            {activeFilter || 'All places'}
+            {selectedCollection ? selectedCollection.name : 'All places'}
           </span>
+          {selectedCollection && (
+            <span style={{
+              fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)',
+              paddingLeft: 6, borderLeft: '1px solid var(--dl-glass-border)',
+            }}>
+              click pins to add/remove
+            </span>
+          )}
         </div>
       )}
 
@@ -1858,25 +1980,46 @@ function MapInner({ token }) {
           2nd click on the same card opens the per-place carousel below. */}
       {mode === 'places' && !placesInDetail && !previewGeo && !selectedDiscovered && !addingPlace && (
         <CollectionScroller
-          collections={placeTypes.map(t => ({
-            id: t.id,
-            name: t.name,
-            color: t.color,
-            is_public: !!t.is_public,
-            count: places.filter(p => (p.category || '').toLowerCase() === t.name.toLowerCase()).length,
-          })).filter(c => c.count > 0)}
+          collections={collections.map(c => ({
+            id: c.id, name: c.name, color: c.color || 'var(--dl-accent)',
+            is_public: !!c.is_public,
+            count: c.place_count || 0,
+          }))}
           totalCount={places.length}
-          selectedCollection={activeFilter}
-          onPreview={(key) => setActiveFilter(key)}
-          onEnterDetail={(key) => { setActiveFilter(key); setPlacesInDetail(true); }}
+          // Selected key in this scroller is the collection id. ALL = null.
+          selectedCollection={selectedCollectionId
+            ? collections.find(c => c.id === selectedCollectionId)?.name || null
+            : null}
+          onPreview={(name) => {
+            const found = name ? collections.find(c => c.name === name) : null;
+            setSelectedCollectionId(found?.id || null);
+          }}
+          onEnterDetail={(name) => {
+            const found = name ? collections.find(c => c.name === name) : null;
+            setSelectedCollectionId(found?.id || null);
+            setPlacesInDetail(true);
+          }}
           onTogglePublic={async (c) => {
             const next = !c.is_public;
-            // Optimistic update of the placeTypes list so the UI flips immediately.
-            setPlaceTypes(arr => arr.map(t => t.id === c.id ? { ...t, is_public: next } : t));
+            setCollections(arr => arr.map(x => x.id === c.id ? { ...x, is_public: next } : x));
             try {
-              await api.patch('/api/place-types', { id: c.id, is_public: next }, token);
+              await api.patch('/api/collections', { id: c.id, is_public: next }, token);
             } catch {
-              setPlaceTypes(arr => arr.map(t => t.id === c.id ? { ...t, is_public: !next } : t));
+              setCollections(arr => arr.map(x => x.id === c.id ? { ...x, is_public: !next } : x));
+            }
+          }}
+          onCreate={async () => {
+            const name = prompt('Collection name (e.g. "Bay Area Guide"):');
+            if (!name?.trim()) return;
+            try {
+              const res = await api.post('/api/collections', { name: name.trim() }, token);
+              if (res?.collection) {
+                setCollections(arr => [...arr, res.collection]);
+                setSelectedCollectionId(res.collection.id);
+                setPlacesInDetail(true); // jump straight into the new collection
+              }
+            } catch (e) {
+              showToast?.('Failed to create collection', 'error');
             }
           }}
         />

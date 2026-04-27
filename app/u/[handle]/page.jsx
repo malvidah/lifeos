@@ -42,7 +42,7 @@ function ProfilePage() {
   const params = useParams();
   const handle = params?.handle;
 
-  const [state, setState] = useState({ loading: true, profile: null, notes: [], trips: [], collections: [], places: [], error: null });
+  const [state, setState] = useState({ loading: true, profile: null, notes: [], trips: [], collections: [], places: [], tags: [], error: null });
   const [token, setToken] = useState(null);
   const [meHandle, setMeHandle] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -76,6 +76,7 @@ function ProfilePage() {
           trips: json.trips || [],
           collections: json.collections || [],
           places: json.places || [],
+          tags: json.tags || [],
           error: null,
         });
       })
@@ -251,6 +252,7 @@ function ProfilePage() {
           trips={state.trips}
           collections={state.collections}
           places={state.places}
+          tags={state.tags}
         />
       </div>
     </div>
@@ -258,7 +260,7 @@ function ProfilePage() {
 }
 
 // ─── Public content (real Day Lab Card primitives, read-only) ────────────────
-function PublicContent({ notes, trips, collections, places }) {
+function PublicContent({ notes, trips, collections, places, tags }) {
   const hasMap   = (places?.length || 0) > 0 || (trips?.length || 0) > 0;
   const hasNotes = (notes?.length || 0) > 0;
 
@@ -281,6 +283,7 @@ function PublicContent({ notes, trips, collections, places }) {
             places={places || []}
             collections={collections || []}
             trips={trips || []}
+            tags={tags || []}
           />
         </Card>
       )}

@@ -21,10 +21,11 @@ const GAP = 8;
 export default function CollectionScroller({
   collections,        // [{ id, name, color, count, is_public }, ...]
   totalCount,         // count for the ALL card
-  selectedCollection, // null = ALL; string = category name
+  selectedCollection, // null = ALL; string = collection name
   onPreview,          // (name | null) => void
   onEnterDetail,      // (name | null) => void
   onTogglePublic,     // (collection: {id, name, is_public}) => void — when omitted, toggle hides
+  onCreate,           // () => void — when omitted, "+ new collection" tile hides (read-only views)
 }) {
   const scrollRef = useRef(null);
   const dragRef   = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
@@ -77,7 +78,33 @@ export default function CollectionScroller({
           cursor: 'grab',
         }}
       >
-        {/* ALL card — always first */}
+        {/* "+ new collection" tile — leads the row, like TripScroller's "+ new trip". */}
+        {onCreate && (
+          <button
+            onClick={() => { if (!dragRef.current.moved) onCreate(); }}
+            style={{
+              flexShrink: 0, width: 140, height: 70,
+              backdropFilter: 'blur(20px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+              background: 'var(--dl-glass)',
+              border: '1.5px dashed var(--dl-glass-border)',
+              borderRadius: 12, padding: 10,
+              boxShadow: 'var(--dl-glass-shadow)',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center', gap: 6,
+              cursor: 'pointer',
+              color: 'var(--dl-middle)', fontFamily: mono, fontSize: 10,
+              letterSpacing: '0.06em', textTransform: 'uppercase',
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New
+          </button>
+        )}
+
+        {/* ALL card */}
         <CollectionCard
           label="All"
           count={totalCount}

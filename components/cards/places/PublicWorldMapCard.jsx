@@ -20,7 +20,7 @@ import TripHeader from "../trip/TripHeader.jsx";
 const MAP_TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
 const MAP_TILES_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
 
-export default function PublicWorldMapCard({ places = [], collections = [], trips = [] }) {
+export default function PublicWorldMapCard({ places = [], collections = [], trips = [], tags = [] }) {
   const containerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layerRef = useRef([]);
@@ -30,9 +30,17 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
   const todayStr = new Date().toISOString().slice(0, 10);
 
   // ── Mode + selection state (mirrors dashboard's `mode` / `inDetail`) ────
-  const [mode, setMode] = useState(places.length === 0 && trips.length > 0 ? 'trip' : 'places');
+  // Default to whichever mode has more content. Both visible iff both > 0.
+  const [mode, setMode] = useState(() => {
+    const placesCount = places.length;
+    const tripsCount = trips.length;
+    if (placesCount === 0 && tripsCount > 0) return 'trip';
+    if (tripsCount > placesCount) return 'trip';
+    return 'places';
+  });
   // Places mode
-  const [activeCollection, setActiveCollection] = useState(null); // null = ALL; string = name
+  const [activeTag, setActiveTag] = useState(null);              // null = no tag filter; string = tag name
+  const [activeCollection, setActiveCollection] = useState(null); // null = ALL; string = collection name
   const [placesInDetail, setPlacesInDetail] = useState(false);
   const [selectedPlaceId, setSelectedPlaceId] = useState(null);
   // Trip mode
@@ -66,11 +74,21 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
     };
   }, []); // eslint-disable-line
 
-  // ── Visible places (filtered by collection) ─────────────────────────────
+  // Place IDs that belong to the currently-selected collection (null = no
+  // collection selected; show all public places).
+  const placesInSelectedCollection = useMemo(() => {
+    if (!activeCollection) return null;
+    const found = collections.find(c => c.name === activeCollection);
+    return found ? new Set(found.place_ids || []) : new Set();
+  }, [activeCollection, collections]);
+
+  // ── Visible places (filtered by tag + collection) ───────────────────────
   const visiblePlaces = useMemo(() => {
-    if (!activeCollection) return places;
-    return places.filter(p => (p.category || '').toLowerCase() === activeCollection.toLowerCase());
-  }, [places, activeCollection]);
+    let out = places;
+    if (activeTag) out = out.filter(p => (p.category || '').toLowerCase() === activeTag.toLowerCase());
+    if (placesInSelectedCollection) out = out.filter(p => placesInSelectedCollection.has(p.id));
+    return out;
+  }, [places, activeTag, placesInSelectedCollection]);
 
   const previewedTrip = useMemo(
     () => trips.find(t => t.id === previewedTripId) || null,
@@ -86,13 +104,14 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
     layerRef.current = [];
 
     if (mode === 'places') {
-      const colorOf = (cat) => collections.find(c => c.name?.toLowerCase() === (cat || '').toLowerCase())?.color || '#D08828';
+      // Pin colour comes from the place's TAG (place type), not its collection.
+      const colorOf = (cat) => tags.find(t => t.name?.toLowerCase() === (cat || '').toLowerCase())?.color || '#D08828';
       const coords = [];
       for (const p of visiblePlaces) {
         if (p.lat == null || p.lng == null) continue;
         const color = p.color || colorOf(p.category);
         const isSel = selectedPlaceId === p.id;
-        const size = isSel ? 18 : 14;
+        const size = isSel ? 16 : 12;
         const icon = L.divIcon({
           className: '',
           html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:${isSel ? 3 : 2}px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
@@ -100,18 +119,19 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
         });
         const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
         if (p.name) marker.bindTooltip(p.name, { className: 'daylab-tooltip', direction: 'top', offset: [0, -10] });
+        // Soft-select: highlight + scroll carousel to it, but DON'T zoom in.
+        // Aggressive zoom on every pin click was disorienting; pan-only feels
+        // closer to the dashboard's "select" affordance.
         marker.on('click', () => setSelectedPlaceId(p.id));
         layerRef.current.push(marker);
         coords.push([p.lat, p.lng]);
       }
-      // Fit bounds — to selected if any, else to all visible.
-      if (selectedPlaceId) {
-        const sp = visiblePlaces.find(p => p.id === selectedPlaceId);
-        if (sp?.lat != null) map.setView([sp.lat, sp.lng], Math.max(map.getZoom(), 12));
-      } else if (coords.length >= 2) {
+      // Fit bounds to whatever is currently visible. Don't auto-zoom on
+      // individual pin selection (that flow lives on the dashboard).
+      if (coords.length >= 2) {
         map.fitBounds(L.latLngBounds(coords).pad(0.2));
       } else if (coords.length === 1) {
-        map.setView(coords[0], 12);
+        map.setView(coords[0], Math.max(map.getZoom(), 10));
       }
     } else if (mode === 'trip') {
       const allCoords = [];
@@ -149,7 +169,7 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
       if (focusCoords.length >= 2) map.fitBounds(L.latLngBounds(focusCoords).pad(0.2));
       else if (focusCoords.length === 1) map.setView(focusCoords[0], 10);
     }
-  }, [mode, visiblePlaces, collections, trips, previewedTripId, tripInDetail, previewedTrip, selectedPlaceId, leafletReady, dark]);
+  }, [mode, visiblePlaces, collections, tags, trips, previewedTripId, tripInDetail, previewedTrip, selectedPlaceId, leafletReady, dark]);
 
   // Reset cross-mode state on mode switch.
   useEffect(() => {
@@ -157,12 +177,12 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
     if (mode !== 'trip')   setTripInDetail(false);
   }, [mode]);
 
-  // The collections we surface in the scroller — one entry per category that
-  // actually has at least one public place.
+  // Each collection's place count comes from its membership join (already in
+  // c.place_ids from the public API).
   const scrollerCollections = useMemo(() => collections.map(c => ({
-    id: c.id, name: c.name, color: c.color, is_public: !!c.is_public,
-    count: places.filter(p => (p.category || '').toLowerCase() === c.name.toLowerCase()).length,
-  })).filter(c => c.count > 0), [collections, places]);
+    id: c.id, name: c.name, color: c.color || 'var(--dl-accent)', is_public: !!c.is_public,
+    count: c.place_count || (c.place_ids?.length || 0),
+  })), [collections]);
 
   return (
     <div style={{
@@ -170,6 +190,40 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
       borderRadius: 10, overflow: 'hidden', background: '#0d1a24',
     }}>
       <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+
+      {/* Tag pills (top-left) — same as dashboard. Only in places mode and not detail. */}
+      {mode === 'places' && !placesInDetail && tags.length > 0 && (
+        <div style={{
+          position: 'absolute', top: 50, left: 10, right: 10, zIndex: 999,
+          display: 'flex', gap: 4, flexWrap: 'wrap',
+        }}>
+          <button onClick={() => setActiveTag(null)}
+            style={{
+              backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+              background: !activeTag ? 'var(--dl-accent-20)' : 'var(--dl-glass)',
+              border: `1px solid ${!activeTag ? 'var(--dl-accent)' : 'var(--dl-glass-border)'}`,
+              borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
+              color: !activeTag ? 'var(--dl-accent)' : 'var(--dl-middle)',
+              textTransform: 'uppercase',
+            }}>All</button>
+          {tags.map(t => (
+            <button key={t.id} onClick={() => setActiveTag(activeTag === t.name ? null : t.name)}
+              style={{
+                backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+                background: activeTag === t.name ? t.color + '33' : 'var(--dl-glass)',
+                border: `1px solid ${activeTag === t.name ? t.color : 'var(--dl-glass-border)'}`,
+                borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
+                fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
+                color: activeTag === t.name ? t.color : 'var(--dl-middle)',
+                textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4,
+              }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+              {t.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Mode toggle (top right) — only show modes that have content */}
       {(places.length > 0 || trips.length > 0) && (
