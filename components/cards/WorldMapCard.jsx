@@ -73,14 +73,20 @@ const COUNTRY_NAME_MAP = {
 const AREA_GEO_TYPES = new Set(['state', 'administrative', 'island', 'archipelago', 'territory', 'city', 'town', 'village', 'municipality', 'district', 'borough', 'county', 'country']);
 
 // ─── Search bar (glassmorphic, location-biased) ─────────────────────────────
-function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
+// Exported so the public profile can reuse the exact same search UI.
+export function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance, compact = false }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [geoResults, setGeoResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
+  // In `compact` mode the search starts as a circle and expands when clicked.
+  // Once the user types or focuses, we expand; collapse back when they blur
+  // with no query.
+  const [expanded, setExpanded] = useState(!compact);
   const timerRef = useRef(null);
   const inputRef = useRef(null);
+  useEffect(() => { if (expanded) inputRef.current?.focus(); }, [expanded]);
 
   // Filter saved places
   useEffect(() => {
@@ -187,10 +193,34 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
   }, [query]); // eslint-disable-line
 
   const hasResults = results.length > 0 || geoResults.length > 0;
-  const showDropdown = open && (hasResults || searching);
+  const showDropdown = open && expanded && (hasResults || searching);
+
+  // Collapsed (compact + not expanded) → circle icon button. Expand on click.
+  if (compact && !expanded) {
+    return (
+      <button
+        onClick={() => { setExpanded(true); setOpen(true); }}
+        title="Search"
+        style={{
+          width: 36, height: 36, borderRadius: '50%',
+          backdropFilter: 'blur(20px) saturate(1.4)',
+          WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+          background: 'var(--dl-glass)',
+          border: '1px solid var(--dl-glass-border)',
+          boxShadow: 'var(--dl-glass-shadow)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', flexShrink: 0,
+        }}
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+      </button>
+    );
+  }
 
   return (
-    <div style={{ position: 'relative', flex: 1 }}>
+    <div style={{ position: 'relative', flex: compact ? '0 0 280px' : 1 }}>
       {/* Glassmorphic search pill */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
@@ -211,7 +241,13 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
           value={query}
           onChange={e => { setQuery(e.target.value); setOpen(true); }}
           onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 200)}
+          onBlur={() => {
+            // Delay so a result-click can fire before we collapse.
+            setTimeout(() => {
+              setOpen(false);
+              if (compact && !query) setExpanded(false);
+            }, 200);
+          }}
           placeholder="Search nearby..."
           style={{
             flex: 1, background: 'none', border: 'none', outline: 'none',
@@ -222,6 +258,13 @@ function MapSearch({ places, onSelect, onGeoSelect, isDark, mapInstance }) {
         />
         {query && (
           <button onClick={() => { setQuery(''); setResults([]); setGeoResults([]); }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--dl-middle)', fontSize: 14, lineHeight: 1 }}>
+            &times;
+          </button>
+        )}
+        {compact && (
+          <button onClick={() => { setQuery(''); setResults([]); setGeoResults([]); setExpanded(false); setOpen(false); }}
+            title="Close"
             style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: 'var(--dl-middle)', fontSize: 14, lineHeight: 1 }}>
             &times;
           </button>
@@ -1794,16 +1837,41 @@ function MapInner({ token }) {
         ))}
       </div>
 
-      {/* Top bar:
-            row 1 = [mode toggle] [search] [+ add]
-            row 2 = [trip header]   (only in trip-detail mode, aligned left under
-                                     the mode toggle) */}
+      {/* Top bar — top-LEFT cluster: search (circle, expands) + place + add.
+                    top-RIGHT cluster: mode toggle (icons).
+          Trip detail header sits below this row. */}
       <div style={{
         position: 'absolute', top: 10, left: 10, right: 10, zIndex: 1000,
         display: 'flex', flexDirection: 'column', gap: 6,
       }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {/* Mode toggle — glassmorphic pill */}
+        {/* Search — collapsed circle by default, expands on click. */}
+        <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} mapInstance={mapInstance} compact />
+
+        {/* + Add pin button — glassmorphic */}
+        {mode === 'places' && (
+          <button onClick={addAtCenter}
+            title="Add a pin"
+            style={{
+              backdropFilter: 'blur(20px) saturate(1.4)',
+              WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+              background: 'var(--dl-glass)',
+              border: '1px solid var(--dl-glass-border)',
+              borderRadius: 100, padding: '6px 8px', cursor: 'pointer',
+              color: 'var(--dl-accent)', display: 'flex', alignItems: 'center',
+              flexShrink: 0, boxShadow: 'var(--dl-glass-shadow)',
+              transition: 'all 0.15s',
+            }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+          </button>
+        )}
+
+        {/* Spacer pushes the mode toggle to the right edge. */}
+        <div style={{ flex: 1 }} />
+
+        {/* Mode toggle — top-right, icons only, matches public profile. */}
         <div style={{
           display: 'flex', gap: 1,
           backdropFilter: 'blur(20px) saturate(1.4)',
@@ -1833,7 +1901,6 @@ function MapInner({ token }) {
               color: mode === 'trip' ? 'var(--dl-accent)' : 'var(--dl-middle)',
               display: 'flex', alignItems: 'center', transition: 'all 0.15s',
             }}>
-            {/* Curved route between two pins */}
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="5" cy="18" r="2" />
               <circle cx="19" cy="6" r="2" />
@@ -1841,30 +1908,6 @@ function MapInner({ token }) {
             </svg>
           </button>
         </div>
-
-        {/* Search pill — useful in every mode, including trip mode for finding
-            places to add as stops. */}
-        <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} mapInstance={mapInstance} />
-
-        {/* + Add pin button — glassmorphic */}
-        {mode === 'places' && (
-          <button onClick={addAtCenter}
-            title="Add a pin"
-            style={{
-              backdropFilter: 'blur(20px) saturate(1.4)',
-              WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-              background: 'var(--dl-glass)',
-              border: '1px solid var(--dl-glass-border)',
-              borderRadius: 100, padding: '6px 8px', cursor: 'pointer',
-              color: 'var(--dl-accent)', display: 'flex', alignItems: 'center',
-              flexShrink: 0, boxShadow: 'var(--dl-glass-shadow)',
-              transition: 'all 0.15s',
-            }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-          </button>
-        )}
       </div>
 
       {/* Row 2: trip header (detail mode only). Aligned left under the mode toggle. */}
