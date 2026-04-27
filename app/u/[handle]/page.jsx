@@ -11,7 +11,7 @@ import NoteCardItem, { firstMediaForNote } from "@/components/widgets/NoteCardIt
 import NotesGrid from "@/components/widgets/NotesGrid.jsx";
 import { MiniTripMap } from "@/components/widgets/JournalEditor.jsx";
 import { Card } from "@/components/ui/primitives.jsx";
-import PublicWorldMapCard from "@/components/cards/places/PublicWorldMapCard.jsx";
+import WorldMapCard from "@/components/cards/WorldMapCard.jsx";
 import PublicNotesCard from "@/components/widgets/PublicNotesCard.jsx";
 
 // Extract a display name from note content (mirrors NotesCard.noteName).
@@ -278,14 +278,18 @@ function PublicContent({ notes, trips, collections, places, tags }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       {hasMap && (
-        <Card label="🗺️ Map" color="var(--dl-accent)" autoHeight slim>
-          <PublicWorldMapCard
-            places={places || []}
-            collections={collections || []}
-            trips={trips || []}
-            tags={tags || []}
-          />
-        </Card>
+        // Render WorldMapCard standalone — no outer <Card> wrapper. MapInner
+        // already provides its own styled chrome (rounded corners, background,
+        // height). Wrapping it again was the visual mismatch with the
+        // dashboard. Public-view mode supplies data + gates write affordances.
+        <WorldMapCard
+          publicView={{
+            places: places || [],
+            collections: collections || [],
+            trips: trips || [],
+            tags: tags || [],
+          }}
+        />
       )}
       {hasNotes && (
         <PublicNotesCard notes={notes} trips={trips} places={places} />

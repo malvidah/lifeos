@@ -1936,6 +1936,7 @@ function MapInner({ token, publicView }) {
               onBack={() => setInDetail(false)}
               onUpdate={trips.updateTrip}
               onDelete={async (id) => { await trips.deleteTrip(id); }}
+              readOnly={isPublic}
             />
           </div>
         ) : mode === 'places' && placesInDetail ? (
@@ -2082,6 +2083,7 @@ function MapInner({ token, publicView }) {
               onUpdateStop={trips.updateStop}
               onDeleteStop={trips.deleteStop}
               onReorder={trips.reorderStops}
+              readOnly={isPublic}
             />
           : <TripScroller
               trips={trips.trips}
@@ -2096,6 +2098,7 @@ function MapInner({ token, publicView }) {
                 const t = await trips.createTrip({ name: 'New trip' });
                 if (t?.id) { await trips.selectTrip(t.id); setInDetail(true); }
               }}
+              readOnly={isPublic}
             />
       )}
 
@@ -2123,7 +2126,7 @@ function MapInner({ token, publicView }) {
             setSelectedCollectionId(found?.id || null);
             setPlacesInDetail(true);
           }}
-          onTogglePublic={async (c) => {
+          onTogglePublic={isPublic ? undefined : async (c) => {
             const next = !c.is_public;
             setCollections(arr => arr.map(x => x.id === c.id ? { ...x, is_public: next } : x));
             try {
@@ -2132,7 +2135,7 @@ function MapInner({ token, publicView }) {
               setCollections(arr => arr.map(x => x.id === c.id ? { ...x, is_public: !next } : x));
             }
           }}
-          onCreate={async (name) => {
+          onCreate={isPublic ? undefined : async (name) => {
             // CollectionScroller's inline input collects the name; we just
             // create + select + jump into the new collection's detail.
             if (!name?.trim()) return;
@@ -2584,6 +2587,6 @@ function MapInner({ token, publicView }) {
 
 const MapInnerNoSSR = dynamic(() => Promise.resolve(MapInner), { ssr: false });
 
-export default function WorldMapCard({ token }) {
-  return <MapInnerNoSSR token={token} />;
+export default function WorldMapCard({ token, publicView }) {
+  return <MapInnerNoSSR token={token} publicView={publicView} />;
 }
