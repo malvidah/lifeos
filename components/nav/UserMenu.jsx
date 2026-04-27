@@ -682,7 +682,9 @@ function TripSyncPanel({ token }) {
       });
       const d = await r.json();
       if (!r.ok) {
-        setError(d?.needsReauth ? 'Need to reconnect Google with Gmail access. Sign out and back in.' : (d?.error || 'Scan failed'));
+        // Surface Google's actual reason so it's actionable (API not enabled
+        // vs scope missing vs something else entirely).
+        setError(d?.error || `Scan failed (${r.status})`);
         return;
       }
       const found = d?.candidates?.length || 0;

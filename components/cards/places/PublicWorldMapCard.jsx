@@ -256,10 +256,13 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
         </div>
       )}
 
-      {/* Search — top-LEFT, circle by default, expands on click. Identical
-          shape to the dashboard. Mirrors the same Photon + Nominatim search
-          but only over `places` (the user's public set). */}
-      <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 1000 }}>
+      {/* Search — centered above the map, always expanded, capped width so it
+          never overlaps the corner controls (mode toggle / collection header). */}
+      <div style={{
+        position: 'absolute', top: 10, left: '50%', transform: 'translateX(-50%)',
+        width: 'min(320px, calc(100% - 180px))', minWidth: 140,
+        zIndex: 1000, pointerEvents: 'auto',
+      }}>
         <MapSearch
           places={places}
           onSelect={(p) => {
@@ -271,7 +274,6 @@ export default function PublicWorldMapCard({ places = [], collections = [], trip
           }}
           isDark={dark}
           mapInstance={mapInstanceRef}
-          compact
         />
       </div>
 

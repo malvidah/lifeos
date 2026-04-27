@@ -174,13 +174,56 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   });
 
   if (!listResult.ok) {
+    // Surface Google's actual reason. Common error shapes:
+    //   { "error": { "code": 403, "errors":[{"reason":"insufficientPermissions"}] } }
+    //   { "error": { "code": 403, "status":"PERMISSION_DENIED", "details":[...] } }
+    let reason = null, detail = listResult.error || '';
+    try {
+      const parsed = typeof listResult.error === 'string' ? JSON.parse(listResult.error) : listResult.error;
+      reason = parsed?.error?.errors?.[0]?.reason
+            || parsed?.error?.status
+            || parsed?.error?.message
+            || null;
+      detail = parsed?.error?.message || detail;
+    } catch {}
+
+    // Also introspect the user's actual token scopes via Google's tokeninfo
+    // endpoint. Tells us conclusively whether gmail.readonly is granted.
+    let grantedScopes = null;
+    try {
+      const tokenInfoResp = await withGoogleToken(supabase, user.id, async (accessToken) => {
+        const r = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${accessToken}`);
+        if (!r.ok) return { ok: false, status: r.status };
+        return { ok: true, data: await r.json() };
+      });
+      if (tokenInfoResp?.ok) grantedScopes = tokenInfoResp.data?.scope || null;
+    } catch {}
+
+    const hasGmailScope = !!(grantedScopes && /gmail\.readonly/.test(grantedScopes));
+
     if (listResult.status === 403) {
+      // Distinguish three failure modes for the user:
+      //   - scope missing on the token        → reconnect Google
+      //   - Gmail API not enabled in project  → enable in Google Cloud Console
+      //   - something else                    → show raw reason
+      const isApiDisabled = reason === 'accessNotConfigured' || /enabled/i.test(detail);
+      const isScopeIssue  = !hasGmailScope && (!reason || reason === 'insufficientPermissions' || /scope/i.test(detail));
       return Response.json({
-        error: 'Gmail access denied — reconnect Google with Gmail scope',
-        needsReauth: true,
+        error: isApiDisabled
+          ? 'Gmail API is not enabled for this Google Cloud project — enable Gmail API in Google Cloud Console.'
+          : isScopeIssue
+            ? 'Your Google access token does not include the Gmail scope. Sign out and back in to grant it.'
+            : `Gmail returned 403: ${detail || reason || 'permission denied'}`,
+        reason,
+        detail,
+        grantedScopes, // null if tokeninfo lookup failed
+        hasGmailScope,
       }, { status: 403 });
     }
-    return Response.json({ error: 'Gmail list failed', detail: listResult.error }, { status: listResult.status || 500 });
+    return Response.json({
+      error: `Gmail list failed (${listResult.status})${detail ? ': ' + detail : ''}`,
+      status: listResult.status, reason, detail, grantedScopes, hasGmailScope,
+    }, { status: listResult.status || 500 });
   }
 
   const messageIds = (listResult.data?.messages || []).map(m => m.id);

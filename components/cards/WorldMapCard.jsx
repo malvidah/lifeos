@@ -1837,29 +1837,31 @@ function MapInner({ token }) {
         ))}
       </div>
 
-      {/* Top bar — top-LEFT cluster: search (circle, expands) + place + add.
-                    top-RIGHT cluster: mode toggle (icons).
-          Trip detail header sits below this row. */}
+      {/* Top chrome — three independently positioned clusters so the centered
+          search never collides with the corner controls on narrow screens.
+            top-LEFT  : + add pin (places mode only)
+            top-CENTER: search pill (always expanded, capped width)
+            top-RIGHT : mode toggle (icons) */}
       <div style={{
         position: 'absolute', top: 10, left: 10, right: 10, zIndex: 1000,
         display: 'flex', flexDirection: 'column', gap: 6,
+        // Pointer-events flow through the empty stripes so map drags still work.
+        pointerEvents: 'none',
       }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {/* Search — collapsed circle by default, expands on click. */}
-        <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} mapInstance={mapInstance} compact />
-
-        {/* + Add pin button — glassmorphic */}
+      <div style={{ position: 'relative', height: 36 }}>
+        {/* + Add pin (top-left) */}
         {mode === 'places' && (
           <button onClick={addAtCenter}
             title="Add a pin"
             style={{
+              position: 'absolute', top: 0, left: 0, pointerEvents: 'auto',
               backdropFilter: 'blur(20px) saturate(1.4)',
               WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
               background: 'var(--dl-glass)',
               border: '1px solid var(--dl-glass-border)',
               borderRadius: 100, padding: '6px 8px', cursor: 'pointer',
               color: 'var(--dl-accent)', display: 'flex', alignItems: 'center',
-              flexShrink: 0, boxShadow: 'var(--dl-glass-shadow)',
+              boxShadow: 'var(--dl-glass-shadow)',
               transition: 'all 0.15s',
             }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1868,17 +1870,27 @@ function MapInner({ token }) {
           </button>
         )}
 
-        {/* Spacer pushes the mode toggle to the right edge. */}
-        <div style={{ flex: 1 }} />
-
-        {/* Mode toggle — top-right, icons only, matches public profile. */}
+        {/* Search — centered, always expanded, capped width. */}
         <div style={{
+          position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+          // Cap to 320px on wide screens; on narrow viewports leave space for
+          // the corner controls so they never get covered (≈80px each side).
+          width: 'min(320px, calc(100% - 180px))',
+          minWidth: 140,
+          pointerEvents: 'auto',
+        }}>
+          <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} mapInstance={mapInstance} />
+        </div>
+
+        {/* Mode toggle (top-right) */}
+        <div style={{
+          position: 'absolute', top: 0, right: 0, pointerEvents: 'auto',
           display: 'flex', gap: 1,
           backdropFilter: 'blur(20px) saturate(1.4)',
           WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
           background: 'var(--dl-glass)',
           border: '1px solid var(--dl-glass-border)',
-          borderRadius: 100, padding: 3, flexShrink: 0,
+          borderRadius: 100, padding: 3,
           boxShadow: 'var(--dl-glass-shadow)',
         }}>
           <button onClick={() => { setMode('places'); setAddingPlace(null); setSelectedPlace(null); }}
