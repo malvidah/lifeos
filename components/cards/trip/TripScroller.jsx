@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { mono } from '@/lib/tokens';
 import { nearestTripIdx, tripDateSpan, tripModeMix } from '@/lib/useTrips';
 
@@ -56,24 +56,40 @@ export default function TripScroller({ trips, todayStr, previewedId, onPreview, 
   const dragRef   = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
   const [centred, setCentred] = useState(false);
 
-  // Centre the scroll on the trip closest to today on first paint.
+  // Sort: oldest on the LEFT, newest on the RIGHT, "+ new trip" tile sits at
+  // the very right after the newest trip. Trips without any dated stops fall
+  // back to created_at so they still slot into the timeline.
+  const sortedTrips = useMemo(() => {
+    return [...(trips || [])].sort((a, b) => {
+      const aSpan = tripDateSpan(a.stops);
+      const bSpan = tripDateSpan(b.stops);
+      const aKey  = aSpan.end || aSpan.start || a.created_at || '';
+      const bKey  = bSpan.end || bSpan.start || b.created_at || '';
+      return String(aKey).localeCompare(String(bKey));
+    });
+  }, [trips]);
+
+  // Centre the scroll on the trip closest to today on first paint. With the
+  // "+ new trip" tile gone from the leading edge, geometry simplifies — no
+  // NEW_TILE_W offset.
   useEffect(() => {
-    if (centred || !trips.length || !scrollRef.current) return;
-    const idx = nearestTripIdx(trips, todayStr);
-    if (idx < 0) { setCentred(true); return; }
-    const left = (NEW_TILE_W + GAP) + idx * (CARD_W + GAP) - (scrollRef.current.clientWidth - CARD_W) / 2;
+    if (centred || !sortedTrips.length || !scrollRef.current) return;
+    let idx = nearestTripIdx(sortedTrips, todayStr);
+    // No dated trip → fall back to the rightmost (most recently created) one.
+    if (idx < 0) idx = sortedTrips.length - 1;
+    const left = idx * (CARD_W + GAP) - (scrollRef.current.clientWidth - CARD_W) / 2;
     scrollRef.current.scrollLeft = Math.max(0, left);
     setCentred(true);
-  }, [trips, todayStr, centred]);
+  }, [sortedTrips, todayStr, centred]);
 
   // Smoothly centre the previewed card when it changes.
   useEffect(() => {
     if (!previewedId || !scrollRef.current) return;
-    const idx = trips.findIndex(t => t.id === previewedId);
+    const idx = sortedTrips.findIndex(t => t.id === previewedId);
     if (idx < 0) return;
-    const left = (NEW_TILE_W + GAP) + idx * (CARD_W + GAP) - (scrollRef.current.clientWidth - CARD_W) / 2;
+    const left = idx * (CARD_W + GAP) - (scrollRef.current.clientWidth - CARD_W) / 2;
     scrollRef.current.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
-  }, [previewedId, trips]);
+  }, [previewedId, sortedTrips]);
 
   // Click handler routing: same card → detail; different / first card → preview.
   const handleCardClick = (id) => {
@@ -110,31 +126,7 @@ export default function TripScroller({ trips, todayStr, previewedId, onPreview, 
           cursor: 'grab',
         }}
       >
-        {/* "+ new trip" tile, always first — hidden in read-only / public view. */}
-        {!readOnly && <button
-          onClick={() => { if (!dragRef.current.moved) onCreate(); }}
-          style={{
-            flexShrink: 0, width: 200, height: 100,
-            backdropFilter: 'blur(28px) saturate(1.6)',
-            WebkitBackdropFilter: 'blur(28px) saturate(1.6)',
-            background: 'var(--dl-glass)',
-            border: '1.5px dashed var(--dl-glass-border)',
-            borderRadius: 12, padding: 10,
-            boxShadow: 'var(--dl-glass-shadow)',
-            display: 'flex', flexDirection: 'column',
-            alignItems: 'center', justifyContent: 'center',
-            gap: 6, cursor: 'pointer',
-            color: 'var(--dl-middle)', fontFamily: mono, fontSize: 11,
-            letterSpacing: '0.04em', textTransform: 'uppercase',
-          }}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-          New trip
-        </button>}
-
-        {trips.map(trip => {
+        {sortedTrips.map(trip => {
           const span  = tripDateSpan(trip.stops);
           const modes = tripModeMix(trip.stops);
           const dim   = isPast(span, todayStr);
@@ -184,6 +176,33 @@ export default function TripScroller({ trips, todayStr, previewedId, onPreview, 
             </button>
           );
         })}
+
+        {/* "+ new trip" tile — sits at the right edge so the timeline reads
+            "oldest ← scroll left | scroll right → newest → new". */}
+        {!readOnly && (
+          <button
+            onClick={() => { if (!dragRef.current.moved) onCreate(); }}
+            style={{
+              flexShrink: 0, width: NEW_TILE_W, height: 100,
+              backdropFilter: 'blur(28px) saturate(1.6)',
+              WebkitBackdropFilter: 'blur(28px) saturate(1.6)',
+              background: 'var(--dl-glass)',
+              border: '1.5px dashed var(--dl-glass-border)',
+              borderRadius: 12, padding: 10,
+              boxShadow: 'var(--dl-glass-shadow)',
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              gap: 6, cursor: 'pointer',
+              color: 'var(--dl-middle)', fontFamily: mono, fontSize: 11,
+              letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            New trip
+          </button>
+        )}
       </div>
     </div>
   );
