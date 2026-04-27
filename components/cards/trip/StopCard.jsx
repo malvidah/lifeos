@@ -119,7 +119,7 @@ function stopColor(stop) { return stop.place?.color || 'var(--dl-accent)'; }
  * `priorDate` lets a bare-time entry like "4pm" attach to the trip's day
  * instead of today.
  */
-export default function StopCard({ stop, index, isLast, onUpdate, onDelete, derivedDateTime, priorDate }) {
+export default function StopCard({ stop, index, isLast, onUpdate, onDelete, derivedDateTime, priorDate, readOnly = false }) {
   const [label, setLabel] = useState(stopName(stop));
   // Date input has two display modes: a clean formatted string when not
   // focused ("Apr 25 4pm") and the raw user-typed value while editing.
@@ -163,83 +163,108 @@ export default function StopCard({ stop, index, isLast, onUpdate, onDelete, deri
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0,
         }}>{index + 1}</span>
-        <input
-          value={label}
-          onChange={e => setLabel(e.target.value)}
-          onBlur={() => { if (label.trim() && label !== stopName(stop)) onUpdate(stop.id, { label: label.trim() }); }}
-          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
-          placeholder="Stop name"
-          style={{
+        {readOnly ? (
+          <span style={{
             flex: 1, minWidth: 0,
-            background: 'transparent', border: 'none', outline: 'none',
             fontFamily: mono, fontSize: 12, fontWeight: 600,
-            color: 'var(--dl-strong)', letterSpacing: '0.02em', padding: 0,
-          }}
-        />
-        <button
-          onClick={() => onDelete(stop.id)}
-          title="Remove from trip"
-          style={{
-            background: 'none', border: 'none', cursor: 'pointer',
-            color: 'var(--dl-middle)', opacity: 0.5, padding: 2,
-            display: 'flex', alignItems: 'center',
-          }}
-        >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-            <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
-        </button>
+            color: 'var(--dl-strong)', letterSpacing: '0.02em',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{label || 'Stop'}</span>
+        ) : (
+          <input
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+            onBlur={() => { if (label.trim() && label !== stopName(stop)) onUpdate(stop.id, { label: label.trim() }); }}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            placeholder="Stop name"
+            style={{
+              flex: 1, minWidth: 0,
+              background: 'transparent', border: 'none', outline: 'none',
+              fontFamily: mono, fontSize: 12, fontWeight: 600,
+              color: 'var(--dl-strong)', letterSpacing: '0.02em', padding: 0,
+            }}
+          />
+        )}
+        {!readOnly && (
+          <button
+            onClick={() => onDelete(stop.id)}
+            title="Remove from trip"
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              color: 'var(--dl-middle)', opacity: 0.5, padding: 2,
+              display: 'flex', alignItems: 'center',
+            }}
+          >
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+        )}
       </div>
 
-      {/* Date + time — text input with natural-language parsing.
-          Bare time inputs ("4pm") use priorDate as the date anchor so they
-          stay on the trip's current day instead of jumping to today. */}
-      <input
-        value={dateDisplay}
-        onFocus={() => {
-          // Seed the editable value with whatever the user is currently
-          // seeing — explicit time if set, otherwise the derived value.
-          // Using stop.date_time alone would blank the field and trick a
-          // bare-time entry into resolving against "now".
-          setDateRaw(formatDateTime(stop.date_time) || formatDateTime(derivedDateTime));
-          setDateFocused(true);
-        }}
-        onChange={e => setDateRaw(e.target.value)}
-        onBlur={() => {
-          setDateFocused(false);
-          const trimmed = dateRaw.trim();
-          if (!trimmed) { if (stop.date_time) onUpdate(stop.id, { date_time: null }); return; }
-          const parsed = parseDateTimeInput(trimmed, priorDate || derivedDateTime);
-          if (parsed && parsed !== stop.date_time) onUpdate(stop.id, { date_time: parsed });
-        }}
-        onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDateRaw(''); e.currentTarget.blur(); } }}
-        placeholder="Apr 25 4pm"
-        style={{
-          width: '100%', background: 'transparent', border: 'none', outline: 'none',
-          fontFamily: mono, fontSize: 10,
-          color: 'var(--dl-middle)',
-          // Ghost the derived time so users can tell it's auto-computed.
-          fontStyle: isDerived && !dateFocused ? 'italic' : 'normal',
-          opacity: isDerived && !dateFocused ? 0.6 : 1,
-          padding: '2px 0',
-        }}
-      />
+      {/* Date + time — read-only text in public view, editable input otherwise. */}
+      {readOnly ? (
+        (dateDisplay && (
+          <div style={{
+            fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)',
+            fontStyle: isDerived ? 'italic' : 'normal',
+            opacity: isDerived ? 0.6 : 1,
+            padding: '2px 0',
+          }}>{dateDisplay}</div>
+        ))
+      ) : (
+        <input
+          value={dateDisplay}
+          onFocus={() => {
+            setDateRaw(formatDateTime(stop.date_time) || formatDateTime(derivedDateTime));
+            setDateFocused(true);
+          }}
+          onChange={e => setDateRaw(e.target.value)}
+          onBlur={() => {
+            setDateFocused(false);
+            const trimmed = dateRaw.trim();
+            if (!trimmed) { if (stop.date_time) onUpdate(stop.id, { date_time: null }); return; }
+            const parsed = parseDateTimeInput(trimmed, priorDate || derivedDateTime);
+            if (parsed && parsed !== stop.date_time) onUpdate(stop.id, { date_time: parsed });
+          }}
+          onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); if (e.key === 'Escape') { setDateRaw(''); e.currentTarget.blur(); } }}
+          placeholder="Apr 25 4pm"
+          style={{
+            width: '100%', background: 'transparent', border: 'none', outline: 'none',
+            fontFamily: mono, fontSize: 10,
+            color: 'var(--dl-middle)',
+            fontStyle: isDerived && !dateFocused ? 'italic' : 'normal',
+            opacity: isDerived && !dateFocused ? 0.6 : 1,
+            padding: '2px 0',
+          }}
+        />
+      )}
 
       {/* Notes */}
-      <input
-        value={notes}
-        onChange={e => setNotes(e.target.value)}
-        onBlur={() => { if (notes !== (stop.notes || '')) onUpdate(stop.id, { notes: notes || null }); }}
-        placeholder="Notes…"
-        style={{
-          width: '100%', background: 'transparent', border: 'none', outline: 'none',
-          fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)',
-          padding: '2px 0',
-        }}
-      />
+      {readOnly ? (
+        notes && (
+          <div style={{
+            fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)',
+            padding: '2px 0', whiteSpace: 'pre-wrap',
+          }}>{notes}</div>
+        )
+      ) : (
+        <input
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          onBlur={() => { if (notes !== (stop.notes || '')) onUpdate(stop.id, { notes: notes || null }); }}
+          placeholder="Notes…"
+          style={{
+            width: '100%', background: 'transparent', border: 'none', outline: 'none',
+            fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)',
+            padding: '2px 0',
+          }}
+        />
+      )}
 
-      {/* Mode picker — only relevant when there's a segment after this stop */}
-      {!isLast && (
+      {/* Mode picker — only relevant when there's a segment after this stop.
+          In read-only mode we show only the active mode glyph (or hide if none). */}
+      {!isLast && !readOnly && (
         <div style={{
           display: 'flex', gap: 1, marginTop: 2,
           borderTop: '1px solid var(--dl-glass-border)', paddingTop: 6,
@@ -261,6 +286,14 @@ export default function StopCard({ stop, index, isLast, onUpdate, onDelete, deri
               }}
             >{opt.glyph}</button>
           ))}
+        </div>
+      )}
+      {!isLast && readOnly && mode && (
+        <div style={{
+          marginTop: 2, borderTop: '1px solid var(--dl-glass-border)', paddingTop: 6,
+          fontSize: 13, lineHeight: 1, textAlign: 'center', opacity: 0.85,
+        }}>
+          {MODE_OPTIONS.find(o => o.key === mode)?.glyph || '·'}
         </div>
       )}
     </div>

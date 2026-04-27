@@ -458,7 +458,7 @@ function MiniLocationMap({ places, interactive = false }) {
 // ── MiniTripMap — Leaflet map showing a tagged trip's numbered stops + route ─
 // Mirrors MiniLocationMap but renders trip-specific overlays: numbered badges
 // per stop and per-segment polylines (modes coloured the same as WorldMapCard).
-function MiniTripMap({ trip, token, interactive = false }) {
+export function MiniTripMap({ trip, token, interactive = false }) {
   const containerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const { theme } = useTheme();

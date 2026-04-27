@@ -11,6 +11,7 @@ import { resolveTripSegments, MODE_STYLE } from "@/lib/routing";
 import TripScroller from "./trip/TripScroller.jsx";
 import TripHeader from "./trip/TripHeader.jsx";
 import TripStopsRow from "./trip/TripStopsRow.jsx";
+import CollectionScroller from "./places/CollectionScroller.jsx";
 
 // ─── Pin color palette for user-created types ──────────────────────────────
 const PIN_COLORS = [
@@ -459,12 +460,10 @@ function MapInner({ token }) {
   const mapInstance = useRef(null);
   const tileLayerRef = useRef(null);
   const markersRef = useRef([]);
-  const locationDotsRef = useRef([]);
   const currentLocMarker = useRef(null);
 
   const [places, setPlaces] = useState([]);
   const [placeTypes, setPlaceTypes] = useState([]);
-  const [locations, setLocations] = useState([]);
   const [mode, setMode] = useState('places');
   const [activeFilter, setActiveFilter] = useState(null); // null = show all, type name = filter
   const [addingPlace, setAddingPlace] = useState(null);
@@ -504,6 +503,24 @@ function MapInner({ token }) {
   const [inDetail, setInDetail] = useState(false);
   // Reset the detail flag whenever the selected trip changes or trip mode exits.
   useEffect(() => { if (!trips.selectedTrip || mode !== 'trip') setInDetail(false); }, [trips.selectedTrip, mode]);
+
+  // Places-mode equivalent of `inDetail`. When false, we show CollectionScroller
+  // (collection cards). When true, we show the existing per-place carousel.
+  const [placesInDetail, setPlacesInDetail] = useState(false);
+  useEffect(() => { if (mode !== 'places') setPlacesInDetail(false); }, [mode]);
+
+  // Fit map bounds to the previewed collection's pins when activeFilter changes
+  // in places mode. This is what makes selecting a collection feel "alive".
+  useEffect(() => {
+    if (mode !== 'places' || !mapInstance.current || !leafletReady) return;
+    const L = LRef.current;
+    const filtered = activeFilter
+      ? places.filter(p => (p.category || '').toLowerCase() === activeFilter.toLowerCase())
+      : places;
+    const coords = filtered.filter(p => p.lat != null && p.lng != null).map(p => [p.lat, p.lng]);
+    if (coords.length < 2) return; // a single pin would zoom uncomfortably tight
+    mapInstance.current.fitBounds(L.latLngBounds(coords).pad(0.2));
+  }, [activeFilter, mode, leafletReady]); // eslint-disable-line
   const discoveredLayerRef = useRef(null);
   const statesLayerRef = useRef(null);
   const geoJsonCacheRef = useRef(null);
@@ -898,14 +915,6 @@ function MapInner({ token }) {
     return () => window.removeEventListener('daylab:open-trip', handler);
   }, [trips, inDetail, token]);
 
-  // Fetch location history
-  useEffect(() => {
-    if (!token || mode !== 'timeline') return;
-    api.get('/api/location?start=2020-01-01&end=2099-12-31', token).then(d => {
-      setLocations(d?.locations ?? []);
-    });
-  }, [token, mode]);
-
   // Render place markers
   useEffect(() => {
     if (!mapInstance.current || !leafletReady) return;
@@ -1191,57 +1200,6 @@ function MapInner({ token }) {
     });
     currentLocMarker.current = L.marker([userLoc.lat, userLoc.lng], { icon, interactive: false }).addTo(mapInstance.current);
   }, [userLoc, leafletReady, isDark, mode]);
-
-  // Render location history
-  useEffect(() => {
-    if (!mapInstance.current || !leafletReady) return;
-    const L = LRef.current;
-    const map = mapInstance.current;
-    locationDotsRef.current.forEach(m => m.remove());
-    locationDotsRef.current = [];
-    if (mode !== 'timeline' || !locations.length) return;
-
-    const coords = locations.map(l => [l.lat, l.lng]);
-    const polyline = L.polyline(coords, {
-      color: isDark ? '#D08828' : '#B87018',
-      weight: 1.5, opacity: 0.25, dashArray: '6,6',
-    }).addTo(map);
-    locationDotsRef.current.push(polyline);
-
-    const stays = [];
-    let cur = { ...locations[0], days: 1 };
-    for (let i = 1; i < locations.length; i++) {
-      const loc = locations[i];
-      const same = (loc.city && loc.city === cur.city) ||
-        (Math.abs(loc.lat - cur.lat) < 0.5 && Math.abs(loc.lng - cur.lng) < 0.5);
-      if (same) cur.days++;
-      else { stays.push(cur); cur = { ...loc, days: 1 }; }
-    }
-    stays.push(cur);
-
-    stays.forEach(stay => {
-      const size = Math.max(6, Math.min(18, 4 + stay.days * 1.2));
-      const color = isDark ? '#D08828' : '#B87018';
-      const icon = L.divIcon({
-        className: '',
-        html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};opacity:0.55;border:1.5px solid ${isDark ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.7)'};box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>`,
-        iconSize: [size, size],
-        iconAnchor: [size / 2, size / 2],
-      });
-      const marker = L.marker([stay.lat, stay.lng], { icon }).addTo(map);
-      marker.bindTooltip(
-        `<div style="font-family:monospace;font-size:11px;letter-spacing:0.04em;">
-          <strong>${stay.city || `${stay.lat.toFixed(1)}, ${stay.lng.toFixed(1)}`}</strong>
-          ${stay.country ? `<span style="opacity:0.5;margin-left:4px">${stay.country}</span>` : ''}
-          <br/><span style="opacity:0.6">${stay.days} day${stay.days !== 1 ? 's' : ''}</span>
-        </div>`,
-        { className: 'daylab-tooltip', direction: 'top', offset: [0, -size / 2] }
-      );
-      locationDotsRef.current.push(marker);
-    });
-
-    if (coords.length > 1) map.fitBounds(L.latLngBounds(coords).pad(0.1));
-  }, [locations, mode, leafletReady, isDark]); // eslint-disable-line
 
   // Save new place (or discovered area)
   const savePlace = useCallback(async () => {
@@ -1785,18 +1743,6 @@ function MapInner({ token }) {
               <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
             </svg>
           </button>
-          <button onClick={() => { setMode('timeline'); setAddingPlace(null); setSelectedPlace(null); }}
-            title="Location timeline"
-            style={{
-              background: mode === 'timeline' ? 'var(--dl-accent-15)' : 'none',
-              border: 'none', borderRadius: 100, padding: '5px 8px', cursor: 'pointer',
-              color: mode === 'timeline' ? 'var(--dl-accent)' : 'var(--dl-middle)',
-              display: 'flex', alignItems: 'center', transition: 'all 0.15s',
-            }}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-            </svg>
-          </button>
           <button onClick={() => { setMode('trip'); setAddingPlace(null); setSelectedPlace(null); }}
             title="Trip planner"
             style={{
@@ -1852,39 +1798,26 @@ function MapInner({ token }) {
       )}
       </div>
 
-      {/* Type filter pills — below top bar */}
-      {mode === 'places' && placeTypes.length > 0 && (
+      {/* Top-left detail header for places-mode (back arrow + collection name). */}
+      {mode === 'places' && placesInDetail && (
         <div style={{
-          position: 'absolute', top: 50, left: 10, right: 10, zIndex: 999,
-          display: 'flex', gap: 4, flexWrap: 'wrap',
+          position: 'absolute', top: 50, left: 10, zIndex: 999,
+          display: 'flex', alignItems: 'center', gap: 6,
+          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
+          background: 'var(--dl-glass)',
+          border: '1px solid var(--dl-glass-border)',
+          borderRadius: 100, padding: '4px 12px',
+          boxShadow: 'var(--dl-glass-shadow)',
         }}>
-          <button onClick={() => setActiveFilter(null)}
-            style={{
-              backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-              background: !activeFilter ? 'var(--dl-accent-20)' : 'var(--dl-glass)',
-              border: `1px solid ${!activeFilter ? 'var(--dl-accent)' : 'var(--dl-glass-border)'}`,
-              borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
-              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
-              color: !activeFilter ? 'var(--dl-accent)' : 'var(--dl-middle)',
-              textTransform: 'uppercase',
-            }}>
-            All
-          </button>
-          {placeTypes.map(t => (
-            <button key={t.id} onClick={() => setActiveFilter(activeFilter === t.name ? null : t.name)}
-              style={{
-                backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-                background: activeFilter === t.name ? t.color + '33' : 'var(--dl-glass)',
-                border: `1px solid ${activeFilter === t.name ? t.color : 'var(--dl-glass-border)'}`,
-                borderRadius: 100, padding: '3px 10px', cursor: 'pointer',
-                fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
-                color: activeFilter === t.name ? t.color : 'var(--dl-middle)',
-                textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 4,
-              }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
-              {t.name}
-            </button>
-          ))}
+          <button onClick={() => setPlacesInDetail(false)}
+            title="Back to collections"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', padding: 0, lineHeight: 1, fontSize: 18 }}>‹</button>
+          <span style={{
+            fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+            color: 'var(--dl-strong)',
+          }}>
+            {activeFilter || 'All places'}
+          </span>
         </div>
       )}
 
@@ -1920,8 +1853,38 @@ function MapInner({ token }) {
             />
       )}
 
-      {/* Place carousel */}
-      {mode !== 'trip' && (visiblePlaces.length > 0 || addingPlace) && !previewGeo && !selectedDiscovered && (
+      {/* Collection scroller (places mode, browsing). Two-step: 1st click on
+          a collection card previews it (filters markers + fits bounds);
+          2nd click on the same card opens the per-place carousel below. */}
+      {mode === 'places' && !placesInDetail && !previewGeo && !selectedDiscovered && !addingPlace && (
+        <CollectionScroller
+          collections={placeTypes.map(t => ({
+            id: t.id,
+            name: t.name,
+            color: t.color,
+            is_public: !!t.is_public,
+            count: places.filter(p => (p.category || '').toLowerCase() === t.name.toLowerCase()).length,
+          })).filter(c => c.count > 0)}
+          totalCount={places.length}
+          selectedCollection={activeFilter}
+          onPreview={(key) => setActiveFilter(key)}
+          onEnterDetail={(key) => { setActiveFilter(key); setPlacesInDetail(true); }}
+          onTogglePublic={async (c) => {
+            const next = !c.is_public;
+            // Optimistic update of the placeTypes list so the UI flips immediately.
+            setPlaceTypes(arr => arr.map(t => t.id === c.id ? { ...t, is_public: next } : t));
+            try {
+              await api.patch('/api/place-types', { id: c.id, is_public: next }, token);
+            } catch {
+              setPlaceTypes(arr => arr.map(t => t.id === c.id ? { ...t, is_public: !next } : t));
+            }
+          }}
+        />
+      )}
+
+      {/* Per-place carousel — shown when in places-mode detail or while
+          actively adding a place (regardless of detail state). */}
+      {mode === 'places' && (placesInDetail || addingPlace) && (visiblePlaces.length > 0 || addingPlace) && !previewGeo && !selectedDiscovered && (
         <div style={{ pointerEvents: 'none' }}>
           <div ref={carouselRef}
             onMouseDown={e => {

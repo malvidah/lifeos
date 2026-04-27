@@ -14,7 +14,7 @@ import StopCard from './StopCard.jsx';
  * an explicit one. This propagates forward — set the start node's date+time
  * once and every downstream stop gets a sensible default.
  */
-export default function TripStopsRow({ trip, token, onUpdateStop, onDeleteStop, onReorder }) {
+export default function TripStopsRow({ trip, token, onUpdateStop, onDeleteStop, onReorder, readOnly = false }) {
   // Drag-reorder. Tracks the index being dragged; the dropped position
   // produces a new ordering that we send up via onReorder.
   const [dragIdx, setDragIdx] = useState(null);
@@ -79,6 +79,8 @@ export default function TripStopsRow({ trip, token, onUpdateStop, onDeleteStop, 
   }, [trip.stops, derivedTimes]);
 
   if (!trip.stops?.length) {
+    // Empty state nudge only makes sense when the user can actually add stops.
+    if (readOnly) return null;
     return (
       <div style={{
         pointerEvents: 'auto', padding: '0 10px',
@@ -109,20 +111,18 @@ export default function TripStopsRow({ trip, token, onUpdateStop, onDeleteStop, 
       {trip.stops.map((stop, i) => (
         <div
           key={stop.id}
-          draggable
-          onDragStart={e => {
+          draggable={!readOnly}
+          onDragStart={readOnly ? undefined : (e => {
             setDragIdx(i);
             e.dataTransfer.effectAllowed = 'move';
-            // Required for some browsers to fire drag events at all.
             try { e.dataTransfer.setData('text/plain', stop.id); } catch {}
-          }}
-          onDragEnter={() => { if (dragIdx != null && dragIdx !== i) setOverIdx(i); }}
-          onDragOver={e => { if (dragIdx != null) e.preventDefault(); }}
-          onDrop={e => { e.preventDefault(); finishDrop(i); }}
-          onDragEnd={() => { setDragIdx(null); setOverIdx(null); }}
+          })}
+          onDragEnter={readOnly ? undefined : (() => { if (dragIdx != null && dragIdx !== i) setOverIdx(i); })}
+          onDragOver={readOnly ? undefined : (e => { if (dragIdx != null) e.preventDefault(); })}
+          onDrop={readOnly ? undefined : (e => { e.preventDefault(); finishDrop(i); })}
+          onDragEnd={readOnly ? undefined : (() => { setDragIdx(null); setOverIdx(null); })}
           style={{
             opacity: dragIdx === i ? 0.4 : 1,
-            // Visual cue for the drop target — a colored bar on the leading edge.
             boxShadow: overIdx === i && dragIdx != null && dragIdx !== i
               ? 'inset 3px 0 0 var(--dl-accent)'
               : 'none',
@@ -134,10 +134,11 @@ export default function TripStopsRow({ trip, token, onUpdateStop, onDeleteStop, 
             stop={stop}
             index={i}
             isLast={i === trip.stops.length - 1}
-            onUpdate={onUpdateStop}
-            onDelete={onDeleteStop}
+            onUpdate={readOnly ? undefined : onUpdateStop}
+            onDelete={readOnly ? undefined : onDeleteStop}
             derivedDateTime={derivedTimes[i]}
             priorDate={priorDates[i]}
+            readOnly={readOnly}
           />
         </div>
       ))}

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo, useContext } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, useContext } from "react";
 import { createPortal } from "react-dom";
 import { mono, F } from "@/lib/tokens";
 import { api } from "@/lib/api";
@@ -15,6 +15,56 @@ import { extractImages, stripImageChips, extractDrawingTags, extractPlaceTags, M
 import { NoteContext } from "@/lib/contexts";
 import { useTheme } from "@/lib/theme";
 import { uploadImageFile, deleteImageFile } from "@/lib/images";
+import NotesKanban from "./NotesKanban.jsx";
+import NotesGrid from "./NotesGrid.jsx";
+import { firstMediaForNote } from "./NoteCardItem.jsx";
+
+// Inline editable title shown next to the back chevron in kanban detail view.
+// Local state so typing doesn't thrash parent re-renders; commit on blur/Enter.
+function KanbanTitleRow({ note, currentTitle, onBack, onTitleCommit }) {
+  const [draft, setDraft] = useState(currentTitle);
+  // Sync draft if the note (or its title) changes externally (e.g. cascade rename).
+  useEffect(() => { setDraft(currentTitle); }, [note.id, currentTitle]);
+  const inputRef = useRef(null);
+  const commit = () => {
+    const next = draft.trim();
+    if (!next) { setDraft(currentTitle); return; }
+    if (next !== currentTitle) onTitleCommit(next);
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6, gap: 4 }}>
+      <button
+        onClick={onBack}
+        title="Back to kanban"
+        style={{
+          background: 'none', border: 'none', cursor: 'pointer',
+          color: 'var(--dl-middle)', fontFamily: mono, fontSize: 18,
+          padding: '0 4px 0 0', lineHeight: 1, flexShrink: 0,
+        }}
+        onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+        onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+      >‹</button>
+      <input
+        ref={inputRef}
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.preventDefault(); inputRef.current?.blur(); }
+          if (e.key === 'Escape') { setDraft(currentTitle); inputRef.current?.blur(); }
+        }}
+        placeholder="Untitled"
+        style={{
+          flex: 1, minWidth: 0,
+          background: 'transparent', border: 'none', outline: 'none', padding: 0,
+          fontFamily: mono, fontSize: '0.8em', fontWeight: 400,
+          letterSpacing: '0.08em', textTransform: 'uppercase',
+          color: 'var(--dl-strong)',
+        }}
+      />
+    </div>
+  );
+}
 
 // ─── NotesCard ────────────────────────────────────────────────────────────────
 // Self-contained Notes tab card.
@@ -61,6 +111,17 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
     api.get('/api/places', token).then(d => setAllPlaces(d?.places ?? [])).catch(() => {});
   }, [token]);
 
+  // All trips (with slim stops incl. lat/lng) so card thumbnails can render
+  // a route silhouette without per-trip detail fetches.
+  const [allTrips, setAllTrips] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    api.get('/api/trips', token).then(d => setAllTrips(d?.trips ?? [])).catch(() => {});
+    const refresh = () => api.get('/api/trips', token).then(d => setAllTrips(d?.trips ?? [])).catch(() => {});
+    window.addEventListener('daylab:trips-changed', refresh);
+    return () => window.removeEventListener('daylab:trips-changed', refresh);
+  }, [token]);
+
   // Load notes whenever project changes
   useEffect(() => {
     if (!token) return;
@@ -90,18 +151,30 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
     return c.split('\n')[0].trim() || 'Untitled';
   };
 
-  // Notes sort mode
-  const [notesSortRecent, toggleNotesSort] = useCollapse(`pv:${effectiveProject}:notes-sort`, false);
-  const [recentPinnedId, setRecentPinnedId] = useState(null);
+  // Notes view mode: 'manual' (drag-reorder tabs), 'recent' (sort by updated), 'kanban' (status board).
+  // Persisted per project via localStorage so each project can remember its preferred view.
+  const viewModeKey = `view:${effectiveProject}:notes`;
+  const [notesViewMode, setNotesViewModeState] = useState(() => {
+    if (typeof window === 'undefined') return 'manual';
+    return localStorage.getItem(viewModeKey) || 'manual';
+  });
+  // Re-sync when the project (and thus the key) changes.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    setNotesViewModeState(localStorage.getItem(viewModeKey) || 'manual');
+  }, [viewModeKey]);
+  const setNotesViewMode = (m) => {
+    setNotesViewModeState(m);
+    if (typeof window !== 'undefined') localStorage.setItem(viewModeKey, m);
+  };
+  const kanbanMode = notesViewMode === 'kanban';
+  const [kanbanDetailId, setKanbanDetailId] = useState(null);
 
+  // Sorted note list for grid view. Manual = projectsMeta order; recent = updated_at desc.
+  // Kanban does its own grouping by status, so this only feeds the grid component.
   const sortedNotes = useMemo(() => {
-    if (notesSortRecent) {
-      const byDate = [...notesList].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
-      if (recentPinnedId && byDate.length > 1 && byDate[0]?.id !== recentPinnedId) {
-        const pinnedIdx = byDate.findIndex(n => n.id === recentPinnedId);
-        if (pinnedIdx > 0) { const [p] = byDate.splice(pinnedIdx, 1); byDate.unshift(p); }
-      }
-      return byDate;
+    if (notesViewMode === 'recent') {
+      return [...notesList].sort((a, b) => new Date(b.updated_at || 0) - new Date(a.updated_at || 0));
     }
     const order = (projectsMeta || {})[effectiveProject]?.noteOrder || [];
     const orderMap = new Map(order.map((id, i) => [id, i]));
@@ -111,7 +184,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
       if (ai !== bi) return ai - bi;
       return new Date(a.created_at || 0) - new Date(b.created_at || 0);
     });
-  }, [notesList, projectsMeta, effectiveProject, notesSortRecent, recentPinnedId]);
+  }, [notesList, projectsMeta, effectiveProject, notesViewMode]);
 
   const allNoteNames = notesList.map(noteName).filter(Boolean);
 
@@ -119,6 +192,13 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
   useEffect(() => {
     onNoteNamesChange?.(allNoteNames);
   }, [allNoteNames.join(',')]); // eslint-disable-line
+
+  // Compute the first media item for a note (image > drawing > place > trip).
+  // Used by grid/kanban cards for the banner thumbnail.
+  const getMediaPreview = useCallback(
+    (note) => firstMediaForNote(note, { drawings: allDrawingsList, trips: allTrips }),
+    [allDrawingsList, allTrips]
+  );
 
   const saveNoteOrder = useCallback((orderedIds) => {
     if (effectiveProject === '__everything__') return;
@@ -129,154 +209,65 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
     }, { skipHistory: true });
   }, [effectiveProject, setProjectsMeta]);
 
-  // FLIP animation refs
-  const tabElemsRef = useRef({});
-  const pendingFlipSnap = useRef(null);
-
-  // Drag-to-reorder tab state
-  const tabRowRef = useRef(null);
-  const tabPending = useRef(null);
-  const tabItemWidths = useRef([]);
-  const tabDragIdxRef = useRef(null);
-  const tabOverIdxRef = useRef(null);
-  const [tabDragging, setTabDragging] = useState(false);
-  const [, tabBump] = useState(0);
-
-  const canReorderTabs = !notesSortRecent && sortedNotes.length > 1;
-
-  const calcTabOver = (clientX) => {
-    const rect = tabRowRef.current?.getBoundingClientRect();
-    if (!rect) return 0;
-    const relX = clientX - rect.left + (tabRowRef.current?.scrollLeft || 0);
-    let accum = 0;
-    for (let i = 0; i < tabItemWidths.current.length; i++) {
-      accum += tabItemWidths.current[i];
-      if (relX < accum - tabItemWidths.current[i] / 2) return i;
-    }
-    return Math.max(0, tabItemWidths.current.length - 1);
-  };
-
-  const handleTabPointerDown = (e, idx) => {
-    if (!canReorderTabs) return;
-    e.preventDefault();
-    tabPending.current = { idx, pointerId: e.pointerId, startX: e.clientX };
-    tabRowRef.current?.setPointerCapture(e.pointerId);
-  };
-
-  const handleTabPointerMove = (e) => {
-    const p = tabPending.current;
-    if (!p && !tabDragging) return;
-    if (p && !tabDragging) {
-      if (Math.abs(e.clientX - p.startX) < 5) return;
-      tabDragIdxRef.current = p.idx;
-      tabOverIdxRef.current = p.idx;
-      setTabDragging(true);
-      tabPending.current = null;
-    }
-    if (tabDragIdxRef.current != null) {
-      const newOver = calcTabOver(e.clientX);
-      if (newOver !== tabOverIdxRef.current) {
-        const snap = {};
-        Object.entries(tabElemsRef.current).forEach(([nid, el]) => {
-          if (el) snap[nid] = el.getBoundingClientRect().left;
-        });
-        pendingFlipSnap.current = snap;
-      }
-      tabOverIdxRef.current = newOver;
-      tabBump(n => n + 1);
-    }
-  };
-
-  const handleTabPointerUp = () => {
-    const wasPending = tabPending.current;
-    const wasDragging = tabDragIdxRef.current != null;
-    const dragFrom = tabDragIdxRef.current;
-    const dragTo = tabOverIdxRef.current;
-
-    if (wasPending?.pointerId != null) {
-      try { tabRowRef.current?.releasePointerCapture(wasPending.pointerId); } catch {}
-    }
-
-    if (wasDragging && dragFrom != null && dragTo != null && dragFrom !== dragTo) {
-      const ids = sortedNotes.map(n => n.id);
-      const [moved] = ids.splice(dragFrom, 1);
-      ids.splice(dragTo, 0, moved);
-      saveNoteOrder(ids);
-    }
-
-    if (wasPending && !wasDragging) {
-      selectNote(sortedNotes[wasPending.idx]?.id);
-    }
-
-    tabPending.current = null;
-    tabDragIdxRef.current = null;
-    tabOverIdxRef.current = null;
-    setTabDragging(false);
-  };
-
-  // Visual tab order during drag
-  const dragFrom = tabDragIdxRef.current;
-  const dragTo = tabOverIdxRef.current;
-  let displayNotes = sortedNotes;
-  if (tabDragging && dragFrom != null && dragTo != null && dragFrom !== dragTo) {
-    displayNotes = [...sortedNotes];
-    const [moved] = displayNotes.splice(dragFrom, 1);
-    displayNotes.splice(dragTo, 0, moved);
-  }
-
-  // FLIP animation after reorder
-  useLayoutEffect(() => {
-    const snap = pendingFlipSnap.current;
-    if (!snap) return;
-    pendingFlipSnap.current = null;
-    Object.entries(tabElemsRef.current).forEach(([id, el]) => {
-      if (!el || snap[id] == null) return;
-      const newX = el.getBoundingClientRect().left;
-      const delta = snap[id] - newX;
-      if (Math.abs(delta) < 1) return;
-      el.style.transition = 'none';
-      el.style.transform = `translateX(${delta}px)`;
-      el.offsetHeight;
-      el.style.transition = 'transform 0.22s cubic-bezier(0.4,0,0.2,1)';
-      el.style.transform = 'translateX(0)';
-      const cleanup = () => { el.style.transition = ''; el.style.transform = ''; };
-      el.addEventListener('transitionend', cleanup, { once: true });
-    });
-  });
-
-  const skipPhantomBlur = useRef(false);
-
-  const addNote = useCallback(async (initialName = '', { silent = false, initialContent } = {}) => {
+  const addNote = useCallback(async (initialName = '', { silent = false, initialContent, status } = {}) => {
     const content = initialContent || initialName || '';
-    const res = await api.post('/api/notes', { content, origin_project: effectiveProject === '__everything__' ? null : effectiveProject }, token);
+    const res = await api.post('/api/notes', {
+      content,
+      origin_project: effectiveProject === '__everything__' ? null : effectiveProject,
+      status: status || undefined,
+    }, token);
     if (res?.note) {
       setNotesList(prev => [res.note, ...prev]);
       if (!silent) setActiveNoteId(res.note.id);
     }
+    return res?.note ?? null;
   }, [effectiveProject, token]);
 
-  const selectNote = (id) => {
-    setActiveNoteId(id);
-    if (notesSortRecent && sortedNotes[0]?.id !== id) {
-      const snap = {};
-      Object.entries(tabElemsRef.current).forEach(([nid, el]) => {
-        if (el) snap[nid] = el.getBoundingClientRect().left;
-      });
-      pendingFlipSnap.current = snap;
-      setRecentPinnedId(id);
+  // Update a note's status (used by the kanban view's drag-drop). Optimistic.
+  const patchNoteStatus = useCallback(async (id, status) => {
+    setNotesList(prev => prev.map(n => n.id === id ? { ...n, status } : n));
+    try {
+      const res = await api.patch('/api/notes', { id, status }, token);
+      if (res?.note) setNotesList(prev => prev.map(n => n.id === id ? { ...n, ...res.note } : n));
+    } catch {
+      showToast('Failed to update status', 'error');
     }
-  };
+  }, [token]);
+
+  // Bulk-rename: change all notes whose status === oldStatus to newStatus.
+  // Used when a kanban column header is renamed.
+  const bulkRenameStatus = useCallback(async (oldStatus, newStatus) => {
+    setNotesList(prev => prev.map(n => {
+      const s = (n.status || 'new').toLowerCase().trim();
+      return s === oldStatus ? { ...n, status: newStatus } : n;
+    }));
+    try {
+      await api.patch('/api/notes', { id: '__bulk__', oldStatus, status: newStatus }, token);
+    } catch {
+      showToast('Failed to rename column', 'error');
+    }
+  }, [token]);
+
+  // Open a note in detail mode (used by external navigation events + note links).
+  const openNoteDetail = useCallback((id) => {
+    setActiveNoteId(id);
+    setKanbanDetailId(id);
+  }, []);
 
   // Navigate-to-note from journal chip clicks
   useEffect(() => {
-    const goHandler = (e) => {
+    const goHandler = async (e) => {
       const targetName = e.detail?.name || '';
       const match = notesList.find(n => noteName(n).toLowerCase() === targetName.toLowerCase());
-      if (match) selectNote(match.id);
-      else addNote(targetName);
+      if (match) openNoteDetail(match.id);
+      else {
+        const note = await addNote(targetName);
+        if (note) openNoteDetail(note.id);
+      }
     };
-    const createHandler = (e) => {
-      addNote(e.detail?.name || '');
+    const createHandler = async (e) => {
+      const note = await addNote(e.detail?.name || '');
+      if (note) openNoteDetail(note.id);
     };
     window.addEventListener('daylab:go-to-note', goHandler);
     window.addEventListener('daylab:create-note', createHandler);
@@ -284,7 +275,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
       window.removeEventListener('daylab:go-to-note', goHandler);
       window.removeEventListener('daylab:create-note', createHandler);
     };
-  }, [notesList, addNote]); // eslint-disable-line
+  }, [notesList, addNote, openNoteDetail]); // eslint-disable-line
 
   const updateNoteContent = useCallback((id, newContent) => {
     if (deletedNoteIds.current.has(id)) return;
@@ -366,6 +357,8 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
       setActiveNoteId(remaining[0]?.id ?? null);
       return remaining;
     });
+    // If we were viewing the deleted note in kanban detail mode, return to the grid.
+    setKanbanDetailId(prev => prev === id ? null : prev);
     await api.delete(`/api/notes?id=${id}`, token);
   };
 
@@ -529,12 +522,17 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
         headerRight={
           <div style={{ display:'flex', gap:2, background:'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius:100, padding:2 }} onClick={e => e.stopPropagation()}>
             {[
-              { key: false, icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg> },
-              { key: true,  icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
-            ].map(({key, icon}) => {
-              const active = notesSortRecent === key;
+              { key: 'manual', label: 'Manual order',
+                icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg> },
+              { key: 'recent', label: 'Recent first',
+                icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+              { key: 'kanban', label: 'Kanban by status',
+                icon: <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="1" y="1.5" width="3.5" height="13" rx="1"/><rect x="6.25" y="1.5" width="3.5" height="8.5" rx="1"/><rect x="11.5" y="1.5" width="3.5" height="10.5" rx="1"/></svg> },
+            ].map(({key, label, icon}) => {
+              const active = notesViewMode === key;
               return (
-                <button key={String(key)} onClick={() => { if (!active) toggleNotesSort(); }}
+                <button key={key} onClick={() => { if (!active) { setNotesViewMode(key); setKanbanDetailId(null); } }}
+                  aria-label={label} aria-pressed={active}
                   style={{
                     padding:'4px 8px', borderRadius:100, cursor:'pointer', border:'none',
                     display:'flex', alignItems:'center',
@@ -551,89 +549,74 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 220 }}>
-          {/* Tab row: draggable note tabs with pinned + button */}
-          <div style={{ position: 'relative', marginBottom: 8 }}>
-            <div
-              ref={tabRowRef}
-              data-no-page-swipe
-              onPointerMove={handleTabPointerMove}
-              onPointerUp={handleTabPointerUp}
-              onPointerCancel={handleTabPointerUp}
-              style={{
-                display: 'flex', gap: 2, overflowX: tabDragging ? 'hidden' : 'auto', overflowY: 'hidden',
-                paddingBottom: 8, paddingRight: 40,
-                borderBottom: '1px solid var(--dl-border)',
-                scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
-                touchAction: canReorderTabs ? 'none' : 'auto',
-              }}
-            >
-              {sortedNotes.length === 0 && (
-                <button onClick={() => { skipPhantomBlur.current = true; addNote(); }}
-                  style={{
-                    background: 'var(--dl-border-15, rgba(128,120,100,0.1))', border: 'none',
-                    borderRadius: 100, padding: '5px 14px', cursor: 'text',
-                    fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
-                    textTransform: 'uppercase', color: "var(--dl-middle)",
-                    whiteSpace: 'nowrap', flexShrink: 0,
-                  }}>Untitled</button>
-              )}
-              {displayNotes.map((note, idx) => {
-                const active = note.id === activeNoteId;
-                const isDragged = tabDragging && sortedNotes[tabDragIdxRef.current]?.id === note.id;
-                return (
-                  <button
-                    key={note.id}
-                    ref={el => {
-                      if (el) tabItemWidths.current[idx] = el.offsetWidth + 2;
-                      tabElemsRef.current[note.id] = el;
-                    }}
-                    onPointerDown={e => handleTabPointerDown(e, idx)}
-                    onClick={() => { if (!canReorderTabs) selectNote(note.id); }}
-                    style={{
-                      background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
-                      border: 'none', borderRadius: 100,
-                      padding: '5px 12px', cursor: canReorderTabs ? 'grab' : 'pointer', flexShrink: 0,
-                      fontFamily: mono, fontSize: F.sm, letterSpacing: '0.08em',
-                      textTransform: 'uppercase', whiteSpace: 'nowrap',
-                      color: active ? "var(--dl-strong)" : "var(--dl-middle)",
-                      opacity: isDragged ? 0.4 : 1,
-                      transition: 'color 0.15s, opacity 0.15s, background 0.15s, transform 0.15s ease, box-shadow 0.15s ease',
-                      maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
-                    }}
-                    onMouseEnter={e => { if (!active && !tabDragging) { e.currentTarget.style.color = "var(--dl-strong)"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.08)"; } }}
-                    onMouseLeave={e => { if (!active && !tabDragging) { e.currentTarget.style.color = "var(--dl-middle)"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; } }}
-                  >{noteName(note)}</button>
-                );
-              })}
-            </div>
-            {/* Vignette fade + pinned add button */}
-            <div style={{
-              position: 'absolute', right: 0, top: 0, bottom: 8,
-              display: 'flex', alignItems: 'center',
-              paddingLeft: 24,
-              background: 'linear-gradient(to right, transparent, var(--dl-card) 40%)',
-            }}>
-              <button
-                onClick={() => { skipPhantomBlur.current = true; addNote(); }}
-                title="New note"
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--dl-middle)', display: 'flex', alignItems: 'center',
-                  padding: '4px 6px', borderRadius: 100, transition: 'color 0.15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.color = "var(--dl-strong)"}
-                onMouseLeave={e => e.currentTarget.style.color = "var(--dl-middle)"}
-              >
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-                </svg>
-              </button>
-            </div>
-          </div>
+          {/* Detail-mode style: hide the editor's H1 since the title input lives in the header row. */}
+          {kanbanDetailId && (
+            <style>{`.dl-hide-h1 .ProseMirror h1 { display: none; }`}</style>
+          )}
 
-          {/* Editor + photos */}
+          {/* ── Detail header: back chevron + inline editable title (any mode) ── */}
+          {kanbanDetailId && activeNote && (
+            <KanbanTitleRow
+              key={activeNote.id}
+              note={activeNote}
+              currentTitle={noteName(activeNote)}
+              onBack={() => setKanbanDetailId(null)}
+              onTitleCommit={(newTitle) => {
+                const cleaned = newTitle.trim();
+                if (!cleaned) return;
+                const oldContent = activeNote.content || '';
+                const escHtml = cleaned.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+                const next = /<h1[^>]*>.*?<\/h1>/s.test(oldContent)
+                  ? oldContent.replace(/<h1([^>]*)>.*?<\/h1>/s, `<h1$1>${escHtml}</h1>`)
+                  : `<h1>${escHtml}</h1>${oldContent}`;
+                if (next === oldContent) return;
+                updateNoteContent(activeNote.id, next);
+                noteEditorRef.current?.setContent?.(next);
+              }}
+            />
+          )}
+
+          {/* ── Grid views (no detail open) ───────────────────────────────── */}
+          {!kanbanDetailId && kanbanMode && (
+            <NotesKanban
+              notes={notesList}
+              noteName={noteName}
+              effectiveProject={effectiveProject}
+              projectsMeta={projectsMeta}
+              setProjectsMeta={setProjectsMeta}
+              onSelectNote={(id) => { setActiveNoteId(id); setKanbanDetailId(id); }}
+              onAddNote={async (status) => {
+                const note = await addNote('', { status });
+                if (note) { setActiveNoteId(note.id); setKanbanDetailId(note.id); }
+              }}
+              onPatchNote={(id, updates) => {
+                if (updates.status !== undefined) patchNoteStatus(id, updates.status);
+              }}
+              onBulkRenameStatus={bulkRenameStatus}
+              getMediaPreview={getMediaPreview}
+            />
+          )}
+          {!kanbanDetailId && !kanbanMode && (
+            <NotesGrid
+              notes={sortedNotes}
+              noteName={noteName}
+              effectiveProject={effectiveProject}
+              sort={notesViewMode}
+              onSelectNote={(id) => { setActiveNoteId(id); setKanbanDetailId(id); }}
+              onAddNote={async () => {
+                const note = await addNote('');
+                if (note) { setActiveNoteId(note.id); setKanbanDetailId(note.id); }
+              }}
+              onSaveOrder={saveNoteOrder}
+              getMediaPreview={getMediaPreview}
+            />
+          )}
+
+          {/* ── Editor — only when a note is open in detail mode ──────────── */}
+          {kanbanDetailId && (
           <div
             data-no-pointer-capture
+            className="dl-hide-h1"
             style={{ flex: 1, minWidth: 0, position: 'relative' }}
             onDragEnter={handleNoteDragEnter}
             onDragLeave={handleNoteDragLeave}
@@ -642,23 +625,55 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
           >
             {/* Delete note button */}
             {activeNote && (
-              <button
-                onClick={() => setDeleteConfirm({ id: activeNote.id, name: noteName(activeNote) })}
-                title="Delete note"
-                style={{
-                  position: 'absolute', top: 4, right: 4, zIndex: 2,
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--dl-middle)', padding: 6, borderRadius: 6,
-                  transition: 'color 0.15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
-                  <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-                </svg>
-              </button>
+              <div style={{ position: 'absolute', top: 4, right: 4, zIndex: 2, display: 'flex', gap: 2 }}>
+                {/* Public/private toggle — eye-open = public, eye-off = private */}
+                <button
+                  onClick={() => {
+                    const next = !activeNote.is_public;
+                    setNotesList(prev => prev.map(n => n.id === activeNote.id ? { ...n, is_public: next } : n));
+                    api.patch('/api/notes', { id: activeNote.id, is_public: next }, token).catch(() => {
+                      // rollback on failure
+                      setNotesList(prev => prev.map(n => n.id === activeNote.id ? { ...n, is_public: !next } : n));
+                      showToast('Failed to update visibility', 'error');
+                    });
+                  }}
+                  title={activeNote.is_public ? 'Public — click to make private' : 'Private — click to make public'}
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: activeNote.is_public ? 'var(--dl-accent)' : 'var(--dl-middle)',
+                    padding: 6, borderRadius: 6, transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = activeNote.is_public ? 'var(--dl-accent)' : 'var(--dl-strong)'}
+                  onMouseLeave={e => e.currentTarget.style.color = activeNote.is_public ? 'var(--dl-accent)' : 'var(--dl-middle)'}
+                >
+                  {activeNote.is_public ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                      <line x1="1" y1="1" x2="23" y2="23"/>
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm({ id: activeNote.id, name: noteName(activeNote) })}
+                  title="Delete note"
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'var(--dl-middle)', padding: 6, borderRadius: 6,
+                    transition: 'color 0.15s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/>
+                    <line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                  </svg>
+                </button>
+              </div>
             )}
             {/* Media strip / slideshow for current note */}
             {allNoteMedia.length > 0 && (
@@ -687,8 +702,8 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 onTripClick={name => navigateToTrip(name, { openDetail: true })}
                 onNoteClick={name => {
                   const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
-                  if (match) selectNote(match.id);
-                  else addNote(name);
+                  if (match) { setActiveNoteId(match.id); setKanbanDetailId(match.id); }
+                  else addNote(name).then(n => { if (n) { setActiveNoteId(n.id); setKanbanDetailId(n.id); } });
                 }}
                 textColor={"var(--dl-strong)"}
                 mutedColor={"var(--dl-middle)"}
@@ -696,31 +711,9 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 hideInlineImages
                 style={{ minHeight: 180, width: '100%' }}
               />
-            ) : (
-              <DayLabEditor
-                key="phantom"
-                value=""
-                noteTitle
-                showScheduleTags={false}
-                onBlur={html => {
-                  if (skipPhantomBlur.current) { skipPhantomBlur.current = false; return; }
-                  const text = html?.replace(/<[^>]*>/g, '').trim();
-                  if (text && text !== 'Untitled') { skipPhantomBlur.current = true; addNote('', { initialContent: html }); }
-                }}
-                onImageUpload={file => uploadImageFile(file, token)}
-                noteNames={[]}
-                projectNames={pvProjectNames}
-                tripNames={pvTripNames}
-                onCreateNote={addNote}
-                onProjectClick={name => navigateToProject(name)}
-                onTripClick={name => navigateToTrip(name, { openDetail: true })}
-                textColor={"var(--dl-strong)"}
-                mutedColor={"var(--dl-middle)"}
-                color={"var(--dl-highlight)"}
-                style={{ minHeight: 180, width: '100%' }}
-              />
-            )}
+            ) : null}
           </div>
+          )}
         </div>
       </Card>
 

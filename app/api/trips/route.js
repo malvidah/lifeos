@@ -14,7 +14,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   if (id) {
     const { data: trip, error: tripErr } = await supabase
       .from('trips')
-      .select('id, name, created_at, updated_at')
+      .select('id, name, is_public, created_at, updated_at')
       .eq('user_id', user.id)
       .is('deleted_at', null)
       .eq('id', id)
@@ -39,7 +39,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   // Two queries (trips + stops) is simpler than a SQL aggregation and the volumes are small.
   const { data: trips, error } = await supabase
     .from('trips')
-    .select('id, name, created_at, updated_at')
+    .select('id, name, is_public, created_at, updated_at')
     .eq('user_id', user.id)
     .is('deleted_at', null)
     .order('updated_at', { ascending: false });
@@ -48,9 +48,11 @@ export const GET = withAuth(async (req, { supabase, user }) => {
   const ids = (trips ?? []).map(t => t.id);
   let stopsByTrip = {};
   if (ids.length) {
+    // lat/lng/label included so card thumbnails (notes grid) can render the
+    // route silhouette without a per-trip detail fetch.
     const { data: stops, error: stopsErr } = await supabase
       .from('trip_stops')
-      .select('trip_id, date_time, profile_to_next, order_idx')
+      .select('trip_id, date_time, profile_to_next, order_idx, lat, lng, label')
       .in('trip_id', ids)
       .order('order_idx', { ascending: true });
     if (stopsErr) throw stopsErr;
@@ -69,7 +71,7 @@ export const POST = withAuth(async (req, { supabase, user }) => {
   const { data, error } = await supabase
     .from('trips')
     .insert({ user_id: user.id, name })
-    .select('id, name, created_at, updated_at')
+    .select('id, name, is_public, created_at, updated_at')
     .single();
   if (error) throw error;
   return Response.json({ trip: { ...data, stops: [] } });
@@ -79,10 +81,11 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
   const { id, ...rest } = await req.json();
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
 
-  const allowed = ['name'];
+  const allowed = ['name', 'is_public'];
   const patch = Object.fromEntries(
     Object.entries(rest).filter(([k]) => allowed.includes(k))
   );
+  if (patch.is_public !== undefined) patch.is_public = !!patch.is_public;
   patch.updated_at = new Date().toISOString();
 
   const { data, error } = await supabase

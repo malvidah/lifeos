@@ -436,6 +436,20 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           </div>
           </>}
 
+          {/* ── Public profile entry — just the link / handle bootstrap.
+                Editing happens on the profile page itself. ─────────────── */}
+          {divider}
+          <div style={row}>
+            <ProfileLink token={token} />
+          </div>
+
+          {/* ── Trip auto-sync (Gmail) ───────────────────────────────────── */}
+          {divider}
+          <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Trip auto-sync</div>
+          <div style={row}>
+            <TripSyncPanel token={token} />
+          </div>
+
           {/* ── Integrations ────────────────────────────────────────────── */}
           {divider}
           <div style={{padding:'2px 16px 6px',fontFamily:mono,fontSize:'9px',letterSpacing:'0.12em',textTransform:'uppercase',color:'var(--dl-middle)'}}>Integrations</div>
@@ -636,6 +650,358 @@ export default function UserMenu({session,token,userId,theme,themePreference,onT
           </div>
 
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Trip auto-sync (Gmail) ──────────────────────────────────────────────────
+// Pulls JSON-LD reservation data from booking emails and surfaces them as
+// trip candidates the user accepts/rejects.
+function TripSyncPanel({ token }) {
+  const [scanning, setScanning] = useState(false);
+  const [candidates, setCandidates] = useState([]);
+  const [error, setError] = useState(null);
+  const [scanMsg, setScanMsg] = useState(null);
+
+  const loadPending = () => {
+    if (!token) return;
+    fetch('/api/trip-candidates?status=pending', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json())
+      .then(d => setCandidates(d?.candidates ?? []))
+      .catch(() => {});
+  };
+  useEffect(loadPending, [token]); // eslint-disable-line
+
+  const scan = async () => {
+    if (scanning) return;
+    setScanning(true); setError(null); setScanMsg(null);
+    try {
+      const r = await fetch('/api/auto-trips/gmail/scan?days=90', {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setError(d?.needsReauth ? 'Need to reconnect Google with Gmail access. Sign out and back in.' : (d?.error || 'Scan failed'));
+        return;
+      }
+      const found = d?.candidates?.length || 0;
+      setScanMsg(found ? `Found ${found} new trip${found === 1 ? '' : 's'}` : 'No new trips found');
+      loadPending();
+    } catch (e) {
+      setError('Scan failed');
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const decide = async (id, action) => {
+    setCandidates(prev => prev.filter(c => c.id !== id));
+    try {
+      await fetch('/api/trip-candidates', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, action }),
+      });
+      // Trip list might have changed — let other tabs know.
+      if (action === 'accept' && typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('daylab:trips-changed'));
+      }
+    } catch {
+      loadPending(); // restore on failure
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={scan} disabled={!token || scanning}
+        style={{
+          width: '100%', padding: '7px 10px',
+          background: scanning ? 'var(--dl-surface)' : 'var(--dl-accent-15)',
+          border: `1px solid var(--dl-accent-30, var(--dl-border2))`,
+          borderRadius: 6, cursor: scanning ? 'default' : 'pointer',
+          fontFamily: mono, fontSize: F.sm, letterSpacing: '0.04em', textTransform: 'uppercase',
+          color: 'var(--dl-strong)',
+        }}>
+        {scanning ? 'Scanning Gmail…' : 'Scan Gmail for trips'}
+      </button>
+      {error && (
+        <div style={{ marginTop: 6, fontFamily: mono, fontSize: F.sm, color: 'var(--dl-red, #c0392b)' }}>{error}</div>
+      )}
+      {scanMsg && !error && (
+        <div style={{ marginTop: 6, fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>{scanMsg}</div>
+      )}
+      {candidates.length > 0 && (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <div style={{ fontFamily: mono, fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--dl-middle)' }}>
+            Pending ({candidates.length})
+          </div>
+          {candidates.map(c => (
+            <div key={c.id} style={{
+              border: '1px solid var(--dl-border)', borderRadius: 6, padding: '6px 8px',
+              display: 'flex', flexDirection: 'column', gap: 4,
+            }}>
+              <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {c.name || 'Trip'}
+              </div>
+              {(c.start_date || c.end_date) && (
+                <div style={{ fontFamily: mono, fontSize: '10px', color: 'var(--dl-middle)' }}>
+                  {c.start_date}{c.end_date && c.end_date !== c.start_date ? ' → ' + c.end_date : ''}
+                  {c.stops?.length ? ` · ${c.stops.length} stop${c.stops.length === 1 ? '' : 's'}` : ''}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                <button onClick={() => decide(c.id, 'accept')}
+                  style={{
+                    flex: 1, padding: '4px 8px', border: 'none', borderRadius: 4, cursor: 'pointer',
+                    background: 'var(--dl-accent-15)', color: 'var(--dl-accent)',
+                    fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase',
+                  }}>Accept</button>
+                <button onClick={() => decide(c.id, 'reject')}
+                  style={{
+                    flex: 1, padding: '4px 8px', border: '1px solid var(--dl-border)', borderRadius: 4, cursor: 'pointer',
+                    background: 'transparent', color: 'var(--dl-middle)',
+                    fontFamily: mono, fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase',
+                  }}>Skip</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Profile link / handle bootstrap ─────────────────────────────────────────
+// Minimal entry point: if you have a handle, link to /u/[handle]. If you
+// don't, a single inline input lets you claim one (then it links). All other
+// profile editing (name, bio, avatar, banner, public toggle) lives on the
+// profile page itself.
+function ProfileLink({ token }) {
+  const [handle, setHandle] = useState(null);   // null = loading, '' = not set
+  const [draft, setDraft]   = useState('');
+  const [error, setError]   = useState(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/profile/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(d => setHandle(d?.profile?.handle || ''))
+      .catch(() => setHandle(''));
+  }, [token]);
+
+  if (handle === null) return <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>Loading…</div>;
+
+  if (handle) {
+    return (
+      <a href={`/u/${handle}`} target="_blank" rel="noreferrer" style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        textDecoration: 'none', padding: '4px 0',
+      }}>
+        <span style={{
+          fontFamily: mono, fontSize: F.sm, letterSpacing: '0.04em', textTransform: 'uppercase',
+          color: 'var(--dl-strong)',
+        }}>Public profile</span>
+        <span style={{
+          fontFamily: mono, fontSize: F.sm, color: 'var(--dl-accent)', letterSpacing: '0.02em',
+        }}>@{handle} →</span>
+      </a>
+    );
+  }
+
+  const claim = async () => {
+    const v = draft.trim().toLowerCase();
+    if (!v) return;
+    setSaving(true); setError(null);
+    try {
+      const r = await fetch('/api/profile/me', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ handle: v }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setError(d?.error || 'Failed'); return; }
+      setHandle(d.profile.handle);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <div style={{
+        fontFamily: mono, fontSize: F.sm, letterSpacing: '0.04em', textTransform: 'uppercase',
+        color: 'var(--dl-strong)', marginBottom: 6,
+      }}>Public profile</div>
+      <div style={{ display: 'flex', gap: 4 }}>
+        <span style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)', alignSelf: 'center' }}>@</span>
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value.toLowerCase())}
+          onKeyDown={e => { if (e.key === 'Enter') claim(); }}
+          placeholder="pick a handle"
+          style={{
+            flex: 1, minWidth: 0,
+            background: 'var(--dl-surface)', border: '1px solid var(--dl-border2)',
+            borderRadius: 5, outline: 'none', color: 'var(--dl-strong)',
+            fontFamily: mono, fontSize: F.sm, padding: '5px 7px',
+          }}
+        />
+        <button
+          onClick={claim}
+          disabled={!draft.trim() || saving}
+          style={{
+            background: 'var(--dl-accent-15)', border: '1px solid var(--dl-accent-30, var(--dl-border2))',
+            borderRadius: 5, padding: '5px 10px', cursor: draft.trim() ? 'pointer' : 'default',
+            fontFamily: mono, fontSize: F.sm, color: 'var(--dl-accent)',
+          }}>{saving ? '…' : 'Go'}</button>
+      </div>
+      {error && (
+        <div style={{ fontFamily: mono, fontSize: '10px', color: 'var(--dl-red, #c0392b)', marginTop: 4 }}>{error}</div>
+      )}
+    </div>
+  );
+}
+
+// ─── Profile settings (legacy — kept for reference, not rendered) ────────────
+function ProfileSettingsPanel({ token }) {
+  const [profile, setProfile] = useState(null);
+  const [draft, setDraft]     = useState({});
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState(null);
+  const [savedAt, setSavedAt] = useState(0);
+
+  useEffect(() => {
+    if (!token) return;
+    fetch('/api/profile/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.json()).then(d => {
+        const p = d?.profile || {};
+        setProfile(p);
+        setDraft({
+          handle:         p.handle || '',
+          display_name:   p.display_name || '',
+          bio:            p.bio || '',
+          profile_public: !!p.profile_public,
+        });
+      }).catch(() => {});
+  }, [token]);
+
+  const save = async (patch) => {
+    if (!token) return;
+    setSaving(true); setError(null);
+    try {
+      const r = await fetch('/api/profile/me', {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const d = await r.json();
+      if (!r.ok) {
+        setError(d?.error || 'Save failed');
+        return;
+      }
+      setProfile(d.profile);
+      setSavedAt(Date.now());
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleBlur = (key) => {
+    const value = draft[key] ?? '';
+    if (value === (profile?.[key] || '')) return;
+    save({ [key]: value });
+  };
+
+  const inputStyle = {
+    width: '100%', boxSizing: 'border-box',
+    background: 'var(--dl-surface)', border: '1px solid var(--dl-border2)',
+    borderRadius: 5, outline: 'none', color: 'var(--dl-strong)',
+    fontFamily: mono, fontSize: F.sm, padding: '6px 8px',
+  };
+  const labelStyle = {
+    fontFamily: mono, fontSize: '9px', letterSpacing: '0.1em', textTransform: 'uppercase',
+    color: 'var(--dl-middle)', marginBottom: 3, display: 'block',
+  };
+
+  if (!profile) return <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-middle)' }}>Loading…</div>;
+
+  const profileUrl = profile.handle ? `/u/${profile.handle}` : null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div>
+        <label style={labelStyle}>Handle</label>
+        <input
+          value={draft.handle || ''}
+          onChange={e => setDraft(d => ({ ...d, handle: e.target.value.toLowerCase() }))}
+          onBlur={() => handleBlur('handle')}
+          placeholder="your-handle"
+          style={inputStyle}
+        />
+      </div>
+      <div>
+        <label style={labelStyle}>Display name</label>
+        <input
+          value={draft.display_name || ''}
+          onChange={e => setDraft(d => ({ ...d, display_name: e.target.value }))}
+          onBlur={() => handleBlur('display_name')}
+          placeholder="Your name"
+          style={inputStyle}
+        />
+      </div>
+      <div>
+        <label style={labelStyle}>Bio</label>
+        <textarea
+          value={draft.bio || ''}
+          onChange={e => setDraft(d => ({ ...d, bio: e.target.value }))}
+          onBlur={() => handleBlur('bio')}
+          placeholder="One line about you"
+          rows={2}
+          style={{ ...inputStyle, resize: 'vertical', minHeight: 40 }}
+        />
+      </div>
+
+      {/* Public toggle */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <span style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-strong)' }}>
+          Profile public
+        </span>
+        <button
+          onClick={() => {
+            const next = !draft.profile_public;
+            setDraft(d => ({ ...d, profile_public: next }));
+            save({ profile_public: next });
+          }}
+          aria-pressed={!!draft.profile_public}
+          style={{
+            width: 36, height: 20, borderRadius: 999, border: 'none', cursor: 'pointer',
+            background: draft.profile_public ? 'var(--dl-accent)' : 'var(--dl-border)',
+            position: 'relative', transition: 'background 0.15s',
+          }}>
+          <span style={{
+            position: 'absolute', top: 2, left: draft.profile_public ? 18 : 2,
+            width: 16, height: 16, borderRadius: '50%', background: '#fff',
+            transition: 'left 0.15s',
+          }} />
+        </button>
+      </div>
+
+      {error && <div style={{ fontFamily: mono, fontSize: F.sm, color: 'var(--dl-red, #c0392b)' }}>{error}</div>}
+      {!error && savedAt > 0 && Date.now() - savedAt < 2000 && (
+        <div style={{ fontFamily: mono, fontSize: '10px', color: 'var(--dl-middle)' }}>Saved</div>
+      )}
+
+      {profileUrl && draft.profile_public && (
+        <a href={profileUrl} target="_blank" rel="noreferrer"
+          style={{
+            fontFamily: mono, fontSize: F.sm, letterSpacing: '0.04em', textTransform: 'uppercase',
+            color: 'var(--dl-accent)', textDecoration: 'none',
+            border: '1px solid var(--dl-accent-30, var(--dl-border2))',
+            borderRadius: 6, padding: '6px 10px', textAlign: 'center',
+          }}>
+          View profile →
+        </a>
       )}
     </div>
   );

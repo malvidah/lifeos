@@ -1,0 +1,335 @@
+"use client";
+// Read-only WorldMap for the public profile page.
+// Mirrors the dashboard WorldMapCard's full UX (mode toggle + bottom strip +
+// two-step click → detail) but reuses the dashboard components in `readOnly`
+// mode so visuals + interactions match exactly.
+//
+// What's different vs the dashboard:
+//   - No double-click on map to add places / stops
+//   - No "+ new trip" tile, no "+ new place" tile
+//   - No is_public toggles in collection cards (we never pass onTogglePublic)
+//   - StopCard / TripHeader run in `readOnly` mode
+import { useEffect, useRef, useState, useMemo } from "react";
+import { mono } from "@/lib/tokens";
+import { useTheme } from "@/lib/theme";
+import CollectionScroller from "./CollectionScroller.jsx";
+import TripScroller from "../trip/TripScroller.jsx";
+import TripStopsRow from "../trip/TripStopsRow.jsx";
+import TripHeader from "../trip/TripHeader.jsx";
+
+const MAP_TILES_LIGHT = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const MAP_TILES_DARK  = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+
+export default function PublicWorldMapCard({ places = [], collections = [], trips = [] }) {
+  const containerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+  const layerRef = useRef([]);
+  const LRef = useRef(null);
+  const { theme } = useTheme();
+  const dark = theme === 'dark';
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // ── Mode + selection state (mirrors dashboard's `mode` / `inDetail`) ────
+  const [mode, setMode] = useState(places.length === 0 && trips.length > 0 ? 'trip' : 'places');
+  // Places mode
+  const [activeCollection, setActiveCollection] = useState(null); // null = ALL; string = name
+  const [placesInDetail, setPlacesInDetail] = useState(false);
+  const [selectedPlaceId, setSelectedPlaceId] = useState(null);
+  // Trip mode
+  const [previewedTripId, setPreviewedTripId] = useState(null);
+  const [tripInDetail, setTripInDetail] = useState(false);
+
+  // ── Init Leaflet once ────────────────────────────────────────────────────
+  const [leafletReady, setLeafletReady] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const Lmod = await import('leaflet');
+      await import('leaflet/dist/leaflet.css');
+      if (cancelled) return;
+      const L = Lmod.default || Lmod;
+      LRef.current = L;
+      if (!containerRef.current || mapInstanceRef.current) { setLeafletReady(true); return; }
+      const map = L.map(containerRef.current, {
+        // Match the dashboard WorldMapCard — hide Leaflet's default zoom buttons
+        // (mouse-wheel + pinch zoom still work). Keeps the chrome clean.
+        zoomControl: false, attributionControl: false, worldCopyJump: true,
+      }).setView([20, 0], 2);
+      L.tileLayer(dark ? MAP_TILES_DARK : MAP_TILES_LIGHT, { maxZoom: 19 }).addTo(map);
+      mapInstanceRef.current = map;
+      setLeafletReady(true);
+    })();
+    return () => {
+      cancelled = true;
+      try { mapInstanceRef.current?.remove(); } catch {}
+      mapInstanceRef.current = null;
+    };
+  }, []); // eslint-disable-line
+
+  // ── Visible places (filtered by collection) ─────────────────────────────
+  const visiblePlaces = useMemo(() => {
+    if (!activeCollection) return places;
+    return places.filter(p => (p.category || '').toLowerCase() === activeCollection.toLowerCase());
+  }, [places, activeCollection]);
+
+  const previewedTrip = useMemo(
+    () => trips.find(t => t.id === previewedTripId) || null,
+    [trips, previewedTripId]
+  );
+
+  // ── Layer rendering ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!leafletReady || !mapInstanceRef.current) return;
+    const L = LRef.current;
+    const map = mapInstanceRef.current;
+    layerRef.current.forEach(l => { try { l.remove(); } catch {} });
+    layerRef.current = [];
+
+    if (mode === 'places') {
+      const colorOf = (cat) => collections.find(c => c.name?.toLowerCase() === (cat || '').toLowerCase())?.color || '#D08828';
+      const coords = [];
+      for (const p of visiblePlaces) {
+        if (p.lat == null || p.lng == null) continue;
+        const color = p.color || colorOf(p.category);
+        const isSel = selectedPlaceId === p.id;
+        const size = isSel ? 18 : 14;
+        const icon = L.divIcon({
+          className: '',
+          html: `<div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};border:${isSel ? 3 : 2}px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);"></div>`,
+          iconSize: [size + 4, size + 4], iconAnchor: [(size + 4) / 2, (size + 4) / 2],
+        });
+        const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
+        if (p.name) marker.bindTooltip(p.name, { className: 'daylab-tooltip', direction: 'top', offset: [0, -10] });
+        marker.on('click', () => setSelectedPlaceId(p.id));
+        layerRef.current.push(marker);
+        coords.push([p.lat, p.lng]);
+      }
+      // Fit bounds — to selected if any, else to all visible.
+      if (selectedPlaceId) {
+        const sp = visiblePlaces.find(p => p.id === selectedPlaceId);
+        if (sp?.lat != null) map.setView([sp.lat, sp.lng], Math.max(map.getZoom(), 12));
+      } else if (coords.length >= 2) {
+        map.fitBounds(L.latLngBounds(coords).pad(0.2));
+      } else if (coords.length === 1) {
+        map.setView(coords[0], 12);
+      }
+    } else if (mode === 'trip') {
+      const allCoords = [];
+      const focusTrip = tripInDetail ? previewedTrip : null;
+      // Render every public trip's polyline (faint), the previewed/in-detail one bolder.
+      for (const t of trips) {
+        const stops = (t.stops || []).filter(s => s.lat != null && s.lng != null);
+        if (stops.length === 0) continue;
+        const isFocus = t.id === previewedTripId;
+        const coords = stops.map(s => [s.lat, s.lng]);
+        const polyline = L.polyline(coords, {
+          color: isFocus ? '#5BA89D' : (dark ? '#D08828' : '#B87018'),
+          weight: isFocus ? 3 : 1.5,
+          opacity: isFocus ? 0.9 : 0.4,
+        }).addTo(map);
+        layerRef.current.push(polyline);
+        if (isFocus) {
+          stops.forEach((s, i) => {
+            const html = `<div style="
+              width:18px;height:18px;border-radius:50%;background:#5BA89D;color:#fff;
+              font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:10px;font-weight:700;
+              display:flex;align-items:center;justify-content:center;
+              border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.4);
+            ">${i + 1}</div>`;
+            const icon = L.divIcon({ className: '', html, iconSize: [22, 22], iconAnchor: [11, 11] });
+            const m = L.marker([s.lat, s.lng], { icon, interactive: false }).addTo(map);
+            layerRef.current.push(m);
+          });
+        }
+        allCoords.push(...coords);
+      }
+      const focusCoords = focusTrip
+        ? (focusTrip.stops || []).filter(s => s.lat != null).map(s => [s.lat, s.lng])
+        : (previewedTripId ? (previewedTrip?.stops || []).filter(s => s.lat != null).map(s => [s.lat, s.lng]) : allCoords);
+      if (focusCoords.length >= 2) map.fitBounds(L.latLngBounds(focusCoords).pad(0.2));
+      else if (focusCoords.length === 1) map.setView(focusCoords[0], 10);
+    }
+  }, [mode, visiblePlaces, collections, trips, previewedTripId, tripInDetail, previewedTrip, selectedPlaceId, leafletReady, dark]);
+
+  // Reset cross-mode state on mode switch.
+  useEffect(() => {
+    if (mode !== 'places') { setPlacesInDetail(false); setSelectedPlaceId(null); }
+    if (mode !== 'trip')   setTripInDetail(false);
+  }, [mode]);
+
+  // The collections we surface in the scroller — one entry per category that
+  // actually has at least one public place.
+  const scrollerCollections = useMemo(() => collections.map(c => ({
+    id: c.id, name: c.name, color: c.color, is_public: !!c.is_public,
+    count: places.filter(p => (p.category || '').toLowerCase() === c.name.toLowerCase()).length,
+  })).filter(c => c.count > 0), [collections, places]);
+
+  return (
+    <div style={{
+      position: 'relative', width: '100%', height: 480,
+      borderRadius: 10, overflow: 'hidden', background: '#0d1a24',
+    }}>
+      <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />
+
+      {/* Mode toggle (top right) — only show modes that have content */}
+      {(places.length > 0 || trips.length > 0) && (
+        <div style={{
+          position: 'absolute', top: 10, right: 10, zIndex: 999,
+          display: 'flex', gap: 2,
+          backdropFilter: 'blur(20px) saturate(1.4)', WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+          background: 'var(--dl-glass)', border: '1px solid var(--dl-glass-border)',
+          borderRadius: 100, padding: 3, boxShadow: 'var(--dl-glass-shadow)',
+        }}>
+          {places.length > 0 && <ModeBtn label="Places" active={mode === 'places'} onClick={() => setMode('places')} />}
+          {trips.length > 0  && <ModeBtn label="Trips"  active={mode === 'trip'}   onClick={() => setMode('trip')} />}
+        </div>
+      )}
+
+      {/* Top-left detail header (places-mode detail) */}
+      {mode === 'places' && placesInDetail && (
+        <div style={{
+          position: 'absolute', top: 10, left: 10, zIndex: 999,
+          display: 'flex', alignItems: 'center', gap: 6,
+          backdropFilter: 'blur(20px) saturate(1.4)', WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+          background: 'var(--dl-glass)', border: '1px solid var(--dl-glass-border)',
+          borderRadius: 100, padding: '4px 12px', boxShadow: 'var(--dl-glass-shadow)',
+        }}>
+          <button
+            onClick={() => { setPlacesInDetail(false); setSelectedPlaceId(null); }}
+            title="Back to collections"
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', padding: 0, lineHeight: 1, fontSize: 18 }}>‹</button>
+          <span style={{
+            fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dl-strong)',
+          }}>{activeCollection || 'All places'}</span>
+        </div>
+      )}
+
+      {/* Top-left trip header (trip-mode detail) */}
+      {mode === 'trip' && tripInDetail && previewedTrip && (
+        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 999 }}>
+          <TripHeader
+            trip={previewedTrip}
+            onBack={() => setTripInDetail(false)}
+            readOnly
+          />
+        </div>
+      )}
+
+      {/* Bottom strip */}
+      <div style={{
+        position: 'absolute', bottom: 10, left: 0, right: 0, zIndex: 999,
+      }}>
+        {/* PLACES MODE */}
+        {mode === 'places' && !placesInDetail && scrollerCollections.length > 0 && (
+          <CollectionScroller
+            collections={scrollerCollections}
+            totalCount={places.length}
+            selectedCollection={activeCollection}
+            onPreview={(key) => { setActiveCollection(key); setSelectedPlaceId(null); }}
+            onEnterDetail={(key) => { setActiveCollection(key); setPlacesInDetail(true); }}
+            // No onTogglePublic — eye toggle hides itself.
+          />
+        )}
+        {mode === 'places' && placesInDetail && (
+          <PublicPlaceCarousel
+            places={visiblePlaces}
+            selectedPlaceId={selectedPlaceId}
+            onSelect={(id) => setSelectedPlaceId(id)}
+          />
+        )}
+
+        {/* TRIP MODE */}
+        {mode === 'trip' && !tripInDetail && trips.length > 0 && (
+          <TripScroller
+            trips={trips}
+            todayStr={todayStr}
+            previewedId={previewedTripId}
+            onPreview={(id) => setPreviewedTripId(id)}
+            onEnterDetail={(id) => { setPreviewedTripId(id); setTripInDetail(true); }}
+            onCreate={() => {}}
+            readOnly
+          />
+        )}
+        {mode === 'trip' && tripInDetail && previewedTrip && (
+          <TripStopsRow
+            trip={previewedTrip}
+            readOnly
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ModeBtn({ label, active, onClick }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        background: active ? 'var(--dl-accent-15)' : 'transparent',
+        border: 'none', borderRadius: 100, padding: '4px 10px', cursor: 'pointer',
+        fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+        color: active ? 'var(--dl-accent)' : 'var(--dl-middle)',
+        transition: 'all 0.15s',
+      }}>
+      {label}
+    </button>
+  );
+}
+
+// Per-place carousel for places-mode detail. Mirrors the dashboard's place
+// carousel but read-only (no "+ new place" tile, no edit buttons).
+function PublicPlaceCarousel({ places, selectedPlaceId, onSelect }) {
+  const scrollRef = useRef(null);
+  // Scroll the selected card into view when selection changes (e.g. user
+  // clicked a pin on the map).
+  useEffect(() => {
+    if (!selectedPlaceId || !scrollRef.current) return;
+    const el = scrollRef.current.querySelector(`[data-place-id="${selectedPlaceId}"]`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+  }, [selectedPlaceId]);
+
+  return (
+    <div ref={scrollRef} style={{
+      display: 'flex', gap: 6, padding: '0 10px',
+      overflowX: 'auto', overflowY: 'hidden',
+      scrollbarWidth: 'none', msOverflowStyle: 'none',
+      pointerEvents: 'auto',
+    }}>
+      {places.map(p => {
+        const selected = p.id === selectedPlaceId;
+        return (
+          <button
+            key={p.id}
+            data-place-id={p.id}
+            onClick={() => onSelect(p.id)}
+            style={{
+              flexShrink: 0, width: 200, minHeight: 60,
+              background: 'var(--dl-glass)',
+              backdropFilter: 'blur(20px) saturate(1.4)', WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+              border: selected ? `1.5px solid ${p.color || 'var(--dl-accent)'}` : '1px solid var(--dl-glass-border)',
+              borderRadius: 10, padding: 8, boxShadow: 'var(--dl-glass-shadow)',
+              cursor: 'pointer', textAlign: 'left',
+              display: 'flex', flexDirection: 'column', gap: 4,
+            }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              {p.color && <span style={{ width: 8, height: 8, borderRadius: '50%', background: p.color, flexShrink: 0 }} />}
+              <span style={{
+                fontFamily: mono, fontSize: 12, fontWeight: 600,
+                color: selected ? (p.color || 'var(--dl-accent)') : 'var(--dl-strong)',
+                letterSpacing: '0.02em',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+              }}>{p.name || 'Place'}</span>
+            </div>
+            {p.notes && (
+              <div style={{
+                fontFamily: mono, fontSize: 10, color: 'var(--dl-middle)',
+                display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}>{p.notes}</div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}

@@ -5,10 +5,10 @@ import { extractProjectTags, extractTitle } from '@/lib/parseBlocks.js';
 // GET /api/notes                    → all notes (global / all-projects view)
 // GET /api/notes?id=UUID            → single note
 //
-// POST /api/notes  { content, origin_project? }
+// POST /api/notes  { content, origin_project?, status? }
 //   Create a new note. project_tags derived from content + origin_project.
 //
-// PATCH /api/notes  { id, content }
+// PATCH /api/notes  { id, content?, status? }
 //   Update a note. project_tags and title recomputed from content.
 //
 // DELETE /api/notes?id=UUID
@@ -20,7 +20,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 
   let query = supabase
     .from('notes')
-    .select('id, title, content, project_tags, created_at, updated_at')
+    .select('id, title, content, project_tags, status, is_public, created_at, updated_at')
     .eq('user_id', user.id)
     .is('deleted_at', null);
 
@@ -40,7 +40,7 @@ export const GET = withAuth(async (req, { supabase, user }) => {
 });
 
 export const POST = withAuth(async (req, { supabase, user }) => {
-  const { content = '', origin_project } = await req.json();
+  const { content = '', origin_project, status } = await req.json();
 
   // Derive project_tags from content chips + origin_project
   const contentTags = extractProjectTags(content);
@@ -48,15 +48,18 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     ? [...new Set([...contentTags, origin_project.toLowerCase()])]
     : contentTags;
 
+  const insert = {
+    user_id:      user.id,
+    title:        extractTitle(content),
+    content,
+    project_tags: tags,
+  };
+  if (typeof status === 'string' && status.trim()) insert.status = status.trim();
+
   const { data, error } = await supabase
     .from('notes')
-    .insert({
-      user_id:      user.id,
-      title:        extractTitle(content),
-      content,
-      project_tags: tags,
-    })
-    .select('id, title, content, project_tags, created_at, updated_at')
+    .insert(insert)
+    .select('id, title, content, project_tags, status, is_public, created_at, updated_at')
     .single();
   if (error) throw error;
 
@@ -64,8 +67,20 @@ export const POST = withAuth(async (req, { supabase, user }) => {
 });
 
 export const PATCH = withAuth(async (req, { supabase, user }) => {
-  const { id, content } = await req.json();
+  const { id, content, status, oldStatus, is_public } = await req.json();
   if (!id) return Response.json({ error: 'id required' }, { status: 400 });
+
+  // Bulk rename: { oldStatus, status } with no id rewrites all notes for this
+  // user from oldStatus → status (used when a kanban column is renamed).
+  if (oldStatus !== undefined && status !== undefined && id === '__bulk__') {
+    const { error: bulkErr } = await supabase
+      .from('notes')
+      .update({ status: status || null })
+      .eq('user_id', user.id)
+      .eq('status', oldStatus);
+    if (bulkErr) throw bulkErr;
+    return Response.json({ ok: true });
+  }
 
   const patch = {};
   if (content !== undefined) {
@@ -80,11 +95,13 @@ export const PATCH = withAuth(async (req, { supabase, user }) => {
     const existingTags = existing?.project_tags ?? [];
     patch.project_tags = [...new Set([...existingTags, ...contentTags])];
   }
+  if (status !== undefined) patch.status = status || null;
+  if (is_public !== undefined) patch.is_public = !!is_public;
 
   const { data, error } = await supabase
     .from('notes').update(patch)
     .eq('id', id).eq('user_id', user.id)
-    .select('id, title, content, project_tags, updated_at')
+    .select('id, title, content, project_tags, status, is_public, updated_at')
     .single();
   if (error) throw error;
 

@@ -51,7 +51,7 @@ const GAP = 8;
  *   2nd click on the same card → parent enters detail mode
  * Click a different card → just previews that one.
  */
-export default function TripScroller({ trips, todayStr, previewedId, onPreview, onEnterDetail, onCreate }) {
+export default function TripScroller({ trips, todayStr, previewedId, onPreview, onEnterDetail, onCreate, readOnly = false }) {
   const scrollRef = useRef(null);
   const dragRef   = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
   const [centred, setCentred] = useState(false);
@@ -110,8 +110,8 @@ export default function TripScroller({ trips, todayStr, previewedId, onPreview, 
           cursor: 'grab',
         }}
       >
-        {/* "+ new trip" tile, always first */}
-        <button
+        {/* "+ new trip" tile, always first — hidden in read-only / public view. */}
+        {!readOnly && <button
           onClick={() => { if (!dragRef.current.moved) onCreate(); }}
           style={{
             flexShrink: 0, width: 200, height: 100,
@@ -132,7 +132,7 @@ export default function TripScroller({ trips, todayStr, previewedId, onPreview, 
             <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
           </svg>
           New trip
-        </button>
+        </button>}
 
         {trips.map(trip => {
           const span  = tripDateSpan(trip.stops);
