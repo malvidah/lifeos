@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { mono } from '@/lib/tokens';
 
 // Card geometry (smaller than TripScroller — just name + count fits comfortably).
@@ -25,10 +25,28 @@ export default function CollectionScroller({
   onPreview,          // (name | null) => void
   onEnterDetail,      // (name | null) => void
   onTogglePublic,     // (collection: {id, name, is_public}) => void — when omitted, toggle hides
-  onCreate,           // () => void — when omitted, "+ new collection" tile hides (read-only views)
+  onCreate,           // (name: string) => Promise<void> — when omitted, "+ new" tile hides (read-only)
 }) {
   const scrollRef = useRef(null);
   const dragRef   = useRef({ down: false, startX: 0, scrollLeft: 0, moved: false });
+  // Inline-create state: when `creating` is true the "+ new" tile becomes a
+  // text input. No system prompt() — feels native to the rest of the chrome.
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft]       = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const inputRef = useRef(null);
+  useEffect(() => { if (creating) inputRef.current?.focus(); }, [creating]);
+
+  const commitCreate = async () => {
+    const name = draft.trim();
+    if (!name) { setCreating(false); setDraft(''); return; }
+    setSubmitting(true);
+    try { await onCreate?.(name); }
+    finally {
+      setSubmitting(false); setCreating(false); setDraft('');
+    }
+  };
+  const cancelCreate = () => { setCreating(false); setDraft(''); };
 
   // Smoothly centre the previewed card when it changes.
   useEffect(() => {
@@ -78,30 +96,78 @@ export default function CollectionScroller({
           cursor: 'grab',
         }}
       >
-        {/* "+ new collection" tile — leads the row, like TripScroller's "+ new trip". */}
+        {/* "+ new collection" tile — leads the row. Click to expand into an
+            inline input; type a name + Enter (Esc cancels). No system prompt. */}
         {onCreate && (
-          <button
-            onClick={() => { if (!dragRef.current.moved) onCreate(); }}
-            style={{
-              flexShrink: 0, width: 140, height: 70,
-              backdropFilter: 'blur(20px) saturate(1.4)',
-              WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-              background: 'var(--dl-glass)',
-              border: '1.5px dashed var(--dl-glass-border)',
-              borderRadius: 12, padding: 10,
-              boxShadow: 'var(--dl-glass-shadow)',
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 6,
-              cursor: 'pointer',
-              color: 'var(--dl-middle)', fontFamily: mono, fontSize: 10,
-              letterSpacing: '0.06em', textTransform: 'uppercase',
-            }}
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            New
-          </button>
+          creating ? (
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                flexShrink: 0, width: 180, height: 70,
+                backdropFilter: 'blur(20px) saturate(1.4)',
+                WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                background: 'var(--dl-glass)',
+                border: '1.5px solid var(--dl-accent)',
+                borderRadius: 12, padding: '8px 10px',
+                boxShadow: 'var(--dl-glass-shadow)',
+                display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+              }}
+            >
+              <div style={{
+                fontFamily: mono, fontSize: 9, letterSpacing: '0.08em', textTransform: 'uppercase',
+                color: 'var(--dl-middle)',
+              }}>New collection</div>
+              <input
+                ref={inputRef}
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitCreate(); }
+                  if (e.key === 'Escape') { e.preventDefault(); cancelCreate(); }
+                }}
+                onBlur={() => { if (!submitting) commitCreate(); }}
+                placeholder='e.g. "Bay Area Guide"'
+                disabled={submitting}
+                style={{
+                  width: '100%', background: 'transparent', border: 'none', outline: 'none',
+                  fontFamily: mono, fontSize: 12, fontWeight: 600,
+                  color: 'var(--dl-strong)', letterSpacing: '0.02em', padding: 0,
+                }}
+              />
+              <div style={{
+                fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)',
+                opacity: submitting ? 1 : 0.6,
+              }}>
+                {submitting ? 'Creating…' : 'Enter to save · Esc to cancel'}
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => { if (!dragRef.current.moved) setCreating(true); }}
+              style={{
+                flexShrink: 0, width: 140, height: 70,
+                backdropFilter: 'blur(20px) saturate(1.4)',
+                WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                background: 'var(--dl-glass)',
+                border: '1.5px dashed var(--dl-glass-border)',
+                borderRadius: 12, padding: 10,
+                boxShadow: 'var(--dl-glass-shadow)',
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', gap: 6,
+                cursor: 'pointer',
+                color: 'var(--dl-middle)', fontFamily: mono, fontSize: 10,
+                letterSpacing: '0.06em', textTransform: 'uppercase',
+                transition: 'border-color 0.15s, color 0.15s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--dl-accent)'; e.currentTarget.style.color = 'var(--dl-accent)'; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--dl-glass-border)'; e.currentTarget.style.color = 'var(--dl-middle)'; }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              New
+            </button>
+          )
         )}
 
         {/* ALL card */}

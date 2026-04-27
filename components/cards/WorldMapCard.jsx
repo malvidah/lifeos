@@ -534,22 +534,32 @@ function MapInner({ token }) {
     return new Set(selectedCollection.place_ids || []);
   }, [selectedCollection]);
 
-  // Fit map bounds when the selected collection or tag filter changes in
-  // places mode (skipping detail mode — there we let pin clicks drive focus).
+  // Fit map bounds ONLY when the user changes the selection (tag pill or
+  // collection card). Deliberately does NOT depend on the membership Set —
+  // otherwise every pin-click that toggles a place in/out of a collection
+  // would re-fit the map and feel jumpy.
+  // Skip auto-fit while inside a collection's detail view: the user is
+  // curating and the map should stay put as they add/remove pins.
   useEffect(() => {
     if (mode !== 'places' || !mapInstance.current || !leafletReady) return;
+    if (placesInDetail) return;
     const L = LRef.current;
     let filtered = places;
     if (activeFilter) {
       filtered = filtered.filter(p => (p.category || '').toLowerCase() === activeFilter.toLowerCase());
     }
-    if (placesInSelectedCollection) {
-      filtered = filtered.filter(p => placesInSelectedCollection.has(p.id));
+    if (selectedCollectionId) {
+      const sc = collections.find(c => c.id === selectedCollectionId);
+      const ids = new Set(sc?.place_ids || []);
+      filtered = filtered.filter(p => ids.has(p.id));
     }
     const coords = filtered.filter(p => p.lat != null && p.lng != null).map(p => [p.lat, p.lng]);
     if (coords.length < 2) return;
     mapInstance.current.fitBounds(L.latLngBounds(coords).pad(0.2));
-  }, [activeFilter, selectedCollectionId, mode, leafletReady, placesInSelectedCollection, places]); // eslint-disable-line
+    // collections is intentionally omitted from deps — we only want this
+    // effect to fire when the user changes selection, not when memberships
+    // change.
+  }, [activeFilter, selectedCollectionId, mode, leafletReady, placesInDetail]); // eslint-disable-line
   const discoveredLayerRef = useRef(null);
   const statesLayerRef = useRef(null);
   const geoJsonCacheRef = useRef(null);
@@ -2008,17 +2018,18 @@ function MapInner({ token }) {
               setCollections(arr => arr.map(x => x.id === c.id ? { ...x, is_public: !next } : x));
             }
           }}
-          onCreate={async () => {
-            const name = prompt('Collection name (e.g. "Bay Area Guide"):');
+          onCreate={async (name) => {
+            // CollectionScroller's inline input collects the name; we just
+            // create + select + jump into the new collection's detail.
             if (!name?.trim()) return;
             try {
               const res = await api.post('/api/collections', { name: name.trim() }, token);
               if (res?.collection) {
                 setCollections(arr => [...arr, res.collection]);
                 setSelectedCollectionId(res.collection.id);
-                setPlacesInDetail(true); // jump straight into the new collection
+                setPlacesInDetail(true);
               }
-            } catch (e) {
+            } catch {
               showToast?.('Failed to create collection', 'error');
             }
           }}
