@@ -69,14 +69,24 @@ export default function TripHeader({ trip, onBack, onUpdate, onDelete, readOnly 
         <input
           value={name}
           onChange={e => setName(e.target.value)}
-          onBlur={() => { if (name.trim() && name !== trip.name) onUpdate(trip.id, { name: name.trim() }); }}
+          onBlur={(e) => {
+            if (name.trim() && name !== trip.name) onUpdate(trip.id, { name: name.trim() });
+            e.currentTarget.style.background = 'transparent';
+          }}
+          onFocus={e => { e.currentTarget.style.background = 'var(--dl-glass-active, rgba(208,136,40,0.08))'; }}
+          onMouseEnter={e => { if (document.activeElement !== e.currentTarget) e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; }}
+          onMouseLeave={e => { if (document.activeElement !== e.currentTarget) e.currentTarget.style.background = 'transparent'; }}
           onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
           placeholder="Trip name"
+          title="Click to rename"
           style={{
             minWidth: 100, maxWidth: 200,
             background: 'transparent', border: 'none', outline: 'none',
             fontFamily: mono, fontSize: 12, fontWeight: 600,
-            color: 'var(--dl-strong)', letterSpacing: '0.02em', padding: 0,
+            color: 'var(--dl-strong)', letterSpacing: '0.02em',
+            padding: '2px 6px', margin: '-2px -6px',
+            borderRadius: 6, cursor: 'text',
+            transition: 'background 0.12s',
           }}
         />
       )}

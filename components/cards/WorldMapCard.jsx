@@ -1849,8 +1849,47 @@ function MapInner({ token }) {
         pointerEvents: 'none',
       }}>
       <div style={{ position: 'relative', height: 36 }}>
-        {/* + Add pin (top-left) */}
-        {mode === 'places' && (
+        {/* Top-left slot — content depends on mode/state.
+              trip detail   → TripHeader (back chevron + inline-editable name + dates + delete)
+              places detail → collection back-pill (back chevron + collection name)
+              places mode   → "+ add pin" button */}
+        {mode === 'trip' && inDetail && trips.selectedTrip ? (
+          <div style={{ position: 'absolute', top: 0, left: 0, pointerEvents: 'auto', maxWidth: 'calc(50% - 90px)' }}>
+            <TripHeader
+              trip={trips.selectedTrip}
+              onBack={() => setInDetail(false)}
+              onUpdate={trips.updateTrip}
+              onDelete={async (id) => { await trips.deleteTrip(id); }}
+            />
+          </div>
+        ) : mode === 'places' && placesInDetail ? (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, pointerEvents: 'auto',
+            display: 'flex', alignItems: 'center', gap: 6,
+            backdropFilter: 'blur(20px) saturate(1.4)', WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+            background: 'var(--dl-glass)', border: '1px solid var(--dl-glass-border)',
+            borderRadius: 100, padding: '4px 12px', boxShadow: 'var(--dl-glass-shadow)',
+            maxWidth: 'calc(50% - 90px)',
+          }}>
+            <button onClick={() => { setPlacesInDetail(false); setSelectedCollectionId(null); }}
+              title="Back to collections"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', padding: 0, lineHeight: 1, fontSize: 18 }}>‹</button>
+            <span style={{
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+              color: 'var(--dl-strong)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
+              {selectedCollection ? selectedCollection.name : 'All places'}
+            </span>
+            {selectedCollection && (
+              <span style={{
+                fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)',
+                paddingLeft: 6, borderLeft: '1px solid var(--dl-glass-border)',
+                whiteSpace: 'nowrap',
+              }}>click pins</span>
+            )}
+          </div>
+        ) : mode === 'places' && (
           <button onClick={addAtCenter}
             title="Add a pin"
             style={{
@@ -1922,17 +1961,6 @@ function MapInner({ token }) {
         </div>
       </div>
 
-      {/* Row 2: trip header (detail mode only). Aligned left under the mode toggle. */}
-      {mode === 'trip' && inDetail && trips.selectedTrip && (
-        <div style={{ alignSelf: 'flex-start' }}>
-          <TripHeader
-            trip={trips.selectedTrip}
-            onBack={() => setInDetail(false)}
-            onUpdate={trips.updateTrip}
-            onDelete={async (id) => { await trips.deleteTrip(id); }}
-          />
-        </div>
-      )}
       </div>
 
       {/* Top-left tag filter pills — restored. These are place TYPES (food, bars,
@@ -1974,39 +2002,8 @@ function MapInner({ token }) {
         </div>
       )}
 
-      {/* Top-left detail header for places-mode — back chevron + collection
-          name + (when editing a collection) a hint that clicking pins toggles
-          membership. */}
-      {mode === 'places' && placesInDetail && (
-        <div style={{
-          position: 'absolute', top: 50, left: 10, zIndex: 999,
-          display: 'flex', alignItems: 'center', gap: 6,
-          backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)',
-          background: 'var(--dl-glass)',
-          border: '1px solid var(--dl-glass-border)',
-          borderRadius: 100, padding: '4px 12px',
-          boxShadow: 'var(--dl-glass-shadow)',
-          maxWidth: 360,
-        }}>
-          <button onClick={() => { setPlacesInDetail(false); setSelectedCollectionId(null); }}
-            title="Back to collections"
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', padding: 0, lineHeight: 1, fontSize: 18 }}>‹</button>
-          <span style={{
-            fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
-            color: 'var(--dl-strong)',
-          }}>
-            {selectedCollection ? selectedCollection.name : 'All places'}
-          </span>
-          {selectedCollection && (
-            <span style={{
-              fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)',
-              paddingLeft: 6, borderLeft: '1px solid var(--dl-glass-border)',
-            }}>
-              click pins to add/remove
-            </span>
-          )}
-        </div>
-      )}
+      {/* (Places-mode detail header was hoisted into the top chrome row above
+          so it sits in line with the search + toggle, not below them.) */}
 
       {/* ─── Map Bottom Strip ─── */}
       <MapBottomStrip collapsed={bottomCollapsed} onToggle={() => setBottomCollapsed(c => !c)}>
