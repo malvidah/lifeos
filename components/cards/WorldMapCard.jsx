@@ -496,7 +496,37 @@ function MapBottomStrip({ collapsed, onToggle, children }) {
 }
 
 // ─── Map component (client-only) ────────────────────────────────────────────
-function MapInner({ token }) {
+// Read-only equivalent of useTrips for public-view mode. Mirrors the shape
+// the hook returns — `trips`, `selectedTrip`, `selectTrip`, plus mutation
+// stubs — so MapInner doesn't need a separate code path. Mutations are
+// silent no-ops; selection is local state, not an API call.
+function makePublicTripsStub(publicTrips, selectedId, setSelectedId) {
+  const noop = async () => {};
+  return {
+    trips: publicTrips,
+    selectedTrip: publicTrips.find(t => t.id === selectedId) || null,
+    selectTrip: async (id) => { setSelectedId(id || null); },
+    createTrip: noop,
+    updateTrip: noop,
+    deleteTrip: noop,
+    addStop: noop,
+    updateStop: noop,
+    deleteStop: noop,
+    reorderStops: noop,
+    loaded: true,
+  };
+}
+
+// MapInner — the dashboard's WorldMap. Also doubles as the public-profile map
+// when a `publicView` prop is provided: it switches to using the supplied
+// public data instead of fetching the user's own data, and hides every write
+// affordance. This way the public profile and dashboard share one source of
+// truth for layout, mode toggles, scrollers, and routing logic.
+//
+// publicView shape: { places, collections, trips, tags } — all optional, all
+// from /api/public/profile/[handle].
+function MapInner({ token, publicView }) {
+  const isPublic = !!publicView;
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const mapRef = useRef(null);
@@ -505,8 +535,11 @@ function MapInner({ token }) {
   const markersRef = useRef([]);
   const currentLocMarker = useRef(null);
 
-  const [places, setPlaces] = useState([]);
-  const [placeTypes, setPlaceTypes] = useState([]);
+  // Internal data state. In public mode we override these by re-binding the
+  // local names below so every existing read site gets the public data with
+  // zero changes.
+  let [places, setPlaces] = useState([]);
+  let [placeTypes, setPlaceTypes] = useState([]);
   const [mode, setMode] = useState('places');
   const [activeFilter, setActiveFilter] = useState(null); // null = show all, type name = filter
   const [addingPlace, setAddingPlace] = useState(null);
@@ -527,7 +560,12 @@ function MapInner({ token }) {
   const [bottomCollapsed, setBottomCollapsed] = useState(false);
   const [mapBounds, setMapBounds] = useState(null); // track visible bounds for carousel
   // Trip mode: lazy-loaded, only fetches when the user enters trip mode.
-  const trips = useTrips(token, { enabled: mode === 'trip' });
+  // In public-view mode we don't enable the hook (no token / not the user's
+  // own data) — instead we synthesise an equivalently-shaped object below
+  // backed by publicView.trips with no-op mutations.
+  const ownerTrips = useTrips(token, { enabled: !isPublic && mode === 'trip' });
+  const [publicSelectedTripId, setPublicSelectedTripId] = useState(null);
+  const trips = isPublic ? makePublicTripsStub(publicView.trips || [], publicSelectedTripId, setPublicSelectedTripId) : ownerTrips;
   const todayStr = new Date().toISOString().slice(0, 10);
   // Tile basemap: basic (default) → topo (trails, contours) → satellite. Persisted
   // per session via localStorage so a topo planner stays in topo on refresh.
@@ -551,7 +589,9 @@ function MapInner({ token }) {
   // place_types (taxonomy tags like "food"). Selected by the bottom scroller;
   // detail mode shows just that collection's places + lets the user click pins
   // to toggle membership.
-  const [collections, setCollections] = useState([]);
+  // `collections` re-bound below for public mode — declared as `let` so the
+  // re-bind takes effect for every read site.
+  let [collections, setCollections] = useState([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState(null);
   // `placesInDetail` here means "we're inside a collection's detail view"
   // (or, when no collection is selected and the user clicked ALL twice, we're
@@ -560,10 +600,20 @@ function MapInner({ token }) {
   useEffect(() => { if (mode !== 'places') { setPlacesInDetail(false); setSelectedCollectionId(null); } }, [mode]);
 
   const refreshCollections = useCallback(() => {
-    if (!token) return;
+    if (isPublic || !token) return;
     api.get('/api/collections', token).then(d => setCollections(d?.collections ?? [])).catch(() => {});
-  }, [token]);
+  }, [token, isPublic]);
   useEffect(() => { refreshCollections(); }, [refreshCollections]);
+
+  // Public-mode override — re-bind the local names so every existing read
+  // site below transparently gets the public data instead of the internal
+  // state. Setters keep pointing at the internal state but are only called
+  // by code paths gated by !isPublic, so they never actually fire here.
+  if (isPublic) {
+    places      = publicView.places || [];
+    placeTypes  = publicView.tags   || [];
+    collections = publicView.collections || [];
+  }
 
   const selectedCollection = useMemo(
     () => collections.find(c => c.id === selectedCollectionId) || null,
@@ -934,9 +984,11 @@ function MapInner({ token }) {
     previewMarkerRef.current = L.marker([addingPlace.lat, addingPlace.lng], { icon, interactive: false }).addTo(mapInstance.current);
   }, [addingPlace, leafletReady, isDark]);
 
-  // Fetch places + types
+  // Fetch places + types. Skipped in public-view mode — data flows in from
+  // publicView instead; the dashboard-only `discovered` (per-user travel
+  // history) is silently dropped.
   useEffect(() => {
-    if (!token) return;
+    if (isPublic || !token) return;
     api.get('/api/places', token).then(d => {
       const all = d?.places ?? [];
       const seen = new Set();
@@ -950,7 +1002,7 @@ function MapInner({ token }) {
       setDiscoveredCountries(d?.countries ?? []);
       setDiscoveredPlaces(d?.discovered ?? []);
     });
-  }, [token]);
+  }, [token, isPublic]);
 
   // Listen for place chip clicks from editors — fly to the place on map
   useEffect(() => {
@@ -1361,17 +1413,35 @@ function MapInner({ token }) {
         name: newName.trim(), category: newType || 'pin',
         notes: newNotes.trim() || null,
       }, token);
-      if (result?.place) setPlaces(prev => {
-        const without = prev.filter(p => p.id !== result.place.id);
-        return [result.place, ...without];
-      });
+      if (result?.place) {
+        setPlaces(prev => {
+          const without = prev.filter(p => p.id !== result.place.id);
+          return [result.place, ...without];
+        });
+        // If a specific collection is currently active, auto-add the new
+        // place to it. (ALL is virtual — no membership row needed; the
+        // place naturally appears in the unfiltered "All" view anyway.)
+        if (selectedCollectionId && result.place.id) {
+          try {
+            await api.post('/api/collections/places', {
+              collection_id: selectedCollectionId, place_id: result.place.id,
+            }, token);
+            setCollections(arr => arr.map(c => {
+              if (c.id !== selectedCollectionId) return c;
+              const ids = new Set(c.place_ids || []);
+              ids.add(result.place.id);
+              return { ...c, place_ids: [...ids], place_count: ids.size };
+            }));
+          } catch {} // membership add is best-effort; the place still saved.
+        }
+      }
     }
     lastGeoRef.current = null;
     setAddingPlace(null);
     setNewName('');
     setNewType('');
     setNewNotes('');
-  }, [addingPlace, newName, newType, newNotes, token]);
+  }, [addingPlace, newName, newType, newNotes, token, selectedCollectionId, discoveredPlaces]);
 
   // Trip mode: double-click on the map drops a new stop. Stops own their own
   // lat/lng/label — they're NOT auto-promoted to saved places, so casual
@@ -1391,17 +1461,23 @@ function MapInner({ token }) {
   const dblclickHandlerRef = useRef(() => {});
   useEffect(() => {
     dblclickHandlerRef.current = (latlng) => {
-      // Adding a stop requires being explicitly in DETAIL mode for a trip —
-      // preview mode shouldn't accept new stops, since the user hasn't yet
-      // committed to "editing" that trip.
+      // Public-view: double-click does nothing (no add affordance).
+      if (isPublic) return;
+      // Trip detail: add a stop to the current trip.
       if (mode === 'trip' && inDetail && trips.selectedTrip) {
         addStopAtPoint(latlng.lat, latlng.lng);
-      } else {
+        return;
+      }
+      // Places mode: only accept new pins when the user is inside a
+      // collection's detail view. ALL counts — places added there don't get
+      // assigned to a specific collection. Specific collection → the new
+      // place auto-joins that collection (handled in savePlace).
+      if (mode === 'places' && placesInDetail) {
         setAddingPlace({ lat: latlng.lat, lng: latlng.lng });
         setNewName(''); setNewType(''); setNewNotes('');
       }
     };
-  }, [mode, inDetail, trips.selectedTrip, addStopAtPoint]);
+  }, [isPublic, mode, inDetail, placesInDetail, trips.selectedTrip, addStopAtPoint]);
 
   // Create new type — auto-assigns next color from palette
   const createType = useCallback(async (name) => {
@@ -1889,25 +1965,11 @@ function MapInner({ token }) {
               }}>click pins</span>
             )}
           </div>
-        ) : mode === 'places' && (
-          <button onClick={addAtCenter}
-            title="Add a pin"
-            style={{
-              position: 'absolute', top: 0, left: 0, pointerEvents: 'auto',
-              backdropFilter: 'blur(20px) saturate(1.4)',
-              WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
-              background: 'var(--dl-glass)',
-              border: '1px solid var(--dl-glass-border)',
-              borderRadius: 100, padding: '6px 8px', cursor: 'pointer',
-              color: 'var(--dl-accent)', display: 'flex', alignItems: 'center',
-              boxShadow: 'var(--dl-glass-shadow)',
-              transition: 'all 0.15s',
-            }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-          </button>
-        )}
+        ) : null}
+        {/* Note: the "+ add pin" button used to live here. Adding a place now
+            happens via collection-detail mode (double-click the map or use
+            search) — this keeps the chrome clean and ties new places to the
+            collection you're currently looking at. */}
 
         {/* Search — centered, always expanded, capped width. */}
         <div style={{

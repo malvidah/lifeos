@@ -1,11 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { mono } from '@/lib/tokens';
 
 // Card geometry (smaller than TripScroller — just name + count fits comfortably).
 const CARD_W = 160;
 const ALL_CARD_W = 140;
+const NEW_TILE_W = 140;
 const GAP = 8;
 
 /**
@@ -48,17 +49,35 @@ export default function CollectionScroller({
   };
   const cancelCreate = () => { setCreating(false); setDraft(''); };
 
-  // Smoothly centre the previewed card when it changes.
+  // Sort collections oldest → newest by created_at so the row reads:
+  //   ALL ← scroll left (older) | newer cards → "+ new" tile (rightmost)
+  // Mirrors the trip scroller's timeline pattern.
+  const sortedCollections = useMemo(() => {
+    return [...(collections || [])].sort((a, b) => {
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''));
+    });
+  }, [collections]);
+
+  // First paint: scroll all the way to the right so the "+ new" tile and the
+  // most recent collections are visible. Subsequent renders only adjust scroll
+  // when the previewed collection changes.
+  const [didInitialScroll, setDidInitialScroll] = useState(false);
   useEffect(() => {
-    if (!scrollRef.current) return;
-    const idx = selectedCollection == null
-      ? -1 // ALL is first; no separate index needed
-      : collections.findIndex(c => c.name === selectedCollection);
-    const left = idx < 0
-      ? 0
-      : (ALL_CARD_W + GAP) + idx * (CARD_W + GAP) - (scrollRef.current.clientWidth - CARD_W) / 2;
+    if (!scrollRef.current || didInitialScroll) return;
+    scrollRef.current.scrollLeft = scrollRef.current.scrollWidth;
+    setDidInitialScroll(true);
+  }, [sortedCollections, didInitialScroll]);
+
+  useEffect(() => {
+    if (!scrollRef.current || !didInitialScroll) return;
+    if (selectedCollection == null) return; // selecting ALL → no scroll change
+    const idx = sortedCollections.findIndex(c => c.name === selectedCollection);
+    if (idx < 0) return;
+    // ALL card is leftmost (after no leading "+ new" tile now), so card N
+    // sits at: ALL_CARD_W + GAP + N * (CARD_W + GAP)
+    const left = (ALL_CARD_W + GAP) + idx * (CARD_W + GAP) - (scrollRef.current.clientWidth - CARD_W) / 2;
     scrollRef.current.scrollTo({ left: Math.max(0, left), behavior: 'smooth' });
-  }, [selectedCollection, collections]);
+  }, [selectedCollection, sortedCollections, didInitialScroll]);
 
   const handleClick = (key) => {
     if (dragRef.current.moved) return;
@@ -96,8 +115,33 @@ export default function CollectionScroller({
           cursor: 'grab',
         }}
       >
-        {/* "+ new collection" tile — leads the row. Click to expand into an
-            inline input; type a name + Enter (Esc cancels). No system prompt. */}
+        {/* ALL card — leftmost, "show everything" affordance. */}
+        <CollectionCard
+          label="All"
+          count={totalCount}
+          color={null}
+          selected={selectedCollection == null}
+          width={ALL_CARD_W}
+          onClick={() => handleClick(null)}
+        />
+
+        {sortedCollections.map(c => (
+          <CollectionCard
+            key={c.name}
+            label={c.name}
+            count={c.count}
+            color={c.color}
+            selected={selectedCollection === c.name}
+            width={CARD_W}
+            onClick={() => handleClick(c.name)}
+            isPublic={!!c.is_public}
+            onTogglePublic={onTogglePublic ? (e) => { e.stopPropagation(); onTogglePublic(c); } : null}
+          />
+        ))}
+
+        {/* "+ new collection" tile — sits at the right edge so the row reads
+            "ALL ← (older) ... (newer) → + new". Click to expand into an
+            inline input; Enter saves, Esc cancels. No system prompt. */}
         {onCreate && (
           creating ? (
             <div
@@ -145,7 +189,7 @@ export default function CollectionScroller({
             <button
               onClick={() => { if (!dragRef.current.moved) setCreating(true); }}
               style={{
-                flexShrink: 0, width: 140, height: 70,
+                flexShrink: 0, width: NEW_TILE_W, height: 70,
                 backdropFilter: 'blur(20px) saturate(1.4)',
                 WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
                 background: 'var(--dl-glass)',
@@ -169,30 +213,6 @@ export default function CollectionScroller({
             </button>
           )
         )}
-
-        {/* ALL card */}
-        <CollectionCard
-          label="All"
-          count={totalCount}
-          color={null}
-          selected={selectedCollection == null}
-          width={ALL_CARD_W}
-          onClick={() => handleClick(null)}
-        />
-
-        {collections.map(c => (
-          <CollectionCard
-            key={c.name}
-            label={c.name}
-            count={c.count}
-            color={c.color}
-            selected={selectedCollection === c.name}
-            width={CARD_W}
-            onClick={() => handleClick(c.name)}
-            isPublic={!!c.is_public}
-            onTogglePublic={onTogglePublic ? (e) => { e.stopPropagation(); onTogglePublic(c); } : null}
-          />
-        ))}
       </div>
     </div>
   );
