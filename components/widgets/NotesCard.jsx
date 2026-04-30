@@ -6,12 +6,13 @@ import { api } from "@/lib/api";
 import { useCollapse } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase";
 import { useDbSave, MEM } from "@/lib/db";
-import { ProjectNamesContext, NavigationContext, TripNamesContext } from "@/lib/contexts";
+import { ProjectNamesContext, NavigationContext, TripNamesContext, CollectionNamesContext } from "@/lib/contexts";
 import { useTripByName } from "@/lib/useTrips";
+import { useCollectionByName } from "@/lib/useCollections";
 import { Card } from "../ui/primitives.jsx";
 import { showToast } from "../ui/Toast.jsx";
 import { DayLabEditor } from "../Editor.jsx";
-import { extractImages, stripImageChips, extractDrawingTags, extractPlaceTags, MediaStrip, MediaSlideshow, DropZone } from "./JournalEditor.jsx";
+import { extractImages, stripImageChips, extractDrawingTags, extractPlaceTags, extractCollectionTags, MediaStrip, MediaSlideshow, DropZone } from "./JournalEditor.jsx";
 import { NoteContext } from "@/lib/contexts";
 import { useTheme } from "@/lib/theme";
 import { uploadImageFile, deleteImageFile } from "@/lib/images";
@@ -71,9 +72,10 @@ function KanbanTitleRow({ note, currentTitle, onBack, onTitleCommit }) {
 // project: null → show all notes; any string → show notes tagged to that project
 // onNoteNamesChange: called whenever note list changes so Dashboard can sync NoteContext
 export default function NotesCard({ project, token, userId, onNoteNamesChange, collapsed: externalCollapsed, onToggle: externalToggle, expandHref }) {
-  const pvProjectNames = useContext(ProjectNamesContext);
-  const pvTripNames    = useContext(TripNamesContext);
-  const { navigateToProject, navigateToTrip } = useContext(NavigationContext);
+  const pvProjectNames    = useContext(ProjectNamesContext);
+  const pvTripNames       = useContext(TripNamesContext);
+  const pvCollectionNames = useContext(CollectionNamesContext);
+  const { navigateToProject, navigateToTrip, navigateToCollection } = useContext(NavigationContext);
   const { drawings: ctxDrawings } = useContext(NoteContext);
   const { theme } = useTheme();
   const dark = theme === 'dark';
@@ -464,13 +466,25 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
     return { type: 'trip-map', name: noteTripData.name, trip: noteTripData };
   }, [noteTripData]);
 
-  // All visual media: photos + drawings + map + trip
+  // Collection mini-map item from the first /co tag in the note content.
+  const noteCollectionName = useMemo(() => {
+    const m = activeNote?.content?.match(/data-collection-tag="([^"]+)"/);
+    return m?.[1] || null;
+  }, [activeNote?.content]);
+  const noteCollectionData = useCollectionByName(noteCollectionName, token);
+  const noteCollectionItem = useMemo(() => {
+    if (!noteCollectionData || !noteCollectionData.places?.length) return null;
+    return { type: 'collection-map', name: noteCollectionData.name, places: noteCollectionData.places };
+  }, [noteCollectionData]);
+
+  // All visual media: photos + drawings + map + trip + collection
   const allNoteMedia = useMemo(() => {
     const items = [...notePhotoItems, ...noteDrawingItems];
     if (noteMapItem)  items.push(noteMapItem);
     if (noteTripItem) items.push(noteTripItem);
+    if (noteCollectionItem) items.push(noteCollectionItem);
     return items;
-  }, [notePhotoItems, noteDrawingItems, noteMapItem, noteTripItem]);
+  }, [notePhotoItems, noteDrawingItems, noteMapItem, noteTripItem, noteCollectionItem]);
 
   useEffect(() => {
     if (allNoteMedia.length === 0) setNoteMediaIdx(null);
@@ -770,9 +784,11 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 noteNames={allNoteNames.filter(n => n !== noteName(activeNote))}
                 projectNames={pvProjectNames}
                 tripNames={pvTripNames}
+                collectionNames={pvCollectionNames}
                 onCreateNote={addNote}
                 onProjectClick={name => navigateToProject(name)}
                 onTripClick={name => navigateToTrip(name, { openDetail: true })}
+                onCollectionClick={name => navigateToCollection(name)}
                 onNoteClick={name => {
                   const match = notesList.find(n => noteName(n).toLowerCase() === name.toLowerCase());
                   if (match) { setActiveNoteId(match.id); setKanbanDetailId(match.id); }

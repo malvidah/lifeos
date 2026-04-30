@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { mono } from "@/lib/tokens";
 import { projectColor } from "@/lib/tokens";
-import { extractImages, extractDrawingTags, extractPlaceTags, MiniTripMap } from "./JournalEditor.jsx";
+import { extractImages, extractDrawingTags, extractPlaceTags, extractCollectionTags, MiniTripMap } from "./JournalEditor.jsx";
 
 const CARD_RADIUS = 10;
 
@@ -34,6 +34,9 @@ export function firstMediaForNote(note, { drawings = [], trips = [] } = {}) {
     const trip = trips.find(t => t.name === tripName) || null;
     return { type: 'trip', name: tripName, trip };
   }
+
+  const collectionNames = extractCollectionTags(content);
+  if (collectionNames.length) return { type: 'collection', name: collectionNames[0] };
 
   return null;
 }
