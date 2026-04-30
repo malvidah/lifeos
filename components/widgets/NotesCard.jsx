@@ -170,6 +170,10 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
   const kanbanMode = notesViewMode === 'kanban';
   const [kanbanDetailId, setKanbanDetailId] = useState(null);
 
+  const [noteSearch, setNoteSearch] = useState('');
+  const [noteSearchOpen, setNoteSearchOpen] = useState(false);
+  const noteSearchRef = useRef(null);
+
   // Sorted note list for grid view. Manual = projectsMeta order; recent = updated_at desc.
   // Kanban does its own grouping by status, so this only feeds the grid component.
   const sortedNotes = useMemo(() => {
@@ -185,6 +189,26 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
       return new Date(a.created_at || 0) - new Date(b.created_at || 0);
     });
   }, [notesList, projectsMeta, effectiveProject, notesViewMode]);
+
+  const filteredNotes = useMemo(() => {
+    if (!noteSearch) return notesList;
+    const q = noteSearch.toLowerCase();
+    return notesList.filter(n => {
+      const name = noteName(n).toLowerCase();
+      const body = (n.content || '').replace(/<[^>]+>/g, '').toLowerCase();
+      return name.includes(q) || body.includes(q);
+    });
+  }, [notesList, noteSearch]);
+
+  const filteredSortedNotes = useMemo(() => {
+    if (!noteSearch) return sortedNotes;
+    const q = noteSearch.toLowerCase();
+    return sortedNotes.filter(n => {
+      const name = noteName(n).toLowerCase();
+      const body = (n.content || '').replace(/<[^>]+>/g, '').toLowerCase();
+      return name.includes(q) || body.includes(q);
+    });
+  }, [sortedNotes, noteSearch]);
 
   const allNoteNames = notesList.map(noteName).filter(Boolean);
 
@@ -520,31 +544,71 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
         onToggle={toggleNotes}
         expandHref={expandHref}
         headerRight={
-          <div style={{ display:'flex', gap:2, background:'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius:100, padding:2 }} onClick={e => e.stopPropagation()}>
-            {[
-              { key: 'manual', label: 'Manual order',
-                icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg> },
-              { key: 'recent', label: 'Recent first',
-                icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
-              { key: 'kanban', label: 'Kanban by status',
-                icon: <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="1" y="1.5" width="3.5" height="13" rx="1"/><rect x="6.25" y="1.5" width="3.5" height="8.5" rx="1"/><rect x="11.5" y="1.5" width="3.5" height="10.5" rx="1"/></svg> },
-            ].map(({key, label, icon}) => {
-              const active = notesViewMode === key;
-              return (
-                <button key={key} onClick={() => { if (!active) { setNotesViewMode(key); setKanbanDetailId(null); } }}
-                  aria-label={label} aria-pressed={active}
+          <div style={{ display:'flex', alignItems:'center', gap:6 }} onClick={e => e.stopPropagation()}>
+            {noteSearchOpen ? (
+              <div style={{ display:'flex', alignItems:'center', gap:4, background:'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius:100, padding:'2px 8px' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--dl-middle)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+                <input
+                  ref={noteSearchRef}
+                  value={noteSearch}
+                  onChange={e => setNoteSearch(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Escape') { setNoteSearch(''); setNoteSearchOpen(false); } }}
+                  placeholder="search..."
+                  autoFocus
                   style={{
-                    padding:'4px 8px', borderRadius:100, cursor:'pointer', border:'none',
-                    display:'flex', alignItems:'center',
-                    background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
-                    color: active ? 'var(--dl-strong)' : 'var(--dl-middle)',
-                    transition:'all 0.15s',
+                    background:'transparent', border:'none', outline:'none',
+                    fontFamily: mono, fontSize:11, color:'var(--dl-strong)',
+                    width: 100, padding:'4px 0',
                   }}
-                  onMouseEnter={e => { if (!active) { e.currentTarget.style.color='var(--dl-strong)'; e.currentTarget.style.background='var(--dl-glass-active, var(--dl-accent-13))'; } }}
-                  onMouseLeave={e => { if (!active) { e.currentTarget.style.color='var(--dl-middle)'; e.currentTarget.style.background='transparent'; } }}
-                >{icon}</button>
-              );
-            })}
+                />
+                <button
+                  onClick={() => { setNoteSearch(''); setNoteSearchOpen(false); }}
+                  style={{ background:'none', border:'none', cursor:'pointer', color:'var(--dl-middle)', padding:'2px 0', fontSize:14, lineHeight:1, fontFamily:mono }}
+                  onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+                  onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+                >×</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setNoteSearchOpen(true); setTimeout(() => noteSearchRef.current?.focus(), 0); }}
+                title="Search notes"
+                style={{ background:'none', border:'none', cursor:'pointer', color:'var(--dl-middle)', padding:'4px', display:'flex', alignItems:'center' }}
+                onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+                onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
+              </button>
+            )}
+            <div style={{ display:'flex', gap:2, background:'var(--dl-border-15, rgba(128,120,100,0.1))', borderRadius:100, padding:2 }}>
+              {[
+                { key: 'manual', label: 'Manual order',
+                  icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="15" y2="12"/><line x1="3" y1="18" x2="9" y2="18"/></svg> },
+                { key: 'recent', label: 'Recent first',
+                  icon: <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+                { key: 'kanban', label: 'Kanban by status',
+                  icon: <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4"><rect x="1" y="1.5" width="3.5" height="13" rx="1"/><rect x="6.25" y="1.5" width="3.5" height="8.5" rx="1"/><rect x="11.5" y="1.5" width="3.5" height="10.5" rx="1"/></svg> },
+              ].map(({key, label, icon}) => {
+                const active = notesViewMode === key;
+                return (
+                  <button key={key} onClick={() => { if (!active) { setNotesViewMode(key); setKanbanDetailId(null); } }}
+                    aria-label={label} aria-pressed={active}
+                    style={{
+                      padding:'4px 8px', borderRadius:100, cursor:'pointer', border:'none',
+                      display:'flex', alignItems:'center',
+                      background: active ? 'var(--dl-glass-active, var(--dl-accent-13))' : 'transparent',
+                      color: active ? 'var(--dl-strong)' : 'var(--dl-middle)',
+                      transition:'all 0.15s',
+                    }}
+                    onMouseEnter={e => { if (!active) { e.currentTarget.style.color='var(--dl-strong)'; e.currentTarget.style.background='var(--dl-glass-active, var(--dl-accent-13))'; } }}
+                    onMouseLeave={e => { if (!active) { e.currentTarget.style.color='var(--dl-middle)'; e.currentTarget.style.background='transparent'; } }}
+                  >{icon}</button>
+                );
+              })}
+            </div>
           </div>
         }
       >
@@ -579,12 +643,12 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
           {/* ── Grid views (no detail open) ───────────────────────────────── */}
           {!kanbanDetailId && kanbanMode && (
             <NotesKanban
-              notes={notesList}
+              notes={filteredNotes}
               noteName={noteName}
               effectiveProject={effectiveProject}
               projectsMeta={projectsMeta}
               setProjectsMeta={setProjectsMeta}
-              onSelectNote={(id) => { setActiveNoteId(id); setKanbanDetailId(id); }}
+              onSelectNote={(id) => { setActiveNoteId(id); setKanbanDetailId(id); setNoteSearch(''); setNoteSearchOpen(false); }}
               onAddNote={async (status) => {
                 const note = await addNote('', { status });
                 if (note) { setActiveNoteId(note.id); setKanbanDetailId(note.id); }
@@ -598,11 +662,11 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
           )}
           {!kanbanDetailId && !kanbanMode && (
             <NotesGrid
-              notes={sortedNotes}
+              notes={filteredSortedNotes}
               noteName={noteName}
               effectiveProject={effectiveProject}
               sort={notesViewMode}
-              onSelectNote={(id) => { setActiveNoteId(id); setKanbanDetailId(id); }}
+              onSelectNote={(id) => { setActiveNoteId(id); setKanbanDetailId(id); setNoteSearch(''); setNoteSearchOpen(false); }}
               onAddNote={async () => {
                 const note = await addNote('');
                 if (note) { setActiveNoteId(note.id); setKanbanDetailId(note.id); }
