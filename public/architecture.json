@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-26T01:52:18.203Z",
+  "generatedAt": "2026-04-30T16:53:06.641Z",
   "client": {
     "framework": "Next.js 16.1.6 (App Router)",
     "libraries": [
@@ -170,6 +170,18 @@
       ]
     },
     {
+      "path": "/api/auto-trips/gmail/scan",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "trip_candidates"
+      ]
+    },
+    {
       "path": "/api/calendar",
       "methods": [
         "GET",
@@ -216,6 +228,35 @@
         "tasks",
         "user_settings",
         "workouts"
+      ]
+    },
+    {
+      "path": "/api/collections",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_collection_places",
+        "user_collections"
+      ]
+    },
+    {
+      "path": "/api/collections/places",
+      "methods": [
+        "POST",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_collection_places"
       ]
     },
     {
@@ -570,6 +611,7 @@
       "path": "/api/place-types",
       "methods": [
         "GET",
+        "PATCH",
         "POST"
       ],
       "services": [
@@ -590,6 +632,19 @@
       ],
       "tables": [
         "user_places"
+      ]
+    },
+    {
+      "path": "/api/profile/me",
+      "methods": [
+        "GET",
+        "PATCH"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "user_settings"
       ]
     },
     {
@@ -653,6 +708,23 @@
       ]
     },
     {
+      "path": "/api/public/profile/[handle]",
+      "methods": [],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "notes",
+        "trip_stops",
+        "trips",
+        "user_collection_places",
+        "user_collections",
+        "user_place_types",
+        "user_places",
+        "user_settings"
+      ]
+    },
+    {
       "path": "/api/public/project/[token]",
       "methods": [],
       "services": [
@@ -668,9 +740,7 @@
     },
     {
       "path": "/api/routes/segment",
-      "methods": [
-        "POST"
-      ],
+      "methods": [],
       "services": [],
       "tables": []
     },
@@ -895,6 +965,23 @@
       "tables": []
     },
     {
+      "path": "/api/trip-candidates",
+      "methods": [
+        "GET",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "notes",
+        "trip_candidates",
+        "trip_stops",
+        "trips"
+      ]
+    },
+    {
       "path": "/api/trips",
       "methods": [
         "GET",
@@ -1006,8 +1093,11 @@
         "notes",
         "projects",
         "tasks",
+        "trip_candidates",
         "trip_stops",
         "trips",
+        "user_collection_places",
+        "user_collections",
         "user_discovered",
         "user_locations",
         "user_place_types",
@@ -1026,9 +1116,12 @@
         "/api/agent",
         "/api/ai",
         "/api/all-tags",
+        "/api/auto-trips/gmail/scan",
         "/api/calendar",
         "/api/calendar/list",
         "/api/chat",
+        "/api/collections",
+        "/api/collections/places",
         "/api/cron/oura-sync",
         "/api/discovered",
         "/api/drawings",
@@ -1057,10 +1150,12 @@
         "/api/oura-backfill",
         "/api/place-types",
         "/api/places",
+        "/api/profile/me",
         "/api/project-entries",
         "/api/project-stats",
         "/api/projects",
         "/api/projects/rename",
+        "/api/public/profile/[handle]",
         "/api/public/project/[token]",
         "/api/scores-backfill",
         "/api/settings",
@@ -1081,6 +1176,7 @@
         "/api/tasks/recover",
         "/api/tasks/reorder",
         "/api/transcribe",
+        "/api/trip-candidates",
         "/api/trips",
         "/api/trips/stops",
         "/api/tts",
