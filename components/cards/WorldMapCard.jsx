@@ -1531,19 +1531,16 @@ function MapInner({ token, publicView }) {
 
   const saveEdit = useCallback(async () => {
     if (!editingPlace || !editName.trim() || !token) return;
-    const oldId = editingPlace.id;
-    // Delete old and recreate (simple approach since we don't have PATCH)
-    await api.post(`/api/places?delete=${oldId}`, {}, token);
-    const result = await api.post('/api/places', {
-      lat: editingPlace.lat, lng: editingPlace.lng,
-      name: editName.trim(), category: editType || 'pin',
+    const id = editingPlace.id;
+    const patch = {
+      name: editName.trim(),
+      category: editType || 'pin',
       notes: editNotes.trim() || null,
-    }, token);
+    };
+    setPlaces(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+    const result = await api.patch('/api/places', { id, ...patch }, token);
     if (result?.place) {
-      setPlaces(prev => {
-        const without = prev.filter(p => p.id !== oldId && p.id !== result.place.id);
-        return [...without, result.place];
-      });
+      setPlaces(prev => prev.map(p => p.id === id ? { ...p, ...result.place } : p));
     }
     setEditingPlace(null);
   }, [editingPlace, editName, editType, editNotes, token]);
@@ -1951,13 +1948,35 @@ function MapInner({ token, publicView }) {
             <button onClick={() => { setPlacesInDetail(false); setSelectedCollectionId(null); }}
               title="Back to collections"
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--dl-middle)', padding: 0, lineHeight: 1, fontSize: 18 }}>‹</button>
-            <span style={{
-              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
-              color: 'var(--dl-strong)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {selectedCollection ? selectedCollection.name : 'All places'}
-            </span>
+            {selectedCollection && !isPublic ? (
+              <input
+                defaultValue={selectedCollection.name}
+                key={selectedCollection.id}
+                onBlur={async (e) => {
+                  const next = e.target.value.trim();
+                  if (!next || next === selectedCollection.name) { e.target.value = selectedCollection.name; return; }
+                  setCollections(arr => arr.map(c => c.id === selectedCollection.id ? { ...c, name: next } : c));
+                  api.patch('/api/collections', { id: selectedCollection.id, name: next }, token).catch(() => {
+                    setCollections(arr => arr.map(c => c.id === selectedCollection.id ? { ...c, name: selectedCollection.name } : c));
+                  });
+                }}
+                onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { e.target.value = selectedCollection.name; e.target.blur(); } }}
+                style={{
+                  fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  color: 'var(--dl-strong)',
+                  background: 'transparent', border: 'none', outline: 'none', padding: 0,
+                  minWidth: 0, width: '100%',
+                }}
+              />
+            ) : (
+              <span style={{
+                fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase',
+                color: 'var(--dl-strong)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {selectedCollection ? selectedCollection.name : 'All places'}
+              </span>
+            )}
             {selectedCollection && (
               <span style={{
                 fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)',
