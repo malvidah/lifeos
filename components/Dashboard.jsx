@@ -13,7 +13,7 @@ import { MEM, DIRTY, clearCacheForUser, doUndo, doRedo } from "@/lib/db";
 import { useIsMobile, useCollapse, useJournalMode } from "@/lib/hooks";
 import { useDashboardLayout } from "@/lib/useDashboardLayout";
 import { useProjects } from "@/lib/useProjects";
-import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext, TripNamesContext } from "@/lib/contexts";
+import { NoteContext, NavigationContext, ProjectNamesContext, PlaceNamesContext, TripNamesContext, CollectionNamesContext } from "@/lib/contexts";
 import UserMenu from "./nav/UserMenu.jsx";
 import ChatFloat from "./widgets/ChatFloat.jsx";
 import { useSearch, SearchResults } from "./widgets/SearchResults.jsx";
@@ -330,6 +330,19 @@ function DashboardInner() {
     const handler = () => load();
     window.addEventListener('daylab:trips-changed', handler);
     return () => window.removeEventListener('daylab:trips-changed', handler);
+  }, [token]);
+
+  // Collection names — used by editors for /co autocomplete
+  const [allCollectionNames, setAllCollectionNames] = useState([]);
+  useEffect(() => {
+    if (!token) return;
+    const load = () => api.get('/api/collections', token).then(d => {
+      setAllCollectionNames((d?.collections ?? []).map(c => c.name));
+    });
+    load();
+    const handler = () => load();
+    window.addEventListener('daylab:collections-changed', handler);
+    return () => window.removeEventListener('daylab:collections-changed', handler);
   }, [token]);
 
   // Listen for new project chip creation (/p + new name in any editor)
@@ -706,6 +719,7 @@ function DashboardInner() {
     <ProjectNamesContext.Provider value={allProjectNames}>
     <PlaceNamesContext.Provider value={allPlaceNames}>
     <TripNamesContext.Provider value={allTripNames}>
+    <CollectionNamesContext.Provider value={allCollectionNames}>
     <NoteContext.Provider value={{ notes: allNoteNames, drawings: allDrawingNames, onCreateNote: (name) => {
       window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name } }));
     }}}>
@@ -729,11 +743,14 @@ function DashboardInner() {
         }
       },
       navigateToTrip: (name, opts = {}) => {
-        // Open the trip on the map. `opts.openDetail = true` enters detail
-        // mode (used by /tr chip click); falsy just previews (used by note
-        // open for ambient context).
         const fire = () => window.dispatchEvent(new CustomEvent(
           'daylab:open-trip', { detail: { name, openDetail: !!opts.openDetail } }));
+        if (timelineCollapsed) { toggleTimeline(); setTimeout(fire, 500); }
+        else fire();
+      },
+      navigateToCollection: (name) => {
+        const fire = () => window.dispatchEvent(new CustomEvent(
+          'daylab:open-collection', { detail: { name } }));
         if (timelineCollapsed) { toggleTimeline(); setTimeout(fire, 500); }
         else fire();
       },
@@ -1235,6 +1252,7 @@ function DashboardInner() {
     </div>
     </NavigationContext.Provider>
     </NoteContext.Provider>
+    </CollectionNamesContext.Provider>
     </TripNamesContext.Provider>
     </PlaceNamesContext.Provider>
     </ProjectNamesContext.Provider>

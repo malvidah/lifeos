@@ -1049,6 +1049,21 @@ function MapInner({ token, publicView }) {
     return () => window.removeEventListener('daylab:open-trip', handler);
   }, [trips, inDetail, token]);
 
+  useEffect(() => {
+    const handler = (e) => {
+      const name = e.detail?.name;
+      if (!name) return;
+      if (mode !== 'places') setMode('places');
+      const match = collections.find(c => c.name?.toLowerCase() === name.toLowerCase());
+      if (match) {
+        setSelectedCollectionId(match.id);
+        setPlacesInDetail(true);
+      }
+    };
+    window.addEventListener('daylab:open-collection', handler);
+    return () => window.removeEventListener('daylab:open-collection', handler);
+  }, [collections, mode]);
+
   // Render place markers
   useEffect(() => {
     if (!mapInstance.current || !leafletReady) return;

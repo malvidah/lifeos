@@ -3,12 +3,13 @@ import { useState, useEffect, useRef, useCallback, useContext, useMemo, Fragment
 import { mono, serif, F, R, projectColor } from "@/lib/tokens";
 import { useDbSave } from "@/lib/db";
 import { useTheme } from "@/lib/theme";
-import { NoteContext, ProjectNamesContext, PlaceNamesContext, TripNamesContext, NavigationContext } from "@/lib/contexts";
+import { NoteContext, ProjectNamesContext, PlaceNamesContext, TripNamesContext, CollectionNamesContext, NavigationContext } from "@/lib/contexts";
 import { RichLine, Shimmer, SourceBadge } from "../ui/primitives.jsx";
 import { estimateNutrition, uploadImageFile, deleteImageFile } from "@/lib/images";
 import { api } from "@/lib/api";
 import { todayKey } from "@/lib/dates";
 import { useTripByName } from "@/lib/useTrips";
+import { useCollectionByName } from "@/lib/useCollections";
 import { DayLabEditor } from "../Editor.jsx";
 import { getStroke } from "perfect-freehand";
 
@@ -74,6 +75,16 @@ export function extractPlaceTags(content) {
   if (!content) return [];
   const names = [];
   const re = /data-place-tag="([^"]+)"/g;
+  let m;
+  while ((m = re.exec(content)) !== null) names.push(m[1].trim());
+  return [...new Set(names)];
+}
+
+// Extract collection tag names from journal/note content
+export function extractCollectionTags(content) {
+  if (!content) return [];
+  const names = [];
+  const re = /data-collection-tag="([^"]+)"/g;
   let m;
   while ((m = re.exec(content)) !== null) names.push(m[1].trim());
   return [...new Set(names)];
@@ -827,6 +838,28 @@ export function MediaStrip({ mediaItems, onViewItem, onReorderPhotos, dark, toke
       );
     }
 
+    if (item.type === 'collection-map') {
+      return (
+        <div
+          key={'collection-' + item.name}
+          onPointerDown={e => { e.stopPropagation(); e.currentTarget._tapStart = { x: e.clientX, y: e.clientY }; }}
+          onPointerUp={e => {
+            e.stopPropagation();
+            const s = e.currentTarget._tapStart;
+            if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) < DRAG_THRESHOLD * 2) onViewItem(mediaIdx);
+          }}
+          style={{
+            width: SIZE, height: SIZE, flexShrink: 0, borderRadius: 10, overflow: 'hidden',
+            cursor: 'pointer', position: 'relative', background: '#0d1a24',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.opacity = '0.85'; }}
+          onMouseLeave={e => { e.currentTarget.style.opacity = '1'; }}
+        >
+          <MiniLocationMap places={item.places} />
+        </div>
+      );
+    }
+
     // Drawing mini-card
     // Use pointer events (not onClick) so taps fire reliably even when the
     // parent container has pointer-capture set for photo drag-reorder.
@@ -943,6 +976,10 @@ export function MediaSlideshow({ mediaItems, index, onClose, dark, token }) {
       ) : item?.type === 'trip-map' ? (
         <div data-no-carousel-swipe style={{ width: '100%', aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
           <MiniTripMap trip={item.trip} token={token} interactive={true} />
+        </div>
+      ) : item?.type === 'collection-map' ? (
+        <div data-no-carousel-swipe style={{ width: '100%', aspectRatio: '4/3', position: 'relative', overflow: 'hidden' }}>
+          <MiniLocationMap places={item.places} interactive={true} />
         </div>
       ) : item?.type === 'drawing' ? (
         <div data-no-carousel-swipe style={{ width: '100%', aspectRatio: '4/3', overflow: 'hidden' }}>
@@ -1276,9 +1313,10 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
   const dark = theme === 'dark';
   const { notes: ctxNotes, drawings: ctxDrawings } = useContext(NoteContext);
   const ctxProjects = useContext(ProjectNamesContext);
-  const ctxPlaces = useContext(PlaceNamesContext);
-  const ctxTrips  = useContext(TripNamesContext);
-  const { navigateToProject, navigateToNote, navigateToPlace, navigateToTrip } = useContext(NavigationContext);
+  const ctxPlaces      = useContext(PlaceNamesContext);
+  const ctxTrips       = useContext(TripNamesContext);
+  const ctxCollections = useContext(CollectionNamesContext);
+  const { navigateToProject, navigateToNote, navigateToPlace, navigateToTrip, navigateToCollection } = useContext(NavigationContext);
 
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1384,13 +1422,25 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
     navigateToTrip(journalTripName, { openDetail: false });
   }, [date, journalTripName]); // eslint-disable-line
 
-  // All visual media as typed items: photos, drawings, map, trip
+  // Collection tag — first /co tag in journal content
+  const journalCollectionName = useMemo(() => {
+    const m = (value || '').match(/data-collection-tag="([^"]+)"/);
+    return m?.[1] ?? null;
+  }, [value]);
+  const journalCollectionData = useCollectionByName(journalCollectionName, token);
+  const collectionItem = useMemo(() => {
+    if (!journalCollectionData || !journalCollectionData.places?.length) return null;
+    return { type: 'collection-map', name: journalCollectionData.name, places: journalCollectionData.places };
+  }, [journalCollectionData]);
+
+  // All visual media as typed items: photos, drawings, map, trip, collection
   const allMedia = useMemo(() => {
     const items = [...photoItems, ...drawingItems];
     if (mapItem) items.push(mapItem);
     if (tripItem) items.push(tripItem);
+    if (collectionItem) items.push(collectionItem);
     return items;
-  }, [photoItems, drawingItems, mapItem, tripItem]);
+  }, [photoItems, drawingItems, mapItem, tripItem, collectionItem]);
 
   // Flat image URL list kept for backward-compat (reorderImages, legacy refs)
   const allImages = useMemo(() => allMedia.map(m => m.type === 'photo' ? m.url : m.thumbnail), [allMedia]);
@@ -1568,11 +1618,13 @@ export function JournalEditor({date,userId,token,project,journalMode}) {
           projectNames={ctxProjects}
           placeNames={ctxPlaces}
           tripNames={ctxTrips}
+          collectionNames={ctxCollections}
           showScheduleTags={false}
           onProjectClick={name => navigateToProject(name)}
           onNoteClick={name => navigateToNote(name)}
           onPlaceClick={name => navigateToPlace(name)}
           onTripClick={name => navigateToTrip(name, { openDetail: true })}
+          onCollectionClick={name => navigateToCollection(name)}
           placeholder="What's on your mind? Use / for tags."
           textColor={"var(--dl-strong)"}
           mutedColor={"var(--dl-middle)"}
@@ -1815,11 +1867,12 @@ export function Meals({date,token,userId}) { return <RowList date={date} type="m
 
 export function AddJournalLine({ project, onAdd, placeholder }) {
   const col = project && project !== '__everything__' ? projectColor(project) : "var(--dl-accent)";
-  const ctxProjects = useContext(ProjectNamesContext);
-  const ctxPlaces   = useContext(PlaceNamesContext);
-  const ctxTrips    = useContext(TripNamesContext);
-  const ctxNotes    = useContext(NoteContext);
-  const { navigateToProject, navigateToNote, navigateToPlace, navigateToTrip } = useContext(NavigationContext);
+  const ctxProjects    = useContext(ProjectNamesContext);
+  const ctxPlaces      = useContext(PlaceNamesContext);
+  const ctxTrips       = useContext(TripNamesContext);
+  const ctxCollections = useContext(CollectionNamesContext);
+  const ctxNotes       = useContext(NoteContext);
+  const { navigateToProject, navigateToNote, navigateToPlace, navigateToTrip, navigateToCollection } = useContext(NavigationContext);
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '2px 0' }}>
       <DayLabEditor
@@ -1828,6 +1881,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         projectNames={ctxProjects}
         placeNames={ctxPlaces}
         tripNames={ctxTrips}
+        collectionNames={ctxCollections}
         noteNames={ctxNotes.notes}
         drawingNames={ctxNotes.drawings}
         showScheduleTags={false}
@@ -1839,6 +1893,7 @@ export function AddJournalLine({ project, onAdd, placeholder }) {
         onNoteClick={name => navigateToNote(name)}
         onPlaceClick={name => navigateToPlace(name)}
         onTripClick={name => navigateToTrip(name, { openDetail: true })}
+        onCollectionClick={name => navigateToCollection(name)}
         onEnterCommit={text => { if (text.trim()) onAdd(text.trim()); }}
         onBlur={text => { if (text.trim()) onAdd(text.trim()); }}
       />
