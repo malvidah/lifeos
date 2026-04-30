@@ -171,6 +171,25 @@ const TripTagNode = Node.create({
   },
 });
 
+// CollectionTag: stored as <span data-collection-tag="name">, rendered as teal chip.
+const CollectionTagNode = Node.create({
+  name: 'collectionTag', group: 'inline', inline: true,
+  atom: true, selectable: true, draggable: false,
+  addAttributes() { return { name: { default: '' } }; },
+  parseHTML() {
+    return [{ tag: 'span[data-collection-tag]', getAttrs: el => ({ name: el.getAttribute('data-collection-tag') || '' }) }];
+  },
+  renderHTML({ node }) {
+    const name = node.attrs.name || '';
+    return ['span', {
+      'data-collection-tag': name,
+      style: Object.entries({ ...CHIP_TOKENS.collection, cursor: 'pointer', userSelect: 'none' })
+        .map(([k, v]) => `${k.replace(/[A-Z]/g, c => '-' + c.toLowerCase())}:${v}`)
+        .join(';'),
+    }, '\u{1F4CD} ' + name.toUpperCase()];
+  },
+});
+
 // DrawingTag: stored as {d:title}, rendered as lilac chip atom node.
 const DrawingTagNode = Node.create({
   name: 'drawingTag', group: 'inline', inline: true,
@@ -969,6 +988,7 @@ export function docToText(docJson) {
       if (c.type === 'projectTag')  return `{${c.attrs?.name ?? ''}}`;
       if (c.type === 'placeTag')    return `{l:${c.attrs?.name ?? ''}}`;
       if (c.type === 'tripTag')     return `{tr:${c.attrs?.name ?? ''}}`;
+      if (c.type === 'collectionTag') return `{co:${c.attrs?.name ?? ''}}`;
       if (c.type === 'noteLink')    return `[${c.attrs?.name ?? ''}]`;
       if (c.type === 'recurrenceTag') return `{r:${c.attrs?.key ?? ''}:${c.attrs?.label ?? ''}}`;
       if (c.type === 'dateTag')    return `@${c.attrs?.date ?? ''}`;
@@ -997,12 +1017,11 @@ function parseLineContent(line) {
   //         [text](url) hyperlink | [note] | @YYYY-MM-DD | legacy #Tag
   // Hyperlink [text](url) must come before [note] so the parser prefers it.
   // {tr:...} comes before {project} so the project regex doesn't swallow it.
-  const re = /\{h:([^:}]+):([^}]*)\}|\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{tr:([^}]+)\}|\{g:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]*)\]\((https?:\/\/[^)]*)\)|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})|#([A-Za-z][A-Za-z0-9]+)/g;
+  const re = /\{h:([^:}]+):([^}]*)\}|\{r:([^:}]+):([^}]*)\}|\{l:([^}]+)\}|\{tr:([^}]+)\}|\{co:([^}]+)\}|\{g:([^}]+)\}|\{([a-z0-9][a-z0-9 ]*[a-z0-9]|[a-z0-9])\}|\[([^\]]*)\]\((https?:\/\/[^)]*)\)|\[([^\]]+)\]|@(\d{4}-\d{2}-\d{2})/g;
   let last = 0, m;
   while ((m = re.exec(line)) !== null) {
     if (m.index > last) content.push({ type: 'text', text: line.slice(last, m.index) });
     if (m[1] != null) {
-      // m[2] may be "label", "label:count", or "label:Nd" — split to extract optional count/days
       const hParts = m[2].split(':');
       const lastPart = hParts[hParts.length - 1];
       const isDays = hParts.length > 1 && /^\d+d$/i.test(lastPart);
@@ -1013,14 +1032,14 @@ function parseLineContent(line) {
       content.push({ type: 'habitTag', attrs: { key: m[1], label: hLabelClean, count: hCount, days: hDays } });
     }
     else if (m[3] != null) content.push({ type: 'recurrenceTag', attrs: { key: m[3], label: m[4] } });
-    else if (m[5] != null) content.push({ type: 'placeTag',  attrs: { name: m[5] } });
-    else if (m[6] != null) content.push({ type: 'tripTag',   attrs: { name: m[6] } });
-    else if (m[7] != null) content.push({ type: 'goalTag',   attrs: { name: m[7] } });
-    else if (m[8] != null) content.push({ type: 'projectTag', attrs: { name: m[8] } });
-    else if (m[9] != null) content.push({ type: 'text', text: m[9], marks: [{ type: 'hyperlink', attrs: { href: m[10] } }] });
-    else if (m[11] != null) content.push({ type: 'noteLink',  attrs: { name: m[11] } });
-    else if (m[12] != null) content.push({ type: 'dateTag',   attrs: { date: m[12] } });
-    else if (m[13] != null) content.push({ type: 'projectTag', attrs: { name: m[13].toLowerCase() } });
+    else if (m[5] != null) content.push({ type: 'placeTag',       attrs: { name: m[5] } });
+    else if (m[6] != null) content.push({ type: 'tripTag',        attrs: { name: m[6] } });
+    else if (m[7] != null) content.push({ type: 'collectionTag',  attrs: { name: m[7] } });
+    else if (m[8] != null) content.push({ type: 'goalTag',        attrs: { name: m[8] } });
+    else if (m[9] != null) content.push({ type: 'projectTag',     attrs: { name: m[9] } });
+    else if (m[10] != null) content.push({ type: 'text', text: m[10], marks: [{ type: 'hyperlink', attrs: { href: m[11] } }] });
+    else if (m[12] != null) content.push({ type: 'noteLink',      attrs: { name: m[12] } });
+    else if (m[13] != null) content.push({ type: 'dateTag',       attrs: { date: m[13] } });
     last = m.index + m[0].length;
   }
   if (last < line.length) content.push({ type: 'text', text: line.slice(last) });
@@ -1246,12 +1265,14 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   projectNames,
   placeNames,
   tripNames,
+  collectionNames,
   goalNames,
   showScheduleTags = true, // set false in notes/journal to hide /h and /r
   onProjectClick,
   onNoteClick,
   onPlaceClick,
   onTripClick,
+  onCollectionClick,
   onGoalClick,
   onCreateNote,      // (name, {silent}) — called when /n creates a new note
   onCreateProject,   // (name) — called when /p creates a new project
@@ -1289,11 +1310,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   const projectNamesRef     = useRef(projectNames || []);
   const placeNamesRef       = useRef(placeNames || []);
   const tripNamesRef        = useRef(tripNames || []);
+  const collectionNamesRef  = useRef(collectionNames || []);
   const goalNamesRef        = useRef(goalNames || []);
   const onProjectClickRef   = useRef(onProjectClick);
   const onNoteClickRef      = useRef(onNoteClick);
   const onPlaceClickRef     = useRef(onPlaceClick);
   const onTripClickRef      = useRef(onTripClick);
+  const onCollectionClickRef = useRef(onCollectionClick);
   const onGoalClickRef      = useRef(onGoalClick);
   const onCreateNoteRef     = useRef(onCreateNote);
   const onCreateProjectRef  = useRef(onCreateProject);
@@ -1318,11 +1341,13 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
   useEffect(() => { projectNamesRef.current      = projectNames || []; }, [projectNames]);
   useEffect(() => { placeNamesRef.current        = placeNames || []; },  [placeNames]);
   useEffect(() => { tripNamesRef.current         = tripNames || []; },   [tripNames]);
+  useEffect(() => { collectionNamesRef.current   = collectionNames || []; }, [collectionNames]);
   useEffect(() => { goalNamesRef.current         = goalNames || []; },   [goalNames]);
   useEffect(() => { onProjectClickRef.current    = onProjectClick; },   [onProjectClick]);
   useEffect(() => { onNoteClickRef.current       = onNoteClick; },      [onNoteClick]);
   useEffect(() => { onPlaceClickRef.current      = onPlaceClick; },     [onPlaceClick]);
   useEffect(() => { onTripClickRef.current       = onTripClick; },      [onTripClick]);
+  useEffect(() => { onCollectionClickRef.current = onCollectionClick; }, [onCollectionClick]);
   useEffect(() => { onGoalClickRef.current       = onGoalClick; },      [onGoalClick]);
   useEffect(() => { onCreateNoteRef.current      = onCreateNote; },     [onCreateNote]);
   useEffect(() => { onCreateProjectRef.current   = onCreateProject; },  [onCreateProject]);
@@ -1467,6 +1492,7 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
       NoteLinkNode,
       PlaceTagNode,
       TripTagNode,
+      CollectionTagNode,
       DrawingTagNode,
       RecurrenceTagNode,
       HabitTagNode,
@@ -1548,6 +1574,21 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               matches.push(`__trip__:${qTrim}`);
             }
             return matches.length ? matches : [`__trip__:${qTrim || 'trip'}`];
+          }
+
+          // /co (collection) — two-letter command, same pattern as /tr
+          if (lowerQ === 'co' || lowerQ.startsWith('co ') || lowerQ.startsWith('co\t')) {
+            const coSearch = query.slice(2).replace(/^\s+/, '');
+            const q        = coSearch.toLowerCase().replace(/\s/g, '');
+            const qTrim    = coSearch.trim();
+            const names    = collectionNamesRef.current || [];
+            const matches  = names
+              .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
+              .map(n => `__collection__:${n}`);
+            if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
+              matches.push(`__collection__:${qTrim}`);
+            }
+            return matches.length ? matches : [`__collection__:${qTrim || 'collection'}`];
           }
 
           const cmd    = query[0]?.toLowerCase();              // 'p' or 'n'
@@ -1742,6 +1783,16 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             return;
           }
 
+          if (name.startsWith('__collection__:')) {
+            const cName = name.slice(15).trim();
+            if (!cName) return;
+            editor.chain().focus().deleteRange(range).insertContent([
+              { type: 'collectionTag', attrs: { name: cName } },
+              { type: 'text', text: ' ' },
+            ]).run();
+            return;
+          }
+
           if (name.startsWith('__place__:') || name.startsWith('__create_place__:')) {
             const isNew = name.startsWith('__create_place__:');
             const placeName = isNew ? name.slice(16) : name.slice(10);
@@ -1788,40 +1839,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
               onCreateNoteRef.current?.(noteName, { silent: true });
               window.dispatchEvent(new CustomEvent('daylab:create-note', { detail: { name: noteName } }));
             }
-          }
-        },
-      }),
-
-      // # trigger for project tags — alias for /p
-      createSuggestion({
-        char: '#',
-        suggKey: 'hashProject',
-        renderRef,
-        itemsFn: (query) => {
-          const q      = query.toLowerCase().replace(/\s/g, '');
-          const qTrim  = query.trim();
-          const names  = projectNamesRef.current || [];
-          const matches = names
-            .filter(n => !q || n.toLowerCase().replace(/\s/g, '').includes(q))
-            .map(n => `__project__:${n}`);
-          if (qTrim && !names.some(n => n.toLowerCase() === qTrim.toLowerCase())) {
-            matches.push(`__create_project__:${qTrim}`);
-          }
-          return matches.length ? matches : ['__create_project__:' + (qTrim || 'project')];
-        },
-        commandFn: ({ editor, range, name }) => {
-          if (!name.startsWith('__project__:') && !name.startsWith('__create_project__:')) return;
-          justInsertedRef.current = true;
-          setTimeout(() => { justInsertedRef.current = false; }, 150);
-          const isNew = name.startsWith('__create_project__:');
-          const pName = (isNew ? name.slice(19) : name.slice(12)).toLowerCase();
-          editor.chain().focus().deleteRange(range).insertContent([
-            { type: 'projectTag', attrs: { name: pName } },
-            { type: 'text', text: ' ' },
-          ]).run();
-          if (isNew) {
-            window.dispatchEvent(new CustomEvent('daylab:create-project', { detail: { name: pName } }));
-            onCreateProjectRef.current?.(pName);
           }
         },
       }),
@@ -1903,6 +1920,18 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
             editorRef.current.view?.dom?.blur();
           }
           onTripClickRef.current(tripEl.getAttribute('data-trip-tag'));
+          return true;
+        }
+        const collectionEl = t.closest?.('[data-collection-tag]');
+        if (collectionEl && onCollectionClickRef.current) {
+          if (onBlurRef.current && editorRef.current) {
+            const serialised = singleLineRef.current
+              ? docToText(editorRef.current.getJSON())
+              : editorRef.current.getHTML();
+            onBlurRef.current(serialised);
+            editorRef.current.view?.dom?.blur();
+          }
+          onCollectionClickRef.current(collectionEl.getAttribute('data-collection-tag'));
           return true;
         }
         const goalEl = t.closest?.('[data-goal]');

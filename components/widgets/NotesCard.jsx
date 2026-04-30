@@ -557,15 +557,6 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
         collapsed={notesCollapsed}
         onToggle={toggleNotes}
         expandHref={expandHref}
-        headerLeft={!kanbanDetailId && (
-          <button
-            onClick={async (e) => { e.stopPropagation(); const note = await addNote(''); if (note) { setActiveNoteId(note.id); setKanbanDetailId(note.id); } }}
-            title="New note"
-            style={{ background:'none', border:'none', cursor:'pointer', color:'var(--dl-middle)', padding:'2px 4px', display:'flex', alignItems:'center', fontSize:16, lineHeight:1 }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
-          >+</button>
-        )}
         headerRight={
           <div style={{ display:'flex', alignItems:'center', gap:6 }} onClick={e => e.stopPropagation()}>
             {noteSearchOpen ? (

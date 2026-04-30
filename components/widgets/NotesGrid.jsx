@@ -80,6 +80,24 @@ export default function NotesGrid({
       msOverflowStyle: 'none',
       minHeight: 120,
     }}>
+      {!readOnly && <button
+        onClick={() => onAddNote()}
+        title="New note"
+        style={{
+          background: 'transparent',
+          border: '1px dashed var(--dl-border)',
+          borderRadius: 10,
+          padding: '8px 10px',
+          cursor: 'pointer',
+          color: 'var(--dl-middle)',
+          fontFamily: mono, fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase',
+          minHeight: 64,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          transition: 'color 0.15s, border-color 0.15s',
+        }}
+        onMouseEnter={e => { e.currentTarget.style.color = 'var(--dl-strong)'; e.currentTarget.style.borderColor = 'var(--dl-middle)'; }}
+        onMouseLeave={e => { e.currentTarget.style.color = 'var(--dl-middle)'; e.currentTarget.style.borderColor = 'var(--dl-border)'; }}
+      >+ note</button>}
       {orderedNotes.map(note => {
         const dropEdgeForCard = (!readOnly && dragOverId === note.id && dragId && dragId !== note.id)
           ? (dropEdge === 'after' ? 'bottom' : 'top')
