@@ -264,7 +264,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
   // Used when a kanban column header is renamed.
   const bulkRenameStatus = useCallback(async (oldStatus, newStatus) => {
     setNotesList(prev => prev.map(n => {
-      const s = (n.status || 'new').toLowerCase().trim();
+      const s = (n.status || 'document').toLowerCase().trim();
       return s === oldStatus ? { ...n, status: newStatus } : n;
     }));
     try {

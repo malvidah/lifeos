@@ -3,21 +3,18 @@ import React, { useState, useRef, useMemo } from "react";
 import { mono, F } from "@/lib/tokens";
 import NoteCardItem from "./NoteCardItem.jsx";
 
-const DEFAULT_STATUSES = ['new', 'in progress', 'archived'];
+const DEFAULT_STATUSES = ['document', 'in progress', 'archived'];
 const CARD_RADIUS = 10;
-// Fixed column width so the kanban scrolls horizontally on narrow screens
-// (iPhone) rather than squishing columns down to unreadable widths.
 const COL_W = 240;
 
-// Stable color per status name. Defaults get fixed colors; everything else
-// hashes to a small palette so the same name always gets the same color.
 const FIXED_COLORS = {
+  'document':    '#6BAED6',
   'new':         '#6BAED6',
   'in progress': '#E8A95B',
   'archived':    'var(--dl-middle)',
 };
 const PALETTE = ['#6BAED6', '#E8A95B', '#8DB86B', '#C49BC4', '#E07C7C', '#5BA89D', '#D4A85B', '#7B96D4'];
-function statusColor(name) {
+export function statusColor(name) {
   const key = (name || '').toLowerCase().trim();
   if (FIXED_COLORS[key]) return FIXED_COLORS[key];
   let h = 0;
@@ -26,7 +23,6 @@ function statusColor(name) {
 }
 
 
-// Read-only header — name + count, no rename / add / delete.
 function ReadOnlyColumnHeader({ statusKey, color, count }) {
   return (
     <div style={{
@@ -43,7 +39,7 @@ function ReadOnlyColumnHeader({ statusKey, color, count }) {
   );
 }
 
-function ColumnHeader({ statusKey, color, count, onRename, onAddNote, onDelete, canDelete }) {
+function ColumnHeader({ statusKey, color, count, onRename, onAddNote, onDelete, canDelete, onColDragStart, onColDragEnd, colDraggable }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(statusKey);
   const inputRef = useRef(null);
@@ -61,6 +57,18 @@ function ColumnHeader({ statusKey, color, count, onRename, onAddNote, onDelete, 
       paddingBottom: 4, gap: 6,
       borderBottom: `2px solid ${typeof color === 'string' && color.startsWith('#') ? color + '44' : 'var(--dl-border)'}`,
     }}>
+      {colDraggable && (
+        <span
+          draggable
+          onDragStart={onColDragStart}
+          onDragEnd={onColDragEnd}
+          title="Drag to reorder"
+          style={{
+            cursor: 'grab', color: 'var(--dl-border2, var(--dl-middle))', fontSize: 10,
+            lineHeight: 1, flexShrink: 0, userSelect: 'none', padding: '0 2px',
+          }}
+        >⠿</span>
+      )}
       {editing ? (
         <input
           ref={inputRef}
@@ -120,19 +128,16 @@ export default function NotesKanban({
   onPatchNote,
   onBulkRenameStatus,
   getMediaPreview,
-  readOnly = false, // public profile: no DnD, no + tile, no rename, no delete, no + status
+  readOnly = false,
 }) {
-  // Per-project status list. Falls back to defaults until user customizes.
   const customList = projectsMeta?.[effectiveProject]?.noteStatuses;
   const baseList = Array.isArray(customList) && customList.length ? customList : DEFAULT_STATUSES;
 
-  // Auto-discover any status values present in current notes that aren't in the
-  // configured list (legacy notes, cross-project tags, etc.) so nothing is hidden.
   const columns = useMemo(() => {
     const seen = new Set(baseList);
     const extras = [];
     for (const n of notes) {
-      const s = (n.status || 'new').toLowerCase().trim();
+      const s = (n.status || 'document').toLowerCase().trim();
       if (!seen.has(s)) { seen.add(s); extras.push(s); }
     }
     return [...baseList, ...extras];
@@ -142,7 +147,7 @@ export default function NotesKanban({
     const out = {};
     for (const c of columns) out[c] = [];
     for (const n of notes) {
-      const s = (n.status || 'new').toLowerCase().trim();
+      const s = (n.status || 'document').toLowerCase().trim();
       (out[s] ||= []).push(n);
     }
     return out;
@@ -150,9 +155,14 @@ export default function NotesKanban({
 
   const showProjects = effectiveProject === '__everything__';
 
-  // Drag state
+  // Card drag state (move note between columns)
   const [dragId, setDragId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+
+  // Column drag state (reorder columns)
+  const [dragColKey, setDragColKey] = useState(null);
+  const [dragOverColKey, setDragOverColKey] = useState(null);
+  const [colDropEdge, setColDropEdge] = useState(null);
 
   const persistList = (list) => {
     setProjectsMeta(prev => {
@@ -162,20 +172,23 @@ export default function NotesKanban({
     }, { skipHistory: true });
   };
 
+  // ── Card DnD ──
   const onDragStart = (e, id) => {
     setDragId(id);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'card');
   };
   const onDragEnd = () => {
     if (dragId && dragOverCol) {
       const note = notes.find(n => n.id === dragId);
-      const current = (note?.status || 'new').toLowerCase().trim();
+      const current = (note?.status || 'document').toLowerCase().trim();
       if (note && current !== dragOverCol) onPatchNote(dragId, { status: dragOverCol });
     }
     setDragId(null);
     setDragOverCol(null);
   };
   const onColDragOver = (e, colKey) => {
+    if (dragColKey) return; // column drag handled separately
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverCol(colKey);
@@ -186,10 +199,48 @@ export default function NotesKanban({
     }
   };
 
+  // ── Column DnD ──
+  const onColumnDragStart = (e, colKey) => {
+    setDragColKey(colKey);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', 'column');
+  };
+  const onColumnDragEnd = () => {
+    if (dragColKey && dragOverColKey && colDropEdge && dragColKey !== dragOverColKey) {
+      const list = [...columns];
+      const fromIdx = list.indexOf(dragColKey);
+      const targetIdx = list.indexOf(dragOverColKey);
+      if (fromIdx !== -1 && targetIdx !== -1) {
+        list.splice(fromIdx, 1);
+        const adjustedTarget = list.indexOf(dragOverColKey);
+        const insertIdx = colDropEdge === 'after' ? adjustedTarget + 1 : adjustedTarget;
+        list.splice(insertIdx, 0, dragColKey);
+        persistList(list);
+      }
+    }
+    setDragColKey(null);
+    setDragOverColKey(null);
+    setColDropEdge(null);
+  };
+  const onColumnDragOver = (e, colKey) => {
+    if (!dragColKey || dragColKey === colKey) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    const rect = e.currentTarget.getBoundingClientRect();
+    const isAfter = (e.clientX - rect.left) > rect.width / 2;
+    setDragOverColKey(colKey);
+    setColDropEdge(isAfter ? 'after' : 'before');
+  };
+  const onColumnDragLeave = (e, colKey) => {
+    if (!e.currentTarget.contains(e.relatedTarget) && dragOverColKey === colKey) {
+      setDragOverColKey(null);
+      setColDropEdge(null);
+    }
+  };
+
   const renameColumn = (oldKey, newKey) => {
     if (!newKey || newKey === oldKey) return;
     if (columns.includes(newKey)) {
-      // Merge: just remove the old column from the list and bulk-update notes.
       const next = baseList.filter(c => c !== oldKey);
       persistList(next);
       onBulkRenameStatus(oldKey, newKey);
@@ -225,23 +276,34 @@ export default function NotesKanban({
       {columns.map(colKey => {
         const items = grouped[colKey] || [];
         const color = statusColor(colKey);
-        const isDropTarget = dragId && dragOverCol === colKey;
+        const isCardDropTarget = dragId && dragOverCol === colKey;
+        const isColDropTarget = dragColKey && dragOverColKey === colKey && dragColKey !== colKey;
         const canDelete = baseList.includes(colKey) && items.length === 0;
         return (
           <div
             key={colKey}
-            onDragOver={e => onColDragOver(e, colKey)}
-            onDragLeave={e => onColDragLeave(e, colKey)}
+            onDragOver={e => {
+              if (dragColKey) { onColumnDragOver(e, colKey); }
+              else { onColDragOver(e, colKey); }
+            }}
+            onDragLeave={e => {
+              if (dragColKey) { onColumnDragLeave(e, colKey); }
+              else { onColDragLeave(e, colKey); }
+            }}
             onDrop={e => e.preventDefault()}
             style={{
+              position: 'relative',
               flex: `0 0 ${COL_W}px`, width: COL_W, minHeight: 100,
               display: 'flex', flexDirection: 'column', gap: 6,
               scrollSnapAlign: 'start',
-              background: isDropTarget ? `${typeof color === 'string' && color.startsWith('#') ? color : 'var(--dl-highlight)'}10` : 'transparent',
-              borderRadius: CARD_RADIUS, padding: isDropTarget ? 4 : 0,
+              background: isCardDropTarget ? `${typeof color === 'string' && color.startsWith('#') ? color : 'var(--dl-highlight)'}10` : 'transparent',
+              borderRadius: CARD_RADIUS, padding: isCardDropTarget ? 4 : 0,
               transition: 'background 0.15s, padding 0.15s',
+              opacity: dragColKey === colKey ? 0.4 : 1,
             }}
           >
+            {isColDropTarget && colDropEdge === 'before' && <ColDropIndicator side="left" />}
+            {isColDropTarget && colDropEdge === 'after' && <ColDropIndicator side="right" />}
             {readOnly ? (
               <ReadOnlyColumnHeader statusKey={colKey} color={color} count={items.length} />
             ) : (
@@ -253,6 +315,9 @@ export default function NotesKanban({
                 onAddNote={() => onAddNote(colKey)}
                 onDelete={() => removeColumn(colKey)}
                 canDelete={canDelete}
+                colDraggable
+                onColDragStart={e => onColumnDragStart(e, colKey)}
+                onColDragEnd={onColumnDragEnd}
               />
             )}
             {items.map(n => (
@@ -282,7 +347,6 @@ export default function NotesKanban({
           </div>
         );
       })}
-      {/* Add-column control — hidden in read-only / public view. */}
       {!readOnly && (
       <div style={{ minWidth: 120, flexShrink: 0, display: 'flex', alignItems: 'flex-start', paddingTop: 2 }}>
         {adding ? (
@@ -318,5 +382,20 @@ export default function NotesKanban({
       </div>
       )}
     </div>
+  );
+}
+
+function ColDropIndicator({ side }) {
+  return (
+    <div style={{
+      position: 'absolute',
+      top: 0, bottom: 0,
+      [side]: -5,
+      width: 2,
+      background: 'var(--dl-accent)',
+      borderRadius: 2,
+      pointerEvents: 'none',
+      zIndex: 1,
+    }} />
   );
 }

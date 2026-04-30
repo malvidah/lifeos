@@ -7,7 +7,7 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'notes' AND column_name = 'status'
   ) THEN
-    ALTER TABLE notes ADD COLUMN status text DEFAULT 'new';
+    ALTER TABLE notes ADD COLUMN status text DEFAULT 'document';
   END IF;
 END $$;
 

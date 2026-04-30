@@ -943,10 +943,10 @@ function DashboardInner() {
                         title={item.label}
                         style={{
                           background: isOpen ? "var(--dl-accent-13, rgba(208,136,40,0.13))" : "transparent",
-                          border: "none", borderRadius: 100, cursor: "pointer",
+                          border: "none", borderRadius: 8, cursor: "pointer",
                           display: "flex", alignItems: "center", justifyContent: "center",
                           color: isOpen ? "var(--dl-accent)" : "var(--dl-middle)",
-                          width: 44, height: 44, flexShrink: 0,
+                          width: 36, height: 36, flexShrink: 0,
                           transition: "background 0.15s, color 0.15s",
                         }}
                       >{item.icon}</button>

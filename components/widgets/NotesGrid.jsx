@@ -108,6 +108,7 @@ export default function NotesGrid({
             note={note}
             noteName={noteName}
             showProjects={showProjects}
+            showStatus
             mediaPreview={getMediaPreview?.(note)}
             draggable={!readOnly && sort === 'manual'}
             isDragging={dragId === note.id}

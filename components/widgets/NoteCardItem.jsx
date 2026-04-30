@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
-import { mono } from "@/lib/tokens";
-import { projectColor } from "@/lib/tokens";
+import { mono, projectColor } from "@/lib/tokens";
+import { statusColor } from "./NotesKanban.jsx";
 import { extractImages, extractDrawingTags, extractPlaceTags, extractCollectionTags, MiniTripMap } from "./JournalEditor.jsx";
 
 const CARD_RADIUS = 10;
@@ -126,6 +126,21 @@ function MediaPreview({ preview }) {
   );
 }
 
+function StatusPill({ status }) {
+  if (!status) return null;
+  const col = statusColor(status);
+  return (
+    <span style={{
+      fontFamily: mono, fontSize: 9, letterSpacing: '0.06em', textTransform: 'uppercase',
+      color: col, background: (typeof col === 'string' && col.startsWith('#') ? col + '22' : 'var(--dl-border)'),
+      borderRadius: 999, padding: '1px 7px',
+      whiteSpace: 'nowrap', lineHeight: '1.65',
+    }}>
+      {status}
+    </span>
+  );
+}
+
 function ProjectPill({ project }) {
   if (!project) return null;
   const col = projectColor(project);
@@ -143,10 +158,10 @@ function ProjectPill({ project }) {
 // Card UI shared between the kanban view and the grid view.
 // Drop targeting (the hairline above/below) is opt-in via dropEdge: 'top' | 'bottom' | null.
 export default function NoteCardItem({
-  note, noteName, showProjects,
+  note, noteName, showProjects, showStatus = false,
   onClick, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop,
   draggable = true, isDragging = false, dropEdge = null,
-  mediaPreview, // optional precomputed { type, url|thumbnail|name|title }
+  mediaPreview,
 }) {
   const [hovered, setHovered] = useState(false);
   const preview = previewText(note.content);
@@ -200,9 +215,10 @@ export default function NoteCardItem({
             {preview}
           </div>
         )}
-        {showProjects && (note.project_tags || []).length > 0 && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
-            {note.project_tags.slice(0, 3).map(p => <ProjectPill key={p} project={p} />)}
+        {(showStatus || (showProjects && (note.project_tags || []).length > 0)) && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 2, alignItems: 'center' }}>
+            {showStatus && note.status && <StatusPill status={note.status} />}
+            {showProjects && (note.project_tags || []).slice(0, 3).map(p => <ProjectPill key={p} project={p} />)}
           </div>
         )}
       </div>
