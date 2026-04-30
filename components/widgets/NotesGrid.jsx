@@ -70,9 +70,15 @@ export default function NotesGrid({
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+      gridTemplateRows: 'repeat(3, auto)',
+      gridAutoFlow: 'column',
+      gridAutoColumns: 200,
       gap: 8,
-      minHeight: 200,
+      overflowX: 'auto',
+      overflowY: 'hidden',
+      scrollbarWidth: 'none',
+      msOverflowStyle: 'none',
+      minHeight: 120,
     }}>
       {orderedNotes.map(note => {
         const dropEdgeForCard = (!readOnly && dragOverId === note.id && dragId && dragId !== note.id)
