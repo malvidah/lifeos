@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-04-30T18:08:12.204Z",
+  "generatedAt": "2026-04-30T18:16:41.199Z",
   "client": {
     "framework": "Next.js 16.1.6 (App Router)",
     "libraries": [
@@ -625,7 +625,8 @@
       "path": "/api/places",
       "methods": [
         "GET",
-        "POST"
+        "POST",
+        "PATCH"
       ],
       "services": [
         "supabase"
