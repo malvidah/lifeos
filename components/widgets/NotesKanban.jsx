@@ -52,23 +52,17 @@ function ColumnHeader({ statusKey, color, count, onRename, onAddNote, onDelete, 
   };
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      paddingBottom: 4, gap: 6,
-      borderBottom: `2px solid ${typeof color === 'string' && color.startsWith('#') ? color + '44' : 'var(--dl-border)'}`,
-    }}>
-      {colDraggable && (
-        <span
-          draggable
-          onDragStart={onColDragStart}
-          onDragEnd={onColDragEnd}
-          title="Drag to reorder"
-          style={{
-            cursor: 'grab', color: 'var(--dl-border2, var(--dl-middle))', fontSize: 10,
-            lineHeight: 1, flexShrink: 0, userSelect: 'none', padding: '0 2px',
-          }}
-        >⠿</span>
-      )}
+    <div
+      draggable={colDraggable && !editing}
+      onDragStart={colDraggable ? onColDragStart : undefined}
+      onDragEnd={colDraggable ? onColDragEnd : undefined}
+      style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        paddingBottom: 4, gap: 6,
+        borderBottom: `2px solid ${typeof color === 'string' && color.startsWith('#') ? color + '44' : 'var(--dl-border)'}`,
+        cursor: colDraggable && !editing ? 'grab' : undefined,
+      }}
+    >
       {editing ? (
         <input
           ref={inputRef}
