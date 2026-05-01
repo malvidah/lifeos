@@ -63,6 +63,12 @@ function ColumnHeader({ statusKey, color, count, onRename, onAddNote, onDelete, 
         cursor: colDraggable && !editing ? 'grab' : undefined,
       }}
     >
+      {colDraggable && !editing && (
+        <span style={{
+          color: 'var(--dl-border2, var(--dl-middle))', fontSize: 10,
+          lineHeight: 1, flexShrink: 0, userSelect: 'none', opacity: 0.5,
+        }}>⠿</span>
+      )}
       {editing ? (
         <input
           ref={inputRef}
