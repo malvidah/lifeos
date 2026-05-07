@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { mono } from "@/lib/tokens";
 import NoteCardItem from "./NoteCardItem.jsx";
 
@@ -26,33 +26,44 @@ export default function NotesGrid({
   const [dropEdge, setDropEdge] = useState(null);     // 'before' | 'after'
   const [isDuplicating, setIsDuplicating] = useState(false);
 
+  // Track altKey via document listeners — more reliable than reading e.altKey in dragstart
+  const altKeyRef = useRef(false);
+  useEffect(() => {
+    const onKey = (e) => { altKeyRef.current = e.altKey; };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('keyup', onKey);
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('keyup', onKey); };
+  }, []);
+
   const orderedNotes = notes; // already sorted by parent (recent or manual order)
 
   const onDragStart = (e, id) => {
     if (sort !== 'manual') return;
     setDragId(id);
-    const dup = e.altKey;
+    const dup = e.altKey || altKeyRef.current;
     setIsDuplicating(dup);
     e.dataTransfer.effectAllowed = dup ? 'copy' : 'move';
   };
   const onDragEnd = () => {
     if (sort !== 'manual') { setDragId(null); setDragOverId(null); setDropEdge(null); setIsDuplicating(false); return; }
-    if (dragId && dragOverId && dropEdge && dragId !== dragOverId) {
-      const ids = orderedNotes.map(n => n.id);
-      const fromIdx = ids.indexOf(dragId);
-      if (fromIdx !== -1) {
-        if (isDuplicating) {
-          // Option+drag: duplicate the note and insert it at the drop position
+    const ids = orderedNotes.map(n => n.id);
+    const fromIdx = dragId ? ids.indexOf(dragId) : -1;
+    if (dragId && fromIdx !== -1) {
+      if (isDuplicating) {
+        // Option+drag: duplicate and insert at drop position.
+        // If dropped over another card use its edge position; otherwise insert after source.
+        let insertAfterId = ids[fromIdx]; // default: after source
+        if (dragOverId && dragOverId !== dragId) {
           const targetIdx = ids.indexOf(dragOverId);
-          const insertAfterId = dropEdge === 'after' ? dragOverId : (ids[targetIdx - 1] ?? null);
-          onDuplicateNote?.(dragId, insertAfterId);
-        } else {
-          ids.splice(fromIdx, 1);
-          const adjustedTarget = ids.indexOf(dragOverId);
-          const insertIdx = dropEdge === 'after' ? adjustedTarget + 1 : adjustedTarget;
-          ids.splice(insertIdx, 0, dragId);
-          onSaveOrder?.(ids);
+          insertAfterId = dropEdge === 'after' ? dragOverId : (ids[targetIdx - 1] ?? null);
         }
+        onDuplicateNote?.(dragId, insertAfterId);
+      } else if (dragOverId && dropEdge && dragId !== dragOverId) {
+        ids.splice(fromIdx, 1);
+        const adjustedTarget = ids.indexOf(dragOverId);
+        const insertIdx = dropEdge === 'after' ? adjustedTarget + 1 : adjustedTarget;
+        ids.splice(insertIdx, 0, dragId);
+        onSaveOrder?.(ids);
       }
     }
     setDragId(null);

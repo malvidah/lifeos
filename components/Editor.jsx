@@ -1874,35 +1874,6 @@ export const DayLabEditor = forwardRef(function DayLabEditor({
     editable,
 
     editorProps: {
-      handleDOMEvents: {
-        // Prevent the browser from selecting an entire h1 line on click.
-        // Without this, clicking into the heading title on some browsers
-        // (especially macOS Safari / iOS) triggers a line-select instead of
-        // placing the cursor at the click position.
-        mousedown(view, event) {
-          const t = event.target;
-          if (t.closest?.('h1')) {
-            // Let ProseMirror place the cursor normally, but suppress the
-            // native browser "select whole line" behavior on headings by
-            // briefly clearing any existing selection before ProseMirror
-            // processes the event.
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount > 0) sel.collapseToStart();
-          }
-          return false; // still let ProseMirror handle it
-        },
-        // iOS Safari fires selectstart and selects the whole h1 on tap.
-        // Return false to let the normal selection proceed (ProseMirror handles it).
-        selectstart(view, event) {
-          const t = event.target;
-          if (t.closest?.('h1') && event.detail > 1) {
-            event.preventDefault();
-            return true;
-          }
-          return false;
-        },
-      },
-
       handleClick(view, pos, event) {
         // Skip navigation if a chip was just inserted (dropdown mouse-click leaks a click event)
         if (justInsertedRef.current) return false;

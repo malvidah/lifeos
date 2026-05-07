@@ -268,14 +268,14 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
     if (effectiveProject !== '__everything__') {
       setProjectsMeta(prev => {
         const meta = prev || {};
-        const order = [...(meta[effectiveProject]?.noteOrder || filteredSortedNotes.map(n => n.id))];
+        const order = [...(meta[effectiveProject]?.noteOrder || sortedNotes.map(n => n.id))];
         const afterIdx = insertAfterId ? order.indexOf(insertAfterId) : -1;
         const insertAt = afterIdx >= 0 ? afterIdx + 1 : 0;
         order.splice(insertAt, 0, newNote.id);
         return { ...meta, [effectiveProject]: { ...(meta[effectiveProject] || {}), noteOrder: order } };
       }, { skipHistory: true });
     }
-  }, [notesList, effectiveProject, token, setProjectsMeta, filteredSortedNotes]);
+  }, [notesList, effectiveProject, token, setProjectsMeta, sortedNotes]);
 
   // Update a note's status (used by the kanban view's drag-drop). Optimistic.
   const patchNoteStatus = useCallback(async (id, status) => {
