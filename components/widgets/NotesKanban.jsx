@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { mono, F } from "@/lib/tokens";
 import NoteCardItem from "./NoteCardItem.jsx";
 
@@ -127,6 +127,7 @@ export default function NotesKanban({
   onAddNote,
   onPatchNote,
   onBulkRenameStatus,
+  onDuplicateNote,
   getMediaPreview,
   readOnly = false,
 }) {
@@ -158,6 +159,16 @@ export default function NotesKanban({
   // Card drag state (move note between columns)
   const [dragId, setDragId] = useState(null);
   const [dragOverCol, setDragOverCol] = useState(null);
+  const [isDuplicating, setIsDuplicating] = useState(false);
+
+  // Track altKey reliably across re-renders
+  const altKeyRef = useRef(false);
+  useEffect(() => {
+    const onKey = (e) => { altKeyRef.current = e.altKey; };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('keyup', onKey);
+    return () => { document.removeEventListener('keydown', onKey); document.removeEventListener('keyup', onKey); };
+  }, []);
 
   // Column drag state (reorder columns)
   const [dragColKey, setDragColKey] = useState(null);
@@ -175,17 +186,26 @@ export default function NotesKanban({
   // ── Card DnD ──
   const onDragStart = (e, id) => {
     setDragId(id);
-    e.dataTransfer.effectAllowed = 'move';
+    const dup = e.altKey || altKeyRef.current;
+    setIsDuplicating(dup);
+    e.dataTransfer.effectAllowed = dup ? 'copy' : 'move';
     e.dataTransfer.setData('text/plain', 'card');
   };
   const onDragEnd = () => {
-    if (dragId && dragOverCol) {
-      const note = notes.find(n => n.id === dragId);
-      const current = (note?.status || 'document').toLowerCase().trim();
-      if (note && current !== dragOverCol) onPatchNote(dragId, { status: dragOverCol });
+    if (dragId) {
+      if (isDuplicating) {
+        // Option+drag: duplicate into whichever column is the drop target (or same column)
+        const targetCol = dragOverCol || (notes.find(n => n.id === dragId)?.status || 'document').toLowerCase().trim();
+        onDuplicateNote?.(dragId, null, targetCol);
+      } else if (dragOverCol) {
+        const note = notes.find(n => n.id === dragId);
+        const current = (note?.status || 'document').toLowerCase().trim();
+        if (note && current !== dragOverCol) onPatchNote(dragId, { status: dragOverCol });
+      }
     }
     setDragId(null);
     setDragOverCol(null);
+    setIsDuplicating(false);
   };
   const onColDragOver = (e, colKey) => {
     if (dragColKey) return; // column drag handled separately
@@ -331,7 +351,8 @@ export default function NotesKanban({
                 onClick={() => onSelectNote(n.id)}
                 onDragStart={readOnly ? undefined : (e => onDragStart(e, n.id))}
                 onDragEnd={readOnly ? undefined : onDragEnd}
-                isDragging={dragId === n.id}
+                isDragging={dragId === n.id && !isDuplicating}
+                isDuplicating={dragId === n.id && isDuplicating}
               />
             ))}
             {!readOnly && items.length === 0 && (

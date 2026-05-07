@@ -249,14 +249,16 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
     return res?.note ?? null;
   }, [effectiveProject, token]);
 
-  // Duplicate a note and insert it after insertAfterId in the manual order.
-  const duplicateNote = useCallback(async (sourceId, insertAfterId) => {
+  // Duplicate a note. In grid mode: insert after insertAfterId in manual order.
+  // In kanban mode: targetStatus sets which column the clone lands in.
+  const duplicateNote = useCallback(async (sourceId, insertAfterId, targetStatus) => {
     const source = notesList.find(n => n.id === sourceId);
     if (!source) return;
+    const status = targetStatus || source.status || undefined;
     const res = await api.post('/api/notes', {
       content: source.content,
       origin_project: effectiveProject === '__everything__' ? null : effectiveProject,
-      status: source.status || undefined,
+      status,
     }, token);
     if (!res?.note) return;
     const newNote = res.note;
@@ -699,6 +701,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 if (updates.status !== undefined) patchNoteStatus(id, updates.status);
               }}
               onBulkRenameStatus={bulkRenameStatus}
+              onDuplicateNote={duplicateNote}
               getMediaPreview={getMediaPreview}
             />
           )}
