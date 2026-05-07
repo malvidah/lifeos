@@ -160,7 +160,7 @@ function ProjectPill({ project }) {
 export default function NoteCardItem({
   note, noteName, showProjects, showStatus = false,
   onClick, onDragStart, onDragEnd, onDragOver, onDragLeave, onDrop,
-  draggable = true, isDragging = false, dropEdge = null,
+  draggable = true, isDragging = false, isDuplicating = false, dropEdge = null,
   mediaPreview,
 }) {
   const [hovered, setHovered] = useState(false);
@@ -187,6 +187,8 @@ export default function NoteCardItem({
         padding: 0,
         cursor: 'pointer',
         opacity: isDragging ? 0.5 : 1,
+        outline: isDuplicating ? '2px dashed var(--dl-accent)' : 'none',
+        outlineOffset: 2,
         transform: hovered && !isDragging ? 'translateY(-0.5px)' : 'none',
         boxShadow: hovered && !isDragging ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
         transition: 'opacity 0.15s, box-shadow 0.15s, transform 0.1s',

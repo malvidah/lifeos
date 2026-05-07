@@ -15,6 +15,7 @@ export default function NotesGrid({
   onSelectNote,
   onAddNote,
   onSaveOrder,        // (orderedIds: string[]) => void — only used when sort==='manual'
+  onDuplicateNote,    // (sourceId, insertAfterId) => void — option+drag to clone
   getMediaPreview,    // (note) => { type, ... } | null
   readOnly = false,   // public profile: hide "+ note" tile + disable DnD
 }) {
@@ -23,31 +24,41 @@ export default function NotesGrid({
   const [dragId, setDragId] = useState(null);
   const [dragOverId, setDragOverId] = useState(null); // id we're hovering over
   const [dropEdge, setDropEdge] = useState(null);     // 'before' | 'after'
+  const [isDuplicating, setIsDuplicating] = useState(false);
 
   const orderedNotes = notes; // already sorted by parent (recent or manual order)
 
   const onDragStart = (e, id) => {
     if (sort !== 'manual') return;
     setDragId(id);
-    e.dataTransfer.effectAllowed = 'move';
+    const dup = e.altKey;
+    setIsDuplicating(dup);
+    e.dataTransfer.effectAllowed = dup ? 'copy' : 'move';
   };
   const onDragEnd = () => {
-    if (sort !== 'manual') { setDragId(null); setDragOverId(null); setDropEdge(null); return; }
+    if (sort !== 'manual') { setDragId(null); setDragOverId(null); setDropEdge(null); setIsDuplicating(false); return; }
     if (dragId && dragOverId && dropEdge && dragId !== dragOverId) {
       const ids = orderedNotes.map(n => n.id);
       const fromIdx = ids.indexOf(dragId);
-      const targetIdx = ids.indexOf(dragOverId);
-      if (fromIdx !== -1 && targetIdx !== -1) {
-        ids.splice(fromIdx, 1);
-        const adjustedTarget = ids.indexOf(dragOverId);
-        const insertIdx = dropEdge === 'after' ? adjustedTarget + 1 : adjustedTarget;
-        ids.splice(insertIdx, 0, dragId);
-        onSaveOrder?.(ids);
+      if (fromIdx !== -1) {
+        if (isDuplicating) {
+          // Option+drag: duplicate the note and insert it at the drop position
+          const targetIdx = ids.indexOf(dragOverId);
+          const insertAfterId = dropEdge === 'after' ? dragOverId : (ids[targetIdx - 1] ?? null);
+          onDuplicateNote?.(dragId, insertAfterId);
+        } else {
+          ids.splice(fromIdx, 1);
+          const adjustedTarget = ids.indexOf(dragOverId);
+          const insertIdx = dropEdge === 'after' ? adjustedTarget + 1 : adjustedTarget;
+          ids.splice(insertIdx, 0, dragId);
+          onSaveOrder?.(ids);
+        }
       }
     }
     setDragId(null);
     setDragOverId(null);
     setDropEdge(null);
+    setIsDuplicating(false);
   };
   const onCardDragOver = (e, id) => {
     if (sort !== 'manual' || !dragId || dragId === id) return;
@@ -111,7 +122,8 @@ export default function NotesGrid({
             showStatus
             mediaPreview={getMediaPreview?.(note)}
             draggable={!readOnly && sort === 'manual'}
-            isDragging={dragId === note.id}
+            isDragging={dragId === note.id && !isDuplicating}
+            isDuplicating={dragId === note.id && isDuplicating}
             dropEdge={dropEdgeForCard}
             onClick={() => onSelectNote?.(note.id)}
             onDragStart={readOnly ? undefined : (e => onDragStart(e, note.id))}

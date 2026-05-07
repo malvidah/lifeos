@@ -249,6 +249,34 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
     return res?.note ?? null;
   }, [effectiveProject, token]);
 
+  // Duplicate a note and insert it after insertAfterId in the manual order.
+  const duplicateNote = useCallback(async (sourceId, insertAfterId) => {
+    const source = notesList.find(n => n.id === sourceId);
+    if (!source) return;
+    const res = await api.post('/api/notes', {
+      content: source.content,
+      origin_project: effectiveProject === '__everything__' ? null : effectiveProject,
+      status: source.status || undefined,
+    }, token);
+    if (!res?.note) return;
+    const newNote = res.note;
+    setNotesList(prev => {
+      const next = [newNote, ...prev.filter(n => n.id !== newNote.id)];
+      return next;
+    });
+    // Insert into manual order right after insertAfterId (or at front if null)
+    if (effectiveProject !== '__everything__') {
+      setProjectsMeta(prev => {
+        const meta = prev || {};
+        const order = [...(meta[effectiveProject]?.noteOrder || filteredSortedNotes.map(n => n.id))];
+        const afterIdx = insertAfterId ? order.indexOf(insertAfterId) : -1;
+        const insertAt = afterIdx >= 0 ? afterIdx + 1 : 0;
+        order.splice(insertAt, 0, newNote.id);
+        return { ...meta, [effectiveProject]: { ...(meta[effectiveProject] || {}), noteOrder: order } };
+      }, { skipHistory: true });
+    }
+  }, [notesList, effectiveProject, token, setProjectsMeta, filteredSortedNotes]);
+
   // Update a note's status (used by the kanban view's drag-drop). Optimistic.
   const patchNoteStatus = useCallback(async (id, status) => {
     setNotesList(prev => prev.map(n => n.id === id ? { ...n, status } : n));
@@ -686,6 +714,7 @@ export default function NotesCard({ project, token, userId, onNoteNamesChange, c
                 if (note) { setActiveNoteId(note.id); setKanbanDetailId(note.id); }
               }}
               onSaveOrder={saveNoteOrder}
+              onDuplicateNote={duplicateNote}
               getMediaPreview={getMediaPreview}
             />
           )}
