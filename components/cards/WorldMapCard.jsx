@@ -2006,16 +2006,51 @@ function MapInner({ token, publicView }) {
             search) — this keeps the chrome clean and ties new places to the
             collection you're currently looking at. */}
 
-        {/* Search — centered, always expanded, capped width. */}
+        {/* Search + random — centered, always expanded, capped width. */}
         <div style={{
           position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
-          // Cap to 320px on wide screens; on narrow viewports leave space for
+          display: 'flex', alignItems: 'center', gap: 6,
+          // Cap to 380px on wide screens; on narrow viewports leave space for
           // the corner controls so they never get covered (≈80px each side).
-          width: 'min(320px, calc(100% - 180px))',
+          width: 'min(380px, calc(100% - 180px))',
           minWidth: 140,
           pointerEvents: 'auto',
         }}>
-          <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} mapInstance={mapInstance} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <MapSearch places={places} onSelect={goToPlace} onGeoSelect={goToGeo} isDark={isDark} mapInstance={mapInstance} />
+          </div>
+          {mode === 'places' && visiblePlaces.length > 0 && (
+            <button
+              onClick={() => {
+                const pool = visiblePlaces;
+                if (!pool.length) return;
+                const pick = pool[Math.floor(Math.random() * pool.length)];
+                goToPlace(pick);
+              }}
+              title="Random place"
+              style={{
+                width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                backdropFilter: 'blur(20px) saturate(1.4)',
+                WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+                background: 'var(--dl-glass)',
+                border: '1px solid var(--dl-glass-border)',
+                boxShadow: 'var(--dl-glass-shadow)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer',
+                color: 'var(--dl-middle)',
+                transition: 'color 0.15s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = 'var(--dl-strong)'}
+              onMouseLeave={e => e.currentTarget.style.color = 'var(--dl-middle)'}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                <rect x="2" y="2" width="20" height="20" rx="3" ry="3" fill="none" stroke="currentColor" strokeWidth="2"/>
+                <circle cx="8" cy="8" r="1.5"/><circle cx="16" cy="8" r="1.5"/>
+                <circle cx="12" cy="12" r="1.5"/>
+                <circle cx="8" cy="16" r="1.5"/><circle cx="16" cy="16" r="1.5"/>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Mode toggle (top-right) */}
