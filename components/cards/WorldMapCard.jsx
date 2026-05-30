@@ -2799,7 +2799,7 @@ function MapInner({ token, publicView }) {
       })()}
 
       {/* Events mode — empty state / carousel */}
-      {mode === 'events' && !selectedEvent && eventSourcesLoaded && eventSources.length === 0 && (
+      {mode === 'events' && !selectedEvent && eventSourcesLoaded && eventSources.length === 0 && communityEvents.length === 0 && (
         <div style={{
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
           padding: '16px 10px',
@@ -2818,7 +2818,14 @@ function MapInner({ token, publicView }) {
           </button>
         </div>
       )}
-      {mode === 'events' && !selectedEvent && (eventSources.length > 0 || !eventSourcesLoaded) && (
+      {mode === 'events' && !selectedEvent && !eventSourcesLoaded && communityEvents.length === 0 && (
+        <div style={{
+          display: 'flex', justifyContent: 'center', padding: '16px 10px',
+        }}>
+          <div style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)' }}>Loading…</div>
+        </div>
+      )}
+      {mode === 'events' && !selectedEvent && (communityEvents.length > 0 || (eventSourcesLoaded && eventSources.length > 0)) && (
         <EventsCarousel
           events={filteredEvents}
           selectedEventId={null}
