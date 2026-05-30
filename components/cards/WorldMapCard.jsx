@@ -758,6 +758,7 @@ function MapInner({ token, publicView }) {
     map.on('click', () => {
       setSelectedPlace(null);
       setSelectedDiscovered(null);
+      setSelectedEvent(null);
       setPreviewGeo(null);
       setAddingPlace(null);
     });
@@ -2671,7 +2672,7 @@ function MapInner({ token, publicView }) {
       {/* Edit mode is now inline in cards — no separate panel */}
 
       {/* Search result preview card */}
-      {previewGeo && (mode === 'places' || (mode === 'trip' && inDetail && trips.selectedTrip)) && !addingPlace && !editingPlace && !selectedPlace && (
+      {previewGeo && (mode === 'places' || mode === 'events' || (mode === 'trip' && inDetail && trips.selectedTrip)) && !addingPlace && !editingPlace && !selectedPlace && (
         <div style={{
           margin: '0 2px',
           background: 'var(--dl-overlay)',
@@ -2855,11 +2856,13 @@ function MapInner({ token, publicView }) {
 
       {/* Event detail card — floats above bottom strip */}
       {mode === 'events' && selectedEvent && (
-        <EventDetailCard
-          event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-          onOpenUrl={(url) => window.open(url, '_blank', 'noopener')}
-        />
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 1100, pointerEvents: 'none' }}>
+          <EventDetailCard
+            event={selectedEvent}
+            onClose={() => setSelectedEvent(null)}
+            onOpenUrl={(url) => window.open(url, '_blank', 'noopener')}
+          />
+        </div>
       )}
 
       {/* No separate tooltip or selected popup — carousel handles all place interactions */}
