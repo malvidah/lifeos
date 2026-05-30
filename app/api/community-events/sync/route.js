@@ -1,5 +1,5 @@
 import { withAuth } from '../../_lib/auth.js';
-import { fetchIcalEvents } from '../../../../lib/event-scrapers.js';
+import { fetchIcalEvents, scrape19hz } from '../../../../lib/event-scrapers.js';
 
 // POST /api/community-events/sync
 // Body: { source_id?: string }  — sync one source, or all enabled sources if omitted
@@ -62,9 +62,40 @@ async function syncSource(supabase, userId, source) {
     case 'rss':
       return { upserted: 0, message: 'RSS sync not yet implemented' };
     case 'scraper':
+      if (source.scraper_key === '19hz') return sync19hz(supabase, userId, source);
       return { upserted: 0, message: `Scraper '${source.scraper_key}' not yet implemented` };
     default:
       return { upserted: 0, message: `Unknown source_type: ${source.source_type}` };
+  }
+}
+
+async function upsertEvent(supabase, row) {
+  if (row.source_event_id) {
+    const { data: existing } = await supabase
+      .from('community_events')
+      .select('id')
+      .eq('user_id', row.user_id)
+      .eq('source', row.source)
+      .eq('source_event_id', row.source_event_id)
+      .maybeSingle();
+
+    if (existing) {
+      const { error } = await supabase
+        .from('community_events')
+        .update(row)
+        .eq('id', existing.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('community_events')
+        .insert(row);
+      if (error) throw error;
+    }
+  } else {
+    const { error } = await supabase
+      .from('community_events')
+      .insert(row);
+    if (error) throw error;
   }
 }
 
@@ -94,18 +125,7 @@ async function syncIcal(supabase, userId, source) {
       updated_at: new Date().toISOString(),
     };
 
-    // Upsert by dedup key if we have a source_event_id, otherwise just insert
-    if (row.source_event_id) {
-      const { error } = await supabase
-        .from('community_events')
-        .upsert(row, { onConflict: 'user_id,source,source_event_id' });
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from('community_events')
-        .insert(row);
-      if (error) throw error;
-    }
+    await upsertEvent(supabase, row);
     upserted++;
   }
 
@@ -156,17 +176,38 @@ async function syncShift2Bikes(supabase, userId, source) {
       updated_at: new Date().toISOString(),
     };
 
-    if (row.source_event_id) {
-      const { error } = await supabase
-        .from('community_events')
-        .upsert(row, { onConflict: 'user_id,source,source_event_id' });
-      if (error) throw error;
-    } else {
-      const { error } = await supabase
-        .from('community_events')
-        .insert(row);
-      if (error) throw error;
-    }
+    await upsertEvent(supabase, row);
+    upserted++;
+  }
+
+  return { upserted };
+}
+
+async function sync19hz(supabase, userId, source) {
+  const events = await scrape19hz();
+  let upserted = 0;
+
+  for (const evt of events) {
+    if (!evt.starts_at || !evt.title) continue;
+
+    const row = {
+      user_id: userId,
+      source: source.name,
+      source_url: evt.url || null,
+      source_event_id: evt.uid || null,
+      title: evt.title,
+      venue: evt.venue || null,
+      address: evt.address || null,
+      lat: source.lat || null,
+      lng: source.lng || null,
+      category: 'music',
+      starts_at: evt.starts_at,
+      cost: evt.cost || null,
+      tags: [],
+      updated_at: new Date().toISOString(),
+    };
+
+    await upsertEvent(supabase, row);
     upserted++;
   }
 
