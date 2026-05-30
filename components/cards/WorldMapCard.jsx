@@ -2120,7 +2120,11 @@ function MapInner({ token, publicView }) {
             </span>
             <button onClick={async () => {
               setEventsSyncing(true);
-              try { await api.post('/api/community-events/sync', {}, token); refreshEvents(); } catch {}
+              try {
+                await api.post('/api/community-events/seed', {}, token);
+                await api.post('/api/community-events/sync', {}, token);
+                refreshEvents();
+              } catch {}
               setEventsSyncing(false);
             }}
               disabled={eventsSyncing}
