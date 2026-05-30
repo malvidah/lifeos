@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-05-12T03:06:26.203Z",
+  "generatedAt": "2026-05-30T19:31:22.191Z",
   "client": {
     "framework": "Next.js 16.1.6 (App Router)",
     "libraries": [
@@ -257,6 +257,61 @@
       ],
       "tables": [
         "user_collection_places"
+      ]
+    },
+    {
+      "path": "/api/community-events",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "community_events"
+      ]
+    },
+    {
+      "path": "/api/community-events/seed",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "event_sources"
+      ]
+    },
+    {
+      "path": "/api/community-events/sources",
+      "methods": [
+        "GET",
+        "POST",
+        "PATCH",
+        "DELETE"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "event_sources"
+      ]
+    },
+    {
+      "path": "/api/community-events/sync",
+      "methods": [
+        "POST"
+      ],
+      "services": [
+        "supabase"
+      ],
+      "tables": [
+        "community_events",
+        "event_sources"
       ]
     },
     {
@@ -1080,9 +1135,11 @@
   "services": {
     "supabase": {
       "tables": [
+        "community_events",
         "day_recaps",
         "drawings",
         "entries",
+        "event_sources",
         "events",
         "feedback",
         "goals",
@@ -1123,6 +1180,10 @@
         "/api/chat",
         "/api/collections",
         "/api/collections/places",
+        "/api/community-events",
+        "/api/community-events/seed",
+        "/api/community-events/sources",
+        "/api/community-events/sync",
         "/api/cron/oura-sync",
         "/api/discovered",
         "/api/drawings",
