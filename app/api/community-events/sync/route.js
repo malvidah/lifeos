@@ -57,6 +57,8 @@ async function syncSource(supabase, userId, source) {
   switch (source.source_type) {
     case 'ical':
       return syncIcal(supabase, userId, source);
+    case 'shift2bikes':
+      return syncShift2Bikes(supabase, userId, source);
     case 'rss':
       return { upserted: 0, message: 'RSS sync not yet implemented' };
     case 'scraper':
@@ -93,6 +95,67 @@ async function syncIcal(supabase, userId, source) {
     };
 
     // Upsert by dedup key if we have a source_event_id, otherwise just insert
+    if (row.source_event_id) {
+      const { error } = await supabase
+        .from('community_events')
+        .upsert(row, { onConflict: 'user_id,source,source_event_id' });
+      if (error) throw error;
+    } else {
+      const { error } = await supabase
+        .from('community_events')
+        .insert(row);
+      if (error) throw error;
+    }
+    upserted++;
+  }
+
+  return { upserted };
+}
+
+async function syncShift2Bikes(supabase, userId, source) {
+  if (!source.url) throw new Error('Shift2Bikes source has no URL');
+
+  const now = new Date();
+  const startdate = now.toISOString().slice(0, 10);
+  const enddate = new Date(now.getTime() + 90 * 86400000).toISOString().slice(0, 10);
+
+  const res = await fetch(`${source.url}?startdate=${startdate}&enddate=${enddate}`, {
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`Shift2Bikes API error: ${res.status}`);
+  const data = await res.json();
+  const events = data.events || [];
+  let upserted = 0;
+
+  for (const evt of events) {
+    if (!evt.date || !evt.title) continue;
+
+    const startsAt = evt.time
+      ? `${evt.date}T${evt.time}`
+      : `${evt.date}T00:00:00`;
+    const endsAt = evt.endtime
+      ? `${evt.date}T${evt.endtime}`
+      : null;
+
+    const row = {
+      user_id: userId,
+      source: source.name,
+      source_url: evt.shareable || source.url,
+      source_event_id: evt.caldaily_id || evt.id || null,
+      title: evt.title,
+      description: evt.details || null,
+      venue: evt.venue || source.venue || null,
+      address: evt.address || null,
+      lat: source.lat || null,
+      lng: source.lng || null,
+      category: source.category || 'outdoors',
+      starts_at: startsAt,
+      ends_at: endsAt,
+      cost: evt.cost || null,
+      tags: [],
+      updated_at: new Date().toISOString(),
+    };
+
     if (row.source_event_id) {
       const { error } = await supabase
         .from('community_events')
