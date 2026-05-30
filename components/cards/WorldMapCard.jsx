@@ -2120,11 +2120,15 @@ function MapInner({ token, publicView }) {
             </span>
             <button onClick={async () => {
               setEventsSyncing(true);
-              try {
-                await api.post('/api/community-events/seed', {}, token);
-                await api.post('/api/community-events/sync', {}, token);
-                refreshEvents();
-              } catch {}
+              const seedRes = await api.post('/api/community-events/seed', {}, token);
+              if (seedRes?.ok === false) console.warn('[events] seed failed:', seedRes);
+              const syncRes = await api.post('/api/community-events/sync', {}, token);
+              if (syncRes?.ok === false) {
+                console.warn('[events] sync failed:', syncRes);
+              } else if (syncRes?.synced != null) {
+                console.log(`[events] synced ${syncRes.synced} events`, syncRes.results);
+              }
+              refreshEvents();
               setEventsSyncing(false);
             }}
               disabled={eventsSyncing}
