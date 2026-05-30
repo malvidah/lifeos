@@ -12,6 +12,7 @@ import TripScroller from "./trip/TripScroller.jsx";
 import TripHeader from "./trip/TripHeader.jsx";
 import TripStopsRow from "./trip/TripStopsRow.jsx";
 import CollectionScroller from "./places/CollectionScroller.jsx";
+import EventsCarousel, { EventDetailCard, categoryColor } from "./places/EventsCarousel.jsx";
 
 // ─── Pin color palette for user-created types ──────────────────────────────
 const PIN_COLORS = [
@@ -599,11 +600,71 @@ function MapInner({ token, publicView }) {
   const [placesInDetail, setPlacesInDetail] = useState(false);
   useEffect(() => { if (mode !== 'places') { setPlacesInDetail(false); setSelectedCollectionId(null); } }, [mode]);
 
+  // Events mode state
+  const [communityEvents, setCommunityEvents] = useState([]);
+  const [eventSources, setEventSources] = useState([]);
+  const [eventSourcesLoaded, setEventSourcesLoaded] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState(null);
+  const [eventTimeFilter, setEventTimeFilter] = useState(null);
+  const [eventCategoryFilter, setEventCategoryFilter] = useState(null);
+  const [eventsSyncing, setEventsSyncing] = useState(false);
+  const eventMarkersRef = useRef([]);
+  useEffect(() => { if (mode !== 'events') { setSelectedEvent(null); setEventTimeFilter(null); setEventCategoryFilter(null); } }, [mode]);
+
   const refreshCollections = useCallback(() => {
     if (isPublic || !token) return;
     api.get('/api/collections', token).then(d => setCollections(d?.collections ?? [])).catch(() => {});
   }, [token, isPublic]);
   useEffect(() => { refreshCollections(); }, [refreshCollections]);
+
+  // Fetch event sources + events when entering events mode
+  const refreshEvents = useCallback(() => {
+    if (isPublic || !token || mode !== 'events') return;
+    api.get('/api/community-events/sources', token)
+      .then(d => { setEventSources(d?.sources ?? []); setEventSourcesLoaded(true); })
+      .catch(() => setEventSourcesLoaded(true));
+    const now = new Date();
+    const start = now.toISOString();
+    const end = new Date(now.getTime() + 90 * 86400000).toISOString();
+    api.get(`/api/community-events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, token)
+      .then(d => setCommunityEvents(d?.events ?? []))
+      .catch(() => {});
+  }, [token, isPublic, mode]);
+  useEffect(() => { refreshEvents(); }, [refreshEvents]);
+
+  const seedAndSync = useCallback(async () => {
+    if (!token) return;
+    setEventsSyncing(true);
+    try {
+      await api.post('/api/community-events/seed', {}, token);
+      await api.post('/api/community-events/sync', {}, token);
+      refreshEvents();
+    } catch {}
+    setEventsSyncing(false);
+  }, [token, refreshEvents]);
+
+  // Filter events by time and category
+  const filteredEvents = useMemo(() => {
+    let ev = communityEvents;
+    if (eventTimeFilter) {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (eventTimeFilter === 'today') {
+        const tomorrow = new Date(today.getTime() + 86400000);
+        ev = ev.filter(e => new Date(e.starts_at) >= today && new Date(e.starts_at) < tomorrow);
+      } else if (eventTimeFilter === 'week') {
+        const weekEnd = new Date(today.getTime() + 7 * 86400000);
+        ev = ev.filter(e => new Date(e.starts_at) >= today && new Date(e.starts_at) < weekEnd);
+      } else if (eventTimeFilter === 'month') {
+        const monthEnd = new Date(today.getTime() + 30 * 86400000);
+        ev = ev.filter(e => new Date(e.starts_at) >= today && new Date(e.starts_at) < monthEnd);
+      }
+    }
+    if (eventCategoryFilter) {
+      ev = ev.filter(e => (e.category || 'other').toLowerCase() === eventCategoryFilter);
+    }
+    return ev;
+  }, [communityEvents, eventTimeFilter, eventCategoryFilter]);
 
   // Public-mode override — re-bind the local names so every existing read
   // site below transparently gets the public data instead of the internal
@@ -1156,6 +1217,48 @@ function MapInner({ token, publicView }) {
       markersRef.current.push(marker);
     });
   }, [places, placeTypes, mode, activeFilter, leafletReady, isDark, selectedPlace, placesInDetail, selectedCollection, placesInSelectedCollection, token]); // eslint-disable-line
+
+  // Render event markers (events mode)
+  useEffect(() => {
+    if (!mapInstance.current || !leafletReady) return;
+    const L = LRef.current;
+    const map = mapInstance.current;
+    eventMarkersRef.current.forEach(m => m.remove());
+    eventMarkersRef.current = [];
+    if (mode !== 'events') return;
+
+    const withCoords = filteredEvents.filter(e => e.lat != null && e.lng != null);
+    withCoords.forEach(event => {
+      const color = categoryColor(event.category);
+      const isSelected = selectedEvent?.id === event.id;
+      const size = isSelected ? 18 : 12;
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="
+          width:${size}px;height:${size}px;border-radius:50%;
+          background:${color};
+          border:2px solid ${isDark ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.9)'};
+          box-shadow:0 0 ${isSelected ? 8 : 4}px ${color}80;
+          transition:all 0.2s;cursor:pointer;
+          ${isSelected ? `animation:eventPulse 1.5s ease-in-out infinite;` : ''}
+        "></div>`,
+        iconSize: [size + 4, size + 4],
+        iconAnchor: [(size + 4) / 2, (size + 4) / 2],
+      });
+      const marker = L.marker([event.lat, event.lng], { icon }).addTo(map);
+      marker.on('click', (e) => {
+        L.DomEvent.stopPropagation(e);
+        setSelectedEvent(isSelected ? null : event);
+      });
+      eventMarkersRef.current.push(marker);
+    });
+
+    // Fit bounds to events with coords
+    if (withCoords.length >= 2 && !selectedEvent) {
+      const coords = withCoords.map(e => [e.lat, e.lng]);
+      map.fitBounds(L.latLngBounds(coords).pad(0.2));
+    }
+  }, [filteredEvents, mode, leafletReady, isDark, selectedEvent]); // eslint-disable-line
 
   // Fit map to a trip's bounds — fires ONLY when the selected trip changes
   // (not on every stop edit), so editing waypoints doesn't reset zoom/pan.
@@ -1853,6 +1956,10 @@ function MapInner({ token, publicView }) {
           60% { transform: scale(1.2); opacity: 0.15; }
           100% { transform: scale(1); opacity: 0; }
         }
+        @keyframes eventPulse {
+          0%, 100% { box-shadow: 0 0 4px currentColor; transform: scale(1); }
+          50% { box-shadow: 0 0 12px currentColor; transform: scale(1.15); }
+        }
         .leaflet-tile-pane {
           filter: ${
             tileMode === 'topo'
@@ -2000,11 +2107,40 @@ function MapInner({ token, publicView }) {
               }}>click pins</span>
             )}
           </div>
+        ) : mode === 'events' ? (
+          <div style={{
+            position: 'absolute', top: 0, left: 0, pointerEvents: 'auto',
+            display: 'flex', alignItems: 'center', gap: 6,
+            backdropFilter: 'blur(20px) saturate(1.4)', WebkitBackdropFilter: 'blur(20px) saturate(1.4)',
+            background: 'var(--dl-glass)', border: '1px solid var(--dl-glass-border)',
+            borderRadius: 100, padding: '4px 12px', boxShadow: 'var(--dl-glass-shadow)',
+          }}>
+            <span style={{ fontFamily: mono, fontSize: 10, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dl-strong)' }}>
+              Events
+            </span>
+            <button onClick={async () => {
+              setEventsSyncing(true);
+              try { await api.post('/api/community-events/sync', {}, token); refreshEvents(); } catch {}
+              setEventsSyncing(false);
+            }}
+              disabled={eventsSyncing}
+              title="Sync sources"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0, lineHeight: 1,
+                color: 'var(--dl-middle)', opacity: eventsSyncing ? 0.4 : 1,
+                transition: 'opacity 0.15s',
+              }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+                style={{ animation: eventsSyncing ? 'spin 1s linear infinite' : 'none' }}>
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+              </svg>
+            </button>
+            <span style={{ fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)' }}>
+              {communityEvents.length} event{communityEvents.length !== 1 ? 's' : ''}
+            </span>
+          </div>
         ) : null}
-        {/* Note: the "+ add pin" button used to live here. Adding a place now
-            happens via collection-detail mode (double-click the map or use
-            search) — this keeps the chrome clean and ties new places to the
-            collection you're currently looking at. */}
 
         {/* Search + random — centered, always expanded, capped width. */}
         <div style={{
@@ -2090,6 +2226,20 @@ function MapInner({ token, publicView }) {
               <path d="M5 16C5 11 14 13 14 8" />
             </svg>
           </button>
+          {!isPublic && (
+            <button onClick={() => { setMode('events'); setAddingPlace(null); setSelectedPlace(null); }}
+              title="Events"
+              style={{
+                background: mode === 'events' ? 'var(--dl-accent-15)' : 'none',
+                border: 'none', borderRadius: 100, padding: '5px 8px', cursor: 'pointer',
+                color: mode === 'events' ? 'var(--dl-accent)' : 'var(--dl-middle)',
+                display: 'flex', alignItems: 'center', transition: 'all 0.15s',
+              }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2648,7 +2798,54 @@ function MapInner({ token, publicView }) {
         );
       })()}
 
+      {/* Events mode — empty state / carousel */}
+      {mode === 'events' && !selectedEvent && eventSourcesLoaded && eventSources.length === 0 && (
+        <div style={{
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+          padding: '16px 10px',
+        }}>
+          <div style={{ fontFamily: mono, fontSize: 11, color: 'var(--dl-middle)', textAlign: 'center' }}>
+            No event sources yet
+          </div>
+          <button onClick={seedAndSync} disabled={eventsSyncing}
+            style={{
+              fontFamily: mono, fontSize: 10, letterSpacing: '0.06em',
+              background: 'var(--dl-accent)', color: '#fff', border: 'none',
+              borderRadius: 100, padding: '6px 16px', cursor: 'pointer',
+              opacity: eventsSyncing ? 0.6 : 1,
+            }}>
+            {eventsSyncing ? 'Setting up…' : 'Add Portland sources'}
+          </button>
+        </div>
+      )}
+      {mode === 'events' && !selectedEvent && (eventSources.length > 0 || !eventSourcesLoaded) && (
+        <EventsCarousel
+          events={filteredEvents}
+          selectedEventId={null}
+          onSelect={(event) => {
+            if (event && event.lat != null && event.lng != null && mapInstance.current) {
+              mapInstance.current.setView([event.lat, event.lng], 15, { animate: true });
+            }
+            setSelectedEvent(event);
+          }}
+          timeFilter={eventTimeFilter}
+          onTimeFilterChange={setEventTimeFilter}
+          categoryFilter={eventCategoryFilter}
+          onCategoryFilterChange={setEventCategoryFilter}
+        />
+      )}
+
       </MapBottomStrip>
+
+      {/* Event detail card — floats above bottom strip */}
+      {mode === 'events' && selectedEvent && (
+        <EventDetailCard
+          event={selectedEvent}
+          onClose={() => setSelectedEvent(null)}
+          onOpenUrl={(url) => window.open(url, '_blank', 'noopener')}
+        />
+      )}
+
       {/* No separate tooltip or selected popup — carousel handles all place interactions */}
     </div>
   );
