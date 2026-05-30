@@ -1,5 +1,5 @@
 import { withAuth } from '../../_lib/auth.js';
-import { fetchIcalEvents, scrape19hz, geocodeAddress } from '../../../../lib/event-scrapers.js';
+import { fetchIcalEvents, scrape19hz, lookupVenueCoords, geocodeAddress } from '../../../../lib/event-scrapers.js';
 
 // POST /api/community-events/sync
 // Body: { source_id?: string }  — sync one source, or all enabled sources if omitted
@@ -109,7 +109,7 @@ async function syncIcal(supabase, userId, source) {
     if (!evt.starts_at) continue;
 
     const location = evt.location || source.venue || null;
-    const geo = location ? await geocodeAddress(location) : null;
+    const geo = lookupVenueCoords(location, null);
 
     const row = {
       user_id: userId,
@@ -161,8 +161,8 @@ async function syncShift2Bikes(supabase, userId, source) {
       ? `${evt.date}T${evt.endtime}${tz}`
       : null;
 
-    const addrStr = [evt.address, 'Portland, OR'].filter(Boolean).join(', ');
-    const geo = evt.address ? await geocodeAddress(addrStr) : null;
+    const venueName = evt.venue || source.venue || null;
+    const geo = lookupVenueCoords(venueName, evt.address);
 
     const row = {
       user_id: userId,
@@ -171,7 +171,7 @@ async function syncShift2Bikes(supabase, userId, source) {
       source_event_id: evt.caldaily_id || evt.id || null,
       title: evt.title,
       description: evt.details || null,
-      venue: evt.venue || source.venue || null,
+      venue: venueName,
       address: evt.address || null,
       lat: geo?.lat || source.lat || null,
       lng: geo?.lng || source.lng || null,
@@ -197,8 +197,7 @@ async function sync19hz(supabase, userId, source) {
   for (const evt of events) {
     if (!evt.starts_at || !evt.title) continue;
 
-    const addrStr = evt.address ? `${evt.address}, Portland, OR` : (evt.venue ? `${evt.venue}, Portland, OR` : null);
-    const geo = addrStr ? await geocodeAddress(addrStr) : null;
+    const geo = lookupVenueCoords(evt.venue, evt.address);
 
     const row = {
       user_id: userId,
