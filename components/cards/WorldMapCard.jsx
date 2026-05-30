@@ -1147,20 +1147,15 @@ function MapInner({ token, publicView }) {
     };
 
     // Filter pins by tag (top pills) and collection (bottom scroller).
-    // In collection-detail mode we render ALL pins so the user can click any
-    // of them to toggle membership; the in-collection ones are highlighted.
     let filtered = places;
     if (activeFilter) {
       filtered = filtered.filter(p => (p.category || '').toLowerCase() === activeFilter.toLowerCase());
     }
-    if (placesInSelectedCollection && !placesInDetail) {
+    if (placesInSelectedCollection) {
       filtered = filtered.filter(p => placesInSelectedCollection.has(p.id));
     }
 
-    // True iff we're inside a collection's detail view — clicking a pin
-    // toggles its membership in that collection (matches trip "click map to
-    // add stop" UX).
-    const inCollectionEdit = placesInDetail && selectedCollection;
+    const inCollectionEdit = false;
 
     filtered.forEach(place => {
       const color = place.color || typeColor(place.category);
@@ -2101,12 +2096,12 @@ function MapInner({ token, publicView }) {
                 {selectedCollection ? selectedCollection.name : 'All places'}
               </span>
             )}
-            {selectedCollection && (
+            {selectedCollection && placesInSelectedCollection && (
               <span style={{
                 fontFamily: mono, fontSize: 9, color: 'var(--dl-middle)',
                 paddingLeft: 6, borderLeft: '1px solid var(--dl-glass-border)',
                 whiteSpace: 'nowrap',
-              }}>click pins</span>
+              }}>{placesInSelectedCollection.size} pins</span>
             )}
           </div>
         ) : mode === 'events' ? (
