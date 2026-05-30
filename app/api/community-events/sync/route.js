@@ -1,5 +1,5 @@
 import { withAuth } from '../../_lib/auth.js';
-import { fetchIcalEvents, scrape19hz } from '../../../../lib/event-scrapers.js';
+import { fetchIcalEvents, scrape19hz, geocodeAddress } from '../../../../lib/event-scrapers.js';
 
 // POST /api/community-events/sync
 // Body: { source_id?: string }  — sync one source, or all enabled sources if omitted
@@ -108,6 +108,9 @@ async function syncIcal(supabase, userId, source) {
   for (const evt of events) {
     if (!evt.starts_at) continue;
 
+    const location = evt.location || source.venue || null;
+    const geo = location ? await geocodeAddress(location) : null;
+
     const row = {
       user_id: userId,
       source: source.name,
@@ -115,9 +118,9 @@ async function syncIcal(supabase, userId, source) {
       source_event_id: evt.uid || null,
       title: evt.title,
       description: evt.description,
-      venue: evt.location || source.venue || null,
-      lat: source.lat || null,
-      lng: source.lng || null,
+      venue: location,
+      lat: geo?.lat || source.lat || null,
+      lng: geo?.lng || source.lng || null,
       category: source.category || 'community',
       starts_at: evt.starts_at,
       ends_at: evt.ends_at,
@@ -157,6 +160,9 @@ async function syncShift2Bikes(supabase, userId, source) {
       ? `${evt.date}T${evt.endtime}`
       : null;
 
+    const addrStr = [evt.address, 'Portland, OR'].filter(Boolean).join(', ');
+    const geo = evt.address ? await geocodeAddress(addrStr) : null;
+
     const row = {
       user_id: userId,
       source: source.name,
@@ -166,8 +172,8 @@ async function syncShift2Bikes(supabase, userId, source) {
       description: evt.details || null,
       venue: evt.venue || source.venue || null,
       address: evt.address || null,
-      lat: source.lat || null,
-      lng: source.lng || null,
+      lat: geo?.lat || source.lat || null,
+      lng: geo?.lng || source.lng || null,
       category: source.category || 'outdoors',
       starts_at: startsAt,
       ends_at: endsAt,
@@ -190,6 +196,9 @@ async function sync19hz(supabase, userId, source) {
   for (const evt of events) {
     if (!evt.starts_at || !evt.title) continue;
 
+    const addrStr = evt.address ? `${evt.address}, Portland, OR` : (evt.venue ? `${evt.venue}, Portland, OR` : null);
+    const geo = addrStr ? await geocodeAddress(addrStr) : null;
+
     const row = {
       user_id: userId,
       source: source.name,
@@ -198,8 +207,8 @@ async function sync19hz(supabase, userId, source) {
       title: evt.title,
       venue: evt.venue || null,
       address: evt.address || null,
-      lat: source.lat || null,
-      lng: source.lng || null,
+      lat: geo?.lat || source.lat || null,
+      lng: geo?.lng || source.lng || null,
       category: 'music',
       starts_at: evt.starts_at,
       cost: evt.cost || null,
