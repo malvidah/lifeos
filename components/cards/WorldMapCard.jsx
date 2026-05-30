@@ -624,8 +624,9 @@ function MapInner({ token, publicView }) {
       .then(d => { setEventSources(d?.sources ?? []); setEventSourcesLoaded(true); })
       .catch(() => setEventSourcesLoaded(true));
     const now = new Date();
-    const start = now.toISOString();
-    const end = new Date(now.getTime() + 90 * 86400000).toISOString();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const start = todayStart.toISOString();
+    const end = new Date(todayStart.getTime() + 90 * 86400000).toISOString();
     api.get(`/api/community-events?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`, token)
       .then(d => setCommunityEvents(d?.events ?? []))
       .catch(() => {});

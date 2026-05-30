@@ -153,11 +153,12 @@ async function syncShift2Bikes(supabase, userId, source) {
   for (const evt of events) {
     if (!evt.date || !evt.title) continue;
 
+    const tz = '-07:00';
     const startsAt = evt.time
-      ? `${evt.date}T${evt.time}`
-      : `${evt.date}T00:00:00`;
+      ? `${evt.date}T${evt.time}${tz}`
+      : `${evt.date}T00:00:00${tz}`;
     const endsAt = evt.endtime
-      ? `${evt.date}T${evt.endtime}`
+      ? `${evt.date}T${evt.endtime}${tz}`
       : null;
 
     const addrStr = [evt.address, 'Portland, OR'].filter(Boolean).join(', ');
