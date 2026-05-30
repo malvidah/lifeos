@@ -210,6 +210,7 @@ export function EventDetailCard({ event, onClose, onOpenUrl }) {
   return (
     <div style={{
       position: 'absolute', bottom: 10, left: 10, right: 10,
+      zIndex: 1002,
       maxWidth: 360,
       background: 'var(--dl-glass)',
       backdropFilter: 'blur(20px) saturate(1.4)',
