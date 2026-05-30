@@ -1,9 +1,9 @@
 import { withAuth } from '../../_lib/auth.js';
 
 const PORTLAND_SOURCES = [
-  { name: 'Shift2Bikes', source_type: 'ical', url: 'https://shift2bikes.org/api/calendar.ics', category: 'outdoors', venue: null, lat: 45.5231, lng: -122.6765 },
-  { name: '19hz Portland', source_type: 'scraper', scraper_key: '19hz', category: 'music', venue: null, lat: 45.5231, lng: -122.6765 },
-  { name: 'OMSI', source_type: 'ical', url: 'https://www.omsi.edu/calendar/?ical=1', category: 'lectures', venue: 'OMSI', lat: 45.5084, lng: -122.6665 },
+  { name: 'Calagator', source_type: 'ical', url: 'https://calagator.org/events.ics', category: 'community', venue: null, lat: 45.5231, lng: -122.6765 },
+  { name: 'Shift2Bikes', source_type: 'shift2bikes', url: 'https://www.shift2bikes.org/api/events.php', category: 'outdoors', venue: null, lat: 45.5231, lng: -122.6765 },
+  { name: 'OMSI', source_type: 'scraper', scraper_key: 'omsi', category: 'lectures', venue: 'OMSI', lat: 45.5084, lng: -122.6665 },
   { name: 'Literary Arts', source_type: 'scraper', scraper_key: 'literary-arts', category: 'lectures', venue: 'Literary Arts', lat: 45.5223, lng: -122.6812 },
   { name: 'ADX Portland', source_type: 'scraper', scraper_key: 'adx', category: 'art', venue: 'ADX Portland', lat: 45.5340, lng: -122.6555 },
   { name: 'Portland Rock Gym NE', source_type: 'scraper', scraper_key: 'prg', category: 'sports', venue: 'Portland Rock Gym NE', lat: 45.5558, lng: -122.6509 },
@@ -25,15 +25,25 @@ const PORTLAND_SOURCES = [
 
 export const POST = withAuth(async (req, { supabase, user }) => {
   let added = 0;
+  let updated = 0;
   for (const src of PORTLAND_SOURCES) {
     const { data: existing } = await supabase
       .from('event_sources')
-      .select('id')
+      .select('id, source_type, url')
       .eq('user_id', user.id)
       .eq('name', src.name)
       .maybeSingle();
 
-    if (existing) continue;
+    if (existing) {
+      if (existing.source_type !== src.source_type || existing.url !== (src.url || null)) {
+        await supabase
+          .from('event_sources')
+          .update({ source_type: src.source_type, url: src.url || null, scraper_key: src.scraper_key || null })
+          .eq('id', existing.id);
+        updated++;
+      }
+      continue;
+    }
 
     const { error } = await supabase
       .from('event_sources')
@@ -41,5 +51,5 @@ export const POST = withAuth(async (req, { supabase, user }) => {
     if (!error) added++;
   }
 
-  return Response.json({ added, total: PORTLAND_SOURCES.length });
+  return Response.json({ added, updated, total: PORTLAND_SOURCES.length });
 });
